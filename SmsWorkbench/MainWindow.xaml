@@ -1,0 +1,133 @@
+<Window x:Class="SmsWorkbench.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Go" Height="760" Width="1260" MinHeight="650" MinWidth="1120"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource AppBg}"
+        FontFamily="Microsoft YaHei UI" FontSize="13">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="46"/>
+      <RowDefinition Height="38"/>
+      <RowDefinition Height="46"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="180"/>
+      <RowDefinition Height="24"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" Background="#EEF3FA" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <DockPanel Margin="8,7">
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+          <Button Content="账号操作 ▾" Width="86" Click="OpenResults_Click"/>
+          <Button Content="批量注册" Width="86" Style="{StaticResource PrimaryButton}" Click="BatchOutlook_Click"/>
+          <Button Content="批量登录" Width="86" Click="BatchFree_Click"/>
+          <Button Content="线程 / OAuth ▾" Width="118" Click="ShowOAuth_Click"/>
+          <Button Content="▶ OAuth 监控" Width="112" Click="ShowOAuth_Click"/>
+          <Button Content="▶ GoPay 监控" Width="112" Click="Stub_Click"/>
+          <Button Content="▶ GoPay 协议" Width="112" Click="Stub_Click"/>
+          <Button Content="▶ Plus2 循环" Width="112" Click="Stub_Click"/>
+          <Button Content="批量充值" Width="92" Click="Stub_Click"/>
+          <Button Content="批量邀请" Width="92" Click="Stub_Click"/>
+          <Button Content="删除选中" Width="92" Click="DeleteSelected_Click"/>
+          <Button Content="取消批次" Width="92" Style="{StaticResource DangerButton}" Click="CancelBatch_Click"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+          <Button Content="刷新" Width="70" Click="Refresh_Click"/>
+          <Button Content="设置" Width="70" Click="Settings_Click"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <TabControl Grid.Row="1" Margin="6,4,6,0" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+      <TabItem Header="账号管理"/>
+      <TabItem Header="已出售账号"/>
+      <TabItem Header="域名管理"/>
+      <TabItem Header="充值卡管理"/>
+      <TabItem Header="GoPay 池"/>
+      <TabItem Header="OAuth"/>
+    </TabControl>
+
+    <Border Grid.Row="2" Margin="6,0,6,4" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+      <Grid Margin="8,7">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="280"/>
+          <ColumnDefinition Width="130"/>
+          <ColumnDefinition Width="130"/>
+          <ColumnDefinition Width="82"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="88"/>
+          <ColumnDefinition Width="70"/>
+          <ColumnDefinition Width="86"/>
+        </Grid.ColumnDefinitions>
+        <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、手机号、备注"/>
+        <ComboBox Grid.Column="1" Margin="6,0,0,0" SelectedItem="{Binding ScopeFilter}">
+          <ComboBoxItem Content="全部"/>
+          <ComboBoxItem Content="邮箱池"/>
+          <ComboBoxItem Content="号池"/>
+          <ComboBoxItem Content="失败/待处理"/>
+        </ComboBox>
+        <ComboBox Grid.Column="2" Margin="6,0,0,0" SelectedItem="{Binding SmsProvider}">
+          <ComboBoxItem Content="herosms"/>
+          <ComboBoxItem Content="smsbower"/>
+        </ComboBox>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
+          <TextBlock Text="数量" VerticalAlignment="Center" Foreground="{StaticResource TextSub}" Margin="0,0,4,0"/>
+          <TextBox Width="38" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+        <TextBox Grid.Column="4" Margin="8,0,0,0" Text="{Binding ProxyText, UpdateSourceTrigger=PropertyChanged}" ToolTip="代理出口，如 http://user:pass@host:port"/>
+        <Button Grid.Column="5" Content="应用代理" Margin="8,0,0,0" Click="ApplyProxy_Click"/>
+        <Button Grid.Column="6" Content="搜索" Margin="6,0,0,0" Click="ApplyFilter_Click"/>
+        <Button Grid.Column="7" Content="清空选择" Margin="6,0,0,0" Click="ClearSelection_Click"/>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="3" Margin="6,0,6,4" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+      <DataGrid ItemsSource="{Binding FilteredRows}" SelectedItem="{Binding SelectedRow}" AutoGenerateColumns="False"
+                CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                RowHeight="28" IsReadOnly="False" AlternatingRowBackground="#F8FAFD"
+                BorderThickness="0" SelectionMode="Extended">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="70" IsReadOnly="True"/>
+          <DataGridCheckBoxColumn Header="选中" Binding="{Binding IsChecked}" Width="55"/>
+          <DataGridTextColumn Header="创建时间" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="True"/>
+          <DataGridTextColumn Header="成功时间" Binding="{Binding CompletedAt}" Width="150" IsReadOnly="True"/>
+          <DataGridTextColumn Header="邮箱/手机号" Binding="{Binding Identifier}" Width="230" IsReadOnly="True"/>
+          <DataGridTextColumn Header="账号类型" Binding="{Binding AccountType}" Width="110" IsReadOnly="True"/>
+          <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="90" IsReadOnly="True"/>
+          <DataGridTextColumn Header="refresh token" Binding="{Binding RefreshToken}" Width="180" IsReadOnly="True"/>
+          <DataGridTextColumn Header="代理出口" Binding="{Binding Proxy}" Width="170" IsReadOnly="True"/>
+          <DataGridTextColumn Header="备注" Binding="{Binding Notes}" Width="*" IsReadOnly="True"/>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <Grid Grid.Row="4" Margin="6,0,6,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="78"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Border Grid.Row="0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <DataGrid ItemsSource="{Binding Tasks}" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
+                  IsReadOnly="True" RowHeight="26" BorderThickness="0">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="邮箱/任务" Binding="{Binding Name}" Width="180"/>
+            <DataGridTextColumn Header="任务" Binding="{Binding Task}" Width="120"/>
+            <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="90"/>
+            <DataGridTextColumn Header="信息" Binding="{Binding Info}" Width="*"/>
+            <DataGridTextColumn Header="重试次数" Binding="{Binding Retry}" Width="80"/>
+            <DataGridTextColumn Header="耗时(s)" Binding="{Binding Cost}" Width="80"/>
+            <DataGridTextColumn Header="成功时间" Binding="{Binding DoneAt}" Width="150"/>
+          </DataGrid.Columns>
+        </DataGrid>
+      </Border>
+      <Border Grid.Row="1" Margin="0,6,0,0" Background="#0B1426" BorderBrush="#17233B" BorderThickness="1">
+        <TextBox Text="{Binding LogText}" Background="#0B1426" Foreground="#DCEBFF" BorderThickness="0"
+                 FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"/>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="5" Background="#EEF3FA" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+      <TextBlock Margin="8,3" Text="{Binding StatusText}" Foreground="{StaticResource TextSub}"/>
+    </Border>
+  </Grid>
+</Window>

@@ -1,0 +1,14 @@
+config.json
+sms_tool/config.json
+outlook_results/
+dist/
+
+__pycache__/
+*.py[cod]
+
+SmsWorkbench/bin/
+SmsWorkbench/obj/
+
+.vs/
+.idea/
+.vscode/

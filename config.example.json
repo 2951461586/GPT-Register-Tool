@@ -1,0 +1,66 @@
+{
+    "chatgpt": {
+        "auth_base_url": "https://auth.openai.com",
+        "chat_base_url": "https://chatgpt.com",
+        "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
+    },
+    "proxy": {
+        "default": null
+    },
+    "registration": {
+        "password_random_length": 12,
+        "password_suffix": "!A1",
+        "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    },
+    "phone_sms": {
+        "provider": "herosms",
+        "herosms_api_key": "YOUR_HEROSMS_API_KEY",
+        "smsbower_api_key": "YOUR_SMSBOWER_API_KEY",
+        "service": "dr",
+        "country": null,
+        "max_price": 1.00,
+        "min_price": 0.01,
+        "blocked_countries": [],
+        "smsbower_base_url": "https://smsbower.page/stubs/handler_api.php"
+    },
+    "email_registration": {
+        "use_as_username": false,
+        "nb_register_path": "F:\\epsoft\\nb-register",
+        "token_file": "F:\\epsoft\\nb-register\\outlook-register-service\\Results\\outlook_token.txt",
+        "email": "",
+        "password": "",
+        "refresh_token": "",
+        "access_token": "",
+        "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
+        "oauth_scope": "offline_access https://graph.microsoft.com/Mail.Read",
+        "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
+    },
+    "outlook_register": {
+        "nb_register_path": "F:\\epsoft\\nb-register",
+        "script_path": "F:\\epsoft\\nb-register\\outlook-register-service\\camoufox_register.py",
+        "results_dir": "F:\\epsoft\\GPT-Register-Tool\\outlook_results",
+        "output_directory": "F:\\epsoft\\GPT-Register-Tool\\outlook_results",
+        "filename_pattern": "mailbox_{email}_{timestamp}.json",
+        "email_suffix": "@outlook.com",
+        "proxy": "",
+        "max_captcha_retries": 10,
+        "timeout_seconds": 900,
+        "oauth_timeout_seconds": 120,
+        "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
+        "oauth_redirect_url": "https://login.microsoftonline.com/common/oauth2/nativeclient",
+        "oauth_scope": "offline_access https://graph.microsoft.com/Mail.Read",
+        "oauth_verification_code": "",
+        "oauth_verification_code_file": "",
+        "skip_oauth": false,
+        "debug": false
+    },
+    "timeouts": {
+        "request": 20,
+        "token_cache_ttl": 300
+    },
+    "output": {
+        "directory": ".",
+        "filename_pattern": "session_{email}_{timestamp}.json"
+    }
+}
