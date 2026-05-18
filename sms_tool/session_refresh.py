@@ -253,7 +253,6 @@ def _session_token(data, *keys):
 
 
 def _import_cookie_header(ctx, cookie_header):
-    cookies = []
     for item in str(cookie_header or "").split(";"):
         if "=" not in item:
             continue
@@ -262,17 +261,19 @@ def _import_cookie_header(ctx, cookie_header):
         value = value.strip()
         if not name or not value:
             continue
-        cookies.append({
+        cookie = {
             "name": name,
             "value": value,
-            "domain": ".chatgpt.com",
+            "url": "https://chatgpt.com",
             "path": "/",
             "httpOnly": name.startswith("__Secure-") or name.startswith("__Host-"),
             "secure": True,
             "sameSite": "Lax",
-        })
-    if cookies:
-        ctx.add_cookies(cookies)
+        }
+        try:
+            ctx.add_cookies([cookie])
+        except Exception as e:
+            print(f"[*] Skipping stale cookie {name}: {e}")
 
 
 def _cookie_header(cookies):

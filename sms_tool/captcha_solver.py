@@ -277,7 +277,8 @@ def _playwright_proxy(proxy_url: str) -> Optional[dict]:
         host = parsed.hostname or ""
         if not host:
             return None
-        server = f"{parsed.scheme or 'http'}://{host}"
+        scheme = (parsed.scheme or "http").replace("socks5h", "socks5")
+        server = f"{scheme}://{host}"
         if parsed.port:
             server += f":{parsed.port}"
         proxy = {"server": server, "bypass": "127.0.0.1,localhost"}
@@ -581,3 +582,174 @@ def _solve_recaptcha(
 
 class CaptchaError(Exception):
     """Raised when CAPTCHA solving fails."""
+
+
+def solve_recaptcha_on_page(
+    *,
+    page_url: str,
+    cookies: dict[str, str] | None = None,
+    proxy: str = "",
+    headless: bool = True,
+    timeout_ms: int = 120000,
+    locale: str = "en-US",
+    log: Callable[[str], None] = print,
+) -> tuple[str, str]:
+    """Solve reCAPTCHA v2 on the actual PayPal page using Playwright.
+
+    Loads the real page (with session cookies), clicks the reCAPTCHA checkbox,
+    waits for the token, and returns it. Handles both invisible v3 and
+    checkbox v2 challenges.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise CaptchaError("playwright is required: pip install playwright")
+
+    log("[captcha] Loading real page to solve reCAPTCHA v2...")
+
+    playwright_ctx = None
+    browser = None
+    context = None
+    page = None
+    try:
+        playwright_ctx = sync_playwright().start()
+        launch_kwargs: dict[str, Any] = {
+            "headless": headless,
+            "args": ["--no-sandbox", "--disable-dev-shm-usage"],
+        }
+        pw_proxy = _playwright_proxy(proxy)
+        if pw_proxy:
+            launch_kwargs["proxy"] = pw_proxy
+        browser = playwright_ctx.chromium.launch(**launch_kwargs)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 960},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+            ),
+            locale=locale or "en-US",
+        )
+
+        # Inject cookies from the HTTP session (best effort)
+        if cookies:
+            for name, value in cookies.items():
+                try:
+                    if name and value and len(str(name)) < 128 and len(str(value)) < 2048:
+                        context.add_cookies([{
+                            "name": str(name),
+                            "value": str(value),
+                            "domain": ".paypal.com",
+                            "path": "/",
+                        }])
+                except Exception:
+                    pass
+
+        page = context.new_page()
+
+        # Navigate to the actual PayPal page
+        page.goto(page_url, wait_until="domcontentloaded", timeout=30000)
+        time.sleep(2)
+
+        # Try to find and click the reCAPTCHA checkbox
+        recaptcha_frame = None
+        deadline = time.time() + timeout_ms / 1000
+
+        # Wait for reCAPTCHA iframe to appear
+        while time.time() < deadline:
+            for frame in page.frames:
+                if "recaptcha" in (frame.url or "").lower():
+                    recaptcha_frame = frame
+                    break
+            if recaptcha_frame:
+                break
+            time.sleep(0.5)
+
+        if not recaptcha_frame:
+            # Maybe it's invisible v3 - try extracting token directly
+            token = page.evaluate(
+                "typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''"
+            )
+            if token:
+                log(f"[captcha] reCAPTCHA v3 token extracted, len={len(token)}")
+                return token, ""
+            # Debug: screenshot and page title
+            try:
+                page.screenshot(path="runtime/captcha_debug.png")
+                title = page.title()
+                url = page.url
+                log(f"[captcha] page title: {title}")
+                log(f"[captcha] page url: {url}")
+                log(f"[captcha] screenshot saved: runtime/captcha_debug.png")
+                # List all frames
+                for f in page.frames:
+                    log(f"[captcha] frame: {f.url[:100]}")
+            except Exception:
+                pass
+            raise CaptchaError("reCAPTCHA iframe not found on page")
+
+        log("[captcha] reCAPTCHA iframe found, clicking checkbox...")
+
+        # Click the checkbox inside the reCAPTCHA iframe
+        try:
+            checkbox = recaptcha_frame.wait_for_selector(
+                ".recaptcha-checkbox-border, #recaptcha-anchor", timeout=10000
+            )
+            if checkbox:
+                checkbox.click()
+                time.sleep(2)
+        except Exception as e:
+            log(f"[captcha] checkbox click failed: {e}")
+
+        # Wait for token to appear (checkbox solved or challenge completed)
+        while time.time() < deadline:
+            token = page.evaluate(
+                "typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''"
+            )
+            if token:
+                log(f"[captcha] reCAPTCHA solved, token_len={len(token)}")
+                return token, ""
+
+            # Check if image challenge appeared
+            challenge_frame = None
+            for frame in page.frames:
+                if "bframe" in (frame.url or "").lower() or "challenge" in (frame.url or "").lower():
+                    challenge_frame = frame
+                    break
+            if challenge_frame:
+                log("[captcha] Image challenge detected, waiting for manual/solver...")
+                # Take screenshot for debugging
+                try:
+                    page.screenshot(path="runtime/captcha_challenge.png")
+                    log("[captcha] Screenshot saved: runtime/captcha_challenge.png")
+                except Exception:
+                    pass
+                # For image challenges, we need external help
+                # Wait a bit in case it auto-solves
+                time.sleep(5)
+                continue
+
+            time.sleep(1)
+
+        raise CaptchaError(f"reCAPTCHA solve timeout ({timeout_ms // 1000}s)")
+
+    finally:
+        if page is not None:
+            try:
+                page.close()
+            except Exception:
+                pass
+        if context is not None:
+            try:
+                context.close()
+            except Exception:
+                pass
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
+        if playwright_ctx is not None:
+            try:
+                playwright_ctx.stop()
+            except Exception:
+                pass

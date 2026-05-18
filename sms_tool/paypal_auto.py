@@ -121,13 +121,14 @@ def auto_pay(
 
     print(f"[*] PayPal URL: {paypal_url[:80]}...")
 
-    # 3. Pick card + address
+    # 3. Pick card + address + phone
     card, address = _pick_card_and_address(cfg)
+    phone, sms_api_url = _pick_phone_and_sms(cfg)
     first_name, last_name = _random_name()
     password = _generate_password()
     alias_email = _generate_alias_email(target_email)
 
-    print(f"[*] Card: ****{card['number'][-4:]}  Name: {first_name} {last_name}  Email: {alias_email}")
+    print(f"[*] Card: ****{card['number'][-4:]}  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone}")
 
     # 4. Try reverse protocol first
     use_reverse = cfg.get("reverse_engineering", True)
@@ -142,6 +143,8 @@ def auto_pay(
             last_name=last_name,
             alias_email=alias_email,
             password=password,
+            phone=phone,
+            sms_api_url=sms_api_url,
             cfg=cfg,
             proxy=proxy,
             cookie_header=data.get("cookie_header", ""),
@@ -151,8 +154,9 @@ def auto_pay(
     # 5. Browser fallback (unless reverse_only or reverse succeeded)
     if not result.get("ok") and not reverse_only:
         if use_reverse:
-            print(f"[*] Reverse protocol failed ({result.get('error', '')}), falling back to browser")
-        result = _try_browser_pay(
+            print(f"[*] Reverse protocol failed ({result.get('error', '')}), trying nodriver...")
+        # 5a. Try nodriver first (undetected Chrome)
+        result = _try_nodriver_pay(
             paypal_url=paypal_url,
             card=card,
             address=address,
@@ -160,11 +164,29 @@ def auto_pay(
             last_name=last_name,
             alias_email=alias_email,
             password=password,
+            phone=phone,
+            sms_api_url=sms_api_url,
             cfg=cfg,
             proxy=proxy,
-            headless=headless,
-            cookie_header=data.get("cookie_header", ""),
         )
+        # 5b. Fall back to Camoufox/CloakBrowser if nodriver fails
+        if not result.get("ok"):
+            print(f"[*] nodriver failed ({result.get('error', '')}), falling back to browser")
+            result = _try_browser_pay(
+                paypal_url=paypal_url,
+                card=card,
+                address=address,
+                first_name=first_name,
+                last_name=last_name,
+                alias_email=alias_email,
+                password=password,
+                phone=phone,
+                sms_api_url=sms_api_url,
+                cfg=cfg,
+                proxy=proxy,
+                headless=headless,
+                cookie_header=data.get("cookie_header", ""),
+            )
 
     # 6. Save results
     if result.get("ok"):
@@ -199,6 +221,8 @@ def _try_reverse_pay(
     last_name: str,
     alias_email: str,
     password: str,
+    phone: str,
+    sms_api_url: str,
     cfg: dict,
     proxy: str | None = None,
     cookie_header: str = "",
@@ -208,12 +232,11 @@ def _try_reverse_pay(
     from .paypal_reverse import try_reverse_pay
 
     sms_cfg = {
-        "api_url": cfg.get("sms_api_url", ""),
-        "phone": cfg.get("phone_number", ""),
+        "api_url": sms_api_url,
+        "phone": phone,
         "poll_interval": int(cfg.get("sms_poll_interval", 5)),
         "timeout": int(cfg.get("sms_timeout", 120)),
     }
-    phone = cfg.get("phone_number", "")
 
     print("[*] Attempting reverse protocol...")
     result = try_reverse_pay(
@@ -243,6 +266,64 @@ def _try_reverse_pay(
     return result
 
 
+# ──────────────────────────── nodriver fallback flow ────────────────────────────
+
+
+def _try_nodriver_pay(
+    paypal_url: str,
+    card: dict,
+    address: dict,
+    first_name: str,
+    last_name: str,
+    alias_email: str,
+    password: str,
+    phone: str,
+    sms_api_url: str,
+    cfg: dict,
+    proxy: str | None = None,
+) -> dict[str, Any]:
+    """Attempt PayPal payment via nodriver (undetected Chrome)."""
+    from .nodriver_paypal import run_nodriver_pay
+
+    sms_cfg = {
+        "api_url": sms_api_url,
+        "phone": phone,
+        "poll_interval": int(cfg.get("sms_poll_interval", 5)),
+        "timeout": int(cfg.get("sms_timeout", 120)),
+    }
+
+    # Normalize proxy
+    nd_proxy = proxy
+    if nd_proxy and "socks5h://" in nd_proxy:
+        nd_proxy = nd_proxy.replace("socks5h://", "socks5://")
+
+    print("[*] Attempting nodriver payment flow...")
+    result = run_nodriver_pay(
+        paypal_url=paypal_url,
+        card=card,
+        address=address,
+        first_name=first_name,
+        last_name=last_name,
+        alias_email=alias_email,
+        password=password,
+        phone=phone,
+        sms_cfg=sms_cfg,
+        proxy=nd_proxy or "",
+        timeout=180,
+    )
+
+    if result.get("ok"):
+        result.setdefault("paypal_status", "completed")
+        result.setdefault("alias_email", alias_email)
+        result.setdefault("card_last4", card["number"][-4:])
+        result.setdefault("password", password)
+        print("[*] nodriver payment succeeded!")
+    else:
+        print(f"[!] nodriver payment failed: {result.get('error', '')}")
+
+    return result
+
+
 # ──────────────────────────── browser fallback flow ────────────────────────────
 
 
@@ -254,6 +335,8 @@ def _try_browser_pay(
     last_name: str,
     alias_email: str,
     password: str,
+    phone: str,
+    sms_api_url: str,
     cfg: dict,
     proxy: str | None = None,
     headless: bool = False,
@@ -265,8 +348,8 @@ def _try_browser_pay(
     falls back to CloakBrowser if Camoufox is not installed.
     """
     sms_cfg = {
-        "api_url": cfg.get("sms_api_url", ""),
-        "phone": cfg.get("phone_number", ""),
+        "api_url": sms_api_url,
+        "phone": phone,
         "poll_interval": int(cfg.get("sms_poll_interval", 5)),
         "timeout": int(cfg.get("sms_timeout", 120)),
     }
@@ -703,6 +786,28 @@ def _write_index(path: str, value: int):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(str(value), encoding="utf-8")
+
+
+# ──────────────────────────── phone / sms selection ────────────────────────────
+
+
+def _pick_phone_and_sms(cfg: dict) -> tuple[str, str]:
+    """Pick a phone number and SMS API URL via round-robin.
+
+    Supports two config formats:
+      - New:  "phone_numbers": [{"phone": "...", "sms_api_url": "..."}, ...]
+      - Legacy fallback: single "phone_number" + "sms_api_url"
+    """
+    phone_list = cfg.get("phone_numbers") or []
+    if phone_list:
+        index_file = cfg.get("phone_index_file", "runtime/paypal_phone_index.txt")
+        idx = _read_index(index_file)
+        entry = phone_list[idx % len(phone_list)]
+        _write_index(index_file, idx + 1)
+        return entry["phone"], entry["sms_api_url"]
+
+    # Legacy fallback
+    return cfg.get("phone_number", ""), cfg.get("sms_api_url", "")
 
 
 # ──────────────────────────── SMS polling (shared) ────────────────────────────
