@@ -314,10 +314,41 @@ def _parse_mailbox_password_file(path):
     return records
 
 
+def _parse_chatai_mailbox_file(path):
+    """Parse chatai format: email----password----client_id----refresh_token"""
+    records = []
+    chatai_path = Path(path)
+    if not chatai_path.exists():
+        return records
+    for line_no, raw in enumerate(chatai_path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("----")
+        if len(parts) < 4:
+            print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
+            continue
+        email, password, client_id, refresh_token = (part.strip() for part in parts[:4])
+        if not email or not refresh_token:
+            continue
+        records.append(MailboxAccount(
+            email=email.lower(),
+            password=password,
+            refresh_token=refresh_token,
+            source=str(chatai_path),
+            provider="chatai",
+            token=client_id,
+        ))
+    return records
+
+
 def _load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
     if getattr(args, "buy_luckmail_mailbox", False):
         return _create_luckmail_purchase(args)
+    chatai_file = getattr(args, "chatai_mailbox_file", None)
+    if chatai_file:
+        return _parse_chatai_mailbox_file(chatai_file)
     direct = _mailbox_from_config(args)
     if direct:
         return [direct]
@@ -347,7 +378,7 @@ def _record_key(record):
 
 def _ms_oauth_refresh(mailbox):
     cfg = _email_cfg()
-    client_id = cfg.get("oauth_client_id", "9e5f94bc-e8a4-4e73-b8be-63364c29d753")
+    client_id = getattr(mailbox, "token", "") or cfg.get("oauth_client_id", "9e5f94bc-e8a4-4e73-b8be-63364c29d753")
     scope = cfg.get("oauth_scope", "offline_access https://graph.microsoft.com/Mail.Read")
     token_url = cfg.get("oauth_token_url", "https://login.microsoftonline.com/common/oauth2/v2.0/token")
     if not mailbox.refresh_token:
@@ -433,6 +464,15 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
     while time.time() < deadline:
         try:
             for msg in _fetch_mailbox_messages(mailbox):
+                if issued_after_unix > 0:
+                    recv_time = str(msg.get("receivedDateTime") or "")
+                    if recv_time:
+                        try:
+                            recv_ts = int(datetime.fromisoformat(recv_time.replace("Z", "+00:00")).timestamp())
+                            if recv_ts < issued_after_unix:
+                                continue
+                        except Exception:
+                            pass
                 subject = str(msg.get("subject") or "")
                 if keyword and keyword not in subject.lower():
                     continue

@@ -62,6 +62,7 @@ class ReversePayResult:
 # ──────────────────────────── constants ────────────────────────────
 
 _CHROME_VERSION = "136"
+_CHROME_FULL_VERSION = "136.0.7103.93"
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_CHROME_VERSION}.0.0.0 Safari/537.36"
@@ -69,12 +70,15 @@ _USER_AGENT = (
 
 # Patterns indicating JS-only rendering or CAPTCHA
 _CAPTCHA_PATTERNS = [
-    re.compile(r"recaptcha", re.I),
+    re.compile(r"data-app=[\"']?authchallenge_response", re.I),
+    re.compile(r"id=[\"']?captcha-standalone", re.I),
+    re.compile(r"data-enable-ads-captcha=[\"']?true", re.I),
+    re.compile(r"adsddcaptcha", re.I),
+    re.compile(r"ngrlCaptcha", re.I),
     re.compile(r"g-recaptcha", re.I),
-    re.compile(r"captcha", re.I),
+    re.compile(r"recaptcha", re.I),
     re.compile(r"are you a human", re.I),
     re.compile(r"verify you are human", re.I),
-    re.compile(r"robot", re.I),
 ]
 
 _BLOCK_PATTERNS = [
@@ -130,6 +134,8 @@ class PayPalReverseClient:
         self._csrf_token: str = ""
         self._captcha_token: str = ""
         self._captcha_ekey: str = ""
+        self._nodriver_cookies: dict[str, str] = {}
+        self._captcha_solved_by_nodriver: bool = False
 
     # ──────────────── public entry ────────────────
 
@@ -192,7 +198,10 @@ class PayPalReverseClient:
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
+            "Cache-Control": "max-age=0",
+            "Priority": "u=0, i",
             "sec-ch-ua": f'"Chromium";v="{_CHROME_VERSION}", "Google Chrome";v="{_CHROME_VERSION}", "Not.A/Brand";v="99"',
+            "sec-ch-ua-full-version-list": f'"Chromium";v="{_CHROME_FULL_VERSION}", "Google Chrome";v="{_CHROME_FULL_VERSION}", "Not.A/Brand";v="99.0.0.0"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "Sec-Fetch-Dest": "document",
@@ -280,6 +289,14 @@ class PayPalReverseClient:
 
         # Check for immediate blocks
         self._check_blocked(self._current_html, "load_page")
+
+        # If nodriver solved CAPTCHA, reload with updated cookies/URL
+        if self._captcha_solved_by_nodriver:
+            r = self._safe_request("GET", self._current_url)
+            self._current_html = r.text
+            self._current_url = str(r.url)
+            self._update_csrf(r)
+            print(f"[re] Reloaded page after nodriver CAPTCHA bypass: {self._current_url[:80]}")
 
         # If PayPal redirected to login/signup page, follow
         if "login" in self._current_url.lower() or "signup" in self._current_url.lower():
@@ -783,52 +800,230 @@ class PayPalReverseClient:
     def _check_blocked(self, html: str, step: str):
         """Check for CAPTCHA or block pages.
 
-        When CAPTCHA is detected, attempts automatic solving via captcha_solver
-        before falling back to browser automation.
+        When CAPTCHA is detected, attempts automatic solving via captcha_solver,
+        then submits the token to the challenge endpoint and re-checks the page.
         """
+        # Skip CAPTCHA check if nodriver already solved it
+        if self._captcha_solved_by_nodriver:
+            print(f"[re] CAPTCHA already solved by nodriver, skipping check at {step}")
+            return
+
         for pattern in _CAPTCHA_PATTERNS:
             if pattern.search(html):
                 token = self._try_solve_captcha(html, step)
-                if token:
-                    # Token injected; skip the browser fallback for this step
-                    print(f"[re] CAPTCHA solved at {step} step, continuing")
-                    return
+                if token == "__nodriver_cookies__":
+                    # nodriver solved CAPTCHA — reload with new cookies and URL
+                    r = self._safe_request("GET", self._current_url)
+                    self._current_html = r.text
+                    self._current_url = str(r.url)
+                    self._update_csrf(r)
+                    # If nodriver flag is set, trust it and continue
+                    if self._captcha_solved_by_nodriver:
+                        print(f"[re] CAPTCHA bypassed via nodriver at {step} step")
+                        return
+                    print(f"[re] nodriver cookies insufficient at {step}, falling back")
+                elif token:
+                    # Submit token to challenge endpoint and re-request
+                    self._submit_captcha_challenge(html, token)
+                    # Re-request the current page to verify CAPTCHA is cleared
+                    r = self._safe_request("GET", self._current_url)
+                    self._current_html = r.text
+                    self._current_url = str(r.url)
+                    self._update_csrf(r)
+                    still_blocked = any(p.search(self._current_html) for p in _CAPTCHA_PATTERNS)
+                    if not still_blocked:
+                        print(f"[re] CAPTCHA solved at {step} step, page reloaded")
+                        return
+                    print(f"[re] CAPTCHA persists at {step} after solve, falling back")
                 raise _NeedBrowserFallback(step, f"CAPTCHA detected at {step} step")
         for pattern in _BLOCK_PATTERNS:
             if pattern.search(html):
                 raise _NeedBrowserFallback(step, f"page blocked at {step} step")
 
-    def _try_solve_captcha(self, html: str, step: str) -> str | None:
-        """Attempt to solve CAPTCHA automatically. Returns token or None."""
+    def _submit_captcha_challenge(self, html: str, token: str):
+        """Submit solved CAPTCHA token to PayPal's challenge endpoint.
+
+        PayPal's ADS CAPTCHA expects the token to be POSTed to the challenge
+        form action URL (typically /auth/createchallenge/.../challenge).
+        """
+        # Extract challenge form action
+        action_match = re.search(
+            r'<form[^>]*name=["\']?challenge["\']?[^>]*action=["\']([^"\']+)["\']',
+            html, re.I,
+        )
+        if not action_match:
+            # Try alternative patterns
+            action_match = re.search(
+                r'action=["\']([^"\']*(?:challenge|auth)[^"\']*)["\']',
+                html, re.I,
+            )
+        if not action_match:
+            print("[re] No challenge form action found, skipping challenge submit")
+            return
+
+        action = action_match.group(1)
+        if action.startswith("/"):
+            parsed = urlparse(self._current_url)
+            action = f"{parsed.scheme}://{parsed.netloc}{action}"
+
+        # Extract hidden fields from the challenge form
+        form_match = re.search(
+            r'<form[^>]*name=["\']?challenge["\']?[^>]*>(.*?)</form>',
+            html, re.DOTALL | re.I,
+        )
+        fields = {}
+        if form_match:
+            form_html = form_match.group(1)
+            for m in re.finditer(r'<input[^>]*type=["\']hidden["\'][^>]*>', form_html, re.I):
+                tag = m.group(0)
+                name = self._get_attr(tag, "name")
+                value = self._get_attr(tag, "value")
+                if name:
+                    fields[name] = value
+
+        # Add CAPTCHA response token
+        fields["g-recaptcha-response"] = token
+        fields["h-captcha-response"] = token
+        if self._captcha_ekey:
+            fields["recaptcha-ekey"] = self._captcha_ekey
+
+        headers = {
+            "Referer": self._current_url,
+            "Origin": urlparse(self._current_url).scheme + "://" + urlparse(self._current_url).netloc,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+
         try:
-            from .captcha_solver import CaptchaError, extract_captcha_config, solve_captcha
+            r = self._safe_request("POST", action, data=fields, headers=headers)
+            # Update cookies from challenge response
+            print(f"[re] Challenge submit: {r.status_code} {str(r.url)[:60]}")
+        except Exception as e:
+            print(f"[re] Challenge submit failed: {e}")
+
+    def _try_solve_captcha(self, html: str, step: str) -> str | None:
+        """Attempt to solve CAPTCHA automatically. Returns token or None.
+
+        Strategy:
+        1. Try basic Playwright bridge solver (invisible v3 / simple v2)
+        2. If that fails, load the real PayPal page in browser and solve v2
+        """
+        try:
+            from .captcha_solver import (
+                CaptchaError,
+                _PAYPAL_RECAPTCHA_SITE_KEY,
+                _solve_hcaptcha,
+                _solve_recaptcha,
+                extract_captcha_config,
+                solve_recaptcha_on_page,
+            )
         except ImportError:
-            print("[re] captcha_solver module not available, falling back to browser")
+            print("[re] captcha_solver module not available")
             return None
 
         config = extract_captcha_config(html)
-        if not config.get("site_key"):
-            print(f"[re] CAPTCHA detected at {step} but no site_key found")
-            return None
+        captcha_type = config.get("type", "")
+        site_key = config.get("site_key", "")
 
+        if not site_key:
+            if re.search(r"captcha", html, re.I) and _PAYPAL_RECAPTCHA_SITE_KEY:
+                print(f"[re] CAPTCHA at {step}, using PayPal reCAPTCHA fallback key")
+                captcha_type = "recaptcha"
+                site_key = _PAYPAL_RECAPTCHA_SITE_KEY
+            else:
+                print(f"[re] CAPTCHA detected at {step} but no site_key found")
+                return None
+
+        # Step 1: Try basic bridge solver
         try:
-            token, ekey = solve_captcha(
-                html,
-                proxy=self.proxy or "",
-                headless=True,
-                timeout_ms=90000,
-                locale="en-US",
-                log=lambda msg: print(msg),
-            )
+            if captcha_type == "hcaptcha":
+                token, ekey = _solve_hcaptcha(
+                    site_key=site_key,
+                    rqdata=config.get("rqdata", ""),
+                    proxy=self.proxy or "",
+                    headless=True,
+                    timeout_ms=90000,
+                    locale="en-US",
+                    log=lambda msg: print(msg),
+                )
+            else:
+                token, ekey = _solve_recaptcha(
+                    site_key=site_key,
+                    proxy=self.proxy or "",
+                    headless=True,
+                    timeout_ms=90000,
+                    locale="en-US",
+                    log=lambda msg: print(msg),
+                )
             if token:
-                # Store the token for use in subsequent form submissions
                 self._captcha_token = token
                 self._captcha_ekey = ekey
                 return token
         except CaptchaError as e:
-            print(f"[re] CAPTCHA solve failed at {step}: {e}")
+            print(f"[re] Basic solver failed at {step}: {e}")
         except Exception as e:
-            print(f"[re] CAPTCHA solve error at {step}: {e}")
+            print(f"[re] Basic solver error at {step}: {e}")
+
+        # Step 2: Browser fallback - load real page and solve reCAPTCHA v2
+        print(f"[re] Trying browser fallback for CAPTCHA at {step}...")
+        try:
+            # Collect cookies from the HTTP session
+            session_cookies = {}
+            if hasattr(self._session, "cookies"):
+                jar = self._session.cookies
+                if hasattr(jar, "get_dict"):
+                    session_cookies = jar.get_dict()
+                else:
+                    session_cookies = dict(jar)
+
+            token, ekey = solve_recaptcha_on_page(
+                page_url=self._current_url,
+                cookies=session_cookies,
+                proxy=self.proxy or "",
+                headless=True,
+                timeout_ms=120000,
+                locale="en-US",
+                log=lambda msg: print(msg),
+            )
+            if token:
+                self._captcha_token = token
+                self._captcha_ekey = ekey
+                return token
+        except CaptchaError as e:
+            print(f"[re] Browser fallback failed at {step}: {e}")
+        except Exception as e:
+            print(f"[re] Browser fallback error at {step}: {e}")
+
+        # Step 3: nodriver fallback (undetected Chrome)
+        print(f"[re] Trying nodriver for CAPTCHA at {step}...")
+        try:
+            from .nodriver_captcha import solve_captcha_with_nodriver
+
+            nd_result = solve_captcha_with_nodriver(
+                page_url=self._current_url,
+                proxy=self.proxy.replace("socks5h://", "socks5://") if self.proxy else "",
+                headless=False,
+                timeout=120,
+            )
+            if nd_result.get("ok") and nd_result.get("cookies"):
+                # Import nodriver cookies into HTTP session
+                for name, value in nd_result["cookies"].items():
+                    self._session.cookies.set(name, value, domain=".paypal.com")
+                print(f"[re] Imported {len(nd_result['cookies'])} nodriver cookies")
+                self._nodriver_cookies = nd_result["cookies"]
+
+                # If nodriver navigated past CAPTCHA, use its final URL
+                final_url = nd_result.get("final_url", "")
+                if final_url and "paypal.com" in final_url:
+                    self._current_url = final_url
+                    print(f"[re] Using nodriver final URL: {final_url[:80]}")
+
+                # Mark CAPTCHA as solved so _check_blocked skips re-check
+                self._captcha_solved_by_nodriver = True
+                return "__nodriver_cookies__"
+        except Exception as e:
+            print(f"[re] nodriver fallback failed at {step}: {e}")
+
         return None
 
     def _update_csrf(self, response: Any):
@@ -876,10 +1071,13 @@ class PayPalReverseClient:
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "same-origin",
             "Sec-Fetch-User": "?1",
+            "X-Requested-With": "XMLHttpRequest",
         }
         if self._csrf_token:
             headers["X-CSRF-Token"] = self._csrf_token
-            headers["X-Requested-With"] = "XMLHttpRequest"
+
+        # Remove None/empty values
+        clean_fields = {k: v for k, v in fields.items() if v is not None}
 
         # Inject CAPTCHA token if available
         if self._captcha_token:
@@ -890,9 +1088,6 @@ class PayPalReverseClient:
             # Clear after use to avoid stale tokens
             self._captcha_token = ""
             self._captcha_ekey = ""
-
-        # Remove None/empty values
-        clean_fields = {k: v for k, v in fields.items() if v is not None}
 
         r = self._safe_request("POST", action, data=clean_fields, headers=headers)
         return r

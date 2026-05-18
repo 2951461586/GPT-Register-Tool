@@ -43,8 +43,7 @@ DEFAULT_STRIPE_PK = (
 DEFAULT_TIMEOUT = 30
 
 PP_PROXIES = [
-    "socks5h://127.0.0.1:17912",  # JP（优惠券资格）
-    "socks5h://127.0.0.1:17911",  # US（备选）
+    "socks5h://127.0.0.1:17912",  # JP exit, required for coupon-qualified checkout
 ]
 
 BILLING_REGIONS = [
@@ -105,6 +104,92 @@ def _stage_proxy(paypal_cfg: dict[str, Any], stage: str, fallback_proxy: str) ->
     stages = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
     fallback = _normalize_proxy(stages.get("default") or fallback_proxy)
     return _normalize_proxy(stages.get(stage, fallback))
+
+
+def _stripe_error_details(response: Any) -> dict[str, Any]:
+    details: dict[str, Any] = {"status": getattr(response, "status_code", None)}
+    body: Any = None
+    try:
+        body = response.json()
+    except Exception:
+        body = None
+    if isinstance(body, dict):
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        for key in ("code", "decline_code", "type", "message", "doc_url", "request_log_url"):
+            value = error.get(key)
+            if value:
+                details[key] = value
+        payment_method = error.get("payment_method") if isinstance(error.get("payment_method"), dict) else {}
+        if payment_method.get("id"):
+            details["payment_method_id"] = payment_method["id"]
+        setup_intent = error.get("setup_intent") if isinstance(error.get("setup_intent"), dict) else {}
+        if setup_intent.get("id"):
+            details["setup_intent_id"] = setup_intent["id"]
+    text = str(getattr(response, "text", "") or "")
+    if text:
+        details["raw"] = text[:500]
+    return details
+
+
+def _is_terminal_confirm_decline(details: dict[str, Any]) -> bool:
+    if details.get("status") != 402:
+        return False
+    if details.get("decline_code"):
+        return True
+    return details.get("code") in {"setup_attempt_failed", "payment_intent_payment_attempt_failed"}
+
+
+def _stripe_confirm_error_result(
+    response: Any,
+    *,
+    region: dict,
+    proxy: str,
+    checkout_proxy: str,
+    stripe_init_proxy: str,
+    stripe_pm_proxy: str,
+    stripe_confirm_proxy: str,
+    cs_id: str,
+    pm_id: str,
+    due: Any,
+    amount_due: Any,
+    currency: str,
+    expected_amount: str,
+    zero_check: dict[str, Any],
+    pm_types: list[Any],
+    has_paypal: bool,
+) -> dict[str, Any]:
+    details = _stripe_error_details(response)
+    terminal = _is_terminal_confirm_decline(details)
+    reason = details.get("decline_code") or details.get("code") or "unknown"
+    message = details.get("message") or str(getattr(response, "text", "") or "")[:180]
+    return {
+        "ok": False,
+        "error": f"Stripe confirm declined: status={details.get('status')} reason={reason} message={message}",
+        "error_code": "stripe_confirm_declined",
+        "terminal": terminal,
+        "retryable": not terminal,
+        "stripe_error": details,
+        "cs_id": cs_id,
+        "pm_id": pm_id,
+        "due": due,
+        "amount_due": amount_due,
+        "currency": currency,
+        "expected_amount": expected_amount,
+        "zero_due_verified": bool(zero_check.get("ok")),
+        "tax_after_zero": zero_check.get("tax_after_zero"),
+        "zero_due_amounts": zero_check.get("amounts"),
+        "tax_amounts": zero_check.get("tax_amounts"),
+        "payment_method_types": pm_types,
+        "has_paypal": has_paypal,
+        "region": region["label"],
+        "proxy": proxy,
+        "stage_proxies": {
+            "checkout": checkout_proxy or "DIRECT",
+            "stripe_init": stripe_init_proxy or "DIRECT",
+            "payment_method": stripe_pm_proxy or "DIRECT",
+            "confirm": stripe_confirm_proxy or "DIRECT",
+        },
+    }
 
 
 # ──────────────────────────── Token 解析 ────────────────────────────
@@ -255,7 +340,7 @@ def _try_paypal_link(
     checkout_proxy = _stage_proxy(paypal_cfg, "checkout", proxy)
     stripe_init_proxy = _stage_proxy(paypal_cfg, "stripe_init", proxy)
     stripe_pm_proxy = _stage_proxy(paypal_cfg, "payment_method", stripe_init_proxy)
-    stripe_confirm_proxy = _stage_proxy(paypal_cfg, "confirm", "")
+    stripe_confirm_proxy = _stage_proxy(paypal_cfg, "confirm", stripe_pm_proxy)
     stripe_pk = (cfg.get("stripe") or {}).get("publishable_key") or DEFAULT_STRIPE_PK
     runtime_cfg = cfg.get("runtime") or {}
     runtime_version = runtime_cfg.get("version") or "fed52f3bc6"
@@ -501,7 +586,24 @@ def _try_paypal_link(
     print(f"[pp] confirm: status={r3.status_code}", file=sys.stderr)
 
     if r3.status_code != 200:
-        return {"ok": False, "error": f"Stripe confirm 失败: {r3.status_code} {r3.text[:300]}"}
+        return _stripe_confirm_error_result(
+            r3,
+            region=region,
+            proxy=proxy,
+            checkout_proxy=checkout_proxy,
+            stripe_init_proxy=stripe_init_proxy,
+            stripe_pm_proxy=stripe_pm_proxy,
+            stripe_confirm_proxy=stripe_confirm_proxy,
+            cs_id=cs_id,
+            pm_id=pm_id,
+            due=due,
+            amount_due=amount_due,
+            currency=currency,
+            expected_amount=expected_amount,
+            zero_check=zero_check,
+            pm_types=pm_types,
+            has_paypal=has_paypal,
+        )
 
     confirm_data = r3.json() or {}
 
@@ -569,6 +671,9 @@ def generate_pp_link(access_token: str) -> dict[str, Any]:
                         print(f"[pp] retry checkout: attempt={attempt}/{max_checkout_retries}", file=sys.stderr)
                     result = _try_paypal_link(access_token, cfg, region, proxy)
                     if result and result.get("ok"):
+                        result["checkout_attempt"] = attempt
+                        return result
+                    if result and result.get("terminal"):
                         result["checkout_attempt"] = attempt
                         return result
                     if result and result.get("error"):

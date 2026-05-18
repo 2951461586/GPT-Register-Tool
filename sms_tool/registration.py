@@ -352,8 +352,12 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
     if r.status_code != 200:
-        err = reg_data.get("error", {}).get("message", str(reg_data))
-        return {"success": False, "email": username, "error": f"user_register: {err}"}
+        err_code = reg_data.get("error", {}).get("code", "")
+        err_msg = reg_data.get("error", {}).get("message", str(reg_data))
+        if err_code == "invalid_auth_step" and "email-verification" in redirect_path:
+            print(f"  Account already in email-verification flow, resuming OTP step...")
+        else:
+            return {"success": False, "email": username, "error": f"user_register: {err_msg}"}
 
     _snapshot_luckmail_token_message(mailbox)
 

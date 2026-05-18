@@ -16,10 +16,25 @@ def regenerate_paypal_link(email="", session_file=""):
     if not access_token:
         return {"ok": False, "email": target_email, "error": "missing_access_token"}
 
+    old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
+    old_paypal_status = str(data.get("paypal_status") or "").strip()
     paypal = generate_pp_link(access_token)
     now = int(time.time())
-    data["paypal"] = paypal
-    data["paypal_status"] = "link_ready" if paypal.get("ok") and paypal.get("url") else "failed"
+    if paypal.get("ok") and paypal.get("url"):
+        data["paypal"] = paypal
+        data["paypal_status"] = "link_ready"
+    else:
+        if old_paypal.get("url"):
+            data["paypal"] = old_paypal
+            data["paypal_status"] = old_paypal_status or "link_ready"
+        else:
+            data["paypal"] = paypal
+            data["paypal_status"] = "failed"
+        data["paypal_regenerate_error"] = paypal.get("error", "")
+        if isinstance(paypal.get("stripe_error"), dict):
+            data["paypal_regenerate_error_details"] = paypal["stripe_error"]
+        if paypal.get("error_code"):
+            data["paypal_regenerate_error_code"] = paypal["error_code"]
     data["paypal_updated_at"] = now
     data["access_token"] = access_token
     data["success"] = bool(data.get("success", True))
@@ -33,7 +48,7 @@ def regenerate_paypal_link(email="", session_file=""):
         "ok": bool(paypal.get("ok") and paypal.get("url")),
         "email": data.get("email", ""),
         "paypal_status": data["paypal_status"],
-        "paypal_url": paypal.get("url", ""),
+        "paypal_url": data.get("paypal", {}).get("url", "") if isinstance(data.get("paypal"), dict) else "",
         "json_path": json_path,
         "error": paypal.get("error", ""),
     }
