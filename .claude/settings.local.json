@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python _update_cli.py)",
+      "Bash(python -c \"from sms_tool.cli import _auto_pay; print\\('_auto_pay function imported successfully'\\)\")",
+      "Bash(python _update_alias.py)",
+      "Bash(python -c ' *)",
+      "Bash(python _improve_sms.py)",
+      "Bash(python _add_batch_pay.py)",
+      "Bash(python _fix_batch.py)",
+      "Bash(python _fix_all_strings.py)",
+      "Bash(python _fix_cookies.py)",
+      "Bash(python _fix_cookie_func.py)",
+      "Bash(dir \"E:\\\\java-demo\\\\GPT-Register-Tool\\\\runtime\\\\paypal_debug\")"
+    ],
+    "defaultMode": "bypassPermissions"
+  }
+}
