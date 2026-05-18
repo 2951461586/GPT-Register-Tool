@@ -38,9 +38,16 @@
     },
     "paypal": {
         "auto_generate": true,
+        "max_checkout_retries": 3,
         "proxies": [
-            "socks5h://127.0.0.1:7897"
-        ]
+            "socks5h://127.0.0.1:17912"
+        ],
+        "stage_proxies": {
+            "checkout": "socks5h://127.0.0.1:17912",
+            "stripe_init": "socks5h://127.0.0.1:17912",
+            "payment_method": "socks5h://127.0.0.1:17912",
+            "confirm": "direct"
+        }
     },
     "runtime": {
         "directory": "runtime"
@@ -51,5 +58,35 @@
     "output": {
         "directory": "sessions",
         "filename_pattern": "session_{email}_{timestamp}.json"
+    },
+    "paypal_auto": {
+        "phone_number": "+582228832",
+        "sms_api_url": "http://a.62-us.com/api/get_sms?key=2a452c4d64f317621d9bb6394290719e",
+        "sms_poll_interval": 5,
+        "sms_timeout": 120,
+        "reverse_engineering": true,
+        "reverse_timeout": 60,
+        "browser_fallback": true,
+        "browser_engine": "camoufox",
+        "geoip": true,
+        "captcha_solver": "passive",
+        "cards": [
+            {"number": "4100393650507866", "exp_month": "12", "exp_year": "2030", "cvv": "887"},
+            {"number": "4100394649295365", "exp_month": "06", "exp_year": "2031", "cvv": "727"},
+            {"number": "4100397751125759", "exp_month": "10", "exp_year": "2029", "cvv": "122"},
+            {"number": "4100390692322379", "exp_month": "10", "exp_year": "2031", "cvv": "477"},
+            {"number": "4100394693299370", "exp_month": "11", "exp_year": "2028", "cvv": "345"}
+        ],
+        "addresses": [
+            {"line1": "1621 elswick ln", "city": "Charlotte", "state": "NC", "postal_code": "28214"},
+            {"line1": "7714 Legacy Ln", "city": "Orlando", "state": "FL", "postal_code": "32818"},
+            {"line1": "2922 E Le Marche Ave", "city": "Phoenix", "state": "AZ", "postal_code": "85032"},
+            {"line1": "1586 29th Ave", "city": "San Francisco", "state": "CA", "postal_code": "94122"},
+            {"line1": "2671 Clayton Oaks Dr", "city": "Dallas", "state": "TX", "postal_code": "75227"}
+        ],
+        "card_index_file": "runtime/paypal_card_index.txt",
+        "headless": false,
+        "debug_screenshots": true,
+        "debug_dir": "runtime/paypal_debug"
     }
 }

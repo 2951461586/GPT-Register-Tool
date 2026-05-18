@@ -1,0 +1,13 @@
+# Core dependencies
+curl_cffi>=0.7.0
+requests>=2.31.0
+
+# Anti-detect browser (preferred)
+camoufox[geoip]>=0.4.0
+browserforge>=0.1.0
+
+# Browser automation fallback
+cloakbrowser>=1.0.0
+
+# CAPTCHA solving (Playwright-based)
+playwright>=1.40.0
