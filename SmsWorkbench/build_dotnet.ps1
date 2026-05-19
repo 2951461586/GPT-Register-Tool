@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $dotnet = Join-Path $repoRoot ".dotnet\dotnet.exe"
 if (-not (Test-Path $dotnet)) {
-    $dotnet = "C:\Program Files\dotnet\dotnet.exe"
+    $dotnet = Join-Path $env:ProgramFiles "dotnet\dotnet.exe"
 }
 if (-not (Test-Path $dotnet)) {
     $dotnet = "dotnet"

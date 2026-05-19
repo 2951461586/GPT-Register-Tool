@@ -42,10 +42,6 @@ DEFAULT_STRIPE_PK = (
 
 DEFAULT_TIMEOUT = 30
 
-PP_PROXIES = [
-    "socks5h://127.0.0.1:7897",  # Clash mixed-port (direct)
-]
-
 BILLING_REGIONS = [
     {"country": "US", "currency": "USD", "label": "美国（USD）"},
 ]
@@ -671,7 +667,8 @@ def generate_pp_link(access_token: str) -> dict[str, Any]:
         cfg = {}
 
     paypal_cfg = cfg.get("paypal") or {}
-    proxies = paypal_cfg.get("proxies") or PP_PROXIES
+    default_proxy = (cfg.get("proxy") or {}).get("default") or "direct"
+    proxies = paypal_cfg.get("proxies") or [default_proxy]
     max_checkout_retries = max(1, int(paypal_cfg.get("max_checkout_retries", 3)))
 
     last_err = None
@@ -702,11 +699,18 @@ def main() -> int:
     args = sys.argv[1:]
 
     if args and args[0] == "--dry-run":
+        try:
+            _cfg = _load_json(DEFAULT_CONFIG_PATH)
+        except Exception:
+            _cfg = {}
+        _pp_cfg = (_cfg.get("paypal") or {})
+        _default_proxy = (_cfg.get("proxy") or {}).get("default") or "direct"
+        _proxies = _pp_cfg.get("proxies") or [_default_proxy]
         print(json.dumps({
             "ok": True,
             "mode": "dry-run",
             "config_exists": os.path.exists(DEFAULT_CONFIG_PATH),
-            "proxies": PP_PROXIES,
+            "proxies": _proxies,
             "regions": [r["label"] for r in BILLING_REGIONS],
         }, ensure_ascii=False, indent=2))
         return 0

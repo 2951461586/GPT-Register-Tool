@@ -1,5 +1,4 @@
 import json
-import secrets
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,6 +49,7 @@ def _failure_result(error, email="", mailbox=None, password=""):
     return result
 
 
+
 def _safe_tock():
     timings = _tl()
     if timings and timings[-1][1] > 1_000_000:
@@ -74,45 +74,121 @@ def _save_sentinel_cache(data):
         json.dump(data, f, ensure_ascii=False)
     print(f"[*] Sentinel token cached")
 
-def _extract_sentinel():
+def _extract_sentinel(proxy=None):
     cached = _get_cached_sentinel()
     if cached: return cached
+    browser_proxy = proxy.replace("socks5h://", "socks5://") if proxy else None
+    return _extract_sentinel_cloakbrowser(browser_proxy)
+
+
+def _extract_sentinel_cloakbrowser(browser_proxy):
+    """Extract sentinel tokens using CloakBrowser."""
     try:
         from cloakbrowser import launch
     except ImportError:
         print("[Error] pip install cloakbrowser")
         return None
 
-    auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
-    browser = launch(headless=True, humanize=True)
+    browser = launch(headless=True, humanize=True, proxy=browser_proxy)
     ctx = browser.new_context(
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
         viewport={"width": 1280, "height": 800}, locale="en-US", timezone_id="America/New_York")
     page = ctx.new_page()
 
-    device_id = str(uuid.uuid4())
-    state_val = secrets.token_urlsafe(32)
-    scope = "openid email profile offline_access model.request model.read organization.read organization.write"
-    auth_url = (
-        f"{auth_base}/api/accounts/authorize"
-        f"?client_id={CFG['chatgpt']['chat_web_client_id']}"
-        f"&scope={quote(scope)}"
-        f"&response_type=code"
-        f"&redirect_uri={quote('https://chatgpt.com/api/auth/callback/openai')}"
-        f"&audience={quote('https://api.openai.com/v1')}"
-        f"&device_id={device_id}"
-        f"&prompt=login"
-        f"&screen_hint=signup"
-        f"&state={state_val}"
-    )
-    try: page.goto(auth_url, wait_until="domcontentloaded", timeout=120000)
-    except: page.goto(auth_url, wait_until="commit", timeout=120000)
+    # Use create-account page (lighter, fewer redirects)
+    auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
+    page_url = f"{auth_base}/create-account"
 
     try:
-        page.wait_for_function("() => typeof window.SentinelSDK !== 'undefined'", timeout=60000, polling=500)
-        print("  SentinelSDK loaded")
-    except Exception:
-        print("  SentinelSDK not loaded!"); browser.close(); return None
+        page.goto(page_url, wait_until="domcontentloaded", timeout=120000)
+    except Exception as e:
+        err_msg = str(e)
+        if "ERR_PROXY" in err_msg or "ERR_TUNNEL" in err_msg or "ERR_CONNECTION" in err_msg:
+            print(f"  [Error] Proxy connection failed: {browser_proxy}")
+            print(f"  [Error] Please check if your proxy (Clash/V2Ray etc.) is running on the correct port.")
+            browser.close(); return None
+        try: page.goto(page_url, wait_until="commit", timeout=120000)
+        except Exception as e2:
+            print(f"  [Error] Page navigation failed: {e2}"); browser.close(); return None
+
+    if "error" in page.url:
+        print(f"  [Error] Auth page returned error: {page.url[:200]}")
+        browser.close(); return None
+
+    # Wait for Cloudflare challenge to resolve (title changes from "Just a moment..." or empty)
+    cf_deadline = time.time() + 180
+    cf_waited = 0
+    while time.time() < cf_deadline:
+        try:
+            title = page.title()
+        except Exception:
+            time.sleep(1); continue
+        if title and "just a moment" not in title.lower():
+            if cf_waited > 5:
+                print(f"  Cloudflare challenge resolved after {cf_waited}s")
+            break
+        if cf_waited > 0 and cf_waited % 30 == 0:
+            print(f"  Waiting for Cloudflare challenge... ({cf_waited}s)")
+        cf_waited += 1
+        time.sleep(1)
+    else:
+        print("  [Error] Cloudflare challenge did not resolve in 180s")
+        browser.close(); return None
+
+    # Now wait for SentinelSDK to load (CF challenge can take 10s to 2+ minutes)
+    # Use page.evaluate() instead of wait_for_function to avoid CSP unsafe-eval violations
+    sdk_deadline = time.time() + 180
+    sdk_loaded = False
+    while time.time() < sdk_deadline:
+        try:
+            if page.evaluate("() => typeof window.SentinelSDK !== 'undefined'"):
+                sdk_loaded = True; break
+        except Exception:
+            pass
+        time.sleep(1)
+    if not sdk_loaded:
+        print("  SentinelSDK not loaded after 180s! Check proxy connectivity to auth.openai.com")
+        browser.close(); return None
+    print("  SentinelSDK loaded")
+
+    result = _collect_sentinel_tokens(page, ctx)
+    browser.close()
+    return result
+
+
+def _collect_sentinel_tokens(page, ctx):
+    """Call SentinelSDK.init() and extract tokens from the loaded page."""
+    page.evaluate("() => SentinelSDK.init()"); time.sleep(0.5)
+    did = page.evaluate("() => document.cookie.match(/oai-did=([^;]+)/)?.[1] || ''")
+
+    sentinel_token = page.evaluate(f"""(did) => {{
+        return SentinelSDK.token().then(raw => {{
+            const parsed = JSON.parse(raw);
+            parsed.id = did;
+            parsed.flow = 'username_password_create';
+            return JSON.stringify(parsed);
+        }});
+    }}""", did)
+
+    sentinel_so = page.evaluate(f"""(did) => {{
+        return SentinelSDK.token().then(raw => {{
+            const parsed = JSON.parse(raw);
+            return JSON.stringify({{
+                so: raw, c: parsed.c, id: did, flow: 'oauth_create_account'
+            }});
+        }});
+    }}""", did)
+
+    cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in ctx.cookies())
+
+    result = {
+        "sentinel_token": sentinel_token,
+        "sentinel_so_token": sentinel_so,
+        "cookie_str": cookie_str,
+        "oai_did": did,
+    }
+    _save_sentinel_cache(result)
+    return result
 
     page.evaluate("() => SentinelSDK.init()"); time.sleep(0.5)
     did = page.evaluate("() => document.cookie.match(/oai-did=([^;]+)/)?.[1] || ''")
@@ -161,6 +237,12 @@ def _absolute_url(base_url, url):
     if url.startswith("http://") or url.startswith("https://"):
         return url
     return base_url.rstrip("/") + "/" + url.lstrip("/")
+
+
+def _is_existing_login_redirect(url):
+    parsed = urlparse(url or "")
+    path = (parsed.path or url or "").lower()
+    return path in {"/log-in", "/login"} or path.endswith("/log-in") or path.endswith("/login")
 
 
 def _follow_continue_url(session, url, base_headers, referer="", label="continue"):
@@ -315,7 +397,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         print("[*] Using provided sentinel tokens")
     else:
         _tick("0-Extract sentinel token")
-        sentinel_data = _extract_sentinel()
+        sentinel_data = _extract_sentinel(proxy=proxy)
         _tock()
     if not sentinel_data or not sentinel_data.get("sentinel_token"):
         return _failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox)
@@ -327,8 +409,13 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     birthdate = _random_birthdate()
     username = mailbox.email
 
-    did = sentinel_data.get("oai_did", str(uuid.uuid4()))
+    # Each registration needs its own device_id to avoid auth session conflicts in batch mode
+    did = str(uuid.uuid4())
     session_logging_id = str(uuid.uuid4()).replace("-", "")
+
+    # Use original sentinel tokens — do NOT patch the embedded id, as it breaks the HMAC signature
+    _sentinel_token = sentinel_data["sentinel_token"]
+    _sentinel_so_token = sentinel_data["sentinel_so_token"]
     print(f"[*] Username: {username}  Password: {password}  Name: {full_name}  Birth: {birthdate}")
 
     # Init curl_cffi session
@@ -374,7 +461,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         redirect_path = r.url.split("auth.openai.com")[-1]
         print(f"  Redirect: {redirect_path}")
 
-        if "log-in" in redirect_path or "login" in redirect_path:
+        if _is_existing_login_redirect(r.url):
             return _failure_result("email_already_registered_or_login_redirect", email=username, mailbox=mailbox, password=password)
 
         # Step 4: Register with username + password
@@ -382,7 +469,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
             json={"password": password, "username": username},
             headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
-                    "openai-sentinel-token": sentinel_data["sentinel_token"]},
+                    "openai-sentinel-token": _sentinel_token},
             impersonate="chrome")
         _tock()
     except Exception as e:
@@ -452,8 +539,8 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         r = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account", label="Create account",
             json={"name": full_name, "birthdate": birthdate},
             headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/about-you",
-                    "openai-sentinel-token": sentinel_data["sentinel_token"],
-                    "openai-sentinel-so-token": sentinel_data["sentinel_so_token"]},
+                    "openai-sentinel-token": _sentinel_token,
+                    "openai-sentinel-so-token": _sentinel_so_token},
             impersonate="chrome")
         _tock()
     except Exception as e:
@@ -541,7 +628,25 @@ def run_phone(*args, **kwargs):
     )
 
 
+def _unique_mailboxes(mailboxes):
+    if not mailboxes:
+        return []
+    unique = []
+    seen = set()
+    for mailbox in mailboxes:
+        email = str(getattr(mailbox, "email", "") or "").strip().lower()
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        unique.append(mailbox)
+    return unique
+
+
 def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4):
+    mailboxes = _unique_mailboxes(mailboxes)
+    if mailboxes and int(count or 1) > len(mailboxes):
+        print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
+        count = len(mailboxes)
     results = []
     print(f"\n{'=' * 60}")
     print(f"  ChatGPT Email Batch Registration - {count} accounts")
@@ -552,7 +657,7 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4):
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         try:
-            mailbox = mailboxes[i % len(mailboxes)] if mailboxes else None
+            mailbox = mailboxes[i] if mailboxes else None
             return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link)
         except Exception as e:
             import traceback; traceback.print_exc()

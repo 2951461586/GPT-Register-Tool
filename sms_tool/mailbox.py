@@ -34,6 +34,14 @@ class MailboxAccount:
 
 
 OTP_RE = re.compile(r"(^|[^0-9])([0-9]{6})([^0-9]|$)")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+KNOWN_EMAIL_DOMAINS = (
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "msn.com",
+    "gmail.com",
+)
 
 
 def _email_cfg():
@@ -49,6 +57,25 @@ def _otp_poll_interval():
         return max(1.0, float(_email_cfg().get("otp_poll_interval", 2)))
     except Exception:
         return 2.0
+
+
+def _normalize_mailbox_email(email):
+    value = str(email or "").strip().lstrip("\ufeff")
+    if "@+" in value:
+        local, suffix = value.split("@+", 1)
+        suffix_lower = suffix.lower()
+        for domain in KNOWN_EMAIL_DOMAINS:
+            if suffix_lower.endswith(domain) and len(suffix) > len(domain):
+                alias = suffix[: -len(domain)]
+                repaired = f"{local}+{alias}@{domain}"
+                if EMAIL_RE.match(repaired):
+                    print(f"[!] Repaired malformed mailbox email: {value} -> {repaired.lower()}")
+                    return repaired.lower()
+    if EMAIL_RE.match(value):
+        domain = value.rsplit("@", 1)[1]
+        if not domain.startswith("+"):
+            return value.lower()
+    return ""
 
 
 def _luckmail_headers():
@@ -276,8 +303,11 @@ def _parse_mailbox_token_file(path):
             print(f"[!] Skip malformed mailbox line {token_path}:{line_no}")
             continue
         email, password, refresh_token = (part.strip() for part in parts[:3])
+        email = _normalize_mailbox_email(email)
         access_token = parts[3].strip() if len(parts) >= 4 else ""
         if not email or not refresh_token:
+            if not email:
+                print(f"[!] Skip malformed mailbox email {token_path}:{line_no}")
             continue
         records.append(MailboxAccount(
             email=email.lower(),
@@ -303,7 +333,9 @@ def _parse_mailbox_password_file(path):
             print(f"[!] Skip malformed mailbox line {password_path}:{line_no}")
             continue
         email, password = (part.strip() for part in line.split(":", 1))
+        email = _normalize_mailbox_email(email)
         if not email:
+            print(f"[!] Skip malformed mailbox email {password_path}:{line_no}")
             continue
         records.append(MailboxAccount(
             email=email.lower(),
@@ -330,7 +362,10 @@ def _parse_chatai_mailbox_file(path):
                 print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
                 continue
             email, password, client_id, refresh_token = (part.strip() for part in parts[:4])
+            email = _normalize_mailbox_email(email)
             if not email or not refresh_token:
+                if not email:
+                    print(f"[!] Skip malformed chatai email {chatai_path}:{line_no}")
                 continue
             records.append(MailboxAccount(
                 email=email.lower(),
@@ -346,8 +381,11 @@ def _parse_chatai_mailbox_file(path):
             print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
             continue
         email, password, refresh_token = (part.strip() for part in parts[:3])
+        email = _normalize_mailbox_email(email)
         access_token = parts[3].strip() if len(parts) >= 4 else ""
         if not email or not refresh_token:
+            if not email:
+                print(f"[!] Skip malformed chatai email {chatai_path}:{line_no}")
             continue
         records.append(MailboxAccount(
             email=email.lower(),

@@ -5,19 +5,10 @@
         "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
     },
     "proxy": {
-        "default": null
-    },
-    "proxy_pool": {
-        "listen_host": "127.0.0.1",
-        "listen_port": 18080,
-        "stats_port": 18081,
-        "upstreams": [
-            {"url": "socks5://127.0.0.1:17912", "label": "jp-exit", "priority": 0},
-            {"url": "socks5://127.0.0.1:7897", "label": "clash-mixed", "priority": 1}
-        ],
-        "health_check_interval": 30,
-        "connect_timeout": 10,
-        "max_retries": 2
+        "default": "socks5h://127.0.0.1:7897",
+        "pool": [
+            "socks5h://127.0.0.1:7897"
+        ]
     },
     "registration": {
         "password_random_length": 12,
@@ -26,7 +17,7 @@
     },
     "email_registration": {
         "use_as_username": false,
-        "token_file": "F:\\epsoft\\GPT-Register-Tool\\mailbox_tokens.txt",
+        "token_file": "mailbox_tokens.txt",
         "luckmail_api_key": "YOUR_LUCKMAIL_API_KEY",
         "luckmail_base_url": "https://mails.luckyous.com",
         "luckmail_project_code": "openai",
@@ -55,12 +46,12 @@
         "require_zero_due": false,
         "max_checkout_retries": 3,
         "proxies": [
-            "socks5h://127.0.0.1:18080"
+            "socks5h://127.0.0.1:7897"
         ],
         "stage_proxies": {
-            "checkout": "socks5h://127.0.0.1:18080",
-            "stripe_init": "socks5h://127.0.0.1:18080",
-            "payment_method": "socks5h://127.0.0.1:18080",
+            "checkout": "socks5h://127.0.0.1:7897",
+            "stripe_init": "socks5h://127.0.0.1:7897",
+            "payment_method": "socks5h://127.0.0.1:7897",
             "confirm": "direct"
         }
     },
@@ -75,8 +66,8 @@
         "filename_pattern": "session_{email}_{timestamp}.json"
     },
     "paypal_auto": {
-        "phone_number": "+582228832",
-        "sms_api_url": "http://a.62-us.com/api/get_sms?key=2a452c4d64f317621d9bb6394290719e",
+        "phone_number": "",
+        "sms_api_url": "",
         "sms_poll_interval": 5,
         "sms_timeout": 120,
         "reverse_engineering": true,
@@ -86,18 +77,10 @@
         "geoip": true,
         "captcha_solver": "passive",
         "cards": [
-            {"number": "4100393650507866", "exp_month": "12", "exp_year": "2030", "cvv": "887"},
-            {"number": "4100394649295365", "exp_month": "06", "exp_year": "2031", "cvv": "727"},
-            {"number": "4100397751125759", "exp_month": "10", "exp_year": "2029", "cvv": "122"},
-            {"number": "4100390692322379", "exp_month": "10", "exp_year": "2031", "cvv": "477"},
-            {"number": "4100394693299370", "exp_month": "11", "exp_year": "2028", "cvv": "345"}
+            {"number": "CARD_NUMBER", "exp_month": "MM", "exp_year": "YYYY", "cvv": "CVV"}
         ],
         "addresses": [
-            {"line1": "1621 elswick ln", "city": "Charlotte", "state": "NC", "postal_code": "28214"},
-            {"line1": "7714 Legacy Ln", "city": "Orlando", "state": "FL", "postal_code": "32818"},
-            {"line1": "2922 E Le Marche Ave", "city": "Phoenix", "state": "AZ", "postal_code": "85032"},
-            {"line1": "1586 29th Ave", "city": "San Francisco", "state": "CA", "postal_code": "94122"},
-            {"line1": "2671 Clayton Oaks Dr", "city": "Dallas", "state": "TX", "postal_code": "75227"}
+            {"line1": "ADDRESS_LINE_1", "city": "CITY", "state": "ST", "postal_code": "ZIP"}
         ],
         "card_index_file": "runtime/paypal_card_index.txt",
         "headless": false,

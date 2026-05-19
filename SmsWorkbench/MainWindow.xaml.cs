@@ -224,6 +224,7 @@ namespace SmsWorkbench
             allRows.Clear();
             LoadMailboxPool();
             LoadSessionPool();
+            DeduplicateRows();
             currentPage = 1;
             UpdateOverview();
             RefreshPagedRows();
@@ -272,6 +273,60 @@ namespace SmsWorkbench
                 || row.AccountType.Contains("SQLite")
                 || row.Status.Contains("已注册")
                 || row.Status.Contains("PayPal");
+        }
+
+        private void DeduplicateRows()
+        {
+            var best = new Dictionary<string, PoolRow>(StringComparer.OrdinalIgnoreCase);
+            foreach (PoolRow row in allRows.ToList())
+            {
+                string key = NormalizeEmailKey(row.Identifier);
+                if (key.Length == 0) continue;
+                if (!best.TryGetValue(key, out PoolRow existing) || RowPriority(row) > RowPriority(existing))
+                {
+                    best[key] = row;
+                }
+            }
+
+            if (best.Count == 0) return;
+            var deduped = allRows.Where(row =>
+            {
+                string key = NormalizeEmailKey(row.Identifier);
+                return key.Length == 0 || ReferenceEquals(best[key], row);
+            }).ToList();
+            if (deduped.Count == allRows.Count) return;
+            allRows.Clear();
+            foreach (PoolRow row in deduped) allRows.Add(row);
+        }
+
+        private int RowPriority(PoolRow row)
+        {
+            if (row.AccountType.Contains("SQLite")) return 30;
+            if (row.AccountType.Contains("Session")) return 20;
+            if (row.PayPalUrl.Length > 0 || row.Status.Contains("PayPal")) return 15;
+            return 10;
+        }
+
+        private string NormalizeEmailKey(string email)
+        {
+            string value = (email ?? "").Trim().TrimStart('\ufeff').ToLowerInvariant();
+            if (value.Contains("@+"))
+            {
+                string[] parts = value.Split(new[] { "@+" }, StringSplitOptions.None);
+                if (parts.Length == 2)
+                {
+                    string[] domains = { "hotmail.com", "outlook.com", "live.com", "msn.com", "gmail.com" };
+                    foreach (string domain in domains)
+                    {
+                        if (parts[1].EndsWith(domain, StringComparison.OrdinalIgnoreCase) && parts[1].Length > domain.Length)
+                        {
+                            string alias = parts[1].Substring(0, parts[1].Length - domain.Length);
+                            return parts[0] + "+" + alias + "@" + domain;
+                        }
+                    }
+                }
+            }
+            return value;
         }
 
         private void LoadMailboxPool()
@@ -1993,9 +2048,11 @@ namespace SmsWorkbench
                     FileName = chrome,
                     UseShellExecute = false
                 };
+                psi.ArgumentList.Add("--new-window");
+                psi.ArgumentList.Add("--incognito");
                 psi.ArgumentList.Add(url);
                 Process.Start(psi);
-                Log("已用正常 Chrome 浏览器打开支付链接。");
+                Log("已用 Chrome 无痕窗口打开支付链接。");
             }
             catch (Exception ex)
             {

@@ -114,6 +114,9 @@ def main():
         effective_count = len(mailboxes)
         if effective_count != requested_count:
             print(f"[!] Requested {requested_count} mailbox(es), LuckMail returned {effective_count}; registering returned mailboxes only.")
+    elif mailboxes and requested_count > len(mailboxes):
+        effective_count = len(mailboxes)
+        print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
 
     register_started = time.time()
     if effective_count > 1:
