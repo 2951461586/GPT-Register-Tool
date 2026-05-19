@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -16,6 +17,14 @@ EXTRA_COLUMNS = {
     "refresh_token_updated_at": "INTEGER DEFAULT 0",
     "oauth_refresh_token": "TEXT DEFAULT ''",
 }
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+KNOWN_EMAIL_DOMAINS = (
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "msn.com",
+    "gmail.com",
+)
 
 
 def database_path(cfg=None):
@@ -37,7 +46,8 @@ def _connect(path=None):
 
 
 def init_database(path=None):
-    with _connect(path) as conn:
+    conn = _connect(path)
+    try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,6 +87,9 @@ def init_database(path=None):
         _ensure_extra_columns(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_accounts_updated_at ON accounts(updated_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_accounts_success ON accounts(success)")
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _ensure_extra_columns(conn):
@@ -124,6 +137,56 @@ def _get(data, key, default=""):
 def _nested(data, key):
     value = _get(data, key, {})
     return value if isinstance(value, dict) else {}
+
+
+def _normalize_account_email(email):
+    value = str(email or "").strip().lstrip("\ufeff")
+    if "@+" in value:
+        local, suffix = value.split("@+", 1)
+        suffix_lower = suffix.lower()
+        for domain in KNOWN_EMAIL_DOMAINS:
+            if suffix_lower.endswith(domain) and len(suffix) > len(domain):
+                alias = suffix[: -len(domain)]
+                repaired = f"{local}+{alias}@{domain}"
+                if EMAIL_RE.match(repaired):
+                    return repaired.lower()
+    if EMAIL_RE.match(value):
+        domain = value.rsplit("@", 1)[1]
+        if not domain.startswith("+"):
+            return value.lower()
+    return value.lower()
+
+
+def _find_existing_account_email(conn, email):
+    canonical = _normalize_account_email(email)
+    if not canonical:
+        return ""
+    row = conn.execute(
+        "SELECT email FROM accounts WHERE lower(email)=lower(?) LIMIT 1",
+        (canonical,),
+    ).fetchone()
+    if row is not None:
+        return row["email"]
+    for row in conn.execute("SELECT email FROM accounts"):
+        existing = str(row["email"] or "")
+        if _normalize_account_email(existing) == canonical:
+            return existing
+    return ""
+
+
+def _resolve_account_email(conn, email):
+    canonical = _normalize_account_email(email)
+    existing = _find_existing_account_email(conn, canonical)
+    if not existing:
+        return canonical
+    if existing == canonical:
+        return canonical
+    try:
+        conn.execute("UPDATE accounts SET email=? WHERE email=?", (canonical, existing))
+        return canonical
+    except sqlite3.IntegrityError:
+        matched = _find_existing_account_email(conn, canonical)
+        return matched or existing
 
 
 def _nested_token(data, *keys):
@@ -192,7 +255,7 @@ def upsert_account(data, json_path=""):
     auth_session = _nested(data, "auth_session")
     timing = _nested(data, "timing")
     pipeline_timing = _nested(data, "pipeline_timing")
-    email = str(_get(data, "email") or _get(mailbox, "email")).strip().lower()
+    email = _normalize_account_email(_get(data, "email") or _get(mailbox, "email"))
     if not email:
         return False
 
@@ -256,8 +319,13 @@ def upsert_account(data, json_path=""):
         VALUES ({placeholders})
         ON CONFLICT(email) DO UPDATE SET {updates}
     """
-    with _connect() as conn:
+    conn = _connect()
+    try:
+        row["email"] = _resolve_account_email(conn, email)
         conn.execute(sql, row)
+        conn.commit()
+    finally:
+        conn.close()
     return True
 
 
@@ -272,8 +340,13 @@ def list_paypal_accounts(email=""):
         query += " WHERE lower(email)=lower(?)"
         params.append(email)
     query += " ORDER BY updated_at DESC"
-    with _connect() as conn:
+    conn = _connect()
+    try:
+        if email:
+            params[0] = _find_existing_account_email(conn, email) or _normalize_account_email(email)
         return [dict(row) for row in conn.execute(query, params)]
+    finally:
+        conn.close()
 
 
 def get_paypal_url(email):
@@ -287,21 +360,29 @@ def get_paypal_url(email):
 
 def get_account_record(email):
     init_database()
-    with _connect() as conn:
+    conn = _connect()
+    try:
+        lookup_email = _find_existing_account_email(conn, email) or _normalize_account_email(email)
         row = conn.execute(
             "SELECT * FROM accounts WHERE lower(email)=lower(?)",
-            (email,),
+            (lookup_email,),
         ).fetchone()
+    finally:
+        conn.close()
     return dict(row) if row else {}
 
 
 def mark_paypal_status(email, status="completed"):
     init_database()
     now = int(time.time())
-    with _connect() as conn:
+    conn = _connect()
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
         row = conn.execute(
             "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
-            (email,),
+            (lookup_email,),
         ).fetchone()
         if row is None:
             return False
@@ -332,8 +413,11 @@ def mark_paypal_status(email, status="completed"):
             SET paypal_status=?, paypal_updated_at=?, updated_at=?, raw_json=?
             WHERE lower(email)=lower(?)
             """,
-            (status, now, now, raw_json, email),
+            (status, now, now, raw_json, lookup_email),
         )
+        conn.commit()
+    finally:
+        conn.close()
     if json_path:
         _update_session_json(json_path, data)
     return True

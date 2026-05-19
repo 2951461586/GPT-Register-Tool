@@ -20,7 +20,15 @@ PAYPAL_URL = (
     "?useWebAuthSession=true&followRedirectsInSDK=true"
 )
 
-PROXY = "socks5://127.0.0.1:17912"  # JP exit
+def _load_proxy():
+    try:
+        with open("config.json", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return (cfg.get("proxy") or {}).get("default") or None
+    except Exception:
+        return None
+
+PROXY = _load_proxy()
 
 
 async def main():
