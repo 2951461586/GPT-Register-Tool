@@ -177,6 +177,8 @@ def _status(data, paypal, access_token):
         return "failed"
     if access_token and paypal.get("ok"):
         return "paypal_ready"
+    if access_token and paypal.get("error"):
+        return "paypal_failed"
     if access_token:
         return "registered"
     return "pending"
@@ -262,7 +264,7 @@ def upsert_account(data, json_path=""):
 def list_paypal_accounts(email=""):
     init_database()
     query = """
-        SELECT email,paypal_url,paypal_status,refresh_token_status,json_path,updated_at
+        SELECT email,access_token,paypal_url,paypal_status,refresh_token_status,json_path,updated_at
         FROM accounts
     """
     params = []

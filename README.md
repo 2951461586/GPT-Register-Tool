@@ -8,6 +8,29 @@
 pip install curl_cffi cloakbrowser requests
 ```
 
+## 一键注册链路和错误边界
+
+桌面端“一键注册+支付链接”按明确边界执行：
+
+1. 选中邮箱行时，只注册当前选中邮箱，并写入无 BOM UTF-8 临时单行文件。
+2. 没有可用选中行时，才读取 `hotmail.txt` / Chatai 邮箱池并使用 UI 中的 count。
+3. 显式传入 `--chatai-mailbox-file` 或 `--mailbox-file` 但解析不到邮箱时，CLI 直接 `EXIT 2`，不会 fallback 创建 LuckMail 新邮箱。
+4. 注册链路里的 TLS、代理、超时等瞬时传输错误由 `sms_tool/http_client.py` 重试；最终失败会写入 SQLite 为结构化失败账号，而不是 traceback 崩掉 WPF 批次。
+5. 注册成功但 PayPal 链接没有生成时，账号仍保存 session，SQLite 标记 `status=paypal_failed`，CLI 以 `EXIT 3` 结束，WPF 批次显示失败。
+
+可调参数：
+
+```json
+"timeouts": {
+  "request": 20,
+  "http_retries": 3,
+  "retry_delay": 2,
+  "token_cache_ttl": 300
+}
+```
+
+更多职责边界见 `docs/architecture.md`。
+
 CloakBrowser 首次运行时会自动下载 Chromium 二进制文件（约200MB），无需手动安装。
 
 ## 项目结构
@@ -128,6 +151,9 @@ python chatgpt_phone_reg.py --email user@example.com --open-paypal-link
 # 旧链接过期时，重新生成 PayPal 链接并回写 session JSON 和 SQLite
 python chatgpt_phone_reg.py --email user@example.com --regenerate-paypal-link
 
+# 批量重新生成 PayPal 链接（每行一个邮箱，默认最多 4 并发）
+python chatgpt_phone_reg.py --regenerate-paypal-link --email-file emails.txt --workers 4
+
 # 人工支付完成后标记状态
 python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status completed
 
@@ -137,6 +163,16 @@ python chatgpt_phone_reg.py --email user@example.com --refresh-session
 
 该流程只打开官方托管支付/登录页面，不在项目内处理 PayPal 开户、短信接码、卡号、日期或 CVV。
 
+### 打开支付链接
+
+WPF 的“打开支付链接”现在只调用正常 Chrome 浏览器打开当前支付 URL，不再附加 `--user-data-dir`、`--load-extension`、`--incognito` 等启动参数。
+
+本地 PayPal 自动填写扩展文件仍保留在项目中，可按需手动使用：
+
+```text
+browser_extensions/paypal_autofill/
+```
+
 ## 使用
 
 ```bash
@@ -145,6 +181,9 @@ python chatgpt_phone_reg.py
 
 # 注册 5 个账号
 python chatgpt_phone_reg.py --count 5
+
+# 批量注册并生成 PayPal 链接（最多 4 并发）
+python chatgpt_phone_reg.py --count 5 --workers 4
 
 # 指定邮箱池
 python chatgpt_phone_reg.py --mailbox-file F:\path\mailbox_tokens.txt

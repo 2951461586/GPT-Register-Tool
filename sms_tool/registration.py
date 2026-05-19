@@ -2,11 +2,13 @@ import json
 import secrets
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from curl_cffi import requests as curl_requests
 
 from .config import CFG
+from .http_client import request_with_retry
 from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_luckmail_token_message
 from .paths import runtime_file
 from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl
@@ -15,6 +17,43 @@ from .utils import _generate_password, _print_timings, _random_birthdate, _rando
 # Sentinel token (cached, browser only when needed)
 # ==========================================
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
+
+def _mailbox_snapshot(mailbox):
+    if not mailbox:
+        return {}
+    return {
+        "email": getattr(mailbox, "email", ""),
+        "password": getattr(mailbox, "password", ""),
+        "refresh_token": getattr(mailbox, "refresh_token", ""),
+        "access_token": getattr(mailbox, "access_token", ""),
+        "source": getattr(mailbox, "source", ""),
+        "provider": getattr(mailbox, "provider", ""),
+        "order_no": getattr(mailbox, "order_no", ""),
+        "token": getattr(mailbox, "token", ""),
+        "purchase_id": getattr(mailbox, "purchase_id", ""),
+        "project_name": getattr(mailbox, "project_name", ""),
+        "price": getattr(mailbox, "price", ""),
+        "purchase_total_cost": getattr(mailbox, "purchase_total_cost", ""),
+        "balance_after": getattr(mailbox, "balance_after", ""),
+    }
+
+
+def _failure_result(error, email="", mailbox=None, password=""):
+    result = {"success": False, "error": error, "timing": _timing_summary()}
+    if email:
+        result["email"] = email
+    if password:
+        result["password"] = password
+    mailbox_data = _mailbox_snapshot(mailbox)
+    if mailbox_data:
+        result["mailbox"] = mailbox_data
+    return result
+
+
+def _safe_tock():
+    timings = _tl()
+    if timings and timings[-1][1] > 1_000_000:
+        _tock()
 
 def _get_cached_sentinel(force_fresh=False):
     if force_fresh: return None
@@ -131,7 +170,8 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
     if referer:
         headers["Referer"] = referer
-    r = session.get(full_url, headers=headers, impersonate="chrome", timeout=30)
+    r = request_with_retry(session, "get", full_url, label=label,
+        headers=headers, impersonate="chrome")
     print(f"  {label}: {r.status_code} {r.url}")
     return r
 
@@ -152,10 +192,10 @@ def _validate_email_otp(session, auth_base, base_headers, code):
     for endpoint in endpoints:
         url = _absolute_url(auth_base, endpoint)
         for payload in payloads:
-            r = session.post(url,
+            r = request_with_retry(session, "post", url, label=f"Email OTP validate {endpoint}",
                 json=payload,
                 headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/verify-email"},
-                impersonate="chrome", timeout=30)
+                impersonate="chrome")
             body = _json_or_raw(r)
             if r.status_code == 200:
                 print(f"  Email OTP validate: {endpoint} {r.status_code}")
@@ -210,9 +250,9 @@ def _auth_session_access_token(body):
 def _fetch_auth_session(session, chat_base, base_headers, attempts=6, delay=2.0):
     last = {"status_code": 0, "body": {}, "cookie_header": _cookie_header(session)}
     for attempt in range(1, max(1, int(attempts or 1)) + 1):
-        r = session.get(f"{chat_base}/api/auth/session",
+        r = request_with_retry(session, "get", f"{chat_base}/api/auth/session", label="Auth session",
             headers={**base_headers, "Accept": "application/json", "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate="chrome", timeout=30)
+            impersonate="chrome")
         body = _json_or_raw(r, limit=1000)
         last = {
             "status_code": r.status_code,
@@ -262,7 +302,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
 
     mailbox = _ensure_mailbox_account(mailbox)
     if not mailbox or not mailbox.email:
-        return {"success": False, "error": "mailbox_required"}
+        return _failure_result("mailbox_required", mailbox=mailbox)
 
     auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
     chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com")
@@ -278,7 +318,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         sentinel_data = _extract_sentinel()
         _tock()
     if not sentinel_data or not sentinel_data.get("sentinel_token"):
-        return {"success": False, "error": "sentinel_extract_failed"}
+        return _failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox)
 
     # Step 1: Generate credentials
     password = password or _generate_password()
@@ -297,53 +337,58 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         session.proxies = {"http": proxy, "https": proxy}
     base_headers = {"User-Agent": ua, "Accept": "application/json"}
 
-    # Auth flow: prime + signin + authorize
-    _tick("2-Auth flow")
-    session.get(f"{auth_base}/create-account",
-        headers={**base_headers, "Accept": "text/html,application/xhtml+xml"}, impersonate="chrome", timeout=30)
+    try:
+        # Auth flow: prime + signin + authorize
+        _tick("2-Auth flow")
+        request_with_retry(session, "get", f"{auth_base}/create-account", label="Auth prime",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml"}, impersonate="chrome")
 
-    csrf_resp = session.get(f"{chat_base}/api/auth/csrf",
-        headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
-        impersonate="chrome", timeout=30)
-    csrf_token = (_json_or_raw(csrf_resp).get("csrfToken") or "").strip()
+        csrf_resp = request_with_retry(session, "get", f"{chat_base}/api/auth/csrf", label="Auth csrf",
+            headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        csrf_token = (_json_or_raw(csrf_resp).get("csrfToken") or "").strip()
 
-    signin_url = (
-        f"{chat_base}/api/auth/signin/openai"
-        f"?prompt=login&ext-oai-did={did}"
-        f"&auth_session_logging_id={session_logging_id}"
-        f"&screen_hint=signup"
-        f"&login_hint={quote(username, safe='')}"
-    )
-    signin_payload = {
-        "csrfToken": csrf_token,
-        "callbackUrl": f"{chat_base}/",
-        "json": "true",
-    }
-    signin_resp = session.post(signin_url, data=urlencode(signin_payload),
-        headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded",
-                 "Origin": chat_base, "Referer": f"{chat_base}/"},
-        impersonate="chrome", timeout=30)
-    signin_body = _json_or_raw(signin_resp, limit=1000)
-    auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
-    auth_session_url = _with_query_param(auth_session_url, "device_id", did)
-    r = session.get(auth_session_url,
-        headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
-        impersonate="chrome", timeout=30)
-    _tock()
-    redirect_path = r.url.split("auth.openai.com")[-1]
-    print(f"  Redirect: {redirect_path}")
+        signin_url = (
+            f"{chat_base}/api/auth/signin/openai"
+            f"?prompt=login&ext-oai-did={did}"
+            f"&auth_session_logging_id={session_logging_id}"
+            f"&screen_hint=signup"
+            f"&login_hint={quote(username, safe='')}"
+        )
+        signin_payload = {
+            "csrfToken": csrf_token,
+            "callbackUrl": f"{chat_base}/",
+            "json": "true",
+        }
+        signin_resp = request_with_retry(session, "post", signin_url, label="Auth signin", data=urlencode(signin_payload),
+            headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded",
+                     "Origin": chat_base, "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        signin_body = _json_or_raw(signin_resp, limit=1000)
+        auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
+        auth_session_url = _with_query_param(auth_session_url, "device_id", did)
+        r = request_with_retry(session, "get", auth_session_url, label="Auth authorize",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        _tock()
+        redirect_path = r.url.split("auth.openai.com")[-1]
+        print(f"  Redirect: {redirect_path}")
 
-    if "log-in" in redirect_path or "login" in redirect_path:
-        return {"success": False, "email": username, "error": "email_already_registered_or_login_redirect"}
+        if "log-in" in redirect_path or "login" in redirect_path:
+            return _failure_result("email_already_registered_or_login_redirect", email=username, mailbox=mailbox, password=password)
 
-    # Step 4: Register with username + password
-    _tick("3-User register (email+password)")
-    r = session.post(f"{auth_base}/api/accounts/user/register",
-        json={"password": password, "username": username},
-        headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
-                "openai-sentinel-token": sentinel_data["sentinel_token"]},
-        impersonate="chrome", timeout=30)
-    _tock()
+        # Step 4: Register with username + password
+        _tick("3-User register (email+password)")
+        r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
+            json={"password": password, "username": username},
+            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
+                    "openai-sentinel-token": sentinel_data["sentinel_token"]},
+            impersonate="chrome")
+        _tock()
+    except Exception as e:
+        _safe_tock()
+        print(f"  Transport error: {e}")
+        return _failure_result(f"transport_error: {e}", email=username, mailbox=mailbox, password=password)
 
     reg_data = {}
     try: reg_data = r.json()
@@ -357,15 +402,20 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         if err_code == "invalid_auth_step" and "email-verification" in redirect_path:
             print(f"  Account already in email-verification flow, resuming OTP step...")
         else:
-            return {"success": False, "email": username, "error": f"user_register: {err_msg}"}
+            return _failure_result(f"user_register: {err_msg}", email=username, mailbox=mailbox, password=password)
 
     _snapshot_luckmail_token_message(mailbox)
 
     # Step 4: Trigger email OTP send
     _tick("4-Trigger email OTP")
     continue_url = reg_data.get("continue_url", "")
-    _follow_continue_url(session, continue_url, base_headers, referer=f"{auth_base}/create-account/password", label="Email OTP send")
-    _tock()
+    try:
+        _follow_continue_url(session, continue_url, base_headers, referer=f"{auth_base}/create-account/password", label="Email OTP send")
+        _tock()
+    except Exception as e:
+        _safe_tock()
+        print(f"  Transport error: {e}")
+        return _failure_result(f"email_otp_send_transport: {e}", email=username, mailbox=mailbox, password=password)
 
     # Step 5: Get email OTP
     _tick("5-Get email OTP")
@@ -378,37 +428,58 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     )
     _tock()
     if not code:
-        return {"success": False, "email": username, "error": "email_otp_poll_timeout"}
+        return _failure_result("email_otp_poll_timeout", email=username, mailbox=mailbox, password=password)
 
     # Step 6: Validate email OTP
     _tick("6-Validate email OTP")
-    otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code)
-    _tock()
+    try:
+        otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code)
+        _tock()
+    except Exception as e:
+        _safe_tock()
+        print(f"  Transport error: {e}")
+        return _failure_result(f"email_otp_validate_transport: {e}", email=username, mailbox=mailbox, password=password)
     if not otp_ok:
-        return {"success": False, "email": username, "error": f"email_otp_validate: {json.dumps(otp_data, ensure_ascii=False)[:300]}"}
-    _follow_continue_url(session, otp_data.get("continue_url", ""), base_headers, referer=f"{auth_base}/verify-email", label="Email OTP continue")
+        return _failure_result(f"email_otp_validate: {json.dumps(otp_data, ensure_ascii=False)[:300]}", email=username, mailbox=mailbox, password=password)
+    try:
+        _follow_continue_url(session, otp_data.get("continue_url", ""), base_headers, referer=f"{auth_base}/verify-email", label="Email OTP continue")
+    except Exception as e:
+        print(f"  Email OTP continue transport warning: {e}")
 
     # Step 7: Create account
     _tick("7-Create account")
-    r = session.post(f"{auth_base}/api/accounts/create_account",
-        json={"name": full_name, "birthdate": birthdate},
-        headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/about-you",
-                "openai-sentinel-token": sentinel_data["sentinel_token"],
-                "openai-sentinel-so-token": sentinel_data["sentinel_so_token"]},
-        impersonate="chrome", timeout=30)
-    _tock()
+    try:
+        r = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account", label="Create account",
+            json={"name": full_name, "birthdate": birthdate},
+            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/about-you",
+                    "openai-sentinel-token": sentinel_data["sentinel_token"],
+                    "openai-sentinel-so-token": sentinel_data["sentinel_so_token"]},
+            impersonate="chrome")
+        _tock()
+    except Exception as e:
+        _safe_tock()
+        print(f"  Transport error: {e}")
+        return _failure_result(f"create_account_transport: {e}", email=username, mailbox=mailbox, password=password)
 
     create_data = {}
     try: create_data = r.json()
     except: create_data = {"_raw": r.text[:300]}
     print(f"  Status: {r.status_code}")
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
-    _follow_continue_url(session, create_data.get("continue_url", ""), base_headers, referer=f"{auth_base}/about-you", label="Create account continue")
+    try:
+        _follow_continue_url(session, create_data.get("continue_url", ""), base_headers, referer=f"{auth_base}/about-you", label="Create account continue")
+    except Exception as e:
+        print(f"  Create account continue transport warning: {e}")
 
     # Step 8: Fetch ChatGPT auth session access token
     _tick("8-Fetch auth session")
-    auth_session = _fetch_auth_session(session, chat_base, base_headers)
-    _tock()
+    try:
+        auth_session = _fetch_auth_session(session, chat_base, base_headers)
+        _tock()
+    except Exception as e:
+        _safe_tock()
+        print(f"  Transport error: {e}")
+        return _failure_result(f"auth_session_transport: {e}", email=username, mailbox=mailbox, password=password)
     auth_body = auth_session.get("body") or {}
     access_token = _auth_session_access_token(auth_body)
 
@@ -470,22 +541,37 @@ def run_phone(*args, **kwargs):
     )
 
 
-def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True):
+def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4):
     results = []
     print(f"\n{'=' * 60}")
     print(f"  ChatGPT Email Batch Registration - {count} accounts")
     print(f"{'=' * 60}\n")
 
-    for i in range(count):
+    def _run_one(i):
         print(f"\n{'#' * 40}")
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         try:
             mailbox = mailboxes[i % len(mailboxes)] if mailboxes else None
-            results.append(run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link))
+            return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link)
         except Exception as e:
             import traceback; traceback.print_exc()
-            results.append({"success": False, "error": str(e)})
+            return i, {"success": False, "error": str(e)}
+
+    workers = max(1, min(int(workers or 1), 4, int(count or 1)))
+    if workers <= 1:
+        for i in range(count):
+            _, result = _run_one(i)
+            results.append(result)
+        return results
+
+    ordered = [None] * count
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_run_one, i) for i in range(count)]
+        for future in as_completed(futures):
+            i, result = future.result()
+            ordered[i] = result
+    results.extend(result for result in ordered if result is not None)
     return results
 
 

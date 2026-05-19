@@ -267,8 +267,8 @@ def _parse_mailbox_token_file(path):
     token_path = Path(path)
     if not token_path.exists():
         return records
-    for line_no, raw in enumerate(token_path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw.strip()
+    for line_no, raw in enumerate(token_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
         parts = line.split("---", 4)
@@ -295,8 +295,8 @@ def _parse_mailbox_password_file(path):
     password_path = Path(path)
     if not password_path.exists():
         return records
-    for line_no, raw in enumerate(password_path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw.strip()
+    for line_no, raw in enumerate(password_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
         if ":" not in line:
@@ -315,29 +315,47 @@ def _parse_mailbox_password_file(path):
 
 
 def _parse_chatai_mailbox_file(path):
-    """Parse chatai format: email----password----client_id----refresh_token"""
+    """Parse chatai format and tolerate standard mailbox lines in mixed temp files."""
     records = []
     chatai_path = Path(path)
     if not chatai_path.exists():
         return records
-    for line_no, raw in enumerate(chatai_path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw.strip()
+    for line_no, raw in enumerate(chatai_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
-        parts = line.split("----")
-        if len(parts) < 4:
+        if "----" in line:
+            parts = line.split("----")
+            if len(parts) < 4:
+                print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
+                continue
+            email, password, client_id, refresh_token = (part.strip() for part in parts[:4])
+            if not email or not refresh_token:
+                continue
+            records.append(MailboxAccount(
+                email=email.lower(),
+                password=password,
+                refresh_token=refresh_token,
+                source=str(chatai_path),
+                provider="chatai",
+                token=client_id,
+            ))
+            continue
+        parts = line.split("---", 4)
+        if len(parts) < 3:
             print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
             continue
-        email, password, client_id, refresh_token = (part.strip() for part in parts[:4])
+        email, password, refresh_token = (part.strip() for part in parts[:3])
+        access_token = parts[3].strip() if len(parts) >= 4 else ""
         if not email or not refresh_token:
             continue
         records.append(MailboxAccount(
             email=email.lower(),
             password=password,
             refresh_token=refresh_token,
+            access_token=access_token,
             source=str(chatai_path),
-            provider="chatai",
-            token=client_id,
+            provider="graph",
         ))
     return records
 

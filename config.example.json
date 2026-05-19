@@ -7,6 +7,18 @@
     "proxy": {
         "default": null
     },
+    "proxy_pool": {
+        "listen_host": "127.0.0.1",
+        "listen_port": 18080,
+        "stats_port": 18081,
+        "upstreams": [
+            {"url": "socks5://127.0.0.1:17912", "label": "jp-exit", "priority": 0},
+            {"url": "socks5://127.0.0.1:7897", "label": "clash-mixed", "priority": 1}
+        ],
+        "health_check_interval": 30,
+        "connect_timeout": 10,
+        "max_retries": 2
+    },
     "registration": {
         "password_random_length": 12,
         "password_suffix": "!A1",
@@ -34,18 +46,21 @@
     },
     "timeouts": {
         "request": 20,
+        "http_retries": 3,
+        "retry_delay": 2,
         "token_cache_ttl": 300
     },
     "paypal": {
         "auto_generate": true,
+        "require_zero_due": false,
         "max_checkout_retries": 3,
         "proxies": [
-            "socks5h://127.0.0.1:17912"
+            "socks5h://127.0.0.1:18080"
         ],
         "stage_proxies": {
-            "checkout": "socks5h://127.0.0.1:17912",
-            "stripe_init": "socks5h://127.0.0.1:17912",
-            "payment_method": "socks5h://127.0.0.1:17912",
+            "checkout": "socks5h://127.0.0.1:18080",
+            "stripe_init": "socks5h://127.0.0.1:18080",
+            "payment_method": "socks5h://127.0.0.1:18080",
             "confirm": "direct"
         }
     },

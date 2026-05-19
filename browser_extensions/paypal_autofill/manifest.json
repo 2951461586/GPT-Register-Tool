@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "GPT Register PayPal Autofill",
+  "version": "1.0.0",
+  "description": "Local helper that fills PayPal/Stripe checkout forms from this workspace's config. It never submits payment or verification forms.",
+  "incognito": "split",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.paypal.com/*",
+        "https://www.paypalobjects.com/*",
+        "https://pay.openai.com/*",
+        "https://checkout.stripe.com/*",
+        "https://pm-redirects.stripe.com/*"
+      ],
+      "js": [
+        "profile.generated.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

@@ -1,78 +1,139 @@
 # 项目结构和职责边界
 
+本项目的主链路是：邮箱来源 -> ChatGPT 邮箱注册 -> 获取 auth session/access token -> 生成 PayPal 授权链接 -> 固化到 session JSON 和 SQLite -> WPF 展示与维护。各层只负责自己的边界，避免 UI、注册协议、支付协议和存储互相穿透。
+
 ## 顶层目录
 
 ```text
-chatgpt_phone_reg.py      兼容入口，转发到 sms_tool.cli
+chatgpt_phone_reg.py      兼容入口，只转发到 sms_tool.cli
 config.example.json       配置模板
 config.json               本地配置，包含密钥，不提交
-sessions/                 固化后的注册登录态和 PayPal 链接结果，不提交
-runtime/                  Sentinel 等运行时缓存，不提交
-sms_tool/                 Python 后端注册流程
+hotmail.txt               Chatai 格式邮箱池，可由 WPF 导入生成
+mailbox_tokens.txt        标准 Graph/OAuth 邮箱池，可选
+sessions/                 成功注册后的 session JSON，不提交
+runtime/                  SQLite、Sentinel 缓存、临时运行数据，不提交
+sms_tool/                 Python 后端能力层
 SmsWorkbench/             WPF 桌面管理端
-docs/                     项目说明和维护文档
+docs/                     维护文档
 ```
 
-## 后端模块
+## 模块职责
 
 ```text
-sms_tool/cli.py           命令行参数、批量入口、固化文件保存
-sms_tool/config.py        config.json 查找和加载
-sms_tool/paths.py         项目根目录、sessions/runtime 路径解析
-sms_tool/mailbox.py       邮箱账户来源、LuckMail token、Graph/IMAP OTP 收信
-sms_tool/providers/       外部邮箱/OTP 服务的低层客户端
-sms_tool/providers/luckmail_token.py  LuckMail token 直连接口客户端
-sms_tool/registration.py  ChatGPT 邮箱注册、auth session、PayPal 链接编排
-sms_tool/gen_pp_link.py   使用 accessToken 生成 PayPal 支付链接
-sms_tool/utils.py         随机资料、计时、通用辅助函数
+SmsWorkbench/MainWindow.xaml.cs
+  UI 编排层。负责导入邮箱、选择账号、启动 CLI、展示 SQLite/session 状态。
+  不直接实现 ChatGPT 注册协议或 PayPal 协议。打开 PayPal 链接时可加载本地自动填写扩展。
+
+sms_tool/cli.py
+  命令行入口和批处理编排。负责解析参数、选择邮箱来源、调用注册、保存结果。
+  显式传入邮箱文件但解析为空时必须失败退出，不允许偷偷 fallback 到 LuckMail。
+
+sms_tool/mailbox.py
+  邮箱来源和 OTP 收信层。负责 Chatai/Graph/LuckMail token 文件解析、Microsoft token 刷新、OTP 轮询。
+  文件解析使用 utf-8-sig，兼容 UTF-8 BOM。
+
+sms_tool/http_client.py
+  传输层。负责 curl_cffi 请求超时、瞬时 TLS/代理错误识别和重试。
+  业务层不直接处理 curl 错误细节。
+
+sms_tool/registration.py
+  ChatGPT 注册编排层。负责 Sentinel、auth flow、邮箱 OTP、create account、auth session 获取。
+  任何网络异常都返回结构化失败结果并入库，不允许 traceback 直接中断 UI 批次。
+
+sms_tool/gen_pp_link.py
+  PayPal 链接生成层。只使用 access token 生成官方托管授权链接。
+
+sms_tool/storage.py
+  SQLite/session JSON 固化层。负责账号索引、支付状态、refresh 状态和历史 session 重建。
+
+sms_tool/session_refresh.py
+  已注册账号 session 刷新层。默认协议刷新，浏览器刷新只作为显式 fallback。
 ```
 
-## 运行数据边界
+## 一键注册+支付链接边界
 
-- `sessions/`：只放成功注册后的固化 JSON，文件内包含 access token、cookie、邮箱 token 和 PayPal 链接，按敏感数据处理。
-- `runtime/`：只放可再生成的运行缓存，例如 `sentinel_cache.json`。
-- `mailbox_tokens.txt`：可选邮箱池输入文件，仍保持在项目根目录，后续如果要长期维护邮箱池，可以再迁到 `data/` 或接入自建 Outlook 管理器。
+WPF 的“一键注册+支付链接”按钮遵循以下规则：
 
-## Outlook 自建收信底座
+1. 如果当前选中行能还原邮箱凭据，优先只注册这一条，并生成临时单行邮箱文件。
+2. 如果没有可用选中行，才使用当前 Chatai 邮箱池文件和 UI 中的 count。
+3. 临时文件使用无 BOM UTF-8，避免 Python 把 BOM 当成 malformed line。
+4. 后端收到显式 `--chatai-mailbox-file` 或 `--mailbox-file` 后，如果解析不到邮箱，直接 `EXIT 2`。
+5. 后端不会因为 Chatai 文件为空而自动新建 LuckMail 邮箱，避免“点失败邮箱却注册了新邮箱”的串线问题。
 
-`keh4l/outlook-mail-manager` 的结构适合作为独立邮箱管理服务参考：账户表保存 `email/password/client_id/refresh_token`，后端刷新 Microsoft OAuth token，先走 Graph API，失败时用 IMAP XOAUTH2 拉取收件箱或垃圾箱。
+## 注册失败处理
 
-当前项目已经有 Graph API 收信和 LuckMail token 收信两条路径。若购买到的是完整 Outlook OAuth 凭据，应直接接入 Graph/IMAP；若只有 LuckMail 的 `tok_...`，该 token 不能直接替代 Microsoft refresh token，应通过 LuckMail token API 换取邮件内容。
+注册流程中所有失败都应分成两类：
 
-## LuckMail token OTP API
+- 业务失败：例如账号创建 400、OTP 超时、邮箱已注册。这类结果写入 SQLite，`status=failed`，保留邮箱元数据。
+- 传输失败：例如 `curl_cffi` TLS connect error、代理连接失败、超时。这类请求由 `sms_tool/http_client.py` 重试；最终仍失败时返回 `transport_error` 或具体阶段错误，并写入 SQLite。
+- 支付链接失败：账号注册成功但 PayPal 链接没有生成时，SQLite 使用 `status=paypal_failed` / `paypal_status=failed`，CLI 在保存 session 和 SQLite 后以 `EXIT 3` 结束，让 WPF 任务状态显示失败。
 
-LuckMail 长效邮箱购买返回的 `tok_...` / `lmp_...` 直接调用 LuckMail OpenAPI：
+这样 WPF 批次不会因为一次 TLS 抖动崩掉，失败账号也能在列表里继续被筛选、删除或重试。
 
-- `GET /api/v1/openapi/email/token/{token}/code`：返回 `data.email_address`、`data.verification_code`、`data.mail`、`data.has_new_mail`。
-- `GET /api/v1/openapi/email/token/{token}/mails`：返回 `data.email_address`、`data.mails` 邮件列表。
-- `GET /api/v1/openapi/email/token/{token}/alive`：返回邮箱可用性和邮箱地址。
+## 数据边界
 
-项目里由 `sms_tool/providers/luckmail_token.py` 固化这层协议。`sms_tool/mailbox.py` 只使用 LuckMail token API 取 OTP。
+- `sessions/` 只放成功注册且拿到 access token 的 session JSON。
+- `runtime/accounts.sqlite3` 是 UI 的主索引，既保存成功账号，也保存结构化失败账号。
+- `runtime/sentinel_cache.json` 是可再生成缓存。
+- `hotmail.txt` 和 `mailbox_tokens.txt` 是输入池，不应该由注册协议层直接修改。
+- 临时单行重试文件写入系统 temp 目录，只作为 CLI 输入。
 
-## 固化购买注册流程
+## PayPal 与 session 刷新边界
 
-一条命令跑完整链路：
+项目只生成并保存官方托管 PayPal 授权链接。自动填写插件只负责把本地配置填入页面字段，不隐藏验证码、不读取短信、不自动提交最终支付/授权表单。
 
-```powershell
-python .\chatgpt_phone_reg.py --buy-luckmail-mailbox --proxy socks5h://127.0.0.1:7897
+维护入口：
+
+- `--list-paypal-links` 展示已保存链接和状态。
+- `--open-paypal-link` 打开指定账号链接。
+- `--regenerate-paypal-link` 使用已有 access token 重新生成短时链接。
+- `--regenerate-paypal-link --email-file <file> --workers 4` 批量重新生成短时链接，每行一个邮箱，最多 4 并发。
+- `--mark-paypal-status completed` 标记人工支付完成。
+- `--refresh-session` 默认走协议刷新 auth session。
+- `--browser-refresh-session` 才使用旧浏览器刷新路径。
+
+## PayPal 自动填写插件
+
+插件目录：
+
+```text
+browser_extensions/paypal_autofill/
+  manifest.json          Chrome 扩展清单
+  content.js             页面字段识别和填写逻辑
+  profile.generated.js   WPF 打开支付链接前按 config.json 生成，已加入 .gitignore
 ```
 
-该命令会：
+WPF 打开支付链接时只启动正常 Chrome，并只传入支付 URL：
 
-1. 调 LuckMail `POST /api/v1/openapi/email/purchase` 购买 `openai + ms_imap + outlook.com` 长效邮箱。
-2. 使用返回的 `email_address` 和 `token` 创建 `MailboxAccount(provider="luckmail_token")`。
-3. 走邮箱注册，验证码优先通过 `sms_tool/providers/luckmail_token.py` 直连 LuckMail token API 读取。
-4. 从 `https://chatgpt.com/api/auth/session` 提取 `accessToken`。
-5. 调 `sms_tool/gen_pp_link.py` 生成 PayPal 支付链接。
-6. 保存到 `sessions/session_{email}_{timestamp}.json`，并写入购买信息、余额、PayPal 结果和分步耗时。
+```text
+chrome.exe <paypal_url>
+```
 
-## 人工 PayPal 与 session 刷新链路
+因此不会额外注入 profile、扩展、无痕模式或其它浏览器启动参数。PayPal 自动填写扩展文件仍保留在项目中，但不再由“打开支付链接”按钮自动加载。
 
-项目只负责保存和打开官方托管 PayPal 链接，不在代码内自动创建 PayPal 账号、接码、填写卡号或提交 CVV。
+填写来源：
 
-- CLI 通过 `--list-paypal-links` 展示 `paypal_url`、`paypal_status`、`refresh_token_status`。
-- CLI 通过 `--email <account> --open-paypal-link` 打开指定账号的 PayPal 链接，后续授权或支付由人工在浏览器完成。
-- CLI 通过 `--email <account> --regenerate-paypal-link` 使用现有 `access_token` 重新生成短时 PayPal 授权链接，并回写 SQLite 和 session JSON。
-- 人工完成后用 `--email <account> --mark-paypal-status completed` 标记 SQLite 和 session JSON。
-- `--email <account> --refresh-session` 打开可见 CloakBrowser 浏览器，人工完成登录/授权后轮询 `https://chatgpt.com/api/auth/session`，回写新的 `access_token`、`auth_session`、`oauth_refresh_token`、`refresh_token_status`。
-- WPF 侧对应按钮为“打开支付链接”“重新生成链接”“标记支付完成”“刷新Session”，列表中展示支付状态和 refresh 状态。
+- `paypal_auto.phone_number`
+- `paypal_auto.cards[0].number / exp_month / exp_year / cvv`
+- `paypal_auto.addresses[0].line1 / city / state / postal_code`
+- PayPal signup 邮箱按当前账号邮箱生成 Gmail alias，例如 `account+pp123@gmail.com`
+
+插件允许自动点击 PayPal 支付方式和“Create an account/Sign up”入口，让表单出现；但不会点击最终 `Pay`、`Agree`、`Subscribe` 等提交按钮。
+
+## 配置边界
+
+```json
+"timeouts": {
+  "request": 20,
+  "http_retries": 3,
+  "retry_delay": 2,
+  "token_cache_ttl": 300
+}
+```
+
+- `request`：单次 HTTP 请求超时秒数。
+- `http_retries`：瞬时传输错误重试次数。
+- `retry_delay`：重试间隔秒数。
+- `token_cache_ttl`：Sentinel token 缓存时间。
+
+代理配置仍由 `proxy.default` 或 CLI `--proxy` 提供；PayPal 链接生成可以通过 `paypal.stage_proxies` 单独配置分阶段代理。

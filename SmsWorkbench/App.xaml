@@ -11,6 +11,13 @@
     <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
     <SolidColorBrush x:Key="TextMain" Color="#142033"/>
     <SolidColorBrush x:Key="TextSub" Color="#607089"/>
+    <SolidColorBrush x:Key="SidebarBg" Color="#ECF2FA"/>
+    <SolidColorBrush x:Key="GridAltBg" Color="#F8FAFD"/>
+    <SolidColorBrush x:Key="SplitterBg" Color="#CBD5E1"/>
+    <SolidColorBrush x:Key="StatusBg" Color="#EEF3FA"/>
+    <SolidColorBrush x:Key="LogBg" Color="#0B1426"/>
+    <SolidColorBrush x:Key="LogBorder" Color="#17233B"/>
+    <SolidColorBrush x:Key="LogText" Color="#DCEBFF"/>
 
     <Style TargetType="Button">
       <Setter Property="Height" Value="30"/>

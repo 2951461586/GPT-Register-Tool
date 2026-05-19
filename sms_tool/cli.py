@@ -5,6 +5,7 @@ import re
 import sys
 import time
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .config import CFG
 from .mailbox import _load_mailbox_pool, _luckmail_enabled
@@ -23,6 +24,7 @@ def main():
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
     parser.add_argument("--proxy", default=None)
     parser.add_argument("--count", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration/link regeneration")
     parser.add_argument("--password", default=None, help="Use a specific password")
     parser.add_argument("--email", default=None, help="Mailbox email address")
     parser.add_argument("--email-password", default=None, help="Mailbox password")
@@ -44,6 +46,7 @@ def main():
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
+    parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
     parser.add_argument("--refresh-timeout", type=int, default=300, help="Seconds to wait for interactive auth refresh")
     parser.add_argument("--browser-refresh-session", action="store_true", help="Use the old browser-based refresh flow")
     parser.add_argument("--headless-refresh", action="store_true", help="Run browser refresh headless; visible browser is default")
@@ -88,9 +91,21 @@ def main():
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)
     mailbox_seconds = time.time() - mailbox_started
+    explicit_mailbox_source = bool(
+        args.chatai_mailbox_file
+        or args.mailbox_file
+        or args.email
+        or args.email_refresh_token
+        or args.email_access_token
+        or args.luckmail_token
+        or args.buy_luckmail_mailbox
+    )
+    if not mailboxes and explicit_mailbox_source:
+        print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
+        raise SystemExit(2)
     if not mailboxes and not _luckmail_enabled():
         print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure LuckMail")
-        return
+        raise SystemExit(2)
     paypal_link = not args.skip_paypal_link and bool(CFG.get("paypal", {}).get("auto_generate", True))
 
     requested_count = max(1, int(args.count or 1))
@@ -102,7 +117,7 @@ def main():
 
     register_started = time.time()
     if effective_count > 1:
-        results = run_batch(count=effective_count, proxy=args.proxy, mailboxes=mailboxes, paypal_link=paypal_link)
+        results = run_batch(count=effective_count, proxy=args.proxy, mailboxes=mailboxes, paypal_link=paypal_link, workers=args.workers)
     else:
         mailbox = mailboxes[0] if mailboxes else None
         results = [run_email(proxy=args.proxy, password=args.password, mailbox=mailbox, paypal_link=paypal_link)]
@@ -145,6 +160,15 @@ def main():
     success_count = sum(1 for r in results if r and r.get("success"))
     print(f"[*] SQLite index: {database_path()} ({db_saved_count} record(s) upserted)")
     print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
+    paypal_failures = [
+        r for r in results
+        if r and r.get("success") and paypal_link and not ((r.get("paypal") or {}).get("ok") and (r.get("paypal") or {}).get("url"))
+    ]
+    if paypal_failures:
+        for data in paypal_failures:
+            paypal = data.get("paypal") or {}
+            print(f"[Error] PayPal link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing PayPal URL')}")
+        raise SystemExit(3)
 
 
 def _print_paypal_links(email=""):
@@ -200,11 +224,58 @@ def _refresh_session(args):
 
 def _regenerate_paypal_link(args):
     email = (args.email or "").strip()
+    emails = _read_email_file(args.email_file)
+    if emails:
+        workers = max(1, min(int(args.workers or 1), 4, len(emails)))
+        print(f"[*] Batch regenerate PayPal links: {len(emails)} account(s), workers={workers}")
+        results = []
+        ordered = [None] * len(emails)
+
+        def _run_one(index, item_email):
+            print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
+            return index, regenerate_paypal_link(email=item_email, session_file="")
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
+            for future in as_completed(futures):
+                index, result = future.result()
+                ordered[index] = result
+
+        results.extend(result for result in ordered if result is not None)
+        ok_count = sum(1 for result in results if result.get("ok"))
+        print(json.dumps({"ok": ok_count == len(emails), "total": len(emails), "success": ok_count, "failed": len(emails) - ok_count, "results": results}, ensure_ascii=False, indent=2))
+        if ok_count != len(emails):
+            raise SystemExit(3)
+        return
+
     if not email and not args.session_file:
         print("[Error] --email or --session-file is required with --regenerate-paypal-link")
         return
     result = regenerate_paypal_link(email=email, session_file=args.session_file or "")
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _read_email_file(path):
+    if not path:
+        return []
+    if not os.path.exists(path):
+        print(f"[Error] --email-file not found: {path}")
+        raise SystemExit(2)
+    emails = []
+    seen = set()
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        for raw in handle:
+            value = raw.strip()
+            if not value or value.startswith("#"):
+                continue
+            email = value.split()[0].strip().lower()
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            emails.append(email)
+    return emails
 
 def _auto_pay(args):
     """Run automated PayPal payment for a ChatGPT account."""

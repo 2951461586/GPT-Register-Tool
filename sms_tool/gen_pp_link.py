@@ -43,7 +43,7 @@ DEFAULT_STRIPE_PK = (
 DEFAULT_TIMEOUT = 30
 
 PP_PROXIES = [
-    "socks5h://127.0.0.1:17912",  # JP exit, required for coupon-qualified checkout
+    "socks5h://127.0.0.1:7897",  # Clash mixed-port (direct)
 ]
 
 BILLING_REGIONS = [
@@ -440,7 +440,8 @@ def _try_paypal_link(
     has_paypal = any("paypal" in (p or "").lower() for p in pm_types)
     zero_check = _zero_due_check(init_data)
 
-    expected_amount = "0"
+    require_zero_due = bool(paypal_cfg.get("require_zero_due", False))
+    expected_amount = "0" if zero_check["ok"] else str(amount_due if amount_due is not None else (due if due is not None else 0))
 
     print(
         f"[pp] init: due={due} amount_due={amount_due} currency={currency} "
@@ -448,7 +449,7 @@ def _try_paypal_link(
         file=sys.stderr,
     )
 
-    if not zero_check["ok"]:
+    if require_zero_due and not zero_check["ok"]:
         return {
             "ok": False,
             "error": (
@@ -618,6 +619,17 @@ def _try_paypal_link(
         na = pi.get("next_action") or {}
         if na.get("type") == "redirect_to_url":
             redirect_url = (na.get("redirect_to_url") or {}).get("url", "")
+    if not redirect_url:
+        return {
+            "ok": False,
+            "error": "Stripe confirm did not return PayPal redirect URL",
+            "region": region["label"],
+            "due": due,
+            "amount_due": amount_due,
+            "expected_amount": expected_amount,
+            "zero_due_verified": zero_check["ok"],
+            "tax_after_zero": zero_check["tax_after_zero"],
+        }
 
     promo_applied = bool(zero_check["ok"])
     coupon_state = f"eligible (0 {currency.upper()})" if promo_applied else f"not_eligible ({amount_due or due} {currency.upper()})"
@@ -631,7 +643,7 @@ def _try_paypal_link(
         "amount_due": amount_due,
         "currency": currency,
         "expected_amount": expected_amount,
-        "zero_due_verified": True,
+        "zero_due_verified": zero_check["ok"],
         "tax_after_zero": zero_check["tax_after_zero"],
         "zero_due_amounts": zero_check["amounts"],
         "tax_amounts": zero_check["tax_amounts"],
