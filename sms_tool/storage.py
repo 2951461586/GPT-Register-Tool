@@ -106,7 +106,7 @@ def _ensure_extra_columns(conn):
     """)
     conn.execute("""
         UPDATE accounts
-        SET refresh_token_status='missing'
+        SET refresh_token_status='no_rt'
         WHERE refresh_token_status IS NULL OR refresh_token_status=''
     """)
 
@@ -232,7 +232,7 @@ def _refresh_token_status(data, auth_session):
         return "oauth_present"
     if str(_get(data, "refresh_token")).strip():
         return "legacy_present"
-    return "missing"
+    return "no_rt"
 
 
 def _status(data, paypal, access_token):

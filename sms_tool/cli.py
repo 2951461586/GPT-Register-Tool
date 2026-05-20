@@ -8,6 +8,8 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .config import CFG
+from .codex_export import export_codex_session, export_codex_sessions
+from .cpa_import import import_cpa_session, import_cpa_sessions
 from .mailbox import _load_mailbox_pool, _luckmail_enabled
 from .paypal_auto import auto_pay
 from .paypal_links import regenerate_paypal_link
@@ -43,6 +45,12 @@ def main():
     parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
     parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
+    parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
+    parser.add_argument("--import-cpa", action="store_true", help="Export paid account session and import it into CPA")
+    parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
+    parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
+    parser.add_argument("--cpa-api-token", default=None, help="CPA API token, defaults to cpa/cpa_mode.api_token in config.json")
+    parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
@@ -72,7 +80,13 @@ def main():
         _open_paypal_link(args.email)
         return
     if args.mark_paypal_status:
-        _mark_paypal_status(args.email, args.mark_paypal_status)
+        _mark_paypal_status(args)
+        return
+    if args.import_cpa:
+        _import_cpa(args)
+        return
+    if args.export_codex_json:
+        _export_codex_json(args)
         return
     if args.regenerate_paypal_link:
         _regenerate_paypal_link(args)
@@ -202,15 +216,56 @@ def _open_paypal_link(email):
     webbrowser.open(url)
 
 
-def _mark_paypal_status(email, status):
-    email = (email or "").strip()
-    if not email:
-        print("[Error] --email is required with --mark-paypal-status")
+def _mark_paypal_status(args):
+    status = args.mark_paypal_status
+    emails = _read_email_file(args.email_file)
+    email = (args.email or "").strip()
+    if not emails and email:
+        emails = [email]
+    if not emails:
+        print("[Error] --email or --email-file is required with --mark-paypal-status")
         return
-    if mark_paypal_status(email, status=status):
-        print(f"[*] PayPal status updated: {email} -> {status}")
-    else:
-        print(f"[Error] account not found: {email}")
+
+    results = []
+    for item_email in emails:
+        if mark_paypal_status(item_email, status=status):
+            print(f"[*] PayPal status updated: {item_email} -> {status}")
+            result = {"ok": True, "email": item_email, "paypal_status": status}
+        else:
+            print(f"[Error] account not found: {item_email}")
+            result = {"ok": False, "email": item_email, "error": "account_not_found"}
+        results.append(result)
+
+    if args.import_cpa:
+        import_emails = [result["email"] for result in results if result.get("ok")]
+        import_result = import_cpa_sessions(
+            import_emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+        )
+        print(json.dumps(import_result, ensure_ascii=False, indent=2))
+        if any(not result.get("ok") for result in results) or not import_result.get("ok"):
+            raise SystemExit(3)
+    elif args.export_codex_json:
+        export_emails = [result["email"] for result in results if result.get("ok")]
+        export_result = export_codex_sessions(
+            export_emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+        )
+        print(json.dumps(export_result, ensure_ascii=False, indent=2))
+        if any(not result.get("ok") for result in results) or not export_result.get("ok"):
+            raise SystemExit(3)
+    elif any(not result.get("ok") for result in results):
+        raise SystemExit(3)
 
 
 def _refresh_session(args):
@@ -223,6 +278,92 @@ def _refresh_session(args):
         proxy=args.proxy,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _export_codex_json(args):
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    if emails:
+        result = export_codex_sessions(
+            emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+        )
+    elif args.session_file:
+        result = export_codex_session(
+            session_file=args.session_file,
+            export_dir=args.codex_export_dir or "",
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+        )
+    else:
+        rows = [
+            row for row in list_paypal_accounts()
+            if str(row.get("paypal_status") or "").strip().lower() == "completed"
+        ]
+        emails = [row.get("email", "") for row in rows if row.get("email")]
+        result = export_codex_sessions(
+            emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _import_cpa(args):
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    if emails:
+        result = import_cpa_sessions(
+            emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+        )
+    elif args.session_file:
+        result = import_cpa_session(
+            session_file=args.session_file,
+            export_dir=args.codex_export_dir or "",
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+        )
+    else:
+        rows = [
+            row for row in list_paypal_accounts()
+            if str(row.get("paypal_status") or "").strip().lower() == "completed"
+        ]
+        emails = [row.get("email", "") for row in rows if row.get("email")]
+        result = import_cpa_sessions(
+            emails,
+            export_dir=args.codex_export_dir or "",
+            workers=args.workers,
+            refresh=not args.no_session_refresh,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
 
 
 def _regenerate_paypal_link(args):

@@ -258,7 +258,7 @@ namespace SmsWorkbench
         {
             int mailboxes = allRows.Count(r => r.AccountType.Contains("邮箱池") || r.AccountType.Contains("Chatai"));
             int registered = allRows.Count(IsRegisteredRow);
-            int paypal = allRows.Count(r => r.Status.Contains("PayPal"));
+            int paypal = allRows.Count(IsPayPalCompletedRow);
             int attention = allRows.Count(r => r.Status.Contains("待") || r.Status.Contains("缺") || r.Status.Contains("失败"));
             TotalCountText = allRows.Count.ToString();
             MailboxCountText = mailboxes.ToString();
@@ -273,6 +273,14 @@ namespace SmsWorkbench
                 || row.AccountType.Contains("SQLite")
                 || row.Status.Contains("已注册")
                 || row.Status.Contains("PayPal");
+        }
+
+        private bool IsPayPalCompletedRow(PoolRow row)
+        {
+            string status = (row.Status + " " + row.PayPalStatus).Trim();
+            return status.Contains("支付完成")
+                || status.Contains("Payment completed")
+                || row.PayPalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase);
         }
 
         private void DeduplicateRows()
@@ -543,7 +551,7 @@ namespace SmsWorkbench
             try
             {
                 SqliteNative.Execute(dbPath, "UPDATE accounts SET paypal_status='link_ready' WHERE (paypal_status IS NULL OR paypal_status='') AND paypal_url IS NOT NULL AND paypal_url<>''");
-                SqliteNative.Execute(dbPath, "UPDATE accounts SET refresh_token_status='missing' WHERE refresh_token_status IS NULL OR refresh_token_status=''");
+                SqliteNative.Execute(dbPath, "UPDATE accounts SET refresh_token_status='no_rt' WHERE refresh_token_status IS NULL OR refresh_token_status=''");
             }
             catch { }
         }
@@ -944,33 +952,143 @@ namespace SmsWorkbench
         {
             try
             {
-                if (row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                string emailKey = NormalizeEmailKey(row.Identifier);
+                int removedPoolLines = DeleteMailboxLines(row, emailKey);
+                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey);
+                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey);
+
+                if (row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(row.SourcePath)
+                    && IsUnderDirectory(row.SourcePath, GetSessionsDir()))
                 {
                     File.Delete(row.SourcePath);
-                    Log("删除文件：" + row.SourcePath);
-                    return;
+                    removedSessionFiles++;
                 }
-                if (row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase))
-                {
-                    SqliteNative.Execute(row.SourcePath, "DELETE FROM accounts WHERE id=" + OnlyDigits(row.RawLine));
-                    if (File.Exists(row.Notes) && IsUnderDirectory(row.Notes, GetSessionsDir()))
-                    {
-                        File.Delete(row.Notes);
-                    }
-                    Log("删除SQLite记录：" + row.Identifier);
-                    return;
-                }
-                if (File.Exists(row.SourcePath) && !string.IsNullOrWhiteSpace(row.RawLine))
-                {
-                    var lines = File.ReadAllLines(row.SourcePath, Encoding.UTF8).ToList();
-                    lines.RemoveAll(line => line.Trim() == row.RawLine.Trim());
-                    File.WriteAllLines(row.SourcePath, lines, Encoding.UTF8);
-                    Log("删除池记录：" + row.Identifier);
-                }
+
+                Log("删除账号：" + row.Identifier
+                    + "，邮箱池 " + removedPoolLines
+                    + " 条，SQLite " + removedSqliteRows
+                    + " 条，session " + removedSessionFiles + " 个");
             }
             catch (Exception ex)
             {
                 Log("删除失败：" + row.Identifier + " " + ex.Message);
+            }
+        }
+
+        private int DeleteMailboxLines(PoolRow row, string emailKey)
+        {
+            int removed = 0;
+            var paths = new List<string> { row.SourcePath, GetChataiMailboxFilePath(), GetMailboxTokenFile() };
+            foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!File.Exists(path) || !path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) continue;
+                string rawLine = (row.RawLine ?? "").Trim();
+                var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
+                int before = lines.Count;
+                lines.RemoveAll(line =>
+                {
+                    string value = line.Trim().TrimStart('\ufeff');
+                    if (rawLine.Length > 0 && value.Equals(rawLine, StringComparison.OrdinalIgnoreCase)) return true;
+                    string lineEmail = MailboxEmailForLine(value);
+                    return emailKey.Length > 0 && NormalizeEmailKey(lineEmail) == emailKey;
+                });
+                int delta = before - lines.Count;
+                if (delta <= 0) continue;
+                File.WriteAllLines(path, lines, new UTF8Encoding(false));
+                removed += delta;
+            }
+            return removed;
+        }
+
+        private int DeleteSqliteAccountRows(PoolRow row, string emailKey)
+        {
+            string dbPath = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
+                ? row.SourcePath
+                : GetDatabasePath();
+            if (!File.Exists(dbPath)) return 0;
+
+            var rows = SqliteNative.Query(dbPath, "SELECT id,email,json_path FROM accounts");
+            var deleteIds = new List<string>();
+            string explicitId = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) ? OnlyDigits(row.RawLine) : "";
+            foreach (Dictionary<string, string> data in rows)
+            {
+                string id = data.TryGetValue("id", out string rawId) ? rawId : "";
+                string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : "";
+                bool matches = explicitId.Length > 0 && id == explicitId;
+                matches = matches || (emailKey.Length > 0 && NormalizeEmailKey(email) == emailKey);
+                if (!matches) continue;
+                deleteIds.Add(id);
+
+                string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
+                if (File.Exists(jsonPath) && IsUnderDirectory(jsonPath, GetSessionsDir()))
+                {
+                    TryDeleteFile(jsonPath);
+                }
+            }
+
+            foreach (string id in deleteIds.Distinct())
+            {
+                SqliteNative.Execute(dbPath, "DELETE FROM accounts WHERE id=" + OnlyDigits(id));
+            }
+            return deleteIds.Distinct().Count();
+        }
+
+        private int DeleteSessionJsonFiles(PoolRow row, string emailKey)
+        {
+            int removed = 0;
+            var dirs = new List<string> { GetSessionsDir(), rootDir };
+            foreach (string dir in dirs.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                foreach (string path in Directory.GetFiles(dir, "session_*.json", SearchOption.TopDirectoryOnly))
+                {
+                    if (!SessionJsonMatchesEmail(path, emailKey)) continue;
+                    if (TryDeleteFile(path)) removed++;
+                }
+            }
+            string notes = (row.Notes ?? "").Trim();
+            if (File.Exists(notes) && notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                && IsUnderDirectory(notes, GetSessionsDir()) && TryDeleteFile(notes))
+            {
+                removed++;
+            }
+            return removed;
+        }
+
+        private bool SessionJsonMatchesEmail(string path, string emailKey)
+        {
+            if (emailKey.Length == 0) return false;
+            try
+            {
+                Dictionary<string, object> data = ReadJsonObject(path);
+                return NormalizeEmailKey(GetString(data, "email")) == emailKey;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string MailboxEmailForLine(string line)
+        {
+            string value = (line ?? "").Trim().TrimStart('\ufeff');
+            if (value.Contains("----")) return value.Split(new[] { "----" }, StringSplitOptions.None).FirstOrDefault() ?? "";
+            if (value.Contains("---")) return value.Split(new[] { "---" }, StringSplitOptions.None).FirstOrDefault() ?? "";
+            return "";
+        }
+
+        private bool TryDeleteFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                File.Delete(path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log("删除文件失败：" + path + " " + ex.Message);
+                return false;
             }
         }
 
@@ -1054,10 +1172,68 @@ namespace SmsWorkbench
 
         private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedAccountRow();
-            if (row == null) return;
-            var args = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed" };
-            RunBackend("标记支付完成", args);
+            MarkPayPalComplete(SelectedRowsOrCurrent());
+        }
+
+        private void MarkPayPalComplete(PoolRow row)
+        {
+            MarkPayPalComplete(row == null ? new List<PoolRow>() : new List<PoolRow> { row });
+        }
+
+        private void MarkPayPalComplete(List<PoolRow> rows)
+        {
+            rows = (rows ?? new List<PoolRow>())
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                MessageBox.Show("请先勾选或选择账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (rows.Count == 1)
+            {
+                PoolRow row = rows[0];
+                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed", "--export-codex-json", "--workers", "4", "--refresh-timeout", "60" };
+                AddSessionFileArg(singleArgs, row);
+                RunBackend("标记支付完成并导出JSON", singleArgs);
+                return;
+            }
+
+            string emailFile = Path.Combine(Path.GetTempPath(), "paypal_completed_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile, "--export-codex-json", "--workers", "4", "--refresh-timeout", "60" };
+            RunBackend("批量标记支付完成并导出JSON (" + rows.Count + ")", args);
+        }
+
+        private void ImportPaidCpa_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = SelectedRowsOrCurrent()
+                .Where(IsPayPalCompletedRow)
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            var rows = selected.Count > 0
+                ? selected
+                : allRows.Where(IsPayPalCompletedRow)
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                    .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                    .Select(g => g.First())
+                    .ToList();
+
+            if (rows.Count == 0)
+            {
+                MessageBox.Show("没有找到支付完成的账号。", "一键导入CPA", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            string emailFile = Path.Combine(Path.GetTempPath(), "paid_cpa_import_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+            var args = new List<string> { "--import-cpa", "--email-file", emailFile, "--workers", "4", "--refresh-timeout", "60" };
+            RunBackend("一键导入CPA (" + rows.Count + ")", args);
         }
 
         private void RefreshSession_Click(object sender, RoutedEventArgs e)
@@ -1152,6 +1328,14 @@ namespace SmsWorkbench
         private void ClearSelection_Click(object sender, RoutedEventArgs e)
         {
             foreach (PoolRow row in allRows) row.IsChecked = false;
+        }
+
+        private void SelectAllFiltered_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (PoolRow row in allRows.Where(FilterRow))
+            {
+                row.IsChecked = true;
+            }
         }
 
         private async void ShowInboxDialog(PoolRow row)
@@ -1391,12 +1575,19 @@ namespace SmsWorkbench
             openPayPalButton.Click += (_, __) => OpenPayPalUrl(paypalUrl, row.Identifier);
             var copyPayPalButton = new Button { Content = "复制支付链接", Width = 108, IsEnabled = !string.IsNullOrWhiteSpace(paypalUrl) };
             copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl);
+            var markPayPalCompleteButton = new Button { Content = "标记支付完成", Width = 112 };
+            markPayPalCompleteButton.Click += (_, __) =>
+            {
+                MarkPayPalComplete(row);
+                dialog.Close();
+            };
             var openButton = new Button { Content = "打开源文件", Width = 96 };
-            openButton.Click += (_, __) => OpenPath(File.Exists(row.Notes) ? row.Notes : row.SourcePath);
+            openButton.Click += (_, __) => OpenAccountJson(row);
             var closeButton = new Button { Content = "关闭", Width = 72 };
             closeButton.Click += (_, __) => dialog.Close();
             actions.Children.Add(openPayPalButton);
             actions.Children.Add(copyPayPalButton);
+            actions.Children.Add(markPayPalCompleteButton);
             actions.Children.Add(openButton);
             actions.Children.Add(closeButton);
             Grid.SetRow(actions, 3);
@@ -1404,6 +1595,65 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             dialog.ShowDialog();
+        }
+
+        private void OpenAccountJson(PoolRow row)
+        {
+            string path = ResolveAccountJsonPath(row);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                MessageBox.Show("未找到该账号对应的 JSON 文件。", "打开源文件", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            OpenPath(path);
+        }
+
+        private string ResolveAccountJsonPath(PoolRow row)
+        {
+            if (row == null) return "";
+            string notes = (row.Notes ?? "").Trim();
+            if (File.Exists(notes) && notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return notes;
+            string source = (row.SourcePath ?? "").Trim();
+            if (File.Exists(source) && source.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return source;
+            if (!File.Exists(source) || !source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)) return "";
+
+            try
+            {
+                string sql = "SELECT email,json_path,raw_json FROM accounts WHERE id=" + OnlyDigits(row.RawLine);
+                var rows = SqliteNative.Query(source, sql);
+                if (rows.Count == 0) return "";
+                Dictionary<string, string> data = rows[0];
+                string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
+                if (File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return jsonPath;
+
+                string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
+                if (string.IsNullOrWhiteSpace(rawJson)) return "";
+                string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : row.Identifier;
+                string safeEmail = Regex.Replace((email ?? "unknown").Trim(), @"[^a-zA-Z0-9_.@+-]+", "_");
+                string dir = Path.Combine(rootDir, "runtime", "account_json");
+                Directory.CreateDirectory(dir);
+                string outPath = Path.Combine(dir, "account_" + safeEmail + ".json");
+                File.WriteAllText(outPath, PrettyJson(rawJson), new UTF8Encoding(false));
+                return outPath;
+            }
+            catch (Exception ex)
+            {
+                Log("打开账号JSON失败：" + ex.Message);
+                return "";
+            }
+        }
+
+        private string PrettyJson(string rawJson)
+        {
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(rawJson);
+                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                return rawJson;
+            }
         }
 
         private void AddDetailRow(Grid parent, int row, string label, string value)
@@ -1521,6 +1771,7 @@ namespace SmsWorkbench
             var paypal = GetSection(config, "paypal");
             var storage = GetSection(config, "storage");
             var output = GetSection(config, "output");
+            var cpaMode = GetSection(config, "cpa_mode");
 
             var dialog = new Window
             {
@@ -1555,6 +1806,8 @@ namespace SmsWorkbench
             AddConfigField(form, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
             AddConfigField(form, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
             AddConfigField(form, fields, row++, "SQLite路径", "sqlite_path", GetString(storage, "sqlite_path"));
+            AddConfigField(form, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
+            AddConfigField(form, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
 
             var scroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             Grid.SetRow(scroll, 0);
@@ -1582,11 +1835,14 @@ namespace SmsWorkbench
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
                 output["directory"] = fields["output_directory"].Text.Trim();
                 storage["sqlite_path"] = fields["sqlite_path"].Text.Trim();
+                cpaMode["api_url"] = fields["cpa_api_url"].Text.Trim();
+                cpaMode["api_token"] = fields["cpa_api_token"].Text.Trim();
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
                 config["output"] = output;
                 config["storage"] = storage;
+                config["cpa_mode"] = cpaMode;
                 SaveConfig(path, config);
                 PurchaseProjectText = fields["luckmail_purchase_project_code"].Text.Trim();
                 PurchaseEmailTypeText = fields["luckmail_purchase_email_type"].Text.Trim();
@@ -1838,6 +2094,7 @@ namespace SmsWorkbench
         {
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) && refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return "已刷新";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) && refreshTokenStatus.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return "已导出";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "待刷新";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalOk == "1" || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "PayPal已生成";
@@ -1858,6 +2115,7 @@ namespace SmsWorkbench
         {
             if (refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return "已获取";
             if (refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)) return "旧token";
+            if (refreshTokenStatus.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return "无RT";
             if (refreshTokenStatus.Equals("missing", StringComparison.OrdinalIgnoreCase)) return "缺失";
             return refreshTokenStatus ?? "";
         }
@@ -2103,9 +2361,18 @@ namespace SmsWorkbench
 
         private void ToggleTheme_Click(object sender, RoutedEventArgs e)
         {
-            darkTheme = !darkTheme;
-            ApplyTheme(darkTheme);
-            Log(darkTheme ? "已切换到黑夜主题。" : "已切换到白天主题。");
+            bool nextTheme = !darkTheme;
+            try
+            {
+                ApplyTheme(nextTheme);
+                darkTheme = nextTheme;
+                Log(darkTheme ? "已切换到黑夜主题。" : "已切换到白天主题。");
+            }
+            catch (Exception ex)
+            {
+                Log("主题切换失败：" + ex.Message);
+                MessageBox.Show("主题切换失败：" + ex.Message, "主题切换", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void ApplyTheme(bool dark)
@@ -2150,10 +2417,13 @@ namespace SmsWorkbench
 
         private void SetBrush(string key, string color)
         {
-            if (Application.Current.Resources[key] is SolidColorBrush brush)
+            Color parsed = (Color)ColorConverter.ConvertFromString(color);
+            if (Application.Current?.Resources[key] is SolidColorBrush brush && !brush.IsFrozen)
             {
-                brush.Color = (Color)ColorConverter.ConvertFromString(color);
+                brush.Color = parsed;
+                return;
             }
+            Application.Current.Resources[key] = new SolidColorBrush(parsed);
         }
 
         private void Log(string text)

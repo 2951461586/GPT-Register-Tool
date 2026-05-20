@@ -627,7 +627,7 @@ class PayPalReverseClient:
             ok=True,
             access_token=access_token,
             oauth_refresh_token=refresh_token,
-            refresh_token_status="oauth_present" if refresh_token else "missing",
+            refresh_token_status="oauth_present" if refresh_token else "no_rt",
             redirect_url=final_url,
         )
 

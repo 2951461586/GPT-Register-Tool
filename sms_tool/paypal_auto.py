@@ -667,7 +667,7 @@ def _run_browser_steps(
         "ok": True,
         "access_token": new_access,
         "oauth_refresh_token": new_refresh,
-        "refresh_token_status": "oauth_present" if new_refresh else "missing",
+        "refresh_token_status": "oauth_present" if new_refresh else "no_rt",
         "paypal_status": "completed",
         "paypal_completed_at": int(time.time()),
         "card_last4": card["number"][-4:],

@@ -15,7 +15,7 @@ def _load_config():
         searched = ", ".join(str(path) for path in candidates)
         print(f"[Error] config.json not found. Searched: {searched}")
         raise SystemExit(1)
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 CFG = _load_config()

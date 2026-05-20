@@ -32,6 +32,11 @@ sms_tool/
   gen_pp_link.py            PayPal/Stripe hosted payment-link generation.
   paypal_links.py           Regenerate PayPal links without clobbering old links.
   session_refresh.py        Refresh auth session after manual login/payment.
+  codex_export.py           Build Codex/CPA-compatible token JSON from session data.
+  codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
+  codex_sentinel.py         Sentinel/cache cookie helpers for auth.openai.com requests.
+  codex_phone.py            Optional add-phone SMS verification boundary.
+  cpa_import.py             CPA API upload boundary; requires real rt_ refresh tokens.
   storage.py                SQLite and session index persistence.
 
 SmsWorkbench/               WPF desktop UI.
@@ -118,6 +123,30 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 
 `accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same email instead of creating a new row with different casing or a repaired alias spelling.
 
+### Codex OAuth and CPA Layer
+
+`sms_tool/codex_oauth.py` owns only the Codex OAuth authorization-code + PKCE sequence:
+
+- Build the OAuth authorize URL.
+- Reuse existing auth cookies when they already produce a callback code.
+- Continue username login.
+- Complete email OTP only when OpenAI routes the flow to an email OTP page, or when takeover is explicitly enabled.
+- Exchange the callback code for OpenAI `access_token`, `id_token`, and `refresh_token`.
+
+It deliberately does not upload to CPA and does not own phone-number inventory.
+
+`sms_tool/codex_sentinel.py` owns auth.openai.com sentinel cookie/header helpers. Cached Cloudflare/auth cookies may be reused, but the cached `oai-did` is stripped before import so one global browser fingerprint is not assigned to every account.
+
+`sms_tool/codex_phone.py` owns add-phone completion. It is disabled by default. If OpenAI requests `/add-phone`, the OAuth layer reports `add_phone_required` unless `codex_oauth.auto_phone_verification` is true.
+
+`sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` uploads that JSON to CPA and refuses files without a real `rt_` refresh token or without a real `id_token`.
+
+Important behavior:
+
+- Default CPA import no longer forces `/log-in/password` accounts into passwordless takeover.
+- `codex_oauth.allow_passwordless_takeover=true` is an explicit escape hatch for takeover-style OTP login.
+- Forced takeover may require add-phone even when a local row is marked payment-completed, so it should not be the normal Plus-account path.
+
 ## Portable Configuration
 
 All paths in `config.example.json` are relative by default:
@@ -132,6 +161,10 @@ All paths in `config.example.json` are relative by default:
   },
   "storage": {
     "sqlite_path": "runtime/accounts.sqlite3"
+  },
+  "codex_oauth": {
+    "allow_passwordless_takeover": false,
+    "auto_phone_verification": false
   },
   "output": {
     "directory": "sessions"

@@ -1,0 +1,602 @@
+﻿import base64
+import hashlib
+import json
+import secrets
+import time
+import urllib.parse
+from datetime import timezone, datetime
+
+from curl_cffi import requests as curl_requests
+
+from .config import CFG
+from .codex_phone import complete_phone_verification
+from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
+from .mailbox import MailboxAccount, _poll_email_otp
+from .storage import upsert_account
+
+
+AUTH_URL = "https://auth.openai.com/oauth/authorize"
+TOKEN_URL = "https://auth.openai.com/oauth/token"
+CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+REDIRECT_URI = "http://localhost:1455/auth/callback"
+SCOPE = "openid profile email offline_access"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36"
+
+
+def refresh_codex_oauth_session(data, json_path="", proxy=None, timeout=180):
+    email = str(data.get("email") or "").strip().lower()
+    if not email:
+        return {"ok": False, "mode": "codex_oauth_pkce", "error": "missing_email"}
+    oauth = _new_oauth_request()
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+    import_cookie_header(session, data.get("cookie_header", ""), "chatgpt.com")
+    import_cached_auth_cookies(session)
+
+    try:
+        _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
+        if _has_callback_code(current_url):
+            tokens = _exchange_callback(current_url, oauth, proxy=proxy)
+            return _save_oauth_tokens(data, json_path, tokens, email, "codex_oauth_pkce")
+
+        result = _login_and_exchange(
+            session=session,
+            oauth=oauth,
+            email=email,
+            data=data,
+            current_url=current_url,
+            proxy=proxy,
+            timeout=timeout,
+        )
+        if not result.get("ok"):
+            return result
+        return _save_oauth_tokens(data, json_path, result["tokens"], email, "codex_oauth_pkce")
+    except Exception as exc:
+        return {"ok": False, "mode": "codex_oauth_pkce", "error": str(exc)}
+
+
+def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, timeout=180):
+    did = str(data.get("device_id") or "").strip() or _cookie_value(session, "oai-did") or secrets.token_hex(16)
+    try:
+        session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
+    except Exception:
+        pass
+    sentinel = load_cached_sentinel()
+    headers = _oai_headers(did, {"Referer": current_url or AUTH_URL, "content-type": "application/json"})
+    attach_sentinel(headers, sentinel)
+    start_resp = session.post(
+        "https://auth.openai.com/api/accounts/authorize/continue",
+        headers=headers,
+        json={"username": {"value": email, "kind": "email"}},
+        timeout=30,
+        impersonate="chrome110",
+        allow_redirects=False,
+    )
+    if start_resp.status_code != 200:
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": f"authorize_continue_failed:{start_resp.status_code}",
+            "body": start_resp.text[:300],
+        }
+    next_url = _next_url(start_resp)
+    _, current_url = _follow_redirects(session, next_url, proxy=proxy)
+    if _has_callback_code(current_url):
+        return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+
+    allow_takeover = _allow_passwordless_takeover()
+    if _needs_email_otp(current_url) or allow_takeover:
+        email_otp_result = _passwordless_login_and_exchange(
+            session=session,
+            oauth=oauth,
+            data=data,
+            did=did,
+            current_url=current_url,
+            proxy=proxy,
+            timeout=timeout,
+            reason="email_otp_required" if _needs_email_otp(current_url) else "passwordless_takeover_enabled",
+        )
+        if email_otp_result.get("ok"):
+            return email_otp_result
+    elif _needs_password(current_url):
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "password_login_required",
+            "last_url": _safe_url(current_url),
+            "message": (
+                "OpenAI routed this account to password login. Passwordless takeover is disabled "
+                "because forcing it can push every account into add-phone."
+            ),
+            "next_action": "Use an existing RT JSON, refresh via a logged-in browser/session, or explicitly enable codex_oauth.allow_passwordless_takeover.",
+        }
+    else:
+        email_otp_result = {"ok": False, "error": "email_otp_not_required", "last_url": _safe_url(current_url)}
+
+    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy)
+    if final.get("ok"):
+        return final
+
+    return {
+        "ok": False,
+        "mode": "codex_oauth_pkce",
+        "error": email_otp_result.get("error") or "oauth_callback_code_not_reached",
+        "last_url": final.get("last_url") or _safe_url(current_url),
+        "email_otp_attempt": email_otp_result,
+        "phone_attempt": final.get("phone_attempt"),
+    }
+
+
+def _passwordless_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, reason=""):
+    mailbox = _mailbox_from_data(data)
+    if mailbox is None:
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "passwordless_missing_mailbox",
+            "fallback_from": reason,
+            "last_url": _safe_url(current_url),
+        }
+
+    issued_after = int(time.time()) - 30
+    send_result = _send_passwordless_otp(session, did, current_url)
+    if send_result.get("hard_error"):
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": send_result.get("error", "passwordless_send_failed"),
+            "fallback_from": reason,
+            "last_url": _safe_url(current_url),
+        }
+
+    attempts = max(1, min(int((CFG.get("email_registration") or {}).get("max_otp_retries") or 3), 5))
+    last_error = ""
+    last_validate_body = ""
+    for attempt in range(attempts):
+        if attempt > 0:
+            _resend_email_otp(session, did, current_url)
+            issued_after = int(time.time()) - 10
+        code = _poll_email_otp(
+            mailbox,
+            subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
+            timeout=min(max(int(timeout or 180), 30), 300),
+            issued_after_unix=issued_after,
+        )
+        if not code:
+            continue
+        validate = session.post(
+            "https://auth.openai.com/api/accounts/email-otp/validate",
+            headers=with_sentinel(
+                _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+                load_cached_sentinel(),
+            ),
+            json={"code": code},
+            timeout=30,
+            impersonate="chrome110",
+        )
+        if validate.status_code != 200:
+            last_error = f"email_otp_validate_failed:{validate.status_code}"
+            last_validate_body = validate.text[:300]
+            print(f"[*] Email OTP validate failed: {validate.status_code} {last_validate_body}")
+            continue
+        next_url = _next_url(validate)
+        _, current_url = _follow_redirects(session, next_url, proxy=proxy)
+        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy)
+        if final.get("ok"):
+            final["login_method"] = "passwordless_email_otp"
+            final["fallback_from"] = reason
+            return final
+        if final.get("phone_attempt"):
+            phone_error = (final.get("phone_attempt") or {}).get("error", "phone_verification_failed")
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": phone_error,
+                "fallback_from": reason,
+                "last_url": final.get("last_url") or _safe_url(current_url),
+                "phone_attempt": final.get("phone_attempt"),
+            }
+        if current_url.endswith("/about-you"):
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": "passwordless_about_you_required",
+                "fallback_from": reason,
+                "last_url": _safe_url(current_url),
+            }
+    return {
+        "ok": False,
+        "mode": "codex_oauth_pkce",
+        "error": last_error or "passwordless_email_otp_failed",
+        "fallback_from": reason,
+        "last_url": _safe_url(current_url),
+        "body": last_validate_body,
+    }
+
+
+def _send_passwordless_otp(session, did, current_url):
+    sentinel = load_cached_sentinel()
+    for endpoint in (
+        "https://auth.openai.com/api/accounts/passwordless/send-otp",
+        "https://auth.openai.com/api/accounts/email-otp/send",
+    ):
+        try:
+            response = session.post(
+                endpoint,
+                headers=with_sentinel(
+                    _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
+                    sentinel,
+                ),
+                json={},
+                timeout=30,
+                impersonate="chrome110",
+            )
+            if response.status_code == 200:
+                print(f"[*] Passwordless OTP send ok: {endpoint.rsplit('/', 1)[-1]}")
+                return {"ok": True, "endpoint": endpoint}
+            print(f"[*] Passwordless OTP send skipped: {endpoint.rsplit('/', 1)[-1]} {response.status_code}")
+            if response.status_code not in (400, 404, 405):
+                return {"ok": False, "hard_error": True, "error": f"passwordless_send_failed:{response.status_code}"}
+        except Exception as exc:
+            return {"ok": False, "hard_error": True, "error": f"passwordless_send_error:{exc}"}
+    return {"ok": False, "error": "passwordless_send_unavailable"}
+
+
+def _resend_email_otp(session, did, current_url):
+    sentinel = load_cached_sentinel()
+    try:
+        response = session.post(
+            "https://auth.openai.com/api/accounts/email-otp/resend",
+            headers=with_sentinel(
+                _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+                sentinel,
+            ),
+            json={},
+            timeout=20,
+            impersonate="chrome110",
+        )
+        print(f"[*] Email OTP resend: {response.status_code}")
+    except Exception:
+        pass
+
+
+def _finish_authorization(session, oauth, did, current_url, proxy=None):
+    if _has_callback_code(current_url):
+        return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+
+    workspace_result = _select_workspace_if_needed(session, did, current_url, proxy=proxy)
+    if workspace_result.get("ok"):
+        current_url = workspace_result.get("url", current_url)
+        if _has_callback_code(current_url):
+            return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+
+    if "/add-phone" in str(current_url):
+        phone_result = complete_phone_verification(
+            session,
+            did,
+            current_url,
+            proxy=proxy,
+            enabled=_auto_phone_verification(),
+        )
+        if phone_result.get("ok"):
+            current_url = phone_result.get("url") or phone_result.get("next_url") or current_url
+            _, current_url = _follow_redirects(session, current_url, proxy=proxy)
+            if _has_callback_code(current_url):
+                return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+            workspace_result = _select_workspace_if_needed(session, did, current_url, proxy=proxy)
+            if workspace_result.get("ok"):
+                current_url = workspace_result.get("url", current_url)
+                if _has_callback_code(current_url):
+                    return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+        return {"ok": False, "last_url": _safe_url(current_url), "phone_attempt": phone_result}
+
+    return {"ok": False, "last_url": _safe_url(current_url)}
+
+
+def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180):
+    mailbox = _mailbox_from_data(data)
+    if mailbox is None:
+        return {"ok": False, "mode": "codex_oauth_pkce", "error": "email_otp_required_missing_mailbox"}
+    try:
+        session.post(
+            "https://auth.openai.com/api/accounts/email-otp/send",
+            headers=_oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
+            json={},
+            timeout=30,
+            impersonate="chrome110",
+        )
+    except Exception:
+        pass
+    code = _poll_email_otp(
+        mailbox,
+        subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
+        timeout=min(max(int(timeout or 180), 30), 300),
+        issued_after_unix=int(time.time()) - 30,
+    )
+    if not code:
+        return {"ok": False, "mode": "codex_oauth_pkce", "error": "email_otp_poll_timeout"}
+    validate = session.post(
+        "https://auth.openai.com/api/accounts/email-otp/validate",
+        headers=with_sentinel(
+            _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+            load_cached_sentinel(),
+        ),
+        json={"code": code},
+        timeout=30,
+        impersonate="chrome110",
+    )
+    if validate.status_code != 200:
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": f"email_otp_validate_failed:{validate.status_code}",
+            "body": validate.text[:300],
+        }
+    return {"ok": True, "next_url": _next_url(validate)}
+
+
+def _select_workspace_if_needed(session, did, current_url, proxy=None):
+    if not current_url or not (current_url.endswith("/consent") or current_url.endswith("/workspace")):
+        return {"ok": False}
+    workspaces = _parse_workspace_from_auth_cookie(_cookie_value(session, "oai-client-auth-session"))
+    if not workspaces:
+        return {"ok": False}
+    workspace_id = ""
+    for item in workspaces:
+        title = str(item.get("title") or item.get("name") or "")
+        if item.get("is_personal") or "Personal" in title:
+            workspace_id = str(item.get("id") or "")
+            break
+    workspace_id = workspace_id or str((workspaces[0] or {}).get("id") or "")
+    if not workspace_id:
+        return {"ok": False}
+    response = session.post(
+        "https://auth.openai.com/api/accounts/workspace/select",
+        headers=with_sentinel(
+            _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
+            load_cached_sentinel(),
+        ),
+        json={"workspace_id": workspace_id},
+        timeout=30,
+        impersonate="chrome110",
+    )
+    if response.status_code != 200:
+        return {"ok": False}
+    _, final_url = _follow_redirects(session, _next_url(response), proxy=proxy)
+    return {"ok": True, "url": final_url}
+
+
+def _new_oauth_request():
+    state = secrets.token_urlsafe(16)
+    verifier = secrets.token_urlsafe(64)
+    challenge = _b64url(hashlib.sha256(verifier.encode("ascii")).digest())
+    params = {
+        "client_id": CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": REDIRECT_URI,
+        "scope": SCOPE,
+        "state": state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "id_token_add_organizations": "true",
+        "codex_cli_simplified_flow": "true",
+    }
+    return {
+        "state": state,
+        "code_verifier": verifier,
+        "redirect_uri": REDIRECT_URI,
+        "auth_url": f"{AUTH_URL}?{urllib.parse.urlencode(params)}",
+    }
+
+
+def _exchange_callback(callback_url, oauth, proxy=None):
+    parsed = urllib.parse.urlparse(callback_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    code = (query.get("code") or [""])[0]
+    state = (query.get("state") or [""])[0]
+    if not code:
+        raise RuntimeError("oauth_callback_missing_code")
+    if state != oauth["state"]:
+        raise RuntimeError("oauth_state_mismatch")
+    response = curl_requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "authorization_code",
+            "client_id": CLIENT_ID,
+            "code": code,
+            "redirect_uri": oauth["redirect_uri"],
+            "code_verifier": oauth["code_verifier"],
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        proxies={"http": proxy, "https": proxy} if proxy else None,
+        timeout=30,
+        impersonate="chrome110",
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"oauth_token_exchange_failed:{response.status_code}:{response.text[:300]}")
+    body = response.json()
+    if not body.get("access_token") or not body.get("refresh_token"):
+        raise RuntimeError("oauth_token_response_missing_access_or_refresh_token")
+    return body
+
+
+def _save_oauth_tokens(data, json_path, tokens, email, mode):
+    now = int(time.time())
+    expires_in = _as_int(tokens.get("expires_in")) or 0
+    refreshed = dict(data)
+    refreshed["email"] = email
+    refreshed["success"] = True
+    refreshed["access_token"] = tokens.get("access_token", "")
+    refreshed["id_token"] = tokens.get("id_token", "")
+    refreshed["oauth_refresh_token"] = tokens.get("refresh_token", "")
+    refreshed["refresh_token_status"] = "oauth_present"
+    refreshed["refresh_token_updated_at"] = now
+    refreshed["refreshed_at"] = now
+    refreshed["codex_oauth"] = {
+        "client_id": CLIENT_ID,
+        "scope": SCOPE,
+        "mode": mode,
+        "updated_at": now,
+    }
+    if expires_in:
+        refreshed["oauth_expires_at"] = _iso_utc(now + expires_in)
+    if json_path:
+        from pathlib import Path
+        Path(json_path).write_text(json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8")
+    upsert_account(refreshed, json_path=json_path)
+    return {
+        "ok": True,
+        "mode": mode,
+        "email": email,
+        "json_path": json_path,
+        "refresh_token_status": "oauth_present",
+    }
+
+
+def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
+    current_url = _absolute_url("https://auth.openai.com", start_url)
+    response = None
+    for _ in range(max_redirects):
+        if not current_url:
+            return response, current_url
+        response = session.get(
+            current_url,
+            allow_redirects=False,
+            timeout=30,
+            impersonate="chrome110",
+        )
+        if response.status_code not in (301, 302, 303, 307, 308):
+            return response, current_url
+        location = response.headers.get("Location", "")
+        if not location:
+            return response, current_url
+        current_url = urllib.parse.urljoin(current_url, location)
+        if _has_callback_code(current_url):
+            return response, current_url
+    return response, current_url
+
+
+def _mailbox_from_data(data):
+    mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
+    email = str(mailbox.get("email") or data.get("email") or "").strip()
+    refresh_token = str(mailbox.get("refresh_token") or "").strip()
+    if not email or not refresh_token:
+        return None
+    return MailboxAccount(
+        email=email,
+        password=str(mailbox.get("password") or data.get("password") or "").strip(),
+        refresh_token=refresh_token,
+        access_token=str(mailbox.get("access_token") or "").strip(),
+        token=str(mailbox.get("token") or "").strip(),
+        source=str(mailbox.get("source") or "").strip(),
+        provider=str(mailbox.get("provider") or "").strip(),
+    )
+
+
+def _oai_headers(did, extra=None):
+    headers = {
+        "accept": "application/json",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent": USER_AGENT,
+        "sec-ch-ua": '"Google Chrome";v="110", "Chromium";v="110", "Not_A Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "oai-device-id": did,
+    }
+    if extra:
+        headers.update(extra)
+    return headers
+
+
+def _next_url(response):
+    try:
+        body = response.json()
+    except Exception:
+        body = {}
+    return _absolute_url("https://auth.openai.com", body.get("continue_url") or response.headers.get("Location") or response.url)
+
+
+def _needs_email_otp(url):
+    value = str(url or "").lower()
+    return "email-verification" in value or "email-otp" in value
+
+
+def _needs_password(url):
+    value = str(url or "").lower()
+    return "/log-in/password" in value or "/login/password" in value or value.endswith("/password")
+
+
+def _codex_oauth_cfg():
+    return CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
+
+
+def _allow_passwordless_takeover():
+    return bool(_codex_oauth_cfg().get("allow_passwordless_takeover", False))
+
+
+def _auto_phone_verification():
+    return bool(_codex_oauth_cfg().get("auto_phone_verification", False))
+
+
+def _has_callback_code(url):
+    text = str(url or "")
+    return "code=" in text and "state=" in text
+
+
+def _cookie_value(session, name):
+    try:
+        return session.cookies.get(name) or ""
+    except Exception:
+        return ""
+
+
+def _parse_workspace_from_auth_cookie(auth_cookie):
+    if not auth_cookie or "." not in auth_cookie:
+        return []
+    parts = auth_cookie.split(".")
+    for segment in parts[1:2] + parts[:1]:
+        claims = _jwt_segment(segment)
+        workspaces = claims.get("workspaces") or []
+        if isinstance(workspaces, list) and workspaces:
+            return workspaces
+    return []
+
+
+def _jwt_segment(segment):
+    try:
+        padded = segment + "=" * (-len(segment) % 4)
+        return json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _absolute_url(base_url, url):
+    if not url:
+        return ""
+    if str(url).startswith(("http://", "https://")):
+        return str(url)
+    return base_url.rstrip("/") + "/" + str(url).lstrip("/")
+
+
+def _safe_url(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+        return urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    except Exception:
+        return str(url or "")[:200]
+
+
+def _b64url(raw):
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _as_int(value):
+    try:
+        return int(value)
+    except Exception:
+        return 0
+
+
+def _iso_utc(epoch_seconds):
+    return datetime.fromtimestamp(int(epoch_seconds), tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
