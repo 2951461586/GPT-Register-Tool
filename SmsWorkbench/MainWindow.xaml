@@ -34,30 +34,17 @@
             <TextBlock Text="邮箱管理" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,8,0,6"/>
             <Button Content="导入Chatai邮箱" Margin="18,0,4,6" Click="ImportChataiMailbox_Click"/>
             <Button Content="查看收件箱" Margin="18,0,4,6" Click="ViewInbox_Click"/>
-            <Button Content="一键注册+支付链接" Margin="18,0,4,6" Style="{StaticResource PrimaryButton}" Click="OneClickRegister_Click"/>
-            <Button Content="重新注册失败账号" Margin="18,0,4,6" Click="RerunFailed_Click"/>
 
             <TextBlock Text="注册流程" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,16,0,6"/>
             <Button Content="购买邮箱并注册" Margin="18,0,4,6" Style="{StaticResource PrimaryButton}" Click="BuyAndRegister_Click"/>
-            <Button Content="邮箱池注册" Margin="18,0,4,6" Click="RegisterFromPool_Click"/>
-            <Button Content="Token 注册" Margin="18,0,4,6" Click="RegisterWithToken_Click"/>
+            <Button Content="一键注册+支付链接" Margin="18,0,4,6" Click="OneClickRegister_Click"/>
 
             <TextBlock Text="数据维护" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,16,0,6"/>
-            <Button Content="打开 Sessions" Margin="18,0,4,6" Click="OpenSessions_Click"/>
-            <Button Content="打开 SQLite" Margin="18,0,4,6" Click="OpenDatabase_Click"/>
-            <Button Content="重建索引" Margin="18,0,4,6" Click="RebuildSqlite_Click"/>
-            <Button Content="打开邮箱池" Margin="18,0,4,6" Click="OpenMailboxPool_Click"/>
             <Button Content="打开支付链接" Margin="18,0,4,6" Click="OpenPayPalLink_Click"/>
-            <Button Content="重新生成链接" Margin="18,0,4,6" Click="RegeneratePayPalLink_Click"/>
             <Button Content="标记支付完成" Margin="18,0,4,6" Click="MarkPayPalComplete_Click"/>
-            <Button Content="刷新Session" Margin="18,0,4,6" Click="RefreshSession_Click"/>
+            <Button Content="一键导入CPA" Margin="18,0,4,6" Click="ImportPaidCpa_Click"/>
+            <Button Content="重新生成链接" Margin="18,0,4,6" Click="RegeneratePayPalLink_Click"/>
             <Button Content="删除选中" Margin="18,0,4,6" Click="DeleteSelected_Click"/>
-
-            <TextBlock Text="筛选" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,16,0,6"/>
-            <Button Content="全部账号" Margin="18,0,4,6" Click="ShowAll_Click"/>
-            <Button Content="邮箱池" Margin="18,0,4,6" Click="ShowMailboxPool_Click"/>
-            <Button Content="已注册" Margin="18,0,4,6" Click="ShowRegistered_Click"/>
-            <Button Content="待处理" Margin="18,0,4,6" Click="ShowPending_Click"/>
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
@@ -66,7 +53,6 @@
     <Grid Grid.Column="1" Margin="10">
       <Grid.RowDefinitions>
         <RowDefinition Height="92"/>
-        <RowDefinition Height="94"/>
         <RowDefinition Height="46"/>
         <RowDefinition Height="*"/>
         <RowDefinition Height="6"/>
@@ -102,7 +88,7 @@
         </Border>
         <Border Grid.Column="3" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
           <StackPanel Margin="14,12">
-            <TextBlock Text="PayPal 链接" Foreground="{StaticResource TextSub}"/>
+            <TextBlock Text="支付完成" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding PaypalCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
@@ -115,52 +101,6 @@
       </Grid>
 
       <Border Grid.Row="1" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
-        <Grid Margin="10">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="96"/>
-            <ColumnDefinition Width="130"/>
-            <ColumnDefinition Width="130"/>
-            <ColumnDefinition Width="140"/>
-            <ColumnDefinition Width="180"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="110"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel Grid.Column="0">
-            <TextBlock Text="批量数量" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <TextBox Width="70" HorizontalAlignment="Left" Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged}"/>
-          </StackPanel>
-          <StackPanel Grid.Column="1" Margin="8,0,0,0">
-            <TextBlock Text="项目" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <TextBox Text="{Binding PurchaseProjectText, UpdateSourceTrigger=PropertyChanged}"/>
-          </StackPanel>
-          <StackPanel Grid.Column="2" Margin="8,0,0,0">
-            <TextBlock Text="邮箱类型" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <TextBox Text="{Binding PurchaseEmailTypeText, UpdateSourceTrigger=PropertyChanged}"/>
-          </StackPanel>
-          <StackPanel Grid.Column="3" Margin="8,0,0,0">
-            <TextBlock Text="域名" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <TextBox Text="{Binding PurchaseDomainText, UpdateSourceTrigger=PropertyChanged}"/>
-          </StackPanel>
-          <StackPanel Grid.Column="4" Margin="8,0,0,0">
-            <TextBlock Text="Chatai邮箱文件" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <TextBox Text="{Binding ChataiMailboxFilePath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Chatai 格式邮箱文件路径，留空自动扫描 hotmail.txt"/>
-          </StackPanel>
-          <StackPanel Grid.Column="5" Margin="8,0,0,0">
-            <TextBlock Text="代理 / LuckMail token" Foreground="{StaticResource TextSub}" Margin="0,0,0,4"/>
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-              </Grid.ColumnDefinitions>
-              <TextBox Grid.Column="0" Text="{Binding ProxyText, UpdateSourceTrigger=PropertyChanged}" ToolTip="代理，例如 socks5h://127.0.0.1:7897"/>
-              <TextBox Grid.Column="1" Margin="8,0,0,0" Text="{Binding LuckmailTokenText, UpdateSourceTrigger=PropertyChanged}" ToolTip="已购买 LuckMail 邮箱 token，例如 tok_xxx"/>
-            </Grid>
-          </StackPanel>
-          <CheckBox Grid.Column="6" Margin="12,22,0,0" Content="跳过PayPal" IsChecked="{Binding SkipPaypalLink}" VerticalAlignment="Top"/>
-        </Grid>
-      </Border>
-
-      <Border Grid.Row="2" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
         <Grid Margin="8,7">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="260"/>
@@ -172,6 +112,7 @@
             <ColumnDefinition Width="96"/>
             <ColumnDefinition Width="64"/>
             <ColumnDefinition Width="64"/>
+            <ColumnDefinition Width="72"/>
           </Grid.ColumnDefinitions>
           <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
           <ComboBox Grid.Column="1" Margin="6,0,0,0" SelectedItem="{Binding ScopeFilter}">
@@ -187,10 +128,11 @@
           <Button Grid.Column="6" Content="清空选择" Click="ClearSelection_Click"/>
           <Button Grid.Column="7" Content="下一页" Click="NextPage_Click"/>
           <Button Grid.Column="8" Content="末页" Click="LastPage_Click"/>
+          <Button Grid.Column="9" Content="全选" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果"/>
         </Grid>
       </Border>
 
-      <Border Grid.Row="3" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+      <Border Grid.Row="2" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
         <DataGrid x:Name="AccountGrid" ItemsSource="{Binding PagedRows}" SelectedItem="{Binding SelectedRow}" AutoGenerateColumns="False"
                   CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   RowHeight="28" IsReadOnly="False" AlternatingRowBackground="{StaticResource GridAltBg}"
@@ -223,10 +165,10 @@
         </DataGrid>
       </Border>
 
-      <GridSplitter Grid.Row="4" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+      <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     Background="{StaticResource SplitterBg}" ShowsPreview="True"/>
 
-      <Grid Grid.Row="5" Margin="0,6,0,0">
+      <Grid Grid.Row="4" Margin="0,6,0,0">
         <Grid.RowDefinitions>
           <RowDefinition Height="36" MinHeight="28"/>
           <RowDefinition Height="5"/>
@@ -304,7 +246,7 @@
         </Border>
       </Grid>
 
-      <Border Grid.Row="6" Background="{StaticResource StatusBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+      <Border Grid.Row="5" Background="{StaticResource StatusBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
         <TextBlock Margin="8,3" Text="{Binding StatusText}" Foreground="{StaticResource TextSub}"/>
       </Border>
     </Grid>

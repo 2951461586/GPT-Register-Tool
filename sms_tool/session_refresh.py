@@ -23,8 +23,9 @@ def refresh_session(email="", session_file="", timeout=300, headless=False, brow
 
 def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None):
     cookie_header = _minimal_chatgpt_cookie_header(data.get("cookie_header") or "")
-    if not cookie_header:
-        return {"ok": False, "email": target_email, "mode": "protocol", "error": "missing_cookie_header"}
+    cookie_header = _ensure_session_cookie(cookie_header, data)
+    if not _has_session_cookie(cookie_header):
+        return {"ok": False, "email": target_email, "mode": "protocol", "error": "missing_session_cookie"}
 
     auth_session = _fetch_protocol_auth_session(cookie_header, timeout=timeout, proxy=proxy)
     access_token = _session_token(auth_session, "accessToken", "access_token")
@@ -107,7 +108,7 @@ def _merge_refreshed_session(data, target_email, auth_session, access_token, oau
     refreshed["auth_session"] = auth_session
     refreshed["cookie_header"] = cookie_header
     refreshed["oauth_refresh_token"] = oauth_refresh_token
-    refreshed["refresh_token_status"] = "oauth_present" if oauth_refresh_token else "missing"
+    refreshed["refresh_token_status"] = "oauth_present" if oauth_refresh_token else "no_rt"
     refreshed["refresh_token_updated_at"] = int(time.time())
     refreshed["refreshed_at"] = int(time.time())
     return refreshed
@@ -207,6 +208,28 @@ def _minimal_chatgpt_cookie_header(cookie_header):
         if name in keep and value:
             output.append(f"{name}={value}")
     return "; ".join(output)
+
+
+def _ensure_session_cookie(cookie_header, data):
+    if _has_session_cookie(cookie_header):
+        return cookie_header
+    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    session_token = (
+        _session_token(auth_session, "sessionToken", "session_token")
+        or str(data.get("session_token") or "").strip()
+    )
+    if not session_token:
+        return cookie_header
+    parts = [part.strip() for part in str(cookie_header or "").split(";") if part.strip()]
+    parts.append(f"__Secure-next-auth.session-token={session_token}")
+    return "; ".join(parts)
+
+
+def _has_session_cookie(cookie_header):
+    return any(
+        item.strip().startswith("__Secure-next-auth.session-token=")
+        for item in str(cookie_header or "").split(";")
+    )
 
 
 def _read_json(path):

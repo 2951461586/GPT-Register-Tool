@@ -61,6 +61,14 @@
     "storage": {
         "sqlite_path": "runtime/accounts.sqlite3"
     },
+    "cpa_mode": {
+        "api_url": "http://your-domain.com:8317",
+        "api_token": ""
+    },
+    "codex_oauth": {
+        "allow_passwordless_takeover": false,
+        "auto_phone_verification": false
+    },
     "output": {
         "directory": "sessions",
         "filename_pattern": "session_{email}_{timestamp}.json"

@@ -8,9 +8,14 @@ browser_extensions/paypal_autofill/profile.generated.js
 .dotnet/
 sms_tool/sentinel_cache.json
 mailbox_tokens.txt
+hotmail*.txt
+*_tokens.txt
 
 __pycache__/
 *.py[cod]
+.pytest_cache/
+runtime/*.log
+runtime/**/*.log
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/

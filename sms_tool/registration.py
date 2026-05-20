@@ -724,7 +724,7 @@ def _build_session_file(data):
         or _extract_nested(auth_session, "session", "refreshToken")
     )
     paypal_status = data.get("paypal_status") or paypal.get("status") or ("link_ready" if paypal.get("url") else "")
-    refresh_token_status = data.get("refresh_token_status") or ("oauth_present" if oauth_refresh_token else ("legacy_present" if refresh_token else "missing"))
+    refresh_token_status = data.get("refresh_token_status") or ("oauth_present" if oauth_refresh_token else ("legacy_present" if refresh_token else "no_rt"))
     purchase = {
         "source": mailbox.get("source", ""),
         "provider": mailbox.get("provider", ""),

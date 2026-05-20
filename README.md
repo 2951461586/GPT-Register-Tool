@@ -40,6 +40,9 @@ Required choices:
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
+- `cpa_mode.api_url` / `cpa_mode.api_token`: CPA management API target for one-click import.
+- `codex_oauth.allow_passwordless_takeover`: default `false`; keeps CPA import from forcing password-page accounts into passwordless takeover.
+- `codex_oauth.auto_phone_verification`: default `false`; phone verification is attempted only when explicitly enabled.
 
 5. Run one registration.
 
@@ -119,6 +122,24 @@ Refresh an auth session after manual payment/login:
 ```powershell
 python chatgpt_phone_reg.py --email user@example.com --refresh-session
 ```
+
+Mark a paid account and export Codex JSON:
+
+```powershell
+python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status completed --export-codex-json
+```
+
+Import paid accounts into CPA:
+
+```powershell
+python chatgpt_phone_reg.py --import-cpa --email-file paid_emails.txt
+```
+
+CPA import requires a real OpenAI OAuth `refresh_token` beginning with `rt_` and a real `id_token`.
+If OpenAI routes an account to `/log-in/password`, the default flow stops with `password_login_required`
+instead of forcing passwordless takeover, because forced takeover is what was causing every account to
+fall into `/add-phone`. Enable `codex_oauth.allow_passwordless_takeover` only when you intentionally
+want that fallback and understand it may require phone verification.
 
 ## WPF Behavior
 
