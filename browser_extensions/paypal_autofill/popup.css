@@ -9,7 +9,7 @@
 }
 
 body {
-  width: 330px;
+  width: 380px;
   margin: 0;
   background: #050807;
   color: #dffcef;
@@ -123,6 +123,11 @@ label {
   gap: 5px;
   margin-top: 10px;
   color: #93b6aa;
+}
+
+small {
+  color: #7fa99b;
+  line-height: 1.35;
 }
 
 input,

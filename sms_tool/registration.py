@@ -364,13 +364,13 @@ def _with_query_param(url, key, value):
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
 
 
-def _generate_paypal_link(access_token):
+def _generate_paypal_link(access_token, proxy=None):
     try:
         from .gen_pp_link import generate_pp_link
     except Exception as e:
         return {"ok": False, "error": f"load_gen_pp_link_failed: {e}"}
     try:
-        return generate_pp_link(access_token)
+        return generate_pp_link(access_token, proxy=proxy)
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -573,7 +573,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     paypal = {}
     if r.status_code == 200 and access_token and paypal_link:
         _tick("9-Generate PayPal link")
-        paypal = _generate_paypal_link(access_token)
+        paypal = _generate_paypal_link(access_token, proxy=proxy)
         print(f"  PayPal link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
         _tock()
 

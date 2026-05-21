@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pay Filler</title>
+    <title>支付填表助手</title>
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
@@ -11,31 +11,39 @@
       <header>
         <span class="mark" aria-hidden="true"></span>
         <div>
-          <h1>Pay Filler</h1>
-          <p id="status">ready</p>
+          <h1>支付填表助手</h1>
+          <p id="status">就绪</p>
         </div>
       </header>
 
       <section class="actions">
-        <button id="runAll" class="primary" type="button">Run all</button>
-        <button id="fill" type="button">Fill form</button>
-        <button id="fillOtp" type="button">OTP + Continue</button>
-        <button id="nextCard" type="button">Next card</button>
-        <button id="nextPhone" type="button">Next phone</button>
+        <button id="runAll" class="primary" type="button">一键执行</button>
+        <button id="fill" type="button">填表</button>
+        <button id="fillOtp" type="button">取码并继续</button>
+        <button id="nextCard" type="button">下一个卡</button>
+        <button id="nextPhone" type="button">下一个手机号</button>
       </section>
 
       <section class="summary">
-        <div><span>Card</span><strong id="cardSummary">none</strong></div>
-        <div><span>Phone</span><strong id="phoneSummary">none</strong></div>
+        <div><span>当前卡</span><strong id="cardSummary">无</strong></div>
+        <div><span>当前号</span><strong id="phoneSummary">无</strong></div>
       </section>
 
-      <label>OTP URL<input id="otpUrl" placeholder="https://a.62-us.com/..." spellcheck="false"></label>
-      <label>Phone pool<textarea id="phonePool" placeholder="one phone per line" spellcheck="false"></textarea></label>
-      <label>Card pool<textarea id="cardPool" placeholder="number|MM / YY|CVV per line" spellcheck="false"></textarea></label>
+      <label>备用验证码链接
+        <input id="otpUrl" placeholder="https://..." spellcheck="false">
+      </label>
+      <label>手机号池
+        <textarea id="phonePool" placeholder="手机号|验证码链接，每行一条" spellcheck="false"></textarea>
+        <small>格式：手机号|验证码链接</small>
+      </label>
+      <label>卡池
+        <textarea id="cardPool" placeholder="卡号|月|年|CVV，每行一条" spellcheck="false"></textarea>
+        <small>格式：卡号|月|年|CVV</small>
+      </label>
 
       <footer>
-        <button id="save" type="button">Save</button>
-        <button id="togglePanel" type="button">Panel</button>
+        <button id="save" type="button">保存</button>
+        <button id="togglePanel" type="button">浮窗</button>
       </footer>
     </main>
     <script src="popup.js"></script>
