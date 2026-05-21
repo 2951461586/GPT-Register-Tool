@@ -41,7 +41,7 @@ Required choices:
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
 - `cpa_mode.api_url` / `cpa_mode.api_token`: CPA management API target for one-click import.
-- `codex_oauth.allow_passwordless_takeover`: default `false`; keeps CPA import from forcing password-page accounts into passwordless takeover.
+- `codex_oauth.allow_passwordless_takeover`: default `false`; only affects manual Codex export/refresh. CPA import forces email OTP login for password-page accounts.
 - `codex_oauth.auto_phone_verification`: default `false`; phone verification is attempted only when explicitly enabled.
 
 5. Run one registration.
@@ -136,10 +136,10 @@ python chatgpt_phone_reg.py --import-cpa --email-file paid_emails.txt
 ```
 
 CPA import requires a real OpenAI OAuth `refresh_token` beginning with `rt_` and a real `id_token`.
-If OpenAI routes an account to `/log-in/password`, the default flow stops with `password_login_required`
-instead of forcing passwordless takeover, because forced takeover is what was causing every account to
-fall into `/add-phone`. Enable `codex_oauth.allow_passwordless_takeover` only when you intentionally
-want that fallback and understand it may require phone verification.
+For `--import-cpa`, if OpenAI routes an account to `/log-in/password`, the tool still uses the
+email OTP login path and does not submit the account password. If OpenAI later requests `/add-phone`,
+the default flow reports `add_phone_required`; phone SMS handling is attempted only when
+`codex_oauth.auto_phone_verification` is explicitly enabled.
 
 ## WPF Behavior
 

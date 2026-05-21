@@ -22,6 +22,7 @@ def export_codex_session(
     proxy=None,
     timeout=300,
     require_refresh_token=False,
+    force_email_otp_login=False,
 ):
     data, json_path = _load_seed_session(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
@@ -37,6 +38,7 @@ def export_codex_session(
             proxy=proxy,
             timeout=timeout,
             require_refresh_token=require_refresh_token,
+            force_email_otp_login=force_email_otp_login,
         )
         if refresh_result.get("ok"):
             data, json_path = _load_seed_session(email=target_email, session_file=json_path)
@@ -101,6 +103,7 @@ def export_codex_sessions(
     proxy=None,
     timeout=300,
     require_refresh_token=False,
+    force_email_otp_login=False,
 ):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -115,6 +118,7 @@ def export_codex_sessions(
             proxy=proxy,
             timeout=timeout,
             require_refresh_token=require_refresh_token,
+            force_email_otp_login=force_email_otp_login,
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -265,7 +269,7 @@ def build_codex_json(data):
     return filtered, warnings
 
 
-def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, require_refresh_token=False):
+def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, require_refresh_token=False, force_email_otp_login=False):
     auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
     refresh_token = _openai_refresh_token(data, auth_session)
     if refresh_token:
@@ -280,7 +284,13 @@ def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, requir
             return {"ok": True, "mode": "oauth_refresh"}
         return {"ok": False, "mode": "oauth_refresh", "error": refreshed.get("error", "oauth_refresh_failed")}
 
-    oauth_result = refresh_codex_oauth_session(data, json_path=json_path, proxy=proxy, timeout=timeout)
+    oauth_result = refresh_codex_oauth_session(
+        data,
+        json_path=json_path,
+        proxy=proxy,
+        timeout=timeout,
+        force_email_otp_login=force_email_otp_login,
+    )
     if oauth_result.get("ok"):
         return oauth_result
 
