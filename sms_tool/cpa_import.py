@@ -7,9 +7,10 @@ from pathlib import Path
 from curl_cffi import CurlMime
 from curl_cffi import requests as curl_requests
 
-from .codex_export import export_codex_session
+from .codex_export import build_codex_json
 from .config import CFG
 from .paths import output_dir
+from .session_refresh import _load_seed_session
 from .storage import get_account_record, upsert_account
 
 
@@ -30,56 +31,62 @@ def import_cpa_session(
     if not token:
         return {"ok": False, "email": target_email, "error": "missing_cpa_api_token"}
 
-    existing = _existing_cpa_json_with_rt(target_email, export_dir)
-    export_result = {"ok": True, "email": target_email, "path": existing, "mode": "existing_rt_json"} if existing else None
-    if export_result is None:
-        export_result = export_codex_session(
-            email=email,
-            session_file=session_file,
-            export_dir=export_dir,
-            refresh=refresh,
-            proxy=proxy,
-            timeout=timeout,
-            require_refresh_token=True,
-            force_email_otp_login=True,
-        )
-        if not export_result.get("ok"):
-            return {
-                "ok": False,
-                "email": target_email or export_result.get("email", ""),
-                "error": "export_failed",
-                "export": export_result,
-            }
-
-    path = export_result.get("path", "")
-    try:
-        token_data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except Exception as exc:
+    source_result = _load_cpa_source(target_email, session_file=session_file, export_dir=export_dir)
+    if not source_result.get("ok"):
         return {
             "ok": False,
-            "email": export_result.get("email", target_email),
-            "error": f"read_export_failed: {exc}",
-            "export": export_result,
+            "email": target_email,
+            "error": source_result.get("error", "missing_cpa_source_json"),
+            "message": source_result.get("message", ""),
+            "source": source_result,
         }
 
+    token_data, warnings = build_codex_json(source_result["data"])
+    if not token_data.get("email"):
+        token_data["email"] = target_email
+
     cpa_payload = _build_cpa_payload(token_data)
+    source_path = source_result.get("path", "")
+    refresh_token_status = "oauth_present" if str(token_data.get("refresh_token") or "").strip() else "no_rt"
+
     if not cpa_payload.get("ok"):
         upload_result = {
             "ok": False,
             "error": cpa_payload.get("error", "invalid_cpa_payload"),
             "message": cpa_payload.get("message", ""),
         }
-        _record_cpa_import(export_result.get("email", target_email), path, upload_result)
+        export_result = {
+            "ok": False,
+            "email": token_data.get("email", target_email),
+            "path": source_path,
+            "mode": "at_json",
+            "source_path": source_path,
+            "source_mode": source_result.get("mode", ""),
+            "refresh_token_status": refresh_token_status,
+            "warnings": warnings,
+        }
+        _record_cpa_import(export_result.get("email", target_email), source_path, upload_result)
         return {
             "ok": False,
             "email": export_result.get("email", target_email),
-            "path": path,
+            "path": source_path,
             "cpa": upload_result,
             "export": export_result,
-            "refresh_token_status": export_result.get("refresh_token_status", ""),
-            "warnings": export_result.get("warnings", []),
+            "refresh_token_status": refresh_token_status,
+            "warnings": warnings,
         }
 
+    path = _write_cpa_json(cpa_payload["data"], export_dir)
+    export_result = {
+        "ok": True,
+        "email": cpa_payload["data"].get("email", target_email),
+        "path": path,
+        "mode": "at_json",
+        "source_path": source_path,
+        "source_mode": source_result.get("mode", ""),
+        "refresh_token_status": refresh_token_status,
+        "warnings": warnings,
+    }
     filename = Path(path).name
     upload_result = upload_to_cpa(cpa_payload["data"], target_url, token, filename=filename)
     _record_cpa_import(export_result.get("email", target_email), path, upload_result)
@@ -89,8 +96,8 @@ def import_cpa_session(
         "path": path,
         "cpa": upload_result,
         "export": export_result,
-        "refresh_token_status": export_result.get("refresh_token_status", ""),
-        "warnings": export_result.get("warnings", []),
+        "refresh_token_status": refresh_token_status,
+        "warnings": warnings,
     }
 
 
@@ -191,30 +198,42 @@ def _build_cpa_payload(token_data):
     id_token = str(token_data.get("id_token") or "").strip()
     if not access_token:
         return {"ok": False, "error": "missing_access_token", "message": "CPA导入缺少 access_token。"}
-    if not refresh_token.startswith("rt_"):
-        return {
-            "ok": False,
-            "error": "missing_refresh_token_for_cpa",
-            "message": "CPA导入必须带 OpenAI refresh_token(rt_开头)，无RT账号导入后不可用，已跳过上传。",
-        }
-    if not id_token or token_data.get("id_token_synthetic"):
-        return {
-            "ok": False,
-            "error": "missing_real_id_token_for_cpa",
-            "message": "CPA导入需要真实 id_token；当前账号没有真实 id_token，已跳过上传。",
-        }
+
+    payload = {
+        "type": "codex",
+        "account_id": str(token_data.get("account_id") or token_data.get("chatgpt_account_id") or "").strip(),
+        "chatgpt_account_id": str(token_data.get("chatgpt_account_id") or token_data.get("account_id") or "").strip(),
+        "email": str(token_data.get("email") or "").strip(),
+        "name": str(token_data.get("name") or token_data.get("email") or "ChatGPT Account").strip(),
+        "plan_type": str(token_data.get("plan_type") or token_data.get("chatgpt_plan_type") or "").strip(),
+        "chatgpt_plan_type": str(token_data.get("chatgpt_plan_type") or token_data.get("plan_type") or "").strip(),
+        "id_token": id_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "session_token": str(token_data.get("session_token") or "").strip(),
+        "last_refresh": str(token_data.get("last_refresh") or "").strip(),
+        "expired": str(token_data.get("expired") or "").strip(),
+        "disabled": bool(token_data.get("disabled", False)),
+    }
+    optional_empty = {
+        "account_id",
+        "chatgpt_account_id",
+        "email",
+        "name",
+        "plan_type",
+        "chatgpt_plan_type",
+        "id_token",
+        "refresh_token",
+        "session_token",
+        "last_refresh",
+        "expired",
+    }
     return {
         "ok": True,
         "data": {
-            "access_token": access_token,
-            "account_id": str(token_data.get("account_id") or token_data.get("chatgpt_account_id") or "").strip(),
-            "disabled": bool(token_data.get("disabled", False)),
-            "email": str(token_data.get("email") or "").strip(),
-            "expired": str(token_data.get("expired") or "").strip(),
-            "id_token": id_token,
-            "last_refresh": str(token_data.get("last_refresh") or "").strip(),
-            "refresh_token": refresh_token,
-            "type": "codex",
+            key: value
+            for key, value in payload.items()
+            if value != "" or key not in optional_empty
         },
     }
 
@@ -249,7 +268,70 @@ def _resolve_cpa_config(api_url="", api_token=""):
     return resolved_url, resolved_token
 
 
-def _existing_cpa_json_with_rt(email, export_dir=""):
+def _load_cpa_source(email="", session_file="", export_dir=""):
+    data, json_path = _load_seed_session(email=email, session_file=session_file)
+    if isinstance(data, dict) and _has_access_token(data):
+        return {
+            "ok": True,
+            "data": data,
+            "path": json_path or session_file or "",
+            "mode": "session_json",
+        }
+
+    existing = _existing_cpa_json_with_access_token(email, export_dir)
+    if existing:
+        try:
+            return {
+                "ok": True,
+                "data": json.loads(Path(existing).read_text(encoding="utf-8-sig")),
+                "path": existing,
+                "mode": "existing_at_json",
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": f"read_existing_at_json_failed: {exc}",
+                "path": existing,
+            }
+
+    return {
+        "ok": False,
+        "error": "missing_at_json",
+        "message": "CPA导入需要已有 access_token 的 JSON 文件；当前账号未找到可导入的 AT JSON。",
+        "path": json_path or session_file or "",
+    }
+
+
+def _has_access_token(data):
+    if not isinstance(data, dict):
+        return False
+    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    candidates = [
+        data.get("accessToken"),
+        data.get("access_token"),
+        (data.get("token") or {}).get("accessToken") if isinstance(data.get("token"), dict) else "",
+        (data.get("token") or {}).get("access_token") if isinstance(data.get("token"), dict) else "",
+        (data.get("credentials") or {}).get("accessToken") if isinstance(data.get("credentials"), dict) else "",
+        (data.get("credentials") or {}).get("access_token") if isinstance(data.get("credentials"), dict) else "",
+        auth_session.get("accessToken") if isinstance(auth_session, dict) else "",
+        auth_session.get("access_token") if isinstance(auth_session, dict) else "",
+        (auth_session.get("session") or {}).get("accessToken") if isinstance(auth_session.get("session"), dict) else "",
+        (auth_session.get("session") or {}).get("access_token") if isinstance(auth_session.get("session"), dict) else "",
+    ]
+    return any(str(value or "").strip() for value in candidates)
+
+
+def _write_cpa_json(token_data, export_dir=""):
+    directory = Path(export_dir) if export_dir else output_dir(CFG) / "codex_exports"
+    directory.mkdir(parents=True, exist_ok=True)
+    email = str(token_data.get("email") or "unknown").strip()
+    safe_email = "".join(ch if ch.isalnum() or ch in "_.@+-" else "_" for ch in email)
+    path = directory / f"codex-{safe_email}-plus.json"
+    path.write_text(json.dumps(token_data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return str(path)
+
+
+def _existing_cpa_json_with_access_token(email, export_dir=""):
     target_email = str(email or "").strip()
     if not target_email:
         return ""
@@ -264,7 +346,7 @@ def _existing_cpa_json_with_rt(email, export_dir=""):
             if not path.exists():
                 continue
             data = json.loads(path.read_text(encoding="utf-8-sig"))
-            if str(data.get("refresh_token") or "").strip().startswith("rt_") and data.get("id_token"):
+            if _has_access_token(data):
                 return str(path)
         except Exception:
             continue

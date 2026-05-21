@@ -6,7 +6,7 @@ from .gen_pp_link import generate_pp_link
 from .storage import get_account_record, upsert_account
 
 
-def regenerate_paypal_link(email="", session_file=""):
+def regenerate_paypal_link(email="", session_file="", proxy=None):
     data, json_path = _load_seed(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     if target_email:
@@ -18,7 +18,7 @@ def regenerate_paypal_link(email="", session_file=""):
 
     old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
     old_paypal_status = str(data.get("paypal_status") or "").strip()
-    paypal = generate_pp_link(access_token)
+    paypal = generate_pp_link(access_token, proxy=proxy)
     now = int(time.time())
     if paypal.get("ok") and paypal.get("url"):
         data["paypal"] = paypal
@@ -82,7 +82,7 @@ def _load_seed(email="", session_file=""):
 
 def _read_json(path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return {}
 

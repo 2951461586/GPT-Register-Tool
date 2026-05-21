@@ -36,13 +36,17 @@ sms_tool/
   codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
   codex_sentinel.py         Sentinel/cache cookie helpers for auth.openai.com requests.
   codex_phone.py            Optional add-phone SMS verification boundary.
-  cpa_import.py             CPA API upload boundary; requires real rt_ refresh tokens.
+  cpa_import.py             CPA API upload boundary; imports AT-only JSON and uploads normalized CPA payloads.
   storage.py                SQLite and session index persistence.
 
 SmsWorkbench/               WPF desktop UI.
+browser_extensions/         Optional Chrome checkout helpers.
+  paypal_autofill/          Popup, content script, and background fetch boundary with one-click fill, OTP polling, and pool rotation.
 tests/                      Unit tests for non-network behavior.
 sessions/                   Generated session JSON, ignored by Git.
 runtime/                    SQLite, debug output, caches, ignored by Git.
+requirements.txt            Primary Python dependency list.
+requirement.txt             Compatibility alias for tooling that expects the singular filename.
 ```
 
 ## Boundary Rules
@@ -56,8 +60,12 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 - Start `chatgpt_phone_reg.py`.
 - Display SQLite/session/mailbox state.
 - Open PayPal links in Chrome incognito.
+- Render custom account and inbox popups.
+- Copy verification codes from already-fetched mailbox previews.
 
 It must not implement ChatGPT registration, PayPal protocol details, mailbox OTP polling, or direct SQLite business rules beyond display and deletion.
+
+Payment and CPA operations stay separated in the UI: marking payment complete only updates PayPal status, while CPA import is launched by the explicit CPA action.
 
 ### CLI
 
@@ -100,16 +108,21 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 
 `sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal redirect URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, or final payment authorization.
 
-`paypal.stage_proxies` can route stages independently:
+`paypal.billing_regions` controls checkout billing country/currency, and `paypal.stage_proxies` can route stages independently:
 
 ```json
 {
-  "checkout": "socks5h://127.0.0.1:7897",
-  "stripe_init": "socks5h://127.0.0.1:7897",
-  "payment_method": "socks5h://127.0.0.1:7897",
-  "confirm": "direct"
+  "billing_regions": ["US"],
+  "stage_proxies": {
+    "checkout": "socks5h://127.0.0.1:7897",
+    "stripe_init": "socks5h://127.0.0.1:7897",
+    "payment_method": "socks5h://127.0.0.1:7897",
+    "confirm": "direct"
+  }
 }
 ```
+
+`paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The original PayPal-capable flow uses `["US"]`; Japan/JPY checkout may return only `["card"]` as the available Stripe payment method. When the UI or CLI supplies `--proxy`, regeneration treats that value as authoritative for the current run.
 
 ### Storage Layer
 
@@ -130,7 +143,7 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 - Build the OAuth authorize URL.
 - Reuse existing auth cookies when they already produce a callback code.
 - Continue username login.
-- Complete email OTP when OpenAI routes the flow to an email OTP page, when takeover is explicitly enabled, or when CPA import forces email OTP login.
+- Complete email OTP when OpenAI routes the flow to an email OTP page or when takeover is explicitly enabled.
 - Exchange the callback code for OpenAI `access_token`, `id_token`, and `refresh_token`.
 
 It deliberately does not upload to CPA and does not own phone-number inventory.
@@ -139,11 +152,10 @@ It deliberately does not upload to CPA and does not own phone-number inventory.
 
 `sms_tool/codex_phone.py` owns add-phone completion. It is disabled by default. If OpenAI requests `/add-phone`, the OAuth layer reports `add_phone_required` unless `codex_oauth.auto_phone_verification` is true.
 
-`sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` uploads that JSON to CPA and refuses files without a real `rt_` refresh token or without a real `id_token`.
+`sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` accepts existing AT-only session JSON, normalizes it into the CPA payload shape, and uploads it without requiring RT.
 
 Important behavior:
 
-- CPA import passes `force_email_otp_login=true`, so `/log-in/password` accounts are handled by email OTP instead of password verification.
 - `codex_oauth.allow_passwordless_takeover=true` is an explicit escape hatch for manual export/refresh paths.
 - Forced email OTP may still require add-phone for some accounts. Phone SMS handling remains a separate opt-in boundary via `codex_oauth.auto_phone_verification`.
 

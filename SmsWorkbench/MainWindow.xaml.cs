@@ -188,6 +188,8 @@ namespace SmsWorkbench
                 rootDir = Directory.GetParent(rootDir)?.FullName ?? rootDir;
             }
 
+            darkTheme = true;
+            ApplyTheme(true);
             ScopeFilter = "全部";
             PurchaseProjectText = ConfigString("email_registration", "luckmail_purchase_project_code");
             if (PurchaseProjectText.Length == 0) PurchaseProjectText = "openai";
@@ -857,11 +859,11 @@ namespace SmsWorkbench
             RunBackend("重建SQLite索引", args);
         }
 
-        private void AccountGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void AccountGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (AccountGrid.SelectedItem is PoolRow row)
+            foreach (object item in e.AddedItems)
             {
-                ShowAccountDetail(row);
+                if (item is PoolRow row) row.IsChecked = true;
             }
         }
 
@@ -1159,6 +1161,7 @@ namespace SmsWorkbench
             {
                 PoolRow row = rows[0];
                 var singleArgs = new List<string> { "--email", row.Identifier, "--regenerate-paypal-link", "--workers", "4" };
+                AddProxy(singleArgs);
                 AddSessionFileArg(singleArgs, row);
                 RunBackend("重新生成PayPal链接", singleArgs);
                 return;
@@ -1167,6 +1170,7 @@ namespace SmsWorkbench
             string emailFile = Path.Combine(Path.GetTempPath(), "paypal_regen_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
             var args = new List<string> { "--regenerate-paypal-link", "--email-file", emailFile, "--workers", "4" };
+            AddProxy(args);
             RunBackend("批量重新生成PayPal链接 (" + rows.Count + ")", args);
         }
 
@@ -1196,16 +1200,16 @@ namespace SmsWorkbench
             if (rows.Count == 1)
             {
                 PoolRow row = rows[0];
-                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed", "--export-codex-json", "--workers", "4", "--refresh-timeout", "60" };
+                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed" };
                 AddSessionFileArg(singleArgs, row);
-                RunBackend("标记支付完成并导出JSON", singleArgs);
+                RunBackend("标记支付完成", singleArgs);
                 return;
             }
 
             string emailFile = Path.Combine(Path.GetTempPath(), "paypal_completed_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile, "--export-codex-json", "--workers", "4", "--refresh-timeout", "60" };
-            RunBackend("批量标记支付完成并导出JSON (" + rows.Count + ")", args);
+            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile };
+            RunBackend("批量标记支付完成 (" + rows.Count + ")", args);
         }
 
         private void ImportPaidCpa_Click(object sender, RoutedEventArgs e)
@@ -1376,7 +1380,9 @@ namespace SmsWorkbench
                 IsReadOnly = true,
                 RowHeight = 28,
                 GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-                AlternatingRowBackground = System.Windows.Media.Brushes.WhiteSmoke,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                AlternatingRowBackground = (System.Windows.Media.Brush)FindResource("GridAltBg"),
                 BorderThickness = new Thickness(0)
             };
             mailGrid.Columns.Add(new DataGridTextColumn { Header = "时间", Binding = new System.Windows.Data.Binding("ReceivedAt"), Width = 150 });
@@ -1478,13 +1484,115 @@ namespace SmsWorkbench
             {
                 if (mailGrid.SelectedItem is MailItem item)
                 {
-                    MessageBox.Show(item.BodyPreview, item.Subject, MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowMailItemDialog(item, row.Identifier);
                 }
             };
 
             dialog.Content = root;
             dialog.Show();
             await LoadEmails();
+        }
+
+        private void ShowMailItemDialog(MailItem item, string mailbox)
+        {
+            string code = ExtractVerifyCode(item.BodyPreview + " " + item.Subject);
+            var dialog = new Window
+            {
+                Title = "邮件详情 - " + mailbox,
+                Owner = this,
+                Width = 680,
+                Height = 420,
+                MinWidth = 560,
+                MinHeight = 320,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var title = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(item.Subject) ? "无主题邮件" : item.Subject,
+                FontSize = 17,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            Grid.SetRow(title, 0);
+            root.Children.Add(title);
+
+            var meta = new TextBlock
+            {
+                Text = item.ReceivedAt + "    " + item.From,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            Grid.SetRow(meta, 1);
+            root.Children.Add(meta);
+
+            var body = new TextBox
+            {
+                Text = item.BodyPreview,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                Padding = new Thickness(10),
+                MinHeight = 160
+            };
+            Grid.SetRow(body, 2);
+            root.Children.Add(body);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            var codeText = new TextBlock
+            {
+                Text = code.Length > 0 ? "验证码：" + code : "未识别验证码",
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            var copyCodeBtn = new Button { Content = "复制验证码", Width = 96, IsEnabled = code.Length > 0 };
+            copyCodeBtn.Click += (_, __) =>
+            {
+                Clipboard.SetText(code);
+                Log("验证码已复制：" + code);
+            };
+            var copyBodyBtn = new Button { Content = "复制正文", Width = 84 };
+            copyBodyBtn.Click += (_, __) =>
+            {
+                Clipboard.SetText(item.BodyPreview ?? "");
+                Log("邮件正文已复制。");
+            };
+            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            closeBtn.Click += (_, __) => dialog.Close();
+            actions.Children.Add(codeText);
+            actions.Children.Add(copyCodeBtn);
+            actions.Children.Add(copyBodyBtn);
+            actions.Children.Add(closeBtn);
+            Grid.SetRow(actions, 3);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private string ExtractVerifyCode(string text)
+        {
+            Match match = Regex.Match(text ?? "", @"(?<!\d)\d{5,8}(?!\d)");
+            return match.Success ? match.Value : "";
         }
 
         private sealed class MailItem
@@ -2093,9 +2201,7 @@ namespace SmsWorkbench
         private string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus)
         {
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) && refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return "已刷新";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase) && refreshTokenStatus.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return "已导出";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "待刷新";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalOk == "1" || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "PayPal已生成";
             return access.Length > 0 ? "已注册" : "待处理";
@@ -2379,21 +2485,21 @@ namespace SmsWorkbench
         {
             if (dark)
             {
-                SetBrush("AppBg", "#0F172A");
-                SetBrush("PanelBg", "#111827");
-                SetBrush("Line", "#263244");
-                SetBrush("Primary", "#3B82F6");
-                SetBrush("PrimarySoft", "#1D2B45");
-                SetBrush("Danger", "#F87171");
-                SetBrush("TextMain", "#E5EDF8");
-                SetBrush("TextSub", "#9FB0C7");
-                SetBrush("SidebarBg", "#0B1220");
-                SetBrush("GridAltBg", "#162033");
-                SetBrush("SplitterBg", "#334155");
-                SetBrush("StatusBg", "#0B1220");
-                SetBrush("LogBg", "#050A14");
-                SetBrush("LogBorder", "#1E293B");
-                SetBrush("LogText", "#DCEBFF");
+                SetBrush("AppBg", "#0B0F14");
+                SetBrush("PanelBg", "#111823");
+                SetBrush("Line", "#223042");
+                SetBrush("Primary", "#31F296");
+                SetBrush("PrimarySoft", "#13261F");
+                SetBrush("Danger", "#FF5F70");
+                SetBrush("TextMain", "#EAF2FF");
+                SetBrush("TextSub", "#8A97A8");
+                SetBrush("SidebarBg", "#0D131D");
+                SetBrush("GridAltBg", "#141C28");
+                SetBrush("SplitterBg", "#223142");
+                SetBrush("StatusBg", "#101823");
+                SetBrush("LogBg", "#05070A");
+                SetBrush("LogBorder", "#1A2430");
+                SetBrush("LogText", "#DFFCF0");
             }
             else
             {

@@ -3,44 +3,45 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
-    <SolidColorBrush x:Key="AppBg" Color="#F4F7FB"/>
-    <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Line" Color="#D9E2EF"/>
-    <SolidColorBrush x:Key="Primary" Color="#2563EB"/>
-    <SolidColorBrush x:Key="PrimarySoft" Color="#EAF1FF"/>
-    <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
-    <SolidColorBrush x:Key="TextMain" Color="#142033"/>
-    <SolidColorBrush x:Key="TextSub" Color="#607089"/>
-    <SolidColorBrush x:Key="SidebarBg" Color="#ECF2FA"/>
-    <SolidColorBrush x:Key="GridAltBg" Color="#F8FAFD"/>
-    <SolidColorBrush x:Key="SplitterBg" Color="#CBD5E1"/>
-    <SolidColorBrush x:Key="StatusBg" Color="#EEF3FA"/>
-    <SolidColorBrush x:Key="LogBg" Color="#0B1426"/>
-    <SolidColorBrush x:Key="LogBorder" Color="#17233B"/>
-    <SolidColorBrush x:Key="LogText" Color="#DCEBFF"/>
+    <SolidColorBrush x:Key="AppBg" Color="#0B0F14"/>
+    <SolidColorBrush x:Key="PanelBg" Color="#111823"/>
+    <SolidColorBrush x:Key="Line" Color="#223042"/>
+    <SolidColorBrush x:Key="Primary" Color="#31F296"/>
+    <SolidColorBrush x:Key="PrimarySoft" Color="#13261F"/>
+    <SolidColorBrush x:Key="Danger" Color="#FF5F70"/>
+    <SolidColorBrush x:Key="TextMain" Color="#EAF2FF"/>
+    <SolidColorBrush x:Key="TextSub" Color="#8A97A8"/>
+    <SolidColorBrush x:Key="SidebarBg" Color="#0D131D"/>
+    <SolidColorBrush x:Key="GridAltBg" Color="#141C28"/>
+    <SolidColorBrush x:Key="SplitterBg" Color="#223142"/>
+    <SolidColorBrush x:Key="StatusBg" Color="#101823"/>
+    <SolidColorBrush x:Key="LogBg" Color="#05070A"/>
+    <SolidColorBrush x:Key="LogBorder" Color="#1A2430"/>
+    <SolidColorBrush x:Key="LogText" Color="#DFFCF0"/>
 
     <Style TargetType="Button">
       <Setter Property="Height" Value="30"/>
       <Setter Property="Padding" Value="12,0"/>
       <Setter Property="Margin" Value="4,0"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontFamily" Value="Consolas"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Border Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="4">
+                    CornerRadius="6">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{StaticResource PrimarySoft}"/>
-                <Setter Property="BorderBrush" Value="#9DB8F5"/>
+                <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.55"/>
@@ -64,18 +65,45 @@
     </Style>
 
     <Style TargetType="TextBox">
-      <Setter Property="Height" Value="30"/>
+      <Setter Property="MinHeight" Value="30"/>
       <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
     <Style TargetType="ComboBox">
-      <Setter Property="Height" Value="30"/>
+      <Setter Property="MinHeight" Value="30"/>
       <Setter Property="Padding" Value="8,3"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <Style TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+    </Style>
+
+    <Style TargetType="DataGrid">
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="RowBackground" Value="{StaticResource PanelBg}"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}"/>
+      <Setter Property="VerticalGridLinesBrush" Value="{StaticResource Line}"/>
+    </Style>
+
+    <Style TargetType="DataGridRow">
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+    </Style>
+
+    <Style TargetType="DataGridCell">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
     </Style>
   </Application.Resources>
 </Application>

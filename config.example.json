@@ -45,6 +45,9 @@
         "auto_generate": true,
         "require_zero_due": false,
         "max_checkout_retries": 3,
+        "billing_regions": [
+            "US"
+        ],
         "proxies": [
             "socks5h://127.0.0.1:7897"
         ],
