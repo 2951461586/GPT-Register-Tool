@@ -46,7 +46,7 @@ def main():
     parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
-    parser.add_argument("--import-cpa", action="store_true", help="Export paid account session and import it into CPA")
+    parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA")
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
     parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
     parser.add_argument("--cpa-api-token", default=None, help="CPA API token, defaults to cpa/cpa_mode.api_token in config.json")
@@ -377,7 +377,7 @@ def _regenerate_paypal_link(args):
 
         def _run_one(index, item_email):
             print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-            return index, regenerate_paypal_link(email=item_email, session_file="")
+            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy)
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
@@ -395,7 +395,7 @@ def _regenerate_paypal_link(args):
     if not email and not args.session_file:
         print("[Error] --email or --session-file is required with --regenerate-paypal-link")
         return
-    result = regenerate_paypal_link(email=email, session_file=args.session_file or "")
+    result = regenerate_paypal_link(email=email, session_file=args.session_file or "", proxy=args.proxy)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)

@@ -234,7 +234,7 @@ def _has_session_cookie(cookie_header):
 
 def _read_json(path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return {}
 

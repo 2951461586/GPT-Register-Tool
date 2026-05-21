@@ -1,17 +1,61 @@
 {
   "manifest_version": 3,
   "name": "GPT Register PayPal Autofill",
-  "version": "1.0.0",
-  "description": "Local helper that fills PayPal/Stripe checkout forms from this workspace's config. It never submits payment or verification forms.",
+  "version": "1.2.0",
+  "description": "Local helper for PayPal/Stripe checkout fill, OTP confirmation, and card/phone pool rotation.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "incognito": "split",
+  "permissions": [
+    "activeTab",
+    "clipboardRead",
+    "clipboardWrite",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.paypal.com/*",
+    "https://paypal.com/*",
+    "https://www.paypalobjects.com/*",
+    "https://pay.openai.com/*",
+    "https://checkout.stripe.com/*",
+    "https://pm-redirects.stripe.com/*",
+    "https://chatgpt.com/*",
+    "https://auth.openai.com/*",
+    "https://www.meiguodizhi.com/*",
+    "http://a.62-us.com/*",
+    "https://a.62-us.com/*",
+    "https://it.tgflare.com/*",
+    "https://mail-api.yuecheng.shop/*"
+  ],
+  "action": {
+    "default_title": "Pay Filler",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
         "https://www.paypal.com/*",
+        "https://paypal.com/*",
         "https://www.paypalobjects.com/*",
         "https://pay.openai.com/*",
         "https://checkout.stripe.com/*",
-        "https://pm-redirects.stripe.com/*"
+        "https://pm-redirects.stripe.com/*",
+        "https://chatgpt.com/*",
+        "https://auth.openai.com/*"
       ],
       "js": [
         "profile.generated.js",

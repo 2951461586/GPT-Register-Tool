@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pay Filler</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="panel">
+      <header>
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>Pay Filler</h1>
+          <p id="status">ready</p>
+        </div>
+      </header>
+
+      <section class="actions">
+        <button id="runAll" class="primary" type="button">Run all</button>
+        <button id="fill" type="button">Fill form</button>
+        <button id="fillOtp" type="button">OTP + Continue</button>
+        <button id="nextCard" type="button">Next card</button>
+        <button id="nextPhone" type="button">Next phone</button>
+      </section>
+
+      <section class="summary">
+        <div><span>Card</span><strong id="cardSummary">none</strong></div>
+        <div><span>Phone</span><strong id="phoneSummary">none</strong></div>
+      </section>
+
+      <label>OTP URL<input id="otpUrl" placeholder="https://a.62-us.com/..." spellcheck="false"></label>
+      <label>Phone pool<textarea id="phonePool" placeholder="one phone per line" spellcheck="false"></textarea></label>
+      <label>Card pool<textarea id="cardPool" placeholder="number|MM / YY|CVV per line" spellcheck="false"></textarea></label>
+
+      <footer>
+        <button id="save" type="button">Save</button>
+        <button id="togglePanel" type="button">Panel</button>
+      </footer>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
