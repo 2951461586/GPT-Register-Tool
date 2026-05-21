@@ -23,7 +23,7 @@ SCOPE = "openid profile email offline_access"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36"
 
 
-def refresh_codex_oauth_session(data, json_path="", proxy=None, timeout=180):
+def refresh_codex_oauth_session(data, json_path="", proxy=None, timeout=180, force_email_otp_login=False):
     email = str(data.get("email") or "").strip().lower()
     if not email:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": "missing_email"}
@@ -48,6 +48,7 @@ def refresh_codex_oauth_session(data, json_path="", proxy=None, timeout=180):
             current_url=current_url,
             proxy=proxy,
             timeout=timeout,
+            force_email_otp_login=force_email_otp_login,
         )
         if not result.get("ok"):
             return result
@@ -56,7 +57,7 @@ def refresh_codex_oauth_session(data, json_path="", proxy=None, timeout=180):
         return {"ok": False, "mode": "codex_oauth_pkce", "error": str(exc)}
 
 
-def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, timeout=180):
+def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, timeout=180, force_email_otp_login=False):
     did = str(data.get("device_id") or "").strip() or _cookie_value(session, "oai-did") or secrets.token_hex(16)
     try:
         session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
@@ -85,7 +86,7 @@ def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, ti
     if _has_callback_code(current_url):
         return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
 
-    allow_takeover = _allow_passwordless_takeover()
+    allow_takeover = bool(force_email_otp_login or _allow_passwordless_takeover())
     if _needs_email_otp(current_url) or allow_takeover:
         email_otp_result = _passwordless_login_and_exchange(
             session=session,
@@ -95,7 +96,7 @@ def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, ti
             current_url=current_url,
             proxy=proxy,
             timeout=timeout,
-            reason="email_otp_required" if _needs_email_otp(current_url) else "passwordless_takeover_enabled",
+            reason="email_otp_required" if _needs_email_otp(current_url) else "email_otp_forced",
         )
         if email_otp_result.get("ok"):
             return email_otp_result
@@ -109,7 +110,7 @@ def _login_and_exchange(session, oauth, email, data, current_url, proxy=None, ti
                 "OpenAI routed this account to password login. Passwordless takeover is disabled "
                 "because forcing it can push every account into add-phone."
             ),
-            "next_action": "Use an existing RT JSON, refresh via a logged-in browser/session, or explicitly enable codex_oauth.allow_passwordless_takeover.",
+            "next_action": "Use an existing RT JSON, refresh via a logged-in browser/session, enable codex_oauth.allow_passwordless_takeover, or call this flow with force_email_otp_login.",
         }
     else:
         email_otp_result = {"ok": False, "error": "email_otp_not_required", "last_url": _safe_url(current_url)}
