@@ -332,7 +332,7 @@ def upsert_account(data, json_path=""):
 def list_paypal_accounts(email=""):
     init_database()
     query = """
-        SELECT email,access_token,paypal_url,paypal_status,refresh_token_status,json_path,updated_at
+        SELECT email,access_token,paypal_url,paypal_status,paypal_updated_at,refresh_token_status,json_path,updated_at
         FROM accounts
     """
     params = []

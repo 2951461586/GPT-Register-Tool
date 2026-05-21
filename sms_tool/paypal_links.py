@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from .gen_pp_link import generate_pp_link
+from .paypal_nocard import _follow_stripe_redirect, extract_ba_token
 from .storage import get_account_record, upsert_account
 
 
@@ -19,6 +20,8 @@ def regenerate_paypal_link(email="", session_file="", proxy=None):
     old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
     old_paypal_status = str(data.get("paypal_status") or "").strip()
     paypal = generate_pp_link(access_token, proxy=proxy)
+    if paypal.get("ok") and paypal.get("url"):
+        paypal = _resolve_ba_redirect(paypal, proxy=proxy)
     now = int(time.time())
     if paypal.get("ok") and paypal.get("url"):
         data["paypal"] = paypal
@@ -52,6 +55,31 @@ def regenerate_paypal_link(email="", session_file="", proxy=None):
         "json_path": json_path,
         "error": paypal.get("error", ""),
     }
+
+
+def _resolve_ba_redirect(paypal, proxy=None):
+    url = str(paypal.get("url") or "").strip()
+    if not url or extract_ba_token(url):
+        return paypal
+    try:
+        resolved = _follow_stripe_redirect(
+            url,
+            proxy=proxy,
+            log=lambda message: print(f"[pp] resolve BA: {message}"),
+        )
+    except Exception as exc:
+        paypal["ba_resolve_error"] = str(exc)
+        return paypal
+    if extract_ba_token(resolved):
+        paypal = dict(paypal)
+        paypal["stripe_redirect_url"] = url
+        paypal["url"] = resolved
+        paypal["ba_resolved"] = True
+    else:
+        paypal = dict(paypal)
+        paypal["ba_resolve_error"] = "missing_ba_token"
+        paypal["ba_resolve_final_url"] = resolved
+    return paypal
 
 
 def _load_seed(email="", session_file=""):

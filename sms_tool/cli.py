@@ -64,6 +64,8 @@ def main():
     parser.add_argument("--auto-pay-timeout", type=int, default=180, help="Seconds to wait for auto-pay completion")
     parser.add_argument("--batch-auto-pay", action="store_true", help="Run auto-pay for all pending accounts in SQLite")
     parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
+    parser.add_argument("--one-click-pay", action="store_true", help="一键支付: PayPal 无卡协议支付 (单账号或 --email-file 批量)")
+    parser.add_argument("--one-click-pay-all", action="store_true", help="一键支付: 对所有待支付账号执行无卡协议支付")
     args = parser.parse_args()
     if not args.proxy:
         args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
@@ -99,6 +101,9 @@ def main():
         return
     if args.batch_auto_pay:
         _batch_auto_pay(args)
+        return
+    if args.one_click_pay or args.one_click_pay_all:
+        _one_click_pay(args)
         return
 
     pipeline_started = time.time()
@@ -520,3 +525,9 @@ def _batch_auto_pay(args):
         for r in results:
             if not r.get("ok"):
                 print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
+
+
+def _one_click_pay(args):
+    """一键支付: PayPal 无卡协议支付。"""
+    from .paypal_nocard import one_click_pay_batch
+    one_click_pay_batch(args)

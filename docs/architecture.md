@@ -31,6 +31,8 @@ sms_tool/
   registration.py           ChatGPT registration protocol and batch worker control.
   gen_pp_link.py            PayPal/Stripe hosted payment-link generation.
   paypal_links.py           Regenerate PayPal links without clobbering old links.
+  paypal_nocard.py          Explicit PayPal no-card agreement payment flow.
+  paypal_auto.py            Reverse/browser PayPal payment helper.
   session_refresh.py        Refresh auth session after manual login/payment.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
   codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
@@ -66,6 +68,10 @@ requirement.txt             Compatibility alias for tooling that expects the sin
 It must not implement ChatGPT registration, PayPal protocol details, mailbox OTP polling, or direct SQLite business rules beyond display and deletion.
 
 Payment and CPA operations stay separated in the UI: marking payment complete only updates PayPal status, while CPA import is launched by the explicit CPA action.
+
+`SmsWorkbench/App.xaml` owns the fixed gray-dominant minimalist dark visual system for the desktop app. Black is limited to the navigation and log surfaces. App and browser-extension icon assets share the same kitten mark under `SmsWorkbench/Assets/` and `browser_extensions/paypal_autofill/icons/`.
+
+`SmsWorkbench/build_dotnet.ps1` publishes the only supported runnable desktop artifact to `dist/net10/SmsWorkbench.exe` and deletes `SmsWorkbench/bin/Release/net10.0-windows` after publish so the bin tree is not treated as a second app distribution directory.
 
 ### CLI
 
@@ -123,6 +129,23 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 ```
 
 `paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The original PayPal-capable flow uses `["US"]`; Japan/JPY checkout may return only `["card"]` as the available Stripe payment method. When the UI or CLI supplies `--proxy`, regeneration treats that value as authoritative for the current run.
+
+### PayPal Payment Layer
+
+`sms_tool/paypal_nocard.py` is the explicit no-card agreement payment boundary. It is adapted from the DanOps-1/Gpt-Agreement-Payment plus-paypal flow and is not executed by default registration. It may:
+
+- Use a just-regenerated SQLite/session `paypal_url` when `paypal_status=link_ready` and `paypal_updated_at` is within the configured freshness window.
+- Generate a fresh PayPal redirect from the current `access_token` when no fresh saved link is available.
+- Use older SQLite/session `paypal_url` values only when configured as explicit reuse or fallback.
+- Resolve and store the PayPal approve URL during link regeneration when the Stripe redirect yields a BA token.
+- Extract or resolve the PayPal BA token from the Stripe redirect chain, including Location hops and PayPal approve URLs embedded in response bodies.
+- Use the configured curl-cffi impersonation fingerprint (`paypal_nocard.impersonate`, default `chrome136`) for PayPal HTTP requests.
+- Consume one configured card from `paypal_auto.cards`.
+- Consume one configured phone/SMS endpoint from `paypal_nocard.phone_pool`.
+- Submit PayPal GraphQL agreement signup and authorization requests.
+- Mark the account `completed` only after the backend reports success.
+
+It must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default. A local SQLite smoke test may be enabled explicitly with `PAYPAL_NOCARD_SQLITE_SMOKE=1`; redirect following is separately gated by `PAYPAL_NOCARD_FOLLOW_REDIRECT=1`.
 
 ### Storage Layer
 
