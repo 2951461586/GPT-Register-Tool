@@ -188,8 +188,6 @@ namespace SmsWorkbench
                 rootDir = Directory.GetParent(rootDir)?.FullName ?? rootDir;
             }
 
-            darkTheme = true;
-            ApplyTheme(true);
             ScopeFilter = "全部";
             PurchaseProjectText = ConfigString("email_registration", "luckmail_purchase_project_code");
             if (PurchaseProjectText.Length == 0) PurchaseProjectText = "openai";
@@ -1161,7 +1159,6 @@ namespace SmsWorkbench
             {
                 PoolRow row = rows[0];
                 var singleArgs = new List<string> { "--email", row.Identifier, "--regenerate-paypal-link", "--workers", "4" };
-                AddProxy(singleArgs);
                 AddSessionFileArg(singleArgs, row);
                 RunBackend("重新生成PayPal链接", singleArgs);
                 return;
@@ -1170,7 +1167,6 @@ namespace SmsWorkbench
             string emailFile = Path.Combine(Path.GetTempPath(), "paypal_regen_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
             var args = new List<string> { "--regenerate-paypal-link", "--email-file", emailFile, "--workers", "4" };
-            AddProxy(args);
             RunBackend("批量重新生成PayPal链接 (" + rows.Count + ")", args);
         }
 
@@ -1200,7 +1196,7 @@ namespace SmsWorkbench
             if (rows.Count == 1)
             {
                 PoolRow row = rows[0];
-                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed" };
+                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed", "--workers", "4" };
                 AddSessionFileArg(singleArgs, row);
                 RunBackend("标记支付完成", singleArgs);
                 return;
@@ -1208,7 +1204,7 @@ namespace SmsWorkbench
 
             string emailFile = Path.Combine(Path.GetTempPath(), "paypal_completed_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile };
+            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile, "--workers", "4" };
             RunBackend("批量标记支付完成 (" + rows.Count + ")", args);
         }
 
@@ -1380,9 +1376,9 @@ namespace SmsWorkbench
                 IsReadOnly = true,
                 RowHeight = 28,
                 GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+                AlternatingRowBackground = (System.Windows.Media.Brush)FindResource("GridAltBg"),
                 Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                AlternatingRowBackground = (System.Windows.Media.Brush)FindResource("GridAltBg"),
                 BorderThickness = new Thickness(0)
             };
             mailGrid.Columns.Add(new DataGridTextColumn { Header = "时间", Binding = new System.Windows.Data.Binding("ReceivedAt"), Width = 150 });
@@ -1484,7 +1480,7 @@ namespace SmsWorkbench
             {
                 if (mailGrid.SelectedItem is MailItem item)
                 {
-                    ShowMailItemDialog(item, row.Identifier);
+                    ShowMailDetailDialog(item);
                 }
             };
 
@@ -1493,17 +1489,18 @@ namespace SmsWorkbench
             await LoadEmails();
         }
 
-        private void ShowMailItemDialog(MailItem item, string mailbox)
+        private void ShowMailDetailDialog(MailItem item)
         {
-            string code = ExtractVerifyCode(item.BodyPreview + " " + item.Subject);
+            if (item == null) return;
+            string code = ExtractVerificationCode(item.BodyPreview);
             var dialog = new Window
             {
-                Title = "邮件详情 - " + mailbox,
+                Title = item.Subject.Length > 0 ? item.Subject : "邮件详情",
                 Owner = this,
-                Width = 680,
-                Height = 420,
+                Width = 720,
+                Height = 460,
                 MinWidth = 560,
-                MinHeight = 320,
+                MinHeight = 360,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
@@ -1516,12 +1513,11 @@ namespace SmsWorkbench
 
             var title = new TextBlock
             {
-                Text = string.IsNullOrWhiteSpace(item.Subject) ? "无主题邮件" : item.Subject,
-                FontSize = 17,
+                Text = item.Subject,
+                FontSize = 16,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 8)
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
             };
             Grid.SetRow(title, 0);
             root.Children.Add(title);
@@ -1529,8 +1525,8 @@ namespace SmsWorkbench
             var meta = new TextBlock
             {
                 Text = item.ReceivedAt + "    " + item.From,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                Margin = new Thickness(0, 0, 0, 10)
+                Margin = new Thickness(0, 6, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
             };
             Grid.SetRow(meta, 1);
             root.Children.Add(meta);
@@ -1542,11 +1538,12 @@ namespace SmsWorkbench
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalContentAlignment = VerticalAlignment.Top,
+                Height = double.NaN,
                 Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                Padding = new Thickness(10),
-                MinHeight = 160
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line")
             };
             Grid.SetRow(body, 2);
             root.Children.Add(body);
@@ -1555,30 +1552,18 @@ namespace SmsWorkbench
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
+                Margin = new Thickness(0, 10, 0, 0)
             };
-            var codeText = new TextBlock
-            {
-                Text = code.Length > 0 ? "验证码：" + code : "未识别验证码",
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            var copyCodeBtn = new Button { Content = "复制验证码", Width = 96, IsEnabled = code.Length > 0 };
+            var copyCodeBtn = new Button { Content = code.Length > 0 ? "复制验证码 " + code : "未识别验证码", MinWidth = 120, IsEnabled = code.Length > 0 };
+            var copyBodyBtn = new Button { Content = "复制正文", Width = 86 };
+            var closeBtn = new Button { Content = "关闭", Width = 72 };
             copyCodeBtn.Click += (_, __) =>
             {
                 Clipboard.SetText(code);
                 Log("验证码已复制：" + code);
             };
-            var copyBodyBtn = new Button { Content = "复制正文", Width = 84 };
-            copyBodyBtn.Click += (_, __) =>
-            {
-                Clipboard.SetText(item.BodyPreview ?? "");
-                Log("邮件正文已复制。");
-            };
-            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            copyBodyBtn.Click += (_, __) => Clipboard.SetText(item.BodyPreview);
             closeBtn.Click += (_, __) => dialog.Close();
-            actions.Children.Add(codeText);
             actions.Children.Add(copyCodeBtn);
             actions.Children.Add(copyBodyBtn);
             actions.Children.Add(closeBtn);
@@ -1589,7 +1574,7 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private string ExtractVerifyCode(string text)
+        private string ExtractVerificationCode(string text)
         {
             Match match = Regex.Match(text ?? "", @"(?<!\d)\d{5,8}(?!\d)");
             return match.Success ? match.Value : "";
@@ -2485,21 +2470,21 @@ namespace SmsWorkbench
         {
             if (dark)
             {
-                SetBrush("AppBg", "#0B0F14");
-                SetBrush("PanelBg", "#111823");
-                SetBrush("Line", "#223042");
-                SetBrush("Primary", "#31F296");
-                SetBrush("PrimarySoft", "#13261F");
-                SetBrush("Danger", "#FF5F70");
-                SetBrush("TextMain", "#EAF2FF");
-                SetBrush("TextSub", "#8A97A8");
-                SetBrush("SidebarBg", "#0D131D");
-                SetBrush("GridAltBg", "#141C28");
-                SetBrush("SplitterBg", "#223142");
-                SetBrush("StatusBg", "#101823");
-                SetBrush("LogBg", "#05070A");
-                SetBrush("LogBorder", "#1A2430");
-                SetBrush("LogText", "#DFFCF0");
+                SetBrush("AppBg", "#0F172A");
+                SetBrush("PanelBg", "#111827");
+                SetBrush("Line", "#263244");
+                SetBrush("Primary", "#3B82F6");
+                SetBrush("PrimarySoft", "#1D2B45");
+                SetBrush("Danger", "#F87171");
+                SetBrush("TextMain", "#E5EDF8");
+                SetBrush("TextSub", "#9FB0C7");
+                SetBrush("SidebarBg", "#0B1220");
+                SetBrush("GridAltBg", "#162033");
+                SetBrush("SplitterBg", "#334155");
+                SetBrush("StatusBg", "#0B1220");
+                SetBrush("LogBg", "#050A14");
+                SetBrush("LogBorder", "#1E293B");
+                SetBrush("LogText", "#DCEBFF");
             }
             else
             {

@@ -15,7 +15,6 @@
         <StackPanel DockPanel.Dock="Top" Margin="14,16,14,10">
           <DockPanel>
             <Button x:Name="SidebarToggleButton" Content="‹" DockPanel.Dock="Right" Width="34" Click="ToggleSidebar_Click"/>
-            <Image Source="Assets/black-kitten.png" Width="28" Height="28" Margin="0,2,10,0" Stretch="Uniform"/>
             <StackPanel x:Name="SidebarHeaderText">
               <TextBlock Text="GPT Register" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
               <TextBlock Text="邮箱注册与支付链接固化" Margin="0,4,0,0" Foreground="{StaticResource TextSub}"/>

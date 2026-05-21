@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "GPT Register PayPal Autofill",
-  "version": "1.2.0",
-  "description": "Local helper for PayPal/Stripe checkout fill, OTP confirmation, and card/phone pool rotation.",
+  "name": "GPT 支付填表助手",
+  "version": "1.2.1",
+  "description": "本地支付填表助手，支持验证码轮询、卡池/手机号池轮换和一键执行。",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -33,7 +33,7 @@
     "https://mail-api.yuecheng.shop/*"
   ],
   "action": {
-    "default_title": "Pay Filler",
+    "default_title": "支付填表助手",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

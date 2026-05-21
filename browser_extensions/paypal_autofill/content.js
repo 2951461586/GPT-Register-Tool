@@ -24,7 +24,7 @@
     country: ["#country", "select[name='country']", "select[autocomplete='country']", "input[name='country']", "input[autocomplete='country']"]
   };
 
-  const BUTTON_WORDS = ["continue", "next", "agree", "submit", "confirm", "pay", "subscribe", "done"];
+  const BUTTON_WORDS = ["continue", "next", "agree", "submit", "confirm", "pay", "subscribe", "done", "继续", "下一步", "同意", "提交", "确认", "支付", "购买", "订阅", "完成"];
 
   function log(...args) {
     console.log(LOG_PREFIX, ...args);
@@ -49,17 +49,17 @@
       enabled: profile.enabled !== false,
       email: profile.email || "",
       phone: profile.phone || "",
-      phonePool: Array.isArray(profile.phonePool) ? profile.phonePool : [],
+      phonePool: Array.isArray(profile.phonePool) ? profile.phonePool.map(normalizePhoneEntry).filter((item) => item.phone || item.otpUrl) : [],
       otpUrl: profile.otpUrl || "",
       password: profile.password || "",
       firstName: profile.firstName || "",
       lastName: profile.lastName || "",
       card: {
         number: card.number || profile.cardNumber || "",
-        expiry: card.expiry || profile.cardExpiry || "",
+        expiry: buildCardExpiry(card) || card.expiry || profile.cardExpiry || "",
         cvv: card.cvv || profile.cardCvv || ""
       },
-      cardPool: Array.isArray(profile.cardPool) ? profile.cardPool : [],
+      cardPool: Array.isArray(profile.cardPool) ? profile.cardPool.map(normalizeCardEntry).filter((item) => item.number) : [],
       address: {
         line1: address.line1 || profile.addressLine1 || "",
         city: address.city || profile.city || "",
@@ -70,6 +70,47 @@
     };
   }
 
+  function normalizePhoneEntry(entry) {
+    if (typeof entry === "string") {
+      const [phone, otpUrl = ""] = String(entry).split("|").map((part) => part.trim());
+      return { phone: phone || "", otpUrl: otpUrl || "" };
+    }
+    if (!entry || typeof entry !== "object") return { phone: "", otpUrl: "" };
+    return {
+      phone: entry.phone || entry.number || "",
+      otpUrl: entry.otpUrl || entry.url || entry.link || ""
+    };
+  }
+
+  function normalizeCardEntry(entry) {
+    if (typeof entry === "string") {
+      const [number = "", month = "", year = "", cvv = ""] = String(entry).split("|").map((part) => part.trim());
+      return { number: number.replace(/\D/g, ""), month, year, cvv: cvv.replace(/\D/g, "") };
+    }
+    if (!entry || typeof entry !== "object") return { number: "", month: "", year: "", cvv: "" };
+    return {
+      number: String(entry.number || entry.cardNumber || "").replace(/\D/g, ""),
+      month: String(entry.month || entry.expiryMonth || entry.expMonth || "").trim(),
+      year: String(entry.year || entry.expiryYear || entry.expYear || "").trim(),
+      cvv: String(entry.cvv || entry.cardCvv || "").replace(/\D/g, ""),
+      expiry: String(entry.expiry || "").trim()
+    };
+  }
+
+  function buildCardExpiry(card = {}) {
+    const month = String(card.month || "").trim();
+    const year = String(card.year || "").trim();
+    if (month && year) {
+      const normalizedYear = year.length === 4 ? year.slice(-2) : year;
+      return `${month.padStart(2, "0")} / ${normalizedYear}`;
+    }
+    const expiry = String(card.expiry || "").trim();
+    const match = expiry.match(/(\d{1,2})\D*(\d{2,4})/);
+    if (!match) return expiry;
+    const normalizedYear = match[2].length === 4 ? match[2].slice(-2) : match[2];
+    return `${match[1].padStart(2, "0")} / ${normalizedYear}`;
+  }
+
   async function readProfile() {
     const data = await storageGet([STORAGE_KEY, STATE_KEY]);
     const stored = normalizeProfile(data[STORAGE_KEY] || {});
@@ -77,13 +118,20 @@
     const state = data[STATE_KEY] || {};
 
     const cardPool = base.cardPool.length ? base.cardPool : (base.card.number ? [base.card] : []);
-    const phonePool = base.phonePool.length ? base.phonePool : (base.phone ? [base.phone] : []);
+    const phonePool = base.phonePool.length ? base.phonePool : (base.phone ? [normalizePhoneEntry({ phone: base.phone, otpUrl: base.otpUrl })] : []);
     if (cardPool.length) {
       const card = cardPool[Math.abs(Number(state.cardIndex || 0)) % cardPool.length];
-      base.card = { ...base.card, ...card };
+      base.card = {
+        ...base.card,
+        ...card,
+        expiry: buildCardExpiry(card) || card.expiry || base.card.expiry || ""
+      };
     }
     if (phonePool.length) {
-      base.phone = phonePool[Math.abs(Number(state.phoneIndex || 0)) % phonePool.length];
+      const phoneEntry = phonePool[Math.abs(Number(state.phoneIndex || 0)) % phonePool.length];
+      base.phone = phoneEntry.phone || base.phone;
+      base.otpUrl = phoneEntry.otpUrl || base.otpUrl;
+      base.phoneEntry = phoneEntry;
     }
     return { profile: base, state };
   }
@@ -260,7 +308,7 @@
 
   async function fillForms({ clickNext = false, useAddress = true } = {}) {
     const { profile } = await readProfile();
-    if (!profile.enabled) return { ok: false, message: "disabled" };
+    if (!profile.enabled) return { ok: false, message: "已禁用" };
 
     let filled = 0;
     const add = (ok) => { if (ok) filled += 1; };
@@ -281,7 +329,7 @@
     add(fillFirst("address.country", SELECTORS.country, address.country));
     checkTerms();
     if (clickNext) clickContinue();
-    return { ok: filled > 0, message: `filled ${filled} field(s)`, filled };
+    return { ok: filled > 0, message: `已填充 ${filled} 项`, filled };
   }
 
   function formatPhone(phone) {
@@ -303,12 +351,12 @@
 
   async function fillOtpFromProfile({ submit = true, poll = true } = {}) {
     const { profile } = await readProfile();
-    if (!profile.otpUrl) return { ok: false, message: "otp url missing" };
+    if (!profile.otpUrl) return { ok: false, message: "未找到验证码链接" };
     const code = poll ? await pollOtpCode(profile.otpUrl) : extractCode((await chrome.runtime.sendMessage({ type: "FETCH_OTP_SMS", url: profile.otpUrl }))?.text || "");
-    if (!code) return { ok: false, message: "otp not found" };
+    if (!code) return { ok: false, message: "未获取到验证码" };
     const ok = fillOtp(code);
     if (ok && submit) clickContinue();
-    return { ok, code, message: ok ? `otp ${code}` : "otp input not found" };
+    return { ok, code, message: ok ? `验证码 ${code}` : "未找到验证码输入框" };
   }
 
   async function runFullFlow() {
@@ -317,7 +365,7 @@
     const otpResult = await fillOtpFromProfile({ submit: true, poll: true });
     if (otpResult.ok) {
       await advancePools({ card: true, phone: true });
-      return { ok: true, message: `filled + otp ${otpResult.code}` };
+      return { ok: true, message: `已完成填表和验证码 ${otpResult.code}` };
     }
     return otpResult;
   }
@@ -336,13 +384,13 @@
     const panel = document.createElement("section");
     panel.id = "gpt-paypal-autofill-panel";
     panel.innerHTML = `
-      <button data-close type="button">x</button>
-      <strong>PAY FILLER</strong>
-      <button data-fill type="button">Fill form</button>
-      <button data-run type="button">Run all</button>
-      <button data-otp type="button">Fill OTP</button>
-      <button data-submit type="button">Continue</button>
-      <div data-state>ready</div>`;
+      <button data-close type="button">×</button>
+      <strong>填表助手</strong>
+      <button data-fill type="button">填表</button>
+      <button data-run type="button">一键执行</button>
+      <button data-otp type="button">取码</button>
+      <button data-submit type="button">继续</button>
+      <div data-state>就绪</div>`;
     document.documentElement.append(style, panel);
     const state = panel.querySelector("[data-state]");
     panel.querySelector("[data-close]").addEventListener("click", () => panel.remove());
@@ -351,7 +399,7 @@
       state.textContent = result.message;
     });
     panel.querySelector("[data-run]").addEventListener("click", async () => {
-      state.textContent = "running...";
+      state.textContent = "执行中...";
       const result = await runFullFlow();
       state.textContent = result.message;
     });
@@ -361,7 +409,7 @@
       if (result.ok) fillOtp(result.code);
     });
     panel.querySelector("[data-submit]").addEventListener("click", () => {
-      state.textContent = clickContinue() ? "continued" : "button not found";
+      state.textContent = clickContinue() ? "已继续" : "未找到按钮";
     });
   }
 
@@ -389,12 +437,12 @@
     if (message?.type === "PAYPAL_AUTOFILL_FILL_OTP") {
       const ok = fillOtp(message.code);
       if (ok && message.submit) clickContinue();
-      sendResponse({ ok, message: ok ? "otp filled" : "otp input not found" });
+      sendResponse({ ok, message: ok ? "验证码已填入" : "未找到验证码输入框" });
       return true;
     }
     if (message?.type === "PAYPAL_AUTOFILL_CONTINUE") {
       const ok = clickContinue();
-      sendResponse({ ok, message: ok ? "continued" : "button not found" });
+      sendResponse({ ok, message: ok ? "已继续" : "未找到按钮" });
       return true;
     }
     return false;
