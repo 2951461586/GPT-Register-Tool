@@ -97,5 +97,24 @@
         "headless": false,
         "debug_screenshots": true,
         "debug_dir": "runtime/paypal_debug"
+    },
+    "paypal_nocard": {
+        "enabled": false,
+        "locale_country": "US",
+        "locale_lang": "en",
+        "otp_timeout": 180,
+        "impersonate": "chrome136",
+        "reuse_saved_url": false,
+        "reuse_saved_ready_url": true,
+        "saved_url_max_age_seconds": 1800,
+        "fallback_to_saved_url": false,
+        "phone_pool": [
+            {
+                "phone": "+10000000000",
+                "sms_api_url": "https://sms.example.com/poll"
+            }
+        ],
+        "card_index_file": "runtime/nocard_card_index.txt",
+        "phone_index_file": "runtime/nocard_phone_index.txt"
     }
 }

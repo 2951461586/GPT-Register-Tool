@@ -12,5 +12,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\app-icon.ico" />
+    <Resource Include="Assets\black-kitten.png" />
   </ItemGroup>
 </Project>

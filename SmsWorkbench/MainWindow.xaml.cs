@@ -46,7 +46,6 @@ namespace SmsWorkbench
         private int currentPage = 1;
         private int filteredCount;
         private bool sidebarCollapsed;
-        private bool darkTheme;
         private string chataiMailboxFilePath = "";
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -683,6 +682,33 @@ namespace SmsWorkbench
             RunBackend(taskName, args);
         }
 
+        private void OneClickPay_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                MessageBox.Show("请先勾选或选择账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var args = new List<string> { "--one-click-pay" };
+            if (rows.Count > 1)
+            {
+                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", rows[0].Identifier });
+            }
+            AddProxy(args);
+            RunBackend("一键支付 (" + rows.Count + ")", args);
+        }
+
         private bool TryCreateSelectedMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount)
         {
             mailboxArg = "--chatai-mailbox-file";
@@ -1117,8 +1143,8 @@ namespace SmsWorkbench
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
             sidebarCollapsed = !sidebarCollapsed;
-            SidebarColumn.Width = new GridLength(sidebarCollapsed ? 64 : 220);
-            SidebarHeaderText.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarColumn.Width = new GridLength(sidebarCollapsed ? 64 : 248);
+            SidebarBrand.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
             SidebarNavScroll.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
             SidebarBottomActions.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
             SidebarToggleButton.Content = sidebarCollapsed ? "›" : "‹";
@@ -2452,12 +2478,10 @@ namespace SmsWorkbench
 
         private void ToggleTheme_Click(object sender, RoutedEventArgs e)
         {
-            bool nextTheme = !darkTheme;
             try
             {
-                ApplyTheme(nextTheme);
-                darkTheme = nextTheme;
-                Log(darkTheme ? "已切换到黑夜主题。" : "已切换到白天主题。");
+                ApplyTheme(true);
+                Log("已应用黑灰极简主题。");
             }
             catch (Exception ex)
             {
@@ -2468,42 +2492,26 @@ namespace SmsWorkbench
 
         private void ApplyTheme(bool dark)
         {
-            if (dark)
-            {
-                SetBrush("AppBg", "#0F172A");
-                SetBrush("PanelBg", "#111827");
-                SetBrush("Line", "#263244");
-                SetBrush("Primary", "#3B82F6");
-                SetBrush("PrimarySoft", "#1D2B45");
-                SetBrush("Danger", "#F87171");
-                SetBrush("TextMain", "#E5EDF8");
-                SetBrush("TextSub", "#9FB0C7");
-                SetBrush("SidebarBg", "#0B1220");
-                SetBrush("GridAltBg", "#162033");
-                SetBrush("SplitterBg", "#334155");
-                SetBrush("StatusBg", "#0B1220");
-                SetBrush("LogBg", "#050A14");
-                SetBrush("LogBorder", "#1E293B");
-                SetBrush("LogText", "#DCEBFF");
-            }
-            else
-            {
-                SetBrush("AppBg", "#F4F7FB");
-                SetBrush("PanelBg", "#FFFFFF");
-                SetBrush("Line", "#D9E2EF");
-                SetBrush("Primary", "#2563EB");
-                SetBrush("PrimarySoft", "#EAF1FF");
-                SetBrush("Danger", "#EF4444");
-                SetBrush("TextMain", "#142033");
-                SetBrush("TextSub", "#607089");
-                SetBrush("SidebarBg", "#ECF2FA");
-                SetBrush("GridAltBg", "#F8FAFD");
-                SetBrush("SplitterBg", "#CBD5E1");
-                SetBrush("StatusBg", "#EEF3FA");
-                SetBrush("LogBg", "#0B1426");
-                SetBrush("LogBorder", "#17233B");
-                SetBrush("LogText", "#DCEBFF");
-            }
+            SetBrush("AppBg", "#25282E");
+            SetBrush("PanelBg", "#30343B");
+            SetBrush("PanelBg2", "#383D45");
+            SetBrush("PanelHover", "#444A54");
+            SetBrush("Line", "#4C535D");
+            SetBrush("LineStrong", "#626A76");
+            SetBrush("Primary", "#E7E9ED");
+            SetBrush("PrimarySoft", "#30343B");
+            SetBrush("Danger", "#B94A48");
+            SetBrush("DangerSoft", "#3A2022");
+            SetBrush("TextMain", "#F2F3F5");
+            SetBrush("TextSub", "#A5ABB4");
+            SetBrush("TextMuted", "#858C97");
+            SetBrush("SidebarBg", "#111317");
+            SetBrush("GridAltBg", "#2A2E35");
+            SetBrush("SplitterBg", "#3E444D");
+            SetBrush("StatusBg", "#2A2E35");
+            SetBrush("LogBg", "#0A0B0D");
+            SetBrush("LogBorder", "#1F2227");
+            SetBrush("LogText", "#D7DBE2");
         }
 
         private void SetBrush(string key, string color)

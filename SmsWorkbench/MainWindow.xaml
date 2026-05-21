@@ -3,26 +3,36 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GPT Register Tool" Icon="Assets/app-icon.ico" Height="780" Width="1320" MinHeight="680" MinWidth="1180"
         WindowStartupLocation="CenterScreen" Background="{StaticResource AppBg}"
-        FontFamily="Microsoft YaHei UI" FontSize="13">
+        FontFamily="Cascadia UI, Microsoft YaHei UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Grid>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition x:Name="SidebarColumn" Width="220"/>
+      <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
     <Border Grid.Column="0" Background="{StaticResource SidebarBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="14,16,14,10">
-          <DockPanel>
-            <Button x:Name="SidebarToggleButton" Content="‹" DockPanel.Dock="Right" Width="34" Click="ToggleSidebar_Click"/>
-            <StackPanel x:Name="SidebarHeaderText">
-              <TextBlock Text="GPT Register" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
-              <TextBlock Text="邮箱注册与支付链接固化" Margin="0,4,0,0" Foreground="{StaticResource TextSub}"/>
+        <StackPanel DockPanel.Dock="Top" Margin="16,18,16,16">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="36"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" x:Name="SidebarBrand" Orientation="Horizontal" VerticalAlignment="Center">
+              <Border Width="34" Height="34" CornerRadius="8" Background="#F6F6F6" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <Image Source="Assets/black-kitten.png" Width="28" Height="28" Stretch="Uniform"/>
+              </Border>
+              <StackPanel x:Name="SidebarHeaderText" Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="GPT Register" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
+                <TextBlock Text="protocol console" Margin="0,2,0,0" FontSize="11" Foreground="{StaticResource TextMuted}"/>
+              </StackPanel>
             </StackPanel>
-          </DockPanel>
+            <Button Grid.Column="1" x:Name="SidebarToggleButton" Content="‹" Width="32" Click="ToggleSidebar_Click"/>
+          </Grid>
         </StackPanel>
 
-        <StackPanel x:Name="SidebarBottomActions" DockPanel.Dock="Bottom" Margin="10,0,10,14">
+        <StackPanel x:Name="SidebarBottomActions" DockPanel.Dock="Bottom" Margin="12,0,12,16">
           <Button Content="主题切换" Click="ToggleTheme_Click"/>
           <Button Content="刷新" Click="Refresh_Click"/>
           <Button Content="配置" Click="Settings_Click"/>
@@ -30,27 +40,30 @@
         </StackPanel>
 
         <ScrollViewer x:Name="SidebarNavScroll" VerticalScrollBarVisibility="Auto">
-          <StackPanel Margin="10,0,10,12">
-            <TextBlock Text="邮箱管理" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,8,0,6"/>
-            <Button Content="导入Chatai邮箱" Margin="18,0,4,6" Click="ImportChataiMailbox_Click"/>
-            <Button Content="查看收件箱" Margin="18,0,4,6" Click="ViewInbox_Click"/>
+          <StackPanel Margin="12,0,12,14">
+            <TextBlock Text="MAILBOX" Style="{StaticResource SectionLabel}" Margin="6,4,0,7"/>
+            <Button Content="导入Chatai邮箱" Margin="0,0,0,7" Click="ImportChataiMailbox_Click"/>
+            <Button Content="查看收件箱" Margin="0,0,0,7" Click="ViewInbox_Click"/>
 
-            <TextBlock Text="注册流程" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,16,0,6"/>
-            <Button Content="购买邮箱并注册" Margin="18,0,4,6" Style="{StaticResource PrimaryButton}" Click="BuyAndRegister_Click"/>
-            <Button Content="一键注册+支付链接" Margin="18,0,4,6" Click="OneClickRegister_Click"/>
+            <TextBlock Text="REGISTRATION" Style="{StaticResource SectionLabel}"/>
+            <Button Content="购买邮箱并注册" Margin="0,0,0,7" Style="{StaticResource PrimaryButton}" Click="BuyAndRegister_Click"/>
+            <Button Content="一键注册+支付链接" Margin="0,0,0,7" Click="OneClickRegister_Click"/>
 
-            <TextBlock Text="数据维护" FontWeight="SemiBold" Foreground="{StaticResource TextSub}" Margin="6,16,0,6"/>
-            <Button Content="打开支付链接" Margin="18,0,4,6" Click="OpenPayPalLink_Click"/>
-            <Button Content="标记支付完成" Margin="18,0,4,6" Click="MarkPayPalComplete_Click"/>
-            <Button Content="一键导入CPA" Margin="18,0,4,6" Click="ImportPaidCpa_Click"/>
-            <Button Content="重新生成链接" Margin="18,0,4,6" Click="RegeneratePayPalLink_Click"/>
-            <Button Content="删除选中" Margin="18,0,4,6" Click="DeleteSelected_Click"/>
+            <TextBlock Text="PAYMENT" Style="{StaticResource SectionLabel}"/>
+            <Button Content="一键支付 (无卡协议)" Margin="0,0,0,7" Style="{StaticResource PrimaryButton}" Click="OneClickPay_Click"/>
+
+            <TextBlock Text="MAINTENANCE" Style="{StaticResource SectionLabel}"/>
+            <Button Content="打开支付链接" Margin="0,0,0,7" Click="OpenPayPalLink_Click"/>
+            <Button Content="标记支付完成" Margin="0,0,0,7" Click="MarkPayPalComplete_Click"/>
+            <Button Content="一键导入CPA" Margin="0,0,0,7" Click="ImportPaidCpa_Click"/>
+            <Button Content="重新生成链接" Margin="0,0,0,7" Click="RegeneratePayPalLink_Click"/>
+            <Button Content="删除选中" Margin="0,0,0,7" Click="DeleteSelected_Click"/>
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
     </Border>
 
-    <Grid Grid.Column="1" Margin="10">
+    <Grid Grid.Column="1" Margin="14">
       <Grid.RowDefinitions>
         <RowDefinition Height="92"/>
         <RowDefinition Height="46"/>
