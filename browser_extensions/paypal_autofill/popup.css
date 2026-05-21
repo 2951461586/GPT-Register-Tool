@@ -1,0 +1,158 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Microsoft YaHei UI", monospace;
+  font-size: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 330px;
+  margin: 0;
+  background: #050807;
+  color: #dffcef;
+}
+
+.panel {
+  margin: 8px;
+  padding: 14px;
+  border: 1px solid #244239;
+  border-radius: 8px;
+  background: #08110f;
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.45);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mark {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #31f296;
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, transparent 0 28%, #31f296 29% 32%, transparent 33%),
+    radial-gradient(circle at 50% 54%, #31f296 0 3px, transparent 4px),
+    #0d1815;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#status {
+  min-height: 16px;
+  margin-top: 2px;
+  color: #8db7aa;
+}
+
+.actions,
+footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.actions {
+  margin-bottom: 10px;
+}
+
+button {
+  height: 34px;
+  border: 1px solid #31594d;
+  border-radius: 6px;
+  background: #0e1a17;
+  color: #dffcef;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #31f296;
+  color: #31f296;
+}
+
+.primary {
+  border-color: #31f296;
+  background: #10251f;
+}
+
+.summary {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #1f342e;
+  border-radius: 6px;
+  background: #0b1512;
+}
+
+.summary div {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.summary span {
+  color: #7fa99b;
+}
+
+.summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: #93b6aa;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #2d4a42;
+  border-radius: 6px;
+  background: #050b09;
+  color: #dffcef;
+  font: inherit;
+  outline: none;
+}
+
+input {
+  height: 32px;
+  padding: 0 8px;
+}
+
+textarea {
+  min-height: 66px;
+  max-height: 110px;
+  padding: 8px;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #31f296;
+}
+
+footer {
+  margin-top: 10px;
+}

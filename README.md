@@ -26,6 +26,8 @@ cd GPT-Register-Tool
 python -m pip install -r requirements.txt
 ```
 
+`requirement.txt` is kept as a compatibility alias for environments that expect the singular filename.
+
 3. Create local config.
 
 ```powershell
@@ -39,9 +41,11 @@ Required choices:
 - `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
+- `paypal.billing_regions`: Checkout billing country/currency order. Use `["US"]` for the original PayPal-capable flow; this is independent from the proxy exit.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
+- `--regenerate-paypal-link --proxy ...`: forces PayPal/Stripe link regeneration through the selected proxy and overrides stage proxy routing for that run.
 - `cpa_mode.api_url` / `cpa_mode.api_token`: CPA management API target for one-click import.
-- `codex_oauth.allow_passwordless_takeover`: default `false`; only affects manual Codex export/refresh. CPA import forces email OTP login for password-page accounts.
+- `codex_oauth.allow_passwordless_takeover`: default `false`; only affects manual Codex export/refresh. CPA import now consumes existing AT-only JSON and no longer depends on RT refresh.
 - `codex_oauth.auto_phone_verification`: default `false`; phone verification is attempted only when explicitly enabled.
 
 5. Run one registration.
@@ -123,10 +127,10 @@ Refresh an auth session after manual payment/login:
 python chatgpt_phone_reg.py --email user@example.com --refresh-session
 ```
 
-Mark a paid account and export Codex JSON:
+Mark a paid account as paid:
 
 ```powershell
-python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status completed --export-codex-json
+python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status completed
 ```
 
 Import paid accounts into CPA:
@@ -135,15 +139,22 @@ Import paid accounts into CPA:
 python chatgpt_phone_reg.py --import-cpa --email-file paid_emails.txt
 ```
 
-CPA import requires a real OpenAI OAuth `refresh_token` beginning with `rt_` and a real `id_token`.
-For `--import-cpa`, if OpenAI routes an account to `/log-in/password`, the tool still uses the
-email OTP login path and does not submit the account password. If OpenAI later requests `/add-phone`,
-the default flow reports `add_phone_required`; phone SMS handling is attempted only when
-`codex_oauth.auto_phone_verification` is explicitly enabled.
+CPA import now accepts existing session JSON that contains an `access_token` even when `refresh_token`
+is missing. If the source file does not already have `id_token`, the tool synthesizes a CPA-compatible
+one when possible and uploads the normalized JSON directly to CPA.
 
 ## WPF Behavior
 
 `SmsWorkbench` is a launcher and management UI. It reads `config.json`, starts the Python CLI, displays mailbox/session/SQLite state, and exposes maintenance actions.
+
+UI responsibilities are intentionally thin:
+
+- The account list supports row selection plus checkbox-backed batch actions; double-clicking a row no longer opens details.
+- Account details are opened from the explicit detail button.
+- The inbox view uses an in-app mail detail popup and can copy recognized 5-8 digit verification codes.
+- Marking payment complete updates PayPal status only. CPA import is a separate operation.
+- Theme switching updates shared application resources so main views and custom popups use the same light/dark palette.
+- The browser helper ships a compact popup with one-click fill, OTP polling, and card/phone pool rotation.
 
 PayPal link buttons open Google Chrome with:
 
