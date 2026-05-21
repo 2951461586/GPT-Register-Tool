@@ -130,7 +130,7 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 - Build the OAuth authorize URL.
 - Reuse existing auth cookies when they already produce a callback code.
 - Continue username login.
-- Complete email OTP only when OpenAI routes the flow to an email OTP page, or when takeover is explicitly enabled.
+- Complete email OTP when OpenAI routes the flow to an email OTP page, when takeover is explicitly enabled, or when CPA import forces email OTP login.
 - Exchange the callback code for OpenAI `access_token`, `id_token`, and `refresh_token`.
 
 It deliberately does not upload to CPA and does not own phone-number inventory.
@@ -143,9 +143,9 @@ It deliberately does not upload to CPA and does not own phone-number inventory.
 
 Important behavior:
 
-- Default CPA import no longer forces `/log-in/password` accounts into passwordless takeover.
-- `codex_oauth.allow_passwordless_takeover=true` is an explicit escape hatch for takeover-style OTP login.
-- Forced takeover may require add-phone even when a local row is marked payment-completed, so it should not be the normal Plus-account path.
+- CPA import passes `force_email_otp_login=true`, so `/log-in/password` accounts are handled by email OTP instead of password verification.
+- `codex_oauth.allow_passwordless_takeover=true` is an explicit escape hatch for manual export/refresh paths.
+- Forced email OTP may still require add-phone for some accounts. Phone SMS handling remains a separate opt-in boundary via `codex_oauth.auto_phone_verification`.
 
 ## Portable Configuration
 

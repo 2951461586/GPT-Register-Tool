@@ -41,6 +41,7 @@ def import_cpa_session(
             proxy=proxy,
             timeout=timeout,
             require_refresh_token=True,
+            force_email_otp_login=True,
         )
         if not export_result.get("ok"):
             return {
