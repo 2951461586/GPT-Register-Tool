@@ -7,57 +7,120 @@
         UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Grid>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
+      <ColumnDefinition x:Name="SidebarColumn" Width="256"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
     <Border Grid.Column="0" Background="{StaticResource SidebarBg}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="16,18,16,16">
+        <StackPanel x:Name="SidebarHeaderPanel" DockPanel.Dock="Top" Margin="12,14,12,14">
           <Grid>
             <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="36"/>
+              <ColumnDefinition x:Name="SidebarBrandColumn" Width="38"/>
+              <ColumnDefinition x:Name="SidebarTextColumn" Width="*"/>
+              <ColumnDefinition x:Name="SidebarToggleColumn" Width="40"/>
             </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" x:Name="SidebarBrand" Orientation="Horizontal" VerticalAlignment="Center">
-              <Border Width="34" Height="34" CornerRadius="8" Background="#F6F6F6" BorderBrush="{StaticResource Line}" BorderThickness="1">
-                <Image Source="Assets/black-kitten.png" Width="28" Height="28" Stretch="Uniform"/>
-              </Border>
-              <StackPanel x:Name="SidebarHeaderText" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="GPT Register" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
-                <TextBlock Text="protocol console" Margin="0,2,0,0" FontSize="11" Foreground="{StaticResource TextMuted}"/>
-              </StackPanel>
+            <Border Grid.Column="0" x:Name="SidebarBrand" Width="34" Height="34" CornerRadius="8" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="1">
+              <Image Source="Assets/black-kitten.png" Width="28" Height="28" Stretch="Uniform"/>
+            </Border>
+            <StackPanel Grid.Column="1" x:Name="SidebarHeaderText" Margin="8,0,0,0" VerticalAlignment="Center">
+              <TextBlock Text="GPT Register" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
+              <TextBlock Text="protocol console" Margin="0,2,0,0" FontSize="11" Foreground="{StaticResource TextMuted}"/>
             </StackPanel>
-            <Button Grid.Column="1" x:Name="SidebarToggleButton" Content="‹" Width="32" Click="ToggleSidebar_Click"/>
+            <Button Grid.Column="2" x:Name="SidebarToggleButton" Content="‹" Width="32" Height="32" Padding="0" HorizontalAlignment="Center" Click="ToggleSidebar_Click"/>
           </Grid>
         </StackPanel>
 
-        <StackPanel x:Name="SidebarBottomActions" DockPanel.Dock="Bottom" Margin="12,0,12,16">
-          <Button Content="主题切换" Click="ToggleTheme_Click"/>
-          <Button Content="刷新" Click="Refresh_Click"/>
-          <Button Content="配置" Click="Settings_Click"/>
-          <Button Content="取消批次" Style="{StaticResource DangerButton}" Click="CancelBatch_Click"/>
+        <StackPanel x:Name="SidebarBottomActions" DockPanel.Dock="Bottom" Margin="12,0,12,14">
+          <Button Style="{StaticResource SidebarButton}" Click="Refresh_Click" ToolTip="刷新">
+            <StackPanel Orientation="Horizontal">
+              <Path Style="{StaticResource IconPath}" Data="M13 7 A5 5 0 1 0 11.5 10.5 M13 7 V3 H9"/>
+              <TextBlock Tag="SidebarText" Text="刷新" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource SidebarButton}" Click="Settings_Click" ToolTip="配置">
+            <StackPanel Orientation="Horizontal">
+              <Path Style="{StaticResource IconPath}" Data="M3 4 H13 M3 8 H13 M3 12 H13 M10 2 V6 M6 6 V10 M11 10 V14"/>
+              <TextBlock Tag="SidebarText" Text="配置" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource SidebarButton}" Click="CancelBatch_Click" ToolTip="取消批次">
+            <StackPanel Orientation="Horizontal">
+              <Path Style="{StaticResource IconPath}" Data="M4 4 L12 12 M12 4 L4 12"/>
+              <TextBlock Tag="SidebarText" Text="取消批次" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
         </StackPanel>
 
         <ScrollViewer x:Name="SidebarNavScroll" VerticalScrollBarVisibility="Auto">
-          <StackPanel Margin="12,0,12,14">
-            <TextBlock Text="MAILBOX" Style="{StaticResource SectionLabel}" Margin="6,4,0,7"/>
-            <Button Content="导入Chatai邮箱" Margin="0,0,0,7" Click="ImportChataiMailbox_Click"/>
-            <Button Content="查看收件箱" Margin="0,0,0,7" Click="ViewInbox_Click"/>
+          <StackPanel x:Name="SidebarNavStack" Margin="12,0,12,14">
+            <TextBlock Tag="SidebarSection" Text="MAILBOX" Style="{StaticResource SectionLabel}" Margin="6,4,0,7"/>
+            <Button Style="{StaticResource SidebarButton}" Click="ImportChataiMailbox_Click" ToolTip="导入Chatai邮箱">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M3 4 H13 M8 4 V14 M5 11 L8 14 L11 11"/>
+                <TextBlock Tag="SidebarText" Text="导入Chatai邮箱" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="ViewInbox_Click" ToolTip="查看收件箱">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M2 5 H14 V13 H2 Z M2 5 L8 9 L14 5"/>
+                <TextBlock Tag="SidebarText" Text="查看收件箱" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
 
-            <TextBlock Text="REGISTRATION" Style="{StaticResource SectionLabel}"/>
-            <Button Content="购买邮箱并注册" Margin="0,0,0,7" Style="{StaticResource PrimaryButton}" Click="BuyAndRegister_Click"/>
-            <Button Content="一键注册+支付链接" Margin="0,0,0,7" Click="OneClickRegister_Click"/>
+            <TextBlock Tag="SidebarSection" Text="REGISTRATION" Style="{StaticResource SectionLabel}"/>
+            <Button Style="{StaticResource SidebarButton}" Click="BuyAndRegister_Click" ToolTip="购买邮箱并注册">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M3 6 H13 M4 6 V13 H12 V6 M6 6 V4 H10 V6"/>
+                <TextBlock Tag="SidebarText" Text="购买邮箱并注册" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="OneClickRegister_Click" ToolTip="一键注册+支付链接">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M8 2 L4 9 H8 L6 14 L12 6 H8 Z"/>
+                <TextBlock Tag="SidebarText" Text="一键注册+支付链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
 
-            <TextBlock Text="PAYMENT" Style="{StaticResource SectionLabel}"/>
-            <Button Content="一键支付 (无卡协议)" Margin="0,0,0,7" Style="{StaticResource PrimaryButton}" Click="OneClickPay_Click"/>
+            <TextBlock Tag="SidebarSection" Text="PAYMENT" Style="{StaticResource SectionLabel}"/>
+            <Button Style="{StaticResource SidebarButton}" Click="OneClickPay_Click" ToolTip="一键支付">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M3 5 H13 V12 H3 Z M3 8 H13"/>
+                <TextBlock Tag="SidebarText" Text="一键支付" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
 
-            <TextBlock Text="MAINTENANCE" Style="{StaticResource SectionLabel}"/>
-            <Button Content="打开支付链接" Margin="0,0,0,7" Click="OpenPayPalLink_Click"/>
-            <Button Content="标记支付完成" Margin="0,0,0,7" Click="MarkPayPalComplete_Click"/>
-            <Button Content="一键导入CPA" Margin="0,0,0,7" Click="ImportPaidCpa_Click"/>
-            <Button Content="重新生成链接" Margin="0,0,0,7" Click="RegeneratePayPalLink_Click"/>
-            <Button Content="删除选中" Margin="0,0,0,7" Click="DeleteSelected_Click"/>
+            <TextBlock Tag="SidebarSection" Text="MAINTENANCE" Style="{StaticResource SectionLabel}"/>
+            <Button Style="{StaticResource SidebarButton}" Click="OpenPayPalLink_Click" ToolTip="打开支付链接">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M5 3 H13 V11 M13 3 L6 10 M3 5 V13 H11"/>
+                <TextBlock Tag="SidebarText" Text="打开支付链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="MarkPayPalComplete_Click" ToolTip="标记支付完成">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M3 8 L6 11 L13 4"/>
+                <TextBlock Tag="SidebarText" Text="标记支付完成" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="ImportPaidCpa_Click" ToolTip="一键导入CPA">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M4 3 H10 L13 6 V13 H4 Z M10 3 V6 H13"/>
+                <TextBlock Tag="SidebarText" Text="一键导入CPA" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="RegeneratePayPalLink_Click" ToolTip="重新生成链接">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M12 5 A5 5 0 1 0 13 10 M12 5 V2 H15"/>
+                <TextBlock Tag="SidebarText" Text="重新生成链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="DeleteSelected_Click" ToolTip="删除选中">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M4 5 H12 M6 5 V13 M10 5 V13 M5 5 L6 14 H10 L11 5 M6 3 H10"/>
+                <TextBlock Tag="SidebarText" Text="删除选中" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
           </StackPanel>
         </ScrollViewer>
       </DockPanel>
@@ -66,10 +129,10 @@
     <Grid Grid.Column="1" Margin="14">
       <Grid.RowDefinitions>
         <RowDefinition Height="92"/>
-        <RowDefinition Height="46"/>
+        <RowDefinition Height="62"/>
         <RowDefinition Height="*"/>
         <RowDefinition Height="6"/>
-        <RowDefinition Height="300" MinHeight="180"/>
+        <RowDefinition Height="380" MinHeight="260"/>
         <RowDefinition Height="24"/>
       </Grid.RowDefinitions>
 
@@ -81,31 +144,31 @@
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <Border Grid.Column="0" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Column="0" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
             <TextBlock Text="总记录" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding TotalCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
-        <Border Grid.Column="1" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Column="1" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
             <TextBlock Text="邮箱池" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding MailboxCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
-        <Border Grid.Column="2" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Column="2" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
             <TextBlock Text="已注册" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding RegisteredCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
-        <Border Grid.Column="3" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Column="3" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
             <TextBlock Text="支付完成" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding PaypalCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
-        <Border Grid.Column="4" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Column="4" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
             <TextBlock Text="异常/待处理" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding AttentionCountText}" FontSize="24" FontWeight="SemiBold"/>
@@ -113,35 +176,37 @@
         </Border>
       </Grid>
 
-      <Border Grid.Row="1" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
-        <Grid Margin="8,7">
+      <Border Grid.Row="1" Margin="0,8,0,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="3" ClipToBounds="False">
+        <Grid Margin="10,10" VerticalAlignment="Center">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="260"/>
-            <ColumnDefinition Width="128"/>
-            <ColumnDefinition Width="90"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="64"/>
-            <ColumnDefinition Width="64"/>
-            <ColumnDefinition Width="96"/>
-            <ColumnDefinition Width="64"/>
-            <ColumnDefinition Width="64"/>
-            <ColumnDefinition Width="72"/>
+            <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
-          <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
-          <ComboBox Grid.Column="1" Margin="6,0,0,0" SelectedItem="{Binding ScopeFilter}">
-            <ComboBoxItem Content="全部"/>
-            <ComboBoxItem Content="邮箱池"/>
-            <ComboBoxItem Content="已注册"/>
-            <ComboBoxItem Content="待处理"/>
-          </ComboBox>
-          <TextBox Grid.Column="2" Margin="6,0,0,0" Text="{Binding PageSizeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="每页条数"/>
-          <TextBlock Grid.Column="3" Margin="10,0,0,0" Text="{Binding PageStatusText}" VerticalAlignment="Center" Foreground="{StaticResource TextSub}"/>
-          <Button Grid.Column="4" Content="首页" Click="FirstPage_Click"/>
-          <Button Grid.Column="5" Content="上一页" Click="PrevPage_Click"/>
-          <Button Grid.Column="6" Content="清空选择" Click="ClearSelection_Click"/>
-          <Button Grid.Column="7" Content="下一页" Click="NextPage_Click"/>
-          <Button Grid.Column="8" Content="末页" Click="LastPage_Click"/>
-          <Button Grid.Column="9" Content="全选" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果"/>
+          <Grid Grid.Column="0" MinWidth="420">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="260"/>
+              <ColumnDefinition Width="128"/>
+              <ColumnDefinition Width="88"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
+            <ComboBox Grid.Column="1" Margin="6,0,0,0" SelectedItem="{Binding ScopeFilter}">
+              <ComboBoxItem Content="全部"/>
+              <ComboBoxItem Content="邮箱池"/>
+              <ComboBoxItem Content="已注册"/>
+              <ComboBoxItem Content="待处理"/>
+            </ComboBox>
+            <TextBox Grid.Column="2" Margin="6,0,0,0" Text="{Binding PageSizeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="每页条数"/>
+            <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding PageStatusText}" VerticalAlignment="Center" Foreground="{StaticResource TextSub}"/>
+          </Grid>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Button Style="{StaticResource PagerButton}" Content="首页" Click="FirstPage_Click"/>
+            <Button Style="{StaticResource PagerButton}" Content="上一页" Click="PrevPage_Click"/>
+            <Button Style="{StaticResource PagerButton}" Content="清空选择" MinWidth="88" Click="ClearSelection_Click"/>
+            <Button Style="{StaticResource PagerButton}" Content="下一页" Click="NextPage_Click"/>
+            <Button Style="{StaticResource PagerButton}" Content="末页" Click="LastPage_Click"/>
+            <Button Style="{StaticResource PagerButton}" Content="全选" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果"/>
+          </StackPanel>
         </Grid>
       </Border>
 
@@ -183,9 +248,9 @@
 
       <Grid Grid.Row="4" Margin="0,6,0,0">
         <Grid.RowDefinitions>
-          <RowDefinition Height="36" MinHeight="28"/>
+          <RowDefinition Height="64" MinHeight="42"/>
           <RowDefinition Height="5"/>
-          <RowDefinition Height="220" MinHeight="160"/>
+          <RowDefinition Height="*" MinHeight="220"/>
         </Grid.RowDefinitions>
         <Border Grid.Row="0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
           <DataGrid ItemsSource="{Binding Tasks}" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
@@ -204,7 +269,7 @@
         </Border>
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       Background="{StaticResource SplitterBg}" ShowsPreview="True"/>
-        <Border Grid.Row="2" Background="{StaticResource LogBg}" BorderBrush="{StaticResource LogBorder}" BorderThickness="1" MinHeight="160">
+        <Border Grid.Row="2" Background="{StaticResource LogBg}" BorderBrush="{StaticResource LogBorder}" BorderThickness="1" MinHeight="220">
           <Grid>
             <Button Content="清空日志" Width="78" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,6,20,0" Panel.ZIndex="1" Click="ClearLog_Click"/>
@@ -212,49 +277,7 @@
                    FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                    TextWrapping="NoWrap"
-                   VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="160" Padding="8,34,8,8">
-            <TextBox.Resources>
-              <Style TargetType="{x:Type ScrollBar}">
-                <Setter Property="Width" Value="15"/>
-                <Setter Property="MinWidth" Value="15"/>
-                <Setter Property="Height" Value="15"/>
-                <Setter Property="MinHeight" Value="15"/>
-                <Setter Property="Background" Value="#111C31"/>
-                <Setter Property="Template">
-                  <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type ScrollBar}">
-                      <Grid Background="{TemplateBinding Background}">
-                        <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True">
-                          <Track.Thumb>
-                            <Thumb Background="#6F86A8">
-                              <Thumb.Template>
-                                <ControlTemplate TargetType="{x:Type Thumb}">
-                                  <Border Background="{TemplateBinding Background}" CornerRadius="7"/>
-                                </ControlTemplate>
-                              </Thumb.Template>
-                            </Thumb>
-                          </Track.Thumb>
-                        </Track>
-                      </Grid>
-                      <ControlTemplate.Triggers>
-                        <Trigger Property="Orientation" Value="Horizontal">
-                          <Setter Property="Width" Value="Auto"/>
-                          <Setter Property="MinWidth" Value="0"/>
-                          <Setter Property="Height" Value="15"/>
-                          <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
-                        </Trigger>
-                        <Trigger Property="Orientation" Value="Vertical">
-                          <Setter Property="Width" Value="15"/>
-                          <Setter Property="Height" Value="Auto"/>
-                          <Setter Property="MinHeight" Value="0"/>
-                        </Trigger>
-                      </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                  </Setter.Value>
-                </Setter>
-              </Style>
-            </TextBox.Resources>
-            </TextBox>
+                   VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="220" Padding="8,8,8,8"/>
           </Grid>
         </Border>
       </Grid>

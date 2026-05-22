@@ -69,9 +69,9 @@ It must not implement ChatGPT registration, PayPal protocol details, mailbox OTP
 
 Payment and CPA operations stay separated in the UI: marking payment complete only updates PayPal status, while CPA import is launched by the explicit CPA action.
 
-`SmsWorkbench/App.xaml` owns the fixed gray-dominant minimalist dark visual system for the desktop app. Black is limited to the navigation and log surfaces. App and browser-extension icon assets share the same kitten mark under `SmsWorkbench/Assets/` and `browser_extensions/paypal_autofill/icons/`.
+`SmsWorkbench/App.xaml` owns the fixed white-first minimalist visual system for the desktop app, with black and gray used for text, borders, navigation, and log surfaces. App and browser-extension icon assets share the same kitten mark under `SmsWorkbench/Assets/` and `browser_extensions/paypal_autofill/icons/`.
 
-`SmsWorkbench/build_dotnet.ps1` publishes the only supported runnable desktop artifact to `dist/net10/SmsWorkbench.exe` and deletes `SmsWorkbench/bin/Release/net10.0-windows` after publish so the bin tree is not treated as a second app distribution directory.
+`SmsWorkbench/build_dotnet.ps1` publishes the only supported runnable desktop artifact to `dist/net10/SmsWorkbench.exe` and calls `SmsWorkbench/clean_dotnet_workspaces.ps1` after publish so `SmsWorkbench/bin/Debug/net10.0-windows`, `SmsWorkbench/bin/Release/net10.0-windows`, and nested runtime folders such as `win-x64` are not treated as second app distribution directories.
 
 ### CLI
 

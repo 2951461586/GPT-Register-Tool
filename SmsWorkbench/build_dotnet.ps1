@@ -25,15 +25,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-$intermediateReleaseDir = Join-Path $PSScriptRoot "bin\Release\net10.0-windows"
-$resolvedProjectDir = [System.IO.Path]::GetFullPath($PSScriptRoot)
-if (Test-Path $intermediateReleaseDir) {
-    $resolvedIntermediate = [System.IO.Path]::GetFullPath($intermediateReleaseDir)
-    if (-not $resolvedIntermediate.StartsWith($resolvedProjectDir, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to clean unexpected path: $resolvedIntermediate"
-    }
-    Remove-Item -LiteralPath $resolvedIntermediate -Recurse -Force
-    Write-Host "Cleaned intermediate $resolvedIntermediate"
-}
+$cleanScript = Join-Path $PSScriptRoot "clean_dotnet_workspaces.ps1"
+& $cleanScript
 
 Write-Host "Published $publishDir\SmsWorkbench.exe"

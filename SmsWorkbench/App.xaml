@@ -3,26 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
-    <SolidColorBrush x:Key="AppBg" Color="#25282E"/>
-    <SolidColorBrush x:Key="PanelBg" Color="#30343B"/>
-    <SolidColorBrush x:Key="PanelBg2" Color="#383D45"/>
-    <SolidColorBrush x:Key="PanelHover" Color="#444A54"/>
-    <SolidColorBrush x:Key="Line" Color="#4C535D"/>
-    <SolidColorBrush x:Key="LineStrong" Color="#626A76"/>
-    <SolidColorBrush x:Key="Primary" Color="#E7E9ED"/>
-    <SolidColorBrush x:Key="PrimarySoft" Color="#30343B"/>
-    <SolidColorBrush x:Key="Danger" Color="#B94A48"/>
-    <SolidColorBrush x:Key="DangerSoft" Color="#3A2022"/>
-    <SolidColorBrush x:Key="TextMain" Color="#F2F3F5"/>
-    <SolidColorBrush x:Key="TextSub" Color="#A5ABB4"/>
-    <SolidColorBrush x:Key="TextMuted" Color="#858C97"/>
-    <SolidColorBrush x:Key="SidebarBg" Color="#111317"/>
-    <SolidColorBrush x:Key="GridAltBg" Color="#2A2E35"/>
-    <SolidColorBrush x:Key="SplitterBg" Color="#3E444D"/>
-    <SolidColorBrush x:Key="StatusBg" Color="#2A2E35"/>
-    <SolidColorBrush x:Key="LogBg" Color="#0A0B0D"/>
-    <SolidColorBrush x:Key="LogBorder" Color="#1F2227"/>
-    <SolidColorBrush x:Key="LogText" Color="#D7DBE2"/>
+    <SolidColorBrush x:Key="AppBg" Color="#F6F7F8"/>
+    <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="PanelBg2" Color="#F8F9FA"/>
+    <SolidColorBrush x:Key="PanelHover" Color="#F1F3F5"/>
+    <SolidColorBrush x:Key="Line" Color="#E2E5E9"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#A9B0BA"/>
+    <SolidColorBrush x:Key="Primary" Color="#111111"/>
+    <SolidColorBrush x:Key="PrimarySoft" Color="#EEF0F2"/>
+    <SolidColorBrush x:Key="Danger" Color="#B42318"/>
+    <SolidColorBrush x:Key="DangerSoft" Color="#FFF2F0"/>
+    <SolidColorBrush x:Key="TextMain" Color="#111111"/>
+    <SolidColorBrush x:Key="TextSub" Color="#4B5563"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#7A828D"/>
+    <SolidColorBrush x:Key="SidebarBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="GridAltBg" Color="#FAFAFB"/>
+    <SolidColorBrush x:Key="SplitterBg" Color="#D8DDE3"/>
+    <SolidColorBrush x:Key="StatusBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="LogBg" Color="#0B0C0E"/>
+    <SolidColorBrush x:Key="LogBorder" Color="#1F2328"/>
+    <SolidColorBrush x:Key="LogText" Color="#E7EAEE"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
@@ -33,7 +33,7 @@
       <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="6,16,0,7"/>
+      <Setter Property="Margin" Value="6,14,0,7"/>
     </Style>
 
     <Style TargetType="Button">
@@ -41,11 +41,13 @@
       <Setter Property="Padding" Value="12,0"/>
       <Setter Property="Margin" Value="4,0"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Background" Value="{StaticResource PanelBg2}"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
@@ -53,8 +55,10 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="5">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    CornerRadius="4">
+              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
@@ -62,7 +66,7 @@
                 <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{StaticResource LineStrong}"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="ButtonChrome" Property="Background" Value="#0E1013"/>
+                <Setter TargetName="ButtonChrome" Property="Background" Value="#E7EAEE"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.42"/>
@@ -74,21 +78,51 @@
     </Style>
 
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#E7E9ED"/>
-      <Setter Property="BorderBrush" Value="#F4F5F6"/>
-      <Setter Property="Foreground" Value="#0A0B0D"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
     </Style>
 
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{StaticResource DangerSoft}"/>
-      <Setter Property="BorderBrush" Value="#6C3434"/>
-      <Setter Property="Foreground" Value="#F1C9C9"/>
+      <Setter Property="BorderBrush" Value="#FFD0CC"/>
+      <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+    </Style>
+
+    <Style x:Key="SidebarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Margin" Value="0,0,0,8"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+
+    <Style x:Key="SidebarIconButton" TargetType="Button" BasedOn="{StaticResource SidebarButton}">
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <Style x:Key="PagerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Height" Value="32"/>
+      <Setter Property="Margin" Value="3,0"/>
+      <Setter Property="Padding" Value="10,0"/>
+    </Style>
+
+    <Style x:Key="IconPath" TargetType="Path">
+      <Setter Property="Width" Value="15"/>
+      <Setter Property="Height" Value="15"/>
+      <Setter Property="Stretch" Value="Uniform"/>
+      <Setter Property="Stroke" Value="{StaticResource TextSub}"/>
+      <Setter Property="StrokeThickness" Value="1.8"/>
+      <Setter Property="StrokeStartLineCap" Value="Round"/>
+      <Setter Property="StrokeEndLineCap" Value="Round"/>
+      <Setter Property="StrokeLineJoin" Value="Round"/>
+      <Setter Property="Fill" Value="Transparent"/>
     </Style>
 
     <Style TargetType="TextBox">
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Padding" Value="10,5"/>
-      <Setter Property="Background" Value="#292D33"/>
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="CaretBrush" Value="{StaticResource TextMain}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
@@ -100,8 +134,10 @@
             <Border x:Name="BoxChrome" Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="4">
-              <ScrollViewer x:Name="PART_ContentHost"/>
+                    CornerRadius="3">
+              <ScrollViewer x:Name="PART_ContentHost"
+                            Margin="{TemplateBinding Padding}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -116,7 +152,7 @@
     <Style TargetType="ComboBox">
       <Setter Property="Height" Value="32"/>
       <Setter Property="Padding" Value="10,4"/>
-      <Setter Property="Background" Value="#292D33"/>
+      <Setter Property="Background" Value="{StaticResource PanelBg}"/>
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
@@ -134,8 +170,8 @@
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="RowBackground" Value="{StaticResource PanelBg}"/>
       <Setter Property="AlternatingRowBackground" Value="{StaticResource GridAltBg}"/>
-      <Setter Property="HorizontalGridLinesBrush" Value="#3D434C"/>
-      <Setter Property="VerticalGridLinesBrush" Value="#3D434C"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}"/>
+      <Setter Property="VerticalGridLinesBrush" Value="{StaticResource Line}"/>
       <Setter Property="SelectionMode" Value="Extended"/>
       <Setter Property="CanUserResizeRows" Value="False"/>
     </Style>
@@ -145,18 +181,18 @@
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Style.Triggers>
         <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#3A4049"/>
+          <Setter Property="Background" Value="#F1F3F5"/>
         </Trigger>
         <Trigger Property="IsSelected" Value="True">
-          <Setter Property="Background" Value="#454C57"/>
-          <Setter Property="Foreground" Value="#FFFFFF"/>
+          <Setter Property="Background" Value="#E9ECEF"/>
+          <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
         </Trigger>
       </Style.Triggers>
     </Style>
 
     <Style TargetType="DataGridCell">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
-      <Setter Property="BorderBrush" Value="#3D434C"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="Padding" Value="8,0"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -171,7 +207,7 @@
     </Style>
 
     <Style TargetType="DataGridColumnHeader">
-      <Setter Property="Background" Value="#111317"/>
+      <Setter Property="Background" Value="#F3F4F6"/>
       <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -182,6 +218,69 @@
     <Style TargetType="CheckBox">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Border x:Name="CheckBoxChrome" Width="15" Height="15" Background="{StaticResource PanelBg}"
+                      BorderBrush="{StaticResource LineStrong}" BorderThickness="1" CornerRadius="2">
+                <Path x:Name="CheckMark" Data="M 3 7 L 6 10 L 12 4" Stroke="#111111" StrokeThickness="1.8"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+              </Border>
+              <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="CheckBoxChrome" Property="Background" Value="#F1F3F5"/>
+                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="CheckBoxChrome" Property="BorderBrush" Value="{StaticResource TextMain}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ScrollBar}">
+      <Setter Property="Width" Value="12"/>
+      <Setter Property="MinWidth" Value="12"/>
+      <Setter Property="Height" Value="12"/>
+      <Setter Property="MinHeight" Value="12"/>
+      <Setter Property="Background" Value="#F3F4F6"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type ScrollBar}">
+            <Grid Background="{TemplateBinding Background}">
+              <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True">
+                <Track.Thumb>
+                  <Thumb Background="#9CA3AF">
+                    <Thumb.Template>
+                      <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Margin="3"/>
+                      </ControlTemplate>
+                    </Thumb.Template>
+                  </Thumb>
+                </Track.Thumb>
+              </Track>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="Height" Value="12"/>
+                <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+              </Trigger>
+              <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="12"/>
+                <Setter Property="Height" Value="Auto"/>
+                <Setter Property="MinHeight" Value="0"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </Application.Resources>
 </Application>

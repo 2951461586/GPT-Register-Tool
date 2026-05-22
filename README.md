@@ -55,7 +55,7 @@ Required choices:
 python chatgpt_phone_reg.py --count 1
 ```
 
-6. Build and start the WPF app. The canonical executable output is `dist/net10/SmsWorkbench.exe`; the build script removes the intermediate `SmsWorkbench/bin/Release/net10.0-windows` tree after publishing.
+6. Build and start the WPF app. The canonical executable output is `dist/net10/SmsWorkbench.exe`; the build script removes intermediate `SmsWorkbench/bin/Debug/net10.0-windows` and `SmsWorkbench/bin/Release/net10.0-windows` workspaces after publishing.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1

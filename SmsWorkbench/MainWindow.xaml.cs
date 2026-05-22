@@ -1143,11 +1143,49 @@ namespace SmsWorkbench
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
             sidebarCollapsed = !sidebarCollapsed;
-            SidebarColumn.Width = new GridLength(sidebarCollapsed ? 64 : 248);
-            SidebarBrand.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            SidebarNavScroll.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            SidebarBottomActions.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarColumn.Width = new GridLength(sidebarCollapsed ? 64 : 256);
+            SidebarHeaderPanel.Margin = sidebarCollapsed ? new Thickness(10, 14, 10, 10) : new Thickness(12, 14, 12, 14);
             SidebarToggleButton.Content = sidebarCollapsed ? "›" : "‹";
+            SidebarToggleButton.Width = sidebarCollapsed ? 34 : 32;
+            SidebarBrandColumn.Width = sidebarCollapsed ? new GridLength(0) : new GridLength(38);
+            SidebarTextColumn.Width = sidebarCollapsed ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            SidebarToggleColumn.Width = sidebarCollapsed ? new GridLength(1, GridUnitType.Star) : new GridLength(40);
+            SidebarBrand.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarHeaderText.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarNavScroll.Visibility = Visibility.Visible;
+            SidebarBottomActions.Visibility = Visibility.Visible;
+            SidebarNavStack.Margin = sidebarCollapsed ? new Thickness(10, 0, 10, 14) : new Thickness(12, 0, 12, 14);
+            SidebarBottomActions.Margin = sidebarCollapsed ? new Thickness(10, 0, 10, 14) : new Thickness(12, 0, 12, 14);
+            SetSidebarCompact(SidebarNavScroll, sidebarCollapsed);
+            SetSidebarCompact(SidebarBottomActions, sidebarCollapsed);
+        }
+
+        private void SetSidebarCompact(DependencyObject root, bool compact)
+        {
+            Style buttonStyle = (Style)FindResource(compact ? "SidebarIconButton" : "SidebarButton");
+            SetSidebarCompactRecursive(root, compact, buttonStyle);
+        }
+
+        private void SetSidebarCompactRecursive(DependencyObject node, bool compact, Style buttonStyle)
+        {
+            if (node is FrameworkElement element)
+            {
+                string tag = element.Tag as string ?? "";
+                if (tag == "SidebarText" || tag == "SidebarSection")
+                {
+                    element.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                }
+                if (node is Button button && button != SidebarToggleButton)
+                {
+                    button.Style = buttonStyle;
+                }
+            }
+
+            int children = VisualTreeHelper.GetChildrenCount(node);
+            for (int i = 0; i < children; i++)
+            {
+                SetSidebarCompactRecursive(VisualTreeHelper.GetChild(node, i), compact, buttonStyle);
+            }
         }
 
         private void OpenSessions_Click(object sender, RoutedEventArgs e) => OpenPath(GetSessionsDir());
@@ -2474,55 +2512,6 @@ namespace SmsWorkbench
         private void ClearLog_Click(object sender, RoutedEventArgs e)
         {
             LogText = "";
-        }
-
-        private void ToggleTheme_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ApplyTheme(true);
-                Log("已应用黑灰极简主题。");
-            }
-            catch (Exception ex)
-            {
-                Log("主题切换失败：" + ex.Message);
-                MessageBox.Show("主题切换失败：" + ex.Message, "主题切换", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private void ApplyTheme(bool dark)
-        {
-            SetBrush("AppBg", "#25282E");
-            SetBrush("PanelBg", "#30343B");
-            SetBrush("PanelBg2", "#383D45");
-            SetBrush("PanelHover", "#444A54");
-            SetBrush("Line", "#4C535D");
-            SetBrush("LineStrong", "#626A76");
-            SetBrush("Primary", "#E7E9ED");
-            SetBrush("PrimarySoft", "#30343B");
-            SetBrush("Danger", "#B94A48");
-            SetBrush("DangerSoft", "#3A2022");
-            SetBrush("TextMain", "#F2F3F5");
-            SetBrush("TextSub", "#A5ABB4");
-            SetBrush("TextMuted", "#858C97");
-            SetBrush("SidebarBg", "#111317");
-            SetBrush("GridAltBg", "#2A2E35");
-            SetBrush("SplitterBg", "#3E444D");
-            SetBrush("StatusBg", "#2A2E35");
-            SetBrush("LogBg", "#0A0B0D");
-            SetBrush("LogBorder", "#1F2227");
-            SetBrush("LogText", "#D7DBE2");
-        }
-
-        private void SetBrush(string key, string color)
-        {
-            Color parsed = (Color)ColorConverter.ConvertFromString(color);
-            if (Application.Current?.Resources[key] is SolidColorBrush brush && !brush.IsFrozen)
-            {
-                brush.Color = parsed;
-                return;
-            }
-            Application.Current.Resources[key] = new SolidColorBrush(parsed);
         }
 
         private void Log(string text)
