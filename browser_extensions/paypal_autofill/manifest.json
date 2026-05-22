@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "GPT 支付填表助手",
-  "version": "1.2.1",
-  "description": "本地支付填表助手，支持验证码轮询、卡池/手机号池轮换和一键执行。",
+  "name": "GPT 支付状态机",
+  "version": "1.3.0",
+  "description": "本地 PayPal 支付自动化插件，支持状态机执行、节点诊断、验证码轮询、卡池和手机号池轮换。",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -33,7 +33,7 @@
     "https://mail-api.yuecheng.shop/*"
   ],
   "action": {
-    "default_title": "支付填表助手",
+    "default_title": "GPT 支付状态机",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>支付填表助手</title>
+    <title>PayPal 状态机</title>
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
@@ -11,22 +11,38 @@
       <header>
         <span class="mark" aria-hidden="true"></span>
         <div>
-          <h1>支付填表助手</h1>
+          <h1>PayPal 状态机</h1>
           <p id="status">就绪</p>
         </div>
       </header>
 
+      <section class="runtime">
+        <div>
+          <span>当前节点</span>
+          <strong id="stageLabel">未识别</strong>
+        </div>
+        <div>
+          <span>当前卡</span>
+          <strong id="cardSummary">无</strong>
+        </div>
+        <div>
+          <span>当前号</span>
+          <strong id="phoneSummary">无</strong>
+        </div>
+      </section>
+
       <section class="actions">
-        <button id="runAll" class="primary" type="button">一键执行</button>
-        <button id="fill" type="button">填表</button>
+        <button id="runAll" class="primary" type="button">一键流程</button>
+        <button id="step" type="button">执行当前节点</button>
         <button id="fillOtp" type="button">取码并继续</button>
+        <button id="togglePanel" type="button">页面浮窗</button>
         <button id="nextCard" type="button">下一个卡</button>
         <button id="nextPhone" type="button">下一个手机号</button>
       </section>
 
-      <section class="summary">
-        <div><span>当前卡</span><strong id="cardSummary">无</strong></div>
-        <div><span>当前号</span><strong id="phoneSummary">无</strong></div>
+      <section class="timeline">
+        <div class="section-title">最近节点</div>
+        <ol id="steps"></ol>
       </section>
 
       <label>备用验证码链接
@@ -42,10 +58,11 @@
       </label>
 
       <footer>
-        <button id="save" type="button">保存</button>
-        <button id="togglePanel" type="button">浮窗</button>
+        <button id="save" type="button">保存配置</button>
+        <button id="refreshState" type="button">刷新状态</button>
       </footer>
     </main>
+    <script src="profile.generated.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
