@@ -77,6 +77,36 @@ class CpaImportTests(unittest.TestCase):
             "active",
         )
 
+    def test_probe_cpa_codex_quota_detects_invalidated_token(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {
+                    "status_code": 401,
+                    "body": {
+                        "error": {
+                            "message": "Your authentication token has been invalidated. Please try signing in again."
+                        }
+                    },
+                }
+
+        with patch.object(cpa_import.curl_requests, "post", return_value=FakeResponse()) as posted:
+            result = cpa_import.probe_cpa_codex_quota(
+                {"email": "bad@example.com", "auth_index": "abc123"},
+                api_url="https://cpa.example/v0/management/auth-files",
+                api_token="token",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "token_invalid")
+        self.assertEqual(result["status_code"], 401)
+        call = posted.call_args
+        self.assertEqual(call.args[0], "https://cpa.example/v0/management/api-call")
+        self.assertEqual(call.kwargs["json"]["authIndex"], "abc123")
+        self.assertEqual(call.kwargs["json"]["url"], cpa_import.CODEX_USAGE_URL)
+
     def test_auto_reimport_cpa_401_filters_domain_and_imports_invalid(self):
         with patch.object(cpa_import, "fetch_cpa_auth_files", return_value={
             "ok": True,
@@ -100,6 +130,29 @@ class CpaImportTests(unittest.TestCase):
         self.assertEqual(result["emails"], ["bad@liziai.cloud"])
         imported.assert_called_once()
         self.assertEqual(imported.call_args.args[0], ["bad@liziai.cloud"])
+
+    def test_auto_reimport_cpa_401_uses_quota_probe_for_active_codex_file(self):
+        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value={
+            "ok": True,
+            "files": [
+                {"email": "bad@liziai.cloud", "status": "active", "auth_index": "abc123", "type": "codex"},
+            ],
+        }):
+            with patch.object(cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management/auth-files", "token")):
+                with patch.object(cpa_import, "probe_cpa_codex_quota", return_value={"ok": True, "status": "token_invalid", "status_code": 401}) as probed:
+                    with patch.object(cpa_import, "import_cpa_sessions", return_value={
+                        "ok": True,
+                        "total": 1,
+                        "success": 1,
+                        "failed": 0,
+                        "results": [],
+                    }) as imported:
+                        result = cpa_import.auto_reimport_cpa_401(domain_filter="liziai.cloud")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["emails"], ["bad@liziai.cloud"])
+        probed.assert_called_once()
+        imported.assert_called_once()
 
 
 if __name__ == "__main__":

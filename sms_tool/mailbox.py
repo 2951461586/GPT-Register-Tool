@@ -425,6 +425,18 @@ def _parse_chatai_mailbox_file(path):
         line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
+        if line.lower().startswith("cfworker://") or line.lower().endswith("@edu.liziai.cloud"):
+            email = line.split("://", 1)[1].strip() if "://" in line else line
+            email = _normalize_mailbox_email(email)
+            if not email:
+                print(f"[!] Skip malformed CFWorker email {chatai_path}:{line_no}")
+                continue
+            records.append(MailboxAccount(
+                email=email.lower(),
+                source=str(chatai_path),
+                provider="cfworker",
+            ))
+            continue
         if "----" in line:
             parts = line.split("----")
             if len(parts) < 4:

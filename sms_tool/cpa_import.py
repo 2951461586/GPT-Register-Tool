@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import time
@@ -13,6 +14,14 @@ from .config import CFG
 from .paths import output_dir
 from .session_refresh import _load_seed_session
 from .storage import get_account_record, upsert_account
+
+
+CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+CODEX_QUOTA_HEADERS = {
+    "Authorization": "Bearer $TOKEN$",
+    "Content-Type": "application/json",
+    "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
+}
 
 
 def import_cpa_session(
@@ -170,6 +179,7 @@ def auto_reimport_cpa_401(
     for item in auth_files_result.get("files", []):
         email = extract_cpa_auth_email(item)
         status = classify_cpa_auth_file(item)
+        quota_probe = None
         if not email:
             skipped.append({"reason": "missing_email", "status": status})
             continue
@@ -177,7 +187,14 @@ def auto_reimport_cpa_401(
             skipped.append({"email": email, "reason": "domain_mismatch", "status": status})
             continue
         if status != "token_invalid":
-            skipped.append({"email": email, "reason": "not_401", "status": status})
+            quota_probe = probe_cpa_codex_quota(item, target_url, token)
+            if quota_probe.get("status") == "token_invalid":
+                status = "token_invalid"
+        if status != "token_invalid":
+            skipped_item = {"email": email, "reason": "not_401", "status": status}
+            if quota_probe:
+                skipped_item["quota_probe"] = quota_probe
+            skipped.append(skipped_item)
             continue
         if email in seen:
             continue
@@ -249,6 +266,69 @@ def fetch_cpa_auth_files(api_url="", api_token="", timeout=30):
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def probe_cpa_codex_quota(item, api_url="", api_token="", timeout=30):
+    if not isinstance(item, dict):
+        return {"ok": False, "status": "unknown", "error": "invalid_auth_file"}
+    auth_index = _normalize_auth_index(item.get("auth_index") or item.get("authIndex") or item.get("auth-index"))
+    if not auth_index:
+        return {"ok": False, "status": "unknown", "error": "missing_auth_index"}
+
+    resolved_api_url, resolved_api_token = _resolve_cpa_config(api_url=api_url, api_token=api_token)
+    api_token = resolved_api_token
+    target_url = _normalize_cpa_api_call_url(resolved_api_url)
+    if not target_url:
+        return {"ok": False, "status": "unknown", "error": "missing_cpa_api_url"}
+    if not api_token:
+        return {"ok": False, "status": "unknown", "error": "missing_cpa_api_token"}
+
+    request_headers = dict(CODEX_QUOTA_HEADERS)
+    account_id = _extract_chatgpt_account_id(item)
+    if account_id:
+        request_headers["Chatgpt-Account-Id"] = account_id
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_token}",
+        "X-Management-Key": api_token,
+    }
+    body = {
+        "authIndex": auth_index,
+        "method": "GET",
+        "url": CODEX_USAGE_URL,
+        "header": request_headers,
+    }
+    try:
+        response = curl_requests.post(
+            target_url,
+            headers=headers,
+            json=body,
+            timeout=timeout,
+            impersonate="chrome110",
+        )
+        try:
+            payload = response.json()
+        except Exception:
+            payload = {"body": response.text[:500]}
+        if response.status_code < 200 or response.status_code >= 300:
+            return {
+                "ok": False,
+                "status": "unknown",
+                "status_code": response.status_code,
+                "error": _cpa_error_text(payload, response.status_code),
+            }
+        quota_status = _extract_api_call_status(payload)
+        error_text = _extract_api_call_error_text(payload)
+        status = "token_invalid" if _is_token_invalid_quota_response(quota_status, error_text) else "active"
+        return {
+            "ok": True,
+            "status": status,
+            "status_code": quota_status,
+            "error": error_text,
+        }
+    except Exception as exc:
+        return {"ok": False, "status": "unknown", "error": str(exc)}
 
 
 def classify_cpa_auth_file(item):
@@ -404,6 +484,105 @@ def _normalize_cpa_auth_files_url(api_url):
     if lower.endswith("/v0"):
         return f"{normalized}/management/auth-files"
     return f"{normalized}/v0/management/auth-files"
+
+
+def _normalize_cpa_api_call_url(api_url):
+    normalized = str(api_url or "").strip().rstrip("/")
+    lower = normalized.lower()
+    if not normalized:
+        return ""
+    if lower.endswith("/api-call"):
+        return normalized
+    if lower.endswith("/auth-files"):
+        return normalized[: -len("/auth-files")] + "/api-call"
+    if lower.endswith("/v0/management") or lower.endswith("/management"):
+        return f"{normalized}/api-call"
+    if lower.endswith("/v0"):
+        return f"{normalized}/management/api-call"
+    return f"{normalized}/v0/management/api-call"
+
+
+def _normalize_auth_index(value):
+    text = str(value or "").strip()
+    return text if text else ""
+
+
+def _extract_chatgpt_account_id(item):
+    candidates = []
+    for container in (item, item.get("metadata"), item.get("attributes")):
+        if isinstance(container, dict):
+            candidates.append(container.get("id_token"))
+    for candidate in candidates:
+        account_id = _extract_chatgpt_account_id_from_token(candidate)
+        if account_id:
+            return account_id
+    return ""
+
+
+def _extract_chatgpt_account_id_from_token(value):
+    if isinstance(value, dict):
+        return str(value.get("chatgpt_account_id") or value.get("chatgptAccountId") or "").strip()
+    token = str(value or "").strip()
+    parts = token.split(".")
+    if len(parts) < 2:
+        return ""
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(payload.encode("ascii"))
+        data = json.loads(decoded.decode("utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("chatgpt_account_id") or data.get("chatgptAccountId") or "").strip()
+
+
+def _extract_api_call_status(payload):
+    if not isinstance(payload, dict):
+        return 0
+    for key in ("status_code", "statusCode"):
+        try:
+            value = int(payload.get(key) or 0)
+        except Exception:
+            value = 0
+        if value:
+            return value
+    return 0
+
+
+def _extract_api_call_error_text(payload):
+    if not isinstance(payload, dict):
+        return str(payload or "")[:500]
+    values = []
+    body = payload.get("body")
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            values.append(error.get("message"))
+            values.append(error.get("code"))
+        else:
+            values.append(error)
+        values.append(body.get("message"))
+    else:
+        values.append(body)
+    values.append(payload.get("bodyText"))
+    values.append(payload.get("error"))
+    values.append(payload.get("message"))
+    text = " ".join(str(value or "") for value in values if str(value or "").strip()).strip()
+    return text[:500]
+
+
+def _is_token_invalid_quota_response(status_code, error_text):
+    text = str(error_text or "").lower()
+    return (
+        int(status_code or 0) == 401
+        or re.search(
+            r"\b401\b|unauthorized|authentication token has been invalidated|token has been invalidated|invalid_grant|refresh_token",
+            text,
+        )
+        is not None
+    )
 
 
 def _parse_cpa_auth_files_payload(payload):

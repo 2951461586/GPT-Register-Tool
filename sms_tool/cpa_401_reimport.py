@@ -2,6 +2,7 @@ from .codex_export import export_codex_session
 from .cpa_import import (
     classify_cpa_auth_file,
     extract_cpa_auth_email,
+    probe_cpa_codex_quota,
 )
 from .import_targets import fetch_target_auth_files, import_account_session, normalize_import_target, target_label
 from .mailbox import MailboxAccount, _cfworker_cfg, _fetch_mailbox_messages, _load_mailbox_pool
@@ -68,11 +69,19 @@ def reimport_cpa_401_survivors(
     for item in auth_files.get("files", []):
         email = extract_cpa_auth_email(item)
         status = classify_cpa_auth_file(item)
+        quota_probe = None
         if not email:
             skipped.append({"reason": "missing_email", "status": status})
             continue
+        if target == "cpa" and status != "token_invalid":
+            quota_probe = probe_cpa_codex_quota(item, api_url, api_token)
+            if quota_probe.get("status") == "token_invalid":
+                status = "token_invalid"
         if status != "token_invalid":
-            skipped.append({"email": email, "reason": "not_401", "status": status})
+            skipped_item = {"email": email, "reason": "not_401", "status": status}
+            if quota_probe:
+                skipped_item["quota_probe"] = quota_probe
+            skipped.append(skipped_item)
             continue
         if email in seen:
             continue
@@ -114,6 +123,16 @@ def reimport_cpa_401_survivors(
             force_email_otp_login=True,
         )
         if not export_result.get("ok"):
+            if _is_deactivated_export_result(export_result):
+                print(f"[SKIP] {email} is deleted or deactivated")
+                results.append({
+                    "ok": False,
+                    "email": email,
+                    "skipped": True,
+                    "reason": "account_deactivated",
+                    "export": export_result,
+                })
+                continue
             results.append({
                 "ok": False,
                 "email": email,
@@ -164,6 +183,22 @@ def reimport_cpa_401_survivors(
         "skipped": skipped,
         "results": results,
     }
+
+
+def _is_deactivated_export_result(result):
+    if not isinstance(result, dict):
+        return False
+    if result.get("terminal") and result.get("error") == "account_deactivated":
+        return True
+    refresh = result.get("refresh") if isinstance(result.get("refresh"), dict) else {}
+    values = [
+        result.get("error"),
+        result.get("body"),
+        refresh.get("error"),
+        refresh.get("body"),
+    ]
+    text = " ".join(str(value or "") for value in values).lower()
+    return "account_deactivated" in text or "deleted or deactivated" in text
 
 
 def has_deactivation_notice(mailbox, target_email, limit=100, proxy=None):

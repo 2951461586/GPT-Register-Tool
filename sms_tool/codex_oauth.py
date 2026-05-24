@@ -180,6 +180,16 @@ def _passwordless_login_and_exchange(session, oauth, data, did, current_url, pro
             last_error = f"email_otp_validate_failed:{validate.status_code}"
             last_validate_body = validate.text[:300]
             print(f"[*] Email OTP validate failed: {validate.status_code} {last_validate_body}")
+            if _is_account_deactivated_response(validate.status_code, validate.text):
+                return {
+                    "ok": False,
+                    "mode": "codex_oauth_pkce",
+                    "error": "account_deactivated",
+                    "terminal": True,
+                    "fallback_from": reason,
+                    "last_url": _safe_url(current_url),
+                    "body": last_validate_body,
+                }
             continue
         next_url = _next_url(validate)
         _, current_url = _follow_redirects(session, next_url, proxy=proxy)
@@ -541,6 +551,16 @@ def _allow_passwordless_takeover():
 
 def _auto_phone_verification():
     return bool(_codex_oauth_cfg().get("auto_phone_verification", False))
+
+
+def _is_account_deactivated_response(status_code, text):
+    body = str(text or "").lower()
+    return int(status_code or 0) in (403, 404) and (
+        "account_deactivated" in body
+        or "deleted or deactivated" in body
+        or "account has been deleted" in body
+        or "account has been deactivated" in body
+    )
 
 
 def _has_callback_code(url):

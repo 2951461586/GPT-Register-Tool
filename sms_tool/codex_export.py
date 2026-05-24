@@ -42,6 +42,14 @@ def export_codex_session(
         )
         if refresh_result.get("ok"):
             data, json_path = _load_seed_session(email=target_email, session_file=json_path)
+        elif _is_terminal_account_deactivated(refresh_result):
+            return {
+                "ok": False,
+                "email": target_email,
+                "error": "account_deactivated",
+                "terminal": True,
+                "refresh": refresh_result,
+            }
 
     codex_json, warnings = build_codex_json(data)
     if not codex_json.get("access_token"):
@@ -136,6 +144,20 @@ def export_codex_sessions(
         "failed": len(emails) - ok_count,
         "results": results,
     }
+
+
+def _is_terminal_account_deactivated(result):
+    if not isinstance(result, dict):
+        return False
+    if result.get("terminal") and result.get("error") == "account_deactivated":
+        return True
+    text = " ".join([
+        str(result.get("error") or ""),
+        str(result.get("body") or ""),
+        str((result.get("refresh") or {}).get("error") if isinstance(result.get("refresh"), dict) else ""),
+        str((result.get("refresh") or {}).get("body") if isinstance(result.get("refresh"), dict) else ""),
+    ]).lower()
+    return "account_deactivated" in text or "deleted or deactivated" in text
 
 
 def build_codex_json(data):
