@@ -18,13 +18,6 @@
     "email_registration": {
         "use_as_username": false,
         "token_file": "mailbox_tokens.txt",
-        "luckmail_api_key": "YOUR_LUCKMAIL_API_KEY",
-        "luckmail_base_url": "https://mails.luckyous.com",
-        "luckmail_project_code": "openai",
-        "luckmail_email_type": "self_built",
-        "luckmail_purchase_project_code": "openai",
-        "luckmail_purchase_email_type": "ms_imap",
-        "luckmail_purchase_domain": "outlook.com",
         "otp_poll_interval": 2,
         "email": "",
         "password": "",

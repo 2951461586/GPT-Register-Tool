@@ -30,10 +30,6 @@ namespace SmsWorkbench
         private string pageSizeText = "25";
         private string proxyText = "";
         private object scopeFilter = "全部";
-        private string luckmailTokenText = "";
-        private string purchaseProjectText = "openai";
-        private string purchaseEmailTypeText = "ms_imap";
-        private string purchaseDomainText = "outlook.com";
         private bool skipPaypalLink;
         private string logText = "";
         private string statusText = "就绪";
@@ -86,30 +82,6 @@ namespace SmsWorkbench
         {
             get => scopeFilter;
             set { scopeFilter = value; OnPropertyChanged(nameof(ScopeFilter)); currentPage = 1; RefreshPagedRows(); }
-        }
-
-        public string LuckmailTokenText
-        {
-            get => luckmailTokenText;
-            set { luckmailTokenText = value ?? ""; OnPropertyChanged(nameof(LuckmailTokenText)); }
-        }
-
-        public string PurchaseProjectText
-        {
-            get => purchaseProjectText;
-            set { purchaseProjectText = value ?? ""; OnPropertyChanged(nameof(PurchaseProjectText)); }
-        }
-
-        public string PurchaseEmailTypeText
-        {
-            get => purchaseEmailTypeText;
-            set { purchaseEmailTypeText = value ?? ""; OnPropertyChanged(nameof(PurchaseEmailTypeText)); }
-        }
-
-        public string PurchaseDomainText
-        {
-            get => purchaseDomainText;
-            set { purchaseDomainText = value ?? ""; OnPropertyChanged(nameof(PurchaseDomainText)); }
         }
 
         public bool SkipPaypalLink
@@ -188,12 +160,6 @@ namespace SmsWorkbench
             }
 
             ScopeFilter = "全部";
-            PurchaseProjectText = ConfigString("email_registration", "luckmail_purchase_project_code");
-            if (PurchaseProjectText.Length == 0) PurchaseProjectText = "openai";
-            PurchaseEmailTypeText = ConfigString("email_registration", "luckmail_purchase_email_type");
-            if (PurchaseEmailTypeText.Length == 0) PurchaseEmailTypeText = "ms_imap";
-            PurchaseDomainText = ConfigString("email_registration", "luckmail_purchase_domain");
-            if (PurchaseDomainText.Length == 0) PurchaseDomainText = "outlook.com";
             ProxyText = ConfigString("proxy", "default");
             RefreshPools();
         }
@@ -590,35 +556,12 @@ namespace SmsWorkbench
             catch { }
         }
 
-        private void BuyAndRegister_Click(object sender, RoutedEventArgs e)
-        {
-            var args = new List<string> { "--buy-luckmail-mailbox", "--count", CountValue().ToString(), "--workers", "4" };
-            AddPurchaseArgs(args);
-            AddProxy(args);
-            AddPaypalOption(args);
-            RunBackend("购买邮箱并注册", args);
-        }
-
         private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
             AddProxy(args);
             AddPaypalOption(args);
             RunBackend("邮箱池注册", args);
-        }
-
-        private void RegisterWithToken_Click(object sender, RoutedEventArgs e)
-        {
-            string token = (LuckmailTokenText ?? "").Trim();
-            if (token.Length == 0)
-            {
-                MessageBox.Show("请先输入 LuckMail 邮箱 token。", "缺少 token", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            var args = new List<string> { "--luckmail-token", token };
-            AddProxy(args);
-            AddPaypalOption(args);
-            RunBackend("Token注册", args);
         }
 
         private void ImportChataiMailbox_Click(object sender, RoutedEventArgs e)
@@ -1140,6 +1083,7 @@ namespace SmsWorkbench
 
             var task = new TaskRow { Name = "批次 " + taskSeq++, Task = taskName, Status = "运行中", Info = string.Join(" ", args) };
             Tasks.Add(task);
+            ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
 
             var psi = new ProcessStartInfo
@@ -1167,6 +1111,7 @@ namespace SmsWorkbench
                     task.DoneAt = SafeTime(DateTime.Now);
                     StatusText = taskName + " 已结束";
                     RefreshPools();
+                    ScrollTaskGridToBottom();
                 }), DispatcherPriority.Background);
             };
 
@@ -1183,6 +1128,19 @@ namespace SmsWorkbench
                 task.Status = "启动失败";
                 Log("启动失败：" + ex.Message);
             }
+        }
+
+        private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();
+
+        private void ScrollTaskGridToBottom()
+        {
+            if (TaskGrid == null || Tasks.Count == 0) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                object last = Tasks[Tasks.Count - 1];
+                TaskGrid.SelectedItem = last;
+                TaskGrid.ScrollIntoView(last);
+            }), DispatcherPriority.Background);
         }
 
         private void DeleteSelected_Click(object sender, RoutedEventArgs e)
@@ -2610,13 +2568,8 @@ namespace SmsWorkbench
             var fields = new Dictionary<string, TextBox>();
             var categories = new List<ConfigCategory>();
 
-            var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱 / LuckMail", "邮箱池、购买参数和 OTP 轮询配置。");
+            var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱", "邮箱池和 OTP 轮询配置。");
             int row = 0;
-            AddConfigField(mailForm, fields, row++, "LuckMail API Key", "luckmail_api_key", GetString(email, "luckmail_api_key"));
-            AddConfigField(mailForm, fields, row++, "LuckMail Base URL", "luckmail_base_url", GetString(email, "luckmail_base_url"));
-            AddConfigField(mailForm, fields, row++, "购买项目", "luckmail_purchase_project_code", GetString(email, "luckmail_purchase_project_code"));
-            AddConfigField(mailForm, fields, row++, "邮箱类型", "luckmail_purchase_email_type", GetString(email, "luckmail_purchase_email_type"));
-            AddConfigField(mailForm, fields, row++, "邮箱域名", "luckmail_purchase_domain", GetString(email, "luckmail_purchase_domain"));
             AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
 
@@ -2667,11 +2620,6 @@ namespace SmsWorkbench
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
             {
-                email["luckmail_api_key"] = fields["luckmail_api_key"].Text.Trim();
-                email["luckmail_base_url"] = fields["luckmail_base_url"].Text.Trim();
-                email["luckmail_purchase_project_code"] = fields["luckmail_purchase_project_code"].Text.Trim();
-                email["luckmail_purchase_email_type"] = fields["luckmail_purchase_email_type"].Text.Trim();
-                email["luckmail_purchase_domain"] = fields["luckmail_purchase_domain"].Text.Trim();
                 email["otp_poll_interval"] = fields["otp_poll_interval"].Text.Trim();
                 email["token_file"] = fields["token_file"].Text.Trim();
                 email["cfworker_url"] = fields["cfworker_url"].Text.Trim();
@@ -2702,9 +2650,6 @@ namespace SmsWorkbench
                 config["cpa_mode"] = cpaMode;
                 config["sub2api"] = sub2api;
                 SaveConfig(path, config);
-                PurchaseProjectText = fields["luckmail_purchase_project_code"].Text.Trim();
-                PurchaseEmailTypeText = fields["luckmail_purchase_email_type"].Text.Trim();
-                PurchaseDomainText = fields["luckmail_purchase_domain"].Text.Trim();
                 ProxyText = fields["default_proxy"].Text.Trim();
                 Log("配置已保存。");
                 dialog.Close();
@@ -2855,25 +2800,6 @@ namespace SmsWorkbench
             }
         }
 
-        private void AddPurchaseArgs(List<string> args)
-        {
-            if (!string.IsNullOrWhiteSpace(PurchaseProjectText))
-            {
-                args.Add("--luckmail-purchase-project");
-                args.Add(PurchaseProjectText.Trim());
-            }
-            if (!string.IsNullOrWhiteSpace(PurchaseEmailTypeText))
-            {
-                args.Add("--luckmail-purchase-email-type");
-                args.Add(PurchaseEmailTypeText.Trim());
-            }
-            if (!string.IsNullOrWhiteSpace(PurchaseDomainText))
-            {
-                args.Add("--luckmail-purchase-domain");
-                args.Add(PurchaseDomainText.Trim());
-            }
-        }
-
         private void AddPaypalOption(List<string> args)
         {
             if (SkipPaypalLink)
@@ -2985,7 +2911,11 @@ namespace SmsWorkbench
 
         private string GetImportedStatus(Dictionary<string, object> data)
         {
-            if (IsImportOk(data, "sub2api_import") || IsImportOk(data, "cpa_import")) return "已导入CPA/SUB2";
+            bool cpaImported = IsImportOk(data, "cpa_import");
+            bool sub2Imported = IsImportOk(data, "sub2api_import");
+            if (cpaImported && sub2Imported) return "已导入CPA/SUB2";
+            if (cpaImported) return "已导入CPA";
+            if (sub2Imported) return "已导入SUB2";
             return "";
         }
 
