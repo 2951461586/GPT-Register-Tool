@@ -123,6 +123,27 @@ class Sub2ApiImportTests(unittest.TestCase):
         self.assertEqual(captured.get("x-api-key"), "admin-secret")
         self.assertNotIn("Authorization", captured)
 
+    def test_resolve_proxy_id_randomizes_configured_proxy_id_list(self):
+        with patch.object(sub2api_import.random, "choice", return_value=4) as choice:
+            proxy_id = sub2api_import._resolve_proxy_id(
+                "https://sub.example",
+                "admin-secret",
+                proxy_id="1,2,3,4,5",
+            )
+
+        self.assertEqual(proxy_id, 4)
+        choice.assert_called_once_with([1, 2, 3, 4, 5])
+
+    def test_resolve_proxy_id_uses_default_pool_when_not_configured(self):
+        with patch.object(sub2api_import.random, "choice", return_value=2) as choice:
+            proxy_id = sub2api_import._resolve_proxy_id(
+                "https://sub.example",
+                "admin-secret",
+            )
+
+        self.assertEqual(proxy_id, 2)
+        choice.assert_called_once_with(sub2api_import.DEFAULT_PROXY_IDS)
+
     def test_fetch_sub2api_auth_files_normalizes_error_account_for_401_filter(self):
         def fake_request(origin, path, token="", method="GET", body=None, timeout=30):
             if path.startswith("/api/v1/admin/accounts"):
