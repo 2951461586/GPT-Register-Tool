@@ -1,4 +1,5 @@
 import json
+import random
 import re
 import time
 import urllib.parse
@@ -14,6 +15,7 @@ from .storage import get_account_record, upsert_account
 
 
 DEFAULT_GROUP_NAME = "codex"
+DEFAULT_PROXY_IDS = (1, 2, 3, 4, 5)
 
 
 def import_sub2api_session(
@@ -389,9 +391,12 @@ def _resolve_proxy_id(origin, token, proxy_name="", proxy_id=None):
     parsed_id = _as_int(proxy_id)
     if parsed_id > 0:
         return parsed_id
+    parsed_ids = _parse_int_list(proxy_id)
+    if parsed_ids:
+        return random.choice(parsed_ids)
     name = str(proxy_name or "").strip()
     if not name:
-        return None
+        return random.choice(DEFAULT_PROXY_IDS)
     result = _request_json(origin, "/api/v1/admin/proxies/all?with_count=true", token=token, method="GET")
     if not result.get("ok"):
         return result

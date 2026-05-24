@@ -76,7 +76,7 @@
         "group_name": "codex",
         "group_ids": "",
         "proxy_name": "",
-        "proxy_id": "",
+        "proxy_id": "1,2,3,4,5",
         "priority": 1,
         "concurrency": 10
     },
