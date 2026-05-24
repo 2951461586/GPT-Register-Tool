@@ -26,7 +26,7 @@ cd GPT-Register-Tool
 python -m pip install -r requirements.txt
 ```
 
-`requirement.txt` is kept as a compatibility alias for environments that expect the singular filename.
+`requirements.txt` is the only dependency manifest kept in the repository.
 
 3. Create local config.
 
@@ -182,6 +182,33 @@ chrome.exe --new-window --incognito <paypal_url>
 If Chrome is not installed in a standard location, the app falls back to the system default browser.
 
 The account list deduplicates rows by normalized email. When a mailbox pool entry later gains SQLite/session status, the SQLite/session row is shown instead of a second duplicate mailbox row.
+
+## Project Modules
+
+The project is split into explicit responsibility seams:
+
+- `chatgpt_phone_reg.py`: compatibility entrypoint that only delegates into `sms_tool.cli`.
+- `sms_tool.cli`: argument parsing and command orchestration. Optional Codex, CPA, PayPal payment, and session-refresh modules are imported lazily only by the command that needs them.
+- `sms_tool.mailbox`: mailbox pool parsing, LuckMail/token mailbox handling, Microsoft token exchange, and OTP polling.
+- `sms_tool.registration`: ChatGPT signup protocol, email OTP validation, access-token retrieval, and batch worker limits.
+- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal link generation and safe persisted-link regeneration.
+- `sms_tool.paypal_nocard`: explicit no-card PayPal agreement payment flow. It is not part of default registration.
+- `sms_tool.codex_oauth`, `sms_tool.codex_export`, `sms_tool.cpa_import`: Codex OAuth/export and CPA upload boundaries.
+- `sms_tool.storage`: SQLite schema, migrations, deduplication, status updates, and session-index rebuilds.
+- `SmsWorkbench`: WPF launcher and management UI. It starts CLI commands and displays local state; protocol details stay in Python modules.
+- `browser_extensions/paypal_autofill`: optional Chrome helper for checkout form filling, OTP polling, and pool rotation.
+
+The same split is maintained in [docs/architecture.md](docs/architecture.md).
+
+## Tests
+
+Tests are offline by default and live under `tests/`.
+
+```powershell
+python -m unittest discover -s tests
+```
+
+See [tests/README.md](tests/README.md) for file-level test ownership. Live browser, network, and SQLite smoke checks must stay opt-in through explicit commands or environment variables.
 
 ## Data and Git Hygiene
 

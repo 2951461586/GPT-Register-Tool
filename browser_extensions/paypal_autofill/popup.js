@@ -115,7 +115,8 @@ function readFormProfile() {
     options: {
       autoSubmit: true,
       rotateOnSuccess: true,
-      useAddressApi: true
+      useAddressApi: true,
+      autoRun: DEFAULT_PROFILE.options?.autoRun === true
     }
   };
 }
@@ -131,6 +132,9 @@ async function readState() {
     phone: shouldSeedPools ? DEFAULT_PROFILE.phone : storedProfile.phone || DEFAULT_PROFILE.phone || "",
     otpUrl: shouldSeedPools ? DEFAULT_PROFILE.otpUrl : storedProfile.otpUrl || DEFAULT_PROFILE.otpUrl || "",
     card: shouldSeedPools ? DEFAULT_PROFILE.card : storedProfile.card || DEFAULT_PROFILE.card || {},
+    options: shouldSeedPools
+      ? { ...(storedProfile.options || {}), ...(DEFAULT_PROFILE.options || {}) }
+      : { ...(DEFAULT_PROFILE.options || {}), ...(storedProfile.options || {}) },
     phonePool: shouldSeedPools
       ? DEFAULT_PROFILE.phonePool || []
       : Array.isArray(storedProfile.phonePool) && storedProfile.phonePool.length ? storedProfile.phonePool : DEFAULT_PROFILE.phonePool || [],
@@ -283,8 +287,59 @@ async function sendToContent(message) {
 }
 
 function extractCode(text) {
-  const match = String(text || "").match(/(?<!\d)\d{4,8}(?!\d)/);
-  return match ? match[0] : "";
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    const code = extractCodeFromJson(parsed);
+    if (code) return code;
+  } catch (_) {}
+  const keywordMatch = raw.match(/(?:code|otp|verification|验证码)[:\s]*(\d{4,8})/i)
+    || raw.match(/(\d{4,8})\s*(?:is your|is the|为你的|是你的)/i);
+  if (keywordMatch) return keywordMatch[1];
+  const candidates = [];
+  const re = /(?<!\d)(\d{4,8})(?!\d)/g;
+  let match;
+  while ((match = re.exec(raw)) !== null) {
+    const digits = match[1];
+    if (/^(19|20)\d{2,4}$/.test(digits)) continue;
+    if (/^1\d{6,}$/.test(digits)) continue;
+    if (/^(\d)\1+$/.test(digits)) continue;
+    candidates.push(digits);
+  }
+  for (const len of [6, 4, 5, 7, 8]) {
+    const found = candidates.find((item) => item.length === len);
+    if (found) return found;
+  }
+  return candidates[0] || "";
+}
+
+function extractCodeFromJson(obj, depth = 0) {
+  if (depth > 8 || obj == null) return "";
+  if (typeof obj === "string" || typeof obj === "number") {
+    const match = String(obj).match(/(?<!\d)(\d{4,8})(?!\d)/);
+    return match ? match[1] : "";
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const code = extractCodeFromJson(item, depth + 1);
+      if (code) return code;
+    }
+    return "";
+  }
+  if (typeof obj === "object") {
+    const codeKeys = /code|otp|sms|message|msg|body|text|content|data|verification|passcode|html|raw/i;
+    for (const [key, value] of Object.entries(obj)) {
+      if (!codeKeys.test(key)) continue;
+      const code = extractCodeFromJson(value, depth + 1);
+      if (code) return code;
+    }
+    for (const value of Object.values(obj)) {
+      const code = extractCodeFromJson(value, depth + 1);
+      if (code) return code;
+    }
+  }
+  return "";
 }
 
 async function rotate(kind) {

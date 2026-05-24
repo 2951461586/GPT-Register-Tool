@@ -20,8 +20,10 @@ WPF or CLI
 chatgpt_phone_reg.py        Compatibility entrypoint; delegates to sms_tool.cli.
 config.example.json         Portable config template. Copy to config.json locally.
 README.md                   Setup and operations guide.
+requirements.txt            Only Python dependency manifest.
 
 sms_tool/
+  __main__.py               `python -m sms_tool` entrypoint; no import-time side effects.
   cli.py                    CLI parsing, high-level orchestration, process exit codes.
   config.py                 Config loading only.
   paths.py                  Project-relative path resolution.
@@ -44,11 +46,9 @@ sms_tool/
 SmsWorkbench/               WPF desktop UI.
 browser_extensions/         Optional Chrome checkout helpers.
   paypal_autofill/          Popup, content script, and background fetch boundary with one-click fill, OTP polling, and pool rotation.
-tests/                      Unit tests for non-network behavior.
+tests/                      Offline unit tests and source-invariant tests; see tests/README.md.
 sessions/                   Generated session JSON, ignored by Git.
 runtime/                    SQLite, debug output, caches, ignored by Git.
-requirements.txt            Primary Python dependency list.
-requirement.txt             Compatibility alias for tooling that expects the singular filename.
 ```
 
 ## Boundary Rules
@@ -84,6 +84,8 @@ Payment and CPA operations stay separated in the UI: marking payment complete on
 - Return meaningful exit codes.
 
 It must not silently replace an explicit empty mailbox file with a new provider purchase. If the user passed a mailbox file and no mailbox was parsed, it exits with code `2`.
+
+Optional command modules are lazy seams. Codex export, CPA import, PayPal payment, PayPal link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
 
 ### Mailbox Layer
 
@@ -146,6 +148,27 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 - Mark the account `completed` only after the backend reports success.
 
 It must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default. A local SQLite smoke test may be enabled explicitly with `PAYPAL_NOCARD_SQLITE_SMOKE=1`; redirect following is separately gated by `PAYPAL_NOCARD_FOLLOW_REDIRECT=1`.
+
+### Browser Extension Layer
+
+`browser_extensions/paypal_autofill/` is an optional Chrome helper, not a Python runtime dependency. It owns:
+
+- Popup state editing for profile, card pool, phone pool, and runtime status.
+- Content-script detection of PayPal checkout, OTP, and approval screens.
+- Background fetches for OTP endpoints and address APIs.
+- Debugger-backed checkout input when PayPal rejects plain JavaScript value assignment.
+
+It must not persist Python session JSON, mutate SQLite, or replace the Python PayPal link/payment modules. Its tests are source-invariant tests because PayPal's live checkout DOM is not stable enough for deterministic offline browser tests.
+
+### Test Layer
+
+`tests/` is the only test directory. Tests should stay offline by default and target module seams rather than live vendor systems. Source-invariant tests are acceptable for browser extension behavior that cannot be reproduced deterministically in local CI.
+
+Run all tests with:
+
+```powershell
+python -m unittest discover -s tests
+```
 
 ### Storage Layer
 

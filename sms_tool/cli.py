@@ -8,14 +8,9 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .config import CFG
-from .codex_export import export_codex_session, export_codex_sessions
-from .cpa_import import import_cpa_session, import_cpa_sessions
 from .mailbox import _load_mailbox_pool, _luckmail_enabled
-from .paypal_auto import auto_pay
-from .paypal_links import regenerate_paypal_link
 from .paths import output_dir
 from .registration import _build_session_file, run_batch, run_email
-from .session_refresh import refresh_session
 from .storage import database_path, get_paypal_url, list_paypal_accounts, mark_paypal_status, rebuild_from_session_dir, upsert_account
 
 def main():
@@ -34,6 +29,8 @@ def main():
     parser.add_argument("--email-access-token", default=None, help="Mailbox access token")
     parser.add_argument("--luckmail-token", default=None, help="LuckMail purchased mailbox token")
     parser.add_argument("--buy-luckmail-mailbox", action="store_true", help="Buy LuckMail long-term mailbox before registration")
+    parser.add_argument("--buy-cfworker-mailbox", action="store_true", help="Use CF Worker temp mailboxes before registration")
+    parser.add_argument("--cfworker-domain", default=None, help="CF Worker mailbox domain, default cfworker_domain in config.json")
     parser.add_argument("--luckmail-purchase-project", default=None, help="LuckMail purchase project code, default openai")
     parser.add_argument("--luckmail-purchase-email-type", default=None, help="LuckMail purchase email type, default ms_imap")
     parser.add_argument("--luckmail-purchase-domain", default=None, help="LuckMail purchase domain, default outlook.com")
@@ -46,10 +43,24 @@ def main():
     parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
-    parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA")
+    parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
+    parser.add_argument("--import-target", choices=["cpa", "sub2api"], default="cpa", help="Target for --import-cpa and 401 re-import")
+    parser.add_argument("--auto-reimport-cpa-401", action="store_true", help="Read CPA 401/invalid auth files and re-import matching local sessions")
+    parser.add_argument("--reimport-cpa-401-survivors", action="store_true", help="Re-login CPA 401 accounts without Access deactivated mail and re-import them")
+    parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
     parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
     parser.add_argument("--cpa-api-token", default=None, help="CPA API token, defaults to cpa/cpa_mode.api_token in config.json")
+    parser.add_argument("--sub2api-url", default=None, help="SUB2API base URL, defaults to sub2api.api_url in config.json")
+    parser.add_argument("--sub2api-token", default=None, help="SUB2API bearer access token, defaults to sub2api.api_token in config.json")
+    parser.add_argument("--sub2api-email", default=None, help="SUB2API login email when no bearer token is configured")
+    parser.add_argument("--sub2api-password", default=None, help="SUB2API login password when no bearer token is configured")
+    parser.add_argument("--sub2api-group", default=None, help="SUB2API target group name(s), defaults to codex")
+    parser.add_argument("--sub2api-group-ids", default=None, help="SUB2API target group id list, comma separated")
+    parser.add_argument("--sub2api-proxy", default=None, help="SUB2API default proxy name or id")
+    parser.add_argument("--sub2api-proxy-id", type=int, default=None, help="SUB2API default proxy id")
+    parser.add_argument("--sub2api-priority", type=int, default=None, help="SUB2API account priority, defaults to config or 1")
+    parser.add_argument("--sub2api-concurrency", type=int, default=None, help="SUB2API account concurrency, defaults to config or 10")
     parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
@@ -87,6 +98,12 @@ def main():
     if args.import_cpa:
         _import_cpa(args)
         return
+    if args.auto_reimport_cpa_401:
+        _auto_reimport_cpa_401(args)
+        return
+    if args.reimport_cpa_401_survivors:
+        _reimport_cpa_401_survivors(args)
+        return
     if args.export_codex_json:
         _export_codex_json(args)
         return
@@ -118,6 +135,7 @@ def main():
         or args.email_access_token
         or args.luckmail_token
         or args.buy_luckmail_mailbox
+        or args.buy_cfworker_mailbox
     )
     if not mailboxes and explicit_mailbox_source:
         print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
@@ -133,6 +151,10 @@ def main():
         effective_count = len(mailboxes)
         if effective_count != requested_count:
             print(f"[!] Requested {requested_count} mailbox(es), LuckMail returned {effective_count}; registering returned mailboxes only.")
+    elif getattr(args, "buy_cfworker_mailbox", False):
+        effective_count = len(mailboxes)
+        if effective_count != requested_count:
+            print(f"[!] Requested {requested_count} mailbox(es), CFWorker returned {effective_count}; registering returned mailboxes only.")
     elif mailboxes and requested_count > len(mailboxes):
         effective_count = len(mailboxes)
         print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
@@ -242,21 +264,36 @@ def _mark_paypal_status(args):
         results.append(result)
 
     if args.import_cpa:
+        from .import_targets import import_account_sessions
+
         import_emails = [result["email"] for result in results if result.get("ok")]
-        import_result = import_cpa_sessions(
+        import_result = import_account_sessions(
+            args.import_target,
             import_emails,
             export_dir=args.codex_export_dir or "",
             workers=args.workers,
             refresh=not args.no_session_refresh,
             proxy=args.proxy,
             timeout=args.refresh_timeout,
-            api_url=args.cpa_api_url or "",
-            api_token=args.cpa_api_token or "",
+            cpa_api_url=args.cpa_api_url or "",
+            cpa_api_token=args.cpa_api_token or "",
+            sub2api_url=args.sub2api_url or "",
+            sub2api_token=args.sub2api_token or "",
+            sub2api_email=args.sub2api_email or "",
+            sub2api_password=args.sub2api_password or "",
+            sub2api_group=args.sub2api_group or "",
+            sub2api_group_ids=args.sub2api_group_ids or "",
+            sub2api_proxy=args.sub2api_proxy or "",
+            sub2api_proxy_id=args.sub2api_proxy_id,
+            sub2api_priority=args.sub2api_priority,
+            sub2api_concurrency=args.sub2api_concurrency,
         )
         print(json.dumps(import_result, ensure_ascii=False, indent=2))
         if any(not result.get("ok") for result in results) or not import_result.get("ok"):
             raise SystemExit(3)
     elif args.export_codex_json:
+        from .codex_export import export_codex_sessions
+
         export_emails = [result["email"] for result in results if result.get("ok")]
         export_result = export_codex_sessions(
             export_emails,
@@ -274,6 +311,8 @@ def _mark_paypal_status(args):
 
 
 def _refresh_session(args):
+    from .session_refresh import refresh_session
+
     result = refresh_session(
         email=args.email or "",
         session_file=args.session_file or "",
@@ -286,6 +325,8 @@ def _refresh_session(args):
 
 
 def _export_codex_json(args):
+    from .codex_export import export_codex_session, export_codex_sessions
+
     emails = _read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
@@ -326,29 +367,53 @@ def _export_codex_json(args):
 
 
 def _import_cpa(args):
+    from .import_targets import import_account_session, import_account_sessions
+
     emails = _read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
     if emails:
-        result = import_cpa_sessions(
+        result = import_account_sessions(
+            args.import_target,
             emails,
             export_dir=args.codex_export_dir or "",
             workers=args.workers,
             refresh=not args.no_session_refresh,
             proxy=args.proxy,
             timeout=args.refresh_timeout,
-            api_url=args.cpa_api_url or "",
-            api_token=args.cpa_api_token or "",
+            cpa_api_url=args.cpa_api_url or "",
+            cpa_api_token=args.cpa_api_token or "",
+            sub2api_url=args.sub2api_url or "",
+            sub2api_token=args.sub2api_token or "",
+            sub2api_email=args.sub2api_email or "",
+            sub2api_password=args.sub2api_password or "",
+            sub2api_group=args.sub2api_group or "",
+            sub2api_group_ids=args.sub2api_group_ids or "",
+            sub2api_proxy=args.sub2api_proxy or "",
+            sub2api_proxy_id=args.sub2api_proxy_id,
+            sub2api_priority=args.sub2api_priority,
+            sub2api_concurrency=args.sub2api_concurrency,
         )
     elif args.session_file:
-        result = import_cpa_session(
+        result = import_account_session(
+            args.import_target,
             session_file=args.session_file,
             export_dir=args.codex_export_dir or "",
             refresh=not args.no_session_refresh,
             proxy=args.proxy,
             timeout=args.refresh_timeout,
-            api_url=args.cpa_api_url or "",
-            api_token=args.cpa_api_token or "",
+            cpa_api_url=args.cpa_api_url or "",
+            cpa_api_token=args.cpa_api_token or "",
+            sub2api_url=args.sub2api_url or "",
+            sub2api_token=args.sub2api_token or "",
+            sub2api_email=args.sub2api_email or "",
+            sub2api_password=args.sub2api_password or "",
+            sub2api_group=args.sub2api_group or "",
+            sub2api_group_ids=args.sub2api_group_ids or "",
+            sub2api_proxy=args.sub2api_proxy or "",
+            sub2api_proxy_id=args.sub2api_proxy_id,
+            sub2api_priority=args.sub2api_priority,
+            sub2api_concurrency=args.sub2api_concurrency,
         )
     else:
         rows = [
@@ -356,22 +421,82 @@ def _import_cpa(args):
             if str(row.get("paypal_status") or "").strip().lower() == "completed"
         ]
         emails = [row.get("email", "") for row in rows if row.get("email")]
-        result = import_cpa_sessions(
+        result = import_account_sessions(
+            args.import_target,
             emails,
             export_dir=args.codex_export_dir or "",
             workers=args.workers,
             refresh=not args.no_session_refresh,
             proxy=args.proxy,
             timeout=args.refresh_timeout,
-            api_url=args.cpa_api_url or "",
-            api_token=args.cpa_api_token or "",
+            cpa_api_url=args.cpa_api_url or "",
+            cpa_api_token=args.cpa_api_token or "",
+            sub2api_url=args.sub2api_url or "",
+            sub2api_token=args.sub2api_token or "",
+            sub2api_email=args.sub2api_email or "",
+            sub2api_password=args.sub2api_password or "",
+            sub2api_group=args.sub2api_group or "",
+            sub2api_group_ids=args.sub2api_group_ids or "",
+            sub2api_proxy=args.sub2api_proxy or "",
+            sub2api_proxy_id=args.sub2api_proxy_id,
+            sub2api_priority=args.sub2api_priority,
+            sub2api_concurrency=args.sub2api_concurrency,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
 
 
+def _auto_reimport_cpa_401(args):
+    from .cpa_import import auto_reimport_cpa_401
+
+    result = auto_reimport_cpa_401(
+        domain_filter=args.cpa_domain_filter or "",
+        export_dir=args.codex_export_dir or "",
+        workers=args.workers,
+        refresh=not args.no_session_refresh,
+        proxy=args.proxy,
+        timeout=args.refresh_timeout,
+        api_url=args.cpa_api_url or "",
+        api_token=args.cpa_api_token or "",
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _reimport_cpa_401_survivors(args):
+    from .cpa_401_reimport import reimport_cpa_401_survivors
+
+    result = reimport_cpa_401_survivors(
+        target=args.import_target,
+        chatai_mailbox_file=args.chatai_mailbox_file or "",
+        export_dir=args.codex_export_dir or "",
+        refresh=not args.no_session_refresh,
+        proxy=args.proxy,
+        timeout=args.refresh_timeout,
+        api_url=args.cpa_api_url or "",
+        api_token=args.cpa_api_token or "",
+        sub2api_url=args.sub2api_url or "",
+        sub2api_token=args.sub2api_token or "",
+        sub2api_email=args.sub2api_email or "",
+        sub2api_password=args.sub2api_password or "",
+        sub2api_group=args.sub2api_group or "",
+        sub2api_group_ids=args.sub2api_group_ids or "",
+        sub2api_proxy=args.sub2api_proxy or "",
+        sub2api_proxy_id=args.sub2api_proxy_id,
+        sub2api_priority=args.sub2api_priority,
+        sub2api_concurrency=args.sub2api_concurrency,
+        cfworker_domain=args.cfworker_domain or "",
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
 def _regenerate_paypal_link(args):
+    from .paypal_links import regenerate_paypal_link
+
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
     if emails:
@@ -428,6 +553,8 @@ def _read_email_file(path):
 
 def _auto_pay(args):
     """Run automated PayPal payment for a ChatGPT account."""
+    from .paypal_auto import auto_pay
+
     email = (args.email or "").strip()
     session_file = (args.session_file or "").strip()
     if not email and not session_file:
@@ -462,6 +589,7 @@ def _auto_pay(args):
 
 def _batch_auto_pay(args):
     """Run automated PayPal payment for all pending accounts."""
+    from .paypal_auto import auto_pay
     from .storage import list_paypal_accounts
 
     limit = max(0, int(args.batch_auto_pay_limit or 0))

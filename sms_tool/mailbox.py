@@ -8,6 +8,7 @@ from pathlib import Path
 from curl_cffi import requests as curl_requests
 
 from .config import CFG
+from .providers.cfworker_mailbox import CFWorkerMailboxClient
 from .providers.luckmail_token import LuckMailTokenClient
 
 # ==========================================
@@ -99,6 +100,28 @@ def _luckmail_token_client():
     )
 
 
+def _cfworker_cfg():
+    cfg = _email_cfg()
+    nested = cfg.get("cfworker") if isinstance(cfg.get("cfworker"), dict) else {}
+    return {
+        "worker_url": str(nested.get("worker_url") or cfg.get("cfworker_url") or "").strip(),
+        "domain": str(nested.get("domain") or cfg.get("cfworker_domain") or "edu.liziai.cloud").strip().lstrip("@"),
+        "admin_token": str(nested.get("admin_token") or cfg.get("cfworker_admin_token") or "").strip(),
+        "cf_api_token": str(nested.get("cf_api_token") or cfg.get("cfworker_api_token") or "").strip(),
+    }
+
+
+def _cfworker_client(proxy=None):
+    cfg = _cfworker_cfg()
+    return CFWorkerMailboxClient(
+        cfg["worker_url"],
+        admin_token=cfg["admin_token"],
+        cf_api_token=cfg["cf_api_token"],
+        timeout=8,
+        proxy=proxy,
+    )
+
+
 def _luckmail_token_code(mailbox):
     token = getattr(mailbox, "token", "")
     if not token:
@@ -138,6 +161,20 @@ def _latest_luckmail_message(data):
 def _latest_luckmail_message_id(data):
     latest = _latest_luckmail_message(data)
     return str(latest.get("message_id") or latest.get("id") or "").strip()
+
+
+def _snapshot_mailbox_message(mailbox, proxy=None):
+    provider = getattr(mailbox, "provider", "")
+    if provider == "cfworker":
+        try:
+            messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
+            message_id = _message_id(messages[0]) if messages else ""
+            mailbox.seen_message_id = message_id
+            return message_id
+        except Exception as e:
+            print(f"[cfworker snapshot error: {e}]")
+            return ""
+    return _snapshot_luckmail_token_message(mailbox)
 
 
 def _snapshot_luckmail_token_message(mailbox):
@@ -259,6 +296,26 @@ def _create_luckmail_purchase(args=None):
     return accounts
 
 
+def _create_cfworker_mailboxes(args=None):
+    args = args or argparse.Namespace()
+    cfg = _cfworker_cfg()
+    domain = str(getattr(args, "cfworker_domain", None) or cfg["domain"] or "edu.liziai.cloud").strip().lstrip("@").lower()
+    quantity = max(1, int(getattr(args, "count", None) or 1))
+    print(f"[*] CFWorker mailbox batch: domain={domain} quantity={quantity}")
+    emails = _cfworker_client(proxy=getattr(args, "proxy", None)).create_mailboxes(count=quantity, domain=domain)
+    accounts = [
+        MailboxAccount(
+            email=email,
+            source=cfg["worker_url"],
+            provider="cfworker",
+        )
+        for email in emails
+    ]
+    for account in accounts:
+        print(f"[*] CFWorker mailbox: {account.email}")
+    return accounts
+
+
 def _default_nb_register_token_file():
     return str(Path.cwd() / "mailbox_tokens.txt")
 
@@ -297,6 +354,18 @@ def _parse_mailbox_token_file(path):
     for line_no, raw in enumerate(token_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
         line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
+            continue
+        if line.lower().startswith("cfworker://") or line.lower().endswith("@edu.liziai.cloud"):
+            email = line.split("://", 1)[1].strip() if "://" in line else line
+            email = _normalize_mailbox_email(email)
+            if not email:
+                print(f"[!] Skip malformed CFWorker email {token_path}:{line_no}")
+                continue
+            records.append(MailboxAccount(
+                email=email.lower(),
+                source=str(token_path),
+                provider="cfworker",
+            ))
             continue
         parts = line.split("---", 4)
         if len(parts) < 3:
@@ -402,6 +471,8 @@ def _load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
     if getattr(args, "buy_luckmail_mailbox", False):
         return _create_luckmail_purchase(args)
+    if getattr(args, "buy_cfworker_mailbox", False):
+        return _create_cfworker_mailboxes(args)
     chatai_file = getattr(args, "chatai_mailbox_file", None)
     if chatai_file:
         return _parse_chatai_mailbox_file(chatai_file)
@@ -466,7 +537,47 @@ def _extract_otp_from_text(text):
     return match.group(2) if match else ""
 
 
-def _fetch_mailbox_messages(mailbox, limit=25):
+def _message_id(msg):
+    msg = msg or {}
+    return str(msg.get("id") or msg.get("message_id") or "").strip()
+
+
+def _message_received_ts(msg):
+    value = str((msg or {}).get("receivedDateTime") or "")
+    if not value:
+        return 0
+    try:
+        return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except Exception:
+        return 0
+
+
+def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
+    if issued_after_unix > 0:
+        recv_ts = _message_received_ts(msg)
+        if recv_ts and recv_ts < issued_after_unix:
+            return None
+    subject = str((msg or {}).get("subject") or "")
+    if keyword and keyword not in subject.lower():
+        return None
+    recipients = _message_recipients(msg)
+    if mailbox.email.lower() not in recipients and recipients:
+        return None
+    body = str((msg or {}).get("bodyPreview") or "") + "\n"
+    body += str((((msg or {}).get("body") or {}).get("content")) or "")
+    otp = _extract_otp_from_text(body)
+    if not otp:
+        return None
+    return {
+        "otp": otp,
+        "id": _message_id(msg),
+        "received_ts": _message_received_ts(msg),
+    }
+
+
+def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
+    if getattr(mailbox, "provider", "") == "cfworker":
+        return _cfworker_client(proxy=proxy).fetch_messages(mailbox.email, limit=limit)
     cfg = _email_cfg()
     token = mailbox.access_token or _ms_oauth_refresh(mailbox)
     graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")
@@ -509,43 +620,90 @@ def _message_recipients(msg):
     return set(recipients)
 
 
-def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0):
+def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
     if getattr(mailbox, "provider", "") == "luckmail":
         return _poll_luckmail_otp(mailbox, timeout=timeout)
     if getattr(mailbox, "provider", "") == "luckmail_token":
         return _poll_luckmail_token_otp(mailbox, timeout=timeout, issued_after_unix=issued_after_unix)
+    if getattr(mailbox, "provider", "") == "cfworker":
+        return _poll_cfworker_otp(
+            mailbox,
+            subject_keyword=subject_keyword,
+            timeout=timeout,
+            issued_after_unix=issued_after_unix,
+            proxy=proxy,
+        )
     keyword = (subject_keyword or "").lower()
     deadline = time.time() + timeout
     interval = _otp_poll_interval()
     while time.time() < deadline:
         try:
-            for msg in _fetch_mailbox_messages(mailbox):
-                if issued_after_unix > 0:
-                    recv_time = str(msg.get("receivedDateTime") or "")
-                    if recv_time:
-                        try:
-                            recv_ts = int(datetime.fromisoformat(recv_time.replace("Z", "+00:00")).timestamp())
-                            if recv_ts < issued_after_unix:
-                                continue
-                        except Exception:
-                            pass
-                subject = str(msg.get("subject") or "")
-                if keyword and keyword not in subject.lower():
-                    continue
-                recipients = _message_recipients(msg)
-                if mailbox.email.lower() not in recipients and recipients:
-                    continue
-                body = str(msg.get("bodyPreview") or "") + "\n"
-                body += str(((msg.get("body") or {}).get("content")) or "")
-                otp = _extract_otp_from_text(body)
-                if otp:
-                    print(f" code:{otp}!")
-                    return otp
+            for msg in _fetch_mailbox_messages(mailbox, proxy=proxy):
+                candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+                if candidate:
+                    print(f" code:{candidate['otp']}!")
+                    return candidate["otp"]
         except Exception as e:
             print(f"[mailbox poll error: {e}]")
         print(".", end="", flush=True)
         time.sleep(interval)
     print(" timeout")
+    return None
+
+
+def _cfworker_otp_settle_seconds():
+    try:
+        return max(0.0, float(_email_cfg().get("cfworker_otp_settle_seconds", 3)))
+    except Exception:
+        return 3.0
+
+
+def _poll_cfworker_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
+    keyword = (subject_keyword or "").lower()
+    deadline = time.time() + timeout
+    interval = _otp_poll_interval()
+    settle_seconds = _cfworker_otp_settle_seconds()
+    seen_message_id = getattr(mailbox, "seen_message_id", "")
+    while time.time() < deadline:
+        try:
+            candidate = _latest_cfworker_otp_candidate(
+                mailbox,
+                keyword=keyword,
+                issued_after_unix=issued_after_unix,
+                seen_message_id=seen_message_id,
+                proxy=proxy,
+            )
+            if candidate:
+                stable_until = time.time() + settle_seconds
+                while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
+                    time.sleep(min(interval, max(0.0, stable_until - time.time())))
+                    newer = _latest_cfworker_otp_candidate(
+                        mailbox,
+                        keyword=keyword,
+                        issued_after_unix=issued_after_unix,
+                        seen_message_id=seen_message_id,
+                        proxy=proxy,
+                    )
+                    if newer and newer.get("id") != candidate.get("id"):
+                        candidate = newer
+                        stable_until = time.time() + settle_seconds
+                print(f" code:{candidate['otp']}!")
+                return candidate["otp"]
+        except Exception as e:
+            print(f"[mailbox poll error: {e}]")
+        print(".", end="", flush=True)
+        time.sleep(interval)
+    print(" timeout")
+    return None
+
+
+def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, seen_message_id="", proxy=None):
+    for msg in _fetch_mailbox_messages(mailbox, proxy=proxy):
+        if seen_message_id and _message_id(msg) == seen_message_id:
+            continue
+        candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+        if candidate:
+            return candidate
     return None
 
 

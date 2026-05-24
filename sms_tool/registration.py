@@ -8,7 +8,7 @@ from curl_cffi import requests as curl_requests
 
 from .config import CFG
 from .http_client import request_with_retry
-from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_luckmail_token_message
+from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
 from .paths import runtime_file
 from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl
 
@@ -491,11 +491,12 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         else:
             return _failure_result(f"user_register: {err_msg}", email=username, mailbox=mailbox, password=password)
 
-    _snapshot_luckmail_token_message(mailbox)
+    _snapshot_mailbox_message(mailbox, proxy=proxy)
 
     # Step 4: Trigger email OTP send
     _tick("4-Trigger email OTP")
     continue_url = reg_data.get("continue_url", "")
+    otp_send_started = int(time.time())
     try:
         _follow_continue_url(session, continue_url, base_headers, referer=f"{auth_base}/create-account/password", label="Email OTP send")
         _tock()
@@ -511,7 +512,8 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         mailbox,
         subject_keyword=email_cfg.get("otp_subject_keyword", ""),
         timeout=int(email_cfg.get("otp_timeout", 300)),
-        issued_after_unix=int(time.time()) - 30,
+        issued_after_unix=otp_send_started if getattr(mailbox, "provider", "") == "cfworker" else int(time.time()) - 30,
+        proxy=proxy,
     )
     _tock()
     if not code:

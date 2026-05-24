@@ -1,7 +1,0 @@
-# Compatibility alias; keep in sync with requirements.txt.
-curl_cffi>=0.7.0
-requests>=2.31.0
-camoufox[geoip]>=0.4.0
-browserforge>=0.1.0
-cloakbrowser>=1.0.0
-playwright>=1.40.0

@@ -1,4 +1,5 @@
 import json
+import re
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -143,6 +144,159 @@ def import_cpa_sessions(
     }
 
 
+def auto_reimport_cpa_401(
+    domain_filter="",
+    export_dir="",
+    workers=1,
+    refresh=True,
+    proxy=None,
+    timeout=300,
+    api_url="",
+    api_token="",
+):
+    target_url, token = _resolve_cpa_config(api_url=api_url, api_token=api_token)
+    auth_files_result = fetch_cpa_auth_files(target_url, token)
+    if not auth_files_result.get("ok"):
+        return {
+            "ok": False,
+            "error": auth_files_result.get("error", "fetch_cpa_auth_files_failed"),
+            "source": auth_files_result,
+        }
+
+    domain = _normalize_domain_filter(domain_filter)
+    emails = []
+    seen = set()
+    skipped = []
+    for item in auth_files_result.get("files", []):
+        email = extract_cpa_auth_email(item)
+        status = classify_cpa_auth_file(item)
+        if not email:
+            skipped.append({"reason": "missing_email", "status": status})
+            continue
+        if domain and not email.endswith("@" + domain):
+            skipped.append({"email": email, "reason": "domain_mismatch", "status": status})
+            continue
+        if status != "token_invalid":
+            skipped.append({"email": email, "reason": "not_401", "status": status})
+            continue
+        if email in seen:
+            continue
+        seen.add(email)
+        emails.append(email)
+
+    if not emails:
+        return {
+            "ok": True,
+            "total": 0,
+            "success": 0,
+            "failed": 0,
+            "emails": [],
+            "skipped": skipped,
+            "source": {"count": len(auth_files_result.get("files", []))},
+            "message": "no_cpa_401_accounts",
+        }
+
+    import_result = import_cpa_sessions(
+        emails,
+        export_dir=export_dir,
+        workers=workers,
+        refresh=refresh,
+        proxy=proxy,
+        timeout=timeout,
+        api_url=target_url,
+        api_token=token,
+    )
+    return {
+        **import_result,
+        "emails": emails,
+        "skipped": skipped,
+        "source": {"count": len(auth_files_result.get("files", []))},
+    }
+
+
+def fetch_cpa_auth_files(api_url="", api_token="", timeout=30):
+    target_url = _normalize_cpa_auth_files_url(api_url)
+    if not target_url:
+        return {"ok": False, "error": "missing_cpa_api_url"}
+    if not api_token:
+        return {"ok": False, "error": "missing_cpa_api_token"}
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_token}",
+        "X-Management-Key": api_token,
+    }
+    try:
+        response = curl_requests.get(
+            target_url,
+            headers=headers,
+            timeout=timeout,
+            impersonate="chrome110",
+        )
+        try:
+            payload = response.json()
+        except Exception:
+            payload = {"raw": response.text[:500]}
+        if response.status_code < 200 or response.status_code >= 300:
+            return {
+                "ok": False,
+                "status_code": response.status_code,
+                "error": _cpa_error_text(payload, response.status_code),
+            }
+        return {
+            "ok": True,
+            "status_code": response.status_code,
+            "files": _parse_cpa_auth_files_payload(payload),
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def classify_cpa_auth_file(item):
+    status = str((item or {}).get("status") or "").strip().lower()
+    text = " ".join([
+        str((item or {}).get("status") or ""),
+        str((item or {}).get("status_message") or ""),
+        str((item or {}).get("message") or ""),
+        str((item or {}).get("error") or ""),
+        str(((item or {}).get("probe") or {}).get("status_code") if isinstance((item or {}).get("probe"), dict) else ""),
+        str(((item or {}).get("probe") or {}).get("statusCode") if isinstance((item or {}).get("probe"), dict) else ""),
+        str(((item or {}).get("probe") or {}).get("error") if isinstance((item or {}).get("probe"), dict) else ""),
+        str(((item or {}).get("probe") or {}).get("raw") if isinstance((item or {}).get("probe"), dict) else ""),
+    ]).lower()
+    probe = (item or {}).get("probe") if isinstance((item or {}).get("probe"), dict) else {}
+    try:
+        probe_status = int(probe.get("status_code") or probe.get("statusCode") or 0)
+    except Exception:
+        probe_status = 0
+    if (
+        re.search(r"\b401\b|unauthorized|auth_unavailable|authentication token has been invalidated|token has been invalidated|refresh_token_expired|refresh token expired|refresh_token_reused|refresh_token_invalidated|invalid_grant", text)
+        or re.search(r"\bbanned\b|\bsuspended\b|\bdeactivated\b|\bterminated\b|account closed|account_locked|fraud|abuse|违反|封禁", text)
+        or probe_status == 401
+        or status in {"disabled", "unavailable"}
+        or (item or {}).get("disabled") is True
+        or (item or {}).get("unavailable") is True
+    ):
+        return "token_invalid"
+    if status in {"active", "ok"}:
+        return "active"
+    if re.search(r"timeout|temporarily|context canceled", text):
+        return "transient"
+    return status or "unknown"
+
+
+def extract_cpa_auth_email(item):
+    if not isinstance(item, dict):
+        return ""
+    for key in ("email", "account", "username"):
+        email = _normalize_email(item.get(key))
+        if email:
+            return email
+    name = str(item.get("name") or item.get("id") or "").strip()
+    if name.lower().endswith(".json"):
+        name = name[:-5]
+    return _normalize_email(name)
+
+
 def upload_to_cpa(token_data, api_url, api_token, filename=""):
     upload_url = _normalize_cpa_auth_files_url(api_url)
     if not upload_url:
@@ -250,6 +404,49 @@ def _normalize_cpa_auth_files_url(api_url):
     if lower.endswith("/v0"):
         return f"{normalized}/management/auth-files"
     return f"{normalized}/v0/management/auth-files"
+
+
+def _parse_cpa_auth_files_payload(payload):
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+    candidates = [
+        payload.get("data"),
+        payload.get("items"),
+        payload.get("files"),
+        payload.get("auth_files"),
+        payload.get("authFiles"),
+        payload.get("results"),
+        payload.get("rows"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, dict):
+            nested = _parse_cpa_auth_files_payload(candidate)
+            if nested:
+                return nested
+    return []
+
+
+def _normalize_email(value):
+    text = str(value or "").strip().lower()
+    return text if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text) else ""
+
+
+def _normalize_domain_filter(value):
+    text = str(value or "").strip().lower().lstrip("@")
+    return text if re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", text) else ""
+
+
+def _cpa_error_text(payload, status_code):
+    if isinstance(payload, dict):
+        for key in ("error", "message", "detail", "reason", "raw"):
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return value[:500]
+    return f"CPA HTTP {status_code}"
 
 
 def _resolve_cpa_config(api_url="", api_token=""):

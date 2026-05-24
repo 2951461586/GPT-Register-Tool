@@ -380,6 +380,30 @@ namespace SmsWorkbench
                 string line = lines[i].Trim();
                 if (line.Length == 0 || line.StartsWith("#")) continue;
 
+                if (line.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
+                    || line.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase))
+                {
+                    string email = line.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
+                        ? line.Substring("cfworker://".Length).Trim()
+                        : line;
+                    allRows.Add(new PoolRow
+                    {
+                        Id = "M" + (i + 1),
+                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
+                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
+                        Identifier = email,
+                        AccountType = "CFWorker邮箱池",
+                        Status = "可收信",
+                        RefreshToken = "CFWorker",
+                        Notes = path,
+                        SourcePath = path,
+                        RawLine = "cfworker://" + email,
+                        MailboxLine = "cfworker://" + email,
+                        MailboxProvider = "cfworker"
+                    });
+                    continue;
+                }
+
                 if (line.Contains("----"))
                 {
                     string[] parts = line.Split(new[] { "----" }, StringSplitOptions.None);
@@ -397,7 +421,8 @@ namespace SmsWorkbench
                         SourcePath = path,
                         RawLine = line,
                         ClientId = parts[2].Trim(),
-                        RawRefreshToken = parts[3].Trim()
+                        RawRefreshToken = parts[3].Trim(),
+                        MailboxProvider = "chatai"
                     });
                     continue;
                 }
@@ -415,7 +440,8 @@ namespace SmsWorkbench
                     RefreshToken = Mask(stdParts[2]),
                     Notes = path,
                     SourcePath = path,
-                    RawLine = line
+                    RawLine = line,
+                    MailboxProvider = "graph"
                 });
             }
         }
@@ -451,28 +477,31 @@ namespace SmsWorkbench
                     string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
                     string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
                     string paypalAmount = GetPaypalAmount(rawJson);
+                    string importedStatus = GetImportedStatus(rawJson);
                     TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
-                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || mailboxClientId.Length > 0;
+                    bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
+                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox);
                     allRows.Add(new PoolRow
                     {
                         Id = "DB" + data["id"],
                         CreatedAt = UnixTimeText(data.TryGetValue("created_at", out string created) ? created : ""),
                         CompletedAt = UnixTimeText(data.TryGetValue("updated_at", out string updated) ? updated : ""),
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
-                        AccountType = isChataiMailbox ? "SQLite/Chatai" : "SQLite",
-                        Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus),
+                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
+                        Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl),
                         PayPalAmount = paypalAmount,
                         RefreshTokenStatus = DisplayRefreshTokenStatus(refreshTokenStatus),
                         PayPalUrl = paypalUrl,
-                        RefreshToken = Mask(isChataiMailbox ? mailboxRefreshToken : access),
+                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
                         Notes = string.IsNullOrWhiteSpace(jsonPath) ? dbPath : jsonPath,
                         SourcePath = dbPath,
                         RawLine = data["id"],
                         ClientId = mailboxClientId,
                         RawRefreshToken = mailboxRefreshToken,
-                        MailboxLine = mailboxLine
+                        MailboxLine = mailboxLine,
+                        MailboxProvider = mailboxProvider
                     });
                 }
                 Log("已从 SQLite 加载账号索引：" + dbPath);
@@ -505,6 +534,8 @@ namespace SmsWorkbench
                         string paypalUrl = GetPaypalUrl(data);
                         string paypalAmount = GetPaypalAmount(data);
                         string refreshTokenStatus = GetString(data, "refresh_token_status");
+                        string importedStatus = GetImportedStatus(data);
+                        TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
                         string timing = GetTimingText(data);
                         allRows.Add(new PoolRow
                         {
@@ -512,16 +543,20 @@ namespace SmsWorkbench
                             CreatedAt = SafeTime(File.GetCreationTime(path)),
                             CompletedAt = SafeTime(File.GetLastWriteTime(path)),
                             Identifier = email,
-                            AccountType = "Session",
-                            Status = access.Length > 0 ? paypalStatus : "缺access_token",
+                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : "Session",
+                            Status = importedStatus.Length > 0 ? importedStatus : access.Length > 0 ? paypalStatus : "缺access_token",
                             PayPalStatus = paypalStatus,
                             PayPalAmount = paypalAmount,
                             RefreshTokenStatus = DisplayRefreshTokenStatus(refreshTokenStatus),
                             PayPalUrl = paypalUrl,
-                            RefreshToken = Mask(access),
+                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : Mask(access),
                             Proxy = timing,
                             Notes = path,
-                            SourcePath = path
+                            SourcePath = path,
+                            ClientId = mailboxClientId,
+                            RawRefreshToken = mailboxRefreshToken,
+                            MailboxLine = mailboxLine,
+                            MailboxProvider = mailboxProvider
                         });
                     }
                     catch (Exception ex)
@@ -647,12 +682,12 @@ namespace SmsWorkbench
             PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
             if (row == null)
             {
-                MessageBox.Show("请先选择一条 Chatai 邮箱记录。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("请先选择一条 Chatai 或 edu.liziai.cloud 邮箱记录。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (string.IsNullOrWhiteSpace(row.RawRefreshToken) || string.IsNullOrWhiteSpace(row.ClientId))
+            if (!IsCfWorkerRow(row) && (string.IsNullOrWhiteSpace(row.RawRefreshToken) || string.IsNullOrWhiteSpace(row.ClientId)))
             {
-                MessageBox.Show("选中记录不是 Chatai 格式邮箱（缺少 refresh_token 或 client_id）。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("选中记录不是 Chatai 或 edu.liziai.cloud 邮箱。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             ShowInboxDialog(row);
@@ -660,9 +695,30 @@ namespace SmsWorkbench
 
         private void OneClickRegister_Click(object sender, RoutedEventArgs e)
         {
+            RegisterOptions options = ShowRegisterOptionsDialog();
+            if (options == null) return;
+
+            if (options.Source == "cfworker")
+            {
+                var cfArgs = new List<string>
+                {
+                    "--buy-cfworker-mailbox",
+                    "--cfworker-domain",
+                    "edu.liziai.cloud",
+                    "--count",
+                    options.Count.ToString(),
+                    "--workers",
+                    options.Workers.ToString()
+                };
+                AddProxy(cfArgs);
+                AddPaypalOption(cfArgs);
+                RunBackend("CFWorker邮箱注册+支付链接", cfArgs);
+                return;
+            }
+
             string mailboxArg = "--chatai-mailbox-file";
             string mailboxFile = GetChataiMailboxFilePath();
-            int count = CountValue();
+            int count = options.Count;
             string taskName = "一键注册+支付链接";
             if (TryCreateSelectedMailboxFile(out string selectedArg, out string selectedFile, out int selectedCount))
             {
@@ -676,7 +732,7 @@ namespace SmsWorkbench
                 MessageBox.Show("未找到 Chatai 邮箱文件，请先导入。", "缺少邮箱文件", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", "4" };
+            var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddProxy(args);
             AddPaypalOption(args);
             RunBackend(taskName, args);
@@ -709,6 +765,93 @@ namespace SmsWorkbench
             RunBackend("一键支付 (" + rows.Count + ")", args);
         }
 
+        private RegisterOptions ShowRegisterOptionsDialog()
+        {
+            var dialog = new Window
+            {
+                Title = "一键注册+支付链接",
+                Owner = this,
+                Width = 420,
+                Height = 240,
+                MinWidth = 380,
+                MinHeight = 220,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var sourceLabel = new TextBlock { Text = "邮箱来源", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "edu.liziai.cloud (CFWorker)", Tag = "cfworker" });
+            sourceBox.SelectedIndex = 0;
+            Grid.SetRow(sourceLabel, 0);
+            Grid.SetColumn(sourceLabel, 0);
+            Grid.SetRow(sourceBox, 0);
+            Grid.SetColumn(sourceBox, 1);
+            root.Children.Add(sourceLabel);
+            root.Children.Add(sourceBox);
+
+            var countLabel = new TextBlock { Text = "数量", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var countBox = new TextBox { Text = CountValue().ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(countLabel, 1);
+            Grid.SetColumn(countLabel, 0);
+            Grid.SetRow(countBox, 1);
+            Grid.SetColumn(countBox, 1);
+            root.Children.Add(countLabel);
+            root.Children.Add(countBox);
+
+            var workerLabel = new TextBlock { Text = "并发", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var workerBox = new TextBox { Text = "4", Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(workerLabel, 2);
+            Grid.SetColumn(workerLabel, 0);
+            Grid.SetRow(workerBox, 2);
+            Grid.SetColumn(workerBox, 1);
+            root.Children.Add(workerLabel);
+            root.Children.Add(workerBox);
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
+            var cancel = new Button { Content = "取消", Width = 72 };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 3);
+            Grid.SetColumnSpan(actions, 2);
+            root.Children.Add(actions);
+
+            RegisterOptions selected = null;
+            ok.Click += (_, __) =>
+            {
+                int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
+                int workers = ParsePositiveInt(workerBox.Text, 1, 4, 4);
+                selected = new RegisterOptions
+                {
+                    Source = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool",
+                    Count = count,
+                    Workers = workers
+                };
+                CountText = count.ToString();
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+            dialog.Content = root;
+            return dialog.ShowDialog() == true ? selected : null;
+        }
+
+        private int ParsePositiveInt(string text, int min, int max, int fallback)
+        {
+            if (!int.TryParse((text ?? "").Trim(), out int value)) return fallback;
+            return Math.Max(min, Math.Min(max, value));
+        }
+
         private bool TryCreateSelectedMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount)
         {
             mailboxArg = "--chatai-mailbox-file";
@@ -739,6 +882,8 @@ namespace SmsWorkbench
         {
             string value = (line ?? "").Trim().TrimStart('\ufeff');
             if (value.Length == 0 || value.StartsWith("#")) return "";
+            if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
             return "";
@@ -790,7 +935,12 @@ namespace SmsWorkbench
                 string accessToken = JsonString(mailbox, "access_token");
                 string clientId = JsonString(mailbox, "token");
                 string provider = JsonString(mailbox, "provider");
-                if (email.Length == 0 || refreshToken.Length == 0) return "";
+                if (email.Length == 0) return "";
+                if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "cfworker://" + email;
+                }
+                if (refreshToken.Length == 0) return "";
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
                 {
                     return email + "----" + password + "----" + clientId + "----" + refreshToken;
@@ -821,7 +971,15 @@ namespace SmsWorkbench
                 string accessToken = JsonString(mailbox, "access_token");
                 clientId = JsonString(mailbox, "token");
                 provider = JsonString(mailbox, "provider");
-                if (email.Length == 0 || refreshToken.Length == 0) return false;
+                if (email.Length == 0) return false;
+
+                if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
+                {
+                    mailboxLine = "cfworker://" + email;
+                    return true;
+                }
+
+                if (refreshToken.Length == 0) return false;
 
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
                 {
@@ -1274,6 +1432,9 @@ namespace SmsWorkbench
 
         private void ImportPaidCpa_Click(object sender, RoutedEventArgs e)
         {
+            string target = ShowImportTargetDialog("一键导入");
+            if (target.Length == 0) return;
+
             var selected = SelectedRowsOrCurrent()
                 .Where(IsPayPalCompletedRow)
                 .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
@@ -1290,14 +1451,115 @@ namespace SmsWorkbench
 
             if (rows.Count == 0)
             {
-                MessageBox.Show("没有找到支付完成的账号。", "一键导入CPA", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("没有找到支付完成的账号。", "一键导入", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            string emailFile = Path.Combine(Path.GetTempPath(), "paid_cpa_import_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            string emailFile = Path.Combine(Path.GetTempPath(), "paid_import_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
             var args = new List<string> { "--import-cpa", "--email-file", emailFile, "--workers", "4", "--refresh-timeout", "60" };
-            RunBackend("一键导入CPA (" + rows.Count + ")", args);
+            AddImportTargetArg(args, target);
+            RunBackend("一键导入" + ImportTargetLabel(target) + " (" + rows.Count + ")", args);
+        }
+
+        private void ReimportCpa401_Click(object sender, RoutedEventArgs e)
+        {
+            string target = ShowImportTargetDialog("一键重导");
+            if (target.Length == 0) return;
+
+            string mailboxFile = GetChataiMailboxFilePath();
+            if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
+            {
+                MessageBox.Show("未找到 Chatai 邮箱文件，请先导入。", "缺少邮箱文件", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var args = new List<string>
+            {
+                "--reimport-cpa-401-survivors",
+                "--chatai-mailbox-file",
+                mailboxFile,
+                "--workers",
+                "1",
+                "--refresh-timeout",
+                "180"
+            };
+            AddImportTargetArg(args, target);
+            AddProxy(args);
+            RunBackend("一键重导" + ImportTargetLabel(target), args);
+        }
+
+        private string ShowImportTargetDialog(string title)
+        {
+            string selected = "";
+            var dialog = new Window
+            {
+                Title = title,
+                Owner = this,
+                Width = 360,
+                Height = 190,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var label = new TextBlock
+            {
+                Text = "选择导入目标",
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            Grid.SetRow(label, 0);
+            root.Children.Add(label);
+
+            var combo = new ComboBox { SelectedIndex = 0, Margin = new Thickness(0, 0, 0, 18) };
+            combo.Items.Add(new ComboBoxItem { Content = "CPA", Tag = "cpa" });
+            combo.Items.Add(new ComboBoxItem { Content = "SUB2API", Tag = "sub2api" });
+            Grid.SetRow(combo, 1);
+            root.Children.Add(combo);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var ok = new Button { Content = "确定", Width = 76, Style = (Style)FindResource("PrimaryButton") };
+            ok.Click += (_, __) =>
+            {
+                selected = ((combo.SelectedItem as ComboBoxItem)?.Tag as string) ?? "cpa";
+                dialog.Close();
+            };
+            var cancel = new Button { Content = "取消", Width = 76, Margin = new Thickness(8, 0, 0, 0) };
+            cancel.Click += (_, __) =>
+            {
+                selected = "";
+                dialog.Close();
+            };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 2);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+            return selected;
+        }
+
+        private void AddImportTargetArg(List<string> args, string target)
+        {
+            args.Add("--import-target");
+            args.Add((target ?? "").Equals("sub2api", StringComparison.OrdinalIgnoreCase) ? "sub2api" : "cpa");
+        }
+
+        private string ImportTargetLabel(string target)
+        {
+            return (target ?? "").Equals("sub2api", StringComparison.OrdinalIgnoreCase) ? "SUB2API" : "CPA";
         }
 
         private void RefreshSession_Click(object sender, RoutedEventArgs e)
@@ -1471,6 +1733,26 @@ namespace SmsWorkbench
 
             async Task LoadEmails()
             {
+                if (IsCfWorkerRow(row))
+                {
+                    header.Text = "正在获取 CFWorker 邮件...";
+                    try
+                    {
+                        mailItems.Clear();
+                        foreach (MailItem item in await FetchCfWorkerInbox(row.Identifier, 25))
+                        {
+                            mailItems.Add(item);
+                        }
+                        header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
+                    }
+                    catch (Exception ex)
+                    {
+                        header.Text = "获取邮件失败：" + ex.Message;
+                        Log("CFWorker收件箱获取失败：" + ex.Message);
+                    }
+                    return;
+                }
+
                 header.Text = "正在刷新令牌...";
                 string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
                 var tokenBody = new Dictionary<string, string>
@@ -1551,6 +1833,154 @@ namespace SmsWorkbench
             dialog.Content = root;
             dialog.Show();
             await LoadEmails();
+        }
+
+        private bool IsCfWorkerRow(PoolRow row)
+        {
+            if (row == null) return false;
+            return row.MailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase)
+                || row.AccountType.Contains("CFWorker")
+                || row.Identifier.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
+                || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<List<MailItem>> FetchCfWorkerInbox(string email, int limit)
+        {
+            var emailSection = GetSection(ReadJsonObject(Path.Combine(rootDir, "config.json")), "email_registration");
+            string baseUrl = GetString(emailSection, "cfworker_url").Trim().TrimEnd('/');
+            string adminToken = GetString(emailSection, "cfworker_admin_token").Trim();
+            string cfToken = GetString(emailSection, "cfworker_api_token").Trim();
+            if (baseUrl.Length == 0) throw new InvalidOperationException("config.json 缺少 email_registration.cfworker_url");
+
+            string normalizedEmail = email.Trim().ToLowerInvariant();
+            string encoded = Uri.EscapeDataString(normalizedEmail);
+            string domain = normalizedEmail.Contains("@") ? normalizedEmail.Substring(normalizedEmail.LastIndexOf('@') + 1) : "";
+            string[] paths =
+            {
+                "/admin/emails?page=1&domain=" + Uri.EscapeDataString(domain),
+                "/admin/emails?page=1",
+                "/api/messages?email=" + encoded + "&limit=" + limit,
+                "/api/emails/" + encoded + "/messages?limit=" + limit,
+                "/api/mailboxes/" + encoded + "/messages?limit=" + limit,
+                "/api/mailbox/" + encoded + "?limit=" + limit,
+                "/api/inbox/" + encoded + "?limit=" + limit,
+                "/api/messages/" + encoded + "?limit=" + limit,
+                "/messages/" + encoded + "?limit=" + limit,
+                "/inbox/" + encoded + "?limit=" + limit
+            };
+
+            string lastError = "";
+            foreach (string path in paths)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + path);
+                request.Headers.Accept.ParseAdd("application/json");
+                if (adminToken.Length > 0)
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+                    request.Headers.TryAddWithoutValidation("X-Admin-Token", adminToken);
+                }
+                if (cfToken.Length > 0)
+                {
+                    request.Headers.TryAddWithoutValidation("X-CF-API-Token", cfToken);
+                }
+
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
+                using HttpResponseMessage response = await httpClient.SendAsync(request, cts.Token);
+                string text = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    lastError = ((int)response.StatusCode) + " " + response.ReasonPhrase;
+                    continue;
+                }
+                using JsonDocument doc = JsonDocument.Parse(text.Length == 0 ? "[]" : text);
+                var items = ExtractCfWorkerMailItems(doc.RootElement, email, limit);
+                if (items.Count > 0 || path.StartsWith("/admin/emails", StringComparison.OrdinalIgnoreCase) || LooksEmptyMessageList(doc.RootElement)) return items;
+            }
+            throw new InvalidOperationException(lastError.Length > 0 ? lastError : "未找到可用的 CFWorker 收件箱接口");
+        }
+
+        private List<MailItem> ExtractCfWorkerMailItems(JsonElement root, string email, int limit)
+        {
+            var array = FindMessageArray(root);
+            var items = new List<MailItem>();
+            if (array.ValueKind != JsonValueKind.Array) return items;
+            foreach (JsonElement msg in array.EnumerateArray())
+            {
+                if (items.Count >= limit) break;
+                string to = JsonStringAny(msg, "to_address", "recipient", "mailbox", "email", "address", "to");
+                if (to.Length > 0 && !to.Contains(email, StringComparison.OrdinalIgnoreCase)) continue;
+                string subject = JsonStringAny(msg, "subject", "title");
+                string from = JsonStringAny(msg, "from_email", "from_address", "sender", "from");
+                string received = JsonStringAny(msg, "receivedDateTime", "received_at", "created_at", "date", "timestamp");
+                string body = JsonStringAny(msg, "bodyPreview", "preview", "text", "content", "body", "html", "extracted_json");
+                if (msg.TryGetProperty("body", out JsonElement bodyObj) && bodyObj.ValueKind == JsonValueKind.Object)
+                {
+                    body = JsonStringAny(bodyObj, "content", "text", "html");
+                }
+                if (from.StartsWith("{")) from = "";
+                received = FormatCfWorkerReceivedAt(received);
+                items.Add(new MailItem
+                {
+                    ReceivedAt = received,
+                    From = from,
+                    Subject = subject,
+                    BodyPreview = body
+                });
+            }
+            return items;
+        }
+
+        private string FormatCfWorkerReceivedAt(string value)
+        {
+            string text = (value ?? "").Trim();
+            if (long.TryParse(text, out long epoch))
+            {
+                try
+                {
+                    DateTimeOffset dto = epoch > 10000000000L
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(epoch)
+                        : DateTimeOffset.FromUnixTimeSeconds(epoch);
+                    return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+                catch
+                {
+                    return text;
+                }
+            }
+            if (text.Length > 19) return text.Substring(0, 19).Replace("T", " ");
+            return text;
+        }
+
+        private JsonElement FindMessageArray(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Array) return element;
+            if (element.ValueKind != JsonValueKind.Object) return default;
+            foreach (string key in new[] { "messages", "mails", "emails", "items", "data", "value", "results" })
+            {
+                if (!element.TryGetProperty(key, out JsonElement child)) continue;
+                if (child.ValueKind == JsonValueKind.Array) return child;
+                JsonElement nested = FindMessageArray(child);
+                if (nested.ValueKind == JsonValueKind.Array) return nested;
+            }
+            return default;
+        }
+
+        private bool LooksEmptyMessageList(JsonElement element)
+        {
+            JsonElement array = FindMessageArray(element);
+            return array.ValueKind == JsonValueKind.Array && array.GetArrayLength() == 0;
+        }
+
+        private string JsonStringAny(JsonElement obj, params string[] properties)
+        {
+            if (obj.ValueKind != JsonValueKind.Object) return obj.ValueKind == JsonValueKind.String ? obj.GetString() ?? "" : "";
+            foreach (string property in properties)
+            {
+                if (!obj.TryGetProperty(property, out JsonElement value)) continue;
+                if (value.ValueKind == JsonValueKind.String) return value.GetString() ?? "";
+                if (value.ValueKind == JsonValueKind.Number) return value.ToString();
+            }
+            return "";
         }
 
         private void ShowMailDetailDialog(MailItem item)
@@ -1929,6 +2359,7 @@ namespace SmsWorkbench
             var storage = GetSection(config, "storage");
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
+            var sub2api = GetSection(config, "sub2api");
 
             var dialog = new Window
             {
@@ -1959,12 +2390,26 @@ namespace SmsWorkbench
             AddConfigField(form, fields, row++, "邮箱域名", "luckmail_purchase_domain", GetString(email, "luckmail_purchase_domain"));
             AddConfigField(form, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(form, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
+            AddConfigField(form, fields, row++, "CFWorker URL", "cfworker_url", GetString(email, "cfworker_url"));
+            AddConfigField(form, fields, row++, "CFWorker 域名", "cfworker_domain", GetString(email, "cfworker_domain"));
+            AddConfigField(form, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
+            AddConfigField(form, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
             AddConfigField(form, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(form, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
             AddConfigField(form, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
             AddConfigField(form, fields, row++, "SQLite路径", "sqlite_path", GetString(storage, "sqlite_path"));
             AddConfigField(form, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
             AddConfigField(form, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
+            AddConfigField(form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
+            AddConfigField(form, fields, row++, "SUB2API Token", "sub2api_token", GetString(sub2api, "api_token"));
+            AddConfigField(form, fields, row++, "SUB2API邮箱", "sub2api_email", GetString(sub2api, "email"));
+            AddConfigField(form, fields, row++, "SUB2API密码", "sub2api_password", GetString(sub2api, "password"));
+            AddConfigField(form, fields, row++, "SUB2API分组", "sub2api_group", GetString(sub2api, "group_name"));
+            AddConfigField(form, fields, row++, "SUB2API分组ID", "sub2api_group_ids", GetString(sub2api, "group_ids"));
+            AddConfigField(form, fields, row++, "SUB2API代理", "sub2api_proxy", GetString(sub2api, "proxy_name"));
+            AddConfigField(form, fields, row++, "SUB2API代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
+            AddConfigField(form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
+            AddConfigField(form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
 
             var scroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             Grid.SetRow(scroll, 0);
@@ -1988,18 +2433,33 @@ namespace SmsWorkbench
                 email["luckmail_purchase_domain"] = fields["luckmail_purchase_domain"].Text.Trim();
                 email["otp_poll_interval"] = fields["otp_poll_interval"].Text.Trim();
                 email["token_file"] = fields["token_file"].Text.Trim();
+                email["cfworker_url"] = fields["cfworker_url"].Text.Trim();
+                email["cfworker_domain"] = fields["cfworker_domain"].Text.Trim();
+                email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();
+                email["cfworker_api_token"] = fields["cfworker_api_token"].Text.Trim();
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
                 output["directory"] = fields["output_directory"].Text.Trim();
                 storage["sqlite_path"] = fields["sqlite_path"].Text.Trim();
                 cpaMode["api_url"] = fields["cpa_api_url"].Text.Trim();
                 cpaMode["api_token"] = fields["cpa_api_token"].Text.Trim();
+                sub2api["api_url"] = fields["sub2api_url"].Text.Trim();
+                sub2api["api_token"] = fields["sub2api_token"].Text.Trim();
+                sub2api["email"] = fields["sub2api_email"].Text.Trim();
+                sub2api["password"] = fields["sub2api_password"].Text.Trim();
+                sub2api["group_name"] = fields["sub2api_group"].Text.Trim();
+                sub2api["group_ids"] = fields["sub2api_group_ids"].Text.Trim();
+                sub2api["proxy_name"] = fields["sub2api_proxy"].Text.Trim();
+                sub2api["proxy_id"] = fields["sub2api_proxy_id"].Text.Trim();
+                sub2api["priority"] = fields["sub2api_priority"].Text.Trim();
+                sub2api["concurrency"] = fields["sub2api_concurrency"].Text.Trim();
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
                 config["output"] = output;
                 config["storage"] = storage;
                 config["cpa_mode"] = cpaMode;
+                config["sub2api"] = sub2api;
                 SaveConfig(path, config);
                 PurchaseProjectText = fields["luckmail_purchase_project_code"].Text.Trim();
                 PurchaseEmailTypeText = fields["luckmail_purchase_email_type"].Text.Trim();
@@ -2176,7 +2636,7 @@ namespace SmsWorkbench
             }
             string status = GetString(data, "paypal_status");
             if (status.Length == 0) status = GetString(paypal, "status");
-            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成";
+            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (status.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return "待人工支付";
             string ok = GetString(paypal, "ok").ToLowerInvariant();
             if (ok == "true") return "PayPal已生成";
@@ -2188,6 +2648,50 @@ namespace SmsWorkbench
         {
             if (!TryGetMap(data, "paypal", out Dictionary<string, object> paypal)) return "";
             return GetString(paypal, "url");
+        }
+
+        private bool IsCpaImported(string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(rawJson)) return false;
+            try
+            {
+                return IsCpaImported(JsonTextToObject(rawJson));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsCpaImported(Dictionary<string, object> data)
+        {
+            if (!TryGetMap(data, "cpa_import", out Dictionary<string, object> cpaImport)) return false;
+            return GetString(cpaImport, "ok").Equals("true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string GetImportedStatus(string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(rawJson)) return "";
+            try
+            {
+                return GetImportedStatus(JsonTextToObject(rawJson));
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private string GetImportedStatus(Dictionary<string, object> data)
+        {
+            if (IsImportOk(data, "sub2api_import") || IsImportOk(data, "cpa_import")) return "已导入CPA/SUB2";
+            return "";
+        }
+
+        private bool IsImportOk(Dictionary<string, object> data, string key)
+        {
+            if (!TryGetMap(data, key, out Dictionary<string, object> importData)) return false;
+            return GetString(importData, "ok").Equals("true", StringComparison.OrdinalIgnoreCase);
         }
 
         private string GetPaypalAmount(string rawJson)
@@ -2247,10 +2751,11 @@ namespace SmsWorkbench
             return "";
         }
 
-        private string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus)
+        private string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus, string importedStatus)
         {
+            if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalOk == "1" || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "PayPal已生成";
             return access.Length > 0 ? "已注册" : "待处理";
@@ -2258,7 +2763,7 @@ namespace SmsWorkbench
 
         private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl)
         {
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付失败";
             if (paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return "待人工支付";
             if (paypalOk == "1" && !string.IsNullOrWhiteSpace(paypalUrl)) return "待人工支付";
@@ -2551,12 +3056,20 @@ namespace SmsWorkbench
         public string MailboxLine { get; set; } = "";
         public string ClientId { get; set; } = "";
         public string RawRefreshToken { get; set; } = "";
+        public string MailboxProvider { get; set; } = "";
         public bool IsChecked
         {
             get => isChecked;
             set { isChecked = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChecked))); }
         }
         public event PropertyChangedEventHandler PropertyChanged;
+    }
+
+    public sealed class RegisterOptions
+    {
+        public string Source { get; set; } = "pool";
+        public int Count { get; set; } = 1;
+        public int Workers { get; set; } = 4;
     }
 
     public sealed class TaskRow : INotifyPropertyChanged
