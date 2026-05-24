@@ -482,7 +482,10 @@ def _mailbox_from_data(data):
     mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
     email = str(mailbox.get("email") or data.get("email") or "").strip()
     refresh_token = str(mailbox.get("refresh_token") or "").strip()
-    if not email or not refresh_token:
+    provider = str(mailbox.get("provider") or "").strip()
+    if not email:
+        return None
+    if provider != "cfworker" and not refresh_token:
         return None
     return MailboxAccount(
         email=email,
@@ -491,7 +494,7 @@ def _mailbox_from_data(data):
         access_token=str(mailbox.get("access_token") or "").strip(),
         token=str(mailbox.get("token") or "").strip(),
         source=str(mailbox.get("source") or "").strip(),
-        provider=str(mailbox.get("provider") or "").strip(),
+        provider=provider,
     )
 
 

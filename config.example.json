@@ -68,6 +68,18 @@
         "api_url": "http://your-domain.com:8317",
         "api_token": ""
     },
+    "sub2api": {
+        "api_url": "http://your-sub2api-domain.com",
+        "api_token": "",
+        "email": "",
+        "password": "",
+        "group_name": "codex",
+        "group_ids": "",
+        "proxy_name": "",
+        "proxy_id": "",
+        "priority": 1,
+        "concurrency": 10
+    },
     "codex_oauth": {
         "allow_passwordless_takeover": false,
         "auto_phone_verification": false

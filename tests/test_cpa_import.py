@@ -67,6 +67,40 @@ class CpaImportTests(unittest.TestCase):
         self.assertEqual(uploaded_payload["session_token"], "st_123")
         self.assertNotIn("refresh_token", uploaded_payload)
 
+    def test_classify_cpa_auth_file_detects_401_probe(self):
+        self.assertEqual(
+            cpa_import.classify_cpa_auth_file({"probe": {"status_code": 401}, "email": "a@liziai.cloud"}),
+            "token_invalid",
+        )
+        self.assertEqual(
+            cpa_import.classify_cpa_auth_file({"status": "active", "email": "a@liziai.cloud"}),
+            "active",
+        )
+
+    def test_auto_reimport_cpa_401_filters_domain_and_imports_invalid(self):
+        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value={
+            "ok": True,
+            "files": [
+                {"email": "bad@liziai.cloud", "probe": {"status_code": 401}},
+                {"email": "ok@liziai.cloud", "status": "active"},
+                {"email": "other@example.com", "probe": {"status_code": 401}},
+            ],
+        }):
+            with patch.object(cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management/auth-files", "token")):
+                with patch.object(cpa_import, "import_cpa_sessions", return_value={
+                    "ok": True,
+                    "total": 1,
+                    "success": 1,
+                    "failed": 0,
+                    "results": [],
+                }) as imported:
+                    result = cpa_import.auto_reimport_cpa_401(domain_filter="liziai.cloud")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["emails"], ["bad@liziai.cloud"])
+        imported.assert_called_once()
+        self.assertEqual(imported.call_args.args[0], ["bad@liziai.cloud"])
+
 
 if __name__ == "__main__":
     unittest.main()

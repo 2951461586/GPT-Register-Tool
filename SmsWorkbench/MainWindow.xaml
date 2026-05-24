@@ -20,7 +20,7 @@
               <ColumnDefinition x:Name="SidebarTextColumn" Width="*"/>
               <ColumnDefinition x:Name="SidebarToggleColumn" Width="40"/>
             </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" x:Name="SidebarBrand" Width="34" Height="34" CornerRadius="8" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="1">
+            <Border Grid.Column="0" x:Name="SidebarBrand" Width="34" Height="34" CornerRadius="8" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
               <Image Source="Assets/black-kitten.png" Width="28" Height="28" Stretch="Uniform"/>
             </Border>
             <StackPanel Grid.Column="1" x:Name="SidebarHeaderText" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -103,10 +103,16 @@
                 <TextBlock Tag="SidebarText" Text="标记支付完成" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
-            <Button Style="{StaticResource SidebarButton}" Click="ImportPaidCpa_Click" ToolTip="一键导入CPA">
+            <Button Style="{StaticResource SidebarButton}" Click="ImportPaidCpa_Click" ToolTip="导入到 CPA 或 SUB2API">
               <StackPanel Orientation="Horizontal">
                 <Path Style="{StaticResource IconPath}" Data="M4 3 H10 L13 6 V13 H4 Z M10 3 V6 H13"/>
-                <TextBlock Tag="SidebarText" Text="一键导入CPA" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Tag="SidebarText" Text="一键导入" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="ReimportCpa401_Click" ToolTip="筛选未封禁的 401 账号并重新导入到 CPA 或 SUB2API">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M4 8 A4 4 0 1 1 6 11.5 M4 8 H2 V6 M12 8 A4 4 0 1 1 10 4.5 M12 8 H14 V10"/>
+                <TextBlock Tag="SidebarText" Text="一键重导" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="RegeneratePayPalLink_Click" ToolTip="重新生成链接">
@@ -271,8 +277,14 @@
                       Background="{StaticResource SplitterBg}" ShowsPreview="True"/>
         <Border Grid.Row="2" Background="{StaticResource LogBg}" BorderBrush="{StaticResource LogBorder}" BorderThickness="1" MinHeight="220">
           <Grid>
-            <Button Content="清空日志" Width="78" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,6,20,0" Panel.ZIndex="1" Click="ClearLog_Click"/>
+            <Button Width="74" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,6,20,0" Padding="8,0" Panel.ZIndex="1" Click="ClearLog_Click">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
+                      Data="M4 5 H12 M6 5 V13 M10 5 V13 M5 5 L6 14 H10 L11 5 M6 3 H10"/>
+                <TextBlock Text="清空" Margin="6,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
             <TextBox Text="{Binding LogText}" Background="{StaticResource LogBg}" Foreground="{StaticResource LogText}" BorderThickness="0"
                    FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
                    VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"

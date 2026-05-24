@@ -3,26 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
-    <SolidColorBrush x:Key="AppBg" Color="#F6F7F8"/>
-    <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="PanelBg2" Color="#F8F9FA"/>
-    <SolidColorBrush x:Key="PanelHover" Color="#F1F3F5"/>
-    <SolidColorBrush x:Key="Line" Color="#E2E5E9"/>
-    <SolidColorBrush x:Key="LineStrong" Color="#A9B0BA"/>
-    <SolidColorBrush x:Key="Primary" Color="#111111"/>
-    <SolidColorBrush x:Key="PrimarySoft" Color="#EEF0F2"/>
+    <SolidColorBrush x:Key="AppBg" Color="#F0EEE8"/>
+    <SolidColorBrush x:Key="PanelBg" Color="#F8F6F1"/>
+    <SolidColorBrush x:Key="PanelBg2" Color="#F0EEE8"/>
+    <SolidColorBrush x:Key="PanelHover" Color="#EFEAE1"/>
+    <SolidColorBrush x:Key="Line" Color="#DED8CD"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#BFB6A8"/>
+    <SolidColorBrush x:Key="Primary" Color="#2F343A"/>
+    <SolidColorBrush x:Key="PrimarySoft" Color="#F0EEE8"/>
     <SolidColorBrush x:Key="Danger" Color="#B42318"/>
     <SolidColorBrush x:Key="DangerSoft" Color="#FFF2F0"/>
-    <SolidColorBrush x:Key="TextMain" Color="#111111"/>
-    <SolidColorBrush x:Key="TextSub" Color="#4B5563"/>
-    <SolidColorBrush x:Key="TextMuted" Color="#7A828D"/>
-    <SolidColorBrush x:Key="SidebarBg" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="GridAltBg" Color="#FAFAFB"/>
-    <SolidColorBrush x:Key="SplitterBg" Color="#D8DDE3"/>
-    <SolidColorBrush x:Key="StatusBg" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="LogBg" Color="#0B0C0E"/>
-    <SolidColorBrush x:Key="LogBorder" Color="#1F2328"/>
-    <SolidColorBrush x:Key="LogText" Color="#E7EAEE"/>
+    <SolidColorBrush x:Key="TextMain" Color="#2F343A"/>
+    <SolidColorBrush x:Key="TextSub" Color="#66707A"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#8A929B"/>
+    <SolidColorBrush x:Key="SidebarBg" Color="#F8F6F1"/>
+    <SolidColorBrush x:Key="GridAltBg" Color="#F0EEE8"/>
+    <SolidColorBrush x:Key="SplitterBg" Color="#D8D1C4"/>
+    <SolidColorBrush x:Key="StatusBg" Color="#F8F6F1"/>
+    <SolidColorBrush x:Key="LogBg" Color="#252A30"/>
+    <SolidColorBrush x:Key="LogBorder" Color="#3A414A"/>
+    <SolidColorBrush x:Key="LogText" Color="#C8D0D8"/>
 
     <Style TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
@@ -66,7 +66,7 @@
                 <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{StaticResource LineStrong}"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="ButtonChrome" Property="Background" Value="#E7EAEE"/>
+                <Setter TargetName="ButtonChrome" Property="Background" Value="#E8E2D8"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.42"/>
@@ -181,10 +181,10 @@
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Style.Triggers>
         <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#F1F3F5"/>
+          <Setter Property="Background" Value="#EFEAE1"/>
         </Trigger>
         <Trigger Property="IsSelected" Value="True">
-          <Setter Property="Background" Value="#E9ECEF"/>
+          <Setter Property="Background" Value="#E8E2D8"/>
           <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
         </Trigger>
       </Style.Triggers>
@@ -207,7 +207,7 @@
     </Style>
 
     <Style TargetType="DataGridColumnHeader">
-      <Setter Property="Background" Value="#F3F4F6"/>
+      <Setter Property="Background" Value="#F0EEE8"/>
       <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -224,14 +224,14 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
               <Border x:Name="CheckBoxChrome" Width="15" Height="15" Background="{StaticResource PanelBg}"
                       BorderBrush="{StaticResource LineStrong}" BorderThickness="1" CornerRadius="2">
-                <Path x:Name="CheckMark" Data="M 3 7 L 6 10 L 12 4" Stroke="#111111" StrokeThickness="1.8"
+                <Path x:Name="CheckMark" Data="M 3 7 L 6 10 L 12 4" Stroke="#2F343A" StrokeThickness="1.8"
                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
               </Border>
               <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="CheckBoxChrome" Property="Background" Value="#F1F3F5"/>
+                <Setter TargetName="CheckBoxChrome" Property="Background" Value="#EFEAE1"/>
                 <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
               </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
@@ -248,7 +248,7 @@
       <Setter Property="MinWidth" Value="12"/>
       <Setter Property="Height" Value="12"/>
       <Setter Property="MinHeight" Value="12"/>
-      <Setter Property="Background" Value="#F3F4F6"/>
+      <Setter Property="Background" Value="#F0EEE8"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="{x:Type ScrollBar}">

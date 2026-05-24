@@ -11,17 +11,17 @@
 body {
   width: 420px;
   margin: 0;
-  background: #f5f6f7;
+  background: #f0eee8;
   color: #111;
 }
 
 .panel {
   margin: 8px;
   padding: 14px;
-  border: 1px solid #dfe3e8;
+  border: 1px solid #ded8cd;
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+  background: #f8f6f1;
+  box-shadow: 0 18px 42px rgba(47, 52, 58, 0.12);
 }
 
 header {
@@ -34,12 +34,9 @@ header {
 .mark {
   width: 30px;
   height: 30px;
-  border: 1px solid #dfe3e8;
+  border: 1px solid #ded8cd;
   border-radius: 7px;
-  background:
-    linear-gradient(135deg, transparent 0 28%, #111 29% 32%, transparent 33%),
-    radial-gradient(circle at 50% 54%, #111 0 3px, transparent 4px),
-    #fff;
+  background: #f8f6f1 url("icons/icon32.png") center / 24px 24px no-repeat;
 }
 
 h1,
@@ -64,9 +61,9 @@ h1 {
   gap: 6px;
   margin: 10px 0;
   padding: 10px;
-  border: 1px solid #e6e9ee;
+  border: 1px solid #ded8cd;
   border-radius: 6px;
-  background: #f8fafc;
+  background: #f0eee8;
 }
 
 .runtime div {
@@ -101,9 +98,9 @@ footer {
 
 button {
   height: 34px;
-  border: 1px solid #d8dee6;
+  border: 1px solid #d8d1c4;
   border-radius: 6px;
-  background: #fff;
+  background: #f8f6f1;
   color: #111;
   font: inherit;
   font-weight: 800;
@@ -111,8 +108,8 @@ button {
 }
 
 button:hover {
-  background: #f2f4f7;
-  border-color: #aab2bd;
+  background: #efeae1;
+  border-color: #bfb6a8;
 }
 
 .primary {
@@ -129,9 +126,9 @@ button:hover {
 .timeline {
   margin: 10px 0;
   padding: 10px;
-  border: 1px solid #e6e9ee;
+  border: 1px solid #ded8cd;
   border-radius: 6px;
-  background: #fff;
+  background: #f8f6f1;
 }
 
 .section-title {
@@ -166,9 +163,9 @@ small {
 input,
 textarea {
   width: 100%;
-  border: 1px solid #d8dee6;
+  border: 1px solid #d8d1c4;
   border-radius: 6px;
-  background: #fff;
+  background: #f8f6f1;
   color: #111;
   font: inherit;
   outline: none;
