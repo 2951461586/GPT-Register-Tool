@@ -41,6 +41,24 @@ class PayPalAutofillOtpTests(unittest.TestCase):
         self.assertIn("ignoreKeys", source)
         self.assertIn("order_id", source)
 
+    def test_otp_submit_continues_to_paypal_agree_and_continue(self):
+        source = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")
+        self.assertIn("postOtpApproveWatchRunning", source)
+        self.assertIn("watchApproveAfterOtpSubmit", source)
+        self.assertIn("clickPayPalApproveButton", source)
+        self.assertIn("Clicked PayPal Agree and Continue", source)
+        self.assertIn("if (submitted) watchApproveAfterOtpSubmit(request.source || \"content-otp\")", source)
+        self.assertIn("if (mainResult.submitted) watchApproveAfterOtpSubmit(request.source || \"main-world-otp\")", source)
+        self.assertIn("if (request.submit) watchApproveAfterOtpSubmit(source)", source)
+
+    def test_generic_paypal_pages_watch_for_agree_and_continue(self):
+        source = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")
+        self.assertIn("genericPayPalApproveWatchStarted", source)
+        self.assertIn("watchGenericPayPalApproveRoute", source)
+        self.assertIn("Clicked PayPal Agree and Continue (${source})", source)
+        self.assertIn('watchGenericPayPalApproveRoute("page-load")', source)
+        self.assertIn("set up once|pay faster|automatic payments|billing agreement", source)
+
 
 if __name__ == "__main__":
     unittest.main()

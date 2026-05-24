@@ -93,10 +93,10 @@
   };
 
   const ACTION_WORDS = {
-    next: [/continue|next|agree|submit|confirm|pay|subscribe|done|log\s*in|sign\s*in/i, /继续|下一步|同意|提交|确认|支付|购买|订阅|完成|登录/i],
+    next: [/continue|next|agree|submit|confirm|verify|pay|subscribe|done|log\s*in|sign\s*in|create\s*(?:an\s*)?account|sign\s*up|register/i, /继续|下一步|同意|提交|确认|支付|购买|订阅|完成|登录/i],
     paypal: [/paypal/i],
-    approve: [/agree\s*(?:and)?\s*continue|accept|authorize|approve|continue|pay\s*now/i, /同意|继续|授权|确认|批准/i],
-    login: [/login|log\s*in|sign\s*in|continue|next/i, /登录|登入|继续|下一步/i],
+    approve: [/agree\s*(?:and|&)?\s*continue|accept|authorize|approve|continue|pay\s*now/i, /同意|继续|授权|确认|批准/i],
+    login: [/login|log\s*in|sign\s*in|continue|next|create\s*(?:an\s*)?account|sign\s*up|register/i, /登录|登入|继续|下一步/i],
     sms: [/send\s*code|resend|text\s*me|sms|continue/i, /发送|重发|短信|验证码|继续/i]
   };
 
@@ -117,6 +117,8 @@
   let checkoutWebSubmitted = false;
   let lastOtpFillRequestId = "";
   let otpCodeFetchRunning = false;
+  let postOtpApproveWatchRunning = false;
+  let genericPayPalApproveWatchStarted = false;
   const CHECKOUT_WEB_BILLING_FIELD_IDS = ["email", "phone", "cardNumber", "cardExpiry", "cardCvv", "billingLine1", "billingCity", "billingPostalCode"];
 
   function log(...args) {
@@ -624,6 +626,119 @@
     return true;
   }
 
+  function findPayPalApproveButton() {
+    const selector = [
+      "#consentButton",
+      "button[name='consentButton']",
+      "button[data-testid='submit-button']",
+      "button[data-testid='hosted-payment-submit-button']",
+      "button[data-automation-id*='agree' i]",
+      "button[data-automation-id*='continue' i]",
+      "button",
+      "a",
+      "[role='button']",
+      "input[type='submit']",
+      "input[type='button']"
+    ].join(",");
+    return all(selector).find((button) => {
+      if (button.disabled || button.getAttribute?.("aria-disabled") === "true") return false;
+      const text = textOf(button);
+      if (button.id === "consentButton" || button.name === "consentButton") return true;
+      if (/agree\s*(?:and|&)?\s*continue/i.test(text)) return true;
+      return ACTION_WORDS.approve.some((pattern) => pattern.test(text));
+    }) || null;
+  }
+
+  function clickPayPalApproveButton() {
+    const button = findPayPalApproveButton();
+    if (!button) return false;
+    log("clicking PayPal approve button:", textOf(button).slice(0, 80));
+    dispatchRobustClick(button);
+    return true;
+  }
+
+  async function watchApproveAfterOtpSubmit(source = "otp") {
+    if (postOtpApproveWatchRunning) return false;
+    postOtpApproveWatchRunning = true;
+    (async () => {
+      try {
+        const { profile } = await readProfile();
+        if (profile.options?.autoSubmit === false) return;
+        for (let i = 0; i < 50; i += 1) {
+          await sleep(1000);
+          const stage = detectStage();
+          if (stage === STAGES.DONE) return;
+          if (stage === STAGES.PAYPAL_SMS && hasOtpInputs()) continue;
+          const body = String(document.body?.innerText || "").toLowerCase();
+          const likelyApprove = stage === STAGES.PAYPAL_REVIEW
+            || stage === STAGES.PAYPAL_APPROVE
+            || /agree\s*(?:and|&)?\s*continue|automatic payments|billing agreement|authorize|review/.test(body);
+          if (!likelyApprove) continue;
+          checkTerms();
+          if (clickPayPalApproveButton()) {
+            await updateRuntime({
+              status: "running",
+              stage: STAGES.PAYPAL_APPROVE,
+              stageLabel: STAGE_LABELS[STAGES.PAYPAL_APPROVE],
+              message: `OTP submitted; clicked Agree and Continue (${source})`
+            });
+            return;
+          }
+        }
+        log("post OTP approve watcher timed out:", source);
+      } catch (error) {
+        log("post OTP approve watcher failed:", error?.message || String(error));
+      } finally {
+        postOtpApproveWatchRunning = false;
+      }
+    })();
+    return true;
+  }
+
+  async function watchGenericPayPalApproveRoute(source = "generic-paypal") {
+    if (genericPayPalApproveWatchStarted || !isTopFrame()) return false;
+    if (!/paypal\./i.test(location.host || "")) return false;
+    genericPayPalApproveWatchStarted = true;
+    (async () => {
+      try {
+        const { profile } = await readProfile();
+        if (profile.options?.autoSubmit === false) return;
+        for (let i = 0; i < 60; i += 1) {
+          await sleep(1500);
+          if (!/paypal\./i.test(location.host || "")) return;
+          if (hasOtpInputs()) continue;
+          if (isPayPalCheckoutWeb() && checkoutWebBillingFormStillVisible()) continue;
+          const stage = detectStage();
+          if (stage === STAGES.DONE) return;
+          const body = String(document.body?.innerText || "").toLowerCase();
+          const path = String(location.pathname || "").toLowerCase();
+          const likelyApprove = stage === STAGES.PAYPAL_REVIEW
+            || stage === STAGES.PAYPAL_APPROVE
+            || /webapps\/hermes|agreements|billing|review|autopay|checkoutnow/.test(path)
+            || /agree\s*(?:and|&)?\s*continue|set up once|pay faster|automatic payments|billing agreement|authorize|review|consent/.test(body);
+          if (!likelyApprove) continue;
+          checkTerms();
+          if (clickPayPalApproveButton()) {
+            await updateRuntime({
+              status: "running",
+              stage: STAGES.PAYPAL_APPROVE,
+              stageLabel: STAGE_LABELS[STAGES.PAYPAL_APPROVE],
+              message: `Clicked PayPal Agree and Continue (${source})`
+            });
+            return;
+          }
+          if (i % 4 === 0) log("Agree watcher waiting:", source, "attempt", i);
+        }
+        log("generic PayPal approve watcher timed out:", source);
+      } catch (error) {
+        log("generic PayPal approve watcher failed:", error?.message || String(error));
+      } finally {
+        genericPayPalApproveWatchStarted = false;
+      }
+    })();
+    return true;
+  }
+
   function hasCaptcha() {
     return Boolean(
       document.querySelector("iframe[name='recaptcha']") ||
@@ -936,6 +1051,68 @@
     return false;
   }
 
+  function setV32NativeValue(el, value) {
+    if (!el || value == null) return false;
+    const next = String(value);
+    try { el.focus({ preventScroll: true }); } catch (_) {}
+    try { if (el._valueTracker) el._valueTracker.setValue(""); } catch (_) {}
+    const proto = el instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : el instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) setter.call(el, next);
+    else el.value = next;
+    el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("blur", { bubbles: true, composed: true }));
+    return true;
+  }
+
+  function directCheckoutFillId(id, value) {
+    if (value == null || String(value).trim() === "") return false;
+    const el = document.getElementById(id);
+    if (!el) {
+      log("NOT FOUND:", id);
+      return false;
+    }
+    setV32NativeValue(el, value);
+    log(id, "=", "value" in el ? el.value : value);
+    return true;
+  }
+
+  function directCheckoutFillSelect(id, text) {
+    const el = document.getElementById(id);
+    if (!el) {
+      log("NOT FOUND:", id);
+      return false;
+    }
+    if (el instanceof HTMLSelectElement) {
+      const wanted = String(text || "").toLowerCase();
+      const option = Array.from(el.options || []).find((item) => {
+        const label = `${item.textContent || ""} ${item.value || ""}`.toLowerCase();
+        return label.includes(wanted) || String(item.value || "").toLowerCase() === wanted;
+      });
+      if (option) {
+        setV32NativeValue(el, option.value);
+        log(id, "=", option.textContent || option.value);
+        return true;
+      }
+    }
+    return directCheckoutFillId(id, text);
+  }
+
+  async function forceCheckoutCountryUsV32() {
+    const country = document.getElementById("country");
+    if (!country) return false;
+    if (String(country.value || "").toUpperCase() === "US") return true;
+    setV32NativeValue(country, "US");
+    log("Country -> US, waiting 3s...");
+    await sleep(3000);
+    return true;
+  }
+
   async function executeOpenAiCheckout(profile) {
     const payPalButton = findPayPalMethodButton();
     if (payPalButton) {
@@ -1001,6 +1178,7 @@
     const cardExpiryCandidates = checkoutExpiryCandidates(profile.card.expiry);
     return {
       autoSubmit: profile.options.autoSubmit !== false,
+      v32Direct: true,
       email: profile.email,
       phone: phoneCandidates[0] || formatPhone(profile.phone),
       phoneCandidates,
@@ -1029,19 +1207,6 @@
       });
       if (response?.ok && response.result?.ok) return response.result;
       return { ok: false, error: response?.error || "main world fill failed" };
-    } catch (error) {
-      return { ok: false, error: error?.message || String(error) };
-    }
-  }
-
-  async function fillCheckoutWebWithDebugger(profile, address) {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: "PAYPAL_AUTOFILL_DEBUGGER_CHECKOUTWEB",
-        payload: buildCheckoutWebPayload(profile, address)
-      });
-      if (response?.ok && response.result?.ok) return response.result;
-      return { ok: false, error: response?.error || response?.result?.error || "debugger fill failed" };
     } catch (error) {
       return { ok: false, error: error?.message || String(error) };
     }
@@ -1237,6 +1402,81 @@
       : { progressed: false, reason: "checkout_pending_no_otp" };
   }
 
+  async function fillCheckoutWebV32Direct(profile, address) {
+    await forceCheckoutCountryUsV32();
+    let filled = 0;
+    filled += directCheckoutFillId("email", profile.email) ? 1 : 0;
+    filled += directCheckoutFillId("phone", formatPhone(profile.phone)) ? 1 : 0;
+    filled += directCheckoutFillId("cardNumber", profile.card.number) ? 1 : 0;
+    filled += directCheckoutFillId("cardExpiry", profile.card.expiry) ? 1 : 0;
+    filled += directCheckoutFillId("cardCvv", profile.card.cvv) ? 1 : 0;
+    filled += directCheckoutFillId("password", profile.password) ? 1 : 0;
+    filled += directCheckoutFillId("firstName", profile.firstName) ? 1 : 0;
+    filled += directCheckoutFillId("lastName", profile.lastName) ? 1 : 0;
+    const fullNameEl = document.getElementById("full-name");
+    if (fullNameEl && !String(fullNameEl.value || "").trim()) {
+      filled += directCheckoutFillId("full-name", `${profile.firstName} ${profile.lastName}`) ? 1 : 0;
+    }
+    filled += directCheckoutFillId("billingLine1", address.line1) ? 1 : 0;
+    filled += directCheckoutFillId("billingCity", address.city) ? 1 : 0;
+    filled += directCheckoutFillId("billingPostalCode", address.postalCode) ? 1 : 0;
+    filled += directCheckoutFillSelect("billingState", address.state) ? 1 : 0;
+    const missing = checkoutWebRequiredMissing();
+    const unfilled = checkoutWebRequiredUnfilled(profile, address);
+    log("v32 direct fill done, filled=" + filled + ", missing=" + missing.concat(unfilled).join(","));
+    return { ready: missing.length === 0 && unfilled.length === 0, filled, missing: missing.concat(unfilled) };
+  }
+
+  async function watchCheckoutWebOtpV32(profile, submittedUrl) {
+    beginOtpCodeFetch(profile, "checkoutweb-v32-submit");
+    let sendCodeClicked = false;
+    for (let i = 0; i < 80; i += 1) {
+      await sleep(1500);
+      if (i > 0 && i % 12 === 0) beginOtpCodeFetch(profile, "checkoutweb-v32-watch-" + i);
+      if (location.href !== submittedUrl) {
+        log("page navigated after checkout submit:", location.href);
+        return true;
+      }
+
+      const bodyText = (document.body?.innerText || "").substring(0, 800);
+      if (/unable to complete|try a different|unable to process|declined|couldn't\s*process|can't\s*complete|not\s*able\s*to|失败|无法完成|换一个|无法处理/i.test(bodyText)) {
+        log("detected error/risk control during v32 OTP watch, auto-rotating pools");
+        await advancePools({ card: true, phone: true });
+        const rotated = await readProfile();
+        log("rotated to phone:", rotated.profile.phone, "card:", rotated.profile.card.number);
+        await updateRuntime({ status: "waiting", message: "风控/错误：已自动切换手机号和卡号，请重新打开支付链接重试" });
+        return true;
+      }
+
+      if (!sendCodeClicked) {
+        const sendBtn = Array.from(document.querySelectorAll("button, a, [role='button']")).find((el) => {
+          const text = String(el.textContent || el.getAttribute?.("aria-label") || "").replace(/\s+/g, " ").trim();
+          return /send\s*(?:code|sms|text)|text\s*me|get\s*(?:a\s*)?code|发送|获取|验证码/i.test(text) && isVisible(el);
+        });
+        if (sendBtn) {
+          log("clicking send code button:", textOf(sendBtn).slice(0, 80));
+          dispatchRobustClick(sendBtn);
+          sendCodeClicked = true;
+          continue;
+        }
+      }
+
+      const otpInputs = findOtpInputs();
+      if (i % 4 === 0) {
+        log("OTP watch #" + i + ": found=" + otpInputs.length + " inputs=" + queryDeepAll("input").filter(isVisible).length);
+      }
+      if (otpInputs.length > 0) {
+        await updateRuntime({ status: "running", stage: STAGES.PAYPAL_SMS, stageLabel: STAGE_LABELS[STAGES.PAYPAL_SMS], message: "检测到短信验证码输入框，正在取码" });
+        const smsResult = await executePayPalSms(profile);
+        log("OTP result: " + smsResult.message);
+        await updateRuntime({ status: smsResult.ok ? "running" : "waiting", stage: STAGES.PAYPAL_SMS, stageLabel: STAGE_LABELS[STAGES.PAYPAL_SMS], message: smsResult.message });
+        return true;
+      }
+    }
+    await updateRuntime({ status: "waiting", message: "未检测到短信验证页面" });
+    return true;
+  }
+
   async function runCheckoutWebUserscriptFlow(options = {}) {
     if (!isTopFrame()) return false;
     if (checkoutWebDirectRunning || !isPayPalCheckoutWeb()) return false;
@@ -1262,41 +1502,20 @@
       await sleep(2000);
 
       const address = await resolveAddress(profile);
-      const fillResult = await fillCheckoutWebFormWhenReady(profile, address);
-      const filled = fillResult.filled;
-      log("fill done, ready=" + fillResult.ready + ", filled=" + filled + ", missing=" + (fillResult.missing || []).join(","));
-      let mainSubmitResult = await fillCheckoutWebWithDebugger(profile, address);
-      log("debugger checkout result:", JSON.stringify({
-        ok: Boolean(mainSubmitResult?.ok),
-        ready: Boolean(mainSubmitResult?.ready),
-        submitted: Boolean(mainSubmitResult?.submitted),
-        filled: Number(mainSubmitResult?.filled || 0),
-        missing: mainSubmitResult?.missing || [],
-        invalid: mainSubmitResult?.invalid || [],
-        error: mainSubmitResult?.error || ""
+      const fillResult = await fillCheckoutWebV32Direct(profile, address);
+      const mainWorldResult = await fillCheckoutWebInMainWorld(profile, address);
+      log("main-world candidate fill result:", JSON.stringify({
+        ok: Boolean(mainWorldResult?.ok),
+        ready: Boolean(mainWorldResult?.ready),
+        submitted: Boolean(mainWorldResult?.submitted),
+        filled: Number(mainWorldResult?.filled || 0),
+        missing: mainWorldResult?.missing || [],
+        fields: mainWorldResult?.fields || []
       }));
-      if (!mainSubmitResult?.ok) {
-        mainSubmitResult = await fillCheckoutWebInMainWorld(profile, address);
-        log("main-world checkout result:", JSON.stringify({
-          ok: Boolean(mainSubmitResult?.ok),
-          ready: Boolean(mainSubmitResult?.ready),
-          submitted: Boolean(mainSubmitResult?.submitted),
-          filled: Number(mainSubmitResult?.filled || 0),
-          missing: mainSubmitResult?.missing || []
-        }));
-      }
-
-      // 不管 ready 状态，直接尝试提交（PayPal 可能重新格式化值导致验证失败）
-      if (mainSubmitResult?.source === "debugger" && !mainSubmitResult.ready) {
-        log("debugger fill did not stick; stop before submit:", JSON.stringify({ missing: mainSubmitResult.missing || [] }));
-        await updateRuntime({ status: "waiting", stage: STAGES.PAYPAL_GUEST, stageLabel: STAGE_LABELS[STAGES.PAYPAL_GUEST], message: "PayPal fields did not persist after debugger input; stopped before retry loop" });
-        return true;
-      }
-
+      const filled = fillResult.filled;
       checkTerms();
       await sleep(500);
-      const submitted = Boolean(mainSubmitResult?.submitted)
-        || (mainSubmitResult?.source !== "debugger" && await clickCheckoutWebButtonWithRetry(10));
+      const submitted = Boolean(mainWorldResult?.submitted) || await clickCheckoutWebButtonWithRetry(15);
       if (submitted) checkoutWebSubmitted = true;
       log("submit result: " + submitted);
       await updateRuntime({
@@ -1311,6 +1530,10 @@
       // 等待页面响应提交（表单提交可能触发页面重载）
       const submittedUrl = location.href;
       log("submitted at:", submittedUrl);
+      setTimeout(() => clickCheckoutWebButton(), 4000);
+      await watchCheckoutWebOtpV32(profile, submittedUrl);
+      return true;
+
       await sleep(3000);
       let submitProgress = await waitForCheckoutWebProgress(submittedUrl, 1000);
       log("checkout submit progress:", submitProgress.reason);
@@ -1653,6 +1876,7 @@
     const filled = fillOtp(digits, { silent: true });
     if (filled) {
       const submitted = shouldSubmit && await clickByPatternsWithRetry(ACTION_WORDS.next, 3);
+      if (submitted) watchApproveAfterOtpSubmit(request.source || "content-otp");
       log("OTP watcher filled in content frame, submitted:", Boolean(submitted));
       return true;
     }
@@ -1660,6 +1884,7 @@
     if (attempt === 1 || attempt % 4 === 0) {
       const mainResult = await fillOtpInMainWorld(digits, shouldSubmit);
       if (mainResult?.ok && mainResult.filled) {
+        if (mainResult.submitted) watchApproveAfterOtpSubmit(request.source || "main-world-otp");
         log("OTP watcher filled in main world, inputs:", mainResult.found, "submitted:", Boolean(mainResult.submitted));
         return true;
       }
@@ -1718,6 +1943,7 @@
     };
     await storageSet({ [OTP_FILL_REQUEST_KEY]: request, [SAVED_OTP_KEY]: digits });
     handleOtpFillRequest(request);
+    if (request.submit) watchApproveAfterOtpSubmit(source);
     return { ok: true, queued: true, message: "OTP fill request queued for all frames" };
   }
 
@@ -1766,18 +1992,12 @@
 
   async function executePayPalApprove(profile) {
     checkTerms();
-    const consentButton = all("#consentButton, button[name='consentButton'], [data-testid='submit-button']")
-      .find((button) => /agree|continue|authorize|同意|继续|授权/i.test(textOf(button)) || button.id === "consentButton");
     let clicked = false;
     if (profile.options.autoSubmit) {
-      if (consentButton) {
-        consentButton.click();
-        clicked = true;
-      } else {
-        clicked = await clickByPatternsWithRetry(ACTION_WORDS.approve, 10);
-      }
+      clicked = clickPayPalApproveButton();
+      if (!clicked) clicked = await clickByPatternsWithRetry(ACTION_WORDS.approve, 10);
     }
-    return { ok: clicked, action: clicked ? "submitted" : "waiting", message: clicked ? "已点击 PayPal 授权/继续" : "未找到授权按钮" };
+    return { ok: clicked, action: clicked ? "submitted" : "waiting", message: clicked ? "Clicked PayPal Agree and Continue" : "PayPal approve button not found" };
   }
 
   async function executeCurrentStage(stage, profile) {
@@ -2083,6 +2303,7 @@
   startOtpFillWatcher();
   updateRuntime({ stage: initialStage, stageLabel: STAGE_LABELS[initialStage] || initialStage, status: "ready", message: "页面已加载" }).catch(() => {});
   watchCheckoutWebRoute();
+  watchGenericPayPalApproveRoute("page-load");
   runCheckoutWebUserscriptFlow().catch((error) => updateRuntime({
     status: "error",
     stage: STAGES.ERROR,
