@@ -69,12 +69,6 @@
             </Button>
 
             <TextBlock Tag="SidebarSection" Text="REGISTRATION" Style="{StaticResource SectionLabel}"/>
-            <Button Style="{StaticResource SidebarButton}" Click="BuyAndRegister_Click" ToolTip="购买邮箱并注册">
-              <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M3 6 H13 M4 6 V13 H12 V6 M6 6 V4 H10 V6"/>
-                <TextBlock Tag="SidebarText" Text="购买邮箱并注册" Margin="10,0,0,0" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
             <Button Style="{StaticResource SidebarButton}" Click="OneClickRegister_Click" ToolTip="一键注册+支付链接">
               <StackPanel Orientation="Horizontal">
                 <Path Style="{StaticResource IconPath}" Data="M8 2 L4 9 H8 L6 14 L12 6 H8 Z"/>
@@ -234,7 +228,6 @@
             <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="130" IsReadOnly="True"/>
             <DataGridTextColumn Header="支付状态" Binding="{Binding PayPalStatus}" Width="120" IsReadOnly="True"/>
             <DataGridTextColumn Header="支付金额" Binding="{Binding PayPalAmount}" Width="95" IsReadOnly="True"/>
-            <DataGridTextColumn Header="Refresh" Binding="{Binding RefreshTokenStatus}" Width="120" IsReadOnly="True"/>
             <DataGridTemplateColumn Header="详情" Width="70">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
@@ -242,9 +235,6 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="Token" Binding="{Binding RefreshToken}" Width="190" IsReadOnly="True"/>
-            <DataGridTextColumn Header="代理/耗时" Binding="{Binding Proxy}" Width="150" IsReadOnly="True"/>
-            <DataGridTextColumn Header="备注" Binding="{Binding Notes}" Width="520" IsReadOnly="True"/>
           </DataGrid.Columns>
         </DataGrid>
       </Border>
@@ -259,10 +249,11 @@
           <RowDefinition Height="*" MinHeight="220"/>
         </Grid.RowDefinitions>
         <Border Grid.Row="0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1">
-          <DataGrid ItemsSource="{Binding Tasks}" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
+          <DataGrid x:Name="TaskGrid" ItemsSource="{Binding Tasks}" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
                     IsReadOnly="True" RowHeight="26" BorderThickness="0"
                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    Loaded="TaskGrid_Loaded">
             <DataGrid.Columns>
               <DataGridTextColumn Header="批次" Binding="{Binding Name}" Width="160"/>
               <DataGridTextColumn Header="任务" Binding="{Binding Task}" Width="160"/>
