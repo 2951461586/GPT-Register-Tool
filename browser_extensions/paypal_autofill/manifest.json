@@ -14,7 +14,6 @@
     "activeTab",
     "clipboardRead",
     "clipboardWrite",
-    "debugger",
     "scripting",
     "storage",
     "webNavigation"

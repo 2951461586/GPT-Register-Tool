@@ -20,6 +20,13 @@ class PayPalAutofillCheckoutWebTests(unittest.TestCase):
         self.assertIn("if (el._valueTracker) el._valueTracker.setValue(\"\")", body)
         self.assertIn('document.execCommand("insertText"', body)
         self.assertIn("new InputEvent(\"input\"", body)
+        self.assertIn("async function typeNativeValue", body)
+        self.assertIn("fillIdCandidates(\"phone\"", body)
+        self.assertIn("payload.phoneCandidates", body)
+        self.assertIn("fillIdCandidates(\"cardExpiry\"", body)
+        self.assertIn("payload.cardExpiryCandidates", body)
+        self.assertIn("const maxAttempts = payload.v32Direct ? 3 : 36", body)
+        self.assertIn("function fieldSnapshot", body)
 
     def test_checkoutweb_required_fields_include_identity_fields(self):
         for name in ("content.js", "background.js"):
@@ -39,14 +46,15 @@ class PayPalAutofillCheckoutWebTests(unittest.TestCase):
             source.index('beginOtpCodeFetch(profile, "checkoutweb-submit")'),
         )
 
-    def test_checkoutweb_uses_debugger_input_without_refill_retry_loop(self):
+    def test_checkoutweb_debugger_mode_is_disabled(self):
         manifest = (EXTENSION_DIR / "manifest.json").read_text(encoding="utf-8")
         background = (EXTENSION_DIR / "background.js").read_text(encoding="utf-8")
         content = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")
-        self.assertIn('"debugger"', manifest)
-        self.assertIn("PAYPAL_AUTOFILL_DEBUGGER_CHECKOUTWEB", background)
-        self.assertIn('chrome.debugger.sendCommand(target, "Input.insertText"', background)
-        self.assertIn("fillCheckoutWebWithDebugger", content)
+        self.assertNotIn('"debugger"', manifest)
+        self.assertNotIn("PAYPAL_AUTOFILL_DEBUGGER_CHECKOUTWEB", background)
+        self.assertNotIn("chrome.debugger", background)
+        self.assertNotIn("fillCheckoutWebWithDebugger", content)
+        self.assertNotIn("debugger checkout result", content)
         self.assertNotIn("retryCheckoutWebSubmit", content)
         self.assertNotIn("return await runCheckoutWebUserscriptFlow({ force: true })", content)
         self.assertNotIn("checkout submit still on billing form, retry:", content)
@@ -60,11 +68,28 @@ class PayPalAutofillCheckoutWebTests(unittest.TestCase):
         self.assertIn("function checkoutExpiryCandidates", content)
         self.assertIn("phoneCandidates", content)
         self.assertIn("cardExpiryCandidates", content)
-        self.assertIn("uniqueTextCandidates", background)
-        self.assertIn("current.valid !== false", background)
-        self.assertIn("validation: current?.validation", background)
         self.assertIn("typeof el.checkValidity === \"function\" && !el.checkValidity()", content)
         self.assertIn("typeof el.checkValidity === \"function\" && !el.checkValidity()", background)
+
+    def test_checkoutweb_uses_v32_direct_fill_when_debugger_is_disabled(self):
+        source = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")
+        self.assertIn("fillCheckoutWebV32Direct", source)
+        self.assertIn("function setV32NativeValue", source)
+        self.assertIn('Object.getOwnPropertyDescriptor(proto, "value")?.set', source)
+        self.assertIn("directCheckoutFillId(\"phone\", formatPhone(profile.phone))", source)
+        self.assertIn("directCheckoutFillId(\"cardNumber\", profile.card.number)", source)
+        self.assertIn("v32Direct: true", source)
+        self.assertIn("Boolean(mainWorldResult?.submitted) || await clickCheckoutWebButtonWithRetry(15)", source)
+        self.assertIn("await watchCheckoutWebOtpV32(profile, submittedUrl)", source)
+        self.assertIn("main-world candidate fill result", source)
+
+    def test_button_patterns_cover_v32_create_account_and_verify_labels(self):
+        source = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")
+        self.assertIn("create\\s*(?:an\\s*)?account", source)
+        self.assertIn("sign\\s*up", source)
+        self.assertIn("register", source)
+        self.assertIn("confirm|verify|pay", source)
+        self.assertIn("agree\\s*(?:and|&)?\\s*continue", source)
 
     def test_checkoutweb_does_not_refresh_region_or_refill_during_otp(self):
         source = (EXTENSION_DIR / "content.js").read_text(encoding="utf-8")

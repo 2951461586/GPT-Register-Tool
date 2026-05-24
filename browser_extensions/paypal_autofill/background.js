@@ -136,230 +136,6 @@ async function runCheckoutWebMainWorld(sender, payload) {
   return results?.[0]?.result || { ok: false, message: "No result" };
 }
 
-async function runCheckoutWebDebugger(sender, payload) {
-  const tabId = sender?.tab?.id;
-  if (!tabId || tabId < 0) throw new Error("No sender tab");
-  if (!chrome?.debugger?.attach || !chrome?.debugger?.sendCommand) {
-    throw new Error("Chrome debugger API unavailable");
-  }
-  const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
-  const target = { tabId };
-  let attached = false;
-  try {
-    await chrome.debugger.attach(target, "1.3");
-    attached = true;
-    await chrome.debugger.sendCommand(target, "Page.bringToFront").catch(() => {});
-
-    const fieldValues = [
-      ["email", [payload.email]],
-      ["phone", [payload.phone, ...(Array.isArray(payload.phoneCandidates) ? payload.phoneCandidates : [])]],
-      ["cardNumber", [payload.cardNumber]],
-      ["cardExpiry", [payload.cardExpiry, ...(Array.isArray(payload.cardExpiryCandidates) ? payload.cardExpiryCandidates : [])]],
-      ["cardCvv", [payload.cardCvv]],
-      ["password", [payload.password]],
-      ["firstName", [payload.firstName]],
-      ["lastName", [payload.lastName]],
-      ["billingLine1", [payload.address?.line1]],
-      ["billingCity", [payload.address?.city]],
-      ["billingPostalCode", [payload.address?.postalCode]]
-    ];
-    const typed = [];
-    for (const [id, values] of fieldValues) {
-      const candidates = uniqueTextCandidates(values);
-      if (!candidates.length) continue;
-      let accepted = null;
-      let last = null;
-      for (const text of candidates) {
-        const focused = await runCheckoutDebuggerScript(tabId, frameId, debuggerFocusCheckoutField, [id]);
-        if (!focused?.ok) {
-          last = { id, ok: false, reason: focused?.reason || "not_found" };
-          break;
-        }
-        await chrome.debugger.sendCommand(target, "Input.insertText", { text });
-        await sleep(140);
-        const current = await runCheckoutDebuggerScript(tabId, frameId, debuggerReadCheckoutField, [id]);
-        last = {
-          id,
-          ok: Boolean(current?.ok && current.length > 0 && current.valid !== false),
-          length: current?.length || 0,
-          valid: current?.valid,
-          validation: current?.validation || ""
-        };
-        if (last.ok) {
-          accepted = last;
-          break;
-        }
-      }
-      typed.push(accepted || last || { id, ok: false, reason: "empty" });
-    }
-
-    await runCheckoutDebuggerScript(tabId, frameId, debuggerSelectCheckoutState, [payload.address?.state || ""]);
-    await sleep(900);
-    const snapshot = await runCheckoutDebuggerScript(tabId, frameId, debuggerCheckoutSnapshot, []);
-    const result = normalizeCheckoutDebuggerSnapshot(snapshot);
-    let submitted = false;
-    if (result.ready && payload.autoSubmit !== false) {
-      const button = await runCheckoutDebuggerScript(tabId, frameId, debuggerFindSubmitButtonCenter, []);
-      if (button?.ok) {
-        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-          type: "mousePressed",
-          x: button.x,
-          y: button.y,
-          button: "left",
-          clickCount: 1
-        });
-        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
-          type: "mouseReleased",
-          x: button.x,
-          y: button.y,
-          button: "left",
-          clickCount: 1
-        });
-        submitted = true;
-      }
-    }
-    return {
-      ok: true,
-      source: "debugger",
-      ready: result.ready,
-      filled: result.filled,
-      missing: result.missing,
-      invalid: result.invalid,
-      submitted,
-      typed
-    };
-  } finally {
-    if (attached) await chrome.debugger.detach(target).catch(() => {});
-  }
-}
-
-async function runCheckoutDebuggerScript(tabId, frameId, func, args = []) {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId, frameIds: [frameId] },
-    world: "MAIN",
-    args,
-    func
-  });
-  return results?.[0]?.result || null;
-}
-
-function uniqueTextCandidates(values) {
-  const seen = new Set();
-  return (Array.isArray(values) ? values : [values])
-    .map((value) => String(value || "").trim())
-    .filter((value) => value && !seen.has(value) && seen.add(value));
-}
-
-function normalizeCheckoutDebuggerSnapshot(snapshot) {
-  const fields = Array.isArray(snapshot?.fields) ? snapshot.fields : [];
-  const byId = Object.fromEntries(fields.map((field) => [field.id, field]));
-  const checks = {
-    email: (value) => /@/.test(value) && value.trim().length >= 5,
-    phone: (value) => value.replace(/\D/g, "").length >= 10,
-    cardNumber: (value) => value.replace(/\D/g, "").length >= 12,
-    cardExpiry: (value) => /\d{1,2}\D*\d{2,4}/.test(value),
-    cardCvv: (value) => value.replace(/\D/g, "").length >= 3,
-    billingLine1: (value) => value.trim().length >= 4,
-    billingCity: (value) => value.trim().length >= 2,
-    billingPostalCode: (value) => value.replace(/\D/g, "").length >= 5
-  };
-  const invalid = Object.entries(checks)
-    .filter(([id, check]) => {
-      const field = byId[id];
-      if (!field?.present) return false;
-      return field.valid === false || !check(String(field.value || ""));
-    })
-    .map(([id]) => id);
-  const missing = Object.entries(checks)
-    .filter(([id]) => !byId[id]?.present)
-    .map(([id]) => id)
-    .concat(invalid);
-  return {
-    ready: missing.length === 0,
-    filled: fields.filter((field) => field.present && String(field.value || "").length > 0).length,
-    missing,
-    invalid
-  };
-}
-
-function debuggerFocusCheckoutField(id) {
-  const el = document.getElementById(String(id || ""));
-  if (!el) return { ok: false, reason: "not_found" };
-  if (el.disabled || el.readOnly) return { ok: false, reason: "disabled" };
-  try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
-  try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} }
-  try {
-    if (typeof el.select === "function") el.select();
-    else if (typeof el.setSelectionRange === "function") el.setSelectionRange(0, String(el.value || "").length);
-  } catch (_) {}
-  return { ok: true };
-}
-
-function debuggerReadCheckoutField(id) {
-  const el = document.getElementById(String(id || ""));
-  const validity = el && typeof el.checkValidity === "function" ? el.checkValidity() : true;
-  return {
-    ok: Boolean(el),
-    value: el && "value" in el ? String(el.value || "") : "",
-    length: el && "value" in el ? String(el.value || "").length : 0,
-    valid: Boolean(validity),
-    validation: el && typeof el.validationMessage === "string" ? el.validationMessage : "",
-    pattern: el?.getAttribute?.("pattern") || "",
-    maxlength: el?.getAttribute?.("maxlength") || ""
-  };
-}
-
-function debuggerSelectCheckoutState(text) {
-  const el = document.getElementById("billingState");
-  const wanted = String(text || "").trim().toLowerCase();
-  if (!el || !wanted) return { ok: false };
-  if (el instanceof HTMLSelectElement) {
-    const option = Array.from(el.options || []).find((item) => {
-      const label = `${item.textContent || ""} ${item.value || ""}`.toLowerCase();
-      return label.includes(wanted);
-    });
-    if (!option) return { ok: false };
-    el.value = option.value;
-    el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-    return { ok: true, value: el.value };
-  }
-  return { ok: false };
-}
-
-function debuggerCheckoutSnapshot() {
-  const ids = ["email", "phone", "cardNumber", "cardExpiry", "cardCvv", "password", "firstName", "lastName", "billingLine1", "billingCity", "billingPostalCode", "billingState"];
-  return {
-    fields: ids.map((id) => {
-      const el = document.getElementById(id);
-      return {
-        id,
-        present: Boolean(el),
-        value: el && "value" in el ? String(el.value || "") : "",
-        visible: Boolean(el && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0),
-        valid: el && typeof el.checkValidity === "function" ? el.checkValidity() : true,
-        validation: el && typeof el.validationMessage === "string" ? el.validationMessage : "",
-        pattern: el?.getAttribute?.("pattern") || "",
-        maxlength: el?.getAttribute?.("maxlength") || ""
-      };
-    })
-  };
-}
-
-function debuggerFindSubmitButtonCenter() {
-  const button = document.querySelector('button[data-testid="submit-button"]')
-    || document.querySelector('button[data-testid="hosted-payment-submit-button"]')
-    || document.querySelector('button[data-atomic-wait-intent="Submit_Email"]')
-    || document.querySelector("button.SubmitButton--complete")
-    || Array.from(document.querySelectorAll("button")).find((item) => /agree|create\s*account|sign\s*up|submit|continue|confirm/i.test(String(item.textContent || "")));
-  if (!button || button.disabled) return { ok: false };
-  const rect = button.getBoundingClientRect();
-  if (!rect.width || !rect.height) return { ok: false };
-  try { button.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
-  const next = button.getBoundingClientRect();
-  return { ok: true, x: next.left + next.width / 2, y: next.top + next.height / 2 };
-}
-
 async function runOtpMainWorld(sender, payload) {
   const tabId = sender?.tab?.id;
   if (!tabId || tabId < 0) throw new Error("No sender tab");
@@ -464,6 +240,56 @@ async function mainWorldCheckoutWebFill(payload) {
     }
   }
 
+  function clearNativeValue(el) {
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    try { if (el._valueTracker) el._valueTracker.setValue(String(el.value || "")); } catch (_) {}
+    if (setter) setter.call(el, "");
+    else el.value = "";
+    dispatchValueEvents(el, "");
+  }
+
+  async function typeNativeValue(el, value) {
+    if (!el || value == null || String(value).trim() === "") return false;
+    const text = String(value);
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {}
+    try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} }
+    try {
+      if (typeof el.select === "function") el.select();
+      else if (typeof el.setSelectionRange === "function") el.setSelectionRange(0, String(el.value || "").length);
+    } catch (_) {}
+    clearNativeValue(el);
+    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    for (const ch of text) {
+      try { el.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true, cancelable: true, composed: true })); } catch (_) {}
+      if (typeof InputEvent === "function") {
+        try { el.dispatchEvent(new InputEvent("beforeinput", { inputType: "insertText", data: ch, bubbles: true, cancelable: true, composed: true })); } catch (_) {}
+      }
+      let inserted = false;
+      try {
+        inserted = typeof document.execCommand === "function" && document.execCommand("insertText", false, ch);
+      } catch (_) {}
+      if (!inserted) {
+        const next = String(el.value || "") + ch;
+        if (setter) setter.call(el, next);
+        else el.value = next;
+        if (typeof InputEvent === "function") {
+          try { el.dispatchEvent(new InputEvent("input", { inputType: "insertText", data: ch, bubbles: true, composed: true })); } catch (_) {
+            el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+          }
+        } else {
+          el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+        }
+      }
+      try { el.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true, cancelable: true, composed: true })); } catch (_) {}
+      await sleep(25);
+    }
+    el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("blur", { bubbles: true, composed: true }));
+    return true;
+  }
+
   function visible(el) {
     if (!el || el.disabled || el.getAttribute?.("aria-disabled") === "true") return false;
     const rect = el.getBoundingClientRect();
@@ -517,6 +343,41 @@ async function mainWorldCheckoutWebFill(payload) {
     return setNativeValue(el, value);
   }
 
+  function customFieldValid(id, value) {
+    const text = String(value || "");
+    const checks = {
+      email: (v) => /@/.test(v) && v.trim().length >= 5,
+      phone: (v) => v.replace(/\D/g, "").length >= 10,
+      cardNumber: (v) => v.replace(/\D/g, "").length >= 12,
+      cardExpiry: (v) => /\d{1,2}\D*\d{2,4}/.test(v),
+      cardCvv: (v) => v.replace(/\D/g, "").length >= 3,
+      billingLine1: (v) => v.trim().length >= 4,
+      billingCity: (v) => v.trim().length >= 2,
+      billingPostalCode: (v) => v.replace(/\D/g, "").length >= 5
+    };
+    return checks[id] ? checks[id](text) : text.trim().length > 0;
+  }
+
+  async function fillIdCandidates(id, values, options = {}) {
+    const el = byId(id);
+    if (!el) return false;
+    const seen = new Set();
+    const candidates = (Array.isArray(values) ? values : [values])
+      .map((value) => String(value || "").trim())
+      .filter((value) => value && !seen.has(value) && seen.add(value));
+    let wrote = false;
+    for (const value of candidates) {
+      if (options.typeLikeUser) await typeNativeValue(el, value);
+      else setNativeValue(el, value);
+      wrote = true;
+      await sleep(160);
+      const current = String(el.value || "");
+      const nativeValid = typeof el.checkValidity === "function" ? el.checkValidity() : true;
+      if (nativeValid && customFieldValid(id, current)) return true;
+    }
+    return wrote;
+  }
+
   function fillState(value) {
     const el = byId("billingState");
     if (!el) return false;
@@ -554,6 +415,21 @@ async function mainWorldCheckoutWebFill(payload) {
       const nativeInvalid = typeof el.checkValidity === "function" && !el.checkValidity();
       return nativeInvalid || !check(value);
     }).map(([id]) => id);
+  }
+
+  function fieldSnapshot(ids = ["country", "phone", "cardExpiry", "billingState"]) {
+    return ids.map((id) => {
+      const el = byId(id);
+      return {
+        id,
+        present: Boolean(el),
+        value: el && "value" in el ? String(el.value || "") : "",
+        valid: el && typeof el.checkValidity === "function" ? el.checkValidity() : true,
+        validation: el && typeof el.validationMessage === "string" ? el.validationMessage : "",
+        pattern: el?.getAttribute?.("pattern") || "",
+        ariaInvalid: el?.getAttribute?.("aria-invalid") || ""
+      };
+    });
   }
 
   function checkTerms() {
@@ -598,12 +474,12 @@ async function mainWorldCheckoutWebFill(payload) {
     return true;
   }
 
-  function fillOnce() {
+  async function fillOnce() {
     let filled = 0;
     filled += fillId("email", payload.email) ? 1 : 0;
-    filled += fillId("phone", payload.phone) ? 1 : 0;
+    filled += await fillIdCandidates("phone", [payload.phone, ...(Array.isArray(payload.phoneCandidates) ? payload.phoneCandidates : [])], { typeLikeUser: true }) ? 1 : 0;
     filled += fillId("cardNumber", payload.cardNumber) ? 1 : 0;
-    filled += fillId("cardExpiry", payload.cardExpiry) ? 1 : 0;
+    filled += await fillIdCandidates("cardExpiry", [payload.cardExpiry, ...(Array.isArray(payload.cardExpiryCandidates) ? payload.cardExpiryCandidates : [])], { typeLikeUser: true }) ? 1 : 0;
     filled += fillId("cardCvv", payload.cardCvv) ? 1 : 0;
     filled += fillId("password", payload.password) ? 1 : 0;
     filled += fillId("firstName", payload.firstName) ? 1 : 0;
@@ -619,11 +495,12 @@ async function mainWorldCheckoutWebFill(payload) {
 
   let country = { found: false, changed: false, value: "" };
   let result = { filled: 0, ready: false, missing: requiredMissing() };
-  for (let i = 0; i < 36; i += 1) {
+  const maxAttempts = payload.v32Direct ? 3 : 36;
+  for (let i = 0; i < maxAttempts; i += 1) {
     const latestCountry = forceUsCountry();
     if (latestCountry.found) country = latestCountry;
     if (latestCountry.found && latestCountry.changed) await sleep(3000);
-    result = fillOnce();
+    result = await fillOnce();
     if (result.ready) break;
     await sleep(1000);
   }
@@ -642,6 +519,7 @@ async function mainWorldCheckoutWebFill(payload) {
     ready: result.ready,
     filled: result.filled,
     missing: result.missing,
+    fields: fieldSnapshot(),
     submitted
   };
 }
@@ -863,18 +741,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const result = await runCheckoutWebMainWorld(sender, message.payload || {});
-        sendResponse({ ok: true, result });
-      } catch (error) {
-        sendResponse({ ok: false, error: error?.message || String(error) });
-      }
-    })();
-    return true;
-  }
-
-  if (message?.type === "PAYPAL_AUTOFILL_DEBUGGER_CHECKOUTWEB") {
-    (async () => {
-      try {
-        const result = await runCheckoutWebDebugger(sender, message.payload || {});
         sendResponse({ ok: true, result });
       } catch (error) {
         sendResponse({ ok: false, error: error?.message || String(error) });
