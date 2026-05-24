@@ -258,6 +258,206 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     return r
 
 
+def _email_otp_send_url(reg_data, auth_base, resume_email_verification=False):
+    continue_url = ""
+    if isinstance(reg_data, dict):
+        continue_url = str(reg_data.get("continue_url") or "").strip()
+    if continue_url:
+        return continue_url
+    if resume_email_verification:
+        return _absolute_url(auth_base, "/api/accounts/email-otp/send")
+    return ""
+
+
+def _create_account_continue_url(create_data):
+    if not isinstance(create_data, dict):
+        return ""
+    continue_url = str(create_data.get("continue_url") or "").strip()
+    if continue_url:
+        return continue_url
+    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    return str(error.get("redirect_uri") or error.get("redirect_url") or "").strip()
+
+
+def _is_user_already_exists(create_data):
+    if not isinstance(create_data, dict):
+        return False
+    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    return str(error.get("code") or "").strip() == "user_already_exists"
+
+
+def _response_next_url(response, base_url):
+    body = _json_or_raw(response, limit=1000)
+    if isinstance(body, dict):
+        value = body.get("continue_url") or body.get("url")
+        if value:
+            return _absolute_url(base_url, value)
+    location = getattr(response, "headers", {}).get("location") or getattr(response, "headers", {}).get("Location")
+    if location:
+        return _absolute_url(base_url, location)
+    return str(getattr(response, "url", "") or "")
+
+
+def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
+    headers = {
+        **base_headers,
+        "Origin": auth_base,
+        "Referer": current_url or f"{auth_base}/email-verification",
+        "Content-Type": "application/json",
+        "oai-device-id": did,
+    }
+    if sentinel_token:
+        headers["openai-sentinel-token"] = sentinel_token
+    if sentinel_so_token:
+        headers["openai-sentinel-so-token"] = sentinel_so_token
+    for endpoint in (
+        "/api/accounts/passwordless/send-otp",
+        "/api/accounts/email-otp/send",
+    ):
+        response = request_with_retry(
+            session,
+            "post",
+            _absolute_url(auth_base, endpoint),
+            label=f"Existing account OTP send {endpoint}",
+            json={},
+            headers=headers,
+            impersonate="chrome",
+        )
+        print(f"  Existing account OTP send: {endpoint} {response.status_code}")
+        if response.status_code in (200, 202, 204, 409):
+            return True, response
+        if response.status_code not in (400, 404, 405):
+            return False, response
+    return False, None
+
+
+def _login_existing_account_with_email_otp(
+    session,
+    username,
+    mailbox,
+    did,
+    session_logging_id,
+    auth_base,
+    chat_base,
+    base_headers,
+    csrf_token,
+    proxy=None,
+    sentinel_token="",
+    sentinel_so_token="",
+):
+    print("  Existing account login: starting email OTP flow")
+    signin_url = (
+        f"{chat_base}/api/auth/signin/openai"
+        f"?prompt=login&ext-oai-did={did}"
+        f"&auth_session_logging_id={session_logging_id}"
+        f"&screen_hint=login"
+        f"&login_hint={quote(username, safe='')}"
+    )
+    signin_payload = {
+        "csrfToken": csrf_token,
+        "callbackUrl": f"{chat_base}/",
+        "json": "true",
+    }
+    signin_resp = request_with_retry(
+        session,
+        "post",
+        signin_url,
+        label="Existing account signin",
+        data=urlencode(signin_payload),
+        headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded", "Origin": chat_base, "Referer": f"{chat_base}/"},
+        impersonate="chrome",
+    )
+    signin_body = _json_or_raw(signin_resp, limit=1000)
+    auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
+    auth_session_url = _with_query_param(auth_session_url, "device_id", did)
+    authorize_resp = request_with_retry(
+        session,
+        "get",
+        auth_session_url,
+        label="Existing account authorize",
+        headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
+        impersonate="chrome",
+    )
+    current_url = str(authorize_resp.url or "")
+    print(f"  Existing account authorize: {authorize_resp.status_code} {current_url}")
+
+    current_lower = current_url.lower()
+    if "chatgpt.com" in current_lower and ("/api/auth/callback/openai" in current_lower or current_lower.rstrip("/") == chat_base.lower().rstrip("/")):
+        return {"ok": True}
+    if "email-verification" not in current_lower and "email-otp" not in current_lower:
+        continue_resp = request_with_retry(
+            session,
+            "post",
+            f"{auth_base}/api/accounts/authorize/continue",
+            label="Existing account continue",
+            json={"username": {"value": username, "kind": "email"}},
+            headers={
+                **base_headers,
+                "Origin": auth_base,
+                "Referer": current_url or f"{auth_base}/log-in",
+                "Content-Type": "application/json",
+                "oai-device-id": did,
+                "openai-sentinel-token": sentinel_token,
+                "openai-sentinel-so-token": sentinel_so_token,
+            },
+            impersonate="chrome",
+        )
+        print(f"  Existing account continue: {continue_resp.status_code}")
+        if continue_resp.status_code != 200:
+            return {"ok": False, "error": f"existing_login_continue_failed:{continue_resp.status_code}"}
+
+        current_url = _response_next_url(continue_resp, auth_base)
+        if current_url:
+            follow_resp = _follow_continue_url(
+                session,
+                current_url,
+                base_headers,
+                referer=current_url,
+                label="Existing account continue follow",
+            )
+            current_url = str(getattr(follow_resp, "url", "") or current_url)
+
+    otp_send_started = int(time.time())
+    ok, otp_send_response = _send_existing_login_otp(
+        session,
+        auth_base,
+        base_headers,
+        current_url,
+        did,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+    )
+    if not ok:
+        status = getattr(otp_send_response, "status_code", 0)
+        return {"ok": False, "error": f"existing_login_otp_send_failed:{status}"}
+
+    email_cfg = CFG.get("email_registration", {})
+    code = _poll_email_otp(
+        mailbox,
+        subject_keyword=email_cfg.get("otp_subject_keyword", ""),
+        timeout=int(email_cfg.get("otp_timeout", 300)),
+        issued_after_unix=otp_send_started if getattr(mailbox, "provider", "") == "cfworker" else int(time.time()) - 30,
+        proxy=proxy,
+    )
+    if not code:
+        return {"ok": False, "error": "existing_login_otp_poll_timeout"}
+
+    otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code)
+    if not otp_ok:
+        return {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}
+    try:
+        _follow_continue_url(
+            session,
+            otp_data.get("continue_url", ""),
+            base_headers,
+            referer=f"{auth_base}/email-verification",
+            label="Existing account OTP continue",
+        )
+    except Exception as e:
+        print(f"  Existing account OTP continue transport warning: {e}")
+    return {"ok": True}
+
+
 def _validate_email_otp(session, auth_base, base_headers, code):
     endpoints = CFG.get("email_registration", {}).get("otp_validate_endpoints") or [
         "/api/accounts/email-otp/validate",
@@ -483,11 +683,13 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     print(f"  Status: {r.status_code}")
     print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
+    resume_email_verification = False
     if r.status_code != 200:
         err_code = reg_data.get("error", {}).get("code", "")
         err_msg = reg_data.get("error", {}).get("message", str(reg_data))
         if err_code == "invalid_auth_step" and "email-verification" in redirect_path:
             print(f"  Account already in email-verification flow, resuming OTP step...")
+            resume_email_verification = True
         else:
             return _failure_result(f"user_register: {err_msg}", email=username, mailbox=mailbox, password=password)
 
@@ -495,15 +697,19 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
 
     # Step 4: Trigger email OTP send
     _tick("4-Trigger email OTP")
-    continue_url = reg_data.get("continue_url", "")
+    continue_url = _email_otp_send_url(reg_data, auth_base, resume_email_verification)
     otp_send_started = int(time.time())
     try:
-        _follow_continue_url(session, continue_url, base_headers, referer=f"{auth_base}/create-account/password", label="Email OTP send")
+        otp_send_response = _follow_continue_url(session, continue_url, base_headers, referer=f"{auth_base}/create-account/password", label="Email OTP send")
         _tock()
     except Exception as e:
         _safe_tock()
         print(f"  Transport error: {e}")
         return _failure_result(f"email_otp_send_transport: {e}", email=username, mailbox=mailbox, password=password)
+    if otp_send_response is None:
+        return _failure_result("email_otp_send_missing_continue_url", email=username, mailbox=mailbox, password=password)
+    if getattr(otp_send_response, "status_code", 0) not in (200, 202, 204, 409):
+        return _failure_result(f"email_otp_send_failed:{otp_send_response.status_code}", email=username, mailbox=mailbox, password=password)
 
     # Step 5: Get email OTP
     _tick("5-Get email OTP")
@@ -555,8 +761,13 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     except: create_data = {"_raw": r.text[:300]}
     print(f"  Status: {r.status_code}")
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
+    create_ok = r.status_code == 200
+    existing_account = _is_user_already_exists(create_data)
+    if not create_ok and existing_account:
+        print("  Account already exists, continuing existing-account login flow...")
+        create_ok = True
     try:
-        _follow_continue_url(session, create_data.get("continue_url", ""), base_headers, referer=f"{auth_base}/about-you", label="Create account continue")
+        _follow_continue_url(session, _create_account_continue_url(create_data), base_headers, referer=f"{auth_base}/about-you", label="Create account continue")
     except Exception as e:
         print(f"  Create account continue transport warning: {e}")
 
@@ -571,16 +782,48 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         return _failure_result(f"auth_session_transport: {e}", email=username, mailbox=mailbox, password=password)
     auth_body = auth_session.get("body") or {}
     access_token = _auth_session_access_token(auth_body)
+    if existing_account and not access_token:
+        print("  Existing account has no ChatGPT session yet; retrying with passwordless email login...")
+        try:
+            existing_login = _login_existing_account_with_email_otp(
+                session=session,
+                username=username,
+                mailbox=mailbox,
+                did=did,
+                session_logging_id=session_logging_id,
+                auth_base=auth_base,
+                chat_base=chat_base,
+                base_headers=base_headers,
+                csrf_token=csrf_token,
+                proxy=proxy,
+                sentinel_token=_sentinel_token,
+                sentinel_so_token=_sentinel_so_token,
+            )
+        except Exception as e:
+            existing_login = {"ok": False, "error": f"existing_login_transport:{e}"}
+        if existing_login.get("ok"):
+            _tick("8b-Fetch existing account auth session")
+            try:
+                auth_session = _fetch_auth_session(session, chat_base, base_headers)
+                _tock()
+            except Exception as e:
+                _safe_tock()
+                print(f"  Transport error: {e}")
+                return _failure_result(f"existing_auth_session_transport: {e}", email=username, mailbox=mailbox, password=password)
+            auth_body = auth_session.get("body") or {}
+            access_token = _auth_session_access_token(auth_body)
+        else:
+            print(f"  Existing account login failed: {existing_login.get('error') or 'unknown'}")
 
     paypal = {}
-    if r.status_code == 200 and access_token and paypal_link:
+    if create_ok and access_token and paypal_link:
         _tick("9-Generate PayPal link")
         paypal = _generate_paypal_link(access_token, proxy=proxy)
         print(f"  PayPal link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
         _tock()
 
     result = {
-        "success": r.status_code == 200 and bool(access_token),
+        "success": create_ok and bool(access_token),
         "email": username,
         "phone": "",
         "password": password,

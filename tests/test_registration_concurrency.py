@@ -4,7 +4,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool.mailbox import _parse_chatai_mailbox_file
-from sms_tool.registration import _is_existing_login_redirect, run_batch
+from sms_tool.registration import (
+    _create_account_continue_url,
+    _email_otp_send_url,
+    _is_existing_login_redirect,
+    _is_user_already_exists,
+    run_batch,
+)
 
 
 class RegistrationConcurrencyTests(unittest.TestCase):
@@ -16,6 +22,28 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "/api/accounts/authorize?prompt=login&screen_hint=signup"
         ))
         self.assertTrue(_is_existing_login_redirect("https://auth.openai.com/log-in"))
+
+    def test_email_otp_send_url_resumes_email_verification_without_continue_url(self):
+        self.assertEqual(
+            _email_otp_send_url({}, "https://auth.openai.com", resume_email_verification=True),
+            "https://auth.openai.com/api/accounts/email-otp/send",
+        )
+        self.assertEqual(
+            _email_otp_send_url({"continue_url": "/custom/send"}, "https://auth.openai.com", resume_email_verification=True),
+            "/custom/send",
+        )
+        self.assertEqual(_email_otp_send_url({}, "https://auth.openai.com"), "")
+
+    def test_create_account_continue_url_uses_existing_account_redirect(self):
+        redirect = "https://chatgpt.com/auth/login_with?callback_path=/"
+
+        self.assertEqual(
+            _create_account_continue_url({"error": {"code": "user_already_exists", "redirect_uri": redirect}}),
+            redirect,
+        )
+        self.assertEqual(_create_account_continue_url({"continue_url": "/callback"}), "/callback")
+        self.assertTrue(_is_user_already_exists({"error": {"code": "user_already_exists"}}))
+        self.assertFalse(_is_user_already_exists({"error": {"code": "invalid_auth_step"}}))
 
     def test_chatai_parser_repairs_misplaced_alias_plus(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -29,6 +57,22 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].email, "cierrariste7566+oai01@hotmail.com")
+
+    def test_chatai_parser_accepts_cfworker_lines_for_selected_temp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "selected_mailboxes.txt"
+            path.write_text(
+                "cfworker://oai-test@edu.liziai.cloud\n"
+                "a+oai01@hotmail.com----pw----client----refresh-a\n",
+                encoding="utf-8",
+            )
+
+            records = _parse_chatai_mailbox_file(path)
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0].email, "oai-test@edu.liziai.cloud")
+        self.assertEqual(records[0].provider, "cfworker")
+        self.assertEqual(records[1].provider, "chatai")
 
     def test_run_batch_does_not_reuse_mailboxes_when_count_exceeds_pool(self):
         with tempfile.TemporaryDirectory() as tmp:

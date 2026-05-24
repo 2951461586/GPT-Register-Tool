@@ -695,6 +695,20 @@ namespace SmsWorkbench
 
         private void OneClickRegister_Click(object sender, RoutedEventArgs e)
         {
+            if (TryCreateSelectedUnregisteredMailboxFile(out string pendingMailboxArg, out string pendingMailboxFile, out int pendingSelectedCount, out int pendingRowCount))
+            {
+                var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", "4" };
+                AddProxy(pendingArgs);
+                AddPaypalOption(pendingArgs);
+                RunBackend("选中未注册邮箱注册+支付链接", pendingArgs);
+                return;
+            }
+            if (pendingRowCount > 0)
+            {
+                MessageBox.Show("选中的未注册邮箱缺少可用邮箱原始记录，无法直接注册。", "邮箱记录不完整", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             RegisterOptions options = ShowRegisterOptionsDialog();
             if (options == null) return;
 
@@ -876,6 +890,59 @@ namespace SmsWorkbench
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
             selectedCount = lines.Count;
             return true;
+        }
+
+        private bool TryCreateSelectedUnregisteredMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount, out int pendingRowCount)
+        {
+            mailboxArg = "--chatai-mailbox-file";
+            mailboxFile = "";
+            selectedCount = 0;
+            pendingRowCount = 0;
+
+            var lines = new List<string>();
+            foreach (PoolRow row in SelectedRowsOrCurrent().Where(IsUnregisteredMailboxRow))
+            {
+                pendingRowCount++;
+                string line = (row.RawLine ?? "").Trim().TrimStart('\ufeff');
+                if (MailboxArgForLine(line).Length == 0)
+                {
+                    line = FindMailboxLineForRow(row);
+                }
+                if (MailboxArgForLine(line).Length > 0)
+                {
+                    lines.Add(line.Trim());
+                }
+            }
+            if (lines.Count == 0) return false;
+
+            mailboxFile = Path.Combine(Path.GetTempPath(), "selected_unregistered_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
+            selectedCount = lines.Count;
+            return true;
+        }
+
+        private bool IsUnregisteredMailboxRow(PoolRow row)
+        {
+            if (row == null) return false;
+            if (HasRegisteredAccountState(row)) return false;
+            if (IsCfWorkerRow(row)) return true;
+            if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return true;
+            if (!string.IsNullOrWhiteSpace(row.RawRefreshToken)) return true;
+            if (!string.IsNullOrWhiteSpace(row.RawLine) && MailboxArgForLine(row.RawLine).Length > 0) return true;
+            return !string.IsNullOrWhiteSpace(FindMailboxLineForRow(row));
+        }
+
+        private bool HasRegisteredAccountState(PoolRow row)
+        {
+            string status = row.Status ?? "";
+            if (IsPayPalCompletedRow(row)) return true;
+            return status.Contains("已注册")
+                || status.Contains("PayPal")
+                || status.Contains("支付完成")
+                || status.Contains("已导入")
+                || status.Contains("宸叉敞鍐")
+                || status.Contains("鏀粯瀹屾垚")
+                || status.Contains("宸插鍏");
         }
 
         private string MailboxArgForLine(string line)
@@ -1124,12 +1191,128 @@ namespace SmsWorkbench
             if (selected.Count == 0 && SelectedRow != null) selected.Add(SelectedRow);
             if (selected.Count == 0)
             {
-                MessageBox.Show("请先勾选或选择要删除的记录。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemeNoticeDialog("未选择记录", "请先勾选或选择要删除的记录。");
                 return;
             }
-            if (MessageBox.Show("确定删除选中的 " + selected.Count + " 条记录？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            if (!ShowDeleteConfirmDialog(selected.Count)) return;
             foreach (PoolRow row in selected) DeleteRow(row);
             RefreshPools();
+        }
+
+        private void ShowThemeNoticeDialog(string title, string message)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Owner = this,
+                Width = 420,
+                Height = 190,
+                MinWidth = 380,
+                MinHeight = 170,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            body.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            root.Children.Add(body);
+
+            var okButton = new Button
+            {
+                Content = "知道了",
+                Width = 88,
+                Style = (Style)FindResource("PrimaryButton"),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            okButton.Click += (_, __) => dialog.Close();
+            Grid.SetRow(okButton, 1);
+            root.Children.Add(okButton);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private bool ShowDeleteConfirmDialog(int count)
+        {
+            bool confirmed = false;
+            var dialog = new Window
+            {
+                Title = "删除记录",
+                Owner = this,
+                Width = 460,
+                Height = 230,
+                MinWidth = 420,
+                MinHeight = 210,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            body.Children.Add(new TextBlock
+            {
+                Text = "删除选中的 " + count + " 条记录？",
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "将同步清理邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            root.Children.Add(body);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var cancelButton = new Button { Content = "取消", Width = 76 };
+            cancelButton.Click += (_, __) => dialog.Close();
+            var deleteButton = new Button
+            {
+                Content = "删除",
+                Width = 76,
+                Style = (Style)FindResource("DangerButton")
+            };
+            deleteButton.Click += (_, __) =>
+            {
+                confirmed = true;
+                dialog.Close();
+            };
+            actions.Children.Add(cancelButton);
+            actions.Children.Add(deleteButton);
+            Grid.SetRow(actions, 1);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+            return confirmed;
         }
 
         private void DeleteRow(PoolRow row)
@@ -2365,55 +2548,113 @@ namespace SmsWorkbench
             {
                 Title = "配置",
                 Owner = this,
-                Width = 720,
-                Height = 620,
-                MinWidth = 640,
-                MinHeight = 520,
+                Width = 860,
+                Height = 660,
+                MinWidth = 760,
+                MinHeight = 560,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
-            var root = new Grid { Margin = new Thickness(14) };
+            var root = new Grid { Margin = new Thickness(16) };
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var form = new Grid();
-            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var content = new Grid();
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(178) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetRow(content, 0);
+            root.Children.Add(content);
+
+            var sidebar = new StackPanel();
+            sidebar.Children.Add(new TextBlock
+            {
+                Text = "配置分类",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMuted"),
+                Margin = new Thickness(4, 0, 0, 12)
+            });
+            var sidebarShell = new Border
+            {
+                Background = (Brush)FindResource("SidebarBg"),
+                BorderBrush = (Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10),
+                Child = sidebar
+            };
+            Grid.SetColumn(sidebarShell, 0);
+            content.Children.Add(sidebarShell);
+
+            var host = new Grid();
+            var hostScroll = new ScrollViewer
+            {
+                Content = host,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Padding = new Thickness(0)
+            };
+            var hostShell = new Border
+            {
+                Background = (Brush)FindResource("PanelBg"),
+                BorderBrush = (Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(18),
+                Child = hostScroll
+            };
+            Grid.SetColumn(hostShell, 2);
+            content.Children.Add(hostShell);
 
             var fields = new Dictionary<string, TextBox>();
-            int row = 0;
-            AddConfigField(form, fields, row++, "LuckMail API Key", "luckmail_api_key", GetString(email, "luckmail_api_key"));
-            AddConfigField(form, fields, row++, "LuckMail Base URL", "luckmail_base_url", GetString(email, "luckmail_base_url"));
-            AddConfigField(form, fields, row++, "购买项目", "luckmail_purchase_project_code", GetString(email, "luckmail_purchase_project_code"));
-            AddConfigField(form, fields, row++, "邮箱类型", "luckmail_purchase_email_type", GetString(email, "luckmail_purchase_email_type"));
-            AddConfigField(form, fields, row++, "邮箱域名", "luckmail_purchase_domain", GetString(email, "luckmail_purchase_domain"));
-            AddConfigField(form, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
-            AddConfigField(form, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
-            AddConfigField(form, fields, row++, "CFWorker URL", "cfworker_url", GetString(email, "cfworker_url"));
-            AddConfigField(form, fields, row++, "CFWorker 域名", "cfworker_domain", GetString(email, "cfworker_domain"));
-            AddConfigField(form, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
-            AddConfigField(form, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
-            AddConfigField(form, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
-            AddConfigField(form, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
-            AddConfigField(form, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
-            AddConfigField(form, fields, row++, "SQLite路径", "sqlite_path", GetString(storage, "sqlite_path"));
-            AddConfigField(form, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
-            AddConfigField(form, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
-            AddConfigField(form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
-            AddConfigField(form, fields, row++, "SUB2API Token", "sub2api_token", GetString(sub2api, "api_token"));
-            AddConfigField(form, fields, row++, "SUB2API邮箱", "sub2api_email", GetString(sub2api, "email"));
-            AddConfigField(form, fields, row++, "SUB2API密码", "sub2api_password", GetString(sub2api, "password"));
-            AddConfigField(form, fields, row++, "SUB2API分组", "sub2api_group", GetString(sub2api, "group_name"));
-            AddConfigField(form, fields, row++, "SUB2API分组ID", "sub2api_group_ids", GetString(sub2api, "group_ids"));
-            AddConfigField(form, fields, row++, "SUB2API代理", "sub2api_proxy", GetString(sub2api, "proxy_name"));
-            AddConfigField(form, fields, row++, "SUB2API代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
-            AddConfigField(form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
-            AddConfigField(form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
+            var categories = new List<ConfigCategory>();
 
-            var scroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            Grid.SetRow(scroll, 0);
-            root.Children.Add(scroll);
+            var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱 / LuckMail", "邮箱池、购买参数和 OTP 轮询配置。");
+            int row = 0;
+            AddConfigField(mailForm, fields, row++, "LuckMail API Key", "luckmail_api_key", GetString(email, "luckmail_api_key"));
+            AddConfigField(mailForm, fields, row++, "LuckMail Base URL", "luckmail_base_url", GetString(email, "luckmail_base_url"));
+            AddConfigField(mailForm, fields, row++, "购买项目", "luckmail_purchase_project_code", GetString(email, "luckmail_purchase_project_code"));
+            AddConfigField(mailForm, fields, row++, "邮箱类型", "luckmail_purchase_email_type", GetString(email, "luckmail_purchase_email_type"));
+            AddConfigField(mailForm, fields, row++, "邮箱域名", "luckmail_purchase_domain", GetString(email, "luckmail_purchase_domain"));
+            AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
+            AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
+
+            var cfForm = AddConfigCategory(sidebar, host, categories, "CFWorker", "临时域名邮箱和 Cloudflare Worker 接入配置。");
+            row = 0;
+            AddConfigField(cfForm, fields, row++, "CFWorker URL", "cfworker_url", GetString(email, "cfworker_url"));
+            AddConfigField(cfForm, fields, row++, "CFWorker 域名", "cfworker_domain", GetString(email, "cfworker_domain"));
+            AddConfigField(cfForm, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
+            AddConfigField(cfForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
+
+            var cpaForm = AddConfigCategory(sidebar, host, categories, "CPA", "CPA 导入和 401 重导接口配置。");
+            row = 0;
+            AddConfigField(cpaForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
+            AddConfigField(cpaForm, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
+
+            var sub2Form = AddConfigCategory(sidebar, host, categories, "SUB2API", "SUB2API 导入、分组和代理配置。");
+            row = 0;
+            AddConfigField(sub2Form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API Token", "sub2api_token", GetString(sub2api, "api_token"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API邮箱", "sub2api_email", GetString(sub2api, "email"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API密码", "sub2api_password", GetString(sub2api, "password"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API分组", "sub2api_group", GetString(sub2api, "group_name"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API分组ID", "sub2api_group_ids", GetString(sub2api, "group_ids"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API代理", "sub2api_proxy", GetString(sub2api, "proxy_name"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
+            AddConfigField(sub2Form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
+
+            var proxyForm = AddConfigCategory(sidebar, host, categories, "代理 / 支付", "默认代理和 PayPal 链接生成代理。");
+            row = 0;
+            AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
+            AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
+
+            var storageForm = AddConfigCategory(sidebar, host, categories, "存储", "Session 输出目录和 SQLite 索引路径。");
+            row = 0;
+            AddConfigField(storageForm, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
+            AddConfigField(storageForm, fields, row++, "SQLite路径", "sqlite_path", GetString(storage, "sqlite_path"));
+            if (categories.Count > 0) SelectConfigCategory(categories, categories[0]);
 
             var actions = new StackPanel
             {
@@ -2478,6 +2719,66 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             dialog.ShowDialog();
+        }
+
+        private sealed class ConfigCategory
+        {
+            public Button Button { get; set; } = new Button();
+            public FrameworkElement Panel { get; set; } = new StackPanel();
+        }
+
+        private Grid AddConfigCategory(StackPanel sidebar, Grid host, List<ConfigCategory> categories, string title, string description)
+        {
+            var button = new Button
+            {
+                Content = title,
+                Style = (Style)FindResource("SidebarButton"),
+                Width = double.NaN
+            };
+
+            var panel = new StackPanel
+            {
+                Visibility = Visibility.Collapsed
+            };
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 20,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = description,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 18)
+            });
+
+            var form = new Grid();
+            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(168) });
+            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            panel.Children.Add(form);
+            host.Children.Add(panel);
+            sidebar.Children.Add(button);
+
+            var category = new ConfigCategory { Button = button, Panel = panel };
+            categories.Add(category);
+            button.Click += (_, __) => SelectConfigCategory(categories, category);
+            return form;
+        }
+
+        private void SelectConfigCategory(List<ConfigCategory> categories, ConfigCategory selected)
+        {
+            foreach (ConfigCategory category in categories)
+            {
+                bool isSelected = ReferenceEquals(category, selected);
+                category.Panel.Visibility = isSelected ? Visibility.Visible : Visibility.Collapsed;
+                category.Button.Background = (Brush)FindResource(isSelected ? "PanelHover" : "PanelBg");
+                category.Button.BorderBrush = (Brush)FindResource(isSelected ? "Primary" : "Line");
+                category.Button.Foreground = (Brush)FindResource("TextMain");
+            }
         }
 
         private void AddConfigField(Grid form, Dictionary<string, TextBox> fields, int row, string label, string key, string value)
@@ -2899,6 +3200,11 @@ namespace SmsWorkbench
             {
                 if (File.Exists(path) || Directory.Exists(path))
                 {
+                    if (File.Exists(path) && ShouldOpenWithNotepad(path))
+                    {
+                        OpenWithNotepad(path);
+                        return;
+                    }
                     Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
                     return;
                 }
@@ -2915,7 +3221,7 @@ namespace SmsWorkbench
                     {
                         File.WriteAllText(path, "", Encoding.UTF8);
                     }
-                    Process.Start(new ProcessStartInfo("notepad.exe", path) { UseShellExecute = true });
+                    OpenWithNotepad(path);
                     return;
                 }
                 Directory.CreateDirectory(path);
@@ -2925,6 +3231,22 @@ namespace SmsWorkbench
             {
                 Log("打开失败：" + ex.Message);
             }
+        }
+
+        private bool ShouldOpenWithNotepad(string path)
+        {
+            string extension = Path.GetExtension(path).ToLowerInvariant();
+            return extension == ".json" || extension == ".txt" || extension == ".log";
+        }
+
+        private void OpenWithNotepad(string path)
+        {
+            var psi = new ProcessStartInfo("notepad.exe")
+            {
+                UseShellExecute = false
+            };
+            psi.ArgumentList.Add(path);
+            Process.Start(psi);
         }
 
         private void OpenUrl(string url)

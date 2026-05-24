@@ -1,4 +1,4 @@
-from .cpa_import import fetch_cpa_auth_files, import_cpa_session, import_cpa_sessions
+from .cpa_import import _resolve_cpa_config, fetch_cpa_auth_files, import_cpa_session, import_cpa_sessions
 from .sub2api_import import fetch_sub2api_auth_files, import_sub2api_session, import_sub2api_sessions
 
 
@@ -144,4 +144,5 @@ def fetch_target_auth_files(
             login_email=sub2api_email,
             login_password=sub2api_password,
         )
-    return fetch_cpa_auth_files(cpa_api_url, cpa_api_token)
+    resolved_url, resolved_token = _resolve_cpa_config(api_url=cpa_api_url, api_token=cpa_api_token)
+    return fetch_cpa_auth_files(resolved_url, resolved_token)
