@@ -222,6 +222,10 @@ def _run_protocol_login_stages(
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
             return email_otp_result
+        email_otp_result.setdefault("protocol_stage", "email_otp")
+        email_otp_result.setdefault("fallback_from", "password_login_failed")
+        email_otp_result["password_attempt"] = password_result
+        return email_otp_result
     elif stage == "add_phone":
         final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
         if final.get("ok"):
@@ -306,6 +310,7 @@ def _passwordless_login_and_exchange(
             proxy=proxy,
         )
         if not code:
+            last_error = "passwordless_email_otp_poll_timeout"
             continue
         validate = session.post(
             "https://auth.openai.com/api/accounts/email-otp/validate",
@@ -681,6 +686,9 @@ def _save_oauth_tokens(data, json_path, tokens, email, mode, result=None):
     refreshed["refresh_token_status"] = "oauth_present"
     refreshed["refresh_token_updated_at"] = now
     refreshed["refreshed_at"] = now
+    refreshed.pop("error", None)
+    if str(refreshed.get("status") or "").lower() == "failed":
+        refreshed.pop("status", None)
     refreshed["codex_oauth"] = {
         "client_id": CLIENT_ID,
         "scope": SCOPE,

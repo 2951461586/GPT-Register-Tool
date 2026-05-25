@@ -3119,10 +3119,13 @@ namespace SmsWorkbench
         private string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus, string importedStatus)
         {
             if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
-            if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
+            bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
+                || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalOk == "1" || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "PayPal已生成";
+            if (hasRt && access.Length > 0) return "已注册";
+            if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
             return access.Length > 0 ? "已注册" : "待处理";
         }
 
@@ -3141,7 +3144,7 @@ namespace SmsWorkbench
             string value = (refreshTokenStatus ?? "").Trim();
             return value.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)
-                ? "获取"
+                ? "已获取"
                 : "未获取";
         }
 

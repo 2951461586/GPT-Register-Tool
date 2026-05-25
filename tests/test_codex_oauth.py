@@ -74,6 +74,28 @@ class CodexOauthTests(unittest.TestCase):
         self.assertEqual(session.post.call_args.args[0], "https://auth.openai.com/api/accounts/password/verify")
         self.assertEqual(session.post.call_args.kwargs["json"], {"password": "Secret!A1"})
 
+    def test_password_stage_preserves_passwordless_fallback_failure(self):
+        session = Mock()
+
+        with patch("sms_tool.codex_oauth._detect_protocol_stage", return_value="password"), \
+             patch("sms_tool.codex_oauth._password_login_and_exchange", return_value={"ok": False, "error": "password_verify_failed:400"}), \
+             patch("sms_tool.codex_oauth._passwordless_login_and_exchange", return_value={"ok": False, "error": "passwordless_email_otp_poll_timeout"}):
+            result = codex_oauth._run_protocol_login_stages(
+                session=session,
+                oauth={"state": "s", "code_verifier": "v", "redirect_uri": "http://localhost"},
+                email="user@example.com",
+                data={"email": "user@example.com"},
+                did="did",
+                current_url="https://auth.openai.com/log-in/password",
+                force_email_otp_login=True,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "passwordless_email_otp_poll_timeout")
+        self.assertEqual(result["protocol_stage"], "email_otp")
+        self.assertEqual(result["fallback_from"], "password_login_failed")
+        self.assertEqual(result["password_attempt"]["error"], "password_verify_failed:400")
+
     def test_single_phone_oauth_lane_stays_locked_until_token_exchange(self):
         class TrackingLock:
             def __init__(self):
