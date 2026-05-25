@@ -1,8 +1,8 @@
 """Phone verification pool for registration.
 
-SMSBower activations are kept open until the configured reuse count is reached.
-That allows one acquired phone number to receive several verification codes in
-sequence before the activation is completed.
+SMSBower activations are kept open across timeouts and after the configured
+reuse count is reached. That avoids retiring a number automatically when a
+code arrives late or when the caller wants to inspect the activation manually.
 """
 
 from __future__ import annotations
@@ -409,14 +409,7 @@ def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
     if _smsbower_client(slot).request_additional(slot.activation_id):
         print(f"  [smsbower] activation {slot.activation_id} ready for another code")
         return True
-    old_activation = slot.activation_id
-    old_phone = slot.phone
-    print(f"  [smsbower] activation {old_activation} could not request another code; acquiring a new number")
-    _complete_smsbower_activation(slot)
-    acquired = _acquire_smsbower_number(slot)
-    if acquired:
-        return True
-    print(f"  [smsbower] replacement acquire failed after retiring {old_phone} (id={old_activation})")
+    print(f"  [smsbower] activation {slot.activation_id} could not request another code; keeping current number")
     return False
 
 
@@ -667,7 +660,7 @@ def _complete_phone_verification_locked(
 
     if not code:
         if phone_slot.provider == "smsbower":
-            _cancel_smsbower_activation(phone_slot)
+            print(f"  [smsbower] SMS timeout; keeping activation {phone_slot.activation_id} for retry")
             phone_pool.save_state()
         return {
             "ok": False,
@@ -697,7 +690,7 @@ def _complete_phone_verification_locked(
     max_reuse_count = phone_slot.max_reuse_count
     remaining = phone_slot.remaining
     if phone_slot.provider == "smsbower" and phone_slot.is_exhausted:
-        _complete_smsbower_activation(phone_slot)
+        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; keeping it open")
         phone_pool.save_state()
 
     return {

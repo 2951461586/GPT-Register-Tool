@@ -15,7 +15,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(normalize_country("+233"), "38")
         self.assertEqual(normalize_phone("233555123456"), "+233555123456")
 
-    def test_smsbower_activation_completes_after_third_reuse(self):
+    def test_smsbower_activation_stays_open_after_third_reuse(self):
         slot = PhoneSlot(
             phone="+233555123456",
             provider="smsbower",
@@ -25,13 +25,11 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
             slot_id="smsbower:0",
         )
         pool = PhonePool(phones=[slot])
-        completed = []
-
         with patch("sms_tool.phone_reuse._prepare_smsbower_for_send", return_value=True), \
              patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
              patch("sms_tool.phone_reuse._wait_smsbower_code", side_effect=["111111", "222222", "333333"]), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._complete_smsbower_activation", side_effect=lambda used_slot: completed.append(used_slot.activation_id)):
+             patch("sms_tool.phone_reuse._complete_smsbower_activation") as complete:
             first = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
             second = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
             third = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
@@ -40,7 +38,9 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(first["reuse_count"], 1)
         self.assertEqual(second["reuse_count"], 2)
         self.assertEqual(third["reuse_count"], 3)
-        self.assertEqual(completed, ["act-1"])
+        complete.assert_not_called()
+        self.assertEqual(slot.activation_id, "act-1")
+        self.assertEqual(slot.phone, "+233555123456")
         self.assertEqual(pool.total_capacity, 0)
 
     def test_smsbower_wait_ignores_previous_retry_code(self):
@@ -127,7 +127,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         cancel.assert_called_once()
         self.assertEqual(pool.total_capacity, 0)
 
-    def test_smsbower_prepare_replaces_activation_when_additional_code_unavailable(self):
+    def test_smsbower_prepare_keeps_activation_when_additional_code_unavailable(self):
         slot = PhoneSlot(
             phone="+233555123456",
             provider="smsbower",
@@ -141,20 +141,36 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         with patch("sms_tool.phone_reuse._smsbower_client") as client_factory:
             old_client = Mock()
             old_client.request_additional.return_value = False
-            old_client.complete.return_value = False
-            new_client = Mock()
-            new_client.get_number.return_value = Mock(
-                phone="+233555999999",
-                activation_id="act-2",
-                service="dr",
-                country="38",
-                price="0.054",
-            )
-            client_factory.side_effect = [old_client, old_client, new_client]
-            self.assertTrue(_prepare_smsbower_for_send(slot))
+            client_factory.return_value = old_client
+            self.assertFalse(_prepare_smsbower_for_send(slot))
 
-        self.assertEqual(slot.phone, "+233555999999")
-        self.assertEqual(slot.activation_id, "act-2")
+        self.assertEqual(slot.phone, "+233555123456")
+        self.assertEqual(slot.activation_id, "act-1")
+        self.assertEqual(slot.reuse_count, 1)
+        old_client.complete.assert_not_called()
+
+    def test_smsbower_sms_timeout_keeps_activation_for_retry(self):
+        slot = PhoneSlot(
+            phone="+233555123456",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-1",
+            max_reuse_count=3,
+            slot_id="smsbower:0",
+        )
+        pool = PhonePool(phones=[slot])
+
+        with patch("sms_tool.phone_reuse._prepare_smsbower_for_send", return_value=True), \
+             patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
+             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value=None), \
+             patch("sms_tool.phone_reuse._cancel_smsbower_activation") as cancel:
+            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "phone_sms_timeout")
+        cancel.assert_not_called()
+        self.assertEqual(slot.phone, "+233555123456")
+        self.assertEqual(slot.activation_id, "act-1")
         self.assertEqual(slot.reuse_count, 0)
 
     def test_phone_pool_state_does_not_override_configured_send_retries(self):

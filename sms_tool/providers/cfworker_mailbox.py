@@ -48,18 +48,31 @@ class CFWorkerMailboxClient:
             return []
         encoded = quote(email, safe="")
         limit = max(1, min(int(limit or 25), 100))
-        admin_messages = self._fetch_admin_messages(email, limit)
-        if admin_messages is not None:
+        saw_empty_endpoint = False
+        last_error = ""
+        try:
+            admin_messages = self._fetch_admin_messages(email, limit)
+        except Exception as exc:
+            admin_messages = None
+            last_error = str(exc)
+        if admin_messages:
             return [_normalize_message(msg, email=email) for msg in admin_messages[:limit]]
+        if admin_messages == []:
+            saw_empty_endpoint = True
         candidates = [
+            f"/api/messages?email={encoded}&limit={limit}",
+            f"/api/emails/{encoded}/messages?limit={limit}",
+            f"/api/mailboxes/{encoded}/messages?limit={limit}",
+            f"/api/mailbox/{encoded}?limit={limit}",
+            f"/api/inbox/{encoded}?limit={limit}",
+            f"/api/messages/{encoded}?limit={limit}",
+            f"/messages/{encoded}?limit={limit}",
+            f"/inbox/{encoded}?limit={limit}",
             f"/emails/{encoded}",
             f"/api/emails/{encoded}",
             f"/emails/{encoded}?limit={limit}",
             f"/api/emails/{encoded}?limit={limit}",
-            f"/inbox/{encoded}",
-            f"/api/inbox/{encoded}",
         ]
-        last_error = ""
         for path in candidates:
             result = self._request("GET", path, allow_404=True)
             if not result.get("ok"):
@@ -67,12 +80,19 @@ class CFWorkerMailboxClient:
                 continue
             messages = _extract_messages(result.get("data"))
             if messages:
-                return [_normalize_message(msg, email=email) for msg in messages[:limit]]
+                filtered = _messages_for_mailbox(messages, email, allow_missing_recipient=True)
+                if filtered:
+                    return [_normalize_message(msg, email=email) for msg in filtered[:limit]]
             if _looks_empty_message_list(result.get("data")):
-                return []
+                saw_empty_endpoint = True
+                continue
             single = _extract_single_message(result.get("data"))
             if single:
-                return [_normalize_message(single, email=email)]
+                filtered = _messages_for_mailbox([single], email, allow_missing_recipient=True)
+                if filtered:
+                    return [_normalize_message(filtered[0], email=email)]
+        if saw_empty_endpoint:
+            return []
         raise RuntimeError(last_error or "cfworker messages endpoint not found")
 
     def _fetch_admin_messages(self, email, limit):
@@ -92,7 +112,7 @@ class CFWorkerMailboxClient:
                 raise RuntimeError(result.get("error") or "cfworker admin emails failed")
             data = result.get("data")
             messages = _extract_messages(data)
-            collected.extend(msg for msg in messages if _message_matches_email(msg, email))
+            collected.extend(_messages_for_mailbox(messages, email, allow_missing_recipient=False))
             page_data = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), dict) else {}
             try:
                 page_size = max(1, int(page_data.get("pageSize") or len(messages) or 20))
@@ -252,6 +272,16 @@ def _sender(msg):
 def _message_matches_email(msg, email):
     target = str(email or "").strip().lower()
     return bool(target and target in _message_recipients(msg))
+
+
+def _messages_for_mailbox(messages, email, allow_missing_recipient=False):
+    target = str(email or "").strip().lower()
+    output = []
+    for msg in messages or []:
+        recipients = _message_recipients(msg)
+        if target in recipients or (allow_missing_recipient and not recipients):
+            output.append(msg)
+    return output
 
 
 def _message_recipients(msg):

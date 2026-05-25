@@ -40,6 +40,32 @@ class FakeResponse:
         }
 
 
+class EmptyAdminResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {"data": {"items": [], "pageSize": 20, "total": 0}}
+
+
+class TargetEndpointResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {
+            "messages": [
+                {
+                    "message_id": "m3",
+                    "from_address": "noreply@tm.openai.com",
+                    "subject": "Your temporary ChatGPT verification code",
+                    "extracted_json": '[{"value":"333333"}]',
+                    "received_at": 1779588674891,
+                }
+            ]
+        }
+
+
 class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_admin_email_list_uses_proxy_filters_recipient_and_exposes_otp_body(self):
         proxy = "socks5h://127.0.0.1:7897"
@@ -59,6 +85,37 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         recipients = messages[0]["toRecipients"]
         self.assertEqual(recipients[0]["emailAddress"]["address"], "target@edu.liziai.cloud")
         self.assertEqual(messages[0]["receivedDateTime"], "2026-05-24T02:11:14Z")
+
+    def test_target_endpoint_is_used_when_admin_list_has_no_matching_mail(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
+
+        with patch.object(
+            cfworker_mailbox.curl_requests,
+            "get",
+            side_effect=[EmptyAdminResponse(), TargetEndpointResponse()],
+        ) as get:
+            messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
+
+        self.assertIn("/admin/emails?page=1&domain=edu.liziai.cloud", get.call_args_list[0].args[0])
+        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
+        self.assertEqual(len(messages), 1)
+        self.assertIn("333333", messages[0]["bodyPreview"])
+        self.assertEqual(messages[0]["toRecipients"][0]["emailAddress"]["address"], "target@edu.liziai.cloud")
+
+    def test_target_endpoint_is_used_when_admin_request_times_out(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
+
+        with patch.object(
+            cfworker_mailbox.curl_requests,
+            "get",
+            side_effect=[RuntimeError("admin timeout"), TargetEndpointResponse()],
+        ) as get:
+            messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
+
+        self.assertIn("/admin/emails?page=1&domain=edu.liziai.cloud", get.call_args_list[0].args[0])
+        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
+        self.assertEqual(len(messages), 1)
+        self.assertIn("333333", messages[0]["bodyPreview"])
 
     def test_cfworker_otp_poll_waits_for_newer_duplicate_code(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
@@ -84,6 +141,21 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 code = mailbox_module._poll_email_otp(mailbox, timeout=1)
 
         self.assertEqual(code, "222222")
+
+    def test_email_otp_candidate_accepts_code_in_subject(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+        msg = {
+            "id": "subject-only",
+            "receivedDateTime": "2026-05-25T13:58:10Z",
+            "subject": "Your OpenAI code is 333333",
+            "bodyPreview": "",
+            "body": {"content": ""},
+            "toRecipients": [{"emailAddress": {"address": "target@edu.liziai.cloud"}}],
+        }
+
+        candidate = mailbox_module._email_otp_candidate(mailbox, msg, issued_after_unix=0)
+
+        self.assertEqual(candidate["otp"], "333333")
 
     def test_cfworker_fetch_falls_back_to_direct_when_proxy_fails(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")

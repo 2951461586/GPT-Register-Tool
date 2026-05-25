@@ -24,6 +24,42 @@ class StorageDedupTests(unittest.TestCase):
         self.assertEqual(rows[0]["email"], "user@example.com")
         self.assertEqual(rows[0]["success"], 1)
         self.assertEqual(rows[0]["access_token"], "tok")
+        self.assertEqual(rows[0]["error"], "")
+
+    def test_upsert_clears_failed_error_when_refresh_token_is_acquired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.upsert_account({
+                    "email": "rt@example.com",
+                    "success": False,
+                    "error": "passwordless_email_otp_poll_timeout",
+                }))
+                self.assertTrue(storage.upsert_account({
+                    "email": "rt@example.com",
+                    "success": True,
+                    "access_token": "at",
+                    "oauth_refresh_token": "rt",
+                    "refresh_token_status": "oauth_present",
+                    "error": "passwordless_email_otp_poll_timeout",
+                    "paypal": {"ok": True, "url": "https://example.com/pay"},
+                }))
+
+                conn = storage._connect()
+                try:
+                    row = conn.execute(
+                        "SELECT status,error,refresh_token_status,oauth_refresh_token,paypal_status,raw_json FROM accounts WHERE email=?",
+                        ("rt@example.com",),
+                    ).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["status"], "paypal_ready")
+        self.assertEqual(row["error"], "")
+        self.assertEqual(row["refresh_token_status"], "oauth_present")
+        self.assertEqual(row["oauth_refresh_token"], "rt")
+        self.assertEqual(row["paypal_status"], "link_ready")
+        self.assertNotIn("passwordless_email_otp_poll_timeout", row["raw_json"])
 
     def test_upsert_repairs_misplaced_alias_plus(self):
         with tempfile.TemporaryDirectory() as tmp:

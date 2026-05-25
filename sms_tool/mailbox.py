@@ -575,7 +575,8 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
     recipients = _message_recipients(msg)
     if mailbox.email.lower() not in recipients and recipients:
         return None
-    body = str((msg or {}).get("bodyPreview") or "") + "\n"
+    body = subject + "\n"
+    body += str((msg or {}).get("bodyPreview") or "") + "\n"
     body += str((((msg or {}).get("body") or {}).get("content")) or "")
     otp = _extract_otp_from_text(body)
     if not otp:

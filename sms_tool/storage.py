@@ -235,10 +235,10 @@ def _refresh_token_status(data, auth_session):
     return "no_rt"
 
 
-def _status(data, paypal, access_token):
-    if data.get("success") is False:
+def _status(data, paypal, access_token, has_refresh_token=False):
+    if data.get("success") is False and not has_refresh_token:
         return "failed" if data.get("error") else "pending"
-    if not data.get("success") and data.get("error"):
+    if not data.get("success") and data.get("error") and not has_refresh_token:
         return "failed"
     if access_token and paypal.get("ok"):
         return "paypal_ready"
@@ -270,10 +270,14 @@ def upsert_account(data, json_path=""):
     now = int(time.time())
     created_at = _as_int(_get(data, "created_at")) or now
     access_token = str(_get(data, "access_token"))
-    status = _status(data, paypal, access_token)
     paypal_status = _paypal_status(data, paypal)
     oauth_refresh_token = _oauth_refresh_token(data, auth_session)
     refresh_token_status = _refresh_token_status(data, auth_session)
+    has_refresh_token = refresh_token_status in {"oauth_present", "legacy_present"}
+    status = _status(data, paypal, access_token, has_refresh_token=has_refresh_token)
+    if has_refresh_token and _get(data, "error"):
+        data = dict(data)
+        data.pop("error", None)
     raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     row = {
@@ -281,7 +285,7 @@ def upsert_account(data, json_path=""):
         "password": str(_get(data, "password")),
         "success": _as_bool(_success_value(data, access_token)),
         "status": status,
-        "error": str(_get(data, "error")),
+        "error": "" if has_refresh_token else str(_get(data, "error")),
         "session_token": str(_get(data, "session_token")),
         "access_token": access_token,
         "refresh_token": str(_get(data, "refresh_token")),
