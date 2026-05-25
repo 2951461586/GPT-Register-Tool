@@ -1,8 +1,22 @@
+"""Phone verification integration for ChatGPT registration.
+
+Uses phone_reuse.py pool for multi-account phone verification,
+or falls back to single-phone paypal_auto helpers when pool is not provided.
+"""
+
 from .config import CFG
 from .codex_sentinel import load_cached_sentinel, with_sentinel
 
 
-def complete_phone_verification(session, did, current_url, proxy=None, enabled=False):
+def complete_phone_verification(session, did, current_url, proxy=None, enabled=False, phone_pool=None):
+    """Complete phone verification during registration.
+
+    If phone_pool is provided (PhonePool from phone_reuse.py), uses the reuse pool.
+    Otherwise falls back to the legacy single-phone flow from paypal_auto.
+    """
+    if phone_pool:
+        return _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=proxy)
+
     if not enabled:
         return {
             "ok": False,
@@ -10,6 +24,46 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
             "message": "OpenAI requested phone verification; automatic phone handling is disabled.",
         }
 
+    return _verify_with_legacy(session, did, current_url, proxy=proxy)
+
+
+def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
+    """Phone verification using the reuse pool from phone_reuse.py."""
+    from .phone_reuse import complete_phone_verification_with_reuse
+
+    sentinel = load_cached_sentinel()
+    result = complete_phone_verification_with_reuse(
+        session=session,
+        did=did,
+        current_url=current_url,
+        phone_pool=phone_pool,
+        sentinel=sentinel,
+        proxy=proxy,
+    )
+
+    if result.get("ok"):
+        return {
+            "ok": True,
+            "next_url": result.get("next_url", ""),
+            "phone": result.get("phone", ""),
+            "provider": result.get("provider", ""),
+            "activation_id": result.get("activation_id", ""),
+            "reuse_count": result.get("reuse_count", 0),
+            "max_reuse_count": result.get("max_reuse_count", 0),
+            "remaining": result.get("remaining", 0),
+        }
+
+    return {
+        "ok": False,
+        "error": result.get("error", "phone_verification_failed"),
+        "phone": result.get("phone", ""),
+        "body": result.get("body", ""),
+        "message": result.get("message", ""),
+    }
+
+
+def _verify_with_legacy(session, did, current_url, proxy=None):
+    """Legacy single-phone verification from paypal_auto config."""
     try:
         from .paypal_auto import _pick_phone_and_sms, _sms_baseline, _poll_sms_code
     except Exception as exc:
@@ -66,7 +120,7 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
             "error": f"phone_validate_failed:{validate.status_code}",
             "body": validate.text[:300],
         }
-    return {"ok": True, "next_url": _next_url(validate)}
+    return {"ok": True, "next_url": _next_url(validate), "phone": phone}
 
 
 def _oai_headers(did, extra=None):

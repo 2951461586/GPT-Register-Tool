@@ -589,7 +589,13 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
 
 def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
     if getattr(mailbox, "provider", "") == "cfworker":
-        return _cfworker_client(proxy=proxy).fetch_messages(mailbox.email, limit=limit)
+        try:
+            return _cfworker_client(proxy=proxy).fetch_messages(mailbox.email, limit=limit)
+        except Exception as exc:
+            if not proxy:
+                raise
+            print(f"[cfworker proxy poll error: {exc}; retrying direct]")
+            return _cfworker_client(proxy=None).fetch_messages(mailbox.email, limit=limit)
     cfg = _email_cfg()
     token = mailbox.access_token or _ms_oauth_refresh(mailbox)
     graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")

@@ -85,6 +85,22 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         self.assertEqual(code, "222222")
 
+    def test_cfworker_fetch_falls_back_to_direct_when_proxy_fails(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+
+        with patch.object(mailbox_module, "_cfworker_client") as client_factory:
+            proxy_client = type("ProxyClient", (), {})()
+            direct_client = type("DirectClient", (), {})()
+            proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
+            direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
+            client_factory.side_effect = [proxy_client, direct_client]
+
+            messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+
+        self.assertEqual(messages, [{"id": "m1"}])
+        self.assertEqual(client_factory.call_args_list[0].kwargs["proxy"], "socks5h://127.0.0.1:7897")
+        self.assertIsNone(client_factory.call_args_list[1].kwargs["proxy"])
+
 
 if __name__ == "__main__":
     unittest.main()

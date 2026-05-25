@@ -47,7 +47,11 @@ Required choices:
 - `paypal_auto.cards` / `paypal_nocard.phone_pool`: card and SMS-phone pools used only by explicit PayPal no-card payment commands.
 - `cpa_mode.api_url` / `cpa_mode.api_token`: CPA management API target for one-click import.
 - `codex_oauth.allow_passwordless_takeover`: default `false`; only affects manual Codex export/refresh. CPA import now consumes existing AT-only JSON and no longer depends on RT refresh.
-- `codex_oauth.auto_phone_verification`: default `false`; phone verification is attempted only when explicitly enabled.
+- `codex_oauth.require_registration_refresh_token`: default `true`; a new registration is not counted as successful until Codex OAuth returns a refresh token.
+- `codex_oauth.require_registration_phone_verification`: default `true`; when a phone pool is configured, registration must complete SMS verification before the session is saved.
+- `--registration-at-only`: UI default for "one-click registration + payment link"; skips Codex OAuth/phone SMS and stores the ChatGPT access token only.
+- `--one-click-sms`: runs Codex OAuth for selected existing accounts, completes phone SMS verification via the phone pool, and stores the OAuth refresh token.
+- `phone_reuse.smsbower`: SMSBower OpenAI/Ghana (`service=dr`, `country=38`, `+233`) phone pool. One acquired activation is reused up to `phone_reuse.max_reuse_count` times, default `3`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the SMSBower activation.
 
 5. Run one registration.
 
