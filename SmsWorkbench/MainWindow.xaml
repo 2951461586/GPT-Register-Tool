@@ -76,6 +76,13 @@
               </StackPanel>
             </Button>
 
+            <Button Style="{StaticResource SidebarButton}" Click="OneClickSms_Click" ToolTip="一键接码">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M4 3 H12 V13 H4 Z M6 5 H10 M6 8 H10 M8 11 H8"/>
+                <TextBlock Tag="SidebarText" Text="一键接码" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+
             <TextBlock Tag="SidebarSection" Text="PAYMENT" Style="{StaticResource SectionLabel}"/>
             <Button Style="{StaticResource SidebarButton}" Click="OneClickPay_Click" ToolTip="一键支付">
               <StackPanel Orientation="Horizontal">
@@ -226,6 +233,7 @@
             <DataGridTextColumn Header="邮箱" Binding="{Binding Identifier}" Width="260" IsReadOnly="True"/>
             <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
             <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="130" IsReadOnly="True"/>
+            <DataGridTextColumn Header="RT" Binding="{Binding RefreshTokenStatus}" Width="78" IsReadOnly="True"/>
             <DataGridTextColumn Header="支付状态" Binding="{Binding PayPalStatus}" Width="120" IsReadOnly="True"/>
             <DataGridTextColumn Header="支付金额" Binding="{Binding PayPalAmount}" Width="95" IsReadOnly="True"/>
             <DataGridTemplateColumn Header="详情" Width="70">

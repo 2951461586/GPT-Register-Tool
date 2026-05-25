@@ -236,6 +236,8 @@ def _refresh_token_status(data, auth_session):
 
 
 def _status(data, paypal, access_token):
+    if data.get("success") is False:
+        return "failed" if data.get("error") else "pending"
     if not data.get("success") and data.get("error"):
         return "failed"
     if access_token and paypal.get("ok"):
@@ -245,6 +247,12 @@ def _status(data, paypal, access_token):
     if access_token:
         return "registered"
     return "pending"
+
+
+def _success_value(data, access_token):
+    if isinstance(data, dict) and "success" in data:
+        return bool(data.get("success"))
+    return bool(access_token)
 
 
 def upsert_account(data, json_path=""):
@@ -271,7 +279,7 @@ def upsert_account(data, json_path=""):
     row = {
         "email": email,
         "password": str(_get(data, "password")),
-        "success": _as_bool(data.get("success") or bool(access_token)),
+        "success": _as_bool(_success_value(data, access_token)),
         "status": status,
         "error": str(_get(data, "error")),
         "session_token": str(_get(data, "session_token")),

@@ -457,7 +457,7 @@ namespace SmsWorkbench
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl),
                         PayPalAmount = paypalAmount,
-                        RefreshTokenStatus = DisplayRefreshTokenStatus(refreshTokenStatus),
+                        RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                         PayPalUrl = paypalUrl,
                         RefreshToken = isCfWorkerMailbox ? "CFWorker" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
@@ -513,7 +513,7 @@ namespace SmsWorkbench
                             Status = importedStatus.Length > 0 ? importedStatus : access.Length > 0 ? paypalStatus : "缺access_token",
                             PayPalStatus = paypalStatus,
                             PayPalAmount = paypalAmount,
-                            RefreshTokenStatus = DisplayRefreshTokenStatus(refreshTokenStatus),
+                            RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                             PayPalUrl = paypalUrl,
                             RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : Mask(access),
                             Proxy = timing,
@@ -641,6 +641,7 @@ namespace SmsWorkbench
             if (TryCreateSelectedUnregisteredMailboxFile(out string pendingMailboxArg, out string pendingMailboxFile, out int pendingSelectedCount, out int pendingRowCount))
             {
                 var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", "4" };
+                AddRegistrationAtOnlyArgs(pendingArgs);
                 AddProxy(pendingArgs);
                 AddPaypalOption(pendingArgs);
                 RunBackend("选中未注册邮箱注册+支付链接", pendingArgs);
@@ -667,6 +668,7 @@ namespace SmsWorkbench
                     "--workers",
                     options.Workers.ToString()
                 };
+                AddRegistrationAtOnlyArgs(cfArgs);
                 AddProxy(cfArgs);
                 AddPaypalOption(cfArgs);
                 RunBackend("CFWorker邮箱注册+支付链接", cfArgs);
@@ -690,9 +692,45 @@ namespace SmsWorkbench
                 return;
             }
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
+            AddRegistrationAtOnlyArgs(args);
             AddProxy(args);
             AddPaypalOption(args);
             RunBackend(taskName, args);
+        }
+
+        private void AddRegistrationAtOnlyArgs(List<string> args)
+        {
+            args.Add("--registration-at-only");
+            args.Add("--no-phone-reuse");
+        }
+
+        private void OneClickSms_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                MessageBox.Show("请先勾选或选择要接码的邮箱账号。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var args = new List<string> { "--one-click-sms", "--workers", "1", "--refresh-timeout", "60" };
+            if (rows.Count > 1)
+            {
+                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_sms_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", rows[0].Identifier });
+                AddSessionFileArg(args, rows[0]);
+            }
+            AddProxy(args);
+            RunBackend("一键接码(" + rows.Count + ")", args);
         }
 
         private void OneClickPay_Click(object sender, RoutedEventArgs e)
@@ -2501,6 +2539,9 @@ namespace SmsWorkbench
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
             var sub2api = GetSection(config, "sub2api");
+            var codexOauth = GetSection(config, "codex_oauth");
+            var phoneReuse = GetSection(config, "phone_reuse");
+            var smsBower = GetChildSection(phoneReuse, "smsbower");
 
             var dialog = new Window
             {
@@ -2580,6 +2621,28 @@ namespace SmsWorkbench
             AddConfigField(cfForm, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
             AddConfigField(cfForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
 
+            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower 手机号接码、复用次数和 Codex OAuth 接码开关。");
+            row = 0;
+            AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
+            AddConfigField(phoneForm, fields, row++, "服务代码", "smsbower_service", GetString(smsBower, "service"));
+            AddConfigField(phoneForm, fields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"));
+            AddConfigField(phoneForm, fields, row++, "最低价格", "smsbower_min_price", GetString(smsBower, "min_price"));
+            AddConfigField(phoneForm, fields, row++, "最高价格", "smsbower_max_price", GetString(smsBower, "max_price"));
+            AddConfigField(phoneForm, fields, row++, "目标价格", "smsbower_target_price", GetString(smsBower, "target_price"));
+            AddConfigField(phoneForm, fields, row++, "号码池数量", "smsbower_pool_size", GetString(smsBower, "pool_size"));
+            AddConfigField(phoneForm, fields, row++, "短信等待秒", "smsbower_sms_timeout", GetString(smsBower, "sms_timeout"));
+            AddConfigField(phoneForm, fields, row++, "短信轮询间隔秒", "smsbower_sms_poll_interval", GetString(smsBower, "sms_poll_interval"));
+            AddConfigField(phoneForm, fields, row++, "复用次数", "phone_max_reuse_count", GetString(phoneReuse, "max_reuse_count"));
+            AddConfigField(phoneForm, fields, row++, "发码冷却秒", "phone_send_cooldown_seconds", GetString(phoneReuse, "send_cooldown_seconds"));
+            AddConfigField(phoneForm, fields, row++, "发码重试次数", "phone_send_retry_attempts", GetString(phoneReuse, "send_retry_attempts"));
+            AddConfigField(phoneForm, fields, row++, "发码重试延迟秒", "phone_send_retry_delay_seconds", GetString(phoneReuse, "send_retry_delay_seconds"));
+            AddConfigField(phoneForm, fields, row++, "状态文件", "phone_state_file", GetString(phoneReuse, "state_file"));
+            AddConfigField(phoneForm, fields, row++, "OAuth超时秒", "codex_registration_timeout", GetString(codexOauth, "registration_timeout"));
+            AddConfigField(phoneForm, fields, row++, "允许邮箱OTP兜底", "codex_allow_passwordless_takeover", GetString(codexOauth, "allow_passwordless_takeover"));
+            AddConfigField(phoneForm, fields, row++, "自动手机验证", "codex_auto_phone_verification", GetString(codexOauth, "auto_phone_verification"));
+            AddConfigField(phoneForm, fields, row++, "注册要求RT", "codex_require_registration_refresh_token", GetString(codexOauth, "require_registration_refresh_token"));
+            AddConfigField(phoneForm, fields, row++, "注册要求手机号", "codex_require_registration_phone_verification", GetString(codexOauth, "require_registration_phone_verification"));
+
             var cpaForm = AddConfigCategory(sidebar, host, categories, "CPA", "CPA 导入和 401 重导接口配置。");
             row = 0;
             AddConfigField(cpaForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
@@ -2626,6 +2689,26 @@ namespace SmsWorkbench
                 email["cfworker_domain"] = fields["cfworker_domain"].Text.Trim();
                 email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();
                 email["cfworker_api_token"] = fields["cfworker_api_token"].Text.Trim();
+                smsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
+                smsBower["service"] = fields["smsbower_service"].Text.Trim();
+                smsBower["country"] = fields["smsbower_country"].Text.Trim();
+                smsBower["min_price"] = fields["smsbower_min_price"].Text.Trim();
+                smsBower["max_price"] = fields["smsbower_max_price"].Text.Trim();
+                smsBower["target_price"] = fields["smsbower_target_price"].Text.Trim();
+                smsBower["pool_size"] = ConfigIntegerValue(fields, "smsbower_pool_size");
+                smsBower["sms_timeout"] = ConfigIntegerValue(fields, "smsbower_sms_timeout");
+                smsBower["sms_poll_interval"] = ConfigIntegerValue(fields, "smsbower_sms_poll_interval");
+                phoneReuse["smsbower"] = smsBower;
+                phoneReuse["max_reuse_count"] = ConfigIntegerValue(fields, "phone_max_reuse_count");
+                phoneReuse["send_cooldown_seconds"] = ConfigIntegerValue(fields, "phone_send_cooldown_seconds");
+                phoneReuse["send_retry_attempts"] = ConfigIntegerValue(fields, "phone_send_retry_attempts");
+                phoneReuse["send_retry_delay_seconds"] = ConfigIntegerValue(fields, "phone_send_retry_delay_seconds");
+                phoneReuse["state_file"] = fields["phone_state_file"].Text.Trim();
+                codexOauth["registration_timeout"] = ConfigIntegerValue(fields, "codex_registration_timeout");
+                codexOauth["allow_passwordless_takeover"] = ConfigBoolValue(fields, "codex_allow_passwordless_takeover", GetBool(codexOauth, "allow_passwordless_takeover", false));
+                codexOauth["auto_phone_verification"] = ConfigBoolValue(fields, "codex_auto_phone_verification", GetBool(codexOauth, "auto_phone_verification", false));
+                codexOauth["require_registration_refresh_token"] = ConfigBoolValue(fields, "codex_require_registration_refresh_token", GetBool(codexOauth, "require_registration_refresh_token", true));
+                codexOauth["require_registration_phone_verification"] = ConfigBoolValue(fields, "codex_require_registration_phone_verification", GetBool(codexOauth, "require_registration_phone_verification", true));
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
                 output["directory"] = fields["output_directory"].Text.Trim();
@@ -2649,6 +2732,8 @@ namespace SmsWorkbench
                 config["storage"] = storage;
                 config["cpa_mode"] = cpaMode;
                 config["sub2api"] = sub2api;
+                config["codex_oauth"] = codexOauth;
+                config["phone_reuse"] = phoneReuse;
                 SaveConfig(path, config);
                 ProxyText = fields["default_proxy"].Text.Trim();
                 Log("配置已保存。");
@@ -2760,6 +2845,55 @@ namespace SmsWorkbench
             var created = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             config[section] = created;
             return created;
+        }
+
+        private Dictionary<string, object> GetChildSection(Dictionary<string, object> parent, string key)
+        {
+            if (parent.TryGetValue(key, out object value) && value is Dictionary<string, object> map)
+            {
+                return map;
+            }
+            var created = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            parent[key] = created;
+            return created;
+        }
+
+        private object ConfigIntegerValue(Dictionary<string, TextBox> fields, string key)
+        {
+            string raw = fields.TryGetValue(key, out TextBox box) ? box.Text.Trim() : "";
+            if (int.TryParse(raw, out int value)) return value;
+            return raw;
+        }
+
+        private bool ConfigBoolValue(Dictionary<string, TextBox> fields, string key, bool fallback)
+        {
+            string raw = fields.TryGetValue(key, out TextBox box) ? box.Text.Trim() : "";
+            if (raw.Length == 0) return fallback;
+            if (raw.Equals("true", StringComparison.OrdinalIgnoreCase) || raw == "1" || raw.Equals("yes", StringComparison.OrdinalIgnoreCase) || raw.Equals("on", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (raw.Equals("false", StringComparison.OrdinalIgnoreCase) || raw == "0" || raw.Equals("no", StringComparison.OrdinalIgnoreCase) || raw.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            return fallback;
+        }
+
+        private bool GetBool(Dictionary<string, object> data, string key, bool fallback)
+        {
+            if (!data.TryGetValue(key, out object value) || value == null) return fallback;
+            if (value is bool flag) return flag;
+            string raw = Convert.ToString(value) ?? "";
+            if (raw.Equals("true", StringComparison.OrdinalIgnoreCase) || raw == "1" || raw.Equals("yes", StringComparison.OrdinalIgnoreCase) || raw.Equals("on", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (raw.Equals("false", StringComparison.OrdinalIgnoreCase) || raw == "0" || raw.Equals("no", StringComparison.OrdinalIgnoreCase) || raw.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            return fallback;
         }
 
         private string FirstListValue(Dictionary<string, object> data, string key)
@@ -3000,6 +3134,15 @@ namespace SmsWorkbench
             if (paypalOk == "1" && !string.IsNullOrWhiteSpace(paypalUrl)) return "待人工支付";
             if (!string.IsNullOrWhiteSpace(paypalUrl)) return "待人工支付";
             return "";
+        }
+
+        private string DisplayRtStatus(string refreshTokenStatus)
+        {
+            string value = (refreshTokenStatus ?? "").Trim();
+            return value.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)
+                ? "获取"
+                : "未获取";
         }
 
         private string DisplayRefreshTokenStatus(string refreshTokenStatus)

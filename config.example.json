@@ -75,7 +75,40 @@
     },
     "codex_oauth": {
         "allow_passwordless_takeover": false,
-        "auto_phone_verification": false
+        "auto_phone_verification": false,
+        "require_registration_refresh_token": true,
+        "require_registration_phone_verification": true,
+        "registration_timeout": 180
+    },
+    "phone_reuse": {
+        "max_reuse_count": 3,
+        "send_cooldown_seconds": 45,
+        "send_retry_attempts": 3,
+        "send_retry_delay_seconds": 45,
+        "state_file": "runtime/phone_reuse_state.json",
+        "smsbower": {
+            "api_key": "$SMSBOWER_API_KEY",
+            "service": "dr",
+            "service_name": "OpenAI (ChatGPT)",
+            "country": "38",
+            "country_name": "Ghana",
+            "country_prefix": "+233",
+            "target_price": "0.054",
+            "max_price": "0.06",
+            "pool_size": 1,
+            "sms_timeout": 120,
+            "sms_poll_interval": 5,
+            "send_cooldown_seconds": 45,
+            "send_retry_attempts": 3,
+            "send_retry_delay_seconds": 45
+        },
+        "phone_pool": [
+            {
+                "phone": "+10000000000",
+                "sms_api_url": "https://sms.example.com/poll",
+                "provider": "legacy"
+            }
+        ]
     },
     "output": {
         "directory": "sessions",

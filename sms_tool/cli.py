@@ -6,6 +6,7 @@ import sys
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from .config import CFG
 from .mailbox import _load_mailbox_pool, _luckmail_enabled
@@ -77,6 +78,12 @@ def main():
     parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
     parser.add_argument("--one-click-pay", action="store_true", help="一键支付: PayPal 无卡协议支付 (单账号或 --email-file 批量)")
     parser.add_argument("--one-click-pay-all", action="store_true", help="一键支付: 对所有待支付账号执行无卡协议支付")
+    parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
+    parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
+    parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
+    parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
+    parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 3)")
+    parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()
     if not args.proxy:
         args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
@@ -122,6 +129,9 @@ def main():
     if args.one_click_pay or args.one_click_pay_all:
         _one_click_pay(args)
         return
+    if args.one_click_sms:
+        _one_click_sms(args)
+        return
 
     pipeline_started = time.time()
     mailbox_started = time.time()
@@ -159,12 +169,48 @@ def main():
         effective_count = len(mailboxes)
         print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
 
+    # Phone reuse pool (auto-enable when smsbower or paypal_auto phone is configured)
+    phone_pool = None
+    if not args.no_phone_reuse and not args.registration_at_only:
+        from .phone_reuse import create_phone_pool, has_phone_reuse_config, print_phone_pool_status
+        auto_enable = has_phone_reuse_config()
+        if args.phone_reuse or auto_enable:
+            phone_pool = create_phone_pool(
+                max_reuse_count=args.max_reuse_count,
+                send_cooldown_seconds=args.phone_send_cooldown,
+            )
+            if not phone_pool.phones:
+                if args.phone_reuse:
+                    print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
+                    raise SystemExit(2)
+            else:
+                if auto_enable and not args.phone_reuse:
+                    first = phone_pool.phones[0] if phone_pool.phones else None
+                    source = first.provider if first else "configured"
+                    print(f"[*] Auto-enabled phone verification ({source} mode)")
+                print_phone_pool_status(phone_pool)
+
     register_started = time.time()
     if effective_count > 1:
-        results = run_batch(count=effective_count, proxy=args.proxy, mailboxes=mailboxes, paypal_link=paypal_link, workers=args.workers)
+        results = run_batch(
+            count=effective_count,
+            proxy=args.proxy,
+            mailboxes=mailboxes,
+            paypal_link=paypal_link,
+            workers=args.workers,
+            phone_pool=phone_pool,
+            codex_oauth=not args.registration_at_only,
+        )
     else:
         mailbox = mailboxes[0] if mailboxes else None
-        results = [run_email(proxy=args.proxy, password=args.password, mailbox=mailbox, paypal_link=paypal_link)]
+        results = [run_email(
+            proxy=args.proxy,
+            password=args.password,
+            mailbox=mailbox,
+            paypal_link=paypal_link,
+            phone_pool=phone_pool,
+            codex_oauth=not args.registration_at_only,
+        )]
     register_seconds = time.time() - register_started
 
     pipeline_seconds = time.time() - pipeline_started
@@ -659,3 +705,128 @@ def _one_click_pay(args):
     """一键支付: PayPal 无卡协议支付。"""
     from .paypal_nocard import one_click_pay_batch
     one_click_pay_batch(args)
+
+
+def _one_click_sms(args):
+    """Refresh selected account(s) through Codex OAuth and phone SMS, then store RT."""
+    from .codex_oauth import refresh_codex_oauth_session
+    from .phone_reuse import create_phone_pool, print_phone_pool_status
+    from .session_refresh import _load_seed_session
+
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    if not emails and args.session_file:
+        seed, _ = _load_seed_session(session_file=args.session_file)
+        if seed.get("email"):
+            emails = [str(seed.get("email") or "").strip()]
+    emails = _unique_emails(emails)
+    if not emails:
+        print("[Error] --email, --email-file, or --session-file is required with --one-click-sms")
+        raise SystemExit(2)
+
+    phone_pool = create_phone_pool(
+        max_reuse_count=args.max_reuse_count,
+        send_cooldown_seconds=args.phone_send_cooldown,
+    )
+    if not phone_pool.phones:
+        print("[Error] --one-click-sms requires a phone pool. Configure phone_reuse.smsbower.api_key/SMSBOWER_API_KEY or phone_reuse.phone_pool.")
+        raise SystemExit(2)
+    print_phone_pool_status(phone_pool)
+
+    workers = max(1, min(int(args.workers or 1), 4, len(emails)))
+    print(f"[*] One-click SMS RT refresh: {len(emails)} account(s), workers={workers}")
+
+    def _run_one(index, email):
+        print(f"\n[{index + 1}/{len(emails)}] One-click SMS: {email}")
+        data, json_path = _load_seed_session(
+            email=email,
+            session_file=args.session_file if len(emails) == 1 else "",
+        )
+        data.setdefault("email", email)
+        result = refresh_codex_oauth_session(
+            data,
+            json_path=json_path,
+            proxy=args.proxy,
+            timeout=args.refresh_timeout,
+            force_email_otp_login=True,
+            phone_pool=phone_pool,
+        )
+        if result.get("ok"):
+            print(f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}")
+        else:
+            print(f"[FAIL] {email}: {result.get('error', 'unknown')}")
+            _persist_one_click_sms_failure(data, json_path, email, result)
+        result.setdefault("email", email)
+        return index, result
+
+    ordered = [None] * len(emails)
+    if workers <= 1:
+        for index, email in enumerate(emails):
+            i, result = _run_one(index, email)
+            ordered[i] = result
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_run_one, i, email) for i, email in enumerate(emails)]
+            for future in as_completed(futures):
+                i, result = future.result()
+                ordered[i] = result
+
+    results = [result for result in ordered if result is not None]
+    ok_count = sum(1 for result in results if result.get("ok"))
+    summary = {
+        "ok": ok_count == len(emails),
+        "total": len(emails),
+        "success": ok_count,
+        "failed": len(emails) - ok_count,
+        "results": results,
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if ok_count != len(emails):
+        raise SystemExit(3)
+
+
+def _persist_one_click_sms_failure(data, json_path, email, result):
+    now = int(time.time())
+    refreshed = dict(data or {})
+    refreshed["email"] = email
+    refreshed["success"] = bool(refreshed.get("access_token"))
+    refreshed["error"] = str(result.get("error") or "one_click_sms_failed")
+    refreshed["refresh_token_status"] = str(refreshed.get("refresh_token_status") or "no_rt")
+    refreshed["refresh_token_updated_at"] = now
+    response = refreshed.get("response") if isinstance(refreshed.get("response"), dict) else {}
+    response["codex_oauth"] = _public_oauth_result(result)
+    refreshed["response"] = response
+    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    if phone_attempt:
+        refreshed["phone"] = phone_attempt.get("phone", refreshed.get("phone", ""))
+        response["phone_verification"] = phone_attempt
+    if json_path:
+        try:
+            Path(json_path).write_text(json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            print(f"[!] Failed to update session JSON {json_path}: {exc}")
+    upsert_account(refreshed, json_path=json_path)
+
+
+def _public_oauth_result(result):
+    if not isinstance(result, dict):
+        return {}
+    output = {key: value for key, value in result.items() if key != "tokens"}
+    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    if tokens:
+        output["has_access_token"] = bool(tokens.get("access_token"))
+        output["has_refresh_token"] = bool(tokens.get("refresh_token"))
+    return output
+
+
+def _unique_emails(emails):
+    output = []
+    seen = set()
+    for email in emails or []:
+        value = str(email or "").strip().lower()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        output.append(value)
+    return output

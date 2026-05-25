@@ -578,7 +578,7 @@ def _generate_paypal_link(access_token, proxy=None):
 # ==========================================
 # Core Email Registration Flow
 # ==========================================
-def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypal_link=True):
+def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypal_link=True, phone_pool=None, codex_oauth=True):
     """Register a ChatGPT account via mailbox OTP, then create a PayPal payment link."""
     _tl().clear()
 
@@ -815,17 +815,100 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         else:
             print(f"  Existing account login failed: {existing_login.get('error') or 'unknown'}")
 
+    # Step 8c: Codex OAuth PKCE. /api/auth/session can be AT-only; UI one-click
+    # registration intentionally skips this and leaves RT acquisition to "one-click SMS".
+    oauth_result = {}
+    oauth_tokens = {}
+    phone_result = {}
+    oauth_refresh_token = ""
+    id_token = ""
+    if create_ok and codex_oauth:
+        _tick("8c-Codex OAuth refresh token")
+        try:
+            from .codex_oauth import collect_codex_oauth_tokens
+            oauth_seed = {
+                "email": username,
+                "password": password,
+                "device_id": did,
+                "cookie_header": _cookie_header(session),
+                "auth_session": auth_body,
+                "mailbox": {
+                    "email": mailbox.email,
+                    "password": mailbox.password,
+                    "refresh_token": mailbox.refresh_token,
+                    "access_token": mailbox.access_token,
+                    "source": mailbox.source,
+                    "provider": getattr(mailbox, "provider", ""),
+                    "token": getattr(mailbox, "token", ""),
+                } if mailbox else {},
+            }
+            oauth_result = collect_codex_oauth_tokens(
+                data=oauth_seed,
+                session=session,
+                proxy=proxy,
+                timeout=int((CFG.get("codex_oauth") or {}).get("registration_timeout", 180)),
+                force_email_otp_login=False,
+                phone_pool=phone_pool,
+            )
+            _tock()
+        except Exception as e:
+            _safe_tock()
+            oauth_result = {"ok": False, "error": f"codex_oauth_transport:{e}"}
+
+        if oauth_result.get("ok"):
+            oauth_tokens = oauth_result.get("tokens") or {}
+            access_token = oauth_tokens.get("access_token") or access_token
+            id_token = oauth_tokens.get("id_token", "")
+            oauth_refresh_token = oauth_tokens.get("refresh_token", "")
+            phone_result = oauth_result.get("phone_attempt") or {}
+            if phone_result.get("ok"):
+                print(f"  Phone verified: {phone_result.get('phone', '')} "
+                      f"(reuse {phone_result.get('reuse_count', 0)}/{phone_result.get('max_reuse_count', 0)})")
+            if oauth_refresh_token:
+                print(f"  OAuth refresh token captured: {oauth_refresh_token[:20]}...")
+            else:
+                print("  Codex OAuth exchange returned no refresh token")
+        else:
+            phone_result = oauth_result.get("phone_attempt") or {}
+            print(f"  Codex OAuth refresh token failed: {oauth_result.get('error', 'unknown')}")
+    elif create_ok:
+        print("  Codex OAuth refresh token skipped (AT-only registration mode)")
+
+    require_refresh_token = _registration_requires_refresh_token() if codex_oauth else False
+    require_phone_verification = _registration_requires_phone_verification(phone_pool) if codex_oauth else False
+    phone_verified = bool(phone_result.get("ok"))
+    success = (
+        create_ok
+        and bool(access_token)
+        and (not require_refresh_token or bool(oauth_refresh_token))
+        and (not require_phone_verification or phone_verified)
+    )
+    error = ""
+    if create_ok and require_refresh_token and not oauth_refresh_token:
+        error = (
+            (phone_result or {}).get("error")
+            or oauth_result.get("error")
+            or "missing_oauth_refresh_token"
+        )
+    elif create_ok and require_phone_verification and not phone_verified:
+        error = (
+            (phone_result or {}).get("error")
+            or oauth_result.get("error")
+            or "phone_verification_required"
+        )
+
     paypal = {}
-    if create_ok and access_token and paypal_link:
+    if success and access_token and paypal_link:
         _tick("9-Generate PayPal link")
         paypal = _generate_paypal_link(access_token, proxy=proxy)
         print(f"  PayPal link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
         _tock()
 
     result = {
-        "success": create_ok and bool(access_token),
+        "success": success,
+        "error": error,
         "email": username,
-        "phone": "",
+        "phone": phone_result.get("phone", "") if phone_result.get("ok") else "",
         "password": password,
         "name": full_name,
         "birthdate": birthdate,
@@ -834,9 +917,14 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
             "email_otp": otp_data,
             "create_account": create_data,
             "auth_session": auth_body,
+            "phone_verification": phone_result,
+            "codex_oauth": _oauth_result_summary(oauth_result),
         },
         "auth_session": auth_body,
         "access_token": access_token or "",
+        "id_token": id_token,
+        "oauth_refresh_token": oauth_refresh_token,
+        "refresh_token_status": "oauth_present" if oauth_refresh_token else "no_rt",
         "cookie_header": auth_session.get("cookie_header", ""),
         "paypal": paypal,
         "device_id": did,
@@ -870,7 +958,32 @@ def run_phone(*args, **kwargs):
         sentinel_data=kwargs.get("sentinel_data"),
         mailbox=kwargs.get("mailbox"),
         paypal_link=kwargs.get("paypal_link", True),
+        phone_pool=kwargs.get("phone_pool"),
+        codex_oauth=kwargs.get("codex_oauth", True),
     )
+
+
+def _registration_requires_refresh_token():
+    cfg = CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
+    return bool(cfg.get("require_registration_refresh_token", True))
+
+
+def _registration_requires_phone_verification(phone_pool=None):
+    cfg = CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
+    default = bool(phone_pool)
+    return bool(cfg.get("require_registration_phone_verification", default))
+
+
+def _oauth_result_summary(result):
+    if not isinstance(result, dict):
+        return {}
+    summary = {key: value for key, value in result.items() if key != "tokens"}
+    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    if tokens:
+        summary["has_access_token"] = bool(tokens.get("access_token"))
+        summary["has_refresh_token"] = bool(tokens.get("refresh_token"))
+        summary["has_id_token"] = bool(tokens.get("id_token"))
+    return summary
 
 
 def _unique_mailboxes(mailboxes):
@@ -887,7 +1000,7 @@ def _unique_mailboxes(mailboxes):
     return unique
 
 
-def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4):
+def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, phone_pool=None, codex_oauth=True):
     mailboxes = _unique_mailboxes(mailboxes)
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
@@ -903,7 +1016,7 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4):
         print(f"{'#' * 40}")
         try:
             mailbox = mailboxes[i] if mailboxes else None
-            return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link)
+            return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link, phone_pool=phone_pool, codex_oauth=codex_oauth)
         except Exception as e:
             import traceback; traceback.print_exc()
             return i, {"success": False, "error": str(e)}
@@ -955,6 +1068,14 @@ def _build_session_file(data):
         or auth_session.get("accessToken")
         or auth_session.get("access_token")
     )
+    id_token = (
+        data.get("id_token")
+        or data.get("idToken")
+        or auth_session.get("idToken")
+        or auth_session.get("id_token")
+        or _extract_nested(auth_session, "session", "id_token")
+        or _extract_nested(auth_session, "session", "idToken")
+    )
     refresh_token = (
         data.get("refresh_token")
         or response.get("refresh_token")
@@ -987,6 +1108,7 @@ def _build_session_file(data):
         "password": data.get("password", ""),
         "session_token": session_token or "",
         "access_token": access_token or "",
+        "id_token": id_token or "",
         "refresh_token": refresh_token or "",
         "device_id": data.get("device_id") or response.get("device_id") or "",
         "cookie_header": data.get("cookie_header") or response.get("cookie_header") or "",
