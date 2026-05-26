@@ -26,7 +26,7 @@ cd GPT-Register-Tool
 python -m pip install -r requirements.txt
 ```
 
-`requirements.txt` is the install entrypoint; see [docs/dependency-audit.md](docs/dependency-audit.md) for the live package-to-feature map. In this pass there were no dead third-party packages to remove, so the cleanup focused on ownership boundaries instead.
+`requirements.txt` is the only dependency manifest kept in the repository.
 
 3. Create local config.
 
@@ -95,8 +95,6 @@ Register from configured mailbox source:
 ```powershell
 python chatgpt_phone_reg.py --count 4 --workers 4 --proxy socks5h://127.0.0.1:7897
 ```
-
-For batch runs, the CLI now prewarms the sentinel token once on the main thread and reuses that cached token across worker threads. That keeps `cloakbrowser` from being launched repeatedly in parallel.
 
 Register from Chatai file:
 
@@ -191,20 +189,20 @@ The account list deduplicates rows by normalized email. When a mailbox pool entr
 
 ## Project Modules
 
-The project is split into explicit responsibility seams. The canonical boundary map lives in [docs/architecture.md](docs/architecture.md); the dependency audit is in [docs/dependency-audit.md](docs/dependency-audit.md).
-
-Short version:
+The project is split into explicit responsibility seams:
 
 - `chatgpt_phone_reg.py`: compatibility entrypoint that only delegates into `sms_tool.cli`.
-- `sms_tool.cli`: argument parsing and command orchestration only.
-- `sms_tool.mailbox`: mailbox pool parsing, provider handling, token exchange, and OTP polling.
+- `sms_tool.cli`: argument parsing and command orchestration. Optional Codex, CPA, PayPal payment, and session-refresh modules are imported lazily only by the command that needs them.
+- `sms_tool.mailbox`: mailbox pool parsing, LuckMail/token mailbox handling, Microsoft token exchange, and OTP polling.
 - `sms_tool.registration`: ChatGPT signup protocol, email OTP validation, access-token retrieval, and batch worker limits.
-- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal link generation and persisted-link regeneration.
-- `sms_tool.paypal_nocard`: explicit no-card PayPal agreement payment flow, separate from registration.
+- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal link generation and safe persisted-link regeneration.
+- `sms_tool.paypal_nocard`: explicit no-card PayPal agreement payment flow. It is not part of default registration.
 - `sms_tool.codex_oauth`, `sms_tool.codex_export`, `sms_tool.cpa_import`: Codex OAuth/export and CPA upload boundaries.
 - `sms_tool.storage`: SQLite schema, migrations, deduplication, status updates, and session-index rebuilds.
-- `SmsWorkbench`: WPF launcher and management UI only.
+- `SmsWorkbench`: WPF launcher and management UI. It starts CLI commands and displays local state; protocol details stay in Python modules.
 - `browser_extensions/paypal_autofill`: optional Chrome helper for checkout form filling, OTP polling, and pool rotation.
+
+The same split is maintained in [docs/architecture.md](docs/architecture.md).
 
 ## Tests
 

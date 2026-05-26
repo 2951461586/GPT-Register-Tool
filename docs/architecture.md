@@ -14,21 +14,6 @@ WPF or CLI
   -> status display and maintenance actions
 ```
 
-## Ownership Matrix
-
-| Layer | Owns | Does not own |
-| --- | --- | --- |
-| CLI | command parsing, mode selection, exit codes | protocol details, vendor API payloads, persistence rules |
-| Mailbox | mailbox parsing, mailbox token exchange, OTP polling | registration state, PayPal link generation |
-| Registration | signup flow, email OTP validation, access-token fetch, batch limits | PayPal payment, CPA upload, browser fallback details |
-| Codex OAuth | PKCE authorize/callback exchange, email fallback, optional phone verification handoff | mailbox pool parsing, SQLite deduplication, PayPal payment |
-| Phone reuse | SMSBower activation lifecycle, reuse policy, activation expiry, pool state | OpenAI signup logic, mailbox polling |
-| PayPal link | hosted Stripe/PayPal link generation and safe regeneration | no-card agreement payment, account registration |
-| PayPal no-card | agreement payment, BA resolution, card/phone pool consumption | registration, Codex OAuth, persisted account schema |
-| Storage | SQLite schema, upsert, rebuild, status updates | transport, browser automation, vendor protocol logic |
-| WPF UI | display, launch, manual actions | protocol sequencing, token exchange, persistence rules |
-| Browser extension | optional checkout assistance in Chrome | Python session JSON, SQLite, registration flow |
-
 ## Repository Layout
 
 ```text
@@ -102,8 +87,6 @@ It must not silently replace an explicit empty mailbox file with a new provider 
 
 Optional command modules are lazy seams. Codex export, CPA import, PayPal payment, PayPal link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
 
-`requirements.txt` is intentionally a single manifest for the full runtime, but the package audit is feature-grouped in [docs/dependency-audit.md](dependency-audit.md). No dead dependency package was removed in this pass because every listed package still backs a live feature path.
-
 ### Mailbox Layer
 
 `sms_tool/mailbox.py` owns:
@@ -126,8 +109,6 @@ It must not write registration results or modify mailbox pool files during regis
 - OTP validation.
 - Auth session access-token retrieval.
 - Batch worker limits.
-
-Batch registration prewarms the sentinel token once on the main thread before worker threads start, then passes the cached token into each worker so `cloakbrowser` is not launched in parallel.
 
 Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
 
