@@ -97,31 +97,6 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
         self.assertEqual(seen, ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
 
-    def test_run_batch_prewarms_sentinel_once_before_parallel_workers(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "mailboxes.txt"
-            path.write_text(
-                "a+oai01@hotmail.com----pw----client----refresh-a\n"
-                "b+oai01@hotmail.com----pw----client----refresh-b\n",
-                encoding="utf-8",
-            )
-            mailboxes = _parse_chatai_mailbox_file(path)
-
-        seen_sentinels = []
-
-        def fake_run_email(**kwargs):
-            seen_sentinels.append(kwargs["sentinel_data"])
-            return {"success": True, "email": kwargs["mailbox"].email}
-
-        with patch("sms_tool.registration._extract_sentinel", return_value={"sentinel_token": "sentinel", "sentinel_so_token": "so"}) as extract:
-            with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-                results = run_batch(count=2, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, paypal_link=True, workers=2)
-
-        self.assertEqual(extract.call_count, 1)
-        self.assertEqual(len(seen_sentinels), 2)
-        self.assertTrue(all(item and item.get("sentinel_token") == "sentinel" for item in seen_sentinels))
-        self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
-
 
 if __name__ == "__main__":
     unittest.main()

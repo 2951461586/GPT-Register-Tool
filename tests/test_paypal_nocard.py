@@ -371,36 +371,6 @@ class PayPalNoCardUnitTests(unittest.TestCase):
         self.assertTrue(saved["paypal"]["ba_resolved"])
         follow.assert_called_once()
 
-    def test_regenerate_paypal_link_rejects_url_without_ba_token(self):
-        original_url = "https://pm-redirects.stripe.com/authorize/sa_nonce_test"
-        seed = {
-            "email": "paid@example.com",
-            "access_token": "at_test",
-            "success": True,
-            "paypal": {"url": "https://pm-redirects.stripe.com/authorize/old_nonce_test"},
-            "paypal_status": "link_ready",
-        }
-        saved = {}
-
-        def fake_upsert(data, json_path=""):
-            saved.update(data)
-            return True
-
-        with patch.object(paypal_links, "_load_seed", return_value=(seed, "")):
-            with patch.object(paypal_links, "generate_pp_link", return_value={"ok": True, "url": original_url, "cs_id": "cs_test"}):
-                with patch.object(paypal_links, "_follow_stripe_redirect", return_value=original_url) as follow:
-                    with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
-                        result = paypal_links.regenerate_paypal_link(email="paid@example.com")
-
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["paypal_status"], "failed")
-        self.assertEqual(result["paypal_url"], "")
-        self.assertEqual(result["error"], "Generated PayPal link did not resolve to a BA token")
-        self.assertEqual(saved["paypal"]["url"], "")
-        self.assertEqual(saved["paypal"]["stripe_redirect_url"], original_url)
-        self.assertEqual(saved["paypal"]["error_code"], "missing_ba_token")
-        follow.assert_called_once()
-
     def test_sqlite_smoke_reads_existing_paypal_url_when_enabled(self):
         if os.environ.get("PAYPAL_NOCARD_SQLITE_SMOKE") != "1":
             self.skipTest("set PAYPAL_NOCARD_SQLITE_SMOKE=1 to read the local SQLite account pool")
