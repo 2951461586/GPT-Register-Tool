@@ -149,6 +149,40 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(slot.reuse_count, 1)
         old_client.complete.assert_not_called()
 
+    def test_smsbower_prepare_replaces_expired_activation_before_reuse(self):
+        slot = PhoneSlot(
+            phone="+233555123456",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-old",
+            activation_acquired_at=100,
+            reuse_count=2,
+            max_reuse_count=3,
+            slot_id="smsbower:0",
+        )
+
+        with patch("sms_tool.phone_reuse.time.time", return_value=1701):
+            with patch("sms_tool.phone_reuse._smsbower_client") as client_factory:
+                client = Mock()
+                client.get_number.return_value = Mock(
+                    phone="+233555999999",
+                    activation_id="act-new",
+                    service="dr",
+                    country="38",
+                    price="0.054",
+                )
+                client_factory.return_value = client
+
+                self.assertTrue(_prepare_smsbower_for_send(slot))
+
+        client.request_additional.assert_not_called()
+        client.get_number.assert_called_once()
+        self.assertEqual(slot.phone, "+233555999999")
+        self.assertEqual(slot.activation_id, "act-new")
+        self.assertEqual(slot.activation_acquired_at, 1701)
+        self.assertEqual(slot.reuse_count, 0)
+        self.assertEqual(slot.last_sms_code, "")
+
     def test_smsbower_sms_timeout_keeps_activation_for_retry(self):
         slot = PhoneSlot(
             phone="+233555123456",

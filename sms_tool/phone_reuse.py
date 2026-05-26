@@ -43,6 +43,7 @@ class PhoneSlot:
     max_price: str = "0.06"
     target_price: str = "0.054"
     activation_id: str = ""
+    activation_acquired_at: int = 0
     reuse_count: int = 0
     max_reuse_count: int = 3
     last_used_at: int = 0
@@ -148,6 +149,12 @@ class PhonePool:
             if saved.get("phone"):
                 phone.phone = str(saved.get("phone") or "")
             phone.activation_id = str(saved.get("activation_id") or "")
+            phone.activation_acquired_at = int(
+                saved.get("activation_acquired_at")
+                or saved.get("last_send_at")
+                or saved.get("last_used_at")
+                or 0
+            )
             phone.reuse_count = int(saved.get("reuse_count") or 0)
             phone.max_reuse_count = int(saved.get("max_reuse_count") or phone.max_reuse_count)
             phone.last_used_at = int(saved.get("last_used_at") or 0)
@@ -173,6 +180,7 @@ def _state_for_phone(phone: PhoneSlot) -> dict:
         "max_price": phone.max_price,
         "target_price": phone.target_price,
         "activation_id": phone.activation_id,
+        "activation_acquired_at": phone.activation_acquired_at,
         "reuse_count": phone.reuse_count,
         "max_reuse_count": phone.max_reuse_count,
         "last_used_at": phone.last_used_at,
@@ -203,6 +211,13 @@ def _send_retry_attempts(cfg: dict | None = None) -> int:
 def _send_retry_delay_seconds(cfg: dict | None = None) -> int:
     cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
     return max(0, _int_value(cfg.get("send_retry_delay_seconds"), 45))
+
+
+def _smsbower_activation_max_age_seconds(cfg: dict | None = None) -> int:
+    cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
+    smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
+    raw = smsbower_cfg.get("activation_max_age_seconds", cfg.get("activation_max_age_seconds", 1500))
+    return max(0, _int_value(raw, 1500))
 
 
 def _resolve_secret(value: str, env_name: str) -> str:
@@ -388,6 +403,7 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
         previous_phone = slot.phone
         slot.phone = normalize_phone(activation.phone)
         slot.activation_id = activation.activation_id
+        slot.activation_acquired_at = int(time.time())
         slot.service = activation.service
         slot.country = activation.country
         if not previous_phone or previous_phone != slot.phone:
@@ -404,6 +420,18 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
 def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
     if not slot.activation_id or not slot.phone:
         return _acquire_smsbower_number(slot)
+    max_age = _smsbower_activation_max_age_seconds()
+    activation_started_at = int(slot.activation_acquired_at or slot.last_send_at or slot.last_used_at or 0)
+    if max_age > 0 and activation_started_at > 0:
+        age = int(time.time()) - activation_started_at
+        if age >= max_age:
+            old_activation = slot.activation_id
+            print(
+                "  [smsbower] activation "
+                f"{old_activation} expired after {age}s; acquiring a new number"
+            )
+            _reset_smsbower_slot(slot)
+            return _acquire_smsbower_number(slot)
     if slot.reuse_count <= 0:
         return True
     if _smsbower_client(slot).request_additional(slot.activation_id):
@@ -476,6 +504,7 @@ def _wait_smsbower_code(slot: PhoneSlot) -> Optional[str]:
 def _reset_smsbower_slot(slot: PhoneSlot):
     slot.phone = ""
     slot.activation_id = ""
+    slot.activation_acquired_at = 0
     slot.reuse_count = 0
     slot.last_send_at = 0
     slot.last_sms_code = ""
