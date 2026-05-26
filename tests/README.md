@@ -9,6 +9,7 @@ python -m unittest discover -s tests
 ## Files
 
 - `test_entrypoints.py` verifies process entrypoints and lazy optional command seams.
+- `test_entrypoints.py` also guards the CLI boundary so optional browser/payment imports stay lazy.
 - `test_registration_concurrency.py` covers mailbox parsing and batch registration worker behavior.
 - `test_storage_dedup.py` covers SQLite account upsert and email normalization behavior.
 - `test_gen_pp_link.py` covers hosted Stripe/PayPal link generation error handling.

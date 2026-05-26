@@ -18,16 +18,26 @@ def regenerate_paypal_link(email="", session_file="", proxy=None):
         return {"ok": False, "email": target_email, "error": "missing_access_token"}
 
     old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
+    old_paypal_url = str(old_paypal.get("url") or "").strip()
     old_paypal_status = str(data.get("paypal_status") or "").strip()
     paypal = generate_pp_link(access_token, proxy=proxy)
     if paypal.get("ok") and paypal.get("url"):
         paypal = _resolve_ba_redirect(paypal, proxy=proxy)
+        if not extract_ba_token(str(paypal.get("url") or "")):
+            paypal = dict(paypal)
+            paypal["ok"] = False
+            paypal["error_code"] = "missing_ba_token"
+            paypal["error"] = (
+                "Generated PayPal link did not resolve to a BA token"
+            )
+            paypal.setdefault("stripe_redirect_url", str(paypal.get("url") or "").strip())
+            paypal["url"] = ""
     now = int(time.time())
     if paypal.get("ok") and paypal.get("url"):
         data["paypal"] = paypal
         data["paypal_status"] = "link_ready"
     else:
-        if old_paypal.get("url"):
+        if old_paypal_url and extract_ba_token(old_paypal_url):
             data["paypal"] = old_paypal
             data["paypal_status"] = old_paypal_status or "link_ready"
         else:

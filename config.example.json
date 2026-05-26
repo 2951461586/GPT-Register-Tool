@@ -96,6 +96,7 @@
             "target_price": "0.054",
             "max_price": "0.06",
             "pool_size": 1,
+            "activation_max_age_seconds": 1500,
             "sms_timeout": 120,
             "sms_poll_interval": 5,
             "send_cooldown_seconds": 45,

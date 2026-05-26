@@ -1000,7 +1000,16 @@ def _unique_mailboxes(mailboxes):
     return unique
 
 
-def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, phone_pool=None, codex_oauth=True):
+def run_batch(
+    count=1,
+    proxy=None,
+    mailboxes=None,
+    paypal_link=True,
+    workers=4,
+    phone_pool=None,
+    codex_oauth=True,
+    sentinel_data=None,
+):
     mailboxes = _unique_mailboxes(mailboxes)
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
@@ -1010,13 +1019,33 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, 
     print(f"  ChatGPT Email Batch Registration - {count} accounts")
     print(f"{'=' * 60}\n")
 
+    prewarmed_sentinel = sentinel_data
+    if int(count or 1) > 1 and prewarmed_sentinel is None:
+        print("[*] Prewarming sentinel token once before parallel batch...")
+        prewarmed_sentinel = _extract_sentinel(proxy=proxy)
+        if not prewarmed_sentinel or not prewarmed_sentinel.get("sentinel_token"):
+            print("[Error] sentinel extraction failed before batch start")
+            failures = []
+            for i in range(count):
+                mailbox = mailboxes[i] if mailboxes else None
+                failures.append(_failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox))
+            return failures
+
     def _run_one(i):
         print(f"\n{'#' * 40}")
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         try:
             mailbox = mailboxes[i] if mailboxes else None
-            return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link, phone_pool=phone_pool, codex_oauth=codex_oauth)
+            sentinel = dict(prewarmed_sentinel) if isinstance(prewarmed_sentinel, dict) else prewarmed_sentinel
+            return i, run_email(
+                proxy=proxy,
+                mailbox=mailbox,
+                paypal_link=paypal_link,
+                phone_pool=phone_pool,
+                codex_oauth=codex_oauth,
+                sentinel_data=sentinel,
+            )
         except Exception as e:
             import traceback; traceback.print_exc()
             return i, {"success": False, "error": str(e)}
