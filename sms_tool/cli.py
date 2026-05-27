@@ -733,6 +733,9 @@ def _one_click_sms(args):
         print("[Error] --one-click-sms requires a phone pool. Configure phone_reuse.smsbower.api_key/SMSBOWER_API_KEY or phone_reuse.phone_pool.")
         raise SystemExit(2)
     print_phone_pool_status(phone_pool)
+    if phone_pool.total_capacity <= 0:
+        print("[Error] --one-click-sms requires at least one available phone slot; current phone pool is exhausted.")
+        raise SystemExit(2)
 
     workers = max(1, min(int(args.workers or 1), 4, len(emails)))
     print(f"[*] One-click SMS RT refresh: {len(emails)} account(s), workers={workers}")

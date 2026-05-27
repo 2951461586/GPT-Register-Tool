@@ -147,6 +147,9 @@ def _load_seed_session(email="", session_file=""):
             data.setdefault("email", record.get("email", ""))
             data.setdefault("access_token", record.get("access_token", ""))
             data.setdefault("oauth_refresh_token", record.get("oauth_refresh_token", ""))
+            db_password = str(record.get("password") or "").strip()
+            if not db_password:
+                data["password"] = ""
             return data, json_path
         for row in list_paypal_accounts(email=email):
             json_path = str(row.get("json_path") or "").strip()

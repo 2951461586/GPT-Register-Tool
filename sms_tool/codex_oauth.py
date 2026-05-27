@@ -12,7 +12,7 @@ from .config import CFG
 from .codex_phone import complete_phone_verification
 from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
 from .http_client import request_with_retry
-from .mailbox import MailboxAccount, _poll_email_otp
+from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp
 from .storage import upsert_account
 
 
@@ -108,46 +108,56 @@ def _login_and_exchange(
     force_email_otp_login=False,
     phone_pool=None,
 ):
-    did = str(data.get("device_id") or "").strip() or _cookie_value(session, "oai-did") or secrets.token_hex(16)
-    try:
-        session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
-    except Exception:
-        pass
-    sentinel = load_cached_sentinel()
-    headers = _oai_headers(did, {"Referer": current_url or AUTH_URL, "content-type": "application/json"})
-    attach_sentinel(headers, sentinel)
-    start_resp = session.post(
-        "https://auth.openai.com/api/accounts/authorize/continue",
-        headers=headers,
-        json={"username": {"value": email, "kind": "email"}},
-        timeout=30,
-        impersonate="chrome110",
-        allow_redirects=False,
-    )
-    if start_resp.status_code != 200:
-        return {
-            "ok": False,
-            "mode": "codex_oauth_pkce",
-            "error": f"authorize_continue_failed:{start_resp.status_code}",
-            "body": start_resp.text[:300],
-        }
-    next_url = _next_url(start_resp)
-    _, current_url = _follow_redirects(session, next_url, proxy=proxy)
-    if _has_callback_code(current_url):
-        return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+    max_restarts = 2
+    for restart_attempt in range(max_restarts + 1):
+        did = str(data.get("device_id") or "").strip() or _cookie_value(session, "oai-did") or secrets.token_hex(16)
+        try:
+            session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
+        except Exception:
+            pass
+        sentinel = load_cached_sentinel()
+        headers = _oai_headers(did, {"Referer": current_url or AUTH_URL, "content-type": "application/json"})
+        attach_sentinel(headers, sentinel)
+        start_resp = session.post(
+            "https://auth.openai.com/api/accounts/authorize/continue",
+            headers=headers,
+            json={"username": {"value": email, "kind": "email"}},
+            timeout=30,
+            impersonate="chrome110",
+            allow_redirects=False,
+        )
+        if start_resp.status_code != 200:
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": f"authorize_continue_failed:{start_resp.status_code}",
+                "body": start_resp.text[:300],
+            }
+        next_url = _next_url(start_resp)
+        _, current_url = _follow_redirects(session, next_url, proxy=proxy)
+        if _has_callback_code(current_url):
+            return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
 
-    return _run_protocol_login_stages(
-        session=session,
-        oauth=oauth,
-        email=email,
-        data=data,
-        did=did,
-        current_url=current_url,
-        proxy=proxy,
-        timeout=timeout,
-        force_email_otp_login=force_email_otp_login,
-        phone_pool=phone_pool,
-    )
+        result = _run_protocol_login_stages(
+            session=session,
+            oauth=oauth,
+            email=email,
+            data=data,
+            did=did,
+            current_url=current_url,
+            proxy=proxy,
+            timeout=timeout,
+            force_email_otp_login=force_email_otp_login,
+            phone_pool=phone_pool,
+        )
+        if not result.get("needs_session_restart") or restart_attempt >= max_restarts:
+            return result
+        print(f"[*] Session state invalid, restarting auth flow (attempt {restart_attempt + 1}/{max_restarts})")
+        try:
+            session.cookies.clear(domain="auth.openai.com")
+        except Exception:
+            pass
+    return result
 
 
 def _run_protocol_login_stages(
@@ -174,7 +184,10 @@ def _run_protocol_login_stages(
             final.setdefault("protocol_stage", stage)
         return final
 
-    if stage in {"email", "unknown"}:
+    if force_email_otp_login and stage not in {"email_otp", "callback", "consent", "add_phone"}:
+        print(f"[*] force_email_otp_login: overriding stage '{stage}' -> 'email_otp'")
+        stage = "email_otp"
+    elif stage in {"email", "unknown"}:
         stage = "email_otp" if allow_takeover else stage
 
     if stage == "email_otp":
@@ -192,6 +205,9 @@ def _run_protocol_login_stages(
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
             return email_otp_result
+        email_otp_result.setdefault("protocol_stage", "email_otp")
+        email_otp_result.setdefault("fallback_from", "email_otp_forced" if force_email_otp_login else "email_otp_required")
+        return email_otp_result
     elif stage == "password":
         password_result = _password_login_and_exchange(
             session=session,
@@ -302,13 +318,24 @@ def _passwordless_login_and_exchange(
         if attempt > 0:
             _resend_email_otp(session, did, current_url)
             issued_after = int(time.time()) - 10
-        code = _poll_email_otp(
-            mailbox,
-            subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
-            timeout=min(max(int(timeout or 180), 30), 300),
-            issued_after_unix=issued_after,
-            proxy=proxy,
-        )
+        try:
+            code = _poll_email_otp(
+                mailbox,
+                subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
+                timeout=min(max(int(timeout or 180), 30), 300),
+                issued_after_unix=issued_after,
+                proxy=proxy,
+            )
+        except MailboxTokenExpiredError:
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": "mailbox_token_expired",
+                "terminal": True,
+                "fallback_from": reason,
+                "last_url": _safe_url(current_url),
+                "message": f"Mailbox refresh token expired for {getattr(mailbox, 'email', '')}. Re-authenticate the mailbox.",
+            }
         if not code:
             last_error = "passwordless_email_otp_poll_timeout"
             continue
@@ -335,6 +362,16 @@ def _passwordless_login_and_exchange(
                     "fallback_from": reason,
                     "last_url": _safe_url(current_url),
                     "body": last_validate_body,
+                }
+            if "invalid_state" in last_validate_body:
+                return {
+                    "ok": False,
+                    "mode": "codex_oauth_pkce",
+                    "error": "email_otp_invalid_state",
+                    "fallback_from": reason,
+                    "last_url": _safe_url(current_url),
+                    "body": last_validate_body,
+                    "needs_session_restart": True,
                 }
             continue
         next_url = _next_url(validate)

@@ -52,21 +52,27 @@ def is_transient_transport_error(error):
 
 
 def request_with_retry(session, method, url, *, label="", attempts=None, retry_delay=None, **kwargs):
-    attempts = request_attempts() if attempts is None else max(1, int(attempts or 1))
-    retry_delay = request_retry_delay() if retry_delay is None else max(0.0, float(retry_delay or 0))
+    base_attempts = request_attempts() if attempts is None else max(1, int(attempts or 1))
+    base_delay = request_retry_delay() if retry_delay is None else max(0.0, float(retry_delay or 0))
     kwargs.setdefault("timeout", request_timeout())
 
     caller = getattr(session, method.lower())
     last_error = None
-    for attempt in range(1, attempts + 1):
+    # Use more retries for TLS/proxy errors (curl: (35) etc.)
+    max_attempts = max(base_attempts, 5)
+    for attempt in range(1, max_attempts + 1):
         try:
             return caller(url, **kwargs)
         except Exception as error:
             last_error = error
-            if attempt >= attempts or not is_transient_transport_error(error):
+            if not is_transient_transport_error(error):
                 raise
+            if attempt >= max_attempts:
+                raise
+            # Exponential backoff: base_delay * 2^(attempt-1), capped at 15s
+            delay = min(base_delay * (2 ** (attempt - 1)), 15.0)
             prefix = f"  {label} " if label else "  "
-            print(f"{prefix}transport retry {attempt}/{attempts}: {error}")
-            if retry_delay:
-                time.sleep(retry_delay)
+            print(f"{prefix}transport retry {attempt}/{max_attempts}: {error}")
+            if delay:
+                time.sleep(delay)
     raise last_error
