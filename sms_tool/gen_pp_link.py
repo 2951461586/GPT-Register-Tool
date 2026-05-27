@@ -757,6 +757,41 @@ def _try_paypal_link(
     )
     print(f"[pp] confirm: status={r3.status_code}", file=sys.stderr)
 
+    # Re-init retry for amount mismatch (race condition: invoice changes between init and confirm)
+    reinit_attempts = 0
+    while r3.status_code != 200 and reinit_attempts < 2:
+        details = _stripe_error_details(r3)
+        if details.get("code") != "checkout_amount_mismatch":
+            break
+        reinit_attempts += 1
+        print(f"[pp] amount mismatch, re-init retry {reinit_attempts}/2", file=sys.stderr)
+        r1 = _post_stripe_form(
+            stripe_init,
+            f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
+            init_body,
+            timeout=DEFAULT_TIMEOUT,
+            step="stripe init (re-init)",
+        )
+        if r1.status_code != 200:
+            break
+        init_data = r1.json() or {}
+        init_checksum = init_data.get("init_checksum") or init_checksum
+        due = (init_data.get("total_summary") or {}).get("due")
+        amount_due = (init_data.get("invoice") or {}).get("amount_due")
+        currency = (init_data.get("invoice") or {}).get("currency") or region["currency"]
+        zero_check = _zero_due_check(init_data)
+        expected_amount = "0" if zero_check["ok"] else str(amount_due if amount_due is not None else (due if due is not None else 0))
+        confirm_body["init_checksum"] = init_checksum
+        confirm_body["expected_amount"] = expected_amount
+        r3 = _post_stripe_form(
+            stripe_confirm,
+            f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
+            confirm_body,
+            timeout=DEFAULT_TIMEOUT,
+            step="confirm (re-init retry)",
+        )
+        print(f"[pp] confirm (re-init retry {reinit_attempts}): status={r3.status_code}", file=sys.stderr)
+
     if r3.status_code != 200:
         return _stripe_confirm_error_result(
             r3,

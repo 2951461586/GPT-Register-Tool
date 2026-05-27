@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from curl_cffi import requests as curl_requests
 
+from .codex_sentinel import load_cached_sentinel, with_sentinel
 from .config import CFG
 from .http_client import request_with_retry
 from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
@@ -442,7 +443,8 @@ def _login_existing_account_with_email_otp(
     if not code:
         return {"ok": False, "error": "existing_login_otp_poll_timeout"}
 
-    otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code)
+    otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code,
+        sentinel_data={"sentinel_token": sentinel_token, "sentinel_so_token": sentinel_so_token})
     if not otp_ok:
         return {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}
     try:
@@ -458,35 +460,45 @@ def _login_existing_account_with_email_otp(
     return {"ok": True}
 
 
-def _validate_email_otp(session, auth_base, base_headers, code):
-    endpoints = CFG.get("email_registration", {}).get("otp_validate_endpoints") or [
-        "/api/accounts/email-otp/validate",
+def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=None):
+    # Primary endpoint: same as codex_oauth (proven working)
+    primary_endpoint = "/api/accounts/email-otp/validate"
+    fallback_endpoints = [
         "/api/accounts/email-verification/validate",
         "/api/accounts/email-verification/verify",
         "/api/accounts/verify-email",
     ]
-    payloads = (
-        {"code": code},
-        {"otp": code},
-        {"verification_code": code},
+    sentinel = sentinel_data or load_cached_sentinel()
+    validate_headers = with_sentinel(
+        {**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/email-verification", "content-type": "application/json"},
+        sentinel,
     )
-    last_error = {}
-    for endpoint in endpoints:
-        url = _absolute_url(auth_base, endpoint)
-        for payload in payloads:
-            r = request_with_retry(session, "post", url, label=f"Email OTP validate {endpoint}",
-                json=payload,
-                headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/verify-email"},
-                impersonate="chrome")
-            body = _json_or_raw(r)
-            if r.status_code == 200:
-                print(f"  Email OTP validate: {endpoint} {r.status_code}")
-                return True, body
-            if r.status_code not in (404, 405):
+    # Try primary endpoint first with {"code": payload (matches codex_oauth)
+    url = _absolute_url(auth_base, primary_endpoint)
+    r = request_with_retry(session, "post", url, label=f"Email OTP validate {primary_endpoint}",
+        json={"code": code}, headers=validate_headers, impersonate="chrome")
+    body = _json_or_raw(r)
+    if r.status_code == 200:
+        print(f"  Email OTP validate: {primary_endpoint} {r.status_code}")
+        return True, body
+    last_error = {"endpoint": primary_endpoint, "status": r.status_code, "body": body}
+    print(f"  Email OTP validate: {primary_endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False)[:200]}")
+    # If primary returns 404/405, try fallback endpoints
+    if r.status_code in (404, 405):
+        for endpoint in fallback_endpoints:
+            url = _absolute_url(auth_base, endpoint)
+            for payload in ({"code": code}, {"otp": code}):
+                r = request_with_retry(session, "post", url, label=f"Email OTP validate {endpoint}",
+                    json=payload, headers=validate_headers, impersonate="chrome")
+                body = _json_or_raw(r)
+                if r.status_code == 200:
+                    print(f"  Email OTP validate: {endpoint} {r.status_code}")
+                    return True, body
+                if r.status_code not in (404, 405):
+                    last_error = {"endpoint": endpoint, "status": r.status_code, "body": body}
+                    print(f"  Email OTP validate failed: {endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False)[:200]}")
+                    break
                 last_error = {"endpoint": endpoint, "status": r.status_code, "body": body}
-                print(f"  Email OTP validate failed: {endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False)[:200]}")
-                break
-            last_error = {"endpoint": endpoint, "status": r.status_code, "body": body}
     return False, last_error
 
 
@@ -728,7 +740,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     # Step 6: Validate email OTP
     _tick("6-Validate email OTP")
     try:
-        otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code)
+        otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=sentinel_data)
         _tock()
     except Exception as e:
         _safe_tock()
@@ -763,9 +775,11 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
     create_ok = r.status_code == 200
     existing_account = _is_user_already_exists(create_data)
+    password_unknown = False
     if not create_ok and existing_account:
-        print("  Account already exists, continuing existing-account login flow...")
+        print("  Account already exists, password may differ from generated one; clearing stored password.")
         create_ok = True
+        password_unknown = True
     try:
         _follow_continue_url(session, _create_account_continue_url(create_data), base_headers, referer=f"{auth_base}/about-you", label="Create account continue")
     except Exception as e:
@@ -909,7 +923,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         "error": error,
         "email": username,
         "phone": phone_result.get("phone", "") if phone_result.get("ok") else "",
-        "password": password,
+        "password": "" if password_unknown else password,
         "name": full_name,
         "birthdate": birthdate,
         "response": {
@@ -1010,18 +1024,38 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, 
     print(f"  ChatGPT Email Batch Registration - {count} accounts")
     print(f"{'=' * 60}\n")
 
+    sentinel_data = None
+    if int(count or 1) > 1:
+        print("[*] Prewarming sentinel token once before parallel batch...")
+        sentinel_data = _extract_sentinel(proxy=proxy)
+        if not sentinel_data or not sentinel_data.get("sentinel_token"):
+            print("[Error] sentinel extraction failed before batch start")
+            failures = []
+            for i in range(count):
+                mailbox = mailboxes[i] if mailboxes else None
+                failures.append(_failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox))
+            return failures
+
     def _run_one(i):
         print(f"\n{'#' * 40}")
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         try:
             mailbox = mailboxes[i] if mailboxes else None
-            return i, run_email(proxy=proxy, mailbox=mailbox, paypal_link=paypal_link, phone_pool=phone_pool, codex_oauth=codex_oauth)
+            sentinel = dict(sentinel_data) if isinstance(sentinel_data, dict) else sentinel_data
+            return i, run_email(
+                proxy=proxy,
+                mailbox=mailbox,
+                paypal_link=paypal_link,
+                phone_pool=phone_pool,
+                codex_oauth=codex_oauth,
+                sentinel_data=sentinel,
+            )
         except Exception as e:
             import traceback; traceback.print_exc()
             return i, {"success": False, "error": str(e)}
 
-    workers = max(1, min(int(workers or 1), 4, int(count or 1)))
+    workers = max(1, min(int(workers or 1), 5, int(count or 1)))
     if workers <= 1:
         for i in range(count):
             _, result = _run_one(i)

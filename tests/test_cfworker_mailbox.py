@@ -157,21 +157,52 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         self.assertEqual(candidate["otp"], "333333")
 
-    def test_cfworker_fetch_falls_back_to_direct_when_proxy_fails(self):
+    def test_cfworker_fetch_falls_back_to_direct_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "_cfworker_client") as client_factory:
-            proxy_client = type("ProxyClient", (), {})()
-            direct_client = type("DirectClient", (), {})()
-            proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
-            direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
-            client_factory.side_effect = [proxy_client, direct_client]
+        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True}):
+            with patch.object(mailbox_module, "_cfworker_client") as client_factory:
+                proxy_client = type("ProxyClient", (), {})()
+                direct_client = type("DirectClient", (), {})()
+                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
+                direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
+                client_factory.side_effect = [proxy_client, direct_client]
 
-            messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+                messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
 
         self.assertEqual(messages, [{"id": "m1"}])
         self.assertEqual(client_factory.call_args_list[0].kwargs["proxy"], "socks5h://127.0.0.1:7897")
         self.assertIsNone(client_factory.call_args_list[1].kwargs["proxy"])
+
+    def test_cfworker_fetch_does_not_fall_back_to_direct_by_default(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+
+        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}):
+            with patch.object(mailbox_module, "_cfworker_client") as client_factory:
+                proxy_client = type("ProxyClient", (), {})()
+                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
+                client_factory.return_value = proxy_client
+
+                with self.assertRaises(RuntimeError):
+                    mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+
+        client_factory.assert_called_once()
+        self.assertEqual(client_factory.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
+
+    def test_cfworker_fetch_can_skip_proxy_when_configured(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+
+        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}):
+            with patch.object(mailbox_module, "_cfworker_client") as client_factory:
+                direct_client = type("DirectClient", (), {})()
+                direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
+                client_factory.return_value = direct_client
+
+                messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+
+        self.assertEqual(messages, [{"id": "m1"}])
+        client_factory.assert_called_once()
+        self.assertIsNone(client_factory.call_args.kwargs["proxy"])
 
 
 if __name__ == "__main__":

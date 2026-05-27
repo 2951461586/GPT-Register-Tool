@@ -534,6 +534,9 @@ def _ms_oauth_refresh(mailbox):
     except Exception:
         body = {"raw": r.text[:500]}
     if r.status_code != 200:
+        error_code = str((body.get("error_codes") or [body.get("error") or ""])[0]) if isinstance(body, dict) else ""
+        if "invalid_grant" in str(body).lower() or "9002313" in error_code:
+            raise MailboxTokenExpiredError(f"mailbox token expired (invalid_grant): {mailbox.email}")
         raise RuntimeError(f"mailbox token refresh failed: {body}")
     access_token = body.get("access_token", "")
     if not access_token:
@@ -542,6 +545,11 @@ def _ms_oauth_refresh(mailbox):
         mailbox.refresh_token = body["refresh_token"]
     mailbox.access_token = access_token
     return access_token
+
+
+class MailboxTokenExpiredError(RuntimeError):
+    """Raised when the mailbox refresh token is permanently invalid (invalid_grant)."""
+    pass
 
 
 def _extract_otp_from_text(text):
@@ -590,10 +598,12 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
 
 def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
     if getattr(mailbox, "provider", "") == "cfworker":
+        if not _cfworker_poll_proxy_enabled():
+            return _cfworker_client(proxy=None).fetch_messages(mailbox.email, limit=limit)
         try:
             return _cfworker_client(proxy=proxy).fetch_messages(mailbox.email, limit=limit)
         except Exception as exc:
-            if not proxy:
+            if not proxy or not _cfworker_direct_fallback_enabled():
                 raise
             print(f"[cfworker proxy poll error: {exc}; retrying direct]")
             return _cfworker_client(proxy=None).fetch_messages(mailbox.email, limit=limit)
@@ -662,6 +672,8 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
                 if candidate:
                     print(f" code:{candidate['otp']}!")
                     return candidate["otp"]
+        except MailboxTokenExpiredError:
+            raise
         except Exception as e:
             print(f"[mailbox poll error: {e}]")
         print(".", end="", flush=True)
@@ -675,6 +687,20 @@ def _cfworker_otp_settle_seconds():
         return max(0.0, float(_email_cfg().get("cfworker_otp_settle_seconds", 3)))
     except Exception:
         return 3.0
+
+
+def _cfworker_poll_proxy_enabled():
+    value = _email_cfg().get("cfworker_poll_proxy", True)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _cfworker_direct_fallback_enabled():
+    value = _email_cfg().get("cfworker_direct_fallback", False)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _poll_cfworker_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
