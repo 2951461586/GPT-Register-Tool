@@ -1,8 +1,8 @@
 """Phone verification pool for registration.
 
-SMSBower activations are kept open across timeouts and after the configured
-reuse count is reached. That avoids retiring a number automatically when a
-code arrives late or when the caller wants to inspect the activation manually.
+SMSBower activations are kept open across timeouts so a late code can still be
+retried. Once the configured reuse count is reached, the next SMS round resets
+the exhausted activation and buys a new number.
 """
 
 from __future__ import annotations
@@ -158,6 +158,30 @@ class PhonePool:
             if phone.provider == "smsbower" and (not phone.phone or not phone.activation_id):
                 phone.reuse_count = 0
                 phone.last_sms_code = ""
+
+    def reset_exhausted_smsbower_slots(self) -> int:
+        reset_count = 0
+        for phone in self.phones:
+            if phone.provider != "smsbower" or not phone.is_exhausted:
+                continue
+            old_phone = phone.phone
+            old_activation_id = phone.activation_id
+            if old_activation_id:
+                print(
+                    "  [smsbower] activation "
+                    f"{old_activation_id} reached reuse limit; completing before next purchase"
+                )
+                _complete_smsbower_activation(phone)
+            else:
+                _reset_smsbower_slot(phone)
+            print(
+                "  [smsbower] reset exhausted phone "
+                f"{old_phone or '(pending)'}; next send will acquire a new number"
+            )
+            reset_count += 1
+        if reset_count:
+            self.save_state()
+        return reset_count
 
 
 def _state_for_phone(phone: PhoneSlot) -> dict:
@@ -609,6 +633,7 @@ def _complete_phone_verification_locked(
     sms_timeout: int = 0,
     sms_poll_interval: int = 0,
 ) -> dict:
+    phone_pool.reset_exhausted_smsbower_slots()
     phone_slot = phone_pool.get_next_available()
     if not phone_slot:
         return {
@@ -690,7 +715,7 @@ def _complete_phone_verification_locked(
     max_reuse_count = phone_slot.max_reuse_count
     remaining = phone_slot.remaining
     if phone_slot.provider == "smsbower" and phone_slot.is_exhausted:
-        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; keeping it open")
+        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; will reset on next SMS round")
         phone_pool.save_state()
 
     return {

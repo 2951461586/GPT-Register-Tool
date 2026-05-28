@@ -428,7 +428,7 @@ namespace SmsWorkbench
             try
             {
                 EnsureAccountExtraColumns(dbPath);
-                string sql = "SELECT id,email,access_token,status,error,paypal_ok,paypal_url,paypal_status,refresh_token_status,json_path,raw_json,pipeline_total_seconds,timing_total_seconds,created_at,updated_at FROM accounts ORDER BY updated_at DESC";
+                string sql = "SELECT id,email,access_token,status,error,paypal_ok,payment_method,paypal_url,paypal_status,refresh_token_status,json_path,raw_json,pipeline_total_seconds,timing_total_seconds,created_at,updated_at FROM accounts ORDER BY updated_at DESC";
                 var rows = SqliteNative.Query(dbPath, sql);
                 if (rows.Count == 0) return false;
                 foreach (Dictionary<string, string> data in rows)
@@ -436,6 +436,7 @@ namespace SmsWorkbench
                     string status = data.TryGetValue("status", out string rawStatus) ? rawStatus : "";
                     string error = data.TryGetValue("error", out string rawError) ? rawError : "";
                     string paypalOk = data.TryGetValue("paypal_ok", out string rawPaypalOk) ? rawPaypalOk : "";
+                    string paymentMethod = data.TryGetValue("payment_method", out string rawPaymentMethod) ? rawPaymentMethod : "";
                     string paypalUrl = data.TryGetValue("paypal_url", out string rawPaypalUrl) ? rawPaypalUrl : "";
                     string paypalStatus = data.TryGetValue("paypal_status", out string rawPaypalStatus) ? rawPaypalStatus : "";
                     string refreshTokenStatus = data.TryGetValue("refresh_token_status", out string rawRefreshTokenStatus) ? rawRefreshTokenStatus : "";
@@ -444,6 +445,13 @@ namespace SmsWorkbench
                     string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
                     string paypalAmount = GetPaypalAmount(rawJson);
                     string importedStatus = GetImportedStatus(rawJson);
+                    if (IsPaymentLinkMethodMismatch(rawJson, paymentMethod))
+                    {
+                        paypalStatus = "failed";
+                        paypalOk = "0";
+                        paypalUrl = "";
+                        paypalAmount = "";
+                    }
                     TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
                     bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
                     bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox);
@@ -455,7 +463,7 @@ namespace SmsWorkbench
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
                         AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
-                        PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl),
+                        PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
                         PayPalAmount = paypalAmount,
                         RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                         PayPalUrl = paypalUrl,
@@ -537,6 +545,7 @@ namespace SmsWorkbench
         {
             string[] migrations =
             {
+                "ALTER TABLE accounts ADD COLUMN payment_method TEXT DEFAULT 'paypal'",
                 "ALTER TABLE accounts ADD COLUMN paypal_status TEXT DEFAULT ''",
                 "ALTER TABLE accounts ADD COLUMN paypal_updated_at INTEGER DEFAULT 0",
                 "ALTER TABLE accounts ADD COLUMN refresh_token_status TEXT DEFAULT ''",
@@ -640,16 +649,30 @@ namespace SmsWorkbench
         {
             if (TryCreateSelectedUnregisteredMailboxFile(out string pendingMailboxArg, out string pendingMailboxFile, out int pendingSelectedCount, out int pendingRowCount))
             {
-                var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", "4" };
+                RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelectedCount);
+                if (selectedOptions == null) return;
+                var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(pendingArgs);
                 AddProxy(pendingArgs);
-                AddPaypalOption(pendingArgs);
+                AddPaypalOption(pendingArgs, selectedOptions.PaymentMethod);
                 RunBackend("选中未注册邮箱注册+支付链接", pendingArgs);
                 return;
             }
             if (pendingRowCount > 0)
             {
-                MessageBox.Show("选中的未注册邮箱缺少可用邮箱原始记录，无法直接注册。", "邮箱记录不完整", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog("邮箱记录不完整", "选中的未注册邮箱缺少可用邮箱原始记录，无法直接注册。");
+                return;
+            }
+
+            if (TryCreateSelectedMailboxFile(out string selectedArg, out string selectedFile, out int selectedCount))
+            {
+                RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(selectedCount);
+                if (selectedOptions == null) return;
+                var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
+                AddRegistrationAtOnlyArgs(selectedArgs);
+                AddProxy(selectedArgs);
+                AddPaypalOption(selectedArgs, selectedOptions.PaymentMethod);
+                RunBackend("选中邮箱注册+支付链接", selectedArgs);
                 return;
             }
 
@@ -670,7 +693,7 @@ namespace SmsWorkbench
                 };
                 AddRegistrationAtOnlyArgs(cfArgs);
                 AddProxy(cfArgs);
-                AddPaypalOption(cfArgs);
+                AddPaypalOption(cfArgs, options.PaymentMethod);
                 RunBackend("CFWorker邮箱注册+支付链接", cfArgs);
                 return;
             }
@@ -679,22 +702,15 @@ namespace SmsWorkbench
             string mailboxFile = GetChataiMailboxFilePath();
             int count = options.Count;
             string taskName = "一键注册+支付链接";
-            if (TryCreateSelectedMailboxFile(out string selectedArg, out string selectedFile, out int selectedCount))
-            {
-                mailboxArg = selectedArg;
-                mailboxFile = selectedFile;
-                count = selectedCount;
-                taskName = "选中邮箱注册+支付链接";
-            }
             if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
             {
-                MessageBox.Show("未找到 Chatai 邮箱文件，请先导入。", "缺少邮箱文件", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog("缺少邮箱文件", "未选择邮箱，且未找到 Chatai 邮箱文件。请先导入邮箱，或勾选要注册的邮箱记录。");
                 return;
             }
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddRegistrationAtOnlyArgs(args);
             AddProxy(args);
-            AddPaypalOption(args);
+            AddPaypalOption(args, options.PaymentMethod);
             RunBackend(taskName, args);
         }
 
@@ -742,9 +758,11 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                MessageBox.Show("请先勾选或选择账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog("未选择账号", "请先勾选或选择要支付的账号记录。");
                 return;
             }
+            string paymentMethod = ShowPaymentMethodDialog("一键支付", "支付方式");
+            if (paymentMethod.Length == 0) return;
             var args = new List<string> { "--one-click-pay" };
             if (rows.Count > 1)
             {
@@ -756,8 +774,183 @@ namespace SmsWorkbench
             {
                 args.AddRange(new[] { "--email", rows[0].Identifier });
             }
+            args.Add("--payment-method");
+            args.Add(paymentMethod);
             AddProxy(args);
             RunBackend("一键支付 (" + rows.Count + ")", args);
+        }
+
+        private void ShowThemedInfoDialog(string title, string message)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Owner = this,
+                Width = 390,
+                MinWidth = 340,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg"),
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var root = new StackPanel { Margin = new Thickness(16) };
+            root.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 16,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            });
+            root.Children.Add(new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 20,
+                Margin = new Thickness(0, 0, 0, 16),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            });
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = "知道了", Width = 82, Style = (Style)FindResource("PrimaryButton") };
+            ok.Click += (_, __) =>
+            {
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            actions.Children.Add(ok);
+            root.Children.Add(actions);
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private string ShowPaymentMethodDialog(string title, string labelText = "支付方式")
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Owner = this,
+                Width = 360,
+                Height = 170,
+                MinWidth = 320,
+                MinHeight = 150,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var label = new TextBlock { Text = labelText, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var box = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            box.Items.Add(new ComboBoxItem { Content = "PayPal", Tag = "paypal" });
+            box.Items.Add(new ComboBoxItem { Content = "GoPay", Tag = "gopay" });
+            box.SelectedIndex = 0;
+            Grid.SetRow(label, 0);
+            Grid.SetColumn(label, 0);
+            Grid.SetRow(box, 0);
+            Grid.SetColumn(box, 1);
+            root.Children.Add(label);
+            root.Children.Add(box);
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
+            var cancel = new Button { Content = "取消", Width = 72 };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 1);
+            Grid.SetColumnSpan(actions, 2);
+            root.Children.Add(actions);
+            string selected = "";
+            ok.Click += (_, __) =>
+            {
+                selected = NormalizePaymentMethod(((box.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal");
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+            dialog.Content = root;
+            return dialog.ShowDialog() == true ? selected : "";
+        }
+
+        private RegisterOptions ShowSelectedRegisterOptionsDialog(int selectedCount)
+        {
+            var dialog = new Window
+            {
+                Title = "选中邮箱注册+支付链接",
+                Owner = this,
+                Width = 390,
+                Height = 214,
+                MinWidth = 350,
+                MinHeight = 190,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var hint = new TextBlock
+            {
+                Text = "已选择 " + Math.Max(1, selectedCount).ToString() + " 个邮箱",
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            };
+            Grid.SetRow(hint, 0);
+            Grid.SetColumnSpan(hint, 2);
+            root.Children.Add(hint);
+
+            var workerLabel = new TextBlock { Text = "并发", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(workerLabel, 1);
+            Grid.SetColumn(workerLabel, 0);
+            Grid.SetRow(workerBox, 1);
+            Grid.SetColumn(workerBox, 1);
+            root.Children.Add(workerLabel);
+            root.Children.Add(workerBox);
+
+            var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            paymentBox.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
+            paymentBox.Items.Add(new ComboBoxItem { Content = "GoPay 支付链接", Tag = "gopay" });
+            paymentBox.SelectedIndex = 0;
+            Grid.SetRow(paymentLabel, 2);
+            Grid.SetColumn(paymentLabel, 0);
+            Grid.SetRow(paymentBox, 2);
+            Grid.SetColumn(paymentBox, 1);
+            root.Children.Add(paymentLabel);
+            root.Children.Add(paymentBox);
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
+            var cancel = new Button { Content = "取消", Width = 72 };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 3);
+            Grid.SetColumnSpan(actions, 2);
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.Children.Add(actions);
+
+            RegisterOptions selected = null;
+            ok.Click += (_, __) =>
+            {
+                selected = new RegisterOptions
+                {
+                    Source = "pool",
+                    Count = Math.Max(1, selectedCount),
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount()),
+                    PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal")
+                };
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+            dialog.Content = root;
+            return dialog.ShowDialog() == true ? selected : null;
         }
 
         private RegisterOptions ShowRegisterOptionsDialog()
@@ -767,14 +960,15 @@ namespace SmsWorkbench
                 Title = "一键注册+支付链接",
                 Owner = this,
                 Width = 420,
-                Height = 240,
+                Height = 286,
                 MinWidth = 380,
-                MinHeight = 220,
+                MinHeight = 260,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -804,7 +998,7 @@ namespace SmsWorkbench
             root.Children.Add(countBox);
 
             var workerLabel = new TextBlock { Text = "并发", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var workerBox = new TextBox { Text = "4", Margin = new Thickness(0, 0, 0, 10) };
+            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
             Grid.SetRow(workerLabel, 2);
             Grid.SetColumn(workerLabel, 0);
             Grid.SetRow(workerBox, 2);
@@ -812,12 +1006,24 @@ namespace SmsWorkbench
             root.Children.Add(workerLabel);
             root.Children.Add(workerBox);
 
+            var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            paymentBox.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
+            paymentBox.Items.Add(new ComboBoxItem { Content = "GoPay 支付链接", Tag = "gopay" });
+            paymentBox.SelectedIndex = 0;
+            Grid.SetRow(paymentLabel, 3);
+            Grid.SetColumn(paymentLabel, 0);
+            Grid.SetRow(paymentBox, 3);
+            Grid.SetColumn(paymentBox, 1);
+            root.Children.Add(paymentLabel);
+            root.Children.Add(paymentBox);
+
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 3);
+            Grid.SetRow(actions, 4);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -825,12 +1031,13 @@ namespace SmsWorkbench
             ok.Click += (_, __) =>
             {
                 int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
-                int workers = ParsePositiveInt(workerBox.Text, 1, 4, 4);
+                int workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount());
                 selected = new RegisterOptions
                 {
                     Source = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool",
                     Count = count,
-                    Workers = workers
+                    Workers = workers,
+                    PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal")
                 };
                 CountText = count.ToString();
                 dialog.DialogResult = true;
@@ -845,6 +1052,11 @@ namespace SmsWorkbench
         {
             if (!int.TryParse((text ?? "").Trim(), out int value)) return fallback;
             return Math.Max(min, Math.Min(max, value));
+        }
+
+        private int DefaultWorkerCount()
+        {
+            return Math.Max(1, Math.Min(8, CountValue()));
         }
 
         private bool TryCreateSelectedMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount)
@@ -1552,23 +1764,29 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                MessageBox.Show("请先勾选或选择账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog("未选择账号", "请先勾选或选择要重新生成链接的账号记录。");
                 return;
             }
+            string paymentMethod = ShowPaymentMethodDialog("重新生成链接", "生链方式");
+            if (paymentMethod.Length == 0) return;
 
             if (rows.Count == 1)
             {
                 PoolRow row = rows[0];
                 var singleArgs = new List<string> { "--email", row.Identifier, "--regenerate-paypal-link", "--workers", "4" };
                 AddSessionFileArg(singleArgs, row);
-                RunBackend("重新生成PayPal链接", singleArgs);
+                singleArgs.Add("--payment-method");
+                singleArgs.Add(paymentMethod);
+                RunBackend("重新生成支付链接", singleArgs);
                 return;
             }
 
             string emailFile = Path.Combine(Path.GetTempPath(), "paypal_regen_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
             var args = new List<string> { "--regenerate-paypal-link", "--email-file", emailFile, "--workers", "4" };
-            RunBackend("批量重新生成PayPal链接 (" + rows.Count + ")", args);
+            args.Add("--payment-method");
+            args.Add(paymentMethod);
+            RunBackend("批量重新生成支付链接 (" + rows.Count + ")", args);
         }
 
         private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
@@ -1944,6 +2162,15 @@ namespace SmsWorkbench
 
                 try
                 {
+                    mailItems.Clear();
+                    foreach (MailItem item in await FetchBackendInbox(row, 20))
+                    {
+                        mailItems.Add(item);
+                    }
+                    header.Text = row.Identifier + " - " + mailItems.Count + " messages";
+
+                    if (mailItems.Count < 0)
+                    {
                     var tokenResp = await httpClient.PostAsync(tokenUrl, new FormUrlEncodedContent(tokenBody));
                     string tokenJson = await tokenResp.Content.ReadAsStringAsync();
                     if (!tokenResp.IsSuccessStatusCode)
@@ -1992,6 +2219,7 @@ namespace SmsWorkbench
                         }
                     }
                     header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -2012,6 +2240,59 @@ namespace SmsWorkbench
             dialog.Content = root;
             dialog.Show();
             await LoadEmails();
+        }
+
+        private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit)
+        {
+            string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
+            if (!File.Exists(script)) throw new FileNotFoundException("Backend script not found", script);
+            var args = new List<string> { "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString() };
+            AddSessionFileArg(args, row);
+            AddProxy(args);
+            var psi = new ProcessStartInfo
+            {
+                FileName = "python",
+                Arguments = Quote(script) + " " + JoinArgs(args),
+                WorkingDirectory = rootDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            };
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+            string stdout = await process.StandardOutput.ReadToEndAsync();
+            string stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException((stdout + "\n" + stderr).Trim());
+            }
+            using JsonDocument doc = JsonDocument.Parse(stdout);
+            if (!doc.RootElement.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
+            {
+                string error = JsonString(doc.RootElement, "error");
+                throw new InvalidOperationException(error.Length > 0 ? error : stdout.Trim());
+            }
+            var items = new List<MailItem>();
+            if (doc.RootElement.TryGetProperty("messages", out JsonElement messages) && messages.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement msg in messages.EnumerateArray())
+                {
+                    string received = JsonString(msg, "receivedDateTime");
+                    if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
+                    items.Add(new MailItem
+                    {
+                        ReceivedAt = received,
+                        From = JsonString(msg, "from"),
+                        Subject = JsonString(msg, "subject"),
+                        BodyPreview = JsonString(msg, "bodyPreview")
+                    });
+                }
+            }
+            return items;
         }
 
         private bool IsCfWorkerRow(PoolRow row)
@@ -2036,9 +2317,11 @@ namespace SmsWorkbench
             string domain = normalizedEmail.Contains("@") ? normalizedEmail.Substring(normalizedEmail.LastIndexOf('@') + 1) : "";
             string[] paths =
             {
-                "/admin/emails?page=1&domain=" + Uri.EscapeDataString(domain),
-                "/admin/emails?page=1",
+                "/admin/emails?page=1&domain=" + Uri.EscapeDataString(domain) + "&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
+                "/admin/emails?page=1&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
                 "/api/messages?email=" + encoded + "&limit=" + limit,
+                "/api/messages?address=" + encoded + "&limit=" + limit,
+                "/api/messages?to_address=" + encoded + "&limit=" + limit,
                 "/api/emails/" + encoded + "/messages?limit=" + limit,
                 "/api/mailboxes/" + encoded + "/messages?limit=" + limit,
                 "/api/mailbox/" + encoded + "?limit=" + limit,
@@ -2073,7 +2356,7 @@ namespace SmsWorkbench
                 }
                 using JsonDocument doc = JsonDocument.Parse(text.Length == 0 ? "[]" : text);
                 var items = ExtractCfWorkerMailItems(doc.RootElement, email, limit);
-                if (items.Count > 0 || path.StartsWith("/admin/emails", StringComparison.OrdinalIgnoreCase) || LooksEmptyMessageList(doc.RootElement)) return items;
+                if (items.Count > 0 || LooksEmptyMessageList(doc.RootElement)) return items;
             }
             throw new InvalidOperationException(lastError.Length > 0 ? lastError : "未找到可用的 CFWorker 收件箱接口");
         }
@@ -2535,6 +2818,9 @@ namespace SmsWorkbench
             var email = GetSection(config, "email_registration");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
+            var gopay = GetSection(config, "gopay");
+            var gopayStageProxies = GetChildSection(gopay, "stage_proxies");
+            var gopayWaRebind = GetChildSection(gopay, "wa_rebind");
             var storage = GetSection(config, "storage");
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
@@ -2666,6 +2952,42 @@ namespace SmsWorkbench
             AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
 
+            var gopayForm = AddConfigCategory(sidebar, host, categories, "GoPay", "GoPay 生链、协议支付服务和分阶段代理配置。");
+            row = 0;
+            AddConfigField(gopayForm, fields, row++, "一键支付模式", "gopay_one_click_mode", FirstNonEmpty(GetString(gopay, "one_click_mode"), "link"));
+            AddConfigField(gopayForm, fields, row++, "自动打开链接", "gopay_open_link", FirstNonEmpty(GetString(gopay, "open_link"), "true"));
+            AddConfigField(gopayForm, fields, row++, "自动生成链接", "gopay_auto_generate", FirstNonEmpty(GetString(gopay, "auto_generate"), "true"));
+            AddConfigField(gopayForm, fields, row++, "Provider接口", "gopay_provider_api", FirstNonEmpty(GetString(gopay, "provider_api"), "byte-v-forge"));
+            AddConfigField(gopayForm, fields, row++, "PaymentService地址", "gopay_payment_service_addr", FirstNonEmpty(GetString(gopay, "payment_service_addr"), "127.0.0.1:50051"));
+            AddConfigField(gopayForm, fields, row++, "grpcurl路径", "gopay_grpcurl_path", FirstNonEmpty(GetString(gopay, "grpcurl_path"), "grpcurl"));
+            AddConfigField(gopayForm, fields, row++, "gRPC服务名", "gopay_payment_service", FirstNonEmpty(GetString(gopay, "payment_service"), "payment.PaymentService"));
+            AddConfigField(gopayForm, fields, row++, "Proto目录", "gopay_proto_import_path", FirstNonEmpty(GetString(gopay, "proto_import_path"), "services\\gopay-flow\\proto"));
+            AddConfigField(gopayForm, fields, row++, "Proto文件", "gopay_proto_path", FirstNonEmpty(GetString(gopay, "proto_path"), "services\\gopay-flow\\proto\\payment.proto"));
+            AddConfigField(gopayForm, fields, row++, "Provider超时秒", "gopay_provider_timeout_seconds", FirstNonEmpty(GetString(gopay, "provider_timeout_seconds"), "600"));
+            AddConfigField(gopayForm, fields, row++, "服务配置模板", "gopay_provider_config_path", FirstNonEmpty(GetString(gopay, "provider_config_path"), "services\\gopay-flow\\config.gopay.base.json"));
+            AddConfigField(gopayForm, fields, row++, "Tokenization", "gopay_tokenization", FirstNonEmpty(GetString(gopay, "tokenization"), "qris"));
+            AddConfigField(gopayForm, fields, row++, "GoPay手机号", "gopay_phone", FirstNonEmpty(GetString(gopay, "phone"), GetString(gopay, "phone_number")));
+            AddConfigField(gopayForm, fields, row++, "国家区号", "gopay_country_code", FirstNonEmpty(GetString(gopay, "country_code"), "62"));
+            AddConfigField(gopayForm, fields, row++, "OTP渠道", "gopay_otp_channel", FirstNonEmpty(GetString(gopay, "otp_channel"), "sms"));
+            AddConfigField(gopayForm, fields, row++, "GoPay PIN", "gopay_pin", GetString(gopay, "pin"));
+            AddConfigField(gopayForm, fields, row++, "人工确认后自动确认", "gopay_confirm_after_manual", FirstNonEmpty(GetString(gopay, "confirm_after_manual"), "false"));
+            AddConfigField(gopayForm, fields, row++, "MuMu主程序", "gopay_emulator_exe", FirstNonEmpty(GetString(gopay, "emulator_exe"), "D:\\Program Files\\Netease\\MuMuPlayer\\nx_main\\MuMuNxMain.exe"));
+            AddConfigField(gopayForm, fields, row++, "ADB路径", "gopay_adb_path", FirstNonEmpty(GetString(gopay, "adb_path"), "D:\\Program Files\\Netease\\MuMuPlayer\\nx_main\\adb.exe"));
+            AddConfigField(gopayForm, fields, row++, "ADB Serial", "gopay_adb_serial", FirstNonEmpty(GetString(gopay, "adb_serial"), "emulator-5554"));
+            AddConfigField(gopayForm, fields, row++, "ADB Sidecar", "gopay_adb_sidecar_addr", FirstNonEmpty(GetString(gopay, "adb_sidecar_addr"), "127.0.0.1:9999"));
+            AddConfigField(gopayForm, fields, row++, "WA换绑启用", "gopay_wa_enabled", FirstNonEmpty(GetString(gopayWaRebind, "enabled"), "false"));
+            AddConfigField(gopayForm, fields, row++, "WA支付后换绑", "gopay_wa_rebind_after_payment", FirstNonEmpty(GetString(gopayWaRebind, "rebind_after_payment"), "true"));
+            AddConfigField(gopayForm, fields, row++, "GoPay App服务", "gopay_wa_app_service_addr", FirstNonEmpty(GetString(gopayWaRebind, "gopay_app_service_addr"), "127.0.0.1:50060"));
+            AddConfigField(gopayForm, fields, row++, "GoPay App Proto目录", "gopay_wa_app_proto_import_path", FirstNonEmpty(GetString(gopayWaRebind, "gopay_app_proto_import_path"), "services\\gopay-app\\proto"));
+            AddConfigField(gopayForm, fields, row++, "GoPay App Proto文件", "gopay_wa_app_proto_path", FirstNonEmpty(GetString(gopayWaRebind, "gopay_app_proto_path"), "services\\gopay-app\\proto\\gopay_app.proto"));
+            AddConfigField(gopayForm, fields, row++, "WA UserId", "gopay_wa_user_id", FirstNonEmpty(GetString(gopayWaRebind, "user_id"), "local"));
+            AddConfigField(gopayForm, fields, row++, "WA支付手机号", "gopay_wa_phone", GetString(gopayWaRebind, "wa_phone"));
+            AddConfigField(gopayForm, fields, row++, "换绑目标手机号", "gopay_wa_rebind_phone", GetString(gopayWaRebind, "rebind_phone"));
+            AddConfigField(gopayForm, fields, row++, "Checkout代理", "gopay_proxy_checkout", GetString(gopayStageProxies, "checkout"));
+            AddConfigField(gopayForm, fields, row++, "Stripe Init代理", "gopay_proxy_stripe_init", GetString(gopayStageProxies, "stripe_init"));
+            AddConfigField(gopayForm, fields, row++, "PM Create代理", "gopay_proxy_payment_method", GetString(gopayStageProxies, "payment_method"));
+            AddConfigField(gopayForm, fields, row++, "Confirm代理", "gopay_proxy_confirm", GetString(gopayStageProxies, "confirm"));
+
             var storageForm = AddConfigCategory(sidebar, host, categories, "存储", "Session 输出目录和 SQLite 索引路径。");
             row = 0;
             AddConfigField(storageForm, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
@@ -2711,6 +3033,44 @@ namespace SmsWorkbench
                 codexOauth["require_registration_phone_verification"] = ConfigBoolValue(fields, "codex_require_registration_phone_verification", GetBool(codexOauth, "require_registration_phone_verification", true));
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
+                gopay["one_click_mode"] = fields["gopay_one_click_mode"].Text.Trim();
+                gopay["open_link"] = ConfigBoolValue(fields, "gopay_open_link", GetBool(gopay, "open_link", true));
+                gopay["auto_generate"] = ConfigBoolValue(fields, "gopay_auto_generate", GetBool(gopay, "auto_generate", true));
+                gopay["provider_api"] = fields["gopay_provider_api"].Text.Trim();
+                gopay["payment_service_addr"] = fields["gopay_payment_service_addr"].Text.Trim();
+                gopay["grpcurl_path"] = fields["gopay_grpcurl_path"].Text.Trim();
+                gopay["payment_service"] = fields["gopay_payment_service"].Text.Trim();
+                gopay["proto_import_path"] = fields["gopay_proto_import_path"].Text.Trim();
+                gopay["proto_path"] = fields["gopay_proto_path"].Text.Trim();
+                gopay["provider_timeout_seconds"] = ConfigIntegerValue(fields, "gopay_provider_timeout_seconds");
+                gopay["provider_config_path"] = fields["gopay_provider_config_path"].Text.Trim();
+                gopay["tokenization"] = fields["gopay_tokenization"].Text.Trim();
+                gopay["phone"] = fields["gopay_phone"].Text.Trim();
+                gopay["country_code"] = fields["gopay_country_code"].Text.Trim();
+                gopay["otp_channel"] = fields["gopay_otp_channel"].Text.Trim();
+                gopay["pin"] = fields["gopay_pin"].Text.Trim();
+                gopay["confirm_after_manual"] = ConfigBoolValue(fields, "gopay_confirm_after_manual", GetBool(gopay, "confirm_after_manual", false));
+                gopay["emulator_exe"] = fields["gopay_emulator_exe"].Text.Trim();
+                gopay["adb_path"] = fields["gopay_adb_path"].Text.Trim();
+                gopay["adb_serial"] = fields["gopay_adb_serial"].Text.Trim();
+                gopay["adb_sidecar_addr"] = fields["gopay_adb_sidecar_addr"].Text.Trim();
+                gopayWaRebind["enabled"] = ConfigBoolValue(fields, "gopay_wa_enabled", GetBool(gopayWaRebind, "enabled", false));
+                gopayWaRebind["rebind_after_payment"] = ConfigBoolValue(fields, "gopay_wa_rebind_after_payment", GetBool(gopayWaRebind, "rebind_after_payment", true));
+                gopayWaRebind["gopay_app_service_addr"] = fields["gopay_wa_app_service_addr"].Text.Trim();
+                gopayWaRebind["gopay_app_service"] = FirstNonEmpty(GetString(gopayWaRebind, "gopay_app_service"), "gopay_app.GopayAppService");
+                gopayWaRebind["gopay_app_proto_import_path"] = fields["gopay_wa_app_proto_import_path"].Text.Trim();
+                gopayWaRebind["gopay_app_proto_path"] = fields["gopay_wa_app_proto_path"].Text.Trim();
+                gopayWaRebind["user_id"] = fields["gopay_wa_user_id"].Text.Trim();
+                gopayWaRebind["wa_phone"] = fields["gopay_wa_phone"].Text.Trim();
+                gopayWaRebind["rebind_phone"] = fields["gopay_wa_rebind_phone"].Text.Trim();
+                gopayWaRebind["timeout_seconds"] = ConfigIntegerValue(fields, "gopay_provider_timeout_seconds");
+                gopay["wa_rebind"] = gopayWaRebind;
+                gopay["billing_regions"] = new List<object> { "ID" };
+                gopayStageProxies["checkout"] = fields["gopay_proxy_checkout"].Text.Trim();
+                gopayStageProxies["stripe_init"] = fields["gopay_proxy_stripe_init"].Text.Trim();
+                gopayStageProxies["payment_method"] = fields["gopay_proxy_payment_method"].Text.Trim();
+                gopayStageProxies["confirm"] = fields["gopay_proxy_confirm"].Text.Trim();
+                gopay["stage_proxies"] = gopayStageProxies;
                 output["directory"] = fields["output_directory"].Text.Trim();
                 storage["sqlite_path"] = fields["sqlite_path"].Text.Trim();
                 cpaMode["api_url"] = fields["cpa_api_url"].Text.Trim();
@@ -2728,6 +3088,7 @@ namespace SmsWorkbench
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
+                config["gopay"] = gopay;
                 config["output"] = output;
                 config["storage"] = storage;
                 config["cpa_mode"] = cpaMode;
@@ -2934,12 +3295,20 @@ namespace SmsWorkbench
             }
         }
 
-        private void AddPaypalOption(List<string> args)
+        private void AddPaypalOption(List<string> args, string paymentMethod = "paypal")
         {
             if (SkipPaypalLink)
             {
                 args.Add("--skip-paypal-link");
+                return;
             }
+            args.Add("--payment-method");
+            args.Add(NormalizePaymentMethod(paymentMethod));
+        }
+
+        private string NormalizePaymentMethod(string paymentMethod)
+        {
+            return string.Equals((paymentMethod ?? "").Trim(), "gopay", StringComparison.OrdinalIgnoreCase) ? "gopay" : "paypal";
         }
 
         private int CountValue()
@@ -2995,14 +3364,21 @@ namespace SmsWorkbench
             {
                 return "已保存";
             }
+            string method = GetString(data, "payment_method");
+            if (method.Length == 0) method = GetString(paypal, "payment_method");
+            if (method.Length == 0) method = GetString(paypal, "method");
+            string prefix = method.Equals("gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay " : "";
+            if (IsPaymentLinkMethodMismatch(data, method)) return prefix + "支付失败";
             string status = GetString(data, "paypal_status");
             if (status.Length == 0) status = GetString(paypal, "status");
-            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
-            if (status.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return "待人工支付";
+            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
+            if (status.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + "待输入OTP";
+            if (status.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(method);
+            if (status.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(method);
             string ok = GetString(paypal, "ok").ToLowerInvariant();
-            if (ok == "true") return "PayPal已生成";
+            if (ok == "true") return PaymentPendingStatus(method);
             string error = GetString(paypal, "error");
-            return error.Length > 0 ? "PayPal失败" : "已保存";
+            return error.Length > 0 ? prefix + "失败" : "已保存";
         }
 
         private string GetPaypalUrl(Dictionary<string, object> data)
@@ -3088,6 +3464,56 @@ namespace SmsWorkbench
             return currency.Length > 0 ? text + " " + currency : text;
         }
 
+        private bool IsPaymentLinkMethodMismatch(string rawJson, string paymentMethod)
+        {
+            if (string.IsNullOrWhiteSpace(rawJson)) return false;
+            try
+            {
+                return IsPaymentLinkMethodMismatch(JsonTextToObject(rawJson), paymentMethod);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsPaymentLinkMethodMismatch(Dictionary<string, object> data, string paymentMethod)
+        {
+            string requested = NormalizePaymentMethod(paymentMethod);
+            if (!TryGetMap(data, "paypal", out Dictionary<string, object> paypal) || paypal.Count == 0) return false;
+            string savedMethod = NormalizePaymentMethod(FirstNonEmpty(
+                GetString(paypal, "payment_method"),
+                GetString(paypal, "method"),
+                GetString(paypal, "type")
+            ));
+            bool hasSavedMethod = GetString(paypal, "payment_method").Length > 0
+                || GetString(paypal, "method").Length > 0
+                || GetString(paypal, "type").Length > 0;
+            string currency = GetString(paypal, "currency").Trim().ToLowerInvariant();
+            bool hasGoPayType = PaymentMethodTypesContain(paypal, "gopay");
+            bool hasPayPalType = PaymentMethodTypesContain(paypal, "paypal");
+            if (requested == "gopay")
+            {
+                return (hasSavedMethod && savedMethod == "paypal")
+                    || hasPayPalType
+                    || currency == "usd";
+            }
+            return (hasSavedMethod && savedMethod == "gopay")
+                || hasGoPayType
+                || currency == "idr";
+        }
+
+        private bool PaymentMethodTypesContain(Dictionary<string, object> paypal, string expected)
+        {
+            if (!paypal.TryGetValue("payment_method_types", out object raw) || raw == null) return false;
+            string target = expected.Trim().ToLowerInvariant();
+            if (raw is List<object> items)
+            {
+                return items.Any(item => string.Equals(Convert.ToString(item)?.Trim(), target, StringComparison.OrdinalIgnoreCase));
+            }
+            return Convert.ToString(raw)?.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private string FirstNonEmpty(params string[] values)
         {
             foreach (string value in values)
@@ -3123,20 +3549,36 @@ namespace SmsWorkbench
                 || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
-            if (paypalOk == "1" || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "PayPal已生成";
+            if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)
+                || paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)
+                || paypalOk == "1"
+                || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "待支付";
             if (hasRt && access.Length > 0) return "已注册";
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
             return access.Length > 0 ? "已注册" : "待处理";
         }
 
-        private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl)
+        private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")
         {
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
-            if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付失败";
-            if (paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return "待人工支付";
-            if (paypalOk == "1" && !string.IsNullOrWhiteSpace(paypalUrl)) return "待人工支付";
-            if (!string.IsNullOrWhiteSpace(paypalUrl)) return "待人工支付";
+            string prefix = string.Equals((paymentMethod ?? "").Trim(), "gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay " : "";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
+            if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付失败";
+            if (paypalStatus.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + "待输入OTP";
+            if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(paymentMethod);
+            if (paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(paymentMethod);
+            if (paypalOk == "1" && !string.IsNullOrWhiteSpace(paypalUrl)) return PaymentPendingStatus(paymentMethod);
+            if (!string.IsNullOrWhiteSpace(paypalUrl)) return PaymentPendingStatus(paymentMethod);
             return "";
+        }
+
+        private string PaymentPendingStatus(string paymentMethod)
+        {
+            return PaymentMethodLabel(paymentMethod) + "待支付";
+        }
+
+        private string PaymentMethodLabel(string paymentMethod)
+        {
+            return NormalizePaymentMethod(paymentMethod).Equals("gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay" : "PayPal";
         }
 
         private string DisplayRtStatus(string refreshTokenStatus)
@@ -3468,6 +3910,7 @@ namespace SmsWorkbench
         public string Source { get; set; } = "pool";
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
+        public string PaymentMethod { get; set; } = "paypal";
     }
 
     public sealed class TaskRow : INotifyPropertyChanged

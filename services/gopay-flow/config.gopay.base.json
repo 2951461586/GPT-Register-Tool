@@ -1,0 +1,83 @@
+{
+  "name": "codex-pool-plus-payment-gopay",
+  "version": "1.1.0",
+  "description": "ChatGPT Plus GoPay protocol payment with ADB OTP and automatic unlink",
+  "fresh_checkout": {
+    "enabled": true,
+    "bootstrap_from_flows": false,
+    "auto_refresh_on_inactive": true,
+    "warmup_route_data": true,
+    "plan": {
+      "workspace_name": "",
+      "price_interval": "month",
+      "seat_quantity": 1,
+      "billing_country": "ID",
+      "billing_currency": "IDR",
+      "promo_campaign_id": "plus-1-month-free",
+      "checkout_ui_mode": "hosted",
+      "cancel_url": "https://chatgpt.com/#pricing",
+      "plan_name": "chatgptplusplan",
+      "payment_lower_bound_amount_cents": 0,
+      "payment_upper_bound_amount_cents": 100000,
+      "force_custom_for_promo": true,
+      "max_checkout_retries": 3
+    },
+    "auth": {
+      "mode": "access_token",
+      "access_token": "",
+      "session_token": "",
+      "cookie_header": "",
+      "device_id": "",
+      "oai_device_id": "",
+      "openai_sentinel_token": "",
+      "prefer_session_refresh": true
+    },
+    "request_style": "abcard",
+    "use_flows_for_templates": false
+  },
+  "gopay": {
+    "name": "GoPay-ID",
+    "country_code": "62",
+    "phone_number": "",
+    "pin": "",
+    "otp": {
+      "source": "adb",
+      "adb_url": "http://127.0.0.1:9999",
+      "timeout": 120,
+      "poll_interval": 2
+    },
+    "unlink": {
+      "enabled": true,
+      "adb_url": "http://127.0.0.1:9999",
+      "timeout_seconds": 120
+    }
+  },
+  "stripe": {
+    "publishable_key": "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n",
+    "return_url_template": "https://chatgpt.com/?payment_return=1"
+  },
+  "billing": {},
+  "locale": "ID",
+  "runtime": {
+    "confirm_mode": "inline_payment_method_data",
+    "version": "6f8494a281",
+    "js_checksum": "qto~d^n0=QU>a<eRUrbu]]_QUT^`@=l`<cdbovabT=qPsyn;YZato?U^`w",
+    "top_checkout_config_id": "",
+    "payment_method_checkout_config_id": "",
+    "frontend_execution": ""
+  },
+  "proxy": "http://127.0.0.1:7897",
+  "proxy_for_checkout": "http://127.0.0.1:7897",
+  "proxy_for_payment_link": "http://127.0.0.1:7897",
+  "proxy_for_payment_flow": "http://127.0.0.1:7897",
+  "adb": {
+    "adb_path": "",
+    "serial": "emulator-5554",
+    "package": "com.gojek.gopay",
+    "command_timeout": 15,
+    "post_unlink_back_steps": 1
+  },
+  "notes": {
+    "proxy_policy": "Local config can override proxy and emulator paths."
+  }
+}

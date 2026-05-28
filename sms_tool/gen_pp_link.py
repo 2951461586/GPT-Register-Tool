@@ -1,13 +1,13 @@
-#!/usr/bin/env python3
-"""生成 ChatGPT Plus PayPal 授权链接（Stripe Elements confirm 流程）。
+﻿#!/usr/bin/env python3
+"""鐢熸垚 ChatGPT Plus PayPal 鎺堟潈閾炬帴锛圫tripe Elements confirm 娴佺▼锛夈€?
 
-完全独立实现，不依赖 gopay.py。
+瀹屽叏鐙珛瀹炵幇锛屼笉渚濊禆 gopay.py銆?
 
-用法：
+鐢ㄦ硶锛?
   python3 gen_pp_link.py <access_token>
   python3 gen_pp_link.py --dry-run
 
-流程：checkout → stripe init → create pm (paypal) → confirm → 授权链接
+娴佺▼锛歝heckout 鈫?stripe init 鈫?create pm (paypal) 鈫?confirm 鈫?鎺堟潈閾炬帴
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from urllib.parse import quote
 
 import requests
 
-# 可选 curl_cffi（Chrome TLS 指纹）
+# 鍙€?curl_cffi锛圕hrome TLS 鎸囩汗锛?
 try:
     from curl_cffi.requests import Session as _CurlCffiSession
 except ImportError:
     _CurlCffiSession = None
 
-# ──────────────────────────── 常量 ────────────────────────────
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 甯搁噺 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -43,14 +43,30 @@ DEFAULT_STRIPE_PK = (
 DEFAULT_TIMEOUT = 30
 
 BILLING_REGIONS = [
-    {"country": "US", "currency": "USD", "label": "美国（USD）"},
+    {"country": "US", "currency": "USD", "label": "United States (USD)"},
 ]
 
 REGION_PRESETS = {
+    "ID": {
+        "country": "ID",
+        "currency": "IDR",
+        "label": "Indonesia (IDR)",
+        "browser_locale": "id-ID",
+        "browser_timezone": "Asia/Jakarta",
+        "stripe_locale": "id",
+        "payment_email": "buyer@example.id",
+        "address": {
+            "country": "ID",
+            "line1": "Jl. M. H. Thamrin No. 1",
+            "city": "Jakarta",
+            "postal_code": "10310",
+            "state": "DKI Jakarta",
+        },
+    },
     "JP": {
         "country": "JP",
         "currency": "JPY",
-        "label": "日本（JPY）",
+        "label": "Japan (JPY)",
         "browser_locale": "ja-JP",
         "browser_timezone": "Asia/Tokyo",
         "stripe_locale": "ja",
@@ -66,7 +82,7 @@ REGION_PRESETS = {
     "US": {
         "country": "US",
         "currency": "USD",
-        "label": "美国（USD）",
+        "label": "United States (USD)",
         "browser_locale": "en-US",
         "browser_timezone": "Asia/Shanghai",
         "stripe_locale": "en",
@@ -81,7 +97,16 @@ REGION_PRESETS = {
     },
 }
 
-# ──────────────────────────── Session ────────────────────────────
+PAYMENT_METHOD_LABELS = {
+    "paypal": "PayPal",
+    "gopay": "GoPay",
+}
+
+
+def _log_prefix(payment_method: Any = "") -> str:
+    return "[gopay]" if _normalize_payment_method(payment_method) == "gopay" else "[paypal]"
+
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Session 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
 def _new_session(impersonate: str = "chrome136") -> Any:
@@ -154,6 +179,25 @@ def _proxy_candidates(paypal_cfg: dict[str, Any], default_proxy: str, explicit_p
     return proxies or [_normalize_proxy(default_proxy)], False
 
 
+def _normalize_payment_method(value: Any) -> str:
+    method = str(value or "").strip().lower()
+    if method in {"gopay", "go-pay", "go_pay"}:
+        return "gopay"
+    return "paypal"
+
+
+def _payment_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+    if payment_method == "paypal":
+        return paypal_cfg
+    method_cfg = cfg.get(payment_method) if isinstance(cfg.get(payment_method), dict) else {}
+    merged = dict(paypal_cfg)
+    merged.update(method_cfg)
+    if not (method_cfg.get("billing_regions") or method_cfg.get("billing_region") or method_cfg.get("billing_country")):
+        merged["billing_regions"] = ["ID"]
+    return merged
+
+
 def _billing_regions(paypal_cfg: dict[str, Any]) -> list[dict[str, Any]]:
     raw = paypal_cfg.get("billing_regions") or paypal_cfg.get("billing_region") or paypal_cfg.get("billing_country")
     if raw is None or raw == "":
@@ -184,7 +228,7 @@ def _billing_regions(paypal_cfg: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         region["country"] = country
         region["currency"] = str(region.get("currency") or "USD").strip().upper()
-        region["label"] = str(region.get("label") or f"{country}（{region['currency']}）")
+        region["label"] = str(region.get("label") or f"{country} ({region['currency']})")
         address = region.get("address") if isinstance(region.get("address"), dict) else {}
         preset_address = REGION_PRESETS.get(country, {}).get("address") or {}
         region["address"] = {**preset_address, **address, "country": country}
@@ -228,7 +272,7 @@ def _post_stripe_form(session: Any, url: str, body: dict[str, Any], *, timeout: 
         if response.status_code == 400 and details.get("code") == "parameter_unknown" and unknown_param in current_body:
             removed_params.append(unknown_param)
             current_body.pop(unknown_param, None)
-            print(f"[pp] {step}: retry without unknown param {unknown_param}", file=sys.stderr)
+            print(f"[stripe] {step}: retry without unknown param {unknown_param}", file=sys.stderr)
             continue
         if removed_params:
             response.removed_unknown_params = removed_params
@@ -260,7 +304,7 @@ def _stripe_step_error_result(
     reason = details.get("code") or details.get("type") or "unknown"
     message = details.get("message") or str(getattr(response, "text", "") or "")[:180]
     print(
-        f"[pp] {step} failed: status={status} reason={reason} "
+        f"[stripe] {step} failed: status={status} reason={reason} "
         f"param={details.get('param', '')} message={message}",
         file=sys.stderr,
     )
@@ -331,7 +375,7 @@ def _stripe_confirm_error_result(
     }
 
 
-# ──────────────────────────── Token 解析 ────────────────────────────
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Token 瑙ｆ瀽 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
 def parse_token(raw: str) -> str | None:
@@ -353,7 +397,7 @@ def parse_token(raw: str) -> str | None:
     return None
 
 
-# ──────────────────────────── 辅助函数 ────────────────────────────
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 杈呭姪鍑芥暟 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
 def _load_json(path: str) -> dict:
@@ -466,7 +510,7 @@ def _zero_due_check(init_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# ──────────────────────────── 核心流程 ────────────────────────────
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鏍稿績娴佺▼ 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
 def _try_paypal_link(
@@ -475,12 +519,16 @@ def _try_paypal_link(
     region: dict,
     proxy: str,
     force_proxy: bool = False,
+    payment_method: str = "paypal",
 ) -> dict[str, Any] | None:
-    paypal_cfg = cfg.get("paypal") or {}
-    checkout_proxy = _stage_proxy(paypal_cfg, "checkout", proxy, force_fallback=force_proxy)
-    stripe_init_proxy = _stage_proxy(paypal_cfg, "stripe_init", proxy, force_fallback=force_proxy)
-    stripe_pm_proxy = _stage_proxy(paypal_cfg, "payment_method", stripe_init_proxy, force_fallback=force_proxy)
-    stripe_confirm_proxy = _stage_proxy(paypal_cfg, "confirm", stripe_pm_proxy, force_fallback=force_proxy)
+    payment_method = _normalize_payment_method(payment_method)
+    payment_label = PAYMENT_METHOD_LABELS[payment_method]
+    log_prefix = _log_prefix(payment_method)
+    payment_cfg = _payment_cfg(cfg, payment_method)
+    checkout_proxy = _stage_proxy(payment_cfg, "checkout", proxy, force_fallback=force_proxy)
+    stripe_init_proxy = _stage_proxy(payment_cfg, "stripe_init", proxy, force_fallback=force_proxy)
+    stripe_pm_proxy = _stage_proxy(payment_cfg, "payment_method", stripe_init_proxy, force_fallback=force_proxy)
+    stripe_confirm_proxy = _stage_proxy(payment_cfg, "confirm", stripe_pm_proxy, force_fallback=force_proxy)
     stripe_pk = (cfg.get("stripe") or {}).get("publishable_key") or DEFAULT_STRIPE_PK
     runtime_cfg = cfg.get("runtime") or {}
     runtime_version = runtime_cfg.get("version") or "fed52f3bc6"
@@ -490,11 +538,11 @@ def _try_paypal_link(
     stripe_locale = str(region.get("stripe_locale") or "auto")
     payment_email = str(region.get("payment_email") or "buyer@example.com")
 
-    # 构建 ChatGPT session
+    # 鏋勫缓 ChatGPT session
     cs = _build_chatgpt_session(access_token)
     _set_session_proxy(cs, checkout_proxy)
 
-    # 构建 Stripe 外部 session
+    # 鏋勫缓 Stripe 澶栭儴 session
     stripe_init = _new_session()
     _set_session_proxy(stripe_init, stripe_init_proxy)
     stripe_init.headers.update({
@@ -508,7 +556,7 @@ def _try_paypal_link(
     _set_session_proxy(stripe_confirm, stripe_confirm_proxy)
     stripe_confirm.headers.update(stripe_init.headers)
 
-    # ── Step 1: ChatGPT checkout ──
+    # 鈹€鈹€ Step 1: ChatGPT checkout 鈹€鈹€
     body: dict[str, Any] = {
         "entry_point": "all_plans_pricing_modal",
         "plan_name": "chatgptplusplan",
@@ -525,7 +573,7 @@ def _try_paypal_link(
     }
 
     print(
-        f"[pp] checkout: billing_region={region['country']} promo=plus-1-month-free proxy={checkout_proxy or 'DIRECT'}",
+        f"{log_prefix} checkout: method={payment_method} billing_region={region['country']} promo=plus-1-month-free proxy={checkout_proxy or 'DIRECT'}",
         file=sys.stderr,
     )
 
@@ -533,22 +581,33 @@ def _try_paypal_link(
         "https://chatgpt.com/backend-api/payments/checkout",
         json=body, timeout=DEFAULT_TIMEOUT,
     )
+    if r.status_code == 401:
+        return {
+            "ok": False,
+            "error": f"checkout unauthorized: {r.status_code} {r.text[:300]}",
+            "error_code": "checkout_unauthorized",
+            "terminal": True,
+            "retryable": False,
+            "region": region["label"],
+            "proxy": proxy,
+            "stage_proxy": checkout_proxy or "DIRECT",
+        }
     if r.status_code == 400:
         err_text = r.text[:300]
         if "already paid" in err_text.lower():
-            return {"ok": False, "error": "该账号已有 ChatGPT Plus 订阅，无法重复创建 checkout"}
-        return {"ok": False, "error": f"checkout 创建失败: {r.status_code} {err_text}"}
+            return {"ok": False, "error": "account already has ChatGPT Plus; checkout cannot be created again"}
+        return {"ok": False, "error": f"checkout create failed: {r.status_code} {err_text}"}
     r.raise_for_status()
 
     data = r.json()
     cs_id, processor_entity, checkout_url = _extract_checkout_context(data)
     if not cs_id or not cs_id.startswith("cs_"):
-        return {"ok": False, "error": f"checkout 响应异常: {json.dumps(data, ensure_ascii=False)[:300]}"}
+        return {"ok": False, "error": f"checkout 鍝嶅簲寮傚父: {json.dumps(data, ensure_ascii=False)[:300]}"}
 
     processor_entity = processor_entity or ("openai_llc" if region["country"] == "US" else "openai_ie")
-    print(f"[pp] cs_id={cs_id} processor_entity={processor_entity}", file=sys.stderr)
+    print(f"{log_prefix} cs_id={cs_id} processor_entity={processor_entity}", file=sys.stderr)
 
-    # ── Step 2: Stripe init ──
+    # 鈹€鈹€ Step 2: Stripe init 鈹€鈹€
     init_body = {
         "browser_locale": browser_locale,
         "browser_timezone": browser_timezone,
@@ -565,7 +624,7 @@ def _try_paypal_link(
             "checkout_manual_approval_preview=v1"
         ),
     }
-    print(f"[pp] stripe init: proxy={stripe_init_proxy or 'DIRECT'}", file=sys.stderr)
+    print(f"{log_prefix} stripe init: proxy={stripe_init_proxy or 'DIRECT'}", file=sys.stderr)
     r1 = _post_stripe_form(
         stripe_init,
         f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
@@ -573,7 +632,7 @@ def _try_paypal_link(
         timeout=DEFAULT_TIMEOUT,
         step="stripe init",
     )
-    print(f"[pp] stripe init: status={r1.status_code}", file=sys.stderr)
+    print(f"{log_prefix} stripe init: status={r1.status_code}", file=sys.stderr)
     if r1.status_code != 200:
         return _stripe_step_error_result(
             r1,
@@ -589,20 +648,22 @@ def _try_paypal_link(
 
     init_checksum = init_data.get("init_checksum") or ""
     if not init_checksum:
-        return {"ok": False, "error": f"Stripe init 无 init_checksum: {r1.text[:200]}"}
+        return {"ok": False, "error": f"Stripe init missing init_checksum: {r1.text[:200]}"}
 
     due = (init_data.get("total_summary") or {}).get("due")
     amount_due = (init_data.get("invoice") or {}).get("amount_due")
     currency = (init_data.get("invoice") or {}).get("currency") or region["currency"]
     pm_types = init_data.get("payment_method_types") or []
     has_paypal = any("paypal" in (p or "").lower() for p in pm_types)
+    has_gopay = any("gopay" in (p or "").lower() for p in pm_types)
+    has_payment_method = any(payment_method in (p or "").lower() for p in pm_types)
     zero_check = _zero_due_check(init_data)
 
-    require_zero_due = bool(paypal_cfg.get("require_zero_due", False))
+    require_zero_due = bool(payment_cfg.get("require_zero_due", False))
     expected_amount = "0" if zero_check["ok"] else str(amount_due if amount_due is not None else (due if due is not None else 0))
 
     print(
-        f"[pp] init: due={due} amount_due={amount_due} currency={currency} "
+        f"{log_prefix} init: due={due} amount_due={amount_due} currency={currency} "
         f"amounts={zero_check['amounts']} tax_amounts={zero_check['tax_amounts']} pm_types={pm_types}",
         file=sys.stderr,
     )
@@ -622,15 +683,23 @@ def _try_paypal_link(
             "tax_after_zero": zero_check["tax_after_zero"],
         }
 
-    if not has_paypal:
-        return {"ok": False, "error": f"Stripe 不支持 PayPal（可用: {pm_types}）", "region": region["label"]}
+    if not has_payment_method:
+        return {
+            "ok": False,
+            "error": f"Stripe does not support {payment_label} for this checkout (available: {pm_types})",
+            "region": region["label"],
+            "payment_method": payment_method,
+            "payment_method_types": pm_types,
+            "has_paypal": has_paypal,
+            "has_gopay": has_gopay,
+        }
 
-    # ── Step 3: 创建 PayPal payment method ──
+    # Step 3: create the selected Stripe payment method.
     stripe_js_id = str(uuid.uuid4())
     elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
 
     pm_body = {
-        "type": "paypal",
+        "type": payment_method,
         "billing_details[name]": "John Doe",
         "billing_details[email]": payment_email,
         "billing_details[address][country]": address.get("country") or region["country"],
@@ -662,7 +731,7 @@ def _try_paypal_link(
         ),
     }
 
-    print(f"[pp] pm create: proxy={stripe_pm_proxy or 'DIRECT'}", file=sys.stderr)
+    print(f"{log_prefix} pm create: proxy={stripe_pm_proxy or 'DIRECT'}", file=sys.stderr)
     r2 = _post_stripe_form(
         stripe_pm,
         "https://api.stripe.com/v1/payment_methods",
@@ -670,7 +739,7 @@ def _try_paypal_link(
         timeout=DEFAULT_TIMEOUT,
         step="pm create",
     )
-    print(f"[pp] pm create: status={r2.status_code}", file=sys.stderr)
+    print(f"{log_prefix} pm create: status={r2.status_code}", file=sys.stderr)
 
     if r2.status_code != 200:
         return _stripe_step_error_result(
@@ -685,11 +754,11 @@ def _try_paypal_link(
 
     pm_id = r2.json().get("id", "")
     if not pm_id.startswith("pm_"):
-        return {"ok": False, "error": f"PM 响应异常: {r2.text[:200]}"}
+        return {"ok": False, "error": f"payment method response invalid: {r2.text[:200]}"}
 
-    print(f"[pp] pm_id={pm_id}", file=sys.stderr)
+    print(f"{log_prefix} pm_id={pm_id}", file=sys.stderr)
 
-    # ── Step 4: Stripe confirm ──
+    # 鈹€鈹€ Step 4: Stripe confirm 鈹€鈹€
     chatgpt_return = (
         f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}"
         f"&processor_entity={processor_entity}&plan_type=plus"
@@ -707,7 +776,7 @@ def _try_paypal_link(
         "init_checksum": init_checksum,
         "version": runtime_version,
         "expected_amount": expected_amount,
-        "expected_payment_method_type": "paypal",
+        "expected_payment_method_type": payment_method,
         "return_url": return_url,
         "elements_session_client[session_id]": elements_session_id,
         "elements_session_client[locale]": stripe_locale,
@@ -747,7 +816,7 @@ def _try_paypal_link(
     if runtime_cfg.get("rv_timestamp"):
         confirm_body["rv_timestamp"] = runtime_cfg["rv_timestamp"]
 
-    print(f"[pp] confirm: proxy={stripe_confirm_proxy or 'DIRECT'}", file=sys.stderr)
+    print(f"{log_prefix} confirm: proxy={stripe_confirm_proxy or 'DIRECT'}", file=sys.stderr)
     r3 = _post_stripe_form(
         stripe_confirm,
         f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
@@ -755,7 +824,7 @@ def _try_paypal_link(
         timeout=DEFAULT_TIMEOUT,
         step="confirm",
     )
-    print(f"[pp] confirm: status={r3.status_code}", file=sys.stderr)
+    print(f"{log_prefix} confirm: status={r3.status_code}", file=sys.stderr)
 
     # Re-init retry for amount mismatch (race condition: invoice changes between init and confirm)
     reinit_attempts = 0
@@ -764,7 +833,7 @@ def _try_paypal_link(
         if details.get("code") != "checkout_amount_mismatch":
             break
         reinit_attempts += 1
-        print(f"[pp] amount mismatch, re-init retry {reinit_attempts}/2", file=sys.stderr)
+        print(f"{log_prefix} amount mismatch, re-init retry {reinit_attempts}/2", file=sys.stderr)
         r1 = _post_stripe_form(
             stripe_init,
             f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
@@ -790,7 +859,7 @@ def _try_paypal_link(
             timeout=DEFAULT_TIMEOUT,
             step="confirm (re-init retry)",
         )
-        print(f"[pp] confirm (re-init retry {reinit_attempts}): status={r3.status_code}", file=sys.stderr)
+        print(f"{log_prefix} confirm (re-init retry {reinit_attempts}): status={r3.status_code}", file=sys.stderr)
 
     if r3.status_code != 200:
         return _stripe_confirm_error_result(
@@ -814,7 +883,7 @@ def _try_paypal_link(
 
     confirm_data = r3.json() or {}
 
-    # 提取授权链接
+    # 鎻愬彇鎺堟潈閾炬帴
     redirect_url = ""
     si = confirm_data.get("setup_intent") or {}
     na = si.get("next_action") or {}
@@ -828,8 +897,9 @@ def _try_paypal_link(
     if not redirect_url:
         return {
             "ok": False,
-            "error": "Stripe confirm did not return PayPal redirect URL",
+            "error": f"Stripe confirm did not return {payment_label} redirect URL",
             "region": region["label"],
+            "payment_method": payment_method,
             "due": due,
             "amount_due": amount_due,
             "expected_amount": expected_amount,
@@ -843,6 +913,8 @@ def _try_paypal_link(
     return {
         "ok": True,
         "url": redirect_url,
+        "method": payment_method,
+        "payment_method": payment_method,
         "cs_id": cs_id,
         "pm_id": pm_id,
         "due": due,
@@ -855,6 +927,7 @@ def _try_paypal_link(
         "tax_amounts": zero_check["tax_amounts"],
         "payment_method_types": pm_types,
         "has_paypal": has_paypal,
+        "has_gopay": has_gopay,
         "coupon_state": coupon_state,
         "region": region["label"],
         "proxy": proxy,
@@ -867,20 +940,21 @@ def _try_paypal_link(
     }
 
 
-# ──────────────────────────── 入口 ────────────────────────────
+# 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鍏ュ彛 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
-def generate_pp_link(access_token: str, proxy: Any = None) -> dict[str, Any]:
+def generate_payment_link(access_token: str, proxy: Any = None, payment_method: Any = "paypal") -> dict[str, Any]:
     try:
         cfg = _load_json(DEFAULT_CONFIG_PATH)
     except Exception as e:
         cfg = {}
 
-    paypal_cfg = cfg.get("paypal") or {}
+    payment_method = _normalize_payment_method(payment_method)
+    payment_cfg = _payment_cfg(cfg, payment_method)
     default_proxy = (cfg.get("proxy") or {}).get("default") or "direct"
-    proxies, force_proxy = _proxy_candidates(paypal_cfg, default_proxy, explicit_proxy=proxy)
-    regions = _billing_regions(paypal_cfg)
-    max_checkout_retries = max(1, int(paypal_cfg.get("max_checkout_retries", 3)))
+    proxies, force_proxy = _proxy_candidates(payment_cfg, default_proxy, explicit_proxy=proxy)
+    regions = _billing_regions(payment_cfg)
+    max_checkout_retries = max(1, int(payment_cfg.get("max_checkout_retries", 3)))
 
     last_err = None
     for region in regions:
@@ -888,26 +962,47 @@ def generate_pp_link(access_token: str, proxy: Any = None) -> dict[str, Any]:
             for attempt in range(1, max_checkout_retries + 1):
                 try:
                     if attempt > 1:
-                        print(f"[pp] retry checkout: attempt={attempt}/{max_checkout_retries}", file=sys.stderr)
-                    result = _try_paypal_link(access_token, cfg, region, proxy, force_proxy=force_proxy)
+                        print(f"{_log_prefix(payment_method)} retry checkout: method={payment_method} attempt={attempt}/{max_checkout_retries}", file=sys.stderr)
+                    result = _try_paypal_link(
+                        access_token,
+                        cfg,
+                        region,
+                        proxy,
+                        force_proxy=force_proxy,
+                        payment_method=payment_method,
+                    )
                     if result and result.get("ok"):
                         result["checkout_attempt"] = attempt
+                        result["payment_method"] = payment_method
+                        result["method"] = payment_method
                         return result
                     if result and result.get("terminal"):
                         result["checkout_attempt"] = attempt
+                        result["payment_method"] = payment_method
+                        result["method"] = payment_method
                         return result
                     if result and result.get("error"):
                         last_err = result["error"]
                 except Exception as e:
                     last_err = str(e)
-                    print(f"[pp] attempt failed: {region['label']}+{proxy}: {last_err}", file=sys.stderr)
+                    print(f"{_log_prefix(payment_method)} attempt failed: {region['label']}+{proxy}: {last_err}", file=sys.stderr)
                     continue
 
-    return {"ok": False, "error": f"所有尝试均失败，最后错误: {last_err}"}
+    return {"ok": False, "error": f"all attempts failed, last error: {last_err}"}
+
+
+def generate_pp_link(access_token: str, proxy: Any = None) -> dict[str, Any]:
+    return generate_payment_link(access_token, proxy=proxy, payment_method="paypal")
 
 
 def main() -> int:
     args = sys.argv[1:]
+    payment_method = "paypal"
+    if "--payment-method" in args:
+        idx = args.index("--payment-method")
+        if idx + 1 < len(args):
+            payment_method = _normalize_payment_method(args[idx + 1])
+            del args[idx:idx + 2]
 
     if args and args[0] == "--dry-run":
         try:
@@ -928,15 +1023,15 @@ def main() -> int:
         return 0
 
     if not args:
-        print(json.dumps({"ok": False, "error": "用法: gen_pp_link.py <access_token>"}, ensure_ascii=False))
+        print(json.dumps({"ok": False, "error": "鐢ㄦ硶: gen_pp_link.py <access_token>"}, ensure_ascii=False))
         return 2
 
     access_token = parse_token(args[0])
     if not access_token:
-        print(json.dumps({"ok": False, "error": "无效的 access_token（需要 eyJ 开头的 JWT 或 session JSON）"}, ensure_ascii=False))
+        print(json.dumps({"ok": False, "error": "invalid access_token: expected an eyJ JWT or session JSON"}, ensure_ascii=False))
         return 1
 
-    result = generate_pp_link(access_token)
+    result = generate_payment_link(access_token, payment_method=payment_method)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("ok") else 1
 

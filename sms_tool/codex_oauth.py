@@ -22,6 +22,7 @@ CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 REDIRECT_URI = "http://localhost:1455/auth/callback"
 SCOPE = "openid profile email offline_access"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36"
+LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
 
 
 def refresh_codex_oauth_session(
@@ -300,7 +301,7 @@ def _passwordless_login_and_exchange(
             "last_url": _safe_url(current_url),
         }
 
-    issued_after = int(time.time()) - 30
+    issued_after = int(time.time())
     send_result = _send_passwordless_otp(session, did, current_url)
     if send_result.get("hard_error"):
         return {
@@ -316,12 +317,12 @@ def _passwordless_login_and_exchange(
     last_validate_body = ""
     for attempt in range(attempts):
         if attempt > 0:
+            issued_after = int(time.time())
             _resend_email_otp(session, did, current_url)
-            issued_after = int(time.time()) - 10
         try:
             code = _poll_email_otp(
                 mailbox,
-                subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
+                subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
                 timeout=min(max(int(timeout or 180), 30), 300),
                 issued_after_unix=issued_after,
                 proxy=proxy,
@@ -486,8 +487,16 @@ def _send_passwordless_otp(session, did, current_url):
                 print(f"[*] Passwordless OTP send accepted: {endpoint.rsplit('/', 1)[-1]}")
                 return {"ok": True, "endpoint": endpoint}
             print(f"[*] Passwordless OTP send skipped: {endpoint.rsplit('/', 1)[-1]} {response.status_code}")
+            if response.status_code == 409:
+                print("[*] Passwordless OTP send already pending; continuing to mailbox polling")
+                return {"ok": True, "endpoint": endpoint, "status_code": response.status_code}
             if response.status_code not in (400, 404, 405):
-                return {"ok": False, "hard_error": True, "error": f"passwordless_send_failed:{response.status_code}"}
+                return {
+                    "ok": False,
+                    "hard_error": True,
+                    "error": f"passwordless_send_failed:{response.status_code}",
+                    "body": response.text[:300],
+                }
         except Exception as exc:
             return {"ok": False, "hard_error": True, "error": f"passwordless_send_error:{exc}"}
     return {"ok": False, "error": "passwordless_send_unavailable"}
@@ -583,6 +592,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
     mailbox = _mailbox_from_data(data)
     if mailbox is None:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": "email_otp_required_missing_mailbox"}
+    issued_after = int(time.time())
     try:
         session.post(
             "https://auth.openai.com/api/accounts/email-otp/send",
@@ -595,9 +605,9 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
         pass
     code = _poll_email_otp(
         mailbox,
-        subject_keyword=(CFG.get("email_registration") or {}).get("otp_subject_keyword", ""),
+        subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
         timeout=min(max(int(timeout or 180), 30), 300),
-        issued_after_unix=int(time.time()) - 30,
+        issued_after_unix=issued_after,
         proxy=proxy,
     )
     if not code:
