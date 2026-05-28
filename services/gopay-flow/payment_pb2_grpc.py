@@ -99,6 +99,11 @@ class PaymentServiceStub(object):
                 request_serializer=payment__pb2.CancelGoPayRequest.SerializeToString,
                 response_deserializer=payment__pb2.CancelGoPayResponse.FromString,
                 _registered_method=True)
+        self.UnlinkGoPay = channel.unary_unary(
+                '/payment.PaymentService/UnlinkGoPay',
+                request_serializer=payment__pb2.UnlinkGoPayRequest.SerializeToString,
+                response_deserializer=payment__pb2.UnlinkGoPayResponse.FromString,
+                _registered_method=True)
 
 
 class PaymentServiceServicer(object):
@@ -182,6 +187,12 @@ class PaymentServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UnlinkGoPay(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PaymentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -249,6 +260,11 @@ def add_PaymentServiceServicer_to_server(servicer, server):
                     servicer.CancelGoPay,
                     request_deserializer=payment__pb2.CancelGoPayRequest.FromString,
                     response_serializer=payment__pb2.CancelGoPayResponse.SerializeToString,
+            ),
+            'UnlinkGoPay': grpc.unary_unary_rpc_method_handler(
+                    servicer.UnlinkGoPay,
+                    request_deserializer=payment__pb2.UnlinkGoPayRequest.FromString,
+                    response_serializer=payment__pb2.UnlinkGoPayResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -602,6 +618,33 @@ class PaymentService(object):
             '/payment.PaymentService/CancelGoPay',
             payment__pb2.CancelGoPayRequest.SerializeToString,
             payment__pb2.CancelGoPayResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UnlinkGoPay(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/payment.PaymentService/UnlinkGoPay',
+            payment__pb2.UnlinkGoPayRequest.SerializeToString,
+            payment__pb2.UnlinkGoPayResponse.FromString,
             options,
             channel_credentials,
             insecure,

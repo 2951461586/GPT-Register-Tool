@@ -37,6 +37,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -91,6 +92,135 @@ LINK_BYPASS_BODY_HINTS = (
 )
 DEFAULT_OTP_REGEX = r"(?<!\d)(\d{6})(?!\d)"
 MIDTRANS_STATUS_POLL_LIMIT = 12
+SMSBOWER_ENDPOINT = "https://smsbower.page/stubs/handler_api.php"
+
+
+def _stripe_error_details(response: Any) -> dict[str, Any]:
+    details: dict[str, Any] = {"status": getattr(response, "status_code", None)}
+    body: Any = None
+    try:
+        body = response.json()
+    except Exception:
+        body = None
+    if isinstance(body, dict):
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        for key in ("code", "decline_code", "type", "message", "param", "doc_url", "request_log_url"):
+            value = error.get(key)
+            if value:
+                details[key] = value
+    text = str(getattr(response, "text", "") or "")
+    if text:
+        details["raw"] = text[:500]
+    return details
+
+
+def _stripe_error_summary(response: Any) -> str:
+    details = _stripe_error_details(response)
+    parts = [f"status={details.get('status')}"]
+    for key in ("code", "type", "param", "message"):
+        if details.get(key):
+            parts.append(f"{key}={details[key]}")
+    if details.get("raw") and not details.get("message"):
+        parts.append(f"raw={details['raw']}")
+    return " ".join(parts)
+
+
+def _post_stripe_form(
+    session: Any,
+    url: str,
+    body: dict[str, Any],
+    *,
+    timeout: int,
+    step: str,
+    log: Callable[[str], None],
+) -> Any:
+    current_body = dict(body)
+    while True:
+        response = session.post(url, data=current_body, timeout=timeout)
+        details = _stripe_error_details(response)
+        unknown_param = str(details.get("param") or "")
+        if response.status_code == 400 and details.get("code") == "parameter_unknown" and unknown_param in current_body:
+            current_body.pop(unknown_param, None)
+            log(f"[gopay] {step}: retry without unknown param {unknown_param}")
+            continue
+        return response
+
+
+def _amount_to_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _amount_at(data: dict[str, Any], *path: str) -> Any:
+    cur: Any = data
+    for part in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(part)
+    return cur
+
+
+def _collect_tax_amounts(value: Any, allow_scalar: bool = True) -> list[int]:
+    amounts: list[int] = []
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            key_lower = str(key).lower()
+            if key_lower in ("amount", "tax_amount", "taxamount"):
+                direct = _amount_to_int(nested)
+                if direct is not None:
+                    amounts.append(direct)
+                continue
+            if isinstance(nested, (dict, list)):
+                amounts.extend(_collect_tax_amounts(nested, allow_scalar=False))
+    elif isinstance(value, list):
+        for item in value:
+            amounts.extend(_collect_tax_amounts(item, allow_scalar=False))
+    elif allow_scalar:
+        direct = _amount_to_int(value)
+        if direct is not None:
+            amounts.append(direct)
+    return amounts
+
+
+def _zero_due_check(init_data: dict[str, Any]) -> dict[str, Any]:
+    amount_candidates = {
+        "total_summary.due": _amount_at(init_data, "total_summary", "due"),
+        "total_summary.total": _amount_at(init_data, "total_summary", "total"),
+        "invoice.amount_due": _amount_at(init_data, "invoice", "amount_due"),
+        "invoice.total": _amount_at(init_data, "invoice", "total"),
+    }
+    amounts = {key: amount for key, raw in amount_candidates.items() if (amount := _amount_to_int(raw)) is not None}
+    tax_candidates = [
+        _amount_at(init_data, "total_summary", "tax"),
+        _amount_at(init_data, "total_summary", "tax_amount"),
+        _amount_at(init_data, "total_summary", "total_tax_amounts"),
+        _amount_at(init_data, "invoice", "tax"),
+        _amount_at(init_data, "invoice", "tax_amount"),
+        _amount_at(init_data, "invoice", "total_tax_amounts"),
+    ]
+    tax_amounts: list[int] = []
+    for candidate in tax_candidates:
+        tax_amounts.extend(_collect_tax_amounts(candidate))
+    amount_zero = bool(amounts) and all(amount == 0 for amount in amounts.values())
+    tax_zero = all(amount == 0 for amount in tax_amounts)
+    return {
+        "ok": amount_zero and tax_zero,
+        "amounts": amounts,
+        "tax_amounts": tax_amounts,
+    }
+
+
+def _expected_amount_from_init(init_data: dict[str, Any]) -> str:
+    zero_check = _zero_due_check(init_data)
+    if zero_check["ok"]:
+        return "0"
+    amount_due = _amount_at(init_data, "invoice", "amount_due")
+    due = _amount_at(init_data, "total_summary", "due")
+    return str(amount_due if amount_due is not None else (due if due is not None else 0))
 
 
 # ──────────────────────────── exceptions ──────────────────────────
@@ -105,6 +235,10 @@ class OTPCancelled(GoPayError):
 
 
 class GoPayPINRejected(GoPayError):
+    pass
+
+
+class GoPayFraudDeny(GoPayError):
     pass
 
 
@@ -136,6 +270,7 @@ class GoPayCharger:
         self.country_code = str(gopay_cfg["country_code"]).lstrip("+")
         self.phone = re.sub(r"\D", "", str(gopay_cfg["phone_number"]))
         self.pin = str(gopay_cfg["pin"])
+        self.otp_channel = str(gopay_cfg.get("otp_channel") or "sms").strip().lower()
         self.browser_locale = str(gopay_cfg.get("browser_locale") or "zh-CN")
         self.pin_locale = str(gopay_cfg.get("pin_locale") or "id")
         self.browser_platform = str(gopay_cfg.get("browser_platform") or "Mac OS 10.15.7")
@@ -251,16 +386,31 @@ class GoPayCharger:
             "elements_session_client[is_aggregation_expected]": "false",
             "elements_options_client[stripe_js_locale]": "auto",
             "key": stripe_pk,
+            "_stripe_version": (
+                "2025-03-31.basil; checkout_server_update_beta=v1; "
+                "checkout_manual_approval_preview=v1"
+            ),
         }
-        r = self.ext.post(
+        r = _post_stripe_form(
+            self.ext,
             f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
-            data=body, timeout=DEFAULT_TIMEOUT,
+            body,
+            timeout=DEFAULT_TIMEOUT,
+            step="stripe init",
+            log=self.log,
         )
-        r.raise_for_status()
+        if r.status_code != 200:
+            raise GoPayError(f"stripe init failed: {_stripe_error_summary(r)}")
         data = r.json() or {}
         pm_types = [pm for pm in data.get("payment_method_types", []) if isinstance(pm, str)]
         currency = str(data.get("currency") or "").lower()
-        self.log(f"[gopay] stripe init currency={currency or '?'} payment_method_types={pm_types}")
+        expected_amount = _expected_amount_from_init(data)
+        zero_check = _zero_due_check(data)
+        self.log(
+            f"[gopay] stripe init currency={currency or '?'} expected_amount={expected_amount} "
+            f"amounts={zero_check['amounts']} tax_amounts={zero_check['tax_amounts']} "
+            f"payment_method_types={pm_types}"
+        )
         if "gopay" not in pm_types:
             raise GoPayError(
                 "checkout does not support GoPay: "
@@ -286,6 +436,7 @@ class GoPayCharger:
     def _stripe_confirm(self, cs_id: str, pm_id: str, stripe_pk: str) -> dict:
         init_data = self._stripe_init(cs_id, stripe_pk)
         init_checksum = init_data.get("init_checksum", "")
+        expected_amount = _expected_amount_from_init(init_data)
         # Stripe 需要 return_url 才会把 checkout 推进到 requires_action（带 setup_intent）
         chatgpt_return = (
             f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}"
@@ -303,28 +454,51 @@ class GoPayCharger:
             "payment_method": pm_id,
             "init_checksum": init_checksum,
             "version": self.runtime.get("version") or "fed52f3bc6",
-            "expected_amount": "0",
+            "expected_amount": expected_amount,
             "expected_payment_method_type": "gopay",
             "return_url": return_url,
             "elements_session_client[session_id]": f"elements_session_{uuid.uuid4().hex[:11]}",
             "elements_session_client[locale]": "en",
             "elements_session_client[referrer_host]": "chatgpt.com",
             "elements_session_client[is_aggregation_expected]": "false",
+            "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+            "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+            "elements_session_client[elements_init_source]": "custom_checkout",
+            "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
             "client_attribution_metadata[client_session_id]": str(uuid.uuid4()),
-            "client_attribution_metadata[merchant_integration_source]": "elements",
+            "client_attribution_metadata[checkout_session_id]": cs_id,
+            "client_attribution_metadata[merchant_integration_source]": "checkout",
             "client_attribution_metadata[merchant_integration_subtype]": "payment-element",
+            "client_attribution_metadata[merchant_integration_version]": "custom",
             "client_attribution_metadata[payment_intent_creation_flow]": "deferred",
+            "client_attribution_metadata[payment_method_selection_flow]": "automatic",
+            "client_attribution_metadata[merchant_integration_additional_elements][0]": "payment",
+            "client_attribution_metadata[merchant_integration_additional_elements][1]": "address",
+            "elements_options_client[saved_payment_method][enable_save]": "never",
+            "elements_options_client[saved_payment_method][enable_redisplay]": "never",
             "key": stripe_pk,
+            "_stripe_version": (
+                "2025-03-31.basil; checkout_server_update_beta=v1; "
+                "checkout_manual_approval_preview=v1"
+            ),
         }
+        consent_collection = init_data.get("consent_collection") or {}
+        tos = consent_collection.get("terms_of_service")
+        if tos and tos not in ("none", ""):
+            body["consent[terms_of_service]"] = "accepted"
         # Stripe runtime anti-bot tokens (replayable per-session-only; without
         # these confirm fails for hCaptcha-protected merchants like OpenAI).
         if self.runtime.get("js_checksum"):
             body["js_checksum"] = self.runtime["js_checksum"]
         if self.runtime.get("rv_timestamp"):
             body["rv_timestamp"] = self.runtime["rv_timestamp"]
-        r = self.ext.post(
+        r = _post_stripe_form(
+            self.ext,
             f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
-            data=body, timeout=DEFAULT_TIMEOUT,
+            body,
+            timeout=DEFAULT_TIMEOUT,
+            step="stripe confirm",
+            log=self.log,
         )
         if (
             r.status_code == 400
@@ -333,12 +507,35 @@ class GoPayCharger:
         ):
             self.log("[gopay] Stripe confirm requires ToS consent; retrying once")
             body["consent[terms_of_service]"] = "accepted"
-            r = self.ext.post(
+            r = _post_stripe_form(
+                self.ext,
                 f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
-                data=body, timeout=DEFAULT_TIMEOUT,
+                body,
+                timeout=DEFAULT_TIMEOUT,
+                step="stripe confirm",
+                log=self.log,
             )
         if r.status_code != 200:
-            raise GoPayError(f"stripe confirm {r.status_code}: {r.text[:400]}")
+            reinit_attempts = 0
+            while r.status_code != 200 and reinit_attempts < 2:
+                details = _stripe_error_details(r)
+                if details.get("code") != "checkout_amount_mismatch":
+                    break
+                reinit_attempts += 1
+                self.log(f"[gopay] stripe confirm amount mismatch; re-init retry {reinit_attempts}/2")
+                init_data = self._stripe_init(cs_id, stripe_pk)
+                body["init_checksum"] = init_data.get("init_checksum") or body["init_checksum"]
+                body["expected_amount"] = _expected_amount_from_init(init_data)
+                r = _post_stripe_form(
+                    self.ext,
+                    f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
+                    body,
+                    timeout=DEFAULT_TIMEOUT,
+                    step="stripe confirm",
+                    log=self.log,
+                )
+            if r.status_code != 200:
+                raise GoPayError(f"stripe confirm failed: {_stripe_error_summary(r)}")
         data = r.json() or {}
         self.log(
             f"[gopay] stripe confirm: payment_status={data.get('payment_status')} "
@@ -560,7 +757,7 @@ class GoPayCharger:
     # ───── Step 7: Midtrans linking initiation ─────
 
     def _midtrans_init_linking(self, snap_token: str) -> str:
-        """POST snap/v3/accounts/{snap}/linking. Retries on 406, bypasses on 429."""
+        """POST snap/v3/accounts/{snap}/linking. Unlinks on 406, bypasses on 429."""
         url = f"https://app.midtrans.com/snap/v3/accounts/{snap_token}/linking"
         body = {
             "type": "gopay",
@@ -588,7 +785,11 @@ class GoPayCharger:
                     last_err = str(j[0])
                 else:
                     last_err = r.text[:120]
-                self.log(f"[gopay] midtrans linking 406 ({last_err}), 冷却 {LINK_RETRY_SLEEP_S}s 再重试 {attempt}/{LINK_RETRY_LIMIT}")
+                self.log(f"[gopay] midtrans linking 406 ({last_err}), unlink then retry {attempt}/{LINK_RETRY_LIMIT}")
+                try:
+                    self._midtrans_unlink_gopay(snap_token)
+                except Exception as exc:
+                    self.log(f"[gopay] midtrans unlink before relink failed: {exc}")
                 time.sleep(LINK_RETRY_SLEEP_S)
                 continue
             if not bypass_tried and self._linking_is_rate_limited(r):
@@ -611,9 +812,20 @@ class GoPayCharger:
             )
         raise GoPayError(f"midtrans linking exhausted retries: {last_err}")
 
+    def _midtrans_unlink_gopay(self, snap_token: str) -> None:
+        r = self.ext.delete(
+            f"https://app.midtrans.com/snap/v3/accounts/{snap_token}/gopay",
+            headers=self._midtrans_headers(snap_token, source=True),
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if r.status_code in (200, 201, 204, 404):
+            self.log(f"[gopay] midtrans unlink status={r.status_code}")
+            return
+        raise GoPayError(f"midtrans unlink failed status={r.status_code} body={r.text[:200]}")
+
     @staticmethod
     def _parse_linking_reference(r) -> Optional[str]:
-        if r.status_code != 201:
+        if r.status_code not in (200, 201):
             return None
         try:
             data = r.json()
@@ -652,8 +864,34 @@ class GoPayCharger:
             headers["x-user-locale"] = locale
         return headers
 
+    def _ext_request(self, method: str, url: str, **kwargs: Any):
+        request = getattr(self.ext, method)
+        for attempt in range(3):
+            try:
+                return request(url, **kwargs)
+            except Exception as exc:
+                text = str(exc)
+                transient = any(
+                    hint in text.lower()
+                    for hint in (
+                        "tls connect error",
+                        "failed to perform",
+                        "timed out",
+                        "timeout",
+                        "connection reset",
+                        "connection aborted",
+                        "connection refused",
+                    )
+                )
+                if not transient or attempt >= 2:
+                    raise
+                wait = 2 * (attempt + 1)
+                self.log(f"[gopay] transient {method.upper()} error; retrying in {wait}s: {text[:160]}")
+                time.sleep(wait)
+
     def _gopay_validate_reference(self, reference_id: str):
-        r = self.ext.post(
+        r = self._ext_request(
+            "post",
             "https://gwa.gopayapi.com/v1/linking/validate-reference",
             json={"reference_id": reference_id},
             headers=self._gopay_headers(locale=None),
@@ -664,7 +902,8 @@ class GoPayCharger:
             raise GoPayError(f"validate-reference failed: {r.text[:300]}")
 
     def _gopay_user_consent(self, reference_id: str):
-        r = self.ext.post(
+        r = self._ext_request(
+            "post",
             "https://gwa.gopayapi.com/v1/linking/user-consent",
             json={"reference_id": reference_id},
             headers=self._gopay_headers(locale=self.browser_locale),
@@ -673,7 +912,44 @@ class GoPayCharger:
         r.raise_for_status()
         if not r.json().get("success"):
             raise GoPayError(f"user-consent failed: {r.text[:300]}")
-        self.log("[gopay] consent ok, OTP sent via WhatsApp")
+        self.log("[gopay] consent ok")
+
+    def _gopay_resend_otp(self, reference_id: str) -> None:
+        channel = self.otp_channel.upper()
+        r = self._ext_request(
+            "post",
+            "https://gwa.gopayapi.com/v1/linking/resend-otp",
+            json={"reference_id": reference_id, "otp_channel": channel},
+            headers=self._gopay_headers(locale=self.browser_locale),
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if r.status_code not in (200, 201):
+            raise GoPayError(f"resend-otp failed: {r.status_code} {r.text[:300]}")
+        self.log(f"[gopay] resend-otp ok channel={channel}")
+
+    @staticmethod
+    def _extract_challenge_details(body: Any) -> tuple[str, str]:
+        if not isinstance(body, dict):
+            return "", ""
+        challenge_id = str(body.get("challenge_id") or body.get("challengeId") or "")
+        client_id = str(body.get("client_id") or body.get("clientId") or "")
+        if challenge_id or client_id:
+            return challenge_id, client_id
+        for key in ("data", "challenge", "action", "value"):
+            found_id, found_client = GoPayCharger._extract_challenge_details(body.get(key))
+            if found_id or found_client:
+                return found_id, found_client
+        for value in body.values():
+            if isinstance(value, dict):
+                found_id, found_client = GoPayCharger._extract_challenge_details(value)
+                if found_id or found_client:
+                    return found_id, found_client
+            elif isinstance(value, list):
+                for item in value:
+                    found_id, found_client = GoPayCharger._extract_challenge_details(item)
+                    if found_id or found_client:
+                        return found_id, found_client
+        return "", ""
 
     def _gopay_validate_otp(self, reference_id: str, otp: str) -> tuple[str, str]:
         """Returns (challenge_id, client_id) for PIN tokenization."""
@@ -687,13 +963,10 @@ class GoPayCharger:
         data = r.json()
         if not data.get("success"):
             raise GoPayError(f"validate-otp failed: {data}")
-        challenge = (
-            data.get("data", {}).get("challenge", {}).get("action", {}).get("value", {})
-        )
-        challenge_id = challenge.get("challenge_id") or ""
-        client_id = challenge.get("client_id") or ""
-        if not challenge_id or not client_id:
+        challenge_id, client_id = self._extract_challenge_details(data)
+        if not challenge_id:
             raise GoPayError(f"validate-otp: missing challenge details {data}")
+        client_id = client_id or GOPAY_PIN_CLIENT_ID_LINK
         self.log(f"[gopay] otp ok challenge_id={challenge_id[:8]}…")
         return challenge_id, client_id
 
@@ -773,12 +1046,34 @@ class GoPayCharger:
             json={"payment_type": "gopay", "tokenization": "true", "promo_details": None},
             headers=headers, timeout=DEFAULT_TIMEOUT,
         )
-        r.raise_for_status()
+        if r.status_code not in (200, 201):
+            raise GoPayError(f"midtrans charge failed: HTTP {r.status_code} body={r.text[:600]}")
         data = r.json()
-        link = data.get("gopay_verification_link_url", "")
+        charge_json = json.dumps(data, ensure_ascii=False)
+        body_status = str(data.get("status_code") or "")
+        fraud = str(data.get("fraud_status") or "").lower()
+        txn_status = str(data.get("transaction_status") or "").lower()
+        if fraud == "deny" or txn_status == "deny":
+            raise GoPayFraudDeny(f"midtrans fraud denied: {charge_json[:400]}")
+        if txn_status in {"settlement", "capture"}:
+            self.log(f"[gopay] midtrans charge already settled status={txn_status}")
+            return ""
+        if body_status and body_status not in {"200", "201", "202"}:
+            raise GoPayError(f"midtrans charge body_status={body_status}: {charge_json[:400]}")
+        link = str(data.get("gopay_verification_link_url") or "")
+        if not link:
+            for action in data.get("actions") or []:
+                if isinstance(action, dict) and action.get("url"):
+                    link = str(action.get("url") or "")
+                    break
+        if not link:
+            for key in ("redirect_url", "url", "deeplink_url"):
+                if data.get(key):
+                    link = str(data.get(key) or "")
+                    break
         m = re.search(r"reference=([A-Za-z0-9]+)", link)
         if not m:
-            raise GoPayError(f"midtrans charge: no reference in {link!r}")
+            raise GoPayError(f"midtrans charge: no reference in response {charge_json[:400]}")
         charge_ref = m.group(1)
         self.log(f"[gopay] midtrans charge ref={charge_ref}")
         return charge_ref
@@ -836,8 +1131,10 @@ class GoPayCharger:
         data = r.json()
         if not data.get("success"):
             raise GoPayError(f"payment/confirm failed: {data}")
-        ch = data.get("data", {}).get("challenge", {}).get("action", {}).get("value", {})
-        return ch.get("challenge_id", ""), ch.get("client_id", "")
+        challenge_id, client_id = self._extract_challenge_details(data)
+        if not challenge_id:
+            raise GoPayError(f"payment/confirm missing challenge details: {data}")
+        return challenge_id, client_id or GOPAY_PIN_CLIENT_ID_CHARGE
 
     def _gopay_payment_process(self, charge_ref: str, pin_token: str):
         r = self.ext.post(
@@ -921,6 +1218,10 @@ class GoPayCharger:
         reference_id = self._midtrans_init_linking(snap_token)
         self._gopay_validate_reference(reference_id)
         self._gopay_user_consent(reference_id)
+        if self.otp_channel in {"sms", "text", "message"}:
+            self._gopay_resend_otp(reference_id)
+        else:
+            self.log(f"[gopay] OTP delivery channel={self.otp_channel or 'default'}")
         return {
             "cs_id": cs_id,
             "stripe_pk": stripe_pk,
@@ -945,10 +1246,11 @@ class GoPayCharger:
         self._gopay_validate_pin(reference_id, pin_token)
 
         charge_ref = self._midtrans_create_charge(snap_token)
-        self._gopay_payment_validate(charge_ref)
-        ch2_id, ch2_client = self._gopay_payment_confirm(charge_ref)
-        pin_token2 = self._tokenize_pin(ch2_id, ch2_client, purpose="payment")
-        self._gopay_payment_process(charge_ref, pin_token2)
+        if charge_ref:
+            self._gopay_payment_validate(charge_ref)
+            ch2_id, ch2_client = self._gopay_payment_confirm(charge_ref)
+            pin_token2 = self._tokenize_pin(ch2_id, ch2_client, purpose="payment")
+            self._gopay_payment_process(charge_ref, pin_token2)
         midtrans_status = self._midtrans_poll_status(snap_token)
 
         if cs_id:
@@ -1033,7 +1335,12 @@ def build_configured_otp_provider(
     if not isinstance(otp_cfg, dict):
         otp_cfg = {}
 
-    source = str(otp_cfg.get("source") or otp_cfg.get("type") or "grpc").strip().lower()
+    source = str(
+        gopay_cfg.get("otp_source")
+        or otp_cfg.get("source")
+        or otp_cfg.get("type")
+        or "grpc"
+    ).strip().lower()
     unsupported = {
         "", "manual", "cli", "stdin",
         "relay", "whatsapp_http", "wa_http",
@@ -1045,8 +1352,8 @@ def build_configured_otp_provider(
             "unsupported gopay.otp source: "
             f"{source or '<empty>'}; use source=grpc or source=adb"
         )
-    if source not in ("auto", "grpc", "whatsapp_grpc", "wa_grpc", "adb", "emulator", "termux", "phone", "http", "https"):
-        raise GoPayError(f"unsupported gopay.otp source: {source}; use source=grpc or source=adb")
+    if source not in ("auto", "grpc", "whatsapp_grpc", "wa_grpc", "adb", "emulator", "termux", "phone", "http", "https", "smsbower", "sms_bower"):
+        raise GoPayError(f"unsupported gopay.otp source: {source}; use source=grpc, source=adb, or source=smsbower")
 
     def _float_cfg(d: dict, key: str, default: float = 0.0) -> float:
         try:
@@ -1058,6 +1365,16 @@ def build_configured_otp_provider(
     slack = _float_cfg(otp_cfg, "issued_after_slack_s", 15.0)
     attempts = int(_float_cfg(otp_cfg, "attempts", 2.0))
     purpose = str(otp_cfg.get("purpose") or "gopay")
+
+    if source in ("smsbower", "sms_bower"):
+        activation = prepare_smsbower_otp(gopay_cfg, log=log)
+        gopay_cfg["phone_number"] = activation["phone_number"]
+        gopay_cfg["country_code"] = activation["country_code"]
+
+        def provider() -> str:
+            return wait_smsbower_otp({"smsbower": activation}, log=log)
+
+        return provider
 
     if source in ("adb", "emulator", "termux", "phone", "http", "https"):
         sidecar_url = str(
@@ -1091,6 +1408,440 @@ def build_configured_otp_provider(
         issued_after_slack_s=slack,
         log=log,
     )
+
+
+def smsbower_source_enabled(gopay_cfg: dict) -> bool:
+    otp_cfg = gopay_cfg.get("otp") or gopay_cfg.get("otp_provider") or {}
+    if not isinstance(otp_cfg, dict):
+        return False
+    source = str(
+        gopay_cfg.get("otp_source")
+        or otp_cfg.get("source")
+        or otp_cfg.get("type")
+        or ""
+    ).strip().lower()
+    return source in {"smsbower", "sms_bower"}
+
+
+def prepare_smsbower_otp(gopay_cfg: dict, *, log: Callable[[str], None] = print) -> dict[str, Any]:
+    otp_cfg = gopay_cfg.get("otp") or {}
+    if not isinstance(otp_cfg, dict):
+        otp_cfg = {}
+    smsbower = otp_cfg.get("smsbower") or gopay_cfg.get("smsbower") or {}
+    if not isinstance(smsbower, dict):
+        smsbower = {}
+    api_key = _resolve_secret(str(smsbower.get("api_key") or ""), "SMSBOWER_API_KEY")
+    if not api_key:
+        raise GoPayError("gopay.otp.source=smsbower requires gopay.otp.smsbower.api_key or SMSBOWER_API_KEY")
+    endpoint = str(smsbower.get("endpoint") or SMSBOWER_ENDPOINT).strip() or SMSBOWER_ENDPOINT
+    service = str(smsbower.get("service") or "").strip()
+    country = str(smsbower.get("country") or "").strip()
+    if not service or not country:
+        raise GoPayError("gopay.otp.smsbower.service and country are required for GoPay SMSBower mode")
+    params = {
+        "service": service,
+        "country": country,
+    }
+    for src, dst in (("max_price", "maxPrice"), ("min_price", "minPrice")):
+        value = str(smsbower.get(src) or "").strip()
+        if value:
+            params[dst] = value
+    result = _smsbower_api(api_key, endpoint, "getNumberV2", params)
+    if result.startswith("{"):
+        data = json.loads(result)
+        activation_id = str(data.get("activationId") or data.get("activation_id") or data.get("id") or "").strip()
+        phone = _normalize_phone(data.get("phoneNumber") or data.get("phone") or data.get("number") or "")
+        price = str(data.get("activationCost") or data.get("price") or "")
+    else:
+        parts = result.split(":", 2)
+        if len(parts) != 3 or parts[0] != "ACCESS_NUMBER":
+            raise GoPayError(f"smsbower getNumber error: {result}")
+        activation_id = parts[1]
+        phone = _normalize_phone(parts[2])
+        price = ""
+    if not activation_id or not phone:
+        raise GoPayError(f"smsbower getNumber returned incomplete activation: {result[:200]}")
+    country_code = str(gopay_cfg.get("country_code") or smsbower.get("phone_country_code") or "62").strip().lstrip("+")
+    local_phone = _strip_country_code(phone, country_code)
+    log(f"[gopay] smsbower acquired {phone} id={activation_id} service={service} country={country} price={price}")
+    activation = {
+        "provider": "smsbower",
+        "activation_id": activation_id,
+        "phone": phone,
+        "phone_number": local_phone,
+        "country_code": country_code,
+        "api_key": api_key,
+        "endpoint": endpoint,
+        "service": service,
+        "country": country,
+        "price": price,
+        "timeout": int(float(smsbower.get("sms_timeout") or otp_cfg.get("timeout") or 120)),
+        "poll_interval": int(float(smsbower.get("sms_poll_interval") or otp_cfg.get("poll_interval") or 5)),
+        "completed": False,
+    }
+    if _truthy(smsbower.get("register_account", gopay_cfg.get("register_smsbower_account", True))):
+        try:
+            _bootstrap_gojek_account(gopay_cfg, activation, log=log)
+        except Exception:
+            finish_smsbower_otp({"smsbower": activation}, success=False, log=log)
+            raise
+    return activation
+
+
+def wait_smsbower_otp(state: dict, *, log: Callable[[str], None] = print) -> str:
+    activation = state.get("smsbower") if isinstance(state.get("smsbower"), dict) else {}
+    activation_id = str(activation.get("activation_id") or "").strip()
+    api_key = str(activation.get("api_key") or "").strip()
+    endpoint = str(activation.get("endpoint") or SMSBOWER_ENDPOINT).strip() or SMSBOWER_ENDPOINT
+    if not activation_id or not api_key:
+        raise OTPCancelled("smsbower activation missing from payment flow")
+    timeout = int(activation.get("timeout") or 120)
+    poll_interval = max(1, int(activation.get("poll_interval") or 5))
+    if activation.get("request_retry_before_wait"):
+        _smsbower_set_status(activation, "3", log=log)
+        activation["request_retry_before_wait"] = False
+    log(f"[gopay] waiting GoPay OTP via SMSBower id={activation_id} timeout={timeout}s")
+    otp = _wait_smsbower_code(activation, timeout=timeout, poll_interval=poll_interval, log=log)
+    if otp:
+        return otp
+    raise OTPCancelled(f"SMSBower OTP timeout after {timeout}s")
+
+
+def _wait_smsbower_code(
+    activation: dict,
+    *,
+    timeout: int,
+    poll_interval: int,
+    log: Callable[[str], None] = print,
+) -> str:
+    activation_id = str(activation.get("activation_id") or "").strip()
+    api_key = str(activation.get("api_key") or "").strip()
+    endpoint = str(activation.get("endpoint") or SMSBOWER_ENDPOINT).strip() or SMSBOWER_ENDPOINT
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = _smsbower_api(api_key, endpoint, "getStatus", {"id": activation_id})
+        if result.startswith("STATUS_OK:"):
+            otp = result[len("STATUS_OK:"):].strip().strip("'\"")
+            if otp:
+                log("[gopay] SMSBower OTP received")
+                activation["used_codes"] = int(activation.get("used_codes") or 0) + 1
+                return otp
+        if result.startswith("STATUS_WAIT_RETRY"):
+            if not activation.get("logged_wait_retry"):
+                log("[gopay] SMSBower waiting for retry OTP")
+                activation["logged_wait_retry"] = True
+            time.sleep(min(poll_interval, max(1, deadline - time.time())))
+            continue
+        if result == "STATUS_CANCEL":
+            raise OTPCancelled("smsbower activation was cancelled")
+        time.sleep(min(poll_interval, max(1, deadline - time.time())))
+    return ""
+
+
+def _wait_smsbower_otp_with_retry(
+    activation: dict,
+    *,
+    first_timeout: int,
+    retry_timeout: int,
+    retry_callback: Callable[[], dict],
+    retry_flow: str,
+    log: Callable[[str], None] = print,
+) -> str:
+    poll_interval = max(1, int(activation.get("poll_interval") or 5))
+    code = _wait_smsbower_code(activation, timeout=first_timeout, poll_interval=poll_interval, log=log)
+    if code:
+        return code
+    log(f"[gopay] SMSBower OTP not received after {first_timeout}s; retrying {retry_flow}")
+    _smsbower_set_status(activation, "3", log=log)
+    retry_result = retry_callback()
+    if retry_result.get("status") not in (200, 201):
+        raise GoPayError(
+            f"Gojek OTP retry failed status={retry_result.get('status')} "
+            f"body={str(retry_result.get('body'))[:300]}"
+        )
+    code = _wait_smsbower_code(activation, timeout=retry_timeout, poll_interval=poll_interval, log=log)
+    if code:
+        return code
+    raise OTPCancelled(f"SMSBower OTP timeout after {first_timeout + retry_timeout}s")
+
+
+def finish_smsbower_otp(state: dict, *, success: bool, log: Callable[[str], None] = print) -> None:
+    activation = state.get("smsbower") if isinstance(state.get("smsbower"), dict) else {}
+    if not activation or activation.get("completed"):
+        return
+    activation_id = str(activation.get("activation_id") or "").strip()
+    api_key = str(activation.get("api_key") or "").strip()
+    endpoint = str(activation.get("endpoint") or SMSBOWER_ENDPOINT).strip() or SMSBOWER_ENDPOINT
+    if not activation_id or not api_key:
+        return
+    status = "6" if success else "8"
+    try:
+        _smsbower_api(api_key, endpoint, "setStatus", {"id": activation_id, "status": status})
+        activation["completed"] = True
+        log(f"[gopay] SMSBower activation {'completed' if success else 'cancelled'} id={activation_id}")
+    except Exception as exc:
+        log(f"[gopay] SMSBower activation cleanup failed id={activation_id}: {exc}")
+
+
+def _smsbower_set_status(activation: dict, status: str, *, log: Callable[[str], None] = print) -> str:
+    activation_id = str(activation.get("activation_id") or "").strip()
+    api_key = str(activation.get("api_key") or "").strip()
+    endpoint = str(activation.get("endpoint") or SMSBOWER_ENDPOINT).strip() or SMSBOWER_ENDPOINT
+    if not activation_id or not api_key:
+        return ""
+    result = _smsbower_api(api_key, endpoint, "setStatus", {"id": activation_id, "status": status})
+    log(f"[gopay] SMSBower setStatus id={activation_id} status={status} result={result}")
+    return result
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _int_cfg(*values: Any, default: int = 0) -> int:
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
+def _extract_gopay_balance_rp(response: dict[str, Any]) -> int:
+    if int(response.get("status") or 0) != 200:
+        return -1
+    body = response.get("body") if isinstance(response.get("body"), dict) else {}
+    data = body.get("data", [])
+    if isinstance(data, list) and data:
+        balance = data[0].get("balance", {}) if isinstance(data[0], dict) else {}
+        return _int_cfg(balance.get("value"), default=0)
+    if isinstance(data, dict):
+        balance = data.get("balance", {})
+        if isinstance(balance, dict):
+            return _int_cfg(balance.get("value"), default=0)
+    return 0
+
+
+def _check_gojek_balance_rp(client: Any, *, log: Callable[[str], None] = print) -> int:
+    get_balance = getattr(client, "get_balance", None) or getattr(client, "gopay_get_balances", None)
+    if not callable(get_balance):
+        return -1
+    balance = _extract_gopay_balance_rp(_gojek_call(get_balance, log=log))
+    if balance >= 0:
+        return balance
+    refresh = getattr(client, "refresh_token", None)
+    if callable(refresh):
+        log("[gopay] GoPay balance check failed; refreshing token")
+        _gojek_call(refresh, log=log)
+        balance = _extract_gopay_balance_rp(_gojek_call(get_balance, log=log))
+    return balance
+
+
+def _bootstrap_gojek_account(gopay_cfg: dict, activation: dict, *, log: Callable[[str], None] = print) -> None:
+    pin = str(gopay_cfg.get("pin") or "147258").strip()
+    if not pin:
+        raise GoPayError("gopay.pin is required for SMSBower GoPay account registration")
+    otp_cfg = gopay_cfg.get("otp") or {}
+    smsbower_cfg = otp_cfg.get("smsbower") if isinstance(otp_cfg, dict) else {}
+    if not isinstance(smsbower_cfg, dict):
+        smsbower_cfg = {}
+    min_balance_rp = _int_cfg(
+        smsbower_cfg.get("min_balance_rp"),
+        gopay_cfg.get("min_balance_rp"),
+        os.getenv("OPAI_GOPAY_MIN_BALANCE_RP"),
+        default=1,
+    )
+    GojekClient = _load_gojek_client(gopay_cfg)
+    phone = str(activation.get("phone") or "").strip()
+    local = str(activation.get("phone_number") or "").strip()
+    proxy = _tls_client_proxy(str(gopay_cfg.get("proxy") or gopay_cfg.get("proxy_url") or "").strip())
+    client = GojekClient.from_phone(phone, proxy=proxy)
+    activation["gojek_phone"] = phone
+    log(f"[gopay] GoPay account bootstrap start phone={phone}")
+
+    time.sleep(2)
+    methods = _gojek_call(client.get_login_methods, "+62", local, log=log)
+    if methods.get("status") in (200, 201):
+        raise GoPayError(f"SMSBower phone is already registered as Gojek account: {phone}")
+    if methods.get("status") == 403:
+        raise GoPayError(f"Gojek login-methods WAF/403 for {phone}: {str(methods.get('body'))[:240]}")
+
+    otp_result = _gojek_call(client.signup_request_otp, phone, log=log)
+    if otp_result.get("status") not in (200, 201):
+        raise GoPayError(f"Gojek signup OTP failed status={otp_result.get('status')} body={str(otp_result.get('body'))[:300]}")
+    signup_otp = _wait_smsbower_otp_with_retry(
+        activation,
+        first_timeout=60,
+        retry_timeout=180,
+        retry_callback=lambda: client.retry_otp(flow="signup_na"),
+        retry_flow="signup_na",
+        log=log,
+    )
+    time.sleep(2)
+    verify = _gojek_call(client.signup_verify_otp, signup_otp, phone, log=log)
+    if verify.get("status") not in (200, 201):
+        raise GoPayError(f"Gojek signup verify failed status={verify.get('status')} body={str(verify.get('body'))[:300]}")
+
+    names = [
+        "Budi Santoso", "Adi Pratama", "Siti Rahayu", "Dewi Lestari",
+        "Rizky Ramadhan", "Putri Wulandari", "Agus Setiawan", "Rina Kusuma",
+        "Hendra Wijaya", "Novi Anggraini", "Dian Permata", "Wahyu Hidayat",
+    ]
+    time.sleep(2)
+    signup = _gojek_call(client.signup_create_account, name=random.choice(names), phone=phone, email="", country="ID", log=log)
+    if signup.get("status") not in (200, 201):
+        body = signup.get("body") or {}
+        if "phone_already_taken" in str(body):
+            raise GoPayError(f"SMSBower phone became registered before signup completed: {phone}")
+        raise GoPayError(f"Gojek signup failed status={signup.get('status')} body={str(body)[:300]}")
+    if not str(getattr(client.auth, "refresh_token", "") or "").strip():
+        raise GoPayError(f"Gojek signup did not return refresh token for {phone}")
+
+    time.sleep(5)
+    refresh = _gojek_call(client.refresh_token, log=log)
+    if refresh.get("status") not in (200, 201):
+        raise GoPayError(f"Gojek token refresh failed status={refresh.get('status')} body={str(refresh.get('body'))[:300]}")
+
+    time.sleep(2)
+    _gojek_call(client.gopay_init, log=log)
+    time.sleep(2)
+    _gojek_call(client.gopay_get_profiles, log=log)
+    time.sleep(2)
+    profile = _gojek_call(client.get_user_profile, log=log)
+    body = profile.get("body") if isinstance(profile.get("body"), dict) else {}
+    is_pin_set = bool((body.get("data") or {}).get("is_pin_setup")) if profile.get("status") == 200 else False
+    if not is_pin_set:
+        _smsbower_set_status(activation, "3", log=log)
+        time.sleep(2)
+        pin_otp = _gojek_call(client.pin_request_otp, log=log)
+        if pin_otp.get("status") not in (200, 201):
+            raise GoPayError(f"Gojek PIN OTP request failed status={pin_otp.get('status')} body={str(pin_otp.get('body'))[:300]}")
+        pin_code = _wait_smsbower_otp_with_retry(
+            activation,
+            first_timeout=60,
+            retry_timeout=180,
+            retry_callback=lambda: client.retry_otp(flow="goto_pin_wa_sms"),
+            retry_flow="goto_pin_wa_sms",
+            log=log,
+        )
+        time.sleep(2)
+        pin_verify = _gojek_call(client.pin_verify_otp, pin_code, log=log)
+        if pin_verify.get("status") not in (200, 201):
+            raise GoPayError(f"Gojek PIN OTP verify failed status={pin_verify.get('status')} body={str(pin_verify.get('body'))[:300]}")
+        time.sleep(2)
+        pin_result = _gojek_call(client.pin_setup, pin, log=log)
+        if pin_result.get("status") not in (200, 201):
+            raise GoPayError(f"Gojek PIN setup failed status={pin_result.get('status')} body={str(pin_result.get('body'))[:300]}")
+
+    post_registration_hook = getattr(client, "pin_post_registration_hook", None)
+    if callable(post_registration_hook):
+        time.sleep(2)
+        hook = _gojek_call(post_registration_hook, log=log)
+        if hook.get("status") in (200, 201, 204):
+            log("[gopay] GoPay post-registration hook ok")
+        else:
+            log(f"[gopay] GoPay post-registration hook failed status={hook.get('status')} body={str(hook.get('body'))[:240]}")
+        time.sleep(2)
+        _gojek_call(client.gopay_get_profiles, log=log)
+
+    balance_rp = _check_gojek_balance_rp(client, log=log)
+    activation["balance_rp"] = balance_rp
+    if balance_rp < 0:
+        raise GoPayError("GoPay balance check failed before payment")
+    log(f"[gopay] GoPay balance={balance_rp} Rp")
+    if min_balance_rp > 0 and balance_rp < min_balance_rp:
+        raise GoPayError(f"GoPay balance insufficient before payment: balance={balance_rp} Rp required>={min_balance_rp} Rp")
+
+    activation["gojek_registered"] = True
+    activation["request_retry_before_wait"] = True
+    log(f"[gopay] GoPay account bootstrap ok phone={phone}")
+
+
+def _gojek_call(fn: Callable, *args: Any, log: Callable[[str], None] = print, **kwargs: Any) -> dict:
+    last: dict[str, Any] = {}
+    for attempt in range(3):
+        last = fn(*args, **kwargs)
+        status = int(last.get("status") or 0)
+        if status in (200, 201, 204):
+            return last
+        body = str(last.get("body") or "")
+        if (
+            status >= 500
+            or status == 429
+            or "ratelimit" in body.lower()
+            or "rate_limit" in body.lower()
+            or "WAF Block Page" in body
+        ):
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                log(f"[gopay] Gojek API retry in {wait}s status={status}")
+                time.sleep(wait)
+                continue
+        return last
+    return last
+
+
+def _load_gojek_client(gopay_cfg: dict) -> Any:
+    path = str(gopay_cfg.get("gopay_deploy_src") or os.getenv("GOPAY_DEPLOY_SRC") or "").strip()
+    if not path:
+        root = Path(__file__).resolve().parents[2]
+        sibling = root.parent / "gopay-deploy" / "app" / "src"
+        path = str(sibling)
+    if path and path not in sys.path:
+        sys.path.insert(0, path)
+    try:
+        from opai.core.gojek_client import GojekClient  # type: ignore
+    except Exception as exc:
+        raise GoPayError(f"unable to import gopay-deploy GojekClient from {path}: {exc}") from exc
+    return GojekClient
+
+
+def _tls_client_proxy(proxy: str) -> str:
+    proxy = str(proxy or "").strip()
+    if proxy.lower().startswith("socks5h://"):
+        return "socks5://" + proxy[len("socks5h://"):]
+    return proxy
+
+
+def _smsbower_api(api_key: str, endpoint: str, action: str, params: dict[str, Any] | None = None) -> str:
+    query = {"api_key": api_key, "action": action}
+    if params:
+        query.update(params)
+    response = requests.get(endpoint, params=query, timeout=20)
+    response.raise_for_status()
+    return response.text.strip()
+
+
+def _normalize_phone(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("+"):
+        digits = "".join(ch for ch in text[1:] if ch.isdigit())
+    elif text.startswith("00"):
+        digits = "".join(ch for ch in text[2:] if ch.isdigit())
+    else:
+        digits = "".join(ch for ch in text if ch.isdigit())
+    return f"+{digits}" if digits else ""
+
+
+def _strip_country_code(phone: str, country_code: str) -> str:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    code = "".join(ch for ch in str(country_code or "") if ch.isdigit())
+    if code and digits.startswith(code):
+        return digits[len(code):]
+    return digits
+
+
+def _resolve_secret(value: str, env_name: str) -> str:
+    value = str(value or "").strip()
+    if value.startswith("$"):
+        return os.getenv(value[1:], "").strip()
+    if value:
+        return value
+    return os.getenv(env_name, "").strip()
 
 
 def http_sidecar_otp_provider(

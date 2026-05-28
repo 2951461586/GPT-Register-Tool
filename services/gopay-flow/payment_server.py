@@ -27,6 +27,10 @@ from gopay import (
     OTPCancelled,
     _build_chatgpt_session,
     _load_cfg,
+    finish_smsbower_otp,
+    prepare_smsbower_otp,
+    smsbower_source_enabled,
+    wait_smsbower_otp,
 )
 
 logging.basicConfig(
@@ -144,6 +148,7 @@ class PendingFlow:
     expires_at: float
 
     def close(self) -> None:
+        finish_smsbower_otp(self.state, success=False, log=logger.info)
         self.charger.close()
 
 
@@ -208,6 +213,7 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
 
         charger = None
         cs_session = None
+        smsbower_activation = None
         try:
             cfg = copy.deepcopy(self._cfg)
             fresh_checkout = cfg.get("fresh_checkout") or {}
@@ -228,6 +234,15 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
                 gopay_cfg["phone_number"] = request.gopay_phone
             if request.tokenization:
                 gopay_cfg["tokenization"] = request.tokenization
+            if request.otp_channel:
+                gopay_cfg["otp_channel"] = request.otp_channel
+            proxy = str(getattr(request, "proxy_url", "") or cfg.get("proxy") or "").strip() or None
+            if proxy:
+                gopay_cfg["proxy"] = proxy
+            if smsbower_source_enabled(gopay_cfg) and not str(gopay_cfg.get("phone_number") or "").strip():
+                smsbower_activation = prepare_smsbower_otp(gopay_cfg, log=logger.info)
+                gopay_cfg["phone_number"] = smsbower_activation["phone_number"]
+                gopay_cfg["country_code"] = smsbower_activation["country_code"]
 
             stripe_pk = (
                 (cfg.get("stripe") or {}).get("publishable_key")
@@ -235,7 +250,6 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
                 or DEFAULT_STRIPE_PK
             )
             runtime_cfg = dict(cfg.get("runtime") or {})
-            proxy = request.proxy_url or (cfg.get("proxy") or "").strip() or None
             charger = GoPayCharger(
                 cs_session,
                 gopay_cfg,
@@ -247,6 +261,8 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
 
             logger.info("[payment] StartGoPay start")
             state = charger.start_until_otp(stripe_pk=stripe_pk, billing=_billing_from_config(cfg))
+            if smsbower_activation is not None:
+                state["smsbower"] = smsbower_activation
             flow_id, expires_at = self._flows.put(charger, state)
             charger = None
             cs_session = None
@@ -260,11 +276,16 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
                 checkout_url=str(state.get("checkout_url") or ""),
                 checkout_session_id=str(state.get("cs_id") or state.get("checkout_session_id") or ""),
                 otp_required=True,
+                gopay_phone=str((smsbower_activation or {}).get("phone") or gopay_cfg.get("phone_number") or ""),
             )
         except GoPayError as exc:
+            if smsbower_activation is not None:
+                finish_smsbower_otp({"smsbower": smsbower_activation}, success=False, log=logger.info)
             logger.error("[payment] StartGoPay failed: %s", exc)
             return payment_pb2.StartGoPayResponse(success=False, error_message=str(exc)[:500])
         except Exception as exc:
+            if smsbower_activation is not None:
+                finish_smsbower_otp({"smsbower": smsbower_activation}, success=False, log=logger.info)
             logger.exception("[payment] StartGoPay crashed")
             return payment_pb2.StartGoPayResponse(success=False, error_message=str(exc)[:500])
         finally:
@@ -276,8 +297,6 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
     def CompleteGoPay(self, request, context):
         if not request.flow_id:
             return payment_pb2.GoPayResponse(success=False, error_message="flow_id is required")
-        if not request.otp:
-            return payment_pb2.GoPayResponse(success=False, error_message="otp is required")
 
         flow = self._flows.pop(request.flow_id)
         if flow is None:
@@ -287,7 +306,12 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
             logger.info("[payment] CompleteGoPay flow=%s", request.flow_id[:8])
             if request.pin:
                 flow.charger.pin = request.pin
-            result = flow.charger.complete_after_otp(flow.state, request.otp)
+            otp = str(request.otp or "").strip()
+            if not otp and smsbower_source_enabled(self._cfg.get("gopay") or {}):
+                otp = wait_smsbower_otp(flow.state, log=logger.info)
+            if not otp:
+                return payment_pb2.GoPayResponse(success=False, error_message="otp is required")
+            result = flow.charger.complete_after_otp(flow.state, otp)
             state = str(result.get("state") or "")
             success = state == "succeeded"
             unlink_status = ""
@@ -299,6 +323,7 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
                 except Exception as exc:
                     unlink_error = str(exc)[:500]
                     logger.error("[payment] GoPay unlink after success failed: %s", exc)
+            finish_smsbower_otp(flow.state, success=success, log=logger.info)
             return payment_pb2.GoPayResponse(
                 success=success,
                 error_message="" if success else f"payment state={state or 'unknown'}",
@@ -309,9 +334,11 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
             )
         except GoPayError as exc:
             logger.error("[payment] CompleteGoPay failed: %s", exc)
+            finish_smsbower_otp(flow.state, success=False, log=logger.info)
             return payment_pb2.GoPayResponse(success=False, error_message=str(exc)[:500])
         except Exception as exc:
             logger.exception("[payment] CompleteGoPay crashed")
+            finish_smsbower_otp(flow.state, success=False, log=logger.info)
             return payment_pb2.GoPayResponse(success=False, error_message=str(exc)[:500])
         finally:
             flow.close()

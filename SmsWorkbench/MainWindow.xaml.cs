@@ -2821,6 +2821,8 @@ namespace SmsWorkbench
             var gopay = GetSection(config, "gopay");
             var gopayStageProxies = GetChildSection(gopay, "stage_proxies");
             var gopayWaRebind = GetChildSection(gopay, "wa_rebind");
+            var gopayOtp = GetChildSection(gopay, "otp");
+            var gopayOtpSmsBower = GetChildSection(gopayOtp, "smsbower");
             var storage = GetSection(config, "storage");
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
@@ -2912,6 +2914,10 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
             AddConfigField(phoneForm, fields, row++, "服务代码", "smsbower_service", GetString(smsBower, "service"));
             AddConfigField(phoneForm, fields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"));
+            AddConfigField(phoneForm, fields, row++, "GoPay SMSBower服务代码", "smsbower_gopay_service", GetString(smsBower, "gopay_service"));
+            AddConfigField(phoneForm, fields, row++, "GoPay SMSBower国家代码", "smsbower_gopay_country", GetString(smsBower, "gopay_country"));
+            AddConfigField(phoneForm, fields, row++, "GoPay SMSBower最低价格", "smsbower_gopay_min_price", GetString(smsBower, "gopay_min_price"));
+            AddConfigField(phoneForm, fields, row++, "GoPay SMSBower最高价格", "smsbower_gopay_max_price", GetString(smsBower, "gopay_max_price"));
             AddConfigField(phoneForm, fields, row++, "最低价格", "smsbower_min_price", GetString(smsBower, "min_price"));
             AddConfigField(phoneForm, fields, row++, "最高价格", "smsbower_max_price", GetString(smsBower, "max_price"));
             AddConfigField(phoneForm, fields, row++, "目标价格", "smsbower_target_price", GetString(smsBower, "target_price"));
@@ -2954,7 +2960,7 @@ namespace SmsWorkbench
 
             var gopayForm = AddConfigCategory(sidebar, host, categories, "GoPay", "GoPay 生链、协议支付服务和分阶段代理配置。");
             row = 0;
-            AddConfigField(gopayForm, fields, row++, "一键支付模式", "gopay_one_click_mode", FirstNonEmpty(GetString(gopay, "one_click_mode"), "link"));
+            AddConfigField(gopayForm, fields, row++, "一键支付模式", "gopay_one_click_mode", FirstNonEmpty(GetString(gopay, "one_click_mode"), "protocol"));
             AddConfigField(gopayForm, fields, row++, "自动打开链接", "gopay_open_link", FirstNonEmpty(GetString(gopay, "open_link"), "true"));
             AddConfigField(gopayForm, fields, row++, "自动生成链接", "gopay_auto_generate", FirstNonEmpty(GetString(gopay, "auto_generate"), "true"));
             AddConfigField(gopayForm, fields, row++, "Provider接口", "gopay_provider_api", FirstNonEmpty(GetString(gopay, "provider_api"), "byte-v-forge"));
@@ -2969,6 +2975,11 @@ namespace SmsWorkbench
             AddConfigField(gopayForm, fields, row++, "GoPay手机号", "gopay_phone", FirstNonEmpty(GetString(gopay, "phone"), GetString(gopay, "phone_number")));
             AddConfigField(gopayForm, fields, row++, "国家区号", "gopay_country_code", FirstNonEmpty(GetString(gopay, "country_code"), "62"));
             AddConfigField(gopayForm, fields, row++, "OTP渠道", "gopay_otp_channel", FirstNonEmpty(GetString(gopay, "otp_channel"), "sms"));
+            AddConfigField(gopayForm, fields, row++, "OTP来源", "gopay_otp_source", FirstNonEmpty(GetString(gopay, "otp_source"), FirstNonEmpty(GetString(gopayOtp, "source"), "smsbower")));
+            AddConfigField(gopayForm, fields, row++, "GoPay SMSBower服务代码", "gopay_smsbower_service", GetString(gopayOtpSmsBower, "service"));
+            AddConfigField(gopayForm, fields, row++, "GoPay SMSBower国家代码", "gopay_smsbower_country", GetString(gopayOtpSmsBower, "country"));
+            AddConfigField(gopayForm, fields, row++, "GoPay SMSBower最低价格", "gopay_smsbower_min_price", FirstNonEmpty(GetString(gopayOtpSmsBower, "min_price"), GetString(smsBower, "gopay_min_price")));
+            AddConfigField(gopayForm, fields, row++, "GoPay SMSBower最高价格", "gopay_smsbower_max_price", FirstNonEmpty(GetString(gopayOtpSmsBower, "max_price"), GetString(smsBower, "gopay_max_price")));
             AddConfigField(gopayForm, fields, row++, "GoPay PIN", "gopay_pin", GetString(gopay, "pin"));
             AddConfigField(gopayForm, fields, row++, "人工确认后自动确认", "gopay_confirm_after_manual", FirstNonEmpty(GetString(gopay, "confirm_after_manual"), "false"));
             AddConfigField(gopayForm, fields, row++, "MuMu主程序", "gopay_emulator_exe", FirstNonEmpty(GetString(gopay, "emulator_exe"), "D:\\Program Files\\Netease\\MuMuPlayer\\nx_main\\MuMuNxMain.exe"));
@@ -3014,6 +3025,10 @@ namespace SmsWorkbench
                 smsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
                 smsBower["service"] = fields["smsbower_service"].Text.Trim();
                 smsBower["country"] = fields["smsbower_country"].Text.Trim();
+                smsBower["gopay_service"] = fields["smsbower_gopay_service"].Text.Trim();
+                smsBower["gopay_country"] = fields["smsbower_gopay_country"].Text.Trim();
+                smsBower["gopay_min_price"] = fields["smsbower_gopay_min_price"].Text.Trim();
+                smsBower["gopay_max_price"] = fields["smsbower_gopay_max_price"].Text.Trim();
                 smsBower["min_price"] = fields["smsbower_min_price"].Text.Trim();
                 smsBower["max_price"] = fields["smsbower_max_price"].Text.Trim();
                 smsBower["target_price"] = fields["smsbower_target_price"].Text.Trim();
@@ -3048,6 +3063,18 @@ namespace SmsWorkbench
                 gopay["phone"] = fields["gopay_phone"].Text.Trim();
                 gopay["country_code"] = fields["gopay_country_code"].Text.Trim();
                 gopay["otp_channel"] = fields["gopay_otp_channel"].Text.Trim();
+                gopay["otp_source"] = fields["gopay_otp_source"].Text.Trim();
+                gopayOtp["source"] = fields["gopay_otp_source"].Text.Trim();
+                gopayOtpSmsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
+                gopayOtpSmsBower["endpoint"] = GetString(smsBower, "endpoint");
+                gopayOtpSmsBower["service"] = fields["gopay_smsbower_service"].Text.Trim();
+                gopayOtpSmsBower["country"] = fields["gopay_smsbower_country"].Text.Trim();
+                gopayOtpSmsBower["min_price"] = fields["gopay_smsbower_min_price"].Text.Trim();
+                gopayOtpSmsBower["max_price"] = fields["gopay_smsbower_max_price"].Text.Trim();
+                gopayOtpSmsBower["sms_timeout"] = ConfigIntegerValue(fields, "smsbower_sms_timeout");
+                gopayOtpSmsBower["sms_poll_interval"] = ConfigIntegerValue(fields, "smsbower_sms_poll_interval");
+                gopayOtp["smsbower"] = gopayOtpSmsBower;
+                gopay["otp"] = gopayOtp;
                 gopay["pin"] = fields["gopay_pin"].Text.Trim();
                 gopay["confirm_after_manual"] = ConfigBoolValue(fields, "gopay_confirm_after_manual", GetBool(gopay, "confirm_after_manual", false));
                 gopay["emulator_exe"] = fields["gopay_emulator_exe"].Text.Trim();

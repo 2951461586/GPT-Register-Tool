@@ -167,6 +167,62 @@ Run GoPay protocol payment through the project-local PaymentService:
 python chatgpt_phone_reg.py --email user@example.com --one-click-pay --payment-method gopay
 ```
 
+GoPay one-click payment uses protocol mode by default when `gopay.one_click_mode=protocol`
+or `provider`. This keeps the main project as the owner of ChatGPT account state,
+SQLite/session updates, and checkout generation, while using the pure Midtrans/GoPay
+HTTP protocol for the actual wallet linking and charge. Compared with the external
+`gopay-deploy` worker, it avoids a second inbox/worker queue and can mark the same
+account row `otp_required` or `completed`. OTP can come from the local ADB sidecar
+or from SMSBower by setting `gopay.otp_source=smsbower`.
+
+SMSBower mode reuses the same secret/endpoint/timeout style as the one-click SMS
+configuration, but GoPay needs its own SMSBower service/country code. Configure
+either `gopay.otp.smsbower.service/country` or `phone_reuse.smsbower.gopay_service`
+and `phone_reuse.smsbower.gopay_country`; do not reuse the OpenAI/Ghana
+`service=dr,country=38` values for GoPay.
+
+```json
+{
+  "gopay": {
+    "one_click_mode": "protocol",
+    "otp_source": "smsbower",
+    "country_code": "62",
+    "otp_channel": "sms",
+    "pin": "147258",
+    "otp": {
+      "source": "smsbower",
+      "smsbower": {
+        "api_key": "$SMSBOWER_API_KEY",
+        "service": "<gopay-service-code>",
+        "country": "<indonesia-country-code>",
+        "min_balance_rp": 1,
+        "sms_timeout": 120,
+        "sms_poll_interval": 5
+      }
+    }
+  }
+}
+```
+
+Protocol flow:
+
+1. Load the account session/access token and call `PaymentService.StartGoPay`.
+2. Create a ChatGPT checkout session for Plus with IDR billing.
+3. Create a Stripe GoPay payment method and confirm the Stripe payment page.
+4. Follow the Stripe/Midtrans redirect and resolve the Midtrans snap token.
+5. Load the Midtrans transaction and POST `/snap/v3/accounts/{snap}/linking`.
+6. If Midtrans reports the wallet is already linked, DELETE `/snap/v3/accounts/{snap}/gopay` and retry linking.
+7. POST GoPay `/v1/linking/validate-reference` and `/v1/linking/user-consent`.
+8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout; otherwise use configured `gopay.phone`.
+9. For `otp_channel=sms`, POST `/v1/linking/resend-otp` to force SMS OTP; WA/default only uses consent delivery.
+10. Persist `flow_id`; SMSBower mode immediately calls `CompleteGoPay` and waits for the code, while manual/ADB modes mark `otp_required`.
+11. When OTP is available, call `PaymentService.CompleteGoPay`.
+12. POST `/v1/linking/validate-otp`, tokenize the PIN, then POST `/v1/linking/validate-pin`.
+13. POST Midtrans `/snap/v2/transactions/{snap}/charge`; fraud deny is surfaced as a terminal payment failure.
+14. Validate/confirm the GoPay payment challenge, tokenize the PIN again, then POST `/v1/payment/process`.
+15. Poll Midtrans transaction status until settlement/capture.
+16. Verify the ChatGPT checkout and mark the account `completed`; if configured, call the ADB sidecar to unlink OpenAI from GoPay.
+
 WA-channel rebind mode is intentionally explicit because it spans two providers:
 
 ```json

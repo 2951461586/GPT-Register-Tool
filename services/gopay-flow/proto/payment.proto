@@ -18,6 +18,7 @@ message StartGoPayRequest {
   string gopay_phone = 6;
   string otp_channel = 7; // sms 时调用 resend-otp；wa/空值只走 user-consent
   string gopay_country_code = 8;
+  string proxy_url = 9;
 }
 
 message PrepareGoPayRequest {
@@ -75,6 +76,7 @@ message StartGoPayResponse {
   string checkout_url = 7;
   string checkout_session_id = 8;
   bool otp_required = 9;
+  string gopay_phone = 10;
 }
 
 message ProbePlusTrialPaymentRequest {
@@ -149,6 +151,18 @@ message CancelGoPayResponse {
   string error_message = 2;
 }
 
+message UnlinkGoPayRequest {
+  string url = 1;
+  int32 timeout_seconds = 2;
+}
+
+message UnlinkGoPayResponse {
+  bool success = 1;
+  string error_message = 2;
+  string status = 3;
+  string raw_json = 4;
+}
+
 message GoPayResponse {
   bool success = 1;
   string error_message = 2;
@@ -160,6 +174,8 @@ message GoPayResponse {
   string finish_redirect_url = 8;
   string finish_200_redirect_url = 9;
   string qr_string = 10;
+  string unlink_status = 11;
+  string unlink_error = 12;
 }
 
 service PaymentService {
@@ -176,4 +192,5 @@ service PaymentService {
   rpc ResendGoPayOTP(ResendGoPayOTPRequest) returns (ResendGoPayOTPResponse);
   rpc ConfirmGoPayPayment(ConfirmGoPayPaymentRequest) returns (GoPayResponse);
   rpc CancelGoPay(CancelGoPayRequest) returns (CancelGoPayResponse);
+  rpc UnlinkGoPay(UnlinkGoPayRequest) returns (UnlinkGoPayResponse);
 }

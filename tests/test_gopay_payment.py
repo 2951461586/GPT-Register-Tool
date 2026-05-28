@@ -67,6 +67,44 @@ class GoPayPaymentTests(unittest.TestCase):
         self.assertEqual(saved["paypal"]["flow_id"], "flow123")
         self.assertEqual(saved["paypal_status"], "otp_required")
 
+    def test_gopay_defaults_to_protocol_mode(self):
+        self.assertEqual(gopay_payment._one_click_mode({}), "provider")
+
+    def test_smsbower_protocol_mode_auto_completes_without_static_phone(self):
+        row = {
+            "email": "buyer@example.com",
+            "access_token": "at_test",
+            "raw_json": json.dumps({"email": "buyer@example.com", "access_token": "at_test", "session_token": "st_test"}),
+            "json_path": "",
+        }
+        calls = []
+
+        def fake_call(method, body, cfg):
+            calls.append((method, body, cfg))
+            if method == "StartGoPay":
+                return {"success": True, "flowId": "flow_smsbower", "gopayPhone": "+6281234567890"}
+            return {"success": True, "chargeRef": "A123ID", "snapToken": "snap123"}
+
+        cfg = {
+            "gopay": {
+                "one_click_mode": "protocol",
+                "payment_service_addr": "127.0.0.1:50054",
+                "otp_source": "smsbower",
+                "otp": {"source": "smsbower"},
+            }
+        }
+        with patch.object(gopay_payment, "_account_row", return_value=row):
+            with patch.object(gopay_payment, "_call_payment_service", side_effect=fake_call):
+                with patch.object(gopay_payment, "upsert_account", return_value=True):
+                    result = gopay_payment.one_click_pay("buyer@example.com", cfg=cfg)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["paypal_status"], "completed")
+        self.assertEqual(calls[0][0], "StartGoPay")
+        self.assertEqual(calls[0][1]["gopay_phone"], "")
+        self.assertEqual(calls[1][0], "CompleteGoPay")
+        self.assertEqual(calls[1][1]["otp"], "")
+
     def test_provider_mode_completes_with_otp_and_pin(self):
         row = {
             "email": "buyer@example.com",
