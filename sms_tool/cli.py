@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--mailbox-file", default=None, help="Mailbox token file: email---password---refresh_token---access_token---0")
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay"], default=None, help="Payment link/payment method: paypal or gopay")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
     parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
@@ -68,6 +69,8 @@ def main():
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
     parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
     parser.add_argument("--refresh-timeout", type=int, default=300, help="Seconds to wait for interactive auth refresh")
+    parser.add_argument("--view-inbox", action="store_true", help="Fetch recent mailbox messages for --email/--session-file and print JSON")
+    parser.add_argument("--inbox-limit", type=int, default=20, help="Max messages for --view-inbox")
     parser.add_argument("--browser-refresh-session", action="store_true", help="Use the old browser-based refresh flow")
     parser.add_argument("--headless-refresh", action="store_true", help="Run browser refresh headless; visible browser is default")
     parser.add_argument("--auto-pay", action="store_true", help="Automate PayPal payment (reverse protocol first, browser fallback)")
@@ -76,8 +79,19 @@ def main():
     parser.add_argument("--auto-pay-timeout", type=int, default=180, help="Seconds to wait for auto-pay completion")
     parser.add_argument("--batch-auto-pay", action="store_true", help="Run auto-pay for all pending accounts in SQLite")
     parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
-    parser.add_argument("--one-click-pay", action="store_true", help="一键支付: PayPal 无卡协议支付 (单账号或 --email-file 批量)")
-    parser.add_argument("--one-click-pay-all", action="store_true", help="一键支付: 对所有待支付账号执行无卡协议支付")
+    parser.add_argument("--one-click-pay", action="store_true", help="一键支付: PayPal 无卡协议支付或 GoPay 支付 (单账号或 --email-file 批量)")
+    parser.add_argument("--one-click-pay-all", action="store_true", help="一键支付: 对所有待支付账号执行支付")
+    parser.add_argument("--gopay-phone", default=None, help="GoPay provider mode phone number override")
+    parser.add_argument("--gopay-country-code", default=None, help="GoPay provider mode country code override, e.g. 62")
+    parser.add_argument("--gopay-otp-channel", default=None, choices=["sms", "wa", "whatsapp", "none"], help="GoPay provider OTP channel")
+    parser.add_argument("--gopay-flow-id", default=None, help="Existing GoPay provider flow_id to complete with --gopay-otp")
+    parser.add_argument("--gopay-otp", default=None, help="GoPay provider OTP code for completing a prepared flow")
+    parser.add_argument("--gopay-pin", default=None, help="GoPay provider PIN for completing provider payment")
+    parser.add_argument("--gopay-wa-phone", default=None, help="WA-channel GoPay phone used for payment/rebind mode")
+    parser.add_argument("--gopay-user-id", default=None, help="GoPay app state user id for WA rebind mode, default local")
+    parser.add_argument("--gopay-auth-otp", default=None, help="WA login OTP for GoPay app auth before rebind")
+    parser.add_argument("--gopay-rebind-phone", default=None, help="New phone number used by WA rebind after payment")
+    parser.add_argument("--gopay-rebind-otp", default=None, help="SMS OTP for GoPay change-phone completion")
     parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
@@ -120,6 +134,9 @@ def main():
     if args.refresh_session:
         _refresh_session(args)
         return
+    if args.view_inbox:
+        _view_inbox(args)
+        return
     if args.auto_pay or args.auto_pay_reverse_only:
         _auto_pay(args)
         return
@@ -153,7 +170,8 @@ def main():
     if not mailboxes and not _luckmail_enabled():
         print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure LuckMail")
         raise SystemExit(2)
-    paypal_link = not args.skip_paypal_link and bool(CFG.get("paypal", {}).get("auto_generate", True))
+    payment_method = _payment_method(args)
+    paypal_link = _payment_link_enabled(payment_method, args)
 
     requested_count = max(1, int(args.count or 1))
     effective_count = requested_count
@@ -200,6 +218,7 @@ def main():
             workers=args.workers,
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
+            payment_method=payment_method,
         )
     else:
         mailbox = mailboxes[0] if mailboxes else None
@@ -210,6 +229,7 @@ def main():
             paypal_link=paypal_link,
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
+            payment_method=payment_method,
         )]
     register_seconds = time.time() - register_started
 
@@ -257,18 +277,37 @@ def main():
     if paypal_failures:
         for data in paypal_failures:
             paypal = data.get("paypal") or {}
-            print(f"[Error] PayPal link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing PayPal URL')}")
+            label = "GoPay" if payment_method == "gopay" else "PayPal"
+            print(f"[Error] {label} link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing payment URL')}")
         raise SystemExit(3)
+
+
+def _payment_method(args):
+    value = str(getattr(args, "payment_method", "") or "").strip().lower()
+    if value in {"gopay", "go-pay", "go_pay"}:
+        return "gopay"
+    return "paypal"
+
+
+def _payment_link_enabled(payment_method, args):
+    if args.skip_paypal_link:
+        return False
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    if payment_method == "gopay":
+        gopay_cfg = CFG.get("gopay") if isinstance(CFG.get("gopay"), dict) else {}
+        return bool(gopay_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
+    return bool(paypal_cfg.get("auto_generate", True))
 
 
 def _print_paypal_links(email=""):
     rows = list_paypal_accounts(email=email or "")
     if not rows:
-        print("[*] No PayPal records found")
+        print("[*] No payment records found")
         return
     for row in rows:
         print(json.dumps({
             "email": row.get("email", ""),
+            "payment_method": row.get("payment_method", ""),
             "paypal_url": row.get("paypal_url", ""),
             "paypal_status": row.get("paypal_status", ""),
             "refresh_token_status": row.get("refresh_token_status", ""),
@@ -302,7 +341,7 @@ def _mark_paypal_status(args):
     results = []
     for item_email in emails:
         if mark_paypal_status(item_email, status=status):
-            print(f"[*] PayPal status updated: {item_email} -> {status}")
+            print(f"[*] Payment status updated: {item_email} -> {status}")
             result = {"ok": True, "email": item_email, "paypal_status": status}
         else:
             print(f"[Error] account not found: {item_email}")
@@ -368,6 +407,57 @@ def _refresh_session(args):
         proxy=args.proxy,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _view_inbox(args):
+    from .codex_oauth import _mailbox_from_data
+    from .mailbox import _fetch_mailbox_messages
+    from .session_refresh import _load_seed_session
+
+    data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
+    mailbox = _mailbox_from_data(data)
+    if mailbox is None:
+        print(json.dumps({
+            "ok": False,
+            "email": args.email or data.get("email", ""),
+            "error": "missing_mailbox_credentials",
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(2)
+    try:
+        messages = _fetch_mailbox_messages(
+            mailbox,
+            limit=max(1, min(int(args.inbox_limit or 20), 100)),
+            proxy=args.proxy,
+        )
+    except Exception as exc:
+        print(json.dumps({
+            "ok": False,
+            "email": mailbox.email,
+            "provider": mailbox.provider,
+            "error": str(exc),
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(3)
+    print(json.dumps({
+        "ok": True,
+        "email": mailbox.email,
+        "provider": mailbox.provider,
+        "messages": [_public_mail_message(item) for item in messages],
+    }, ensure_ascii=False, indent=2))
+
+
+def _public_mail_message(msg):
+    msg = msg if isinstance(msg, dict) else {}
+    from_value = msg.get("from")
+    if isinstance(from_value, dict):
+        from_value = ((from_value.get("emailAddress") or {}).get("address") or from_value.get("address") or "")
+    body = msg.get("body") if isinstance(msg.get("body"), dict) else {}
+    return {
+        "id": str(msg.get("id") or msg.get("message_id") or ""),
+        "receivedDateTime": str(msg.get("receivedDateTime") or msg.get("received_at") or msg.get("created_at") or ""),
+        "from": str(from_value or msg.get("from_email") or msg.get("sender") or ""),
+        "subject": str(msg.get("subject") or msg.get("title") or ""),
+        "bodyPreview": str(msg.get("bodyPreview") or msg.get("preview") or body.get("content") or msg.get("text") or "")[:2000],
+    }
 
 
 def _export_codex_json(args):
@@ -553,7 +643,7 @@ def _regenerate_paypal_link(args):
 
         def _run_one(index, item_email):
             print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy)
+            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy, payment_method=_payment_method(args))
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
@@ -571,7 +661,7 @@ def _regenerate_paypal_link(args):
     if not email and not args.session_file:
         print("[Error] --email or --session-file is required with --regenerate-paypal-link")
         return
-    result = regenerate_paypal_link(email=email, session_file=args.session_file or "", proxy=args.proxy)
+    result = regenerate_paypal_link(email=email, session_file=args.session_file or "", proxy=args.proxy, payment_method=_payment_method(args))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
@@ -703,7 +793,10 @@ def _batch_auto_pay(args):
 
 def _one_click_pay(args):
     """一键支付: PayPal 无卡协议支付。"""
-    from .paypal_nocard import one_click_pay_batch
+    if _payment_method(args) == "gopay":
+        from .gopay_payment import one_click_pay_batch
+    else:
+        from .paypal_nocard import one_click_pay_batch
     one_click_pay_batch(args)
 
 
@@ -732,6 +825,7 @@ def _one_click_sms(args):
     if not phone_pool.phones:
         print("[Error] --one-click-sms requires a phone pool. Configure phone_reuse.smsbower.api_key/SMSBOWER_API_KEY or phone_reuse.phone_pool.")
         raise SystemExit(2)
+    phone_pool.reset_exhausted_smsbower_slots()
     print_phone_pool_status(phone_pool)
     if phone_pool.total_capacity <= 0:
         print("[Error] --one-click-sms requires at least one available phone slot; current phone pool is exhausted.")

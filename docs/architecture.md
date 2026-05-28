@@ -9,7 +9,7 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
-  -> PayPal/Stripe hosted payment-link generation
+  -> PayPal/GoPay payment-link generation or explicit protocol payment
   -> session JSON + SQLite index
   -> status display and maintenance actions
 ```
@@ -35,6 +35,9 @@ sms_tool/
   paypal_links.py           Regenerate PayPal links without clobbering old links.
   paypal_nocard.py          Explicit PayPal no-card agreement payment flow.
   paypal_auto.py            Reverse/browser PayPal payment helper.
+  grpcurl_client.py         Shared grpcurl subprocess boundary.
+  gopay_payment.py          GoPay link/provider/WA-rebind payment entrypoint.
+  gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
   session_refresh.py        Refresh auth session after manual login/payment.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
   codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
@@ -44,6 +47,10 @@ sms_tool/
   storage.py                SQLite and session index persistence.
 
 SmsWorkbench/               WPF desktop UI.
+services/
+  gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
+  gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
+  gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
 browser_extensions/         Optional Chrome checkout helpers.
   paypal_autofill/          Popup, content script, and background fetch boundary with one-click fill, OTP polling, and pool rotation.
 tests/                      Offline unit tests and source-invariant tests; see tests/README.md.
@@ -85,7 +92,7 @@ Payment and CPA operations stay separated in the UI: marking payment complete on
 
 It must not silently replace an explicit empty mailbox file with a new provider purchase. If the user passed a mailbox file and no mailbox was parsed, it exits with code `2`.
 
-Optional command modules are lazy seams. Codex export, CPA import, PayPal payment, PayPal link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
+Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay payment, PayPal link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
 
 ### Mailbox Layer
 
@@ -149,6 +156,39 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 
 It must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default. A local SQLite smoke test may be enabled explicitly with `PAYPAL_NOCARD_SQLITE_SMOKE=1`; redirect following is separately gated by `PAYPAL_NOCARD_FOLLOW_REDIRECT=1`.
 
+### GoPay Link And Provider Layer
+
+`sms_tool.gopay_payment` is the only GoPay payment entrypoint used by `--one-click-pay --payment-method gopay`. It may:
+
+- Generate a hosted GoPay link through `sms_tool.gen_pp_link` when `gopay.one_click_mode=link`.
+- Call a local `payment.PaymentService` through `sms_tool.grpcurl_client` when `gopay.one_click_mode=provider`.
+- Switch to WA-channel provider payment when `gopay.one_click_mode=wa_rebind`.
+- Persist GoPay status into the existing `paypal_*` SQLite/session columns for UI compatibility, while recording richer GoPay details under `paypal` and `gopay_wa_rebind`.
+
+It must not implement GoPay App login, signup, PIN setup, or change-phone details inline. Those app-side steps belong to `sms_tool.gopay_wa_rebind` or a dedicated provider service.
+
+`sms_tool.grpcurl_client` owns grpcurl process execution and proto path resolution only. Payment modules pass method names, request bodies, service names, and provider configuration into it.
+
+### GoPay WA Rebind Layer
+
+`sms_tool.gopay_wa_rebind` adapts the byte-v-forge WA flow to this project without importing its Temporal/orchestrator stack. It may:
+
+- Resolve the WA payment phone from CLI/config.
+- Use `GopayAppService.GetGoPayState` and `UpsertGoPayState` for app state.
+- Start or complete WA login with `AuthStart/AuthComplete`.
+- Start or complete post-payment phone change with `ChangePhoneStart/ChangePhoneComplete`.
+- Return explicit pending states when required OTPs are missing.
+
+It must not acquire SMS numbers, poll third-party SMS providers, or run background workflows. In this project, OTPs are explicit CLI/UI inputs or are read by a separately configured sidecar. This keeps the current desktop tool deterministic and avoids silently running the upstream orchestrator's long-lived workflow model.
+
+### Local Provider Services
+
+`services/gopay-flow` is the project-local PaymentService. It owns the ChatGPT checkout, Stripe/Midtrans GoPay linking, OTP handoff, PIN charge, ChatGPT verify, and optional unlink trigger.
+
+`services/gopay-app/proto` stores the GoPay App service contract used by WA rebind mode. The app-service implementation is a provider boundary: it may be supplied by a local project service or compatible binary, but callers inside `sms_tool` only depend on the proto-level RPC surface.
+
+`services/gopay-adb` owns emulator/ADB HTTP endpoints such as `/health`, `/otp`, `/otp/clear`, and `/gopay/unlink`. It must not know about ChatGPT accounts, SQLite rows, or CPA import.
+
 ### Browser Extension Layer
 
 `browser_extensions/paypal_autofill/` is an optional Chrome helper, not a Python runtime dependency. It owns:
@@ -178,6 +218,7 @@ python -m unittest discover -s tests
 - Case-insensitive account deduplication.
 - Email normalization before upsert.
 - PayPal status and refresh-token status persistence.
+- Payment method persistence for GoPay/PayPal compatibility.
 - Rebuilding SQLite from `sessions/session_*.json`.
 
 `accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same email instead of creating a new row with different casing or a repaired alias spelling.

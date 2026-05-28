@@ -124,6 +124,17 @@ class CodexOauthTests(unittest.TestCase):
         self.assertEqual(result["protocol_stage"], "email_otp")
         self.assertEqual(result["phone_attempt"], phone_attempt)
 
+    def test_passwordless_send_409_continues_to_mailbox_polling(self):
+        response = Mock(status_code=409, text='{"error":"already pending"}')
+        session = Mock()
+        session.post.return_value = response
+
+        with patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}):
+            result = codex_oauth._send_passwordless_otp(session, "did", "https://auth.openai.com/email-verification")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status_code"], 409)
+
     def test_single_phone_oauth_lane_stays_locked_until_token_exchange(self):
         class TrackingLock:
             def __init__(self):

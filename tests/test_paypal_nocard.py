@@ -371,6 +371,135 @@ class PayPalNoCardUnitTests(unittest.TestCase):
         self.assertTrue(saved["paypal"]["ba_resolved"])
         follow.assert_called_once()
 
+    def test_regenerate_paypal_link_refreshes_session_after_checkout_401(self):
+        seed = {"email": "paid@example.com", "access_token": "old_at", "cookie_header": "cookie", "success": True}
+        refreshed_seed = {"email": "paid@example.com", "access_token": "new_at", "cookie_header": "cookie", "success": True}
+        saved = {}
+
+        def fake_load_seed(email="", session_file=""):
+            if fake_load_seed.calls == 0:
+                fake_load_seed.calls += 1
+                return seed, "session.json"
+            return refreshed_seed, "session.json"
+
+        fake_load_seed.calls = 0
+
+        def fake_upsert(data, json_path=""):
+            saved.update(data)
+            return True
+
+        with patch.object(paypal_links, "_load_seed", side_effect=fake_load_seed):
+            with patch.object(paypal_links, "generate_pp_link", side_effect=[
+                {"ok": False, "error": "checkout unauthorized: 401", "error_code": "checkout_unauthorized"},
+                {"ok": True, "url": "https://www.paypal.com/agreements/approve?ba_token=BA-NEW123456789"},
+            ]) as gen:
+                with patch.object(paypal_links, "_refresh_seed_session", return_value={"ok": True}):
+                    with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
+                        result = paypal_links.regenerate_paypal_link(email="paid@example.com")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([call.args[0] for call in gen.call_args_list], ["old_at", "new_at"])
+        self.assertEqual(saved["access_token"], "new_at")
+
+    def test_refresh_seed_session_falls_back_when_cookie_refresh_returns_same_token(self):
+        with patch("sms_tool.session_refresh.refresh_session", return_value={"ok": True, "mode": "protocol"}):
+            with patch.object(paypal_links, "_load_seed", return_value=({"access_token": "old_at"}, "session.json")):
+                with patch.object(
+                    paypal_links,
+                    "_try_oauth_refresh_token",
+                    return_value={"ok": False, "error": "no_oauth_refresh_token"},
+                ) as oauth:
+                    with patch.object(
+                        paypal_links,
+                        "_try_passwordless_oauth_login",
+                        return_value={"ok": False, "error": "passwordless_missing_mailbox"},
+                    ) as passwordless:
+                        result = paypal_links._refresh_seed_session(
+                            "paid@example.com",
+                            "session.json",
+                            stale_access_token="old_at",
+                        )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("cookie_refresh_returned_same_access_token", result["error"])
+        self.assertIn("oauth_fallback=no_oauth_refresh_token", result["error"])
+        self.assertIn("passwordless_fallback=passwordless_missing_mailbox", result["error"])
+        oauth.assert_called_once()
+        passwordless.assert_called_once()
+
+    def test_refresh_seed_session_uses_passwordless_login_after_expired_oauth_refresh(self):
+        load_results = [
+            ({"access_token": "old_at"}, "session.json"),
+            ({"access_token": "new_at"}, "session.json"),
+        ]
+
+        with patch("sms_tool.session_refresh.refresh_session", return_value={"ok": True, "mode": "protocol"}):
+            with patch.object(paypal_links, "_load_seed", side_effect=load_results):
+                with patch.object(
+                    paypal_links,
+                    "_try_oauth_refresh_token",
+                    return_value={"ok": False, "error": "oauth_refresh_http_401: token_expired"},
+                ):
+                    with patch.object(
+                        paypal_links,
+                        "_try_passwordless_oauth_login",
+                        return_value={"ok": True, "mode": "passwordless_email_otp_login"},
+                    ) as passwordless:
+                        result = paypal_links._refresh_seed_session(
+                            "paid@example.com",
+                            "session.json",
+                            stale_access_token="old_at",
+                        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "passwordless_email_otp_login")
+        passwordless.assert_called_once()
+
+    def test_regenerate_gopay_failure_does_not_reuse_old_paypal_link(self):
+        old_url = "https://www.paypal.com/agreements/approve?ba_token=BA-OLD123456789"
+        seed = {
+            "email": "paid@example.com",
+            "access_token": "at_test",
+            "success": True,
+            "payment_method": "gopay",
+            "paypal_status": "link_ready",
+            "paypal": {
+                "ok": True,
+                "url": old_url,
+                "currency": "usd",
+                "payment_method_types": ["card", "paypal"],
+            },
+        }
+        saved = {}
+
+        def fake_upsert(data, json_path=""):
+            saved.update(data)
+            return True
+
+        with patch.object(paypal_links, "_load_seed", return_value=(seed, "")):
+            with patch.object(
+                paypal_links,
+                "_generate_link",
+                return_value={
+                    "ok": False,
+                    "payment_method": "gopay",
+                    "method": "gopay",
+                    "error": "You cannot combine currencies on a single customer.",
+                    "error_code": "checkout_failed",
+                },
+            ):
+                with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
+                    result = paypal_links.regenerate_paypal_link(email="paid@example.com", payment_method="gopay")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["payment_method"], "gopay")
+        self.assertEqual(result["paypal_status"], "failed")
+        self.assertEqual(result["paypal_url"], "")
+        self.assertEqual(saved["payment_method"], "gopay")
+        self.assertEqual(saved["paypal_status"], "failed")
+        self.assertEqual(saved["paypal"].get("url", ""), "")
+        self.assertEqual(saved["previous_paypal"]["url"], old_url)
+
     def test_sqlite_smoke_reads_existing_paypal_url_when_enabled(self):
         if os.environ.get("PAYPAL_NOCARD_SQLITE_SMOKE") != "1":
             self.skipTest("set PAYPAL_NOCARD_SQLITE_SMOKE=1 to read the local SQLite account pool")
