@@ -83,6 +83,8 @@
                 "min_price": "0.008",
                 "max_price": "0.014",
                 "min_balance_rp": 1,
+                "claim_envelope_on_low_balance": true,
+                "envelope_url": "https://app.gopay.co.id/NF8p/ajgvlrts",
                 "register_account": true,
                 "sms_timeout": 120,
                 "sms_poll_interval": 5
