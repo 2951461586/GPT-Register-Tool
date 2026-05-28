@@ -13,6 +13,9 @@ from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox
 from .paths import runtime_file
 from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl
 
+REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
+LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
+
 # ==========================================
 # Sentinel token (cached, browser only when needed)
 # ==========================================
@@ -435,9 +438,9 @@ def _login_existing_account_with_email_otp(
     email_cfg = CFG.get("email_registration", {})
     code = _poll_email_otp(
         mailbox,
-        subject_keyword=email_cfg.get("otp_subject_keyword", ""),
+        subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
         timeout=int(email_cfg.get("otp_timeout", 300)),
-        issued_after_unix=otp_send_started if getattr(mailbox, "provider", "") == "cfworker" else int(time.time()) - 30,
+        issued_after_unix=otp_send_started,
         proxy=proxy,
     )
     if not code:
@@ -577,12 +580,16 @@ def _with_query_param(url, key, value):
 
 
 def _generate_paypal_link(access_token, proxy=None):
+    return _generate_payment_link(access_token, proxy=proxy, payment_method="paypal")
+
+
+def _generate_payment_link(access_token, proxy=None, payment_method="paypal"):
     try:
-        from .gen_pp_link import generate_pp_link
+        from .gen_pp_link import generate_payment_link
     except Exception as e:
         return {"ok": False, "error": f"load_gen_pp_link_failed: {e}"}
     try:
-        return generate_pp_link(access_token, proxy=proxy)
+        return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method)
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -590,7 +597,7 @@ def _generate_paypal_link(access_token, proxy=None):
 # ==========================================
 # Core Email Registration Flow
 # ==========================================
-def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypal_link=True, phone_pool=None, codex_oauth=True):
+def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypal_link=True, phone_pool=None, codex_oauth=True, payment_method="paypal"):
     """Register a ChatGPT account via mailbox OTP, then create a PayPal payment link."""
     _tl().clear()
 
@@ -728,9 +735,9 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     email_cfg = CFG.get("email_registration", {})
     code = _poll_email_otp(
         mailbox,
-        subject_keyword=email_cfg.get("otp_subject_keyword", ""),
+        subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
         timeout=int(email_cfg.get("otp_timeout", 300)),
-        issued_after_unix=otp_send_started if getattr(mailbox, "provider", "") == "cfworker" else int(time.time()) - 30,
+        issued_after_unix=otp_send_started,
         proxy=proxy,
     )
     _tock()
@@ -913,9 +920,13 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
 
     paypal = {}
     if success and access_token and paypal_link:
-        _tick("9-Generate PayPal link")
-        paypal = _generate_paypal_link(access_token, proxy=proxy)
-        print(f"  PayPal link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
+        payment_method = str(payment_method or "paypal").strip().lower()
+        payment_label = "GoPay" if payment_method == "gopay" else "PayPal"
+        _tick(f"9-Generate {payment_label} link")
+        paypal = _generate_payment_link(access_token, proxy=proxy, payment_method=payment_method)
+        paypal.setdefault("payment_method", payment_method)
+        paypal.setdefault("method", payment_method)
+        print(f"  {payment_label} link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
         _tock()
 
     result = {
@@ -941,6 +952,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         "refresh_token_status": "oauth_present" if oauth_refresh_token else "no_rt",
         "cookie_header": auth_session.get("cookie_header", ""),
         "paypal": paypal,
+        "payment_method": (paypal.get("payment_method") or payment_method or "paypal") if paypal else (payment_method or "paypal"),
         "device_id": did,
         "timing": _timing_summary(),
     }
@@ -974,6 +986,7 @@ def run_phone(*args, **kwargs):
         paypal_link=kwargs.get("paypal_link", True),
         phone_pool=kwargs.get("phone_pool"),
         codex_oauth=kwargs.get("codex_oauth", True),
+        payment_method=kwargs.get("payment_method", "paypal"),
     )
 
 
@@ -1014,7 +1027,7 @@ def _unique_mailboxes(mailboxes):
     return unique
 
 
-def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, phone_pool=None, codex_oauth=True):
+def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, phone_pool=None, codex_oauth=True, payment_method="paypal"):
     mailboxes = _unique_mailboxes(mailboxes)
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
@@ -1050,6 +1063,7 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, 
                 phone_pool=phone_pool,
                 codex_oauth=codex_oauth,
                 sentinel_data=sentinel,
+                payment_method=payment_method,
             )
         except Exception as e:
             import traceback; traceback.print_exc()
@@ -1124,6 +1138,7 @@ def _build_session_file(data):
         or _extract_nested(auth_session, "session", "refreshToken")
     )
     paypal_status = data.get("paypal_status") or paypal.get("status") or ("link_ready" if paypal.get("url") else "")
+    payment_method = data.get("payment_method") or paypal.get("payment_method") or paypal.get("method") or ("paypal" if paypal.get("url") else "")
     refresh_token_status = data.get("refresh_token_status") or ("oauth_present" if oauth_refresh_token else ("legacy_present" if refresh_token else "no_rt"))
     purchase = {
         "source": mailbox.get("source", ""),
@@ -1148,6 +1163,7 @@ def _build_session_file(data):
         "cookie_header": data.get("cookie_header") or response.get("cookie_header") or "",
         "auth_session": auth_session,
         "paypal": paypal,
+        "payment_method": payment_method,
         "paypal_status": paypal_status,
         "oauth_refresh_token": oauth_refresh_token or "",
         "refresh_token_status": refresh_token_status,

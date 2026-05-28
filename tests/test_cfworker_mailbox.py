@@ -66,6 +66,26 @@ class TargetEndpointResponse:
         }
 
 
+class RawTextEndpointResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {
+            "messages": [
+                {
+                    "message_id": "m4",
+                    "from_address": "noreply@tm.openai.com",
+                    "to_address": "target@edu.liziai.cloud",
+                    "subject": "你的临时 OpenAI 登录代码",
+                    "extracted_json": "[]",
+                    "raw_text": "你的临时 OpenAI 登录代码是 444444。",
+                    "received_at": 1779588674891,
+                }
+            ]
+        }
+
+
 class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_admin_email_list_uses_proxy_filters_recipient_and_exposes_otp_body(self):
         proxy = "socks5h://127.0.0.1:7897"
@@ -86,7 +106,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         self.assertEqual(recipients[0]["emailAddress"]["address"], "target@edu.liziai.cloud")
         self.assertEqual(messages[0]["receivedDateTime"], "2026-05-24T02:11:14Z")
 
-    def test_target_endpoint_is_used_when_admin_list_has_no_matching_mail(self):
+    def test_target_endpoint_falls_back_to_address_alias_when_first_target_endpoint_is_empty(self):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
 
         with patch.object(
@@ -96,24 +116,24 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         ) as get:
             messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
 
-        self.assertIn("/admin/emails?page=1&domain=edu.liziai.cloud", get.call_args_list[0].args[0])
-        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
+        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[0].args[0])
+        self.assertIn("/api/messages?address=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
         self.assertEqual(len(messages), 1)
         self.assertIn("333333", messages[0]["bodyPreview"])
         self.assertEqual(messages[0]["toRecipients"][0]["emailAddress"]["address"], "target@edu.liziai.cloud")
 
-    def test_target_endpoint_is_used_when_admin_request_times_out(self):
+    def test_target_endpoint_alias_is_used_when_first_target_request_times_out(self):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
 
         with patch.object(
             cfworker_mailbox.curl_requests,
             "get",
-            side_effect=[RuntimeError("admin timeout"), TargetEndpointResponse()],
+            side_effect=[RuntimeError("target timeout"), TargetEndpointResponse()],
         ) as get:
             messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
 
-        self.assertIn("/admin/emails?page=1&domain=edu.liziai.cloud", get.call_args_list[0].args[0])
-        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
+        self.assertIn("/api/messages?email=target%40edu.liziai.cloud", get.call_args_list[0].args[0])
+        self.assertIn("/api/messages?address=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
         self.assertEqual(len(messages), 1)
         self.assertIn("333333", messages[0]["bodyPreview"])
 
@@ -156,6 +176,25 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         candidate = mailbox_module._email_otp_candidate(mailbox, msg, issued_after_unix=0)
 
         self.assertEqual(candidate["otp"], "333333")
+
+    def test_target_endpoint_exposes_otp_from_raw_text_when_extracted_json_is_empty(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="")
+
+        with patch.object(cfworker_mailbox.curl_requests, "get", return_value=RawTextEndpointResponse()):
+            messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn("444444", messages[0]["bodyPreview"])
+
+    def test_fetch_uses_urllib_fallback_when_curl_request_fails(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="")
+
+        with patch.object(cfworker_mailbox.curl_requests, "get", side_effect=RuntimeError("curl timeout")):
+            with patch.object(client, "_request_urllib", return_value={"ok": True, "data": RawTextEndpointResponse().json()}):
+                messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn("444444", messages[0]["bodyPreview"])
 
     def test_cfworker_fetch_falls_back_to_direct_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")

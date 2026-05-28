@@ -143,6 +143,31 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(regions[0]["browser_timezone"], "Asia/Shanghai")
         self.assertEqual(regions[0]["address"]["country"], "US")
 
+    def test_gopay_default_billing_region_is_indonesia(self):
+        cfg = {"paypal": {"billing_regions": ["US"]}}
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "gopay")
+        regions = gen_pp_link._billing_regions(payment_cfg)
+
+        self.assertEqual(regions[0]["country"], "ID")
+        self.assertEqual(regions[0]["currency"], "IDR")
+        self.assertEqual(regions[0]["browser_timezone"], "Asia/Jakarta")
+
+    def test_generate_payment_link_passes_gopay_method(self):
+        ok_result = {"ok": True, "url": "https://app.midtrans.com/snap/v4/redirection/snap"}
+        cfg = {
+            "paypal": {"proxies": ["direct"], "max_checkout_retries": 3},
+            "gopay": {"billing_regions": ["ID"], "max_checkout_retries": 1},
+        }
+
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_try_paypal_link", return_value=ok_result) as try_paypal:
+                result = gen_pp_link.generate_payment_link("eyJ.fake.token", payment_method="gopay")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["payment_method"], "gopay")
+        self.assertEqual(try_paypal.call_args.kwargs["payment_method"], "gopay")
+        self.assertEqual(try_paypal.call_args.args[2]["country"], "ID")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ from .paths import project_path, runtime_file
 
 
 EXTRA_COLUMNS = {
+    "payment_method": "TEXT DEFAULT 'paypal'",
     "paypal_status": "TEXT DEFAULT ''",
     "paypal_updated_at": "INTEGER DEFAULT 0",
     "paypal_completed_at": "INTEGER DEFAULT 0",
@@ -214,6 +215,21 @@ def _paypal_status(data, paypal):
     return "missing"
 
 
+def _payment_method(data, paypal):
+    value = (
+        str(_get(data, "payment_method")).strip()
+        or str(_get(paypal, "payment_method")).strip()
+        or str(_get(paypal, "method")).strip()
+    ).lower()
+    if value in {"gopay", "go-pay", "go_pay"}:
+        return "gopay"
+    if value:
+        return "paypal"
+    if _get(paypal, "url"):
+        return "paypal"
+    return ""
+
+
 def _oauth_refresh_token(data, auth_session):
     return (
         str(_get(data, "oauth_refresh_token")).strip()
@@ -271,6 +287,7 @@ def upsert_account(data, json_path=""):
     created_at = _as_int(_get(data, "created_at")) or now
     access_token = str(_get(data, "access_token"))
     paypal_status = _paypal_status(data, paypal)
+    payment_method = _payment_method(data, paypal)
     oauth_refresh_token = _oauth_refresh_token(data, auth_session)
     refresh_token_status = _refresh_token_status(data, auth_session)
     has_refresh_token = refresh_token_status in {"oauth_present", "legacy_present"}
@@ -292,6 +309,7 @@ def upsert_account(data, json_path=""):
         "cookie_header": str(_get(data, "cookie_header")),
         "device_id": str(_get(data, "device_id")),
         "paypal_ok": _as_bool(paypal.get("ok")),
+        "payment_method": payment_method,
         "paypal_url": str(_get(paypal, "url")),
         "paypal_status": paypal_status,
         "paypal_updated_at": _as_int(_get(data, "paypal_updated_at")) or now,
@@ -344,7 +362,7 @@ def upsert_account(data, json_path=""):
 def list_paypal_accounts(email=""):
     init_database()
     query = """
-        SELECT email,access_token,paypal_url,paypal_status,paypal_updated_at,refresh_token_status,json_path,updated_at
+        SELECT email,access_token,payment_method,paypal_url,paypal_status,paypal_updated_at,refresh_token_status,json_path,updated_at
         FROM accounts
     """
     params = []

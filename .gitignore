@@ -10,6 +10,7 @@ sms_tool/sentinel_cache.json
 mailbox_tokens.txt
 hotmail*.txt
 *_tokens.txt
+session.json
 
 __pycache__/
 *.py[cod]

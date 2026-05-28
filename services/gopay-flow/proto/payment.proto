@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package payment;
+
+option go_package = "./;pb";
+
+message ChatGPTCredential {
+  string session_token = 1;
+  string access_token = 2;
+}
+
+message StartGoPayRequest {
+  ChatGPTCredential credential = 1;
+  bool use_account_token = 2;
+  string tokenization = 3;
+  string checkout_url = 4;
+  string checkout_session_id = 5;
+  string gopay_phone = 6;
+  string otp_channel = 7; // sms 时调用 resend-otp；wa/空值只走 user-consent
+  string gopay_country_code = 8;
+}
+
+message PrepareGoPayRequest {
+  ChatGPTCredential credential = 1;
+  string tokenization = 2;
+  string checkout_url = 3;
+  string checkout_session_id = 4;
+  string gopay_phone = 5;
+  string gopay_country_code = 6;
+}
+
+message PrepareGoPayResponse {
+  bool success = 1;
+  string error_message = 2;
+  string flow_id = 3;
+  string snap_token = 4;
+  string checkout_url = 5;
+  string checkout_session_id = 6;
+  bool retryable_fresh_checkout = 7;
+  int32 checkout_attempt = 8;
+  string stage = 9;
+}
+
+message PrepareGoPayCheckoutRequest {
+  ChatGPTCredential credential = 1;
+  string tokenization = 2;
+  string checkout_url = 3;
+  string checkout_session_id = 4;
+  string gopay_phone = 5;
+  string gopay_country_code = 6;
+}
+
+message RefreshPrepareGoPayCheckoutRequest {
+  string flow_id = 1;
+}
+
+message PrepareGoPayLinkRequest {
+  string flow_id = 1;
+}
+
+message StartPreparedGoPayRequest {
+  string flow_id = 1;
+  string gopay_phone = 2;
+  string otp_channel = 3; // sms 时调用 resend-otp；wa/空值只走 user-consent
+  string gopay_country_code = 4;
+}
+
+message StartGoPayResponse {
+  bool success = 1;
+  string error_message = 2;
+  string flow_id = 3;
+  string snap_token = 4;
+  int64 issued_after_unix = 5;
+  int64 expires_at_unix = 6;
+  string checkout_url = 7;
+  string checkout_session_id = 8;
+  bool otp_required = 9;
+}
+
+message ProbePlusTrialPaymentRequest {
+  ChatGPTCredential credential = 1;
+}
+
+message ProbePlusTrialPaymentResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool checked = 3;
+  bool plus_trial_eligible = 4;
+  int64 amount = 5;
+  string currency = 6;
+  string source = 7;
+  string checkout_url = 8;
+  bool plus_active = 9;
+  string plan_type = 10;
+  string checkout_session_id = 11;
+}
+
+message CreateCheckoutLinkRequest {
+  ChatGPTCredential credential = 1;
+}
+
+message CreateCheckoutLinkResponse {
+  bool success = 1;
+  string error_message = 2;
+  string checkout_url = 3;
+  string checkout_session_id = 4;
+}
+
+message ProbeTierPaymentRequest {
+  ChatGPTCredential credential = 1;
+}
+
+message ProbeTierPaymentResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool checked = 3;
+  string tier = 4;
+  bool plus_active = 5;
+  string source = 6;
+}
+
+message CompleteGoPayRequest {
+  string flow_id = 1;
+  string otp = 2;
+  string pin = 3;
+}
+
+message ResendGoPayOTPRequest {
+  string flow_id = 1;
+}
+
+message ResendGoPayOTPResponse {
+  bool success = 1;
+  string error_message = 2;
+  string flow_id = 3;
+  int64 issued_after_unix = 4;
+}
+
+message ConfirmGoPayPaymentRequest {
+  string flow_id = 1;
+}
+
+message CancelGoPayRequest {
+  string flow_id = 1;
+}
+
+message CancelGoPayResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message GoPayResponse {
+  bool success = 1;
+  string error_message = 2;
+  string charge_ref = 3;
+  string snap_token = 4;
+  bool awaiting_manual_confirmation = 5;
+  string deeplink_url = 6;
+  string qr_code_url = 7;
+  string finish_redirect_url = 8;
+  string finish_200_redirect_url = 9;
+  string qr_string = 10;
+}
+
+service PaymentService {
+  rpc PrepareGoPayCheckout(PrepareGoPayCheckoutRequest) returns (PrepareGoPayResponse);
+  rpc RefreshPrepareGoPayCheckout(RefreshPrepareGoPayCheckoutRequest) returns (PrepareGoPayResponse);
+  rpc PrepareGoPayLink(PrepareGoPayLinkRequest) returns (PrepareGoPayResponse);
+  rpc PrepareGoPay(PrepareGoPayRequest) returns (PrepareGoPayResponse);
+  rpc StartPreparedGoPay(StartPreparedGoPayRequest) returns (StartGoPayResponse);
+  rpc StartGoPay(StartGoPayRequest) returns (StartGoPayResponse);
+  rpc CreateCheckoutLink(CreateCheckoutLinkRequest) returns (CreateCheckoutLinkResponse);
+  rpc ProbePlusTrial(ProbePlusTrialPaymentRequest) returns (ProbePlusTrialPaymentResponse);
+  rpc ProbeTier(ProbeTierPaymentRequest) returns (ProbeTierPaymentResponse);
+  rpc CompleteGoPay(CompleteGoPayRequest) returns (GoPayResponse);
+  rpc ResendGoPayOTP(ResendGoPayOTPRequest) returns (ResendGoPayOTPResponse);
+  rpc ConfirmGoPayPayment(ConfirmGoPayPaymentRequest) returns (GoPayResponse);
+  rpc CancelGoPay(CancelGoPayRequest) returns (CancelGoPayResponse);
+}

@@ -2,6 +2,8 @@ import json
 import re
 import time
 import uuid
+import urllib.error
+import urllib.request
 from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
@@ -50,17 +52,10 @@ class CFWorkerMailboxClient:
         limit = max(1, min(int(limit or 25), 100))
         saw_empty_endpoint = False
         last_error = ""
-        try:
-            admin_messages = self._fetch_admin_messages(email, limit)
-        except Exception as exc:
-            admin_messages = None
-            last_error = str(exc)
-        if admin_messages:
-            return [_normalize_message(msg, email=email) for msg in admin_messages[:limit]]
-        if admin_messages == []:
-            saw_empty_endpoint = True
         candidates = [
             f"/api/messages?email={encoded}&limit={limit}",
+            f"/api/messages?address={encoded}&limit={limit}",
+            f"/api/messages?to_address={encoded}&limit={limit}",
             f"/api/emails/{encoded}/messages?limit={limit}",
             f"/api/mailboxes/{encoded}/messages?limit={limit}",
             f"/api/mailbox/{encoded}?limit={limit}",
@@ -91,6 +86,15 @@ class CFWorkerMailboxClient:
                 filtered = _messages_for_mailbox([single], email, allow_missing_recipient=True)
                 if filtered:
                     return [_normalize_message(filtered[0], email=email)]
+        try:
+            admin_messages = self._fetch_admin_messages(email, limit)
+        except Exception as exc:
+            admin_messages = None
+            last_error = str(exc)
+        if admin_messages:
+            return [_normalize_message(msg, email=email) for msg in admin_messages[:limit]]
+        if admin_messages == []:
+            saw_empty_endpoint = True
         if saw_empty_endpoint:
             return []
         raise RuntimeError(last_error or "cfworker messages endpoint not found")
@@ -104,8 +108,9 @@ class CFWorkerMailboxClient:
         page = 1
         max_pages = 10
         total_pages = 1
+        address_query = f"&address={quote(email, safe='')}&to_address={quote(email, safe='')}&email={quote(email, safe='')}"
         while page <= min(max_pages, total_pages):
-            result = self._request("GET", f"/admin/emails?page={page}{domain_query}", allow_404=True)
+            result = self._request("GET", f"/admin/emails?page={page}{domain_query}{address_query}", allow_404=True)
             if not result.get("ok"):
                 if result.get("error") == "not_found":
                     return None
@@ -150,6 +155,36 @@ class CFWorkerMailboxClient:
             if response.status_code < 200 or response.status_code >= 300:
                 return {"ok": False, "status_code": response.status_code, "error": _safe_error(data)}
             return {"ok": True, "status_code": response.status_code, "data": data}
+        except Exception as exc:
+            fallback = self._request_urllib(method, url, headers, json_body=json_body, allow_404=allow_404)
+            if fallback.get("ok") or fallback.get("error") == "not_found":
+                return fallback
+            return {"ok": False, "error": f"{exc}; urllib fallback: {fallback.get('error', '')}"}
+
+    def _request_urllib(self, method, url, headers, json_body=None, allow_404=False):
+        data = None
+        request_headers = dict(headers)
+        if method == "POST":
+            request_headers["Content-Type"] = "application/json"
+            data = json.dumps(json_body or {}).encode("utf-8")
+        request = urllib.request.Request(url, data=data, headers=request_headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read().decode("utf-8", "replace")
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    data = raw
+                return {"ok": True, "status_code": response.status, "data": data}
+        except urllib.error.HTTPError as exc:
+            if allow_404 and exc.code == 404:
+                return {"ok": False, "error": "not_found"}
+            raw = exc.read().decode("utf-8", "replace")[:500]
+            try:
+                data = json.loads(raw)
+            except Exception:
+                data = raw
+            return {"ok": False, "status_code": exc.code, "error": _safe_error(data)}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
@@ -211,7 +246,7 @@ def _extract_single_message(data):
     if isinstance(data, dict):
         for key in ("message", "email", "mail", "item", "data", "result"):
             value = data.get(key)
-            if isinstance(value, dict):
+            if isinstance(value, dict) and any(k in value for k in ("subject", "bodyPreview", "body", "from", "receivedDateTime", "created_at", "message_id", "to_address")):
                 return value
         if any(k in data for k in ("subject", "bodyPreview", "body", "from", "receivedDateTime", "created_at")):
             return data
@@ -226,6 +261,8 @@ def _looks_empty_message_list(data):
             value = data.get(key)
             if isinstance(value, list):
                 return len(value) == 0
+            if isinstance(value, dict) and _looks_empty_message_list(value):
+                return True
     return False
 
 
@@ -233,7 +270,19 @@ def _normalize_message(msg, email=""):
     if not isinstance(msg, dict):
         msg = {"body": str(msg or "")}
     subject = str(_first(msg, "subject", "title") or "")
-    body_text = str(_first(msg, "bodyPreview", "preview", "text", "content", "body", "html", "extracted_json") or "")
+    body_text = str(_first(
+        msg,
+        "bodyPreview",
+        "preview",
+        "text",
+        "content",
+        "body",
+        "html",
+        "raw_text",
+        "raw_html",
+        "extracted_json",
+        "results",
+    ) or "")
     body = msg.get("body")
     if isinstance(body, dict):
         body_text = str(body.get("content") or body.get("text") or body_text)

@@ -54,6 +54,50 @@
             "confirm": "direct"
         }
     },
+    "gopay": {
+        "one_click_mode": "link",
+        "open_link": true,
+        "auto_generate": true,
+        "provider_api": "byte-v-forge",
+        "payment_service_addr": "127.0.0.1:50051",
+        "grpcurl_path": "grpcurl",
+        "payment_service": "payment.PaymentService",
+        "proto_import_path": "services\\gopay-flow\\proto",
+        "proto_path": "services\\gopay-flow\\proto\\payment.proto",
+        "provider_config_path": "services\\gopay-flow\\config.gopay.base.json",
+        "provider_timeout_seconds": 600,
+        "tokenization": "qris",
+        "phone": "",
+        "country_code": "62",
+        "otp_channel": "sms",
+        "pin": "",
+        "confirm_after_manual": false,
+        "emulator_exe": "",
+        "adb_path": "",
+        "adb_serial": "emulator-5554",
+        "adb_sidecar_addr": "127.0.0.1:9999",
+        "wa_rebind": {
+            "enabled": false,
+            "rebind_after_payment": true,
+            "gopay_app_service_addr": "127.0.0.1:50060",
+            "gopay_app_service": "gopay_app.GopayAppService",
+            "gopay_app_proto_import_path": "services\\gopay-app\\proto",
+            "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
+            "user_id": "local",
+            "wa_phone": "",
+            "rebind_phone": "",
+            "timeout_seconds": 600
+        },
+        "billing_regions": [
+            "ID"
+        ],
+        "stage_proxies": {
+            "checkout": "socks5h://127.0.0.1:7897",
+            "stripe_init": "socks5h://127.0.0.1:7897",
+            "payment_method": "socks5h://127.0.0.1:7897",
+            "confirm": "socks5h://127.0.0.1:7897"
+        }
+    },
     "runtime": {
         "directory": "runtime"
     },
