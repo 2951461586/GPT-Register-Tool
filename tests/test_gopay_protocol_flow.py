@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services" / "gopay-flow"))
 
-from gopay import GoPayCharger, GoPayFraudDeny, _check_gojek_balance_rp, _expected_amount_from_init, _extract_gopay_balance_rp, _gojek_call, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
+from gopay import GoPayCharger, GoPayFraudDeny, _check_gojek_balance_rp, _claim_configured_gopay_envelope, _expected_amount_from_init, _extract_envelope_ids, _extract_gopay_balance_rp, _gojek_call, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
 
 
 class _Resp:
@@ -71,6 +71,15 @@ class _BalanceClient:
     def refresh_token(self):
         self.refreshes += 1
         return {"status": 200, "body": {"ok": True}}
+
+
+class _EnvelopeClient:
+    def __init__(self):
+        self.claimed = []
+
+    def envelope_claim(self, envelope_id):
+        self.claimed.append(envelope_id)
+        return {"status": 200, "body": {"success": True}}
 
 
 class GoPayProtocolFlowTests(unittest.TestCase):
@@ -345,6 +354,26 @@ class GoPayProtocolFlowTests(unittest.TestCase):
 
         self.assertEqual(balance, 12000)
         self.assertEqual(client.refreshes, 1)
+
+    def test_extract_envelope_ids_from_short_link_html(self):
+        envelope_id, link_id = _extract_envelope_ids(
+            'window.__data={"envelope_request_id":"6a181e98a3335241d7dae063","link_id":"7b181e98a3335241d7dae064"}'
+        )
+
+        self.assertEqual(envelope_id, "6a181e98a3335241d7dae063")
+        self.assertEqual(link_id, "7b181e98a3335241d7dae064")
+
+    def test_claim_configured_gopay_envelope_uses_deeplink_id(self):
+        client = _EnvelopeClient()
+
+        claimed = _claim_configured_gopay_envelope(
+            client,
+            {"envelope_deeplink_id": "6a181e98a3335241d7dae063"},
+            log=lambda msg: None,
+        )
+
+        self.assertTrue(claimed)
+        self.assertEqual(client.claimed, ["6a181e98a3335241d7dae063"])
 
 
 if __name__ == "__main__":
