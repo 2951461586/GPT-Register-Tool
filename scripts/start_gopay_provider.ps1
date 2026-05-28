@@ -67,14 +67,6 @@ $EmulatorExe = Resolve-ProjectPath (First-Value @($GoPay.emulator_exe) "D:\Progr
 $AdbPath = Resolve-ProjectPath (First-Value @($GoPay.adb_path) "D:\Program Files\Netease\MuMuPlayer\nx_main\adb.exe")
 $Serial = First-Value @($GoPay.adb_serial) "emulator-5554"
 
-if (!(Test-Path -LiteralPath $AdbPath)) {
-    throw "ADB not found: $AdbPath"
-}
-if ((Test-Path -LiteralPath $EmulatorExe) -and -not (Get-Process | Where-Object { $_.Path -eq $EmulatorExe })) {
-    Start-Process -FilePath $EmulatorExe -WindowStyle Hidden
-    Start-Sleep -Seconds 8
-}
-
 $TemplatePath = Resolve-ProjectPath (First-Value @($GoPay.provider_config_path) "services\gopay-flow\config.gopay.base.json")
 if (!(Test-Path -LiteralPath $TemplatePath)) {
     throw "GoPay provider config template not found: $TemplatePath"
@@ -85,16 +77,72 @@ if ($null -eq $ProviderConfig.gopay) {
 }
 $ProviderConfig.gopay.country_code = First-Value @($GoPay.country_code) "62"
 $ProviderConfig.gopay.phone_number = First-Value @($GoPay.phone, $GoPay.phone_number) ""
-$ProviderConfig.gopay.pin = First-Value @($GoPay.pin) ""
+$ProviderConfig.gopay.pin = First-Value @($GoPay.pin) "147258"
 if ($null -eq $ProviderConfig.gopay.otp) {
     $ProviderConfig.gopay | Add-Member -NotePropertyName otp -NotePropertyValue ([pscustomobject]@{})
 }
 if ($null -eq $ProviderConfig.gopay.unlink) {
     $ProviderConfig.gopay | Add-Member -NotePropertyName unlink -NotePropertyValue ([pscustomobject]@{})
 }
+$RootPhoneReuse = $Config.phone_reuse
+$RootSmsBower = $null
+if ($null -ne $RootPhoneReuse) { $RootSmsBower = $RootPhoneReuse.smsbower }
+$GoPayOtp = $GoPay.otp
+$GoPayOtpSmsBower = $null
+if ($null -ne $GoPayOtp) { $GoPayOtpSmsBower = $GoPayOtp.smsbower }
+$OtpSource = (First-Value @($GoPay.otp_source, $GoPayOtp.source, $ProviderConfig.gopay.otp.source) "adb").ToLowerInvariant()
+$ProviderConfig.gopay.otp.source = $OtpSource
+if ($OtpSource -eq "sms_bower") { $OtpSource = "smsbower"; $ProviderConfig.gopay.otp.source = "smsbower" }
+if ($OtpSource -eq "smsbower") {
+    $SmsBower = if ($null -ne $GoPayOtpSmsBower) { $GoPayOtpSmsBower } else { $RootSmsBower }
+    if ($null -eq $SmsBower) {
+        throw "GoPay otp_source=smsbower requires phone_reuse.smsbower or gopay.otp.smsbower"
+    }
+    $SmsBowerService = First-Value @($GoPayOtpSmsBower.service, $SmsBower.gopay_service) ""
+    $SmsBowerCountry = First-Value @($GoPayOtpSmsBower.country, $SmsBower.gopay_country) ""
+    if ([string]::IsNullOrWhiteSpace($SmsBowerService) -or [string]::IsNullOrWhiteSpace($SmsBowerCountry)) {
+        throw "GoPay otp_source=smsbower requires gopay.otp.smsbower.service/country or phone_reuse.smsbower.gopay_service/gopay_country"
+    }
+    $SmsBowerMinPrice = First-Value @($GoPayOtpSmsBower.min_price, $RootSmsBower.gopay_min_price, $SmsBower.min_price) ""
+    $SmsBowerMaxPrice = First-Value @($GoPayOtpSmsBower.max_price, $RootSmsBower.gopay_max_price, $SmsBower.max_price) ""
+    $SmsBowerTargetPrice = First-Value @($GoPayOtpSmsBower.target_price, $RootSmsBower.gopay_target_price, $SmsBower.target_price) ""
+    $SmsBowerApiKey = First-Value @($GoPayOtpSmsBower.api_key, $RootSmsBower.api_key, $SmsBower.api_key) "`$SMSBOWER_API_KEY"
+    if ($SmsBowerApiKey -eq "`$SMSBOWER_API_KEY" -and $null -ne $RootSmsBower -and -not [string]::IsNullOrWhiteSpace([string]$RootSmsBower.api_key)) {
+        $SmsBowerApiKey = [string]$RootSmsBower.api_key
+    }
+    $smsBowerPayload = [pscustomobject]@{
+        api_key = $SmsBowerApiKey
+        endpoint = First-Value @($SmsBower.endpoint) "https://smsbower.page/stubs/handler_api.php"
+        service = $SmsBowerService
+        country = $SmsBowerCountry
+        min_price = $SmsBowerMinPrice
+        max_price = $SmsBowerMaxPrice
+        target_price = $SmsBowerTargetPrice
+        sms_timeout = [int](First-Value @($SmsBower.sms_timeout) "120")
+        sms_poll_interval = [int](First-Value @($SmsBower.sms_poll_interval) "5")
+        register_account = First-Value @($GoPayOtpSmsBower.register_account, $SmsBower.gopay_register_account) "true"
+        min_balance_rp = [int](First-Value @($GoPayOtpSmsBower.min_balance_rp, $GoPay.min_balance_rp, $SmsBower.gopay_min_balance_rp) "1")
+    }
+    if ($null -eq $ProviderConfig.gopay.otp.smsbower) {
+        $ProviderConfig.gopay.otp | Add-Member -NotePropertyName smsbower -NotePropertyValue $smsBowerPayload
+    } else {
+        $ProviderConfig.gopay.otp.smsbower = $smsBowerPayload
+    }
+    $ProviderConfig.gopay.unlink.enabled = $false
+} else {
+    if (!(Test-Path -LiteralPath $AdbPath)) {
+        throw "ADB not found: $AdbPath"
+    }
+    if ((Test-Path -LiteralPath $EmulatorExe) -and -not (Get-Process | Where-Object { $_.Path -eq $EmulatorExe })) {
+        Start-Process -FilePath $EmulatorExe -WindowStyle Hidden
+        Start-Sleep -Seconds 8
+    }
+}
 $ProviderConfig.gopay.otp.adb_url = "http://$SidecarAddr"
 $ProviderConfig.gopay.unlink.adb_url = "http://$SidecarAddr"
-$ProviderConfig.gopay.unlink.enabled = $true
+if ($OtpSource -ne "smsbower") {
+    $ProviderConfig.gopay.unlink.enabled = $true
+}
 if ($null -eq $ProviderConfig.adb) {
     $ProviderConfig | Add-Member -NotePropertyName adb -NotePropertyValue ([pscustomobject]@{})
 }
@@ -109,8 +157,12 @@ if (![string]::IsNullOrWhiteSpace($proxy)) {
 $GeneratedConfig = Join-Path $RuntimeDir "config.gopay.generated.json"
 Write-JsonNoBom $ProviderConfig $GeneratedConfig
 
-$SidecarListening = Get-NetTCPConnection -LocalAddress $SidecarHost -LocalPort $SidecarPort -ErrorAction SilentlyContinue
-if (-not $SidecarListening) {
+$UsesAdbSidecar = $OtpSource -ne "smsbower"
+$SidecarListening = $null
+if ($UsesAdbSidecar) {
+    $SidecarListening = Get-NetTCPConnection -LocalAddress $SidecarHost -LocalPort $SidecarPort -ErrorAction SilentlyContinue
+}
+if ($UsesAdbSidecar -and -not $SidecarListening) {
     $SidecarScript = Join-Path $Root "services\gopay-adb\gopay_adb_server.py"
     $SidecarArgs = @(
         (Quote-Arg $SidecarScript),
@@ -140,7 +192,9 @@ if (-not $PaymentListening) {
 
 Start-Sleep -Seconds 2
 $PaymentListening = Get-NetTCPConnection -LocalAddress $PaymentHost -LocalPort $PaymentPort -ErrorAction SilentlyContinue
-$SidecarListening = Get-NetTCPConnection -LocalAddress $SidecarHost -LocalPort $SidecarPort -ErrorAction SilentlyContinue
+if ($UsesAdbSidecar) {
+    $SidecarListening = Get-NetTCPConnection -LocalAddress $SidecarHost -LocalPort $SidecarPort -ErrorAction SilentlyContinue
+}
 $GoPayAppListening = $false
 if ($GoPayAppPort -gt 0) {
     $GoPayAppListening = [bool](Get-NetTCPConnection -LocalAddress $GoPayAppHost -LocalPort $GoPayAppPort -ErrorAction SilentlyContinue)
@@ -148,6 +202,7 @@ if ($GoPayAppPort -gt 0) {
 [pscustomobject]@{
     payment_service_addr = $PaymentAddr
     payment_service_listening = [bool]$PaymentListening
+    otp_source = $OtpSource
     adb_sidecar_addr = $SidecarAddr
     adb_sidecar_listening = [bool]$SidecarListening
     gopay_app_service_addr = $GoPayAppAddr

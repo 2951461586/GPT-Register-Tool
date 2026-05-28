@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import time
 import webbrowser
 from pathlib import Path
@@ -32,6 +33,10 @@ def one_click_pay_batch(args) -> None:
 
     cfg = _load_config()
     print(f"[gopay-pay] {len(emails)} account(s) queued mode={_one_click_mode(cfg)}", flush=True)
+    startup_error = _ensure_provider_started(cfg)
+    if startup_error:
+        print(f"[gopay-pay] provider startup failed: {startup_error}", flush=True)
+        raise SystemExit(3)
     ready_count = 0
     completed_count = 0
     fail_count = 0
@@ -139,7 +144,8 @@ def _provider_one_click_pay(
 
     phone = payment_phone(gopay_cfg, args)
     country_code = _arg_or_cfg(args, gopay_cfg, "gopay_country_code", "country_code") or "62"
-    if not phone:
+    auto_smsbower = _gopay_otp_source(gopay_cfg) == "smsbower"
+    if not phone and not auto_smsbower:
         return {"ok": False, "email": email, "error": "gopay_phone is required for provider mode"}
 
     start_body = _provider_start_body(
@@ -156,6 +162,15 @@ def _provider_one_click_pay(
         return _provider_error(email, "start_gopay_failed", start)
 
     flow_id = str(start.get("flowId") or start.get("flow_id") or "")
+    if auto_smsbower:
+        complete_body = _provider_complete_body(gopay_cfg, flow_id=flow_id, otp="", pin=str(pin or gopay_cfg.get("pin") or ""))
+        complete = _call_payment_service("CompleteGoPay", complete_body, gopay_cfg)
+        if not _rpc_success(complete):
+            return _provider_error(email, "complete_gopay_failed", complete)
+        result = _completed_result(email, flow_id, complete)
+        result["gopay_phone"] = start.get("gopayPhone") or start.get("gopay_phone") or phone or ""
+        _persist_provider_state(row, data, result)
+        return result
     if not otp:
         result = {
             "ok": True,
@@ -213,7 +228,7 @@ def _completed_result(email: str, flow_id: str, complete: dict[str, Any]) -> dic
 
 
 def _call_payment_service(method: str, body: dict[str, Any], gopay_cfg: dict[str, Any]) -> dict[str, Any]:
-    addr = str(gopay_cfg.get("payment_service_addr") or gopay_cfg.get("grpc_addr") or "").strip()
+    addr = str(gopay_cfg.get("payment_service_addr") or gopay_cfg.get("grpc_addr") or "127.0.0.1:50051").strip()
     if not addr:
         return {"success": False, "errorMessage": "gopay.payment_service_addr is required"}
     return call_grpcurl(
@@ -222,10 +237,52 @@ def _call_payment_service(method: str, body: dict[str, Any], gopay_cfg: dict[str
         addr=addr,
         service=str(gopay_cfg.get("payment_service") or "payment.PaymentService"),
         grpcurl=str(gopay_cfg.get("grpcurl_path") or gopay_cfg.get("grpcurl") or "grpcurl"),
-        proto_path=str(gopay_cfg.get("proto_path") or ""),
-        proto_import_path=str(gopay_cfg.get("proto_import_path") or ""),
+        proto_path=str(gopay_cfg.get("proto_path") or "services\\gopay-flow\\proto\\payment.proto"),
+        proto_import_path=str(gopay_cfg.get("proto_import_path") or "services\\gopay-flow\\proto"),
         timeout_seconds=int(gopay_cfg.get("provider_timeout_seconds") or gopay_cfg.get("timeout_seconds") or 600),
     )
+
+
+def _ensure_provider_started(cfg: dict[str, Any]) -> str:
+    if not _should_use_provider(cfg):
+        return ""
+    gopay_cfg = _gopay_cfg(cfg)
+    if not _bool_value(gopay_cfg.get("auto_start_provider"), True):
+        return ""
+    script = Path(DEFAULT_CONFIG_PATH).resolve().parent / "scripts" / "start_gopay_provider.ps1"
+    if not script.exists():
+        return f"missing provider startup script: {script}"
+    command = [
+        "powershell",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        "-ConfigPath",
+        str(Path(DEFAULT_CONFIG_PATH).name),
+    ]
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(Path(DEFAULT_CONFIG_PATH).resolve().parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=90,
+        )
+    except Exception as exc:
+        return str(exc)
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode != 0:
+        return (stderr or stdout or f"exit {proc.returncode}")[:500]
+    try:
+        payload = json.loads(stdout)
+    except Exception:
+        return ""
+    if isinstance(payload, dict) and payload.get("payment_service_listening") is False:
+        return f"PaymentService not listening at {payload.get('payment_service_addr') or gopay_cfg.get('payment_service_addr')}"
+    return ""
 
 
 def _provider_start_body(
@@ -253,9 +310,10 @@ def _provider_start_body(
         },
         "use_account_token": _bool_value(gopay_cfg.get("use_account_token"), True),
         "tokenization": str(gopay_cfg.get("tokenization") or "qris"),
-        "gopay_phone": phone,
+        "gopay_phone": str(phone or ""),
         "otp_channel": wa_otp_channel(gopay_cfg),
         "gopay_country_code": country_code,
+        "proxy_url": proxy,
     }
 
 
@@ -405,7 +463,7 @@ def _gopay_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _one_click_mode(cfg: dict[str, Any]) -> str:
-    mode = str(_gopay_cfg(cfg).get("one_click_mode") or "link").strip().lower()
+    mode = str(_gopay_cfg(cfg).get("one_click_mode") or "protocol").strip().lower()
     if mode in {"wa", "wa_rebind", "whatsapp", "whatsapp_rebind"}:
         return "wa_rebind"
     if mode in {"provider", "protocol", "grpc"}:
@@ -429,6 +487,19 @@ def _provider_api(gopay_cfg: dict[str, Any]) -> str:
     if value in {"legacy", "python", "flat", "local-python"}:
         return "legacy"
     return "byte-v-forge"
+
+
+def _gopay_otp_source(gopay_cfg: dict[str, Any]) -> str:
+    otp_cfg = gopay_cfg.get("otp") if isinstance(gopay_cfg.get("otp"), dict) else {}
+    value = str(
+        gopay_cfg.get("otp_source")
+        or otp_cfg.get("source")
+        or otp_cfg.get("type")
+        or ""
+    ).strip().lower()
+    if value in {"sms_bower", "sms-bower"}:
+        return "smsbower"
+    return value
 
 
 def _first_non_empty(*values: Any) -> str:
