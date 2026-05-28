@@ -122,6 +122,13 @@ if ($OtpSource -eq "smsbower") {
         sms_poll_interval = [int](First-Value @($SmsBower.sms_poll_interval) "5")
         register_account = First-Value @($GoPayOtpSmsBower.register_account, $SmsBower.gopay_register_account) "true"
         min_balance_rp = [int](First-Value @($GoPayOtpSmsBower.min_balance_rp, $GoPay.min_balance_rp, $SmsBower.gopay_min_balance_rp) "1")
+        claim_envelope_on_low_balance = First-Value @($GoPayOtpSmsBower.claim_envelope_on_low_balance, $GoPay.claim_envelope_on_low_balance) "true"
+        envelope_urls = @(
+            First-Value @($GoPayOtpSmsBower.envelope_urls, $GoPayOtpSmsBower.envelope_url, $GoPay.envelope_urls, $GoPay.envelope_url, $SmsBower.gopay_envelope_urls, $SmsBower.gopay_envelope_url) ""
+        )
+        envelope_deeplink_ids = @(
+            First-Value @($GoPayOtpSmsBower.envelope_deeplink_ids, $GoPayOtpSmsBower.envelope_deeplink_id, $GoPay.envelope_deeplink_ids, $GoPay.envelope_deeplink_id, $SmsBower.gopay_envelope_deeplink_ids, $SmsBower.gopay_envelope_deeplink_id) ""
+        )
     }
     if ($null -eq $ProviderConfig.gopay.otp.smsbower) {
         $ProviderConfig.gopay.otp | Add-Member -NotePropertyName smsbower -NotePropertyValue $smsBowerPayload

@@ -1611,6 +1611,22 @@ def _int_cfg(*values: Any, default: int = 0) -> int:
     return default
 
 
+def _list_cfg(*values: Any) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, (list, tuple, set)):
+            candidates = value
+        else:
+            candidates = str(value).split(",")
+        for item in candidates:
+            text = str(item or "").strip()
+            if text and text not in result:
+                result.append(text)
+    return result
+
+
 def _extract_gopay_balance_rp(response: dict[str, Any]) -> int:
     if int(response.get("status") or 0) != 200:
         return -1
@@ -1624,6 +1640,147 @@ def _extract_gopay_balance_rp(response: dict[str, Any]) -> int:
         if isinstance(balance, dict):
             return _int_cfg(balance.get("value"), default=0)
     return 0
+
+
+def _extract_envelope_ids(text: str) -> tuple[str, str]:
+    envelope_id = ""
+    link_id = ""
+    m = re.search(r"envelope_request_id[:%\s\"'=]*([0-9a-f]{24})", text)
+    if m:
+        envelope_id = m.group(1)
+    m = re.search(r"link_id[:%\s\"'=]*([0-9a-f]{24})", text)
+    if m:
+        link_id = m.group(1)
+    return envelope_id, link_id
+
+
+def _resolve_gopay_envelope_url(url: str, *, proxy: str = "", log: Callable[[str], None] = print) -> tuple[str, str]:
+    text = str(url or "").strip()
+    if re.fullmatch(r"[0-9a-f]{24}", text):
+        return text, ""
+    if not text:
+        return "", ""
+    proxies = None
+    if proxy and proxy.lower().startswith(("http://", "https://")):
+        proxies = {"http": proxy, "https": proxy}
+    response = requests.get(
+        text,
+        headers={"User-Agent": "GoPay/2.7.0 (com.gojek.gopay; build:2070; Android, 9)"},
+        timeout=20,
+        allow_redirects=True,
+        proxies=proxies,
+    )
+    response.raise_for_status()
+    body = "\n".join([
+        str(getattr(response, "url", "") or ""),
+        str(getattr(response, "text", "") or ""),
+    ])
+    envelope_id, link_id = _extract_envelope_ids(body)
+    if not envelope_id and not link_id:
+        log(f"[gopay] envelope URL did not expose id: {text}")
+    return envelope_id, link_id
+
+
+def _gopay_error_code(response: dict[str, Any]) -> str:
+    body = response.get("body") if isinstance(response.get("body"), dict) else {}
+    errors = body.get("errors", [])
+    if isinstance(errors, list) and errors:
+        first = errors[0] if isinstance(errors[0], dict) else {}
+        return str(first.get("code") or "")
+    return ""
+
+
+def _claim_one_gopay_envelope(
+    client: Any,
+    *,
+    envelope_id: str = "",
+    link_id: str = "",
+    log: Callable[[str], None] = print,
+) -> bool:
+    if envelope_id:
+        claim = getattr(client, "envelope_claim", None)
+        if callable(claim):
+            result = _gojek_call(claim, envelope_id, log=log)
+        else:
+            get = getattr(client, "_gopay_get", None)
+            post = getattr(client, "_gopay_post", None)
+            if not callable(get) or not callable(post):
+                result = {"status": 0, "body": {"errors": [{"code": "missing_envelope_claim"}]}}
+            else:
+                details = _gojek_call(get, f"/v1/festivals/envelope-requests/{envelope_id}", log=log)
+                if int(details.get("status") or 0) == 200:
+                    body = details.get("body") if isinstance(details.get("body"), dict) else {}
+                    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+                    eid = str(data.get("envelope_request_id") or "")
+                    result = _gojek_call(post, "/v1/festivals/envelope-requests", {"envelope_request_id": eid}, log=log)
+                else:
+                    result = details
+        if int(result.get("status") or 0) == 200 and (result.get("body") or {}).get("success", True):
+            log(f"[gopay] envelope claimed id={envelope_id}")
+            return True
+        code = _gopay_error_code(result)
+        if code == "GoPay-36009":
+            log(f"[gopay] envelope already claimed by this account id={envelope_id}")
+            return True
+        log(f"[gopay] envelope claim failed id={envelope_id} status={result.get('status')} code={code}")
+    if link_id:
+        claim_by_link = getattr(client, "envelope_claim_by_link", None)
+        if callable(claim_by_link):
+            result = _gojek_call(claim_by_link, link_id, log=log)
+        else:
+            post = getattr(client, "_gopay_post", None)
+            if not callable(post):
+                result = {"status": 0, "body": {"errors": [{"code": "missing_envelope_claim_by_link"}]}}
+            else:
+                result = _gojek_call(post, "/v1/festivals/link", {"link_id": link_id}, log=log)
+        if int(result.get("status") or 0) == 200 and (result.get("body") or {}).get("success", True):
+            log(f"[gopay] envelope link claimed id={link_id}")
+            return True
+        code = _gopay_error_code(result)
+        if code == "GoPay-36009":
+            log(f"[gopay] envelope link already claimed by this account id={link_id}")
+            return True
+        log(f"[gopay] envelope link claim failed id={link_id} status={result.get('status')} code={code}")
+    return False
+
+
+def _claim_configured_gopay_envelope(
+    client: Any,
+    gopay_cfg: dict,
+    *,
+    log: Callable[[str], None] = print,
+) -> bool:
+    otp_cfg = gopay_cfg.get("otp") or {}
+    smsbower_cfg = otp_cfg.get("smsbower") if isinstance(otp_cfg, dict) else {}
+    if not isinstance(smsbower_cfg, dict):
+        smsbower_cfg = {}
+    proxy = _tls_client_proxy(str(gopay_cfg.get("proxy") or gopay_cfg.get("proxy_url") or "").strip())
+    envelope_ids = _list_cfg(
+        smsbower_cfg.get("envelope_deeplink_ids"),
+        smsbower_cfg.get("envelope_deeplink_id"),
+        gopay_cfg.get("envelope_deeplink_ids"),
+        gopay_cfg.get("envelope_deeplink_id"),
+        os.getenv("GOPAY_ENVELOPE_DEEPLINK_IDS"),
+    )
+    envelope_urls = _list_cfg(
+        smsbower_cfg.get("envelope_urls"),
+        smsbower_cfg.get("envelope_url"),
+        gopay_cfg.get("envelope_urls"),
+        gopay_cfg.get("envelope_url"),
+        os.getenv("GOPAY_ENVELOPE_URLS"),
+    )
+    for envelope_id in envelope_ids:
+        if _claim_one_gopay_envelope(client, envelope_id=envelope_id, log=log):
+            return True
+    for url in envelope_urls:
+        try:
+            envelope_id, link_id = _resolve_gopay_envelope_url(url, proxy=proxy, log=log)
+        except Exception as exc:
+            log(f"[gopay] envelope URL resolve failed url={url}: {exc}")
+            continue
+        if _claim_one_gopay_envelope(client, envelope_id=envelope_id, link_id=link_id, log=log):
+            return True
+    return False
 
 
 def _check_gojek_balance_rp(client: Any, *, log: Callable[[str], None] = print) -> int:
@@ -1754,7 +1911,16 @@ def _bootstrap_gojek_account(gopay_cfg: dict, activation: dict, *, log: Callable
         raise GoPayError("GoPay balance check failed before payment")
     log(f"[gopay] GoPay balance={balance_rp} Rp")
     if min_balance_rp > 0 and balance_rp < min_balance_rp:
-        raise GoPayError(f"GoPay balance insufficient before payment: balance={balance_rp} Rp required>={min_balance_rp} Rp")
+        if _truthy(smsbower_cfg.get("claim_envelope_on_low_balance", gopay_cfg.get("claim_envelope_on_low_balance", True))):
+            log(f"[gopay] GoPay balance below {min_balance_rp} Rp; trying configured envelope")
+            if _claim_configured_gopay_envelope(client, gopay_cfg, log=log):
+                time.sleep(2)
+                balance_rp = _check_gojek_balance_rp(client, log=log)
+                activation["balance_rp"] = balance_rp
+                if balance_rp >= 0:
+                    log(f"[gopay] GoPay balance after envelope={balance_rp} Rp")
+        if balance_rp < min_balance_rp:
+            raise GoPayError(f"GoPay balance insufficient before payment: balance={balance_rp} Rp required>={min_balance_rp} Rp")
 
     activation["gojek_registered"] = True
     activation["request_retry_before_wait"] = True

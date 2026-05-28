@@ -196,6 +196,8 @@ and `phone_reuse.smsbower.gopay_country`; do not reuse the OpenAI/Ghana
         "service": "<gopay-service-code>",
         "country": "<indonesia-country-code>",
         "min_balance_rp": 1,
+        "claim_envelope_on_low_balance": true,
+        "envelope_url": "https://app.gopay.co.id/NF8p/ajgvlrts",
         "sms_timeout": 120,
         "sms_poll_interval": 5
       }
@@ -213,7 +215,7 @@ Protocol flow:
 5. Load the Midtrans transaction and POST `/snap/v3/accounts/{snap}/linking`.
 6. If Midtrans reports the wallet is already linked, DELETE `/snap/v3/accounts/{snap}/gopay` and retry linking.
 7. POST GoPay `/v1/linking/validate-reference` and `/v1/linking/user-consent`.
-8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout; otherwise use configured `gopay.phone`.
+8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout. If balance is too low and `claim_envelope_on_low_balance=true`, resolve `envelope_url`, claim the GoPay red packet through `/v1/festivals/envelope-requests`, then re-check balance. Otherwise use configured `gopay.phone`.
 9. For `otp_channel=sms`, POST `/v1/linking/resend-otp` to force SMS OTP; WA/default only uses consent delivery.
 10. Persist `flow_id`; SMSBower mode immediately calls `CompleteGoPay` and waits for the code, while manual/ADB modes mark `otp_required`.
 11. When OTP is available, call `PaymentService.CompleteGoPay`.
