@@ -268,6 +268,25 @@ message CheckTokenValidResponse {
   string state_json = 100;
 }
 
+// === GoPay 红包 ===
+
+message ClaimEnvelopeRequest {
+  string envelope_request_id = 1; // 为空时从 link 提取
+  string link = 2;                // app.gopay 短链、gopay:// deeplink 或 customer API URL
+  string state_json = 100;
+}
+
+message ClaimEnvelopeResponse {
+  bool success = 1;
+  string error_message = 2;
+  string envelope_request_id = 3;          // 实际请求路径里的 id
+  string response_envelope_request_id = 4; // 返回 data.envelope_request_id；可能与路径 id 不同
+  string status = 5;
+  int32 http_status = 6;
+  string raw_json = 7;
+  string state_json = 100;
+}
+
 // === 解绑 ===
 
 message UnlinkRequest {
@@ -464,6 +483,9 @@ service GopayAppService {
   rpc AuthStart(AuthStartRequest) returns (AuthStartResponse);
   rpc AuthComplete(AuthCompleteRequest) returns (AuthCompleteResponse);
   rpc CheckTokenValid(CheckTokenValidRequest) returns (CheckTokenValidResponse);
+
+  // GoPay 红包；token 只从 state_json/数据库态获取。
+  rpc ClaimEnvelope(ClaimEnvelopeRequest) returns (ClaimEnvelopeResponse);
 
   // 解绑
   rpc Unlink(UnlinkRequest) returns (UnlinkResponse);
