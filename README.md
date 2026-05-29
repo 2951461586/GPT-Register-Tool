@@ -179,12 +179,20 @@ SMSBower mode reuses the same secret/endpoint/timeout style as the one-click SMS
 configuration, but GoPay needs its own SMSBower service/country code. Configure
 either `gopay.otp.smsbower.service/country` or `phone_reuse.smsbower.gopay_service`
 and `phone_reuse.smsbower.gopay_country`; do not reuse the OpenAI/Ghana
-`service=dr,country=38` values for GoPay.
+`service=dr,country=38` values for GoPay. When `register_account=true`, the
+provider uses the project-local `gopay_app.GopayAppService` contract for Gojek
+signup, PIN setup, and balance checks; `gopay.gopay_app_service_addr` must point
+to that compatible local service. The older `gopay_deploy_src` / `opai` client is
+kept only as a legacy fallback.
 
 ```json
 {
   "gopay": {
     "one_click_mode": "protocol",
+    "gopay_app_service_addr": "127.0.0.1:50060",
+    "gopay_app_service": "gopay_app.GopayAppService",
+    "gopay_app_proto_import_path": "services\\gopay-app\\proto",
+    "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
     "otp_source": "smsbower",
     "country_code": "62",
     "otp_channel": "sms",
@@ -196,8 +204,8 @@ and `phone_reuse.smsbower.gopay_country`; do not reuse the OpenAI/Ghana
         "service": "<gopay-service-code>",
         "country": "<indonesia-country-code>",
         "min_balance_rp": 1,
-        "claim_envelope_on_low_balance": true,
-        "envelope_url": "https://app.gopay.co.id/NF8p/ajgvlrts",
+        "balance_wait_timeout_seconds": 120,
+        "balance_poll_interval_seconds": 5,
         "sms_timeout": 120,
         "sms_poll_interval": 5
       }
@@ -215,7 +223,7 @@ Protocol flow:
 5. Load the Midtrans transaction and POST `/snap/v3/accounts/{snap}/linking`.
 6. If Midtrans reports the wallet is already linked, DELETE `/snap/v3/accounts/{snap}/gopay` and retry linking.
 7. POST GoPay `/v1/linking/validate-reference` and `/v1/linking/user-consent`.
-8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout. If balance is too low and `claim_envelope_on_low_balance=true`, resolve `envelope_url`, claim the GoPay red packet through `/v1/festivals/envelope-requests`, then re-check balance. Otherwise use configured `gopay.phone`.
+8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout. If the balance is not ready, the provider waits up to `balance_wait_timeout_seconds` and polls every `balance_poll_interval_seconds`; balance-supplement APIs are intentionally not called because they increase payment risk. Otherwise use configured `gopay.phone`.
 9. For `otp_channel=sms`, POST `/v1/linking/resend-otp` to force SMS OTP; WA/default only uses consent delivery.
 10. Persist `flow_id`; SMSBower mode immediately calls `CompleteGoPay` and waits for the code, while manual/ADB modes mark `otp_required`.
 11. When OTP is available, call `PaymentService.CompleteGoPay`.
