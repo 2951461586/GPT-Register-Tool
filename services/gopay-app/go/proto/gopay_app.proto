@@ -1,0 +1,501 @@
+syntax = "proto3";
+
+package gopay_app;
+
+option go_package = "./;pb";
+
+// === 改手机号 ===
+
+message ChangePhoneStartRequest {
+  string pin = 1;
+  string new_phone = 2;  // 编排服务从接码服务取号后传入，不含国家码
+  string country_code = 3; // 电话区号，例如 "+62"
+  string state_json = 100;
+}
+
+message ChangePhoneStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  string new_phone = 3;       // 实际获取到的号码
+  string activation_id = 4;   // 保留字段；activation_id 由编排服务传递给接码服务
+  bool otp_sent = 5;
+  string state_json = 100;
+}
+
+message ChangePhoneCompleteRequest {
+  string otp = 1;
+  string state_json = 100;
+}
+
+message ChangePhoneCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  string state_json = 100;
+}
+
+message ChangePhoneRetryRequest {
+  string state_json = 100;
+}
+
+message ChangePhoneRetryResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string state_json = 100;
+}
+
+// === 注销 ===
+
+message DeactivateStartRequest {
+  string pin = 1;
+  string state_json = 100;
+}
+
+message DeactivateStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string state_json = 100;
+}
+
+message DeactivateCompleteRequest {
+  string otp = 1;
+  string state_json = 100;
+}
+
+message DeactivateCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  int64 deactivated_at = 3;
+  string state_json = 100;
+}
+
+// === 登录 ===
+
+message LoginStartRequest {
+  string phone = 1;  // 登录手机号；必填，由上游编排传入
+  string country_code = 2; // 电话区号，例如 "+62"；必填，由上游编排传入
+  string pin = 3;          // 登录 PIN；必填，由上游编排传入
+  string otp_channel = 4;  // sms 或 wa；为空时由 provider 选择当前流程默认通道
+  string state_json = 100;
+}
+
+message LoginStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string verification_id = 4;
+  string verification_method = 5;
+  string state_json = 100;
+}
+
+message LoginCompleteRequest {
+  string otp = 1;
+  string state_json = 100;
+}
+
+message LoginCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  reserved 3;
+  reserved "token";
+  string phone = 4;
+  bool otp_sent = 5;
+  string verification_id = 6;
+  string verification_method = 7;
+  string state_json = 100;
+}
+
+// === 注册 ===
+
+message SignupStartRequest {
+  string phone = 1;        // 新账号手机号；必填，由上游编排传入
+  string name = 2;
+  string email = 3;
+  string country_code = 4; // 电话区号，例如 "+62"；为空时 provider 使用 GoPay 默认国家区号
+  string otp_channel = 5;  // sms 或 wa；为空默认 sms；由服务映射为 otp_sms / otp_wa
+  bool skip_phone_probe = 6; // 直接进入 signup methods，不预探测手机号是否已注册
+  string state_json = 100;
+}
+
+message SignupStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string verification_id = 4;
+  string verification_method = 5;
+  string raw_json = 6; // 上游原始响应 JSON
+  repeated int32 retry_timer_seconds = 7;
+  string state_json = 100;
+}
+
+message SignupRetryRequest {
+  string state_json = 100;
+}
+
+message SignupRetryResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string raw_json = 4; // 上游原始响应 JSON
+  string state_json = 100;
+}
+
+message SignupCompleteRequest {
+  string otp = 1;
+  string state_json = 100;
+}
+
+message SignupCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  string phone = 3;
+  bool pin_setup_required = 4;
+  string raw_json = 5; // 上游原始响应 JSON
+  string state_json = 100;
+}
+
+message GenerateDeviceProxyRequest {}
+
+message GenerateDeviceProxyResponse {
+  bool success = 1;
+  string error_message = 2;
+  int32 proxy_slot = 3;
+  int32 dynamic_egress_size = 4;
+  string proxy_hash = 5;
+  string device_fingerprint = 6;
+  string state_json = 100;
+}
+
+message CreatePinStartRequest {
+  string pin = 1;
+  string otp_channel = 2;  // sms 或 wa；为空默认 sms；由服务映射为 otp_sms / otp_wa
+  string state_json = 100;
+}
+
+message CreatePinStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string verification_id = 4;
+  string verification_method = 5;
+  string state_json = 100;
+}
+
+message CreatePinRetryRequest {
+  string state_json = 100;
+}
+
+message CreatePinRetryResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool otp_sent = 3;
+  string state_json = 100;
+}
+
+message CreatePinCompleteRequest {
+  string otp = 1;
+  string pin = 2;
+  string state_json = 100;
+}
+
+message CreatePinCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  string phone = 3;
+  bool pin_setup_complete = 4;
+  string state_json = 100;
+}
+
+// === 登录入口 ===
+
+message AuthStartRequest {
+  string phone = 1;        // 手机号；必填，由上游编排传入
+  string country_code = 2; // 电话区号，例如 "+62"；为空时 provider 使用 GoPay 默认国家区号
+  string pin = 3;          // login 使用；需要 PIN 的步骤必须由调用方传入
+  string otp_channel = 4;  // sms 或 wa；为空时由 provider 选择当前流程默认通道
+  string state_json = 100;
+}
+
+message AuthStartResponse {
+  bool success = 1;
+  string error_message = 2;
+  string mode = 3; // token 或 login；注册走 SignupStart
+  string stage = 4;
+  bool otp_sent = 5;
+  string verification_id = 6;
+  string verification_method = 7;
+  bool ready = 8;
+  bool pin_setup_required = 9;
+  string state_json = 100;
+}
+
+message AuthCompleteRequest {
+  string otp = 1;
+  string pin = 2;  // 保留给需要 PIN 的登录后置步骤；需要 PIN 的步骤必须由调用方传入
+  string state_json = 100;
+}
+
+message AuthCompleteResponse {
+  bool success = 1;
+  string error_message = 2;
+  string mode = 3; // token 或 login；注册走 SignupStart
+  string stage = 4;
+  string phone = 5;
+  bool ready = 6;
+  bool pin_setup_required = 7;
+  bool pin_setup_complete = 8;
+  bool otp_sent = 9;
+  string verification_id = 10;
+  string verification_method = 11;
+  string state_json = 100;
+}
+
+message CheckTokenValidRequest {
+  string state_json = 100;
+}
+
+message CheckTokenValidResponse {
+  bool success = 1;
+  string error_message = 2;
+  string stage = 3;
+  string phone = 4;
+  bool token_valid = 5;
+  bool refreshed = 6;
+  int64 balance_amount = 7;
+  bool has_min_balance = 8;
+  string balance_currency = 9;
+  string state_json = 100;
+}
+
+// === GoPay 红包 ===
+
+message ClaimEnvelopeRequest {
+  string envelope_request_id = 1; // 为空时从 link 提取
+  string link = 2;                // app.gopay 短链、gopay:// deeplink 或 customer API URL
+  string state_json = 100;
+}
+
+message ClaimEnvelopeResponse {
+  bool success = 1;
+  string error_message = 2;
+  string envelope_request_id = 3;          // 实际请求路径里的 id
+  string response_envelope_request_id = 4; // 返回 data.envelope_request_id；可能与路径 id 不同
+  string status = 5;
+  int32 http_status = 6;
+  string raw_json = 7;
+  string state_json = 100;
+}
+
+// === 解绑 ===
+
+message UnlinkRequest {
+  string state_json = 100;
+}
+
+message UnlinkResponse {
+  bool success = 1;
+  string error_message = 2;
+  int32 unlinked_count = 3;
+  string state_json = 100;
+}
+
+// === 状态 ===
+
+message StatusRequest {
+  string state_json = 100;
+}
+
+message StatusResponse {
+  string stage = 1;
+  string phone = 2;
+  reserved 3;
+  reserved "token";
+  string device_fingerprint = 4;  // 当前设备指纹摘要
+  int64 deactivated_at = 5;
+  string error_message = 6;
+  bool token_present = 7;
+  int64 login_otp_sent_at_unix = 8;
+  int64 login_otp_expires_at_unix = 9;
+  int64 signup_otp_sent_at_unix = 10;
+  int64 signup_otp_expires_at_unix = 11;
+  int64 signup_pin_otp_sent_at_unix = 12;
+  int64 signup_pin_otp_expires_at_unix = 13;
+  int64 balance_amount = 14;
+  bool has_min_balance = 15;
+  string balance_currency = 16;
+  bool pin_setup = 17;
+  int64 pin_setup_at_unix = 18;
+  string state_json = 100;
+}
+
+message GetReadyAccountTokenRequest {
+  string state_json = 100;
+}
+
+message GetReadyAccountTokenResponse {
+  bool success = 1;
+  string error_message = 2;
+  string account_token = 3;
+  string phone = 4;
+  string state_json = 100;
+}
+
+// === 注销状态 ===
+
+message CheckDeactivationRequest {
+  string state_json = 100;
+}
+
+message CheckDeactivationResponse {
+  bool completed = 1;
+  int64 remaining_seconds = 2;
+  string state_json = 100;
+}
+
+// === 收款二维码 ===
+
+message GetQrIdRequest {
+  string state_json = 100;
+}
+
+message GetQrIdResponse {
+  bool success = 1;
+  string error_message = 2;
+  string qr_id = 3;
+  string state_json = 100;
+}
+
+// === 号码可用性检测 ===
+
+message CheckPhoneRequest {
+  string phone = 1;  // 不含国家码
+  reserved 2;
+  reserved "country";
+  string country_code = 3; // 电话区号，例如 "+62"；为空时 provider 使用 GoPay 默认国家区号
+  string state_json = 100; // 必须来自 GenerateDeviceProxy；CheckPhone 不隐式生成设备或代理
+}
+
+message CheckPhoneResponse {
+  bool available = 1;       // true=未注册，可用于接收改号
+  string error_message = 2;
+  string status = 3;        // available / registered / rate_limited / error
+  int32 proxy_slot = 4;
+  int32 dynamic_egress_size = 5;
+  string proxy_hash = 6;
+  string device_fingerprint = 7;
+  string state_json = 100;  // 原样返回输入链路态；用于后续注册复用同一 proxy/device
+}
+
+// === Midtrans GoPay 链接支付 ===
+
+message ReplayStepResult {
+  string label = 1;
+  int32 status_code = 2;
+  string response_text = 3;
+  string error_message = 4;
+}
+
+message ReplayLinkPaymentRequest {
+  string payment_link = 1;  // Midtrans GoPay deeplink 或 A...ID payment reference
+  string pin = 2;
+  int64 amount_value = 3;   // 默认 1 IDR
+  string amount_currency = 4;
+  int32 body_limit = 5;
+  string state_json = 100;
+}
+
+message ReplayLinkPaymentResponse {
+  bool success = 1;
+  string error_message = 2;
+  string payment_id = 3;
+  string status = 4;
+  repeated ReplayStepResult steps = 5;
+  string state_json = 100;
+}
+
+// === GoPay state 持久化（由 gopay-app 自己持有）===
+
+message GetGoPayStateRequest {
+  string user_id = 1; // local 或 tg:<user_id>
+}
+
+message GetGoPayStateResponse {
+  bool success = 1;
+  string error_message = 2;
+  string user_id = 3;
+  string state_json = 4;
+}
+
+message UpsertGoPayStateRequest {
+  string user_id = 1; // local 或 tg:<user_id>
+  string state_json = 2;
+}
+
+message UpsertGoPayStateResponse {
+  bool success = 1;
+  string error_message = 2;
+  string user_id = 3;
+  string state_json = 4;
+}
+
+message DeleteGoPayStateRequest {
+  string user_id = 1; // local 或 tg:<user_id>
+}
+
+message DeleteGoPayStateResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+service GopayAppService {
+  // GoPay state 持久化；account-db 不参与。
+  rpc GetGoPayState(GetGoPayStateRequest) returns (GetGoPayStateResponse);
+  rpc UpsertGoPayState(UpsertGoPayStateRequest) returns (UpsertGoPayStateResponse);
+  rpc DeleteGoPayState(DeleteGoPayStateRequest) returns (DeleteGoPayStateResponse);
+
+  // 号码可用性检测；调用方必须先 GenerateDeviceProxy，并把 state_json 传入 CheckPhone。
+  rpc GenerateDeviceProxy(GenerateDeviceProxyRequest) returns (GenerateDeviceProxyResponse);
+  rpc CheckPhone(CheckPhoneRequest) returns (CheckPhoneResponse);
+
+  // 改手机号（start/retry/complete）
+  rpc ChangePhoneStart(ChangePhoneStartRequest) returns (ChangePhoneStartResponse);
+  rpc ChangePhoneRetry(ChangePhoneRetryRequest) returns (ChangePhoneRetryResponse);
+  rpc ChangePhoneComplete(ChangePhoneCompleteRequest) returns (ChangePhoneCompleteResponse);
+
+  // 注销（两步）
+  rpc DeactivateStart(DeactivateStartRequest) returns (DeactivateStartResponse);
+  rpc DeactivateComplete(DeactivateCompleteRequest) returns (DeactivateCompleteResponse);
+
+  // 登录（两步）
+  rpc LoginStart(LoginStartRequest) returns (LoginStartResponse);
+  rpc LoginComplete(LoginCompleteRequest) returns (LoginCompleteResponse);
+
+  // 注册（四步）
+  rpc SignupStart(SignupStartRequest) returns (SignupStartResponse);
+  rpc SignupRetry(SignupRetryRequest) returns (SignupRetryResponse);
+  rpc SignupComplete(SignupCompleteRequest) returns (SignupCompleteResponse);
+  rpc CreatePinStart(CreatePinStartRequest) returns (CreatePinStartResponse);
+  rpc CreatePinRetry(CreatePinRetryRequest) returns (CreatePinRetryResponse);
+  rpc CreatePinComplete(CreatePinCompleteRequest) returns (CreatePinCompleteResponse);
+
+  // 登录 / 注册入口
+  rpc AuthStart(AuthStartRequest) returns (AuthStartResponse);
+  rpc AuthComplete(AuthCompleteRequest) returns (AuthCompleteResponse);
+  rpc CheckTokenValid(CheckTokenValidRequest) returns (CheckTokenValidResponse);
+
+  // GoPay 红包；token 只从 state_json/数据库态获取。
+  rpc ClaimEnvelope(ClaimEnvelopeRequest) returns (ClaimEnvelopeResponse);
+
+  // 解绑
+  rpc Unlink(UnlinkRequest) returns (UnlinkResponse);
+
+  // 查询
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc GetQrId(GetQrIdRequest) returns (GetQrIdResponse);
+  rpc GetReadyAccountToken(GetReadyAccountTokenRequest) returns (GetReadyAccountTokenResponse);
+  rpc CheckDeactivation(CheckDeactivationRequest) returns (CheckDeactivationResponse);
+
+  // Midtrans GoPay 链接支付；token 只从 state_json/数据库态获取。
+  rpc ReplayLinkPayment(ReplayLinkPaymentRequest) returns (ReplayLinkPaymentResponse);
+}

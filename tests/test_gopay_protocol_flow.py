@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services" / "gopay-flow"))
 
-from gopay import GoPayCharger, GoPayFraudDeny, _check_gojek_balance_rp, _claim_configured_gopay_envelope, _expected_amount_from_init, _extract_envelope_ids, _extract_gopay_balance_rp, _gojek_call, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
+from gopay import GoPayCharger, GoPayFraudDeny, _check_gojek_balance_rp, _expected_amount_from_init, _extract_gopay_balance_rp, _gojek_call, _gopay_app_cfg, _gopay_app_service_configured, _retry_smsbower_gopay_bootstrap_error, _rpc_bool, _rpc_state, _smsbower_api, _wait_for_gojek_min_balance, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
 
 
 class _Resp:
@@ -71,15 +71,6 @@ class _BalanceClient:
     def refresh_token(self):
         self.refreshes += 1
         return {"status": 200, "body": {"ok": True}}
-
-
-class _EnvelopeClient:
-    def __init__(self):
-        self.claimed = []
-
-    def envelope_claim(self, envelope_id):
-        self.claimed.append(envelope_id)
-        return {"status": 200, "body": {"success": True}}
 
 
 class GoPayProtocolFlowTests(unittest.TestCase):
@@ -236,6 +227,37 @@ class GoPayProtocolFlowTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["service"], "gp")
         self.assertEqual(calls[0][1]["country"], "6")
 
+    def test_smsbower_api_retries_transient_timeout(self):
+        import gopay
+
+        calls = []
+
+        def fake_get(endpoint, params, timeout):
+            calls.append((endpoint, params, timeout))
+            if len(calls) == 1:
+                raise gopay.requests.exceptions.ReadTimeout("read timeout")
+            return _SmsBowerResp("ACCESS_NUMBER:act1:6281234567890")
+
+        old_get = gopay.requests.get
+        old_sleep = gopay.time.sleep
+        try:
+            gopay.requests.get = fake_get
+            gopay.time.sleep = lambda seconds: None
+            result = _smsbower_api("key", "https://smsbower.example/api", "getNumberV2", {"service": "gp"})
+        finally:
+            gopay.requests.get = old_get
+            gopay.time.sleep = old_sleep
+
+        self.assertEqual(result, "ACCESS_NUMBER:act1:6281234567890")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][2], 20)
+
+    def test_smsbower_bootstrap_retry_accepts_gopay_init_rate_limit(self):
+        err = GoPayFraudDeny(
+            'signup otp initiate rate limited: status 429 {"errors":[{"code":"scp-cvs:error:ratelimit:init_verification"}]}'
+        )
+        self.assertTrue(_retry_smsbower_gopay_bootstrap_error(err))
+
     def test_smsbower_source_accepts_top_level_otp_source(self):
         self.assertTrue(smsbower_source_enabled({"otp_source": "smsbower"}))
 
@@ -355,26 +377,59 @@ class GoPayProtocolFlowTests(unittest.TestCase):
         self.assertEqual(balance, 12000)
         self.assertEqual(client.refreshes, 1)
 
-    def test_extract_envelope_ids_from_short_link_html(self):
-        envelope_id, link_id = _extract_envelope_ids(
-            'window.__data={"envelope_request_id":"6a181e98a3335241d7dae063","link_id":"7b181e98a3335241d7dae064"}'
-        )
+    def test_wait_for_gojek_min_balance_polls_until_ready(self):
+        import gopay
 
-        self.assertEqual(envelope_id, "6a181e98a3335241d7dae063")
-        self.assertEqual(link_id, "7b181e98a3335241d7dae064")
+        client = _BalanceClient([
+            {"status": 200, "body": {"data": [{"balance": {"value": 0}}]}},
+            {"status": 200, "body": {"data": [{"balance": {"value": 0}}]}},
+            {"status": 200, "body": {"data": [{"balance": {"value": 1}}]}},
+        ])
 
-    def test_claim_configured_gopay_envelope_uses_deeplink_id(self):
-        client = _EnvelopeClient()
+        sleeps = []
+        old_sleep = gopay.time.sleep
+        try:
+            gopay.time.sleep = lambda seconds: sleeps.append(seconds)
+            balance = _wait_for_gojek_min_balance(
+                client,
+                min_balance_rp=1,
+                timeout_seconds=120,
+                poll_interval_seconds=5,
+                log=lambda msg: None,
+            )
+        finally:
+            gopay.time.sleep = old_sleep
 
-        claimed = _claim_configured_gopay_envelope(
-            client,
-            {"envelope_deeplink_id": "6a181e98a3335241d7dae063"},
-            log=lambda msg: None,
-        )
+        self.assertEqual(balance, 1)
+        self.assertEqual(len(sleeps), 2)
 
-        self.assertTrue(claimed)
-        self.assertEqual(client.claimed, ["6a181e98a3335241d7dae063"])
+    def test_gopay_app_config_uses_root_addr(self):
+        cfg = _gopay_app_cfg({
+            "gopay_app_service_addr": "127.0.0.1:50060",
+            "provider_timeout_seconds": 123,
+        })
 
+        self.assertTrue(_gopay_app_service_configured({"gopay_app_service_addr": "127.0.0.1:50060"}))
+        self.assertEqual(cfg["addr"], "127.0.0.1:50060")
+        self.assertEqual(cfg["service"], "gopay_app.GopayAppService")
+        self.assertEqual(cfg["timeout_seconds"], 123)
+
+    def test_gopay_app_config_falls_back_to_wa_rebind_addr(self):
+        cfg = _gopay_app_cfg({
+            "wa_rebind": {
+                "gopay_app_service_addr": "127.0.0.1:50061",
+                "gopay_app_service": "custom.Service",
+            },
+        })
+
+        self.assertEqual(cfg["addr"], "127.0.0.1:50061")
+        self.assertEqual(cfg["service"], "custom.Service")
+
+    def test_rpc_helpers_accept_grpcurl_camel_case(self):
+        payload = {"success": True, "otpSent": True, "stateJson": "{\"stage\":\"ok\"}"}
+
+        self.assertTrue(_rpc_bool(payload, "otpSent", "otp_sent"))
+        self.assertEqual(_rpc_state(payload), "{\"stage\":\"ok\"}")
 
 if __name__ == "__main__":
     unittest.main()
