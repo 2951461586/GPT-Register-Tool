@@ -1,5 +1,7 @@
 # Core dependencies
 curl_cffi>=0.7.0
+cryptography>=41.0.0
+httpx[http2,socks]>=0.28.0
 requests>=2.31.0
 
 # Anti-detect browser (preferred)

@@ -39,8 +39,19 @@
     },
     "paypal": {
         "auto_generate": true,
-        "require_zero_due": false,
+        "require_zero_due": true,
         "max_checkout_retries": 3,
+        "link_mode": "chatgpt_checkout",
+        "checkout_ui_mode": "hosted",
+        "redirect_url_format": "any",
+        "use_elements_session": true,
+        "approve_missing_redirect": false,
+        "redirect_poll_timeout_seconds": 30,
+        "redirect_poll_interval_seconds": 1,
+        "resolve_ba_redirect": false,
+        "require_ba_token": false,
+        "explicit_proxy_overrides_stage_proxies": false,
+        "disable_promo_on_confirm_decline": false,
         "billing_regions": [
             "US"
         ],
@@ -52,7 +63,11 @@
             "stripe_init": "socks5h://127.0.0.1:7897",
             "payment_method": "socks5h://127.0.0.1:7897",
             "confirm": "direct"
-        }
+        },
+        "confirm_style": "inline_payment_method_data",
+        "fallback_to_hosted_checkout_on_blocked": true,
+        "max_regenerate_workers": 1,
+        "regenerate_delay_seconds": 3
     },
     "gopay": {
         "one_click_mode": "protocol",
@@ -66,14 +81,10 @@
         "proto_path": "services\\gopay-flow\\proto\\payment.proto",
         "provider_config_path": "services\\gopay-flow\\config.gopay.base.json",
         "provider_timeout_seconds": 600,
-        "gopay_app_service_addr": "127.0.0.1:50060",
-        "gopay_app_service": "gopay_app.GopayAppService",
-        "gopay_app_proto_import_path": "services\\gopay-app\\proto",
-        "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
-        "gopay_app_exe": "runtime\\gopay_provider\\gopay-app-server.exe",
-        "gopay_app_timeout_seconds": 600,
         "auto_start_provider": true,
-        "gopay_deploy_src": "F:\\epsoft\\gopay-deploy\\app\\src",
+        "pure_xe_mode": "enhanced",
+        "pure_protocol_timeout_seconds": 35,
+        "pure_protocol_debug": false,
         "tokenization": "qris",
         "otp_source": "smsbower",
         "otp": {
@@ -159,7 +170,8 @@
         "registration_timeout": 180
     },
     "phone_reuse": {
-        "max_reuse_count": 3,
+        "source": "smsbower",
+        "max_reuse_count": 1,
         "send_cooldown_seconds": 45,
         "send_retry_attempts": 3,
         "send_retry_delay_seconds": 45,
@@ -182,6 +194,7 @@
             "pool_size": 1,
             "sms_timeout": 120,
             "sms_poll_interval": 5,
+            "number_attempts": 3,
             "send_cooldown_seconds": 45,
             "send_retry_attempts": 3,
             "send_retry_delay_seconds": 45
@@ -210,15 +223,42 @@
         "geoip": true,
         "captcha_solver": "passive",
         "cards": [
-            {"number": "CARD_NUMBER", "exp_month": "MM", "exp_year": "YYYY", "cvv": "CVV"}
+            {
+                "number": "CARD_NUMBER",
+                "exp_month": "MM",
+                "exp_year": "YYYY",
+                "cvv": "CVV"
+            }
         ],
         "addresses": [
-            {"line1": "ADDRESS_LINE_1", "city": "CITY", "state": "ST", "postal_code": "ZIP"}
+            {
+                "line1": "ADDRESS_LINE_1",
+                "city": "CITY",
+                "state": "ST",
+                "postal_code": "ZIP"
+            }
         ],
         "card_index_file": "runtime/paypal_card_index.txt",
         "headless": false,
         "debug_screenshots": true,
         "debug_dir": "runtime/paypal_debug"
+    },
+    "paypal_browser": {
+        "enabled": true,
+        "browser_engine": "camoufox",
+        "country": "US",
+        "card_brand": "visa",
+        "email_mode": "random",
+        "headless": false,
+        "manual_human_verification": true,
+        "human_verification_timeout": 300,
+        "phone_pool": [
+            {
+                "phone": "+10000000000",
+                "sms_api_url": "https://sms.example.com/poll"
+            }
+        ],
+        "phone_index_file": "runtime/paypal_browser_phone_index.txt"
     },
     "paypal_nocard": {
         "enabled": false,

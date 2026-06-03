@@ -21,6 +21,14 @@ namespace SmsWorkbench
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         private static readonly HttpClient httpClient = new HttpClient();
+        private static readonly ConfigComboOption[] SmsBowerCountryOptions = new[]
+        {
+            new ConfigComboOption("38", "加纳 / Ghana (+233) - 38", "Ghana", "+233"),
+            new ConfigComboOption("19", "尼日利亚 / Nigeria (+234) - 19", "Nigeria", "+234"),
+            new ConfigComboOption("151", "智利 / Chile (+56) - 151", "Chile", "+56"),
+            new ConfigComboOption("16", "英国 / United Kingdom (+44) - 16", "United Kingdom", "+44"),
+            new ConfigComboOption("6", "印度尼西亚 / Indonesia (+62) - 6", "Indonesia", "+62")
+        };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
         private Process runningProcess;
@@ -518,7 +526,9 @@ namespace SmsWorkbench
                             CompletedAt = SafeTime(File.GetLastWriteTime(path)),
                             Identifier = email,
                             AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : "Session",
-                            Status = importedStatus.Length > 0 ? importedStatus : access.Length > 0 ? paypalStatus : "缺access_token",
+                            Status = importedStatus.Length > 0
+                                ? importedStatus
+                                : DisplayAccountStatus(GetString(data, "status"), "", access, GetString(data, "error"), paypalStatus, refreshTokenStatus, importedStatus),
                             PayPalStatus = paypalStatus,
                             PayPalAmount = paypalAmount,
                             RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
@@ -2818,6 +2828,8 @@ namespace SmsWorkbench
             var email = GetSection(config, "email_registration");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
+            var paypalBrowser = GetSection(config, "paypal_browser");
+            var paypalNocard = GetSection(config, "paypal_nocard");
             var gopay = GetSection(config, "gopay");
             var gopayStageProxies = GetChildSection(gopay, "stage_proxies");
             var gopayWaRebind = GetChildSection(gopay, "wa_rebind");
@@ -2895,6 +2907,7 @@ namespace SmsWorkbench
             content.Children.Add(hostShell);
 
             var fields = new Dictionary<string, TextBox>();
+            var comboFields = new Dictionary<string, ComboBox>();
             var categories = new List<ConfigCategory>();
 
             var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱", "邮箱池和 OTP 轮询配置。");
@@ -2911,9 +2924,10 @@ namespace SmsWorkbench
 
             var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower 手机号接码、复用次数和 Codex OAuth 接码开关。");
             row = 0;
+            AddConfigComboField(phoneForm, comboFields, row++, "接码来源", "phone_source", FirstNonEmpty(GetString(phoneReuse, "source"), "smsbower"), new[] { "smsbower", "phone_pool" });
             AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
             AddConfigField(phoneForm, fields, row++, "服务代码", "smsbower_service", GetString(smsBower, "service"));
-            AddConfigField(phoneForm, fields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"));
+            AddConfigComboField(phoneForm, comboFields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"), SmsBowerCountryOptions, "38");
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower服务代码", "smsbower_gopay_service", GetString(smsBower, "gopay_service"));
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower国家代码", "smsbower_gopay_country", GetString(smsBower, "gopay_country"));
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower最低价格", "smsbower_gopay_min_price", GetString(smsBower, "gopay_min_price"));
@@ -2929,6 +2943,7 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "发码重试次数", "phone_send_retry_attempts", GetString(phoneReuse, "send_retry_attempts"));
             AddConfigField(phoneForm, fields, row++, "发码重试延迟秒", "phone_send_retry_delay_seconds", GetString(phoneReuse, "send_retry_delay_seconds"));
             AddConfigField(phoneForm, fields, row++, "状态文件", "phone_state_file", GetString(phoneReuse, "state_file"));
+            AddConfigField(phoneForm, fields, row++, "固定号码池", "phone_pool_lines", FormatPhonePool(phoneReuse), multiline: true);
             AddConfigField(phoneForm, fields, row++, "OAuth超时秒", "codex_registration_timeout", GetString(codexOauth, "registration_timeout"));
             AddConfigField(phoneForm, fields, row++, "允许邮箱OTP兜底", "codex_allow_passwordless_takeover", GetString(codexOauth, "allow_passwordless_takeover"));
             AddConfigField(phoneForm, fields, row++, "自动手机验证", "codex_auto_phone_verification", GetString(codexOauth, "auto_phone_verification"));
@@ -2957,6 +2972,17 @@ namespace SmsWorkbench
             row = 0;
             AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
+
+            var paypalBrowserForm = AddConfigCategory(sidebar, host, categories, "PayPal浏览器", "项目内置浏览器支付、身份生成和接码号码池。");
+            row = 0;
+            AddConfigField(paypalBrowserForm, fields, row++, "启用", "paypal_browser_enabled", FirstNonEmpty(GetString(paypalBrowser, "enabled"), "true"));
+            AddConfigField(paypalBrowserForm, fields, row++, "浏览器引擎", "paypal_browser_browser_engine", FirstNonEmpty(GetString(paypalBrowser, "browser_engine"), "camoufox"));
+            AddConfigField(paypalBrowserForm, fields, row++, "身份国家", "paypal_browser_country", FirstNonEmpty(GetString(paypalBrowser, "country"), "US"));
+            AddConfigField(paypalBrowserForm, fields, row++, "无头模式", "paypal_browser_headless", FirstNonEmpty(GetString(paypalBrowser, "headless"), "true"));
+            AddConfigField(paypalBrowserForm, fields, row++, "允许人工人机验证", "paypal_browser_manual_human_verification", FirstNonEmpty(GetString(paypalBrowser, "manual_human_verification"), "false"));
+            AddConfigField(paypalBrowserForm, fields, row++, "人机验证等待秒", "paypal_browser_human_verification_timeout", FirstNonEmpty(GetString(paypalBrowser, "human_verification_timeout"), "300"));
+            AddConfigField(paypalBrowserForm, fields, row++, "支付邮箱模式", "paypal_browser_email_mode", FirstNonEmpty(GetString(paypalBrowser, "email_mode"), "random"));
+            AddConfigField(paypalBrowserForm, fields, row++, "接码号码池", "paypal_browser_phone_pool", FormatPhonePool(paypalBrowser, paypalNocard), multiline: true);
 
             var gopayForm = AddConfigCategory(sidebar, host, categories, "GoPay", "GoPay 生链、协议支付服务和分阶段代理配置。");
             row = 0;
@@ -3024,7 +3050,10 @@ namespace SmsWorkbench
                 email["cfworker_api_token"] = fields["cfworker_api_token"].Text.Trim();
                 smsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
                 smsBower["service"] = fields["smsbower_service"].Text.Trim();
-                smsBower["country"] = fields["smsbower_country"].Text.Trim();
+                var smsBowerCountry = ConfigComboOptionValue(comboFields, "smsbower_country", "38");
+                smsBower["country"] = smsBowerCountry.Value;
+                smsBower["country_name"] = smsBowerCountry.Metadata;
+                smsBower["country_prefix"] = smsBowerCountry.Extra;
                 smsBower["gopay_service"] = fields["smsbower_gopay_service"].Text.Trim();
                 smsBower["gopay_country"] = fields["smsbower_gopay_country"].Text.Trim();
                 smsBower["gopay_min_price"] = fields["smsbower_gopay_min_price"].Text.Trim();
@@ -3035,12 +3064,14 @@ namespace SmsWorkbench
                 smsBower["pool_size"] = ConfigIntegerValue(fields, "smsbower_pool_size");
                 smsBower["sms_timeout"] = ConfigIntegerValue(fields, "smsbower_sms_timeout");
                 smsBower["sms_poll_interval"] = ConfigIntegerValue(fields, "smsbower_sms_poll_interval");
+                phoneReuse["source"] = ConfigComboValue(comboFields, "phone_source", "smsbower");
                 phoneReuse["smsbower"] = smsBower;
                 phoneReuse["max_reuse_count"] = ConfigIntegerValue(fields, "phone_max_reuse_count");
                 phoneReuse["send_cooldown_seconds"] = ConfigIntegerValue(fields, "phone_send_cooldown_seconds");
                 phoneReuse["send_retry_attempts"] = ConfigIntegerValue(fields, "phone_send_retry_attempts");
                 phoneReuse["send_retry_delay_seconds"] = ConfigIntegerValue(fields, "phone_send_retry_delay_seconds");
                 phoneReuse["state_file"] = fields["phone_state_file"].Text.Trim();
+                phoneReuse["phone_pool"] = ParsePhonePoolLines(fields["phone_pool_lines"].Text);
                 codexOauth["registration_timeout"] = ConfigIntegerValue(fields, "codex_registration_timeout");
                 codexOauth["allow_passwordless_takeover"] = ConfigBoolValue(fields, "codex_allow_passwordless_takeover", GetBool(codexOauth, "allow_passwordless_takeover", false));
                 codexOauth["auto_phone_verification"] = ConfigBoolValue(fields, "codex_auto_phone_verification", GetBool(codexOauth, "auto_phone_verification", false));
@@ -3048,6 +3079,17 @@ namespace SmsWorkbench
                 codexOauth["require_registration_phone_verification"] = ConfigBoolValue(fields, "codex_require_registration_phone_verification", GetBool(codexOauth, "require_registration_phone_verification", true));
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
+                paypalBrowser["enabled"] = ConfigBoolValue(fields, "paypal_browser_enabled", GetBool(paypalBrowser, "enabled", true));
+                paypalBrowser.Remove("pp_auto_path");
+                paypalBrowser.Remove("engine");
+                paypalBrowser.Remove("firefox_path");
+                paypalBrowser["browser_engine"] = fields["paypal_browser_browser_engine"].Text.Trim();
+                paypalBrowser["country"] = fields["paypal_browser_country"].Text.Trim();
+                paypalBrowser["headless"] = ConfigBoolValue(fields, "paypal_browser_headless", GetBool(paypalBrowser, "headless", true));
+                paypalBrowser["manual_human_verification"] = ConfigBoolValue(fields, "paypal_browser_manual_human_verification", GetBool(paypalBrowser, "manual_human_verification", false));
+                paypalBrowser["human_verification_timeout"] = ConfigIntegerValue(fields, "paypal_browser_human_verification_timeout");
+                paypalBrowser["email_mode"] = fields["paypal_browser_email_mode"].Text.Trim();
+                paypalBrowser["phone_pool"] = ParsePhonePoolLines(fields["paypal_browser_phone_pool"].Text);
                 gopay["one_click_mode"] = fields["gopay_one_click_mode"].Text.Trim();
                 gopay["open_link"] = ConfigBoolValue(fields, "gopay_open_link", GetBool(gopay, "open_link", true));
                 gopay["auto_generate"] = ConfigBoolValue(fields, "gopay_auto_generate", GetBool(gopay, "auto_generate", true));
@@ -3115,6 +3157,7 @@ namespace SmsWorkbench
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
+                config["paypal_browser"] = paypalBrowser;
                 config["gopay"] = gopay;
                 config["output"] = output;
                 config["storage"] = storage;
@@ -3143,6 +3186,27 @@ namespace SmsWorkbench
         {
             public Button Button { get; set; } = new Button();
             public FrameworkElement Panel { get; set; } = new StackPanel();
+        }
+
+        private sealed class ConfigComboOption
+        {
+            public ConfigComboOption(string value, string label, string metadata = "", string extra = "")
+            {
+                Value = value;
+                Label = label;
+                Metadata = metadata;
+                Extra = extra;
+            }
+
+            public string Value { get; }
+            public string Label { get; }
+            public string Metadata { get; }
+            public string Extra { get; }
+
+            public override string ToString()
+            {
+                return Label;
+            }
         }
 
         private Grid AddConfigCategory(StackPanel sidebar, Grid host, List<ConfigCategory> categories, string title, string description)
@@ -3199,7 +3263,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void AddConfigField(Grid form, Dictionary<string, TextBox> fields, int row, string label, string key, string value)
+        private void AddConfigField(Grid form, Dictionary<string, TextBox> fields, int row, string label, string key, string value, bool multiline = false)
         {
             form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var text = new TextBlock
@@ -3216,12 +3280,101 @@ namespace SmsWorkbench
             var box = new TextBox
             {
                 Text = value ?? "",
-                Margin = new Thickness(0, 0, 0, 10)
+                Margin = new Thickness(0, 0, 0, 10),
+                AcceptsReturn = multiline,
+                TextWrapping = multiline ? TextWrapping.NoWrap : TextWrapping.NoWrap,
+                VerticalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
+                HorizontalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
+                MinHeight = multiline ? 112 : 0
             };
+            if (multiline)
+            {
+                box.FontFamily = new System.Windows.Media.FontFamily("Consolas");
+            }
             Grid.SetRow(box, row);
             Grid.SetColumn(box, 1);
             form.Children.Add(box);
             fields[key] = box;
+        }
+
+        private void AddConfigComboField(Grid form, Dictionary<string, ComboBox> fields, int row, string label, string key, string value, IEnumerable<string> options)
+        {
+            form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var text = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 12, 10)
+            };
+            Grid.SetRow(text, row);
+            Grid.SetColumn(text, 0);
+            form.Children.Add(text);
+
+            var combo = new ComboBox
+            {
+                Margin = new Thickness(0, 0, 0, 10),
+                IsEditable = false
+            };
+            string selected = FirstNonEmpty(value, "smsbower").Trim();
+            bool matched = false;
+            foreach (string option in options)
+            {
+                combo.Items.Add(option);
+                if (option.Equals(selected, StringComparison.OrdinalIgnoreCase))
+                {
+                    combo.SelectedItem = option;
+                    matched = true;
+                }
+            }
+            if (!matched && combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+            }
+            Grid.SetRow(combo, row);
+            Grid.SetColumn(combo, 1);
+            form.Children.Add(combo);
+            fields[key] = combo;
+        }
+
+        private void AddConfigComboField(Grid form, Dictionary<string, ComboBox> fields, int row, string label, string key, string value, IEnumerable<ConfigComboOption> options, string fallback)
+        {
+            form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var text = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 12, 10)
+            };
+            Grid.SetRow(text, row);
+            Grid.SetColumn(text, 0);
+            form.Children.Add(text);
+
+            var combo = new ComboBox
+            {
+                Margin = new Thickness(0, 0, 0, 10),
+                IsEditable = false
+            };
+            string selected = FirstNonEmpty(value, fallback).Trim();
+            bool matched = false;
+            foreach (ConfigComboOption option in options)
+            {
+                combo.Items.Add(option);
+                if (option.Value.Equals(selected, StringComparison.OrdinalIgnoreCase))
+                {
+                    combo.SelectedItem = option;
+                    matched = true;
+                }
+            }
+            if (!matched && combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+            }
+            Grid.SetRow(combo, row);
+            Grid.SetColumn(combo, 1);
+            form.Children.Add(combo);
+            fields[key] = combo;
         }
 
         private Dictionary<string, object> GetSection(Dictionary<string, object> config, string section)
@@ -3253,6 +3406,22 @@ namespace SmsWorkbench
             return raw;
         }
 
+        private string ConfigComboValue(Dictionary<string, ComboBox> fields, string key, string fallback)
+        {
+            if (!fields.TryGetValue(key, out ComboBox combo)) return fallback;
+            return Convert.ToString(combo.SelectedItem) ?? fallback;
+        }
+
+        private ConfigComboOption ConfigComboOptionValue(Dictionary<string, ComboBox> fields, string key, string fallback)
+        {
+            if (fields.TryGetValue(key, out ComboBox combo) && combo.SelectedItem is ConfigComboOption selected)
+            {
+                return selected;
+            }
+            return SmsBowerCountryOptions.FirstOrDefault(option => option.Value.Equals(fallback, StringComparison.OrdinalIgnoreCase))
+                ?? SmsBowerCountryOptions.First();
+        }
+
         private bool ConfigBoolValue(Dictionary<string, TextBox> fields, string key, bool fallback)
         {
             string raw = fields.TryGetValue(key, out TextBox box) ? box.Text.Trim() : "";
@@ -3282,6 +3451,65 @@ namespace SmsWorkbench
                 return false;
             }
             return fallback;
+        }
+
+        private string FormatPhonePool(Dictionary<string, object> phoneReuse)
+        {
+            if (!phoneReuse.TryGetValue("phone_pool", out object value) || value is not List<object> list)
+            {
+                return "";
+            }
+            var lines = new List<string>();
+            foreach (object item in list)
+            {
+                if (item is not Dictionary<string, object> entry) continue;
+                string phone = GetString(entry, "phone").Trim();
+                string smsApiUrl = GetString(entry, "sms_api_url").Trim();
+                if (phone.Length == 0 || smsApiUrl.Length == 0) continue;
+                lines.Add(phone + "----" + smsApiUrl);
+            }
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private string FormatPhonePool(Dictionary<string, object> primary, Dictionary<string, object> fallback)
+        {
+            string value = FormatPhonePool(primary);
+            return value.Length > 0 ? value : FormatPhonePool(fallback);
+        }
+
+        private List<object> ParsePhonePoolLines(string raw)
+        {
+            var items = new List<object>();
+            foreach (string sourceLine in (raw ?? "").Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            {
+                string line = sourceLine.Trim();
+                if (line.Length == 0) continue;
+                string phone = "";
+                string smsApiUrl = "";
+                int marker = line.IndexOf("----", StringComparison.Ordinal);
+                if (marker >= 0)
+                {
+                    phone = line.Substring(0, marker).Trim();
+                    smsApiUrl = line.Substring(marker + 4).Trim();
+                }
+                else
+                {
+                    Match match = Regex.Match(line, @"^(\+\d+)\s+(\S+)$");
+                    if (match.Success)
+                    {
+                        phone = match.Groups[1].Value.Trim();
+                        smsApiUrl = match.Groups[2].Value.Trim();
+                    }
+                }
+                if (phone.Length == 0 || smsApiUrl.Length == 0) continue;
+                items.Add(new Dictionary<string, object>
+                {
+                    ["phone"] = phone,
+                    ["sms_api_url"] = smsApiUrl,
+                    ["provider"] = "legacy"
+                });
+            }
+            return items;
         }
 
         private string FirstListValue(Dictionary<string, object> data, string key)
@@ -3574,6 +3802,10 @@ namespace SmsWorkbench
             if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
             bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
+            if (status.Equals("at_invalid", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("access_token_invalid", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("token_invalidated", StringComparison.OrdinalIgnoreCase)
+                || LooksAtInvalidError(error)) return "AT失效";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)
@@ -3583,6 +3815,17 @@ namespace SmsWorkbench
             if (hasRt && access.Length > 0) return "已注册";
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
             return access.Length > 0 ? "已注册" : "待处理";
+        }
+
+        private bool LooksAtInvalidError(string error)
+        {
+            string text = (error ?? "").ToLowerInvariant();
+            return text.Contains("token_invalidated")
+                || text.Contains("token_expired")
+                || text.Contains("authentication token has been invalidated")
+                || text.Contains("could not validate your token")
+                || text.Contains("add_phone_required")
+                || text.Contains("oauth_refresh_http_401");
         }
 
         private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")

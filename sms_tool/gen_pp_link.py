@@ -17,9 +17,10 @@ import os
 import random
 import re
 import sys
+import time
 import uuid
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 
@@ -41,6 +42,11 @@ DEFAULT_STRIPE_PK = (
 )
 
 DEFAULT_TIMEOUT = 30
+
+STRIPE_VERSION = (
+    "2025-03-31.basil; checkout_server_update_beta=v1; "
+    "checkout_manual_approval_preview=v1"
+)
 
 BILLING_REGIONS = [
     {"country": "US", "currency": "USD", "label": "United States (USD)"},
@@ -79,6 +85,22 @@ REGION_PRESETS = {
             "state": "Tokyo",
         },
     },
+    "DE": {
+        "country": "DE",
+        "currency": "EUR",
+        "label": "Germany (EUR)",
+        "browser_locale": "de-DE",
+        "browser_timezone": "Europe/Berlin",
+        "stripe_locale": "de",
+        "payment_email": "buyer@example.de",
+        "address": {
+            "country": "DE",
+            "line1": "Unter den Linden 1",
+            "city": "Berlin",
+            "postal_code": "10117",
+            "state": "Berlin",
+        },
+    },
     "US": {
         "country": "US",
         "currency": "USD",
@@ -115,23 +137,65 @@ def _new_session(impersonate: str = "chrome136") -> Any:
     return requests.Session()
 
 
-def _build_chatgpt_session(access_token: str) -> Any:
-    device_id = str(uuid.uuid4())
-    user_agent = (
+def _auth_context_value(auth_context: Any, *keys: str) -> str:
+    cur = auth_context
+    for key in keys:
+        if not isinstance(cur, dict):
+            return ""
+        cur = cur.get(key)
+    return str(cur or "").strip()
+
+
+def _cookie_names(cookie_header: str) -> set[str]:
+    names: set[str] = set()
+    for part in str(cookie_header or "").split(";"):
+        name = part.strip().split("=", 1)[0].strip()
+        if name:
+            names.add(name)
+    return names
+
+
+def _build_chatgpt_cookie_header(device_id: str, auth_context: Any) -> str:
+    cookie_header = _auth_context_value(auth_context, "cookie_header")
+    session_token = (
+        _auth_context_value(auth_context, "session_token")
+        or _auth_context_value(auth_context, "sessionToken")
+        or _auth_context_value(auth_context, "auth_session", "sessionToken")
+        or _auth_context_value(auth_context, "auth_session", "session_token")
+    )
+    parts = [part.strip() for part in cookie_header.split(";") if part.strip()]
+    names = _cookie_names(cookie_header)
+    if device_id and "oai-did" not in names:
+        parts.append(f"oai-did={device_id}")
+    if session_token and "__Secure-next-auth.session-token" not in names:
+        parts.append(f"__Secure-next-auth.session-token={session_token}")
+    if not parts:
+        parts.append(f"oai-did={device_id}")
+    return "; ".join(parts)
+
+
+def _build_chatgpt_session(access_token: str, auth_context: Any | None = None) -> Any:
+    auth_context = auth_context if isinstance(auth_context, dict) else {}
+    device_id = (
+        _auth_context_value(auth_context, "device_id")
+        or _auth_context_value(auth_context, "oai_device_id")
+        or str(uuid.uuid4())
+    )
+    user_agent = str(auth_context.get("user_agent") or auth_context.get("ua") or "").strip() or (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
     )
     s = _new_session()
     s.headers.update({
         "User-Agent": user_agent,
         "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         "Origin": "https://chatgpt.com",
         "Referer": "https://chatgpt.com/",
         "Content-Type": "application/json",
         "oai-device-id": device_id,
-        "oai-language": "en-US",
-        "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+        "oai-language": "zh-CN",
+        "sec-ch-ua": '"Google Chrome";v="148", "Not.A/Brand";v="8", "Chromium";v="148"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": '"Windows"',
         "sec-fetch-dest": "empty",
@@ -140,7 +204,7 @@ def _build_chatgpt_session(access_token: str) -> Any:
     })
     if access_token:
         s.headers["Authorization"] = f"Bearer {access_token}"
-    s.headers["Cookie"] = f"oai-did={device_id}; __Secure-next-auth.session-token=dummy"
+    s.headers["Cookie"] = _build_chatgpt_cookie_header(device_id, auth_context)
     return s
 
 
@@ -167,7 +231,8 @@ def _stage_proxy(paypal_cfg: dict[str, Any], stage: str, fallback_proxy: str, fo
 def _proxy_candidates(paypal_cfg: dict[str, Any], default_proxy: str, explicit_proxy: Any = None) -> tuple[list[str], bool]:
     explicit_supplied = explicit_proxy is not None and str(explicit_proxy).strip() != ""
     if explicit_supplied:
-        return [_normalize_proxy(explicit_proxy)], True
+        force_stage_proxy = bool(paypal_cfg.get("explicit_proxy_overrides_stage_proxies", False))
+        return [_normalize_proxy(explicit_proxy)], force_stage_proxy
 
     raw_proxies = paypal_cfg.get("proxies")
     if raw_proxies is None or raw_proxies == "":
@@ -196,6 +261,57 @@ def _payment_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
     if not (method_cfg.get("billing_regions") or method_cfg.get("billing_region") or method_cfg.get("billing_country")):
         merged["billing_regions"] = ["ID"]
     return merged
+
+
+def _checkout_ui_mode(payment_cfg: dict[str, Any]) -> str:
+    mode = str(payment_cfg.get("checkout_ui_mode") or "custom").strip().lower()
+    return mode or "custom"
+
+
+def _payment_link_mode(payment_cfg: dict[str, Any], payment_method: str) -> str:
+    if _normalize_payment_method(payment_method) != "paypal":
+        return "stripe_redirect"
+    raw = (
+        payment_cfg.get("link_mode")
+        or payment_cfg.get("paypal_link_mode")
+        or "chatgpt_checkout"
+    )
+    mode = str(raw or "").strip().lower().replace("-", "_")
+    if mode in {"ba", "ba_redirect", "paypal_approve"}:
+        return "ba_redirect"
+    if mode in {"stripe", "stripe_confirm", "stripe_redirect", "paypal_redirect", "legacy"}:
+        return "stripe_redirect"
+    return "chatgpt_checkout"
+
+
+def _promo_campaign_id(payment_cfg: dict[str, Any]) -> str:
+    if payment_cfg.get("use_promo_campaign") is False:
+        return ""
+    raw = payment_cfg.get("promo_campaign_id", "plus-1-month-free")
+    value = str(raw or "").strip()
+    if value.lower() in {"", "none", "null", "false", "off", "direct"}:
+        return ""
+    return value
+
+
+def _checkout_body(payment_cfg: dict[str, Any], region: dict[str, Any], promo_campaign_id: str) -> dict[str, Any]:
+    checkout_ui_mode = _checkout_ui_mode(payment_cfg)
+    body: dict[str, Any] = {
+        "entry_point": "all_plans_pricing_modal",
+        "plan_name": "chatgptplusplan",
+        "billing_details": {
+            "country": region["country"],
+            "currency": region["currency"],
+        },
+        "cancel_url": "https://chatgpt.com/#pricing",
+        "checkout_ui_mode": checkout_ui_mode,
+    }
+    if promo_campaign_id:
+        body["promo_campaign"] = {
+            "promo_campaign_id": promo_campaign_id,
+            "is_coupon_from_query_param": False,
+        }
+    return body
 
 
 def _billing_regions(paypal_cfg: dict[str, Any]) -> list[dict[str, Any]]:
@@ -279,12 +395,510 @@ def _post_stripe_form(session: Any, url: str, body: dict[str, Any], *, timeout: 
         return response
 
 
+def _get_stripe_params(session: Any, url: str, params: dict[str, str], *, timeout: int, step: str) -> Any:
+    current_params = dict(params)
+    removed_params: list[str] = []
+    while True:
+        response = session.get(url, params=current_params, timeout=timeout)
+        details = _stripe_error_details(response)
+        unknown_param = str(details.get("param") or "")
+        if response.status_code == 400 and details.get("code") == "parameter_unknown" and unknown_param in current_params:
+            removed_params.append(unknown_param)
+            current_params.pop(unknown_param, None)
+            params.pop(unknown_param, None)
+            print(f"[stripe] {step}: retry without unknown param {unknown_param}", file=sys.stderr)
+            continue
+        if removed_params:
+            response.removed_unknown_params = removed_params
+        return response
+
+
+def _expected_amount_from_init(init_data: dict[str, Any]) -> str:
+    for path in (
+        ("invoice", "amount_due"),
+        ("total_summary", "due"),
+        ("invoice", "total"),
+        ("total_summary", "total"),
+    ):
+        amount = _amount_to_int(_amount_at(init_data, *path))
+        if amount is not None:
+            return str(amount)
+    return "0"
+
+
+def _payment_method_types_from_init(init_data: dict[str, Any]) -> list[str]:
+    values = init_data.get("payment_method_types") or []
+    if not isinstance(values, list):
+        values = [values]
+    return [str(item).strip().lower() for item in values if str(item or "").strip()]
+
+
+def _elements_session_params(
+    init_data: dict[str, Any],
+    *,
+    cs_id: str,
+    stripe_pk: str,
+    stripe_js_id: str,
+    stripe_locale: str,
+) -> list[tuple[str, str]]:
+    currency = str(
+        init_data.get("currency")
+        or _amount_at(init_data, "invoice", "currency")
+        or ""
+    ).strip().lower()
+    pm_types = _payment_method_types_from_init(init_data)
+    params: list[tuple[str, str]] = [
+        ("client_betas[0]", "custom_checkout_server_updates_1"),
+        ("client_betas[1]", "custom_checkout_manual_approval_1"),
+        ("deferred_intent[mode]", str(init_data.get("mode") or "subscription")),
+        ("deferred_intent[amount]", _expected_amount_from_init(init_data)),
+    ]
+    if currency:
+        params.append(("deferred_intent[currency]", currency))
+    params.append(("deferred_intent[setup_future_usage]", "off_session"))
+    for index, pm_type in enumerate(pm_types):
+        params.append((f"deferred_intent[payment_method_types][{index}]", pm_type))
+    if currency:
+        params.append(("currency", currency))
+    params.extend([
+        ("key", stripe_pk),
+        ("_stripe_version", STRIPE_VERSION),
+        ("elements_init_source", "custom_checkout"),
+        ("referrer_host", "chatgpt.com"),
+        ("stripe_js_id", stripe_js_id),
+        ("locale", str(stripe_locale or "en").strip().lower() or "en"),
+        ("type", "deferred_intent"),
+        ("checkout_session_id", cs_id),
+    ])
+    return params
+
+
+def _get_elements_session(
+    session: Any,
+    init_data: dict[str, Any],
+    *,
+    cs_id: str,
+    stripe_pk: str,
+    stripe_js_id: str,
+    stripe_locale: str,
+    timeout: int,
+) -> tuple[str, dict[str, Any], Any]:
+    params = _elements_session_params(
+        init_data,
+        cs_id=cs_id,
+        stripe_pk=stripe_pk,
+        stripe_js_id=stripe_js_id,
+        stripe_locale=stripe_locale,
+    )
+    response = session.get(
+        "https://api.stripe.com/v1/elements/sessions",
+        params=params,
+        timeout=timeout,
+    )
+    if getattr(response, "status_code", None) != 200:
+        return "", {}, response
+    data = response.json() or {}
+    session_id = str(data.get("session_id") or "").strip()
+    return session_id, data if isinstance(data, dict) else {}, response
+
+
+def _checkout_data_url(checkout_url: str) -> str:
+    checkout_url = str(checkout_url or "").strip()
+    if not checkout_url:
+        return ""
+    base = checkout_url.split("?", 1)[0].rstrip("/")
+    if base.endswith(".data"):
+        return base
+    return f"{base}.data"
+
+
+def _with_referer(session: Any, referer: str):
+    class _RefererGuard:
+        def __enter__(self_inner):
+            self_inner.old = None
+            self_inner.had = False
+            headers = getattr(session, "headers", None)
+            if isinstance(headers, dict) and referer:
+                self_inner.had = "Referer" in headers
+                self_inner.old = headers.get("Referer")
+                headers["Referer"] = referer
+            return session
+
+        def __exit__(self_inner, exc_type, exc, tb):
+            headers = getattr(session, "headers", None)
+            if isinstance(headers, dict) and referer:
+                if self_inner.had:
+                    headers["Referer"] = self_inner.old
+                else:
+                    headers.pop("Referer", None)
+            return False
+
+    return _RefererGuard()
+
+
+
+
+def _post_empty_chatgpt(session: Any, url: str, *, timeout: int):
+    try:
+        return session.post(url, data="", timeout=timeout)
+    except TypeError as exc:
+        if "data" not in str(exc):
+            raise
+        # Unit-test fakes and older session wrappers may only accept json=.
+        # Keep the logical request empty instead of sending the old JSON body.
+        return session.post(url, json=None, timeout=timeout)
+
+def _chatgpt_load_checkout_route(session: Any, *, checkout_url: str, log_prefix: str) -> dict[str, Any]:
+    data_url = _checkout_data_url(checkout_url)
+    if not data_url or not hasattr(session, "get"):
+        return {"ok": False, "skipped": True}
+    page_status = None
+    data_status = None
+    try:
+        with _with_referer(session, "https://chatgpt.com/"):
+            page_response = session.get(checkout_url, timeout=DEFAULT_TIMEOUT)
+        page_status = getattr(page_response, "status_code", None)
+    except Exception as exc:
+        print(f"{log_prefix} checkout page load skipped: {exc}", file=sys.stderr)
+    try:
+        with _with_referer(session, checkout_url or "https://chatgpt.com/"):
+            response = session.get(
+                data_url,
+                params={"_routes": "routes/checkout.$entity.$checkoutId"},
+                timeout=DEFAULT_TIMEOUT,
+            )
+        data_status = getattr(response, "status_code", None)
+        return {
+            "ok": data_status == 200,
+            "status": data_status,
+            "page_status": page_status,
+        }
+    except Exception as exc:
+        print(f"{log_prefix} checkout route load skipped: {exc}", file=sys.stderr)
+        return {"ok": False, "error": str(exc), "page_status": page_status}
+
+
+def _chatgpt_checkout_snapshot(
+    session: Any,
+    *,
+    checkout_url: str,
+    cs_id: str = "",
+    processor_entity: str = "",
+    log_prefix: str,
+) -> dict[str, Any]:
+    url = "https://chatgpt.com/backend-api/payments/checkout/snapshot"
+    attempts: list[dict[str, Any]] = []
+    try:
+        with _with_referer(session, checkout_url):
+            response = _post_empty_chatgpt(session, url, timeout=DEFAULT_TIMEOUT)
+        status = getattr(response, "status_code", None)
+        attempts.append({"mode": "empty", "status": status})
+        if status in (200, 204):
+            return {"ok": True, "status": status, "mode": "empty", "attempts": attempts}
+        if status in (400, 415, 422):
+            with _with_referer(session, checkout_url):
+                response = session.post(url, json={}, timeout=DEFAULT_TIMEOUT)
+            status = getattr(response, "status_code", None)
+            attempts.append({"mode": "empty_json", "status": status})
+            if status in (200, 204):
+                return {"ok": True, "status": status, "mode": "empty_json", "attempts": attempts}
+        if status in (400, 415, 422) and cs_id and processor_entity:
+            # HAR body length for snapshot is 147 bytes, matching the compact
+            # JSON below with payment_method=card. The UI snapshots the default
+            # card payment element before the later PayPal confirm.
+            snapshot_candidates = [
+                ("checkout_card_json", {
+                    "checkout_session_id": cs_id,
+                    "processor_entity": processor_entity,
+                    "payment_method": "card",
+                }),
+                ("checkout_paypal_json", {
+                    "checkout_session_id": cs_id,
+                    "processor_entity": processor_entity,
+                    "payment_method": "paypal",
+                }),
+                ("checkout_json", {
+                    "checkout_session_id": cs_id,
+                    "processor_entity": processor_entity,
+                }),
+            ]
+            for mode, payload in snapshot_candidates:
+                with _with_referer(session, checkout_url):
+                    response = session.post(url, json=payload, timeout=DEFAULT_TIMEOUT)
+                status = getattr(response, "status_code", None)
+                attempts.append({"mode": mode, "status": status})
+                if status in (200, 204):
+                    break
+        return {"ok": status in (200, 204), "status": status, "attempts": attempts}
+    except Exception as exc:
+        print(f"{log_prefix} checkout snapshot skipped: {exc}", file=sys.stderr)
+        return {"ok": False, "error": str(exc), "attempts": attempts}
+
+
+def _chatgpt_approve_checkout(
+    session: Any,
+    *,
+    cs_id: str,
+    processor_entity: str,
+    log_prefix: str,
+    checkout_url: str = "",
+) -> dict[str, Any]:
+    try:
+        with _with_referer(session, checkout_url):
+            session.post(
+                "https://chatgpt.com/backend-api/sentinel/ping",
+                json={},
+                timeout=DEFAULT_TIMEOUT,
+            )
+    except Exception as exc:
+        print(f"{log_prefix} sentinel/ping skipped: {exc}", file=sys.stderr)
+    try:
+        # Browser HAR shows checkout/approve is an empty POST scoped by the
+        # checkout-page Referer. Sending checkout_session_id/processor_entity as
+        # JSON can make ChatGPT return result=blocked even after Stripe confirm
+        # succeeds, so keep this call browser-compatible.
+        approve_url = "https://chatgpt.com/backend-api/payments/checkout/approve"
+        attempts: list[dict[str, Any]] = []
+        with _with_referer(session, checkout_url):
+            response = _post_empty_chatgpt(session, approve_url, timeout=DEFAULT_TIMEOUT)
+        status = getattr(response, "status_code", None)
+        attempts.append({"mode": "empty", "status": status})
+        if status in (400, 415, 422):
+            with _with_referer(session, checkout_url):
+                response = session.post(approve_url, json={}, timeout=DEFAULT_TIMEOUT)
+            status = getattr(response, "status_code", None)
+            attempts.append({"mode": "empty_json", "status": status})
+        if status in (400, 415, 422):
+            with _with_referer(session, checkout_url):
+                response = session.post(
+                    approve_url,
+                    json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                    timeout=DEFAULT_TIMEOUT,
+                )
+            status = getattr(response, "status_code", None)
+            attempts.append({"mode": "checkout_json", "status": status})
+        if status != 200:
+            return {
+                "ok": False,
+                "status": status,
+                "attempts": attempts,
+                "error": str(getattr(response, "text", "") or "")[:300],
+            }
+        try:
+            data = response.json() or {}
+        except Exception:
+            data = {}
+        result = data.get("result") if isinstance(data, dict) else ""
+        if not result and not str(getattr(response, "text", "") or "").strip():
+            result = "approved_empty_response"
+        return {
+            "ok": result in ("approved", "approved_empty_response"),
+            "status": status,
+            "result": result,
+            "response_keys": sorted(str(key) for key in data.keys())[:20] if isinstance(data, dict) else [],
+            "attempts": attempts,
+            "error": str(data.get("error") or data.get("message") or "")[:300] if isinstance(data, dict) else "",
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def _payment_page_poll_params(
+    *,
+    elements_session_id: str,
+    stripe_js_id: str,
+    stripe_locale: str,
+    stripe_pk: str,
+) -> dict[str, str]:
+    return {
+        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+        "elements_session_client[elements_init_source]": "custom_checkout",
+        "elements_session_client[referrer_host]": "chatgpt.com",
+        "elements_session_client[session_id]": elements_session_id,
+        "elements_session_client[stripe_js_id]": stripe_js_id,
+        "elements_session_client[locale]": str(stripe_locale or "en").strip().lower() or "en",
+        "elements_session_client[is_aggregation_expected]": "false",
+        "elements_options_client[stripe_js_locale]": "auto",
+        "elements_options_client[saved_payment_method][enable_save]": "auto",
+        "elements_options_client[saved_payment_method][enable_redisplay]": "auto",
+        "key": stripe_pk,
+        "_stripe_version": STRIPE_VERSION,
+    }
+
+
+def _poll_payment_page_redirect_url(
+    session: Any,
+    *,
+    cs_id: str,
+    elements_session_id: str,
+    stripe_js_id: str,
+    stripe_locale: str,
+    stripe_pk: str,
+    payment_method: str,
+    redirect_format: str,
+    timeout_seconds: float,
+    poll_interval: float,
+) -> tuple[str, dict[str, Any]]:
+    deadline = time.time() + max(1.0, timeout_seconds)
+    params = _payment_page_poll_params(
+        elements_session_id=elements_session_id,
+        stripe_js_id=stripe_js_id,
+        stripe_locale=stripe_locale,
+        stripe_pk=stripe_pk,
+    )
+    attempts = 0
+    last_summary: dict[str, Any] = {}
+    while time.time() < deadline:
+        attempts += 1
+        try:
+            response = _get_stripe_params(
+                session,
+                f"https://api.stripe.com/v1/payment_pages/{cs_id}",
+                params=params,
+                timeout=DEFAULT_TIMEOUT,
+                step="payment page poll",
+            )
+        except Exception as exc:
+            last_summary = {"attempts": attempts, "error": str(exc)}
+            time.sleep(max(0.2, poll_interval))
+            continue
+        status = getattr(response, "status_code", None)
+        if status == 200:
+            payload = response.json() or {}
+            redirect_url = _find_payment_redirect_url(
+                payload,
+                payment_method,
+                redirect_format=redirect_format,
+            )
+            if redirect_url:
+                return redirect_url, {"attempts": attempts, "status": status}
+            last_summary = {
+                "attempts": attempts,
+                "status": status,
+                "confirm_summary": _confirm_summary(payload),
+            }
+        else:
+            last_summary = {
+                "attempts": attempts,
+                "status": status,
+                "error": str(getattr(response, "text", "") or "")[:240],
+            }
+        time.sleep(max(0.2, poll_interval))
+    return "", last_summary
+
+
 def _is_terminal_confirm_decline(details: dict[str, Any]) -> bool:
     if details.get("status") != 402:
         return False
     if details.get("decline_code"):
         return True
     return details.get("code") in {"setup_attempt_failed", "payment_intent_payment_attempt_failed"}
+
+
+def _should_retry_without_promo(result: dict[str, Any], payment_method: str, payment_cfg: dict[str, Any]) -> bool:
+    if payment_method != "paypal":
+        return False
+    if payment_cfg.get("disable_promo_on_confirm_decline") is False:
+        return False
+    return (
+        bool(result.get("terminal"))
+        and result.get("error_code") == "stripe_confirm_declined"
+        and bool(result.get("zero_due_verified"))
+        and bool(result.get("promo_campaign_id"))
+    )
+
+
+def _paypal_redirect_format(payment_cfg: dict[str, Any]) -> str:
+    raw = str(payment_cfg.get("redirect_url_format") or "stripe_authorize").strip().lower().replace("-", "_")
+    if raw in {"any", "legacy", "all"}:
+        return "any"
+    if raw in {"paypal", "paypal_approve", "ba", "ba_approve"}:
+        return "paypal_approve"
+    if raw in {"pm_redirect", "stripe", "stripe_authorize", "stripe_redirect", "stripe_pm_redirect"}:
+        return "stripe_authorize"
+    return "stripe_authorize"
+
+
+def _paypal_confirm_style(payment_cfg: dict[str, Any]) -> str:
+    raw = str(payment_cfg.get("confirm_style") or payment_cfg.get("paypal_confirm_style") or "payment_method_id")
+    raw = raw.strip().lower().replace("-", "_")
+    if raw in {"inline", "inline_payment_method", "inline_payment_method_data", "browser"}:
+        return "inline_payment_method_data"
+    return "payment_method_id"
+
+
+def _is_payment_redirect_url(value: Any, payment_method: str, redirect_format: str = "any") -> bool:
+    text = str(value or "")
+    if not text.startswith(("http://", "https://")):
+        return False
+    lower = text.lower()
+    if payment_method == "paypal":
+        parsed = urlparse(text)
+        host = (parsed.netloc or "").lower()
+        path = (parsed.path or "").lower()
+        is_stripe_authorize = host == "pm-redirects.stripe.com" and path.startswith("/authorize/")
+        is_paypal_approve = host.endswith("paypal.com") and path.startswith("/agreements/approve")
+        if redirect_format == "stripe_authorize":
+            return is_stripe_authorize
+        if redirect_format == "paypal_approve":
+            return is_paypal_approve and "ba_token=" in lower
+        return (
+            is_stripe_authorize
+            or (is_paypal_approve and "ba_token=" in lower)
+            or ("paypal" in lower and "redirect" in lower)
+        )
+    if payment_method == "gopay":
+        return "gopay" in lower or "midtrans" in lower
+    return False
+
+
+def _find_payment_redirect_url(value: Any, payment_method: str, redirect_format: str = "any") -> str:
+    if _is_payment_redirect_url(value, payment_method, redirect_format=redirect_format):
+        return str(value)
+    if isinstance(value, dict):
+        for key in ("url", "redirect_url", "return_url"):
+            if key in value and _is_payment_redirect_url(value.get(key), payment_method, redirect_format=redirect_format):
+                return str(value[key])
+        for child in value.values():
+            found = _find_payment_redirect_url(child, payment_method, redirect_format=redirect_format)
+            if found:
+                return found
+    if isinstance(value, list):
+        for child in value:
+            found = _find_payment_redirect_url(child, payment_method, redirect_format=redirect_format)
+            if found:
+                return found
+    return ""
+
+
+def _intent_summary(intent: Any) -> dict[str, Any]:
+    if not isinstance(intent, dict):
+        return {}
+    next_action = intent.get("next_action") if isinstance(intent.get("next_action"), dict) else {}
+    last_error = intent.get("last_setup_error") or intent.get("last_payment_error")
+    if not isinstance(last_error, dict):
+        last_error = {}
+    return {
+        "id_prefix": str(intent.get("id") or "")[:8],
+        "status": intent.get("status") or "",
+        "next_action_type": next_action.get("type") or "",
+        "last_error_code": last_error.get("code") or "",
+        "last_error_decline_code": last_error.get("decline_code") or "",
+        "last_error_message": str(last_error.get("message") or "")[:180],
+    }
+
+
+def _confirm_summary(confirm_data: Any) -> dict[str, Any]:
+    if not isinstance(confirm_data, dict):
+        return {"response_type": type(confirm_data).__name__}
+    return {
+        "top_level_keys": sorted(str(key) for key in confirm_data.keys())[:30],
+        "status": confirm_data.get("status") or "",
+        "mode": confirm_data.get("mode") or "",
+        "setup_intent": _intent_summary(confirm_data.get("setup_intent")),
+        "payment_intent": _intent_summary(confirm_data.get("payment_intent")),
+    }
 
 
 def _stripe_step_error_result(
@@ -340,6 +954,8 @@ def _stripe_confirm_error_result(
     zero_check: dict[str, Any],
     pm_types: list[Any],
     has_paypal: bool,
+    promo_campaign_id: str,
+    checkout_ui_mode: str,
 ) -> dict[str, Any]:
     details = _stripe_error_details(response)
     terminal = _is_terminal_confirm_decline(details)
@@ -364,6 +980,8 @@ def _stripe_confirm_error_result(
         "tax_amounts": zero_check.get("tax_amounts"),
         "payment_method_types": pm_types,
         "has_paypal": has_paypal,
+        "promo_campaign_id": promo_campaign_id,
+        "checkout_ui_mode": checkout_ui_mode,
         "region": region["label"],
         "proxy": proxy,
         "stage_proxies": {
@@ -437,6 +1055,28 @@ def _extract_checkout_context(data: dict[str, Any]) -> tuple[str, str, str]:
     if not checkout_url and cs_id and processor_entity:
         checkout_url = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
     return cs_id, processor_entity, checkout_url
+
+
+def _canonical_checkout_url(cs_id: str, processor_entity: str) -> str:
+    if not cs_id or not processor_entity:
+        return ""
+    return f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+
+
+def _hosted_pay_url(cs_id: str) -> str:
+    if not cs_id:
+        return ""
+    return f"https://pay.openai.com/c/pay/{cs_id}"
+
+
+def _select_checkout_output_url(provider_url: str, cs_id: str, processor_entity: str, checkout_ui_mode: str) -> str:
+    canonical_url = _canonical_checkout_url(cs_id, processor_entity)
+    if str(checkout_ui_mode or "").strip().lower() == "hosted":
+        provider = str(provider_url or "").strip()
+        if "pay.openai.com/c/pay/" in provider or "checkout.stripe.com/c/pay/" in provider:
+            return provider
+        return _hosted_pay_url(cs_id) or provider or canonical_url
+    return canonical_url or provider_url
 
 
 def _amount_to_int(value: Any) -> int | None:
@@ -520,6 +1160,8 @@ def _try_paypal_link(
     proxy: str,
     force_proxy: bool = False,
     payment_method: str = "paypal",
+    promo_campaign_id: str | None = None,
+    auth_context: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     payment_method = _normalize_payment_method(payment_method)
     payment_label = PAYMENT_METHOD_LABELS[payment_method]
@@ -536,10 +1178,17 @@ def _try_paypal_link(
     browser_locale = str(region.get("browser_locale") or "en-US")
     browser_timezone = str(region.get("browser_timezone") or "Asia/Shanghai")
     stripe_locale = str(region.get("stripe_locale") or "auto")
-    payment_email = str(region.get("payment_email") or "buyer@example.com")
+    payment_email = str((auth_context or {}).get("email") or region.get("payment_email") or "buyer@example.com")
+    if promo_campaign_id is None:
+        promo_campaign_id = _promo_campaign_id(payment_cfg)
+    promo_label = promo_campaign_id or "none"
+    checkout_ui_mode = _checkout_ui_mode(payment_cfg)
+    link_mode = _payment_link_mode(payment_cfg, payment_method)
+    redirect_format = _paypal_redirect_format(payment_cfg) if payment_method == "paypal" else "any"
+    confirm_style = _paypal_confirm_style(payment_cfg) if payment_method == "paypal" else "payment_method_id"
 
     # 鏋勫缓 ChatGPT session
-    cs = _build_chatgpt_session(access_token)
+    cs = _build_chatgpt_session(access_token, auth_context=auth_context)
     _set_session_proxy(cs, checkout_proxy)
 
     # 鏋勫缓 Stripe 澶栭儴 session
@@ -556,24 +1205,16 @@ def _try_paypal_link(
     _set_session_proxy(stripe_confirm, stripe_confirm_proxy)
     stripe_confirm.headers.update(stripe_init.headers)
 
+    stripe_js_id = str(uuid.uuid4())
+    elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
+
     # 鈹€鈹€ Step 1: ChatGPT checkout 鈹€鈹€
-    body: dict[str, Any] = {
-        "entry_point": "all_plans_pricing_modal",
-        "plan_name": "chatgptplusplan",
-        "billing_details": {
-            "country": region["country"],
-            "currency": region["currency"],
-        },
-        "checkout_ui_mode": "hosted",
-        "cancel_url": "https://chatgpt.com/#pricing",
-        "promo_campaign": {
-            "promo_campaign_id": "plus-1-month-free",
-            "is_coupon_from_query_param": False,
-        },
-    }
+    body = _checkout_body(payment_cfg, region, promo_campaign_id)
 
     print(
-        f"{log_prefix} checkout: method={payment_method} billing_region={region['country']} promo=plus-1-month-free proxy={checkout_proxy or 'DIRECT'}",
+        f"{log_prefix} checkout: method={payment_method} billing_region={region['country']} "
+        f"ui_mode={checkout_ui_mode} link_mode={link_mode} redirect_format={redirect_format} "
+        f"promo={promo_label} proxy={checkout_proxy or 'DIRECT'}",
         file=sys.stderr,
     )
 
@@ -591,6 +1232,32 @@ def _try_paypal_link(
             "region": region["label"],
             "proxy": proxy,
             "stage_proxy": checkout_proxy or "DIRECT",
+            "promo_campaign_id": promo_campaign_id,
+            "checkout_ui_mode": checkout_ui_mode,
+            "link_mode": link_mode,
+            "redirect_url_format": redirect_format,
+            "elements_session_id": elements_session_id,
+            "elements_session_error": elements_session_error,
+            "cs_id": cs_id,
+            "pm_id": pm_id,
+        }
+    if r.status_code == 429:
+        retry_after = str(getattr(r, "headers", {}).get("Retry-After", "") or "").strip()
+        wait_hint = f" retry_after={retry_after}" if retry_after else ""
+        return {
+            "ok": False,
+            "error": f"checkout rate limited: status=429{wait_hint}",
+            "error_code": "checkout_rate_limited",
+            "terminal": True,
+            "retryable": True,
+            "retry_after": retry_after,
+            "region": region["label"],
+            "proxy": proxy,
+            "stage_proxy": checkout_proxy or "DIRECT",
+            "promo_campaign_id": promo_campaign_id,
+            "checkout_ui_mode": checkout_ui_mode,
+            "link_mode": link_mode,
+            "redirect_url_format": redirect_format,
         }
     if r.status_code == 400:
         err_text = r.text[:300]
@@ -605,7 +1272,21 @@ def _try_paypal_link(
         return {"ok": False, "error": f"checkout 鍝嶅簲寮傚父: {json.dumps(data, ensure_ascii=False)[:300]}"}
 
     processor_entity = processor_entity or ("openai_llc" if region["country"] == "US" else "openai_ie")
+    stripe_pk_source = "config_or_default"
+    checkout_publishable_key = str(data.get("publishable_key") or "").strip()
+    if checkout_publishable_key.startswith("pk_"):
+        stripe_pk = checkout_publishable_key
+        stripe_pk_source = "checkout_response"
+    provider_checkout_url = checkout_url
+    checkout_url = _select_checkout_output_url(provider_checkout_url, cs_id, processor_entity, checkout_ui_mode)
     print(f"{log_prefix} cs_id={cs_id} processor_entity={processor_entity}", file=sys.stderr)
+    route_load_result = _chatgpt_load_checkout_route(cs, checkout_url=checkout_url, log_prefix=log_prefix)
+    if route_load_result.get("status") or route_load_result.get("page_status"):
+        print(
+            f"{log_prefix} checkout route load: page_status={route_load_result.get('page_status')} "
+            f"data_status={route_load_result.get('status')}",
+            file=sys.stderr,
+        )
 
     # 鈹€鈹€ Step 2: Stripe init 鈹€鈹€
     init_body = {
@@ -615,9 +1296,11 @@ def _try_paypal_link(
         "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_session_client[elements_init_source]": "custom_checkout",
         "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
+        "elements_session_client[stripe_js_id]": stripe_js_id,
         "elements_session_client[locale]": stripe_locale,
         "elements_session_client[is_aggregation_expected]": "false",
+        "elements_options_client[saved_payment_method][enable_save]": "auto",
+        "elements_options_client[saved_payment_method][enable_redisplay]": "auto",
         "key": stripe_pk,
         "_stripe_version": (
             "2025-03-31.basil; checkout_server_update_beta=v1; "
@@ -650,6 +1333,69 @@ def _try_paypal_link(
     if not init_checksum:
         return {"ok": False, "error": f"Stripe init missing init_checksum: {r1.text[:200]}"}
 
+    elements_session_data: dict[str, Any] = {}
+    elements_session_error: dict[str, Any] = {}
+    if bool(payment_cfg.get("use_elements_session", True)):
+        print(f"{log_prefix} elements session: proxy={stripe_init_proxy or 'DIRECT'}", file=sys.stderr)
+        try:
+            stripe_elements_session_id, elements_session_data, elements_session_response = _get_elements_session(
+                stripe_init,
+                init_data,
+                cs_id=cs_id,
+                stripe_pk=stripe_pk,
+                stripe_js_id=stripe_js_id,
+                stripe_locale=stripe_locale,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            print(
+                f"{log_prefix} elements session: status={getattr(elements_session_response, 'status_code', None)}",
+                file=sys.stderr,
+            )
+            if stripe_elements_session_id:
+                elements_session_id = stripe_elements_session_id
+            elif getattr(elements_session_response, "status_code", None) != 200:
+                elements_session_error = _stripe_error_details(elements_session_response)
+        except Exception as exc:
+            elements_session_error = {"error": str(exc)}
+            print(f"{log_prefix} elements session: failed={exc}", file=sys.stderr)
+
+    if bool(payment_cfg.get("refresh_tax_region", True)):
+        refresh_body = {
+            "tax_region[country]": region["country"],
+            "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+            "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+            "elements_session_client[elements_init_source]": "custom_checkout",
+            "elements_session_client[referrer_host]": "chatgpt.com",
+            "elements_session_client[session_id]": elements_session_id,
+            "elements_session_client[stripe_js_id]": stripe_js_id,
+            "elements_session_client[locale]": stripe_locale,
+            "elements_session_client[is_aggregation_expected]": "false",
+            "elements_options_client[saved_payment_method][enable_save]": "auto",
+            "elements_options_client[saved_payment_method][enable_redisplay]": "auto",
+            "client_attribution_metadata[merchant_integration_additional_elements][0]": "expressCheckout",
+            "client_attribution_metadata[merchant_integration_additional_elements][1]": "payment",
+            "client_attribution_metadata[merchant_integration_additional_elements][2]": "address",
+            "key": stripe_pk,
+            "_stripe_version": (
+                "2025-03-31.basil; checkout_server_update_beta=v1; "
+                "checkout_manual_approval_preview=v1"
+            ),
+        }
+        print(f"{log_prefix} tax refresh: country={region['country']} proxy={stripe_init_proxy or 'DIRECT'}", file=sys.stderr)
+        tax_response = _post_stripe_form(
+            stripe_init,
+            f"https://api.stripe.com/v1/payment_pages/{cs_id}",
+            refresh_body,
+            timeout=DEFAULT_TIMEOUT,
+            step="tax refresh",
+        )
+        print(f"{log_prefix} tax refresh: status={tax_response.status_code}", file=sys.stderr)
+        if tax_response.status_code == 200:
+            refreshed_init = tax_response.json() or {}
+            if isinstance(refreshed_init, dict):
+                init_data = refreshed_init
+                init_checksum = init_data.get("init_checksum") or init_checksum
+
     due = (init_data.get("total_summary") or {}).get("due")
     amount_due = (init_data.get("invoice") or {}).get("amount_due")
     currency = (init_data.get("invoice") or {}).get("currency") or region["currency"]
@@ -678,6 +1424,9 @@ def _try_paypal_link(
             "region": region["label"],
             "due": due,
             "amount_due": amount_due,
+            "error_code": "checkout_not_zero_due",
+            "terminal": True,
+            "retryable": False,
             "expected_amount": expected_amount,
             "zero_due_verified": False,
             "tax_after_zero": zero_check["tax_after_zero"],
@@ -694,10 +1443,65 @@ def _try_paypal_link(
             "has_gopay": has_gopay,
         }
 
-    # Step 3: create the selected Stripe payment method.
-    stripe_js_id = str(uuid.uuid4())
-    elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
+    if link_mode == "chatgpt_checkout":
+        if not checkout_url:
+            return {
+                "ok": False,
+                "error": "ChatGPT checkout response did not include a reusable checkout URL",
+                "error_code": "checkout_url_missing",
+                "terminal": True,
+                "retryable": False,
+                "payment_method": payment_method,
+                "cs_id": cs_id,
+                "processor_entity": processor_entity,
+                "checkout_ui_mode": checkout_ui_mode,
+                "link_mode": link_mode,
+                "redirect_url_format": redirect_format,
+                "stripe_publishable_key_source": stripe_pk_source,
+            }
 
+        promo_applied = bool(zero_check["ok"])
+        coupon_state = f"eligible (0 {currency.upper()})" if promo_applied else f"not_eligible ({amount_due or due} {currency.upper()})"
+        return {
+            "ok": True,
+            "url": checkout_url,
+            "checkout_url": checkout_url,
+            "provider_url": provider_checkout_url,
+            "link_type": "chatgpt_checkout",
+            "source": "chatgpt_checkout",
+            "method": payment_method,
+            "payment_method": payment_method,
+            "cs_id": cs_id,
+            "processor_entity": processor_entity,
+            "pm_id": "",
+            "due": due,
+            "amount_due": amount_due,
+            "currency": currency,
+            "expected_amount": expected_amount,
+            "zero_due_verified": zero_check["ok"],
+            "tax_after_zero": zero_check["tax_after_zero"],
+            "zero_due_amounts": zero_check["amounts"],
+            "tax_amounts": zero_check["tax_amounts"],
+            "payment_method_types": pm_types,
+            "has_paypal": has_paypal,
+            "has_gopay": has_gopay,
+            "coupon_state": coupon_state,
+            "promo_campaign_id": promo_campaign_id,
+            "checkout_ui_mode": checkout_ui_mode,
+            "link_mode": link_mode,
+            "redirect_url_format": redirect_format,
+            "stripe_publishable_key_source": stripe_pk_source,
+            "region": region["label"],
+            "proxy": proxy,
+            "stage_proxies": {
+                "checkout": checkout_proxy or "DIRECT",
+                "stripe_init": stripe_init_proxy or "DIRECT",
+                "payment_method": "SKIPPED",
+                "confirm": "SKIPPED",
+            },
+        }
+
+    # Step 3: create the selected Stripe payment method.
     pm_body = {
         "type": payment_method,
         "billing_details[name]": "John Doe",
@@ -731,32 +1535,37 @@ def _try_paypal_link(
         ),
     }
 
-    print(f"{log_prefix} pm create: proxy={stripe_pm_proxy or 'DIRECT'}", file=sys.stderr)
-    r2 = _post_stripe_form(
-        stripe_pm,
-        "https://api.stripe.com/v1/payment_methods",
-        pm_body,
-        timeout=DEFAULT_TIMEOUT,
-        step="pm create",
-    )
-    print(f"{log_prefix} pm create: status={r2.status_code}", file=sys.stderr)
-
-    if r2.status_code != 200:
-        return _stripe_step_error_result(
-            r2,
-            step="payment_method",
-            error_code="stripe_payment_method_failed",
-            region=region,
-            proxy=proxy,
-            stage_proxy=stripe_pm_proxy,
-            cs_id=cs_id,
+    use_inline_confirm = payment_method == "paypal" and confirm_style == "inline_payment_method_data"
+    pm_id = ""
+    if use_inline_confirm:
+        print(f"{log_prefix} pm create: skipped (inline confirm)", file=sys.stderr)
+    else:
+        print(f"{log_prefix} pm create: proxy={stripe_pm_proxy or 'DIRECT'}", file=sys.stderr)
+        r2 = _post_stripe_form(
+            stripe_pm,
+            "https://api.stripe.com/v1/payment_methods",
+            pm_body,
+            timeout=DEFAULT_TIMEOUT,
+            step="pm create",
         )
+        print(f"{log_prefix} pm create: status={r2.status_code}", file=sys.stderr)
 
-    pm_id = r2.json().get("id", "")
-    if not pm_id.startswith("pm_"):
-        return {"ok": False, "error": f"payment method response invalid: {r2.text[:200]}"}
+        if r2.status_code != 200:
+            return _stripe_step_error_result(
+                r2,
+                step="payment_method",
+                error_code="stripe_payment_method_failed",
+                region=region,
+                proxy=proxy,
+                stage_proxy=stripe_pm_proxy,
+                cs_id=cs_id,
+            )
 
-    print(f"{log_prefix} pm_id={pm_id}", file=sys.stderr)
+        pm_id = r2.json().get("id", "")
+        if not pm_id.startswith("pm_"):
+            return {"ok": False, "error": f"payment method response invalid: {r2.text[:200]}"}
+
+        print(f"{log_prefix} pm_id={pm_id}", file=sys.stderr)
 
     # 鈹€鈹€ Step 4: Stripe confirm 鈹€鈹€
     chatgpt_return = (
@@ -769,10 +1578,9 @@ def _try_paypal_link(
     )
 
     confirm_body = {
-        "guid": uuid.uuid4().hex,
-        "muid": uuid.uuid4().hex,
-        "sid": uuid.uuid4().hex,
-        "payment_method": pm_id,
+        "guid": str(uuid.uuid4()),
+        "muid": str(uuid.uuid4()),
+        "sid": str(uuid.uuid4()),
         "init_checksum": init_checksum,
         "version": runtime_version,
         "expected_amount": expected_amount,
@@ -793,16 +1601,48 @@ def _try_paypal_link(
         "client_attribution_metadata[merchant_integration_version]": "custom",
         "client_attribution_metadata[payment_intent_creation_flow]": "deferred",
         "client_attribution_metadata[payment_method_selection_flow]": "automatic",
-        "client_attribution_metadata[merchant_integration_additional_elements][0]": "payment",
-        "client_attribution_metadata[merchant_integration_additional_elements][1]": "address",
-        "elements_options_client[saved_payment_method][enable_save]": "never",
-        "elements_options_client[saved_payment_method][enable_redisplay]": "never",
+        "client_attribution_metadata[merchant_integration_additional_elements][0]": "expressCheckout",
+        "client_attribution_metadata[merchant_integration_additional_elements][1]": "payment",
+        "client_attribution_metadata[merchant_integration_additional_elements][2]": "address",
+        "elements_options_client[saved_payment_method][enable_save]": "never" if payment_method == "paypal" else "auto",
+        "elements_options_client[saved_payment_method][enable_redisplay]": "never" if payment_method == "paypal" else "auto",
         "key": stripe_pk,
         "_stripe_version": (
             "2025-03-31.basil; checkout_server_update_beta=v1; "
             "checkout_manual_approval_preview=v1"
         ),
     }
+
+    if use_inline_confirm:
+        inline_payment_user_agent = (
+            f"stripe.js/{runtime_version}; stripe-js-v3/{runtime_version}; "
+            "payment-element; deferred-intent"
+        )
+        confirm_body.update({
+            "payment_method_data[billing_details][name]": "Z",
+            "payment_method_data[billing_details][email]": payment_email,
+            "payment_method_data[billing_details][address][line1]": address.get("line1") or "",
+            "payment_method_data[billing_details][address][city]": address.get("city") or "",
+            "payment_method_data[billing_details][address][postal_code]": address.get("postal_code") or "",
+            "payment_method_data[billing_details][address][country]": address.get("country") or region["country"],
+            "payment_method_data[type]": payment_method,
+            "payment_method_data[payment_user_agent]": inline_payment_user_agent,
+            "payment_method_data[referrer]": "https://chatgpt.com",
+            "payment_method_data[time_on_page]": str(random.randint(18000, 45000)),
+            "payment_method_data[client_attribution_metadata][client_session_id]": stripe_js_id,
+            "payment_method_data[client_attribution_metadata][checkout_session_id]": cs_id,
+            "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
+            "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
+            "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
+            "payment_method_data[client_attribution_metadata][payment_intent_creation_flow]": "deferred",
+            "payment_method_data[client_attribution_metadata][payment_method_selection_flow]": "automatic",
+            "payment_method_data[client_attribution_metadata][elements_session_id]": elements_session_id,
+            "payment_method_data[client_attribution_metadata][merchant_integration_additional_elements][0]": "expressCheckout",
+            "payment_method_data[client_attribution_metadata][merchant_integration_additional_elements][1]": "payment",
+            "payment_method_data[client_attribution_metadata][merchant_integration_additional_elements][2]": "address",
+        })
+    else:
+        confirm_body["payment_method"] = pm_id
 
     # Terms of service consent
     consent_collection = init_data.get("consent_collection") or {}
@@ -815,6 +1655,16 @@ def _try_paypal_link(
         confirm_body["js_checksum"] = runtime_cfg["js_checksum"]
     if runtime_cfg.get("rv_timestamp"):
         confirm_body["rv_timestamp"] = runtime_cfg["rv_timestamp"]
+
+    snapshot_result = _chatgpt_checkout_snapshot(
+        cs,
+        checkout_url=checkout_url,
+        cs_id=cs_id,
+        processor_entity=processor_entity,
+        log_prefix=log_prefix,
+    )
+    if snapshot_result.get("status"):
+        print(f"{log_prefix} checkout snapshot: status={snapshot_result.get('status')}", file=sys.stderr)
 
     print(f"{log_prefix} confirm: proxy={stripe_confirm_proxy or 'DIRECT'}", file=sys.stderr)
     r3 = _post_stripe_form(
@@ -879,25 +1729,76 @@ def _try_paypal_link(
             zero_check=zero_check,
             pm_types=pm_types,
             has_paypal=has_paypal,
+            promo_campaign_id=promo_campaign_id,
+            checkout_ui_mode=checkout_ui_mode,
         )
 
     confirm_data = r3.json() or {}
 
     # 鎻愬彇鎺堟潈閾炬帴
-    redirect_url = ""
-    si = confirm_data.get("setup_intent") or {}
-    na = si.get("next_action") or {}
-    if na.get("type") == "redirect_to_url":
-        redirect_url = (na.get("redirect_to_url") or {}).get("url", "")
+    redirect_url = _find_payment_redirect_url(confirm_data, payment_method, redirect_format=redirect_format)
+    redirect_source = "confirm"
+    approve_result: dict[str, Any] = {}
+    redirect_poll_summary: dict[str, Any] = {}
+    if (
+        not redirect_url
+        and payment_method == "paypal"
+        and bool(payment_cfg.get("approve_missing_redirect", True))
+    ):
+        print(f"{log_prefix} confirm returned no redirect; approving checkout", file=sys.stderr)
+        approve_result = _chatgpt_approve_checkout(
+            cs,
+            cs_id=cs_id,
+            processor_entity=processor_entity,
+            log_prefix=log_prefix,
+            checkout_url=checkout_url,
+        )
+        print(
+            f"{log_prefix} approve: ok={bool(approve_result.get('ok'))} "
+            f"status={approve_result.get('status', '')} result={approve_result.get('result', '')}",
+            file=sys.stderr,
+        )
+        poll_timeout = float(payment_cfg.get("redirect_poll_timeout_seconds", 30) or 30)
+        poll_interval = float(payment_cfg.get("redirect_poll_interval_seconds", 1) or 1)
+        redirect_url, redirect_poll_summary = _poll_payment_page_redirect_url(
+            stripe_confirm,
+            cs_id=cs_id,
+            elements_session_id=elements_session_id,
+            stripe_js_id=stripe_js_id,
+            stripe_locale=stripe_locale,
+            stripe_pk=stripe_pk,
+            payment_method=payment_method,
+            redirect_format=redirect_format,
+            timeout_seconds=poll_timeout,
+            poll_interval=poll_interval,
+        )
+        if redirect_url:
+            redirect_source = "post_approve_payment_page"
     if not redirect_url:
-        pi = confirm_data.get("payment_intent") or {}
-        na = pi.get("next_action") or {}
-        if na.get("type") == "redirect_to_url":
-            redirect_url = (na.get("redirect_to_url") or {}).get("url", "")
-    if not redirect_url:
+        approve_blocked = (
+            payment_method == "paypal"
+            and approve_result
+            and not approve_result.get("ok")
+            and str(approve_result.get("result") or "").strip().lower() == "blocked"
+        )
+        redirect_label = (
+            "Stripe authorize"
+            if payment_method == "paypal" and redirect_format == "stripe_authorize"
+            else "PayPal approve"
+            if payment_method == "paypal" and redirect_format == "paypal_approve"
+            else payment_label
+        )
         return {
             "ok": False,
-            "error": f"Stripe confirm did not return {payment_label} redirect URL",
+            "error": (
+                "ChatGPT checkout approve was blocked after Stripe confirm returned no redirect"
+                if approve_blocked
+                else f"Stripe confirm did not return {redirect_label} redirect URL"
+            ),
+            "error_code": "checkout_approve_blocked" if approve_blocked else "stripe_confirm_missing_redirect",
+            "terminal": True,
+            "retryable": False,
+            "confirm_summary": _confirm_summary(confirm_data),
             "region": region["label"],
             "payment_method": payment_method,
             "due": due,
@@ -905,6 +1806,22 @@ def _try_paypal_link(
             "expected_amount": expected_amount,
             "zero_due_verified": zero_check["ok"],
             "tax_after_zero": zero_check["tax_after_zero"],
+            "promo_campaign_id": promo_campaign_id,
+            "checkout_ui_mode": checkout_ui_mode,
+            "link_mode": link_mode,
+            "redirect_url_format": redirect_format,
+            "stripe_publishable_key_source": stripe_pk_source,
+            "cs_id": cs_id,
+            "pm_id": pm_id,
+            "elements_session_id": elements_session_id,
+            "elements_session_error": elements_session_error,
+            "approve_result": approve_result,
+            "redirect_poll_summary": redirect_poll_summary,
+            "elements_payment_method_types": (
+                (elements_session_data.get("payment_method_preference") or {}).get("ordered_payment_method_types")
+                if isinstance(elements_session_data.get("payment_method_preference"), dict)
+                else []
+            ),
         }
 
     promo_applied = bool(zero_check["ok"])
@@ -929,6 +1846,18 @@ def _try_paypal_link(
         "has_paypal": has_paypal,
         "has_gopay": has_gopay,
         "coupon_state": coupon_state,
+        "promo_campaign_id": promo_campaign_id,
+        "checkout_ui_mode": checkout_ui_mode,
+        "link_mode": link_mode,
+        "redirect_url_format": redirect_format,
+        "stripe_publishable_key_source": stripe_pk_source,
+        "redirect_source": redirect_source,
+        "elements_session_id": elements_session_id,
+        "elements_payment_method_types": (
+            (elements_session_data.get("payment_method_preference") or {}).get("ordered_payment_method_types")
+            if isinstance(elements_session_data.get("payment_method_preference"), dict)
+            else []
+        ),
         "region": region["label"],
         "proxy": proxy,
         "stage_proxies": {
@@ -943,7 +1872,34 @@ def _try_paypal_link(
 # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鍏ュ彛 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
-def generate_payment_link(access_token: str, proxy: Any = None, payment_method: Any = "paypal") -> dict[str, Any]:
+def _should_fallback_to_hosted_checkout(result: dict[str, Any] | None, payment_method: str, payment_cfg: dict[str, Any]) -> bool:
+    if _normalize_payment_method(payment_method) != "paypal":
+        return False
+    if not isinstance(result, dict) or result.get("ok"):
+        return False
+    if str(result.get("error_code") or "") != "checkout_approve_blocked":
+        return False
+    return bool(payment_cfg.get("fallback_to_hosted_checkout_on_blocked", True))
+
+
+def _hosted_checkout_fallback_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
+    cloned = json.loads(json.dumps(cfg or {}))
+    paypal_cfg = cloned.setdefault("paypal", {})
+    paypal_cfg["checkout_ui_mode"] = "hosted"
+    paypal_cfg["link_mode"] = "chatgpt_checkout"
+    paypal_cfg["resolve_ba_redirect"] = False
+    paypal_cfg["require_ba_token"] = False
+    paypal_cfg["approve_missing_redirect"] = False
+    # Keep require_zero_due unchanged: user explicitly requires 0 due only.
+    return cloned
+
+
+def generate_payment_link(
+    access_token: str,
+    proxy: Any = None,
+    payment_method: Any = "paypal",
+    auth_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     try:
         cfg = _load_json(DEFAULT_CONFIG_PATH)
     except Exception as e:
@@ -970,12 +1926,63 @@ def generate_payment_link(access_token: str, proxy: Any = None, payment_method: 
                         proxy,
                         force_proxy=force_proxy,
                         payment_method=payment_method,
+                        auth_context=auth_context,
                     )
                     if result and result.get("ok"):
                         result["checkout_attempt"] = attempt
                         result["payment_method"] = payment_method
                         result["method"] = payment_method
                         return result
+                    if _should_fallback_to_hosted_checkout(result, payment_method, payment_cfg):
+                        print(
+                            f"{_log_prefix(payment_method)} approve blocked; retry hosted checkout long-link",
+                            file=sys.stderr,
+                        )
+                        hosted_cfg = _hosted_checkout_fallback_cfg(cfg, payment_method)
+                        hosted_result = _try_paypal_link(
+                            access_token,
+                            hosted_cfg,
+                            region,
+                            proxy,
+                            force_proxy=force_proxy,
+                            payment_method=payment_method,
+                            auth_context=auth_context,
+                        )
+                        if hosted_result and hosted_result.get("ok"):
+                            hosted_result["checkout_attempt"] = attempt
+                            hosted_result["payment_method"] = payment_method
+                            hosted_result["method"] = payment_method
+                            hosted_result["fallback_from"] = "checkout_approve_blocked"
+                            hosted_result["fallback_link_mode"] = "hosted_checkout"
+                            return hosted_result
+                        if hosted_result and hosted_result.get("error"):
+                            result = dict(result or {})
+                            result["hosted_fallback_error"] = hosted_result.get("error")
+                    if result and _should_retry_without_promo(result, payment_method, payment_cfg):
+                        print(
+                            f"{_log_prefix(payment_method)} zero-due promo confirm declined; retry without promo",
+                            file=sys.stderr,
+                        )
+                        fallback = _try_paypal_link(
+                            access_token,
+                            cfg,
+                            region,
+                            proxy,
+                            force_proxy=force_proxy,
+                            payment_method=payment_method,
+                            promo_campaign_id="",
+                            auth_context=auth_context,
+                        )
+                        if fallback:
+                            fallback["checkout_attempt"] = attempt
+                            fallback["payment_method"] = payment_method
+                            fallback["method"] = payment_method
+                            fallback["promo_fallback_attempted"] = True
+                            if fallback.get("ok") or fallback.get("terminal"):
+                                return fallback
+                            if fallback.get("error"):
+                                last_err = fallback["error"]
+                                continue
                     if result and result.get("terminal"):
                         result["checkout_attempt"] = attempt
                         result["payment_method"] = payment_method
@@ -991,8 +1998,8 @@ def generate_payment_link(access_token: str, proxy: Any = None, payment_method: 
     return {"ok": False, "error": f"all attempts failed, last error: {last_err}"}
 
 
-def generate_pp_link(access_token: str, proxy: Any = None) -> dict[str, Any]:
-    return generate_payment_link(access_token, proxy=proxy, payment_method="paypal")
+def generate_pp_link(access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None) -> dict[str, Any]:
+    return generate_payment_link(access_token, proxy=proxy, payment_method="paypal", auth_context=auth_context)
 
 
 def main() -> int:
@@ -1019,6 +2026,19 @@ def main() -> int:
             "config_exists": os.path.exists(DEFAULT_CONFIG_PATH),
             "proxies": _proxies,
             "regions": [r["label"] for r in _regions],
+            "checkout_ui_mode": _checkout_ui_mode(_pp_cfg),
+            "link_mode": _payment_link_mode(_pp_cfg, payment_method),
+            "redirect_url_format": _paypal_redirect_format(_pp_cfg) if payment_method == "paypal" else "any",
+            "use_elements_session": bool(_pp_cfg.get("use_elements_session", True)),
+            "approve_missing_redirect": bool(_pp_cfg.get("approve_missing_redirect", True)),
+            "redirect_poll_timeout_seconds": _pp_cfg.get("redirect_poll_timeout_seconds", 30),
+            "promo_campaign_id": _promo_campaign_id(_pp_cfg) or "",
+            "require_zero_due": bool(_pp_cfg.get("require_zero_due", False)),
+            "resolve_ba_redirect": _pp_cfg.get("resolve_ba_redirect", True),
+            "require_ba_token": bool(_pp_cfg.get("require_ba_token", False)),
+            "explicit_proxy_overrides_stage_proxies": bool(_pp_cfg.get("explicit_proxy_overrides_stage_proxies", False)),
+            "disable_promo_on_confirm_decline": _pp_cfg.get("disable_promo_on_confirm_decline", True),
+            "stage_proxies": _pp_cfg.get("stage_proxies") or {},
         }, ensure_ascii=False, indent=2))
         return 0
 

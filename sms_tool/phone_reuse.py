@@ -44,7 +44,7 @@ class PhoneSlot:
     target_price: str = "0.054"
     activation_id: str = ""
     reuse_count: int = 0
-    max_reuse_count: int = 3
+    max_reuse_count: int = 1
     last_used_at: int = 0
     last_send_at: int = 0
     total_verified: int = 0
@@ -54,6 +54,7 @@ class PhoneSlot:
     send_cooldown_seconds: int = 0
     send_retry_attempts: int = 1
     send_retry_delay_seconds: int = 0
+    number_attempts: int = 3
     last_sms_code: str = ""
 
     @property
@@ -143,13 +144,12 @@ class PhonePool:
         }
         for index, phone in enumerate(self.phones):
             saved = saved_by_slot.get(phone.slot_id) or saved_by_phone.get(phone.phone)
-            if not saved:
+            if not saved or not _saved_state_matches_slot(phone, saved):
                 continue
             if saved.get("phone"):
                 phone.phone = str(saved.get("phone") or "")
             phone.activation_id = str(saved.get("activation_id") or "")
             phone.reuse_count = int(saved.get("reuse_count") or 0)
-            phone.max_reuse_count = int(saved.get("max_reuse_count") or phone.max_reuse_count)
             phone.last_used_at = int(saved.get("last_used_at") or 0)
             phone.last_send_at = int(saved.get("last_send_at") or 0)
             phone.total_verified = int(saved.get("total_verified") or 0)
@@ -205,8 +205,24 @@ def _state_for_phone(phone: PhoneSlot) -> dict:
         "send_cooldown_seconds": phone.send_cooldown_seconds,
         "send_retry_attempts": phone.send_retry_attempts,
         "send_retry_delay_seconds": phone.send_retry_delay_seconds,
+        "number_attempts": phone.number_attempts,
         "last_sms_code": phone.last_sms_code,
     }
+
+
+def _saved_state_matches_slot(phone: PhoneSlot, saved: dict) -> bool:
+    saved_provider = str(saved.get("provider") or "").strip()
+    if saved_provider and saved_provider != phone.provider:
+        return False
+    if phone.provider == "smsbower":
+        return True
+    saved_phone = normalize_phone(saved.get("phone") or "")
+    if saved_phone and saved_phone != normalize_phone(phone.phone):
+        return False
+    saved_url = str(saved.get("sms_api_url") or "").strip()
+    if saved_url and saved_url != str(phone.sms_api_url or "").strip():
+        return False
+    return True
 
 
 def _phone_reuse_cfg():
@@ -227,6 +243,12 @@ def _send_retry_attempts(cfg: dict | None = None) -> int:
 def _send_retry_delay_seconds(cfg: dict | None = None) -> int:
     cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
     return max(0, _int_value(cfg.get("send_retry_delay_seconds"), 45))
+
+
+def _number_attempts(cfg: dict | None = None) -> int:
+    cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
+    smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
+    return max(1, _int_value(smsbower_cfg.get("number_attempts") or cfg.get("number_attempts"), 3))
 
 
 def _resolve_secret(value: str, env_name: str) -> str:
@@ -252,6 +274,12 @@ def _smsbower_api_key(cfg: dict | None = None) -> str:
 
 def has_phone_reuse_config() -> bool:
     cfg = _phone_reuse_cfg()
+    source = _phone_source(cfg)
+    if source == "phone_pool":
+        return bool(cfg.get("phone_pool"))
+    if source == "smsbower":
+        smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
+        return bool(_smsbower_api_key(smsbower_cfg))
     smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
     if _smsbower_api_key(smsbower_cfg):
         return True
@@ -263,9 +291,20 @@ def has_phone_reuse_config() -> bool:
     return bool(paypal_cfg.get("phone_number") and paypal_cfg.get("sms_api_url"))
 
 
+def _phone_source(cfg: dict | None = None) -> str:
+    cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
+    source = str(cfg.get("source") or cfg.get("mode") or "auto").strip().lower()
+    if source in {"smsbower", "sms_bower", "platform", "provider"}:
+        return "smsbower"
+    if source in {"phone_pool", "static", "legacy", "sms_link", "link"}:
+        return "phone_pool"
+    return "auto"
+
+
 def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | None = None) -> PhonePool:
     cfg = _phone_reuse_cfg()
-    max_reuse = max_reuse_count or _int_value(cfg.get("max_reuse_count"), 3)
+    source = _phone_source(cfg)
+    max_reuse = max_reuse_count or _int_value(cfg.get("max_reuse_count"), 1)
     send_cooldown = (
         max(0, int(send_cooldown_seconds))
         if send_cooldown_seconds is not None
@@ -273,11 +312,12 @@ def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | Non
     )
     send_retries = _send_retry_attempts(cfg)
     send_retry_delay = _send_retry_delay_seconds(cfg)
+    number_attempts = _number_attempts(cfg)
     phones: list[PhoneSlot] = []
 
     smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
     api_key = _smsbower_api_key(smsbower_cfg)
-    if api_key:
+    if api_key and source != "phone_pool":
         pool_size = max(1, _int_value(smsbower_cfg.get("pool_size"), 1))
         service = normalize_service(smsbower_cfg.get("service") or OPENAI_SERVICE_CODE)
         country = smsbower_cfg.get("country") or GHANA_COUNTRY_CODE
@@ -299,15 +339,16 @@ def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | Non
                 send_cooldown_seconds=_int_value(smsbower_cfg.get("send_cooldown_seconds"), send_cooldown),
                 send_retry_attempts=_int_value(smsbower_cfg.get("send_retry_attempts"), send_retries),
                 send_retry_delay_seconds=_int_value(smsbower_cfg.get("send_retry_delay_seconds"), send_retry_delay),
+                number_attempts=_int_value(smsbower_cfg.get("number_attempts"), number_attempts),
             ))
 
-    if not phones:
+    if not phones and source != "smsbower":
         for index, entry in enumerate(cfg.get("phone_pool") or []):
             slot = _slot_from_static_entry(entry, max_reuse, f"phone_pool:{index}")
             if slot:
                 phones.append(slot)
 
-    if not phones:
+    if not phones and source != "smsbower":
         paypal_cfg = CFG.get("paypal_auto") if isinstance(CFG.get("paypal_auto"), dict) else {}
         phone_numbers = paypal_cfg.get("phone_numbers") or []
         for index, entry in enumerate(phone_numbers):
@@ -433,8 +474,9 @@ def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
     if _smsbower_client(slot).request_additional(slot.activation_id):
         print(f"  [smsbower] activation {slot.activation_id} ready for another code")
         return True
-    print(f"  [smsbower] activation {slot.activation_id} could not request another code; keeping current number")
-    return False
+    print(f"  [smsbower] activation {slot.activation_id} could not request another code; cancelling and acquiring a new number")
+    _cancel_smsbower_activation(slot)
+    return _acquire_smsbower_number(slot)
 
 
 def _wait_for_send_cooldown(slot: PhoneSlot):
@@ -457,6 +499,14 @@ def _should_keep_activation_after_send_failure(result: dict) -> bool:
 def _is_terminal_send_rejection(result: dict) -> bool:
     code = str(result.get("error_code") or "").strip().lower()
     return code in {"fraud_guard", "unsupported_phone_number", "invalid_phone_number"}
+
+
+def _is_terminal_validate_rejection(result: dict) -> bool:
+    status = int(result.get("status_code") or 0)
+    body = str(result.get("body") or "").lower()
+    message = str(result.get("message") or "").lower()
+    text = f"{body} {message}"
+    return status == 429 or "phone_recently_used" in text or "this phone number was recently used" in text
 
 
 def _retire_phone_slot_for_batch(phone_pool: PhonePool, phone_slot: PhoneSlot, reason: str):
@@ -633,6 +683,76 @@ def _complete_phone_verification_locked(
     sms_timeout: int = 0,
     sms_poll_interval: int = 0,
 ) -> dict:
+    attempts = max(
+        1,
+        max((int(phone.number_attempts or 1) for phone in phone_pool.phones if phone.provider == "smsbower"), default=1),
+    )
+    last_result: dict = {}
+    attempt = 1
+    while attempt <= attempts:
+        result = _complete_phone_verification_once_locked(
+            session=session,
+            did=did,
+            current_url=current_url,
+            phone_pool=phone_pool,
+            sentinel=sentinel,
+            proxy=proxy,
+            sms_timeout=sms_timeout,
+            sms_poll_interval=sms_poll_interval,
+        )
+        if result.get("ok"):
+            return result
+        last_result = result
+        should_retry = _should_retry_with_new_smsbower_number(phone_pool, result)
+        if should_retry and attempt >= attempts:
+            attempts = max(attempts, _minimum_smsbower_attempts_for_retry(result))
+        if attempt >= attempts or not should_retry:
+            return result
+        print(
+            "[*] Phone verification retry with new SMSBower number "
+            f"{attempt + 1}/{attempts}: {result.get('error', 'unknown')}"
+        )
+        phone_pool.reset_exhausted_smsbower_slots()
+        attempt += 1
+    return last_result or {"ok": False, "error": "phone_verification_failed"}
+
+
+def _minimum_smsbower_attempts_for_retry(result: dict) -> int:
+    error = str(result.get("error") or "").strip().lower()
+    if error == "phone_sms_timeout" or error.startswith("phone_send_failed:"):
+        return 2
+    return 1
+
+
+def _should_retry_with_new_smsbower_number(phone_pool: PhonePool, result: dict) -> bool:
+    if not any(phone.provider == "smsbower" for phone in phone_pool.phones):
+        return False
+    error = str(result.get("error") or "").strip().lower()
+    body = str(result.get("body") or "").lower()
+    if error == "phone_sms_timeout":
+        return True
+    if error in {"smsbower_prepare_failed", "phone_pool_exhausted"}:
+        return False
+    if error.startswith("phone_send_failed:"):
+        return any(
+            marker in error or marker in body
+            for marker in ("fraud_guard", "unsupported_phone_number", "invalid_phone_number")
+        )
+    if error.startswith("phone_validate_failed:"):
+        return "429" in error or "phone_recently_used" in body or "recently used" in body
+    return False
+
+
+def _complete_phone_verification_once_locked(
+    session,
+    did,
+    current_url,
+    phone_pool: PhonePool,
+    sentinel=None,
+    proxy=None,
+    sms_timeout: int = 0,
+    sms_poll_interval: int = 0,
+) -> dict:
     phone_pool.reset_exhausted_smsbower_slots()
     phone_slot = phone_pool.get_next_available()
     if not phone_slot:
@@ -685,7 +805,8 @@ def _complete_phone_verification_locked(
 
     if not code:
         if phone_slot.provider == "smsbower":
-            print(f"  [smsbower] SMS timeout; keeping activation {phone_slot.activation_id} for retry")
+            print(f"  [smsbower] SMS timeout; cancelling activation {phone_slot.activation_id} so this run can buy a new number")
+            _cancel_smsbower_activation(phone_slot)
             phone_pool.save_state()
         return {
             "ok": False,
@@ -698,6 +819,8 @@ def _complete_phone_verification_locked(
     validate_result = validate_phone_otp(session, did, code, sentinel=sentinel, proxy=proxy)
     if not validate_result.get("ok"):
         if phone_slot.provider == "smsbower":
+            if _is_terminal_validate_rejection(validate_result):
+                print(f"  [smsbower] phone rejected by OpenAI; cancelling activation {phone_slot.activation_id} so next round buys a new number")
             _cancel_smsbower_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -715,7 +838,8 @@ def _complete_phone_verification_locked(
     max_reuse_count = phone_slot.max_reuse_count
     remaining = phone_slot.remaining
     if phone_slot.provider == "smsbower" and phone_slot.is_exhausted:
-        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; will reset on next SMS round")
+        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; completing now")
+        _complete_smsbower_activation(phone_slot)
         phone_pool.save_state()
 
     return {
