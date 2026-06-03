@@ -96,7 +96,7 @@ def main():
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
-    parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 3)")
+    parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()
     if not args.proxy:
@@ -636,14 +636,21 @@ def _regenerate_paypal_link(args):
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
     if emails:
-        workers = max(1, min(int(args.workers or 1), 4, len(emails)))
-        print(f"[*] Batch regenerate PayPal links: {len(emails)} account(s), workers={workers}")
+        payment_method = _payment_method(args)
+        workers = _payment_regenerate_workers(args, payment_method, len(emails))
+        delay_seconds = _payment_regenerate_delay_seconds(payment_method)
+        print(
+            f"[*] Batch regenerate PayPal links: {len(emails)} account(s), "
+            f"workers={workers} requested={int(args.workers or 1)} delay={delay_seconds:g}s"
+        )
         results = []
         ordered = [None] * len(emails)
 
         def _run_one(index, item_email):
+            if index > 0 and delay_seconds > 0:
+                time.sleep(delay_seconds * index if workers > 1 else delay_seconds)
             print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy, payment_method=_payment_method(args))
+            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy, payment_method=payment_method)
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
@@ -665,6 +672,30 @@ def _regenerate_paypal_link(args):
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
+
+
+def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
+    requested = max(1, int(getattr(args, "workers", 1) or 1))
+    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    if payment_method == "paypal":
+        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    configured = cfg.get("max_regenerate_workers", cfg.get("regenerate_workers"))
+    try:
+        cap = int(configured)
+    except (TypeError, ValueError):
+        cap = 4
+    cap = max(1, cap)
+    return max(1, min(requested, cap, total))
+
+
+def _payment_regenerate_delay_seconds(payment_method: str) -> float:
+    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    if payment_method == "paypal":
+        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    try:
+        return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _read_email_file(path):
@@ -796,7 +827,7 @@ def _one_click_pay(args):
     if _payment_method(args) == "gopay":
         from .gopay_payment import one_click_pay_batch
     else:
-        from .paypal_nocard import one_click_pay_batch
+        from .paypal_browser_auto import one_click_pay_batch
     one_click_pay_batch(args)
 
 

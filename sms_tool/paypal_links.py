@@ -4,10 +4,12 @@ from pathlib import Path
 
 from curl_cffi import requests as curl_requests
 
+from .account_seed import extract_access_token as _access_token
+from .account_seed import load_account_seed as _load_seed
 from .config import CFG
 from .gen_pp_link import generate_payment_link, generate_pp_link
 from .paypal_nocard import _follow_stripe_redirect, extract_ba_token
-from .storage import get_account_record, upsert_account
+from .storage import upsert_account
 
 
 def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal"):
@@ -23,29 +25,42 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
     old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
     old_paypal_status = str(data.get("paypal_status") or "").strip()
     payment_method = _normalize_payment_method(payment_method)
-    paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method)
-    if _is_checkout_unauthorized(paypal):
+    paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method, seed_data=data)
+    checkout_unauthorized = _is_checkout_unauthorized(paypal)
+    if checkout_unauthorized:
         refreshed = _refresh_seed_session(target_email, json_path, proxy=proxy, stale_access_token=access_token)
         if refreshed.get("ok"):
             data, json_path = _load_seed(email=target_email, session_file=json_path)
             refreshed_token = _access_token(data)
             if refreshed_token and refreshed_token != access_token:
                 access_token = refreshed_token
-                paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method)
+                paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method, seed_data=data)
             else:
                 paypal = dict(paypal)
                 paypal["refresh_error"] = refreshed.get("error", "refresh_returned_same_access_token")
         else:
             paypal = dict(paypal)
             paypal["refresh_error"] = refreshed.get("error", "refresh_failed")
-    if payment_method == "paypal" and paypal.get("ok") and paypal.get("url"):
+    if _should_resolve_ba_redirect(payment_method, paypal):
         paypal = _resolve_ba_redirect(paypal, proxy=proxy)
+    if (
+        _requires_ba_token(payment_method)
+        and paypal.get("ok")
+        and not _is_chatgpt_checkout_link(paypal)
+        and not extract_ba_token(str(paypal.get("url") or ""))
+    ):
+        paypal = dict(paypal)
+        paypal["ok"] = False
+        paypal["error"] = paypal.get("ba_resolve_error") or "PayPal BA token was not resolved"
+        paypal["error_code"] = "paypal_ba_token_missing"
+        paypal["terminal"] = True
+        paypal["retryable"] = False
     now = int(time.time())
     if paypal.get("ok") and paypal.get("url"):
         data["paypal"] = paypal
         data["paypal_status"] = "link_ready"
     else:
-        can_reuse_old_link = _saved_link_matches_payment_method(old_paypal, payment_method)
+        can_reuse_old_link = _saved_link_matches_payment_method(old_paypal, payment_method, _payment_cfg(payment_method))
         if can_reuse_old_link:
             data["paypal"] = old_paypal
             data["paypal_status"] = old_paypal_status or "link_ready"
@@ -57,8 +72,13 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
         data["paypal_regenerate_error"] = _payment_error(paypal)
         if isinstance(paypal.get("stripe_error"), dict):
             data["paypal_regenerate_error_details"] = paypal["stripe_error"]
+        elif isinstance(paypal.get("confirm_summary"), dict):
+            data["paypal_regenerate_error_details"] = paypal["confirm_summary"]
         if paypal.get("error_code"):
             data["paypal_regenerate_error_code"] = paypal["error_code"]
+    if checkout_unauthorized and not paypal.get("ok") and _at_refresh_failed(paypal):
+        data["status"] = "at_invalid"
+        data["error"] = _payment_error(paypal) or "access_token_invalidated"
     data["paypal_updated_at"] = now
     data["payment_method"] = payment_method
     data["access_token"] = access_token
@@ -89,6 +109,25 @@ def _is_checkout_unauthorized(paypal) -> bool:
     return "401" in error and "checkout" in error.lower()
 
 
+def _at_refresh_failed(paypal) -> bool:
+    text = (
+        str(paypal.get("error") or "")
+        + " "
+        + str(paypal.get("refresh_error") or "")
+    ).lower()
+    markers = (
+        "token_invalidated",
+        "token_expired",
+        "authentication token has been invalidated",
+        "could not validate your token",
+        "add_phone_required",
+        "oauth_refresh_http_401",
+        "cookie_refresh_returned_same_access_token",
+        "passwordless_fallback=",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _normalize_payment_method(value):
     value = str(value or "").strip().lower()
     if value in {"gopay", "go-pay", "go_pay"}:
@@ -96,16 +135,58 @@ def _normalize_payment_method(value):
     return "paypal"
 
 
-def _generate_link(access_token, proxy=None, payment_method="paypal"):
+def _payment_cfg(payment_method="paypal"):
     if _normalize_payment_method(payment_method) == "paypal":
-        return generate_pp_link(access_token, proxy=proxy)
-    return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method)
+        return CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    return method_cfg
 
 
-def _saved_link_matches_payment_method(paypal, payment_method):
+def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None):
+    auth_context = seed_data if isinstance(seed_data, dict) else None
+    if _normalize_payment_method(payment_method) == "paypal":
+        return generate_pp_link(access_token, proxy=proxy, auth_context=auth_context)
+    return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method, auth_context=auth_context)
+
+
+def _is_chatgpt_checkout_link(paypal):
+    if not isinstance(paypal, dict):
+        return False
+    link_type = str(paypal.get("link_type") or paypal.get("source") or "").strip().lower()
+    if link_type in {"chatgpt_checkout", "openai_checkout"}:
+        return True
+    url = str(paypal.get("url") or paypal.get("checkout_url") or "").strip().lower()
+    return (
+        "chatgpt.com/checkout/" in url
+        or "pay.openai.com/c/pay/" in url
+        or "checkout.stripe.com/c/pay/" in url
+    )
+
+
+def _should_resolve_ba_redirect(payment_method, paypal):
+    if _normalize_payment_method(payment_method) != "paypal":
+        return False
+    if not isinstance(paypal, dict) or not paypal.get("ok") or not paypal.get("url"):
+        return False
+    if _is_chatgpt_checkout_link(paypal):
+        return False
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    return bool(paypal_cfg.get("resolve_ba_redirect", True))
+
+
+def _requires_ba_token(payment_method):
+    if _normalize_payment_method(payment_method) != "paypal":
+        return False
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    return bool(paypal_cfg.get("require_ba_token", False))
+
+
+def _saved_link_matches_payment_method(paypal, payment_method, payment_cfg=None):
     if not isinstance(paypal, dict) or not paypal.get("url"):
         return False
     target = _normalize_payment_method(payment_method)
+    if target == "paypal" and not _saved_paypal_link_matches_target_mode(paypal, payment_cfg or {}):
+        return False
     raw_method = str(paypal.get("payment_method") or paypal.get("method") or paypal.get("type") or "").strip().lower()
     method = _normalize_payment_method(raw_method) if raw_method else ""
     currency = str(paypal.get("currency") or "").strip().lower()
@@ -121,6 +202,38 @@ def _saved_link_matches_payment_method(paypal, payment_method):
     if method == "gopay" or has_gopay or currency == "idr":
         return False
     return method == "paypal" or has_paypal or currency == "usd" or not (raw_method or pm_type_values or currency)
+
+
+def _saved_paypal_link_matches_target_mode(paypal, payment_cfg):
+    raw_url = str(paypal.get("url") or "").strip()
+    if not raw_url:
+        return False
+    if bool(payment_cfg.get("require_ba_token", False)) and not extract_ba_token(raw_url):
+        return False
+    url = raw_url.lower()
+    mode = str(payment_cfg.get("link_mode") or payment_cfg.get("paypal_link_mode") or "stripe_redirect").strip().lower().replace("-", "_")
+    checkout_ui_mode = str(payment_cfg.get("checkout_ui_mode") or "custom").strip().lower()
+    resolve_ba = bool(payment_cfg.get("resolve_ba_redirect", True))
+    raw_redirect_format = str(payment_cfg.get("redirect_url_format") or "").strip().lower().replace("-", "_")
+    if raw_redirect_format in {"any", "legacy", "all"}:
+        redirect_format = "any"
+    elif raw_redirect_format in {"paypal", "paypal_approve", "ba", "ba_approve"}:
+        redirect_format = "paypal_approve"
+    elif raw_redirect_format:
+        redirect_format = "stripe_authorize"
+    else:
+        redirect_format = "paypal_approve" if resolve_ba else "stripe_authorize"
+    if mode in {"stripe", "stripe_confirm", "stripe_redirect", "paypal_redirect", "ba_redirect", "legacy"}:
+        if redirect_format == "any":
+            return "pm-redirects.stripe.com/authorize" in url or "paypal.com/agreements/approve" in url or "ba_token=" in url
+        if redirect_format == "paypal_approve":
+            return "paypal.com/agreements/approve" in url or "ba_token=" in url
+        return "pm-redirects.stripe.com/authorize" in url
+    if mode == "chatgpt_checkout":
+        if checkout_ui_mode == "hosted":
+            return "pay.openai.com/c/pay/" in url or "checkout.stripe.com/c/pay/" in url
+        return "chatgpt.com/checkout/" in url
+    return True
 
 
 def _refresh_seed_session(email, json_path, proxy=None, stale_access_token=""):
@@ -325,53 +438,3 @@ def _resolve_ba_redirect(paypal, proxy=None):
     return paypal
 
 
-def _load_seed(email="", session_file=""):
-    if session_file:
-        path = Path(session_file)
-        data = _read_json(path)
-        return data, str(path)
-
-    record = get_account_record(email) if email else {}
-    json_path = str(record.get("json_path") or "").strip()
-    data = {}
-    if json_path:
-        data = _read_json(Path(json_path))
-    raw_json = str(record.get("raw_json") or "").strip()
-    if raw_json:
-        try:
-            raw_data = json.loads(raw_json)
-            if isinstance(raw_data, dict):
-                data = {**raw_data, **data}
-        except Exception:
-            pass
-    if record:
-        data.setdefault("email", record.get("email", ""))
-        data.setdefault("access_token", record.get("access_token", ""))
-        data.setdefault("cookie_header", record.get("cookie_header", ""))
-        data.setdefault("oauth_refresh_token", record.get("oauth_refresh_token", ""))
-        data.setdefault("refresh_token", record.get("refresh_token", ""))
-    return data, json_path
-
-
-def _read_json(path):
-    try:
-        return json.loads(path.read_text(encoding="utf-8-sig"))
-    except Exception:
-        return {}
-
-
-def _access_token(data):
-    token = str(data.get("access_token") or "").strip()
-    if token:
-        return token
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
-    for key in ("accessToken", "access_token"):
-        value = auth_session.get(key)
-        if isinstance(value, str) and value:
-            return value
-    session = auth_session.get("session") if isinstance(auth_session.get("session"), dict) else {}
-    for key in ("accessToken", "access_token"):
-        value = session.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return ""

@@ -365,12 +365,87 @@ def _persist_provider_state(row: dict[str, Any], data: dict[str, Any], result: d
     upsert_account(data, json_path=json_path)
 
 
+def _provider_failure_class(code: str, payload: dict[str, Any]) -> dict[str, str]:
+    try:
+        raw = json.dumps(payload, ensure_ascii=False, default=str)
+    except Exception:
+        raw = str(payload)
+    text = f"{code} {raw}".lower()
+    if any(marker in text for marker in ("otp timeout", "otp not received", "smsbower otp", "sms timeout", "timeout after")):
+        return {
+            "gopay_failure_class": "otp_timeout",
+            "recommended_action": "change_number",
+            "retry_policy": "retry_with_new_smsbower_number",
+        }
+    if any(marker in text for marker in ("phone already registered", "already registered", "phone_already_taken", "user:already_exists")):
+        return {
+            "gopay_failure_class": "registration_phone_rejected",
+            "recommended_action": "change_number",
+            "retry_policy": "retry_with_new_smsbower_number",
+        }
+    if any(marker in text for marker in ("waf block", "tencent cloud waf", " http 403", "status 403", "403 forbidden", "customer_signup failed: http 403")):
+        return {
+            "gopay_failure_class": "proxy_blocked",
+            "recommended_action": "change_proxy",
+            "retry_policy": "retry_with_new_proxy",
+        }
+    if any(marker in text for marker in ("fraud_status", "fraud denied", "transaction_status\": \"deny", "transaction_status='deny", "midtrans fraud denied")):
+        return {
+            "gopay_failure_class": "terminal_fraud_deny",
+            "recommended_action": "terminal_fail",
+            "retry_policy": "do_not_retry_same_payment",
+        }
+    if "payment-switch failed" in text or "gopay_wallet" in text:
+        return {
+            "gopay_failure_class": "payment_switch_rejected",
+            "recommended_action": "change_number_or_proxy",
+            "retry_policy": "retry_with_new_gopay_number_then_proxy",
+        }
+    if "balance insufficient" in text or "required>=" in text:
+        return {
+            "gopay_failure_class": "balance_insufficient",
+            "recommended_action": "fund_or_wait",
+            "retry_policy": "wait_welcome_or_claim_envelope",
+        }
+    if "pin rejected" in text:
+        return {
+            "gopay_failure_class": "terminal_pin_rejected",
+            "recommended_action": "check_pin",
+            "retry_policy": "do_not_retry_until_pin_fixed",
+        }
+    if "pin rate-limited" in text or "cool down" in text:
+        return {
+            "gopay_failure_class": "pin_rate_limited",
+            "recommended_action": "wait_cooldown",
+            "retry_policy": "retry_after_cooldown",
+        }
+    if "rate limit" in text or "rate_limited" in text or "429" in text:
+        return {
+            "gopay_failure_class": "rate_limited",
+            "recommended_action": "change_proxy_or_wait",
+            "retry_policy": "retry_later_or_new_proxy",
+        }
+    if "registration failed" in text or "signup" in text or "bootstrap" in text:
+        return {
+            "gopay_failure_class": "registration_failed",
+            "recommended_action": "change_number",
+            "retry_policy": "retry_with_new_smsbower_number",
+        }
+    return {
+        "gopay_failure_class": "unknown",
+        "recommended_action": "inspect_provider_error",
+        "retry_policy": "manual_triage",
+    }
+
+
 def _provider_error(email: str, code: str, payload: dict[str, Any]) -> dict[str, Any]:
+    failure = _provider_failure_class(code, payload)
     return {
         "ok": False,
         "email": email,
         "error_code": code,
         "error": str(payload.get("errorMessage") or payload.get("error_message") or payload.get("error") or payload)[:1000],
+        **failure,
         "provider": payload,
     }
 
