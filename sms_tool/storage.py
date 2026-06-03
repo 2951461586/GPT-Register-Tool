@@ -252,6 +252,11 @@ def _refresh_token_status(data, auth_session):
 
 
 def _status(data, paypal, access_token, has_refresh_token=False):
+    explicit = str(_get(data, "status")).strip().lower()
+    if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
+        return "at_invalid"
+    if _looks_at_invalid(data, paypal):
+        return "at_invalid"
     if data.get("success") is False and not has_refresh_token:
         return "failed" if data.get("error") else "pending"
     if not data.get("success") and data.get("error") and not has_refresh_token:
@@ -263,6 +268,27 @@ def _status(data, paypal, access_token, has_refresh_token=False):
     if access_token:
         return "registered"
     return "pending"
+
+
+def _looks_at_invalid(data, paypal):
+    text = " ".join(
+        str(value or "")
+        for value in (
+            _get(data, "error"),
+            _get(data, "paypal_regenerate_error"),
+            _get(paypal, "error"),
+            _get(paypal, "refresh_error"),
+        )
+    ).lower()
+    markers = (
+        "token_invalidated",
+        "token_expired",
+        "authentication token has been invalidated",
+        "could not validate your token",
+        "add_phone_required",
+        "oauth_refresh_http_401",
+    )
+    return any(marker in text for marker in markers)
 
 
 def _success_value(data, access_token):
@@ -292,7 +318,7 @@ def upsert_account(data, json_path=""):
     refresh_token_status = _refresh_token_status(data, auth_session)
     has_refresh_token = refresh_token_status in {"oauth_present", "legacy_present"}
     status = _status(data, paypal, access_token, has_refresh_token=has_refresh_token)
-    if has_refresh_token and _get(data, "error"):
+    if has_refresh_token and status != "at_invalid" and _get(data, "error"):
         data = dict(data)
         data.pop("error", None)
     raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))

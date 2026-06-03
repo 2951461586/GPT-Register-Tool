@@ -4,7 +4,7 @@ outlook_results/
 dist/
 sessions/
 runtime/
-browser_extensions/paypal_autofill/profile.generated.js
+browser_extensions/
 .dotnet/
 sms_tool/sentinel_cache.json
 mailbox_tokens.txt

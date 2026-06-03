@@ -1,12 +1,14 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services" / "gopay-flow"))
 
-from gopay import GoPayCharger, GoPayFraudDeny, _check_gojek_balance_rp, _expected_amount_from_init, _extract_gopay_balance_rp, _gojek_call, _gopay_app_cfg, _gopay_app_service_configured, _retry_smsbower_gopay_bootstrap_error, _rpc_bool, _rpc_state, _smsbower_api, _wait_for_gojek_min_balance, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
+from gopay import GoPayCharger, GoPayFraudDeny, _bootstrap_gojek_account, _check_gojek_balance_rp, _expected_amount_from_init, _extract_gopay_balance_rp, _gojek_call, _gopay_app_cfg, _gopay_app_service_configured, _retry_smsbower_gopay_bootstrap_error, _rpc_bool, _rpc_state, _smsbower_api, _wait_for_gojek_min_balance, prepare_smsbower_otp, smsbower_source_enabled, wait_smsbower_otp  # noqa: E402
+import gopay_pure_protocol  # noqa: E402
 
 
 class _Resp:
@@ -36,8 +38,13 @@ class _SequenceExt:
         self.responses = list(responses)
         self.calls = []
 
-    def post(self, url, data=None, timeout=None):
-        self.calls.append({"url": url, "data": dict(data or {}), "timeout": timeout})
+    def post(self, url, data=None, timeout=None, headers=None):
+        captured = data if isinstance(data, str) else dict(data or {})
+        self.calls.append({"url": url, "data": captured, "timeout": timeout, "headers": headers or {}})
+        return self.responses.pop(0)
+
+    def get(self, url, timeout=None, headers=None, params=None):
+        self.calls.append({"url": url, "timeout": timeout, "headers": headers or {}, "params": params or {}})
         return self.responses.pop(0)
 
 
@@ -71,6 +78,96 @@ class _BalanceClient:
     def refresh_token(self):
         self.refreshes += 1
         return {"status": 200, "body": {"ok": True}}
+
+
+class _PureProtocolFake:
+    instances = []
+
+    def __init__(self, device, signer=None, debug=True, dry_run=False, proxy=None, timeout=35, **kwargs):
+        self.device = device
+        self.signer = signer
+        self.debug = debug
+        self.dry_run = dry_run
+        self.proxy = proxy
+        self.timeout = timeout
+        self.closed = False
+        self.calls = []
+        self.balance_reads = 0
+        self.__class__.instances.append(self)
+
+    def login_methods(self, local, country_code):
+        self.calls.append(("login_methods", local, country_code))
+        return 404, {"errors": [{"code": "auth:error:user:not_found"}]}, {}
+
+    def cvs_methods(self, local, flow="signup", country_code="+62"):
+        self.calls.append(("cvs_methods", local, flow, country_code))
+        return 200, {"verification_id": "v_signup", "default_method": "otp_sms", "methods": ["otp_sms"]}, {}
+
+    def cvs_initiate(self, local, verification_id, method="otp_sms", flow="signup", country_code="+62"):
+        self.calls.append(("cvs_initiate", local, verification_id, method, flow, country_code))
+        return 200, {"otp_token": "otp_signup"}, {}
+
+    def cvs_retry(self, otp_token, method="otp_sms", flow="signup"):
+        self.calls.append(("cvs_retry", otp_token, method, flow))
+        return 200, {"otp_token": otp_token}, {}
+
+    def cvs_verify(self, local, verification_id, otp, method="otp_sms", flow="signup", country_code="+62", otp_token=None, **kwargs):
+        self.calls.append(("cvs_verify", local, verification_id, otp, method, flow, country_code, otp_token))
+        return 200, {"verification_token": "verify_signup"}, {}
+
+    def customer_signup(self, local, full_name, **kwargs):
+        self.calls.append(("customer_signup", local, full_name, kwargs.get("signup_client_name")))
+        return 201, {"access_token": "at_signup", "refresh_token": "rt_signup"}, {}
+
+    def token(self, **kwargs):
+        self.calls.append(("token", kwargs))
+        return 200, {"access_token": "at_refreshed", "refresh_token": "rt_refreshed"}, {}
+
+    def pin_allowed(self, access_token, pin):
+        self.calls.append(("pin_allowed", access_token, pin))
+        return 200, {"success": True}, {}
+
+    def cvs_methods_pin(self, access_token):
+        self.calls.append(("cvs_methods_pin", access_token))
+        return 200, {"verification_id": "v_pin", "default_method": "otp_sms", "methods": ["otp_sms"]}, {}
+
+    def cvs_initiate_pin(self, access_token, verification_id, method="otp_sms"):
+        self.calls.append(("cvs_initiate_pin", access_token, verification_id, method))
+        return 200, {"otp_token": "otp_pin"}, {}
+
+    def cvs_retry_pin(self, access_token, otp_token, method="otp_sms"):
+        self.calls.append(("cvs_retry_pin", access_token, otp_token, method))
+        return 200, {"otp_token": otp_token}, {}
+
+    def cvs_verify_pin(self, access_token, verification_id, otp, otp_token, method="otp_sms"):
+        self.calls.append(("cvs_verify_pin", access_token, verification_id, otp, otp_token, method))
+        return 200, {"verification_token": "verify_pin"}, {}
+
+    def pin_setup_token_after_otp(self, access_token, pin, verification_token):
+        self.calls.append(("pin_setup_token_after_otp", access_token, pin, verification_token))
+        return 200, {"success": True}, {}
+
+    def user_profile(self, access_token):
+        self.calls.append(("user_profile", access_token))
+        return 200, {"data": {"is_pin_setup": True}}, {}
+
+    def get(self, base, path, auth=None):
+        self.calls.append(("get", base, path, auth))
+        if path.startswith("/v1/festivals/envelope-requests/"):
+            return 200, {"data": {"envelope_request_id": "env_req_1"}}, {}
+        self.balance_reads += 1
+        if self.balance_reads == 1:
+            return 200, {"data": [{"balance": {"value": 0}}]}, {}
+        return 200, {"data": [{"balance": {"value": 1}}]}, {}
+
+    def post(self, base, path, body, auth=None, **kwargs):
+        self.calls.append(("post", base, path, body, auth))
+        if path == "/v1/festivals/envelope-requests":
+            return 200, {"success": True, "data": {"envelope_request_id": body.get("envelope_request_id")}}, {}
+        return 200, {"success": True}, {}
+
+    def close(self):
+        self.closed = True
 
 
 class GoPayProtocolFlowTests(unittest.TestCase):
@@ -193,6 +290,53 @@ class GoPayProtocolFlowTests(unittest.TestCase):
 
         with self.assertRaises(GoPayFraudDeny):
             charger._midtrans_create_charge("snap123")
+
+    def test_midtrans_snap_headers_are_signed_when_key_configured(self):
+        charger = GoPayCharger.__new__(GoPayCharger)
+        charger.snap_signing_key = "secret"
+        charger._snap_signature_warned = False
+        charger.midtrans_client_id = "mid-client"
+        charger.log = lambda msg: None
+
+        headers = charger._midtrans_headers(
+            "snap123",
+            json_body=True,
+            snap_path="/snap/v3/accounts/snap123/linking",
+            snap_body={"type": "gopay"},
+        )
+
+        self.assertIn("X-Snap-Signature", headers)
+        self.assertIn("X-Timestamp", headers)
+
+    def test_midtrans_charge_uses_compact_signed_json_body(self):
+        charger = GoPayCharger.__new__(GoPayCharger)
+        charger.ext = _SequenceExt([_Resp(data={"transaction_status": "settlement"})])
+        charger.snap_signing_key = "secret"
+        charger._snap_signature_warned = False
+        charger.log = lambda msg: None
+        charger._midtrans_redirection_url = lambda snap: f"https://app.midtrans.com/snap/v4/redirection/{snap}"
+
+        charge_ref = charger._midtrans_create_charge("snap123")
+
+        self.assertEqual(charge_ref, "")
+        self.assertEqual(
+            charger.ext.calls[0]["data"],
+            '{"payment_type":"gopay","tokenization":"true","promo_details":null}',
+        )
+        self.assertIn("X-Snap-Signature", charger.ext.calls[0]["headers"])
+
+    def test_midtrans_status_poll_uses_snap_signature(self):
+        charger = GoPayCharger.__new__(GoPayCharger)
+        charger.ext = _SequenceExt([_Resp(data={"transaction_status": "settlement", "status_code": "200"})])
+        charger.snap_signing_key = "secret"
+        charger._snap_signature_warned = False
+        charger.log = lambda msg: None
+        charger._midtrans_redirection_url = lambda snap: f"https://app.midtrans.com/snap/v4/redirection/{snap}"
+
+        result = charger._midtrans_poll_status("snap123")
+
+        self.assertEqual(result["transaction_status"], "settlement")
+        self.assertIn("X-Snap-Signature", charger.ext.calls[0]["headers"])
 
     def test_prepare_smsbower_sets_local_indonesia_phone(self):
         calls = []
@@ -402,6 +546,100 @@ class GoPayProtocolFlowTests(unittest.TestCase):
 
         self.assertEqual(balance, 1)
         self.assertEqual(len(sleeps), 2)
+
+    def test_smsbower_bootstrap_uses_python_pure_protocol_not_app_or_legacy_client(self):
+        import gopay
+
+        _PureProtocolFake.instances = []
+        activation = {
+            "phone": "+6281234567890",
+            "country_code": "62",
+            "activation_id": "act1",
+            "api_key": "key",
+            "poll_interval": 1,
+        }
+        cfg = {
+            "pin": "147258",
+            "proxy": "socks5h://127.0.0.1:7897",
+            "pure_protocol_timeout_seconds": 9,
+            "otp": {
+                "smsbower": {
+                    "min_balance_rp": 1,
+                    "balance_wait_timeout_seconds": 1,
+                    "balance_poll_interval_seconds": 1,
+                }
+            },
+        }
+
+        with patch.object(gopay_pure_protocol, "GoPayProtocol", _PureProtocolFake):
+            with patch.object(gopay, "_wait_smsbower_otp_with_retry", side_effect=["111111", "222222"]):
+                with patch.object(gopay, "_smsbower_set_status", return_value="ACCESS_RETRY_GET"):
+                    with patch.object(gopay, "_call_gopay_app", side_effect=AssertionError("app service must not be used")):
+                        with patch.object(gopay, "_load_gojek_client", side_effect=AssertionError("legacy client must not be used")):
+                            _bootstrap_gojek_account(cfg, activation, log=lambda msg: None)
+
+        self.assertTrue(activation["gojek_registered"])
+        self.assertEqual(activation["balance_rp"], 1)
+        self.assertEqual(len(_PureProtocolFake.instances), 1)
+        fake = _PureProtocolFake.instances[0]
+        self.assertEqual(fake.proxy, "socks5://127.0.0.1:7897")
+        self.assertEqual(fake.timeout, 9)
+        self.assertTrue(fake.closed)
+        self.assertIn("customer_signup", [call[0] for call in fake.calls])
+        self.assertIn("pin_setup_token_after_otp", [call[0] for call in fake.calls])
+        self.assertEqual(activation["funded_via"], "welcome")
+
+    def test_smsbower_bootstrap_claims_envelope_after_welcome_timeout(self):
+        import gopay
+
+        class _EnvelopeFake(_PureProtocolFake):
+            def get(self, base, path, auth=None):
+                self.calls.append(("get", base, path, auth))
+                if path.startswith("/v1/festivals/envelope-requests/"):
+                    return 200, {"data": {"envelope_request_id": "env_req_1"}}, {}
+                self.balance_reads += 1
+                value = 0 if self.balance_reads <= 2 else 1
+                return 200, {"data": [{"balance": {"value": value}}]}, {}
+
+        _EnvelopeFake.instances = []
+        activation = {
+            "phone": "+6281234567890",
+            "country_code": "62",
+            "activation_id": "act1",
+            "api_key": "key",
+            "poll_interval": 1,
+        }
+        cfg = {
+            "pin": "147258",
+            "otp": {
+                "smsbower": {
+                    "min_balance_rp": 1,
+                    "welcome_wait_seconds": 0,
+                    "fund_wait_timeout_seconds": 5,
+                    "balance_poll_interval_seconds": 1,
+                    "envelope_links": ["https://app.gopay.co.id/NF8p/abc123"],
+                }
+            },
+        }
+
+        with patch.object(gopay_pure_protocol, "GoPayProtocol", _EnvelopeFake):
+            with patch.object(gopay, "_wait_smsbower_otp_with_retry", side_effect=["111111", "222222"]):
+                with patch.object(gopay, "_smsbower_set_status", return_value="ACCESS_RETRY_GET"):
+                    old_sleep = gopay.time.sleep
+                    try:
+                        gopay.time.sleep = lambda seconds: None
+                        _bootstrap_gojek_account(cfg, activation, log=lambda msg: None)
+                    finally:
+                        gopay.time.sleep = old_sleep
+
+        self.assertTrue(activation["gojek_registered"])
+        self.assertEqual(activation["balance_rp"], 1)
+        self.assertEqual(activation["funded_via"], "envelope")
+        fake = _EnvelopeFake.instances[0]
+        self.assertIn(
+            ("post", "https://customer.gopayapi.com", "/v1/festivals/envelope-requests", {"envelope_request_id": "env_req_1"}, "at_refreshed"),
+            fake.calls,
+        )
 
     def test_gopay_app_config_uses_root_addr(self):
         cfg = _gopay_app_cfg({

@@ -40,11 +40,22 @@
     "country_code": "62",
     "phone_number": "",
     "pin": "",
+    "snap_signing_key": "",
+    "pure_xe_mode": "enhanced",
+    "pure_protocol_timeout_seconds": 35,
+    "pure_protocol_debug": false,
     "otp": {
       "source": "adb",
       "adb_url": "http://127.0.0.1:9999",
       "timeout": 120,
-      "poll_interval": 2
+      "poll_interval": 2,
+      "smsbower": {
+        "min_balance_rp": 1,
+        "welcome_wait_seconds": 300,
+        "fund_wait_timeout_seconds": 120,
+        "balance_poll_interval_seconds": 5,
+        "envelope_links": []
+      }
     },
     "unlink": {
       "enabled": true,

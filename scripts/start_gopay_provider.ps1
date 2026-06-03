@@ -60,10 +60,15 @@ $SidecarAddr = First-Value @($GoPay.adb_sidecar_addr) "127.0.0.1:9999"
 $SidecarHost, $SidecarPortText = $SidecarAddr.Split(":", 2)
 $SidecarPort = [int]$SidecarPortText
 $WaRebind = $GoPay.wa_rebind
+$WaRebindEnabled = $false
+if ($null -ne $WaRebind) {
+    $WaEnabledText = ([string](First-Value @($WaRebind.enabled) "false")).Trim().ToLowerInvariant()
+    $WaRebindEnabled = @("true", "1", "yes", "on") -contains $WaEnabledText
+}
 $GoPayAppAddr = ""
 $GoPayAppHost = ""
 $GoPayAppPort = 0
-if ($null -ne $WaRebind) {
+if ($WaRebindEnabled) {
     $GoPayAppAddr = First-Value @($WaRebind.gopay_app_service_addr, $GoPay.gopay_app_service_addr) ""
     if (![string]::IsNullOrWhiteSpace($GoPayAppAddr) -and $GoPayAppAddr.Contains(":")) {
         $GoPayAppHost, $GoPayAppPortText = $GoPayAppAddr.Split(":", 2)
@@ -87,15 +92,19 @@ $ProviderConfig.gopay.country_code = First-Value @($GoPay.country_code) "62"
 $ProviderConfig.gopay.phone_number = First-Value @($GoPay.phone, $GoPay.phone_number) ""
 $ProviderConfig.gopay.pin = First-Value @($GoPay.pin) "147258"
 Set-JsonProperty $ProviderConfig.gopay "grpcurl_path" (First-Value @($GoPay.grpcurl_path, $GoPay.grpcurl) "grpcurl")
-if (![string]::IsNullOrWhiteSpace($GoPayAppAddr)) {
+Set-JsonProperty $ProviderConfig.gopay "pure_xe_mode" (First-Value @($GoPay.pure_xe_mode) "enhanced")
+Set-JsonProperty $ProviderConfig.gopay "pure_xe_resolution_key" (First-Value @($GoPay.pure_xe_resolution_key) "")
+Set-JsonProperty $ProviderConfig.gopay "pure_xe_random_hex" (First-Value @($GoPay.pure_xe_random_hex) "")
+Set-JsonProperty $ProviderConfig.gopay "pure_device_id" (First-Value @($GoPay.pure_device_id) "")
+Set-JsonProperty $ProviderConfig.gopay "pure_x_m1" (First-Value @($GoPay.pure_x_m1) "")
+Set-JsonProperty $ProviderConfig.gopay "pure_protocol_timeout_seconds" ([int](First-Value @($GoPay.pure_protocol_timeout_seconds) "35"))
+Set-JsonProperty $ProviderConfig.gopay "pure_protocol_debug" (First-Value @($GoPay.pure_protocol_debug) "false")
+if ($WaRebindEnabled -and ![string]::IsNullOrWhiteSpace($GoPayAppAddr)) {
     Set-JsonProperty $ProviderConfig.gopay "gopay_app_service_addr" $GoPayAppAddr
     Set-JsonProperty $ProviderConfig.gopay "gopay_app_service" (First-Value @($WaRebind.gopay_app_service, $GoPay.gopay_app_service) "gopay_app.GopayAppService")
     Set-JsonProperty $ProviderConfig.gopay "gopay_app_proto_import_path" (First-Value @($WaRebind.gopay_app_proto_import_path, $GoPay.gopay_app_proto_import_path) "services\gopay-app\proto")
     Set-JsonProperty $ProviderConfig.gopay "gopay_app_proto_path" (First-Value @($WaRebind.gopay_app_proto_path, $GoPay.gopay_app_proto_path) "services\gopay-app\proto\gopay_app.proto")
     Set-JsonProperty $ProviderConfig.gopay "gopay_app_timeout_seconds" ([int](First-Value @($WaRebind.timeout_seconds, $GoPay.gopay_app_timeout_seconds, $GoPay.provider_timeout_seconds) "600"))
-}
-if (![string]::IsNullOrWhiteSpace([string]$GoPay.gopay_deploy_src)) {
-    Set-JsonProperty $ProviderConfig.gopay "gopay_deploy_src" (Resolve-ProjectPath ([string]$GoPay.gopay_deploy_src))
 }
 if ($null -eq $ProviderConfig.gopay.otp) {
     $ProviderConfig.gopay | Add-Member -NotePropertyName otp -NotePropertyValue ([pscustomobject]@{})
@@ -179,7 +188,7 @@ $GeneratedConfig = Join-Path $RuntimeDir "config.gopay.generated.json"
 Write-JsonNoBom $ProviderConfig $GeneratedConfig
 
 $GoPayAppListening = $false
-if ($GoPayAppPort -gt 0) {
+if ($WaRebindEnabled -and $GoPayAppPort -gt 0) {
     $GoPayAppListening = [bool](Get-NetTCPConnection -LocalPort $GoPayAppPort -ErrorAction SilentlyContinue)
     if (-not $GoPayAppListening) {
         $GoPayAppExe = Resolve-ProjectPath (First-Value @($GoPay.gopay_app_exe) "runtime\gopay_provider\gopay-app-server.exe")

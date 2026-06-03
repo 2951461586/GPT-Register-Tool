@@ -105,6 +105,37 @@ class GoPayPaymentTests(unittest.TestCase):
         self.assertEqual(calls[1][0], "CompleteGoPay")
         self.assertEqual(calls[1][1]["otp"], "")
 
+    def test_provider_error_classifies_sms_otp_timeout_as_new_number(self):
+        result = gopay_payment._provider_error(
+            "buyer@example.com",
+            "complete_gopay_failed",
+            {"errorMessage": "SMSBower OTP timeout after 240s"},
+        )
+
+        self.assertEqual(result["gopay_failure_class"], "otp_timeout")
+        self.assertEqual(result["recommended_action"], "change_number")
+        self.assertEqual(result["retry_policy"], "retry_with_new_smsbower_number")
+
+    def test_provider_error_classifies_waf_as_new_proxy(self):
+        result = gopay_payment._provider_error(
+            "buyer@example.com",
+            "start_gopay_failed",
+            {"errorMessage": "customer_signup failed: HTTP 403 WAF Block Page"},
+        )
+
+        self.assertEqual(result["gopay_failure_class"], "proxy_blocked")
+        self.assertEqual(result["recommended_action"], "change_proxy")
+
+    def test_provider_error_classifies_fraud_deny_as_terminal(self):
+        result = gopay_payment._provider_error(
+            "buyer@example.com",
+            "complete_gopay_failed",
+            {"errorMessage": "midtrans fraud denied: {\"fraud_status\":\"deny\"}"},
+        )
+
+        self.assertEqual(result["gopay_failure_class"], "terminal_fraud_deny")
+        self.assertEqual(result["recommended_action"], "terminal_fail")
+
     def test_provider_mode_completes_with_otp_and_pin(self):
         row = {
             "email": "buyer@example.com",

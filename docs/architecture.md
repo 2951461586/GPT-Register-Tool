@@ -27,14 +27,16 @@ sms_tool/
   cli.py                    CLI parsing, high-level orchestration, process exit codes.
   config.py                 Config loading only.
   paths.py                  Project-relative path resolution.
+  account_seed.py           Shared account/session seed lookup and access-token extraction.
   mailbox.py                Mailbox pool parsing and OTP retrieval.
   providers/                External provider clients.
   http_client.py            curl_cffi retry/transport handling.
   registration.py           ChatGPT registration protocol and batch worker control.
   gen_pp_link.py            PayPal/Stripe hosted payment-link generation.
   paypal_links.py           Regenerate PayPal links without clobbering old links.
-  paypal_nocard.py          Explicit PayPal no-card agreement payment flow.
-  paypal_auto.py            Reverse/browser PayPal payment helper.
+  paypal_browser_auto.py    Default PayPal one-click adapter using saved links.
+  paypal_auto.py            Project-local PayPal browser page automation helper.
+  paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
   grpcurl_client.py         Shared grpcurl subprocess boundary.
   gopay_payment.py          GoPay link/provider/WA-rebind payment entrypoint.
   gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
@@ -51,9 +53,7 @@ services/
   gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
   gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
   gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
-browser_extensions/         Optional Chrome checkout helpers.
-  paypal_autofill/          Popup, content script, and background fetch boundary with one-click fill, OTP polling, and pool rotation.
-tests/                      Offline unit tests and source-invariant tests; see tests/README.md.
+tests/                      Offline unit tests; see tests/README.md.
 sessions/                   Generated session JSON, ignored by Git.
 runtime/                    SQLite, debug output, caches, ignored by Git.
 ```
@@ -76,7 +76,7 @@ It must not implement ChatGPT registration, PayPal protocol details, mailbox OTP
 
 Payment and CPA operations stay separated in the UI: marking payment complete only updates PayPal status, while CPA import is launched by the explicit CPA action.
 
-`SmsWorkbench/App.xaml` owns the fixed white-first minimalist visual system for the desktop app, with black and gray used for text, borders, navigation, and log surfaces. App and browser-extension icon assets share the same kitten mark under `SmsWorkbench/Assets/` and `browser_extensions/paypal_autofill/icons/`.
+`SmsWorkbench/App.xaml` owns the fixed white-first minimalist visual system for the desktop app, with black and gray used for text, borders, navigation, and log surfaces. App icon assets live under `SmsWorkbench/Assets/`.
 
 `SmsWorkbench/build_dotnet.ps1` publishes the only supported runnable desktop artifact to `dist/net10/SmsWorkbench.exe` and calls `SmsWorkbench/clean_dotnet_workspaces.ps1` after publish so `SmsWorkbench/bin/Debug/net10.0-windows`, `SmsWorkbench/bin/Release/net10.0-windows`, and nested runtime folders such as `win-x64` are not treated as second app distribution directories.
 
@@ -119,6 +119,19 @@ It must not write registration results or modify mailbox pool files during regis
 
 Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
 
+
+### Account Seed Layer
+
+`sms_tool.account_seed` owns the shared lookup of account/session seed data. It may:
+
+- Load an explicit `session_*.json` file.
+- Load the SQLite account row for an email.
+- Merge persisted raw JSON with the session file.
+- Expose normalized `email`, `access_token`, `cookie_header`, and refresh-token fields.
+- Extract a ChatGPT access token from flat or `auth_session` shaped data.
+
+Payment adapters may call this seam, but must not duplicate SQLite/session merging logic or import private helpers from each other. This keeps PayPal link regeneration, PayPal browser payment, and legacy PayPal automation independent from one another.
+
 ### PayPal Link Layer
 
 `sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal redirect URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, or final payment authorization.
@@ -127,7 +140,7 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 
 ```json
 {
-  "billing_regions": ["US"],
+  "billing_regions": ["DE"],
   "stage_proxies": {
     "checkout": "socks5h://127.0.0.1:7897",
     "stripe_init": "socks5h://127.0.0.1:7897",
@@ -137,24 +150,25 @@ Batch registration uses each loaded mailbox at most once. If `--count` exceeds l
 }
 ```
 
-`paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The original PayPal-capable flow uses `["US"]`; Japan/JPY checkout may return only `["card"]` as the available Stripe payment method. When the UI or CLI supplies `--proxy`, regeneration treats that value as authoritative for the current run.
+`paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The current PayPal regeneration path follows the standalone long-link script logic: `paypal.billing_regions=["US"]`, `paypal.link_mode=chatgpt_checkout`, and `paypal.checkout_ui_mode=hosted`. It posts ChatGPT checkout with US/USD hosted mode, verifies the checkout is still 0 due, and stores the hosted provider URL such as `https://pay.openai.com/c/pay/cs_live_...`. It deliberately does not enter Stripe payment-method creation, confirm, or ChatGPT checkout approve, so it avoids the BA-specific `confirm returned no redirect` / `approve blocked` path. `paypal.resolve_ba_redirect=false` and `paypal.require_ba_token=false` are expected in this mode. With `paypal.explicit_proxy_overrides_stage_proxies=false`, a UI/CLI `--proxy` is used as the default candidate proxy but does not override stage-specific routing. Batch regeneration is intentionally conservative: `paypal.max_regenerate_workers` defaults to `1`, and `paypal.regenerate_delay_seconds` staggers accounts so a UI request with `--workers 4` does not fan out four simultaneous checkout creations and trigger `429`. With `paypal.require_zero_due=true`, non-zero checkout totals fail immediately.
 
 ### PayPal Payment Layer
 
-`sms_tool/paypal_nocard.py` is the explicit no-card agreement payment boundary. It is adapted from the DanOps-1/Gpt-Agreement-Payment plus-paypal flow and is not executed by default registration. It may:
+`sms_tool/paypal_browser_auto.py` is the default PayPal boundary for `--one-click-pay`. It uses `sms_tool.account_seed` for account/session seed loading, generates payment persona data locally, and delegates browser page automation to the project-local `sms_tool.paypal_auto` module. It may:
 
-- Use a just-regenerated SQLite/session `paypal_url` when `paypal_status=link_ready` and `paypal_updated_at` is within the configured freshness window.
-- Generate a fresh PayPal redirect from the current `access_token` when no fresh saved link is available.
-- Use older SQLite/session `paypal_url` values only when configured as explicit reuse or fallback.
-- Resolve and store the PayPal approve URL during link regeneration when the Stripe redirect yields a BA token.
-- Extract or resolve the PayPal BA token from the Stripe redirect chain, including Location hops and PayPal approve URLs embedded in response bodies.
-- Use the configured curl-cffi impersonation fingerprint (`paypal_nocard.impersonate`, default `chrome136`) for PayPal HTTP requests.
-- Consume one configured card from `paypal_auto.cards`.
-- Consume one configured phone/SMS endpoint from `paypal_nocard.phone_pool`.
-- Submit PayPal GraphQL agreement signup and authorization requests.
+- Use the existing SQLite/session `paypal_url` directly.
+- Refuse PayPal browser payment when no saved `paypal_url` exists.
+- Leave link creation to the explicit `--regenerate-paypal-link` command.
+- Run the configured project-local browser engine from `paypal_browser.browser_engine`, defaulting to Camoufox.
+- Detect PayPal human-verification pages and either fail with `paypal_human_verification_required` or wait for manual completion when visible-browser manual verification is enabled.
+- Generate random PayPal signup identity, billing address, and card data inside this repository.
+- Consume one configured phone/SMS endpoint from `paypal_browser.phone_pool`, falling back to `paypal_nocard.phone_pool` for compatibility.
+- Store only redacted browser-payment metadata such as alias email, card last4, phone last4, callback URL, country, and engine.
 - Mark the account `completed` only after the backend reports success.
 
-It must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default. A local SQLite smoke test may be enabled explicitly with `PAYPAL_NOCARD_SQLITE_SMOKE=1`; redirect following is separately gated by `PAYPAL_NOCARD_FOLLOW_REDIRECT=1`.
+`sms_tool/paypal_auto.py` owns browser page mechanics only: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
+
+`sms_tool/paypal_nocard.py` remains available as the older explicit no-card agreement implementation, but the CLI no longer selects it for PayPal one-click payment. PayPal browser automation must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default.
 
 ### GoPay Link And Provider Layer
 
@@ -165,7 +179,7 @@ It must not run as an implicit side effect of registration, SQLite rebuild, link
 - Switch to WA-channel provider payment when `gopay.one_click_mode=wa_rebind`.
 - Persist GoPay status into the existing `paypal_*` SQLite/session columns for UI compatibility, while recording richer GoPay details under `paypal` and `gopay_wa_rebind`.
 
-It must not implement GoPay App login, signup, PIN setup, or change-phone details inline. Those app-side steps belong to `sms_tool.gopay_wa_rebind` or a dedicated provider service.
+It must not implement ChatGPT/Midtrans protocol details inline. SMSBower GoPay account bootstrap is owned by `services/gopay-flow`: it uses the project-local Python pure-protocol client for GoPay Android signup/login/PIN setup, not `services/gopay-app` gRPC and not the old `gopay-deploy` `opai` client.
 
 `sms_tool.grpcurl_client` owns grpcurl process execution and proto path resolution only. Payment modules pass method names, request bodies, service names, and provider configuration into it.
 
@@ -183,26 +197,22 @@ It must not acquire SMS numbers, poll third-party SMS providers, or run backgrou
 
 ### Local Provider Services
 
-`services/gopay-flow` is the project-local PaymentService. It owns the ChatGPT checkout, Stripe/Midtrans GoPay linking, OTP handoff, PIN charge, ChatGPT verify, and optional unlink trigger.
+`services/gopay-flow` is the project-local PaymentService. It owns the ChatGPT checkout, Stripe/Midtrans GoPay linking, OTP handoff, PIN charge, ChatGPT verify, optional unlink trigger, and SMSBower GoPay signup/bootstrap. Its SMSBower bootstrap path imports `gopay_pure_protocol.py` directly and must not call `GopayAppService` or import `opai.core.gojek_client`.
 
 `services/gopay-app/proto` stores the GoPay App service contract used by WA rebind mode. The app-service implementation is a provider boundary: it may be supplied by a local project service or compatible binary, but callers inside `sms_tool` only depend on the proto-level RPC surface.
 
 `services/gopay-adb` owns emulator/ADB HTTP endpoints such as `/health`, `/otp`, `/otp/clear`, and `/gopay/unlink`. It must not know about ChatGPT accounts, SQLite rows, or CPA import.
 
-### Browser Extension Layer
 
-`browser_extensions/paypal_autofill/` is an optional Chrome helper, not a Python runtime dependency. It owns:
+### Removed / Deprecated Surfaces
 
-- Popup state editing for profile, card pool, phone pool, and runtime status.
-- Content-script detection of PayPal checkout, OTP, and approval screens.
-- Background fetches for OTP endpoints and address APIs.
-- Debugger-backed checkout input when PayPal rejects plain JavaScript value assignment.
-
-It must not persist Python session JSON, mutate SQLite, or replace the Python PayPal link/payment modules. Its tests are source-invariant tests because PayPal's live checkout DOM is not stable enough for deterministic offline browser tests.
+- `browser_extensions/paypal_autofill/` is retired. The maintained PayPal browser path is the project-local Python adapter.
+- `tests/test_paypal_autofill_*.py` are retired with that extension; PayPal browser coverage lives in `tests/test_paypal_browser_auto.py`.
+- Runtime debug artifacts and `__pycache__` folders are not source surfaces and should be deleted or ignored.
 
 ### Test Layer
 
-`tests/` is the only test directory. Tests should stay offline by default and target module seams rather than live vendor systems. Source-invariant tests are acceptable for browser extension behavior that cannot be reproduced deterministically in local CI.
+`tests/` is the only test directory. Tests should stay offline by default and target module seams rather than live vendor systems.
 
 Run all tests with:
 

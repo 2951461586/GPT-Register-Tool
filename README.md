@@ -41,10 +41,19 @@ Required choices:
 - `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
-- `paypal.billing_regions`: Checkout billing country/currency order. Use `["US"]` for the original PayPal-capable flow; this is independent from the proxy exit.
+- `paypal.billing_regions`: Checkout billing country/currency order. Current PayPal long-link mode uses `["US"]` for US/USD so the hosted checkout exposes PayPal.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
-- `--regenerate-paypal-link --proxy ...`: forces PayPal/Stripe link regeneration through the selected proxy and overrides stage proxy routing for that run.
-- `paypal_auto.cards` / `paypal_nocard.phone_pool`: card and SMS-phone pools used only by explicit PayPal no-card payment commands.
+- `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL directly instead of attempting BA extraction.
+- `paypal.redirect_url_format`: ignored by the hosted long-link path; kept only for compatibility with the older BA/Stripe redirect path.
+- `paypal.use_elements_session`: current default is `true`; it requests Stripe Elements session data before tax refresh, payment method creation, and confirm.
+- `paypal.resolve_ba_redirect`: current default is `false` for hosted long-link mode.
+- `paypal.require_ba_token`: current default is `false` for hosted long-link mode.
+- `paypal.explicit_proxy_overrides_stage_proxies`: current default is `false`, so a UI/CLI `--proxy` is used as the default candidate proxy but does not override `paypal.stage_proxies.confirm=direct`.
+- `paypal.checkout_ui_mode`: current default is `hosted`; together with `link_mode=chatgpt_checkout` it returns the long provider URL `https://pay.openai.com/c/pay/cs_live_...` and does not enter Stripe confirm/approve. Keep `paypal.require_zero_due=true` to stay strictly on the 0 yuan/free-trial path.
+- `--regenerate-paypal-link --proxy ...`: forces PayPal/Stripe link regeneration through the selected proxy. Batch regeneration is capped by `paypal.max_regenerate_workers` (default `1`) and staggered by `paypal.regenerate_delay_seconds` to avoid checkout `429` rate limits; with `paypal.explicit_proxy_overrides_stage_proxies=false`, `--proxy` still does not override stage-specific routes such as `confirm=direct`.
+- `paypal_browser.browser_engine`: project-local PayPal browser engine, default `camoufox` with `cloakbrowser` fallback support from `sms_tool.paypal_auto`.
+- `paypal_browser.headless` / `paypal_browser.manual_human_verification`: set `headless=false` and `manual_human_verification=true` when PayPal shows a visible "Confirm you're human" challenge so the browser can wait for manual completion.
+- `paypal_browser.phone_pool`: PayPal browser payment SMS-phone pool. If empty, the adapter falls back to `paypal_nocard.phone_pool`.
 - `gopay.one_click_mode`: `link`, `provider`, or `wa_rebind`. `provider` uses the local `PaymentService` on `gopay.payment_service_addr`; `wa_rebind` additionally routes GoPay payment OTP through the WA channel and can call a GoPay App service to change phone after payment.
 - `gopay.payment_service_addr`: local GoPay payment gRPC endpoint, default `127.0.0.1:50051`.
 - `gopay.wa_rebind`: optional WA-channel app-state/rebind settings. `gopay_app_service_addr` points to the GoPay App gRPC provider, `wa_phone` is the WA payment phone, and `rebind_phone` is the phone to bind after payment.
@@ -54,7 +63,7 @@ Required choices:
 - `codex_oauth.require_registration_phone_verification`: default `true`; when a phone pool is configured, registration must complete SMS verification before the session is saved.
 - `--registration-at-only`: UI default for "one-click registration + payment link"; skips Codex OAuth/phone SMS and stores the ChatGPT access token only.
 - `--one-click-sms`: runs Codex OAuth for selected existing accounts, completes phone SMS verification via the phone pool, and stores the OAuth refresh token.
-- `phone_reuse.smsbower`: SMSBower OpenAI/Ghana (`service=dr`, `country=38`, `+233`) phone pool. One acquired activation is reused up to `phone_reuse.max_reuse_count` times, default `3`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the SMSBower activation.
+- `phone_reuse.source`: one-click SMS source, `smsbower` for platform-purchased numbers or `phone_pool` for configured `phone----sms_api_url` entries in `phone_reuse.phone_pool`. SMSBower OpenAI defaults to `service=dr`; the desktop config UI restricts country selection to Ghana `38`, Nigeria `19`, Chile `151`, United Kingdom `16`, or Indonesia `6`. One acquired activation or configured number is reused up to `phone_reuse.max_reuse_count` times, default `1`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the SMSBower activation. `phone_reuse.smsbower.number_attempts` controls same-run number replacement for rejected or silent SMSBower numbers, including `fraud_guard`, recently-used phone validation, and SMS receive timeout.
 
 5. Run one registration.
 
@@ -141,7 +150,7 @@ Mark a paid account as paid:
 python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status completed
 ```
 
-Run PayPal no-card agreement payment for an existing account with a saved payment link:
+Run PayPal browser payment automation for an existing account with a saved payment link:
 
 ```powershell
 python chatgpt_phone_reg.py --email user@example.com --one-click-pay --proxy socks5h://127.0.0.1:7897
@@ -153,7 +162,7 @@ Batch mode accepts one email per line:
 python chatgpt_phone_reg.py --one-click-pay --email-file pending_emails.txt --workers 4 --proxy socks5h://127.0.0.1:7897
 ```
 
-The no-card payment path uses the existing SQLite/session `access_token`, resolves the BA token immediately, then consumes one card from `paypal_auto.cards` and one SMS endpoint from `paypal_nocard.phone_pool`. `--regenerate-paypal-link` now follows the Stripe redirect immediately and stores the resolved PayPal approve URL when a BA token is available. A just-regenerated SQLite/session `paypal_url` is reused when `paypal_status=link_ready` and `paypal_updated_at` is within `paypal_nocard.saved_url_max_age_seconds` (default 1800). Older saved URLs are regenerated by default. `paypal_nocard.reuse_saved_url=true` forces saved URL reuse, and `paypal_nocard.fallback_to_saved_url=true` allows saved URL fallback when regeneration fails. The pure HTTP PayPal signup path uses `paypal_nocard.impersonate` (default `chrome136`) for curl-cffi TLS/browser fingerprinting. It is not part of the default registration command and should be run only when those pools are intentionally configured.
+The PayPal one-click path now uses `sms_tool.paypal_browser_auto`, generates PayPal signup identity/address/card data inside this project, consumes one SMS endpoint from `paypal_browser.phone_pool` (falling back to `paypal_nocard.phone_pool`), then runs the project-local `sms_tool.paypal_auto` browser flow against the already saved SQLite/session `paypal_url`. It does not regenerate PayPal links; run `--regenerate-paypal-link` explicitly before one-click payment when an account has no saved link. The older pure HTTP no-card module remains in `sms_tool.paypal_nocard` but is no longer the default PayPal `--one-click-pay` path.
 
 Start the local GoPay provider services:
 
@@ -180,19 +189,18 @@ configuration, but GoPay needs its own SMSBower service/country code. Configure
 either `gopay.otp.smsbower.service/country` or `phone_reuse.smsbower.gopay_service`
 and `phone_reuse.smsbower.gopay_country`; do not reuse the OpenAI/Ghana
 `service=dr,country=38` values for GoPay. When `register_account=true`, the
-provider uses the project-local `gopay_app.GopayAppService` contract for Gojek
-signup, PIN setup, and balance checks; `gopay.gopay_app_service_addr` must point
-to that compatible local service. The older `gopay_deploy_src` / `opai` client is
-kept only as a legacy fallback.
+provider now runs the GoPay Android 2.10 pure-protocol signup/login/PIN flow in
+Python (`services/gopay-flow/gopay_pure_protocol.py`). It does not call
+`services/gopay-app` gRPC or the old `gopay-deploy` / `opai` client for
+SMSBower account bootstrap.
 
 ```json
 {
   "gopay": {
     "one_click_mode": "protocol",
-    "gopay_app_service_addr": "127.0.0.1:50060",
-    "gopay_app_service": "gopay_app.GopayAppService",
-    "gopay_app_proto_import_path": "services\\gopay-app\\proto",
-    "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
+    "pure_xe_mode": "enhanced",
+    "pure_protocol_timeout_seconds": 35,
+    "pure_protocol_debug": false,
     "otp_source": "smsbower",
     "country_code": "62",
     "otp_channel": "sms",
@@ -223,7 +231,7 @@ Protocol flow:
 5. Load the Midtrans transaction and POST `/snap/v3/accounts/{snap}/linking`.
 6. If Midtrans reports the wallet is already linked, DELETE `/snap/v3/accounts/{snap}/gopay` and retry linking.
 7. POST GoPay `/v1/linking/validate-reference` and `/v1/linking/user-consent`.
-8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/init the GoPay wallet, set PIN, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout. If the balance is not ready, the provider waits up to `balance_wait_timeout_seconds` and polls every `balance_poll_interval_seconds`; balance-supplement APIs are intentionally not called because they increase payment risk. Otherwise use configured `gopay.phone`.
+8. For `otp_source=smsbower`, acquire a GoPay phone number from SMSBower, register/login the GoPay wallet via pure Python protocol, set PIN through the second CVS OTP flow, then require `/v1/payment-options/balances` to be at least `min_balance_rp` before checkout. If the balance is not ready, the provider waits up to `balance_wait_timeout_seconds` and polls every `balance_poll_interval_seconds`; balance-supplement APIs are intentionally not called because they increase payment risk. Otherwise use configured `gopay.phone`.
 9. For `otp_channel=sms`, POST `/v1/linking/resend-otp` to force SMS OTP; WA/default only uses consent delivery.
 10. Persist `flow_id`; SMSBower mode immediately calls `CompleteGoPay` and waits for the code, while manual/ADB modes mark `otp_required`.
 11. When OTP is available, call `PaymentService.CompleteGoPay`.
@@ -280,9 +288,8 @@ UI responsibilities are intentionally thin:
 - The inbox view uses an in-app mail detail popup and can copy recognized 5-8 digit verification codes.
 - Marking payment complete updates PayPal status only. CPA import is a separate operation.
 - The desktop UI uses a fixed gray-dominant minimalist dark theme; black is reserved for the sidebar, log console, and other low-emphasis surfaces.
-- Desktop and browser-extension icons are generated from the same kitten mark: `SmsWorkbench/Assets/app-icon.ico`, `SmsWorkbench/Assets/black-kitten.png`, and `browser_extensions/paypal_autofill/icons/`.
-- The browser helper ships a compact popup with one-click fill, OTP polling, and card/phone pool rotation.
-- One-click payment is an explicit action. PayPal launches the Python no-card agreement workflow; GoPay launches the provider workflow selected in `gopay.one_click_mode`; rows are marked `completed` only after the backend returns success.
+- Desktop icons are generated from the same kitten mark: `SmsWorkbench/Assets/app-icon.ico` and `SmsWorkbench/Assets/black-kitten.png`.
+- One-click payment is an explicit action. PayPal launches the project-local browser adapter against an already saved payment link; GoPay launches the provider/protocol workflow selected in `gopay.one_click_mode`; rows are marked `completed` only after the backend returns success.
 
 PayPal link buttons open Google Chrome with:
 
@@ -302,8 +309,11 @@ The project is split into explicit responsibility seams:
 - `sms_tool.cli`: argument parsing and command orchestration. Optional Codex, CPA, PayPal payment, and session-refresh modules are imported lazily only by the command that needs them.
 - `sms_tool.mailbox`: mailbox pool parsing, LuckMail/token mailbox handling, Microsoft token exchange, and OTP polling.
 - `sms_tool.registration`: ChatGPT signup protocol, email OTP validation, access-token retrieval, and batch worker limits.
+- `sms_tool.account_seed`: shared seam for loading session JSON/SQLite account seed data and extracting access tokens.
 - `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal link generation and safe persisted-link regeneration.
-- `sms_tool.paypal_nocard`: explicit no-card PayPal agreement payment flow. It is not part of default registration.
+- `sms_tool.paypal_browser_auto`: default PayPal one-click payment adapter. It uses existing saved payment links and delegates page automation to `sms_tool.paypal_auto`.
+- `sms_tool.paypal_auto`: project-local browser automation helper. It does not own account lookup or link regeneration.
+- `sms_tool.paypal_nocard`: older explicit no-card PayPal agreement module, kept as an opt-in compatibility path. It is not selected by default registration or one-click PayPal.
 - `sms_tool.gopay_payment`: GoPay payment entrypoint. It selects link/provider/WA-rebind mode and owns session/SQLite state updates.
 - `sms_tool.gopay_wa_rebind`: WA-channel GoPay app auth and change-phone orchestration after a successful provider payment.
 - `sms_tool.grpcurl_client`: shared boundary for optional local gRPC provider services.
@@ -313,9 +323,16 @@ The project is split into explicit responsibility seams:
 - `sms_tool.codex_oauth`, `sms_tool.codex_export`, `sms_tool.cpa_import`: Codex OAuth/export and CPA upload boundaries.
 - `sms_tool.storage`: SQLite schema, migrations, deduplication, status updates, and session-index rebuilds.
 - `SmsWorkbench`: WPF launcher and management UI. It starts CLI commands and displays local state; protocol details stay in Python modules.
-- `browser_extensions/paypal_autofill`: optional Chrome helper for checkout form filling, OTP polling, and pool rotation.
 
 The same split is maintained in [docs/architecture.md](docs/architecture.md).
+
+
+## Cleanup and Ownership Rules
+
+- The old `browser_extensions/paypal_autofill` extension and its tests were removed. PayPal browser payment now lives behind `sms_tool.paypal_browser_auto` and `sms_tool.paypal_auto`; do not add extension-side code back unless it becomes a separately documented adapter.
+- Payment modules must not read SQLite/session files by reimplementing lookup logic. Use `sms_tool.account_seed` for seed loading and access-token extraction.
+- Runtime probes, HAR-derived scratch files, browser screenshots, caches, and generated sessions stay under `runtime/`, `sessions/`, or ignored tool caches, not in source modules.
+- `config.example.json` is the portable template. Local `config.json` and `sms_tool/config.json` remain machine-local config surfaces and must not be used as documentation substitutes.
 
 ## Tests
 

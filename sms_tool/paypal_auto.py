@@ -18,10 +18,12 @@ from typing import Any
 
 import requests as _requests
 
+from .account_seed import extract_access_token as _extract_access_token
+from .account_seed import load_account_seed as _load_seed
 from .config import CFG
 from .gen_pp_link import generate_pp_link
 from .session_refresh import _poll_auth_session, _session_token
-from .storage import get_account_record, upsert_account
+from .storage import upsert_account
 from .utils import _generate_password, _random_name
 
 # ──────────────────────────── constants ────────────────────────────
@@ -236,6 +238,8 @@ def _try_reverse_pay(
         "phone": phone,
         "poll_interval": int(cfg.get("sms_poll_interval", 5)),
         "timeout": int(cfg.get("sms_timeout", 120)),
+        "manual_human_verification": bool(cfg.get("manual_human_verification", not use_headless)),
+        "human_verification_timeout": int(cfg.get("human_verification_timeout", 300)),
     }
 
     print("[*] Attempting reverse protocol...")
@@ -356,6 +360,8 @@ def _try_browser_pay(
     debug_dir = cfg.get("debug_dir", "runtime/paypal_debug")
     debug_enabled = bool(cfg.get("debug_screenshots", True))
     use_headless = headless or bool(cfg.get("headless", False))
+    sms_cfg["manual_human_verification"] = bool(cfg.get("manual_human_verification", not use_headless))
+    sms_cfg["human_verification_timeout"] = int(cfg.get("human_verification_timeout", 300))
 
     # Normalize proxy: socks5h:// -> socks5:// (browser compatibility)
     browser_proxy = proxy
@@ -430,7 +436,7 @@ def _try_browser_pay_camoufox(
 
     # Camoufox options with anti-detection features
     camoufox_options = {
-        "headless": use_headless or "virtual",
+        "headless": True if use_headless else False,
         "humanize": True,
         "persistent_context": True,
         "user_data_dir": tmp_profile,
@@ -597,16 +603,28 @@ def _run_browser_steps(
     step = "navigate"
     _screenshot(page, debug_dir, "01_navigate_before", debug_enabled)
     page.goto(paypal_url, wait_until="domcontentloaded", timeout=60000)
+    _prepare_openai_checkout_paypal(
+        page,
+        address=address,
+        first_name=first_name,
+        last_name=last_name,
+        phone=sms_cfg.get("phone", ""),
+        debug_dir=debug_dir,
+        debug_enabled=debug_enabled,
+    )
     _wait_for_paypal_load(page)
     _screenshot(page, debug_dir, "02_paypal_loaded", debug_enabled)
+    _handle_human_verification_gate(page, sms_cfg, debug_dir, debug_enabled, "human_verification")
 
     step = "create_account"
     _click_create_account(page)
     _screenshot(page, debug_dir, "03_create_account", debug_enabled)
+    _handle_human_verification_gate(page, sms_cfg, debug_dir, debug_enabled, "human_verification")
 
     step = "country"
     _ensure_country_us(page)
     _screenshot(page, debug_dir, "03_country_us", debug_enabled)
+    _handle_human_verification_gate(page, sms_cfg, debug_dir, debug_enabled, "human_verification")
 
     step = "fill_email"
     _fill_signup_email(page, alias_email)
@@ -681,57 +699,8 @@ def _run_browser_steps(
 # ──────────────────────────── seed loading ────────────────────────────
 
 
-def _load_seed(email: str = "", session_file: str = "") -> tuple[dict, str]:
-    if session_file:
-        path = Path(session_file)
-        return _read_json(path), str(path)
-    if email:
-        record = get_account_record(email)
-        json_path = str(record.get("json_path") or "").strip()
-        data = {}
-        if json_path and Path(json_path).exists():
-            data = _read_json(Path(json_path))
-        raw_json = str(record.get("raw_json") or "").strip()
-        if raw_json:
-            try:
-                raw_data = json.loads(raw_json)
-                if isinstance(raw_data, dict):
-                    data = {**raw_data, **data}
-            except Exception:
-                pass
-        if record:
-            data.setdefault("email", record.get("email", ""))
-            data.setdefault("access_token", record.get("access_token", ""))
-            data.setdefault("cookie_header", record.get("cookie_header", ""))
-        return data, json_path
-    return {}, ""
 
-
-def _read_json(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _extract_access_token(data: dict) -> str:
-    token = str(data.get("access_token") or "").strip()
-    if token:
-        return token
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
-    for key in ("accessToken", "access_token"):
-        value = auth_session.get(key)
-        if isinstance(value, str) and value:
-            return value
-    session = auth_session.get("session") if isinstance(auth_session.get("session"), dict) else {}
-    for key in ("accessToken", "access_token"):
-        value = session.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return ""
-
-
-# ──────────────────────────── card / address selection ────────────────────────────
+# Account seed loading and access-token extraction live in sms_tool.account_seed.
 
 
 _STATE_ABBREV = {
@@ -901,6 +870,179 @@ def _wait_for_paypal_load(page, timeout: int = 30000):
     except Exception:
         pass
     time.sleep(2)
+
+
+def _prepare_openai_checkout_paypal(
+    page,
+    *,
+    address: dict,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    debug_dir: str,
+    debug_enabled: bool,
+) -> bool:
+    """Handle ChatGPT checkout links before continuing on PayPal."""
+    if not _is_openai_checkout_url(page.url):
+        return False
+
+    print("[*] OpenAI checkout link detected; selecting PayPal in browser")
+    deadline = time.time() + 45
+    selected = False
+    submitted = False
+    while time.time() < deadline:
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        if _is_paypal_url(page.url):
+            return True
+
+        _fill_openai_checkout_billing(page, address, first_name, last_name, phone)
+        if _select_openai_checkout_paypal(page):
+            selected = True
+            _screenshot(page, debug_dir, "02a_openai_paypal_selected", debug_enabled)
+            time.sleep(1)
+
+        if selected and _click_openai_checkout_continue(page):
+            submitted = True
+            _screenshot(page, debug_dir, "02b_openai_checkout_continue", debug_enabled)
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=15000)
+            except Exception:
+                pass
+            time.sleep(2)
+            if _is_paypal_url(page.url):
+                return True
+
+        if submitted and not _is_openai_checkout_url(page.url):
+            return _is_paypal_url(page.url)
+        time.sleep(1)
+
+    return _is_paypal_url(page.url)
+
+
+def _is_openai_checkout_url(url: str) -> bool:
+    value = str(url or "").lower()
+    return (
+        "chatgpt.com/checkout/" in value
+        or "pay.openai.com" in value
+        or "checkout.stripe.com/c/pay/" in value
+    )
+
+
+def _is_paypal_url(url: str) -> bool:
+    return "paypal.com" in str(url or "").lower()
+
+
+def _select_openai_checkout_paypal(page) -> bool:
+    selectors = [
+        '[data-testid="paypal-accordion-item"]',
+        '#payment-method-accordion-item-title-paypal',
+        'button[data-testid="paypal-accordion-item-button"]',
+        'button[aria-label*="PayPal" i]',
+        'label:has-text("PayPal")',
+        '[role="radio"]:has-text("PayPal")',
+        '[role="button"]:has-text("PayPal")',
+        'text="PayPal"',
+    ]
+    return _click_with_fallback(page, selectors, timeout=5000)
+
+
+def _click_openai_checkout_continue(page) -> bool:
+    selectors = [
+        'button:has-text("Continue")',
+        'button:has-text("Subscribe")',
+        'button:has-text("Start free trial")',
+        'button:has-text("Start trial")',
+        'button:has-text("Pay")',
+        'button[type="submit"]',
+        '[data-testid="hosted-payment-submit-button"]',
+    ]
+    return _click_with_fallback(page, selectors, timeout=8000)
+
+
+def _fill_openai_checkout_billing(page, address: dict, first_name: str, last_name: str, phone: str) -> None:
+    full_name = f"{first_name} {last_name}".strip()
+    country = str(address.get("country") or "US")
+    line1 = str(address.get("line1") or "")
+    city = str(address.get("city") or "")
+    state = str(address.get("state") or "")
+    postal_code = str(address.get("postal_code") or address.get("zip") or "")
+    fields = [
+        (["#billingName", 'input[name="billingName"]', 'input[autocomplete="billing name"]'], full_name),
+        (["#billingAddressLine1", 'input[name="billingAddressLine1"]', 'input[autocomplete="billing address-line1"]'], line1),
+        (["#billingLocality", 'input[name="billingLocality"]', 'input[autocomplete="billing address-level2"]'], city),
+        (["#billingAdministrativeArea", 'input[name="billingAdministrativeArea"]', 'input[autocomplete="billing address-level1"]'], state),
+        (["#billingPostalCode", 'input[name="billingPostalCode"]', 'input[autocomplete="billing postal-code"]'], postal_code),
+        (["#phoneNumber", 'input[name="phoneNumber"]', 'input[type="tel"]'], phone),
+    ]
+    for selectors, value in fields:
+        if value:
+            _fill_visible_input(page, selectors, value, timeout=1500) or _fill_with_fallback(page, selectors, value, timeout=1500)
+    if country:
+        _select_with_fallback(
+            page,
+            ["#billingCountry", 'select[name="billingCountry"]', 'select[autocomplete="billing country"]'],
+            country,
+            labels=["United States", "United States of America"],
+            timeout=1500,
+        )
+
+
+def _is_human_verification_page(page) -> bool:
+    """Detect PayPal's visible human-verification challenge page."""
+    selectors = [
+        'text="Confirm you\'re human"',
+        'text="Confirm you are human"',
+        'text="Please enable JS and disable any ad blocker"',
+        'text="Move the slider all the way to the right"',
+        'iframe[src*="captcha"]',
+        'iframe[title*="captcha" i]',
+    ]
+    for selector in selectors:
+        try:
+            if page.locator(selector).first.is_visible(timeout=500):
+                return True
+        except Exception:
+            continue
+    try:
+        text = str(page.locator("body").inner_text(timeout=1000) or "").lower()
+    except Exception:
+        text = ""
+    return (
+        "confirm you're human" in text
+        or "confirm you are human" in text
+        or "move the slider all the way to the right" in text
+        or "please enable js and disable any ad blocker" in text
+    )
+
+
+def _handle_human_verification_gate(page, sms_cfg: dict, debug_dir: str, debug_enabled: bool, step: str) -> None:
+    """Pause for manual PayPal human verification when allowed."""
+    if not _is_human_verification_page(page):
+        return
+
+    _screenshot(page, debug_dir, "human_verification_required", debug_enabled)
+    allow_manual = bool(sms_cfg.get("manual_human_verification", False))
+    timeout = int(sms_cfg.get("human_verification_timeout", 300) or 300)
+    if not allow_manual:
+        raise _PayPalStepError(step, "paypal_human_verification_required")
+
+    print(f"[*] PayPal human verification required; waiting up to {timeout}s for manual completion...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _is_human_verification_page(page):
+            print("[*] PayPal human verification cleared")
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass
+            time.sleep(2)
+            return
+        time.sleep(2)
+
+    raise _PayPalStepError(step, "paypal_human_verification_required")
 
 
 def _click_with_fallback(page, selectors: list[str], timeout: int = 8000):
