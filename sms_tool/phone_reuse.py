@@ -25,9 +25,17 @@ from .smsbower import (
     normalize_phone,
     normalize_service,
 )
+from .nextsms import (
+    DEFAULT_ENDPOINT as NEXTSMS_DEFAULT_ENDPOINT,
+    DEFAULT_COUNTRY_CODE as NEXTSMS_DEFAULT_COUNTRY_CODE,
+    OPENAI_SERVICE_CODE as NEXTSMS_OPENAI_SERVICE_CODE,
+    NexSmsClient,
+    normalize_country as normalize_nextsms_country,
+    normalize_service as normalize_nextsms_service,
+)
 
 
-PLACEHOLDER_KEYS = {"", "YOUR_SMSBOWER_API_KEY", "$SMSBOWER_API_KEY"}
+PLACEHOLDER_KEYS = {"", "YOUR_SMSBOWER_API_KEY", "$SMSBOWER_API_KEY", "YOUR_NEXTSMS_API_KEY", "$NEXTSMS_API_KEY"}
 
 
 @dataclass
@@ -56,6 +64,7 @@ class PhoneSlot:
     send_retry_delay_seconds: int = 0
     number_attempts: int = 3
     last_sms_code: str = ""
+    pricing_option: int = 0
 
     @property
     def is_exhausted(self) -> bool:
@@ -162,20 +171,20 @@ class PhonePool:
     def reset_exhausted_smsbower_slots(self) -> int:
         reset_count = 0
         for phone in self.phones:
-            if phone.provider != "smsbower" or not phone.is_exhausted:
+            if phone.provider not in {"smsbower", "nextsms"} or not phone.is_exhausted:
                 continue
             old_phone = phone.phone
             old_activation_id = phone.activation_id
             if old_activation_id:
                 print(
-                    "  [smsbower] activation "
+                    f"  [{phone.provider}] activation "
                     f"{old_activation_id} reached reuse limit; completing before next purchase"
                 )
-                _complete_smsbower_activation(phone)
+                _complete_provider_activation(phone)
             else:
-                _reset_smsbower_slot(phone)
+                _reset_provider_slot(phone)
             print(
-                "  [smsbower] reset exhausted phone "
+                f"  [{phone.provider}] reset exhausted phone "
                 f"{old_phone or '(pending)'}; next send will acquire a new number"
             )
             reset_count += 1
@@ -207,6 +216,7 @@ def _state_for_phone(phone: PhoneSlot) -> dict:
         "send_retry_delay_seconds": phone.send_retry_delay_seconds,
         "number_attempts": phone.number_attempts,
         "last_sms_code": phone.last_sms_code,
+        "pricing_option": phone.pricing_option,
     }
 
 
@@ -214,7 +224,7 @@ def _saved_state_matches_slot(phone: PhoneSlot, saved: dict) -> bool:
     saved_provider = str(saved.get("provider") or "").strip()
     if saved_provider and saved_provider != phone.provider:
         return False
-    if phone.provider == "smsbower":
+    if phone.provider in {"smsbower", "nextsms"}:
         return True
     saved_phone = normalize_phone(saved.get("phone") or "")
     if saved_phone and saved_phone != normalize_phone(phone.phone):
@@ -272,6 +282,11 @@ def _smsbower_api_key(cfg: dict | None = None) -> str:
     return _resolve_secret(str(cfg.get("api_key") or ""), "SMSBOWER_API_KEY")
 
 
+def _nextsms_api_key(cfg: dict | None = None) -> str:
+    cfg = cfg if isinstance(cfg, dict) else (_phone_reuse_cfg().get("nextsms") or {})
+    return _resolve_secret(str(cfg.get("api_key") or ""), "NEXTSMS_API_KEY")
+
+
 def has_phone_reuse_config() -> bool:
     cfg = _phone_reuse_cfg()
     source = _phone_source(cfg)
@@ -280,8 +295,14 @@ def has_phone_reuse_config() -> bool:
     if source == "smsbower":
         smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
         return bool(_smsbower_api_key(smsbower_cfg))
+    if source == "nextsms":
+        nextsms_cfg = cfg.get("nextsms") if isinstance(cfg.get("nextsms"), dict) else {}
+        return bool(_nextsms_api_key(nextsms_cfg))
     smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
     if _smsbower_api_key(smsbower_cfg):
+        return True
+    nextsms_cfg = cfg.get("nextsms") if isinstance(cfg.get("nextsms"), dict) else {}
+    if _nextsms_api_key(nextsms_cfg):
         return True
     if cfg.get("phone_pool"):
         return True
@@ -296,6 +317,8 @@ def _phone_source(cfg: dict | None = None) -> str:
     source = str(cfg.get("source") or cfg.get("mode") or "auto").strip().lower()
     if source in {"smsbower", "sms_bower", "platform", "provider"}:
         return "smsbower"
+    if source in {"nextsms", "nexsms", "next_sms", "nextactionplus"}:
+        return "nextsms"
     if source in {"phone_pool", "static", "legacy", "sms_link", "link"}:
         return "phone_pool"
     return "auto"
@@ -317,7 +340,7 @@ def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | Non
 
     smsbower_cfg = cfg.get("smsbower") if isinstance(cfg.get("smsbower"), dict) else {}
     api_key = _smsbower_api_key(smsbower_cfg)
-    if api_key and source != "phone_pool":
+    if api_key and source not in {"phone_pool", "nextsms"}:
         pool_size = max(1, _int_value(smsbower_cfg.get("pool_size"), 1))
         service = normalize_service(smsbower_cfg.get("service") or OPENAI_SERVICE_CODE)
         country = smsbower_cfg.get("country") or GHANA_COUNTRY_CODE
@@ -342,13 +365,39 @@ def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | Non
                 number_attempts=_int_value(smsbower_cfg.get("number_attempts"), number_attempts),
             ))
 
-    if not phones and source != "smsbower":
+    nextsms_cfg = cfg.get("nextsms") if isinstance(cfg.get("nextsms"), dict) else {}
+    nextsms_api_key = _nextsms_api_key(nextsms_cfg)
+    if nextsms_api_key and source == "nextsms":
+        pool_size = max(1, _int_value(nextsms_cfg.get("pool_size"), 1))
+        service = normalize_nextsms_service(nextsms_cfg.get("service") or NEXTSMS_OPENAI_SERVICE_CODE)
+        country = nextsms_cfg.get("country") or NEXTSMS_DEFAULT_COUNTRY_CODE
+        pricing_option = _int_value(nextsms_cfg.get("pricing_option"), 0)
+        for index in range(pool_size):
+            phones.append(PhoneSlot(
+                phone="",
+                provider="nextsms",
+                api_key=nextsms_api_key,
+                endpoint=str(nextsms_cfg.get("endpoint") or NEXTSMS_DEFAULT_ENDPOINT).strip() or NEXTSMS_DEFAULT_ENDPOINT,
+                service=service,
+                country=country,
+                max_reuse_count=max_reuse,
+                slot_id=f"nextsms:{index}",
+                sms_timeout=_int_value(nextsms_cfg.get("sms_timeout"), 120),
+                sms_poll_interval=_int_value(nextsms_cfg.get("sms_poll_interval"), 5),
+                send_cooldown_seconds=_int_value(nextsms_cfg.get("send_cooldown_seconds"), send_cooldown),
+                send_retry_attempts=_int_value(nextsms_cfg.get("send_retry_attempts"), send_retries),
+                send_retry_delay_seconds=_int_value(nextsms_cfg.get("send_retry_delay_seconds"), send_retry_delay),
+                number_attempts=_int_value(nextsms_cfg.get("number_attempts"), number_attempts),
+                pricing_option=pricing_option,
+            ))
+
+    if not phones and source not in {"smsbower", "nextsms"}:
         for index, entry in enumerate(cfg.get("phone_pool") or []):
             slot = _slot_from_static_entry(entry, max_reuse, f"phone_pool:{index}")
             if slot:
                 phones.append(slot)
 
-    if not phones and source != "smsbower":
+    if not phones and source not in {"smsbower", "nextsms"}:
         paypal_cfg = CFG.get("paypal_auto") if isinstance(CFG.get("paypal_auto"), dict) else {}
         phone_numbers = paypal_cfg.get("phone_numbers") or []
         for index, entry in enumerate(phone_numbers):
@@ -433,6 +482,10 @@ def _smsbower_client(slot: PhoneSlot) -> SmsBowerClient:
     return SmsBowerClient(api_key=slot.api_key, endpoint=slot.endpoint)
 
 
+def _nextsms_client(slot: PhoneSlot) -> NexSmsClient:
+    return NexSmsClient(api_key=slot.api_key, endpoint=slot.endpoint)
+
+
 def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
     client = _smsbower_client(slot)
     countries = _country_candidates(slot.country)
@@ -466,6 +519,43 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
     return False
 
 
+def _nextsms_country_candidates(value) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        candidates = [normalize_nextsms_country(item) for item in value]
+    else:
+        candidates = [normalize_nextsms_country(value)]
+    return [item for item in candidates if item]
+
+
+def _acquire_nextsms_number(slot: PhoneSlot) -> bool:
+    client = _nextsms_client(slot)
+    countries = _nextsms_country_candidates(slot.country)
+    for country in countries:
+        try:
+            activation = client.get_number(
+                service=slot.service or NEXTSMS_OPENAI_SERVICE_CODE,
+                country=country,
+                pricing_option=slot.pricing_option,
+            )
+        except Exception as exc:
+            print(f"  [nextsms] country={country} acquire failed: {exc}")
+            continue
+        previous_phone = slot.phone
+        slot.phone = normalize_phone(activation.phone)
+        slot.activation_id = activation.activation_id
+        slot.service = activation.service
+        slot.country = activation.country
+        if not previous_phone or previous_phone != slot.phone:
+            slot.reuse_count = 0
+            slot.last_sms_code = ""
+        print(
+            "  [nextsms] acquired "
+            f"{slot.phone} (id={slot.activation_id}, country={country}, price={activation.price})"
+        )
+        return True
+    return False
+
+
 def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
     if not slot.activation_id or not slot.phone:
         return _acquire_smsbower_number(slot)
@@ -477,6 +567,27 @@ def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
     print(f"  [smsbower] activation {slot.activation_id} could not request another code; cancelling and acquiring a new number")
     _cancel_smsbower_activation(slot)
     return _acquire_smsbower_number(slot)
+
+
+def _prepare_nextsms_for_send(slot: PhoneSlot) -> bool:
+    if not slot.activation_id or not slot.phone:
+        return _acquire_nextsms_number(slot)
+    if slot.reuse_count <= 0:
+        return True
+    if _nextsms_client(slot).request_additional(slot.activation_id):
+        print(f"  [nextsms] order {slot.activation_id} ready for another code")
+        return True
+    print(f"  [nextsms] order {slot.activation_id} could not request another code; acquiring a new number")
+    _reset_provider_slot(slot)
+    return _acquire_nextsms_number(slot)
+
+
+def _prepare_provider_for_send(slot: PhoneSlot) -> bool:
+    if slot.provider == "smsbower":
+        return _prepare_smsbower_for_send(slot)
+    if slot.provider == "nextsms":
+        return _prepare_nextsms_for_send(slot)
+    return True
 
 
 def _wait_for_send_cooldown(slot: PhoneSlot):
@@ -510,8 +621,8 @@ def _is_terminal_validate_rejection(result: dict) -> bool:
 
 
 def _retire_phone_slot_for_batch(phone_pool: PhonePool, phone_slot: PhoneSlot, reason: str):
-    if phone_slot.provider == "smsbower":
-        _cancel_smsbower_activation(phone_slot)
+    if phone_slot.provider in {"smsbower", "nextsms"}:
+        _cancel_provider_activation(phone_slot)
     phone_slot.reuse_count = max(1, int(phone_slot.max_reuse_count or 1))
     print(f"[!] Phone slot retired for this batch: {reason}")
     phone_pool.save_state()
@@ -547,12 +658,25 @@ def _wait_smsbower_code(slot: PhoneSlot) -> Optional[str]:
     )
 
 
-def _reset_smsbower_slot(slot: PhoneSlot):
+def _wait_nextsms_code(slot: PhoneSlot) -> Optional[str]:
+    return _nextsms_client(slot).wait_for_code(
+        slot.activation_id,
+        timeout=slot.sms_timeout,
+        poll_interval=slot.sms_poll_interval,
+        previous_code=slot.last_sms_code,
+    )
+
+
+def _reset_provider_slot(slot: PhoneSlot):
     slot.phone = ""
     slot.activation_id = ""
     slot.reuse_count = 0
     slot.last_send_at = 0
     slot.last_sms_code = ""
+
+
+def _reset_smsbower_slot(slot: PhoneSlot):
+    _reset_provider_slot(slot)
 
 
 def _complete_smsbower_activation(slot: PhoneSlot):
@@ -565,6 +689,30 @@ def _cancel_smsbower_activation(slot: PhoneSlot):
     if slot.activation_id:
         _smsbower_client(slot).cancel(slot.activation_id)
     _reset_smsbower_slot(slot)
+
+
+def _complete_provider_activation(slot: PhoneSlot):
+    if slot.provider == "smsbower":
+        _complete_smsbower_activation(slot)
+        return
+    if slot.provider == "nextsms":
+        if slot.activation_id:
+            _nextsms_client(slot).complete(slot.activation_id)
+        _reset_provider_slot(slot)
+        return
+    _reset_provider_slot(slot)
+
+
+def _cancel_provider_activation(slot: PhoneSlot):
+    if slot.provider == "smsbower":
+        _cancel_smsbower_activation(slot)
+        return
+    if slot.provider == "nextsms":
+        if slot.activation_id:
+            _nextsms_client(slot).cancel(slot.activation_id)
+        _reset_provider_slot(slot)
+        return
+    _reset_provider_slot(slot)
 
 
 def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=None) -> dict:
@@ -685,7 +833,7 @@ def _complete_phone_verification_locked(
 ) -> dict:
     attempts = max(
         1,
-        max((int(phone.number_attempts or 1) for phone in phone_pool.phones if phone.provider == "smsbower"), default=1),
+        max((int(phone.number_attempts or 1) for phone in phone_pool.phones if phone.provider in {"smsbower", "nextsms"}), default=1),
     )
     last_result: dict = {}
     attempt = 1
@@ -705,11 +853,14 @@ def _complete_phone_verification_locked(
         last_result = result
         should_retry = _should_retry_with_new_smsbower_number(phone_pool, result)
         if should_retry and attempt >= attempts:
-            attempts = max(attempts, _minimum_smsbower_attempts_for_retry(result))
+            if _should_retry_until_success_with_new_smsbower_number(result):
+                attempts = attempt + 1
+            else:
+                attempts = max(attempts, _minimum_smsbower_attempts_for_retry(result))
         if attempt >= attempts or not should_retry:
             return result
         print(
-            "[*] Phone verification retry with new SMSBower number "
+            "[*] Phone verification retry with new provider number "
             f"{attempt + 1}/{attempts}: {result.get('error', 'unknown')}"
         )
         phone_pool.reset_exhausted_smsbower_slots()
@@ -724,14 +875,22 @@ def _minimum_smsbower_attempts_for_retry(result: dict) -> int:
     return 1
 
 
+def _should_retry_until_success_with_new_smsbower_number(result: dict) -> bool:
+    error = str(result.get("error") or "").strip().lower()
+    body = str(result.get("body") or "").lower()
+    message = str(result.get("message") or "").lower()
+    text = f"{error} {body} {message}"
+    return error.startswith("phone_send_failed:") and "fraud_guard" in text
+
+
 def _should_retry_with_new_smsbower_number(phone_pool: PhonePool, result: dict) -> bool:
-    if not any(phone.provider == "smsbower" for phone in phone_pool.phones):
+    if not any(phone.provider in {"smsbower", "nextsms"} for phone in phone_pool.phones):
         return False
     error = str(result.get("error") or "").strip().lower()
     body = str(result.get("body") or "").lower()
     if error == "phone_sms_timeout":
         return True
-    if error in {"smsbower_prepare_failed", "phone_pool_exhausted"}:
+    if error in {"smsbower_prepare_failed", "nextsms_prepare_failed", "phone_pool_exhausted"}:
         return False
     if error.startswith("phone_send_failed:"):
         return any(
@@ -767,8 +926,8 @@ def _complete_phone_verification_once_locked(
     if sms_poll_interval:
         phone_slot.sms_poll_interval = sms_poll_interval
 
-    if phone_slot.provider == "smsbower" and not _prepare_smsbower_for_send(phone_slot):
-        return {"ok": False, "error": "smsbower_prepare_failed", "phone": phone_slot.phone}
+    if phone_slot.provider in {"smsbower", "nextsms"} and not _prepare_provider_for_send(phone_slot):
+        return {"ok": False, "error": f"{phone_slot.provider}_prepare_failed", "phone": phone_slot.phone}
 
     phone = normalize_phone(phone_slot.phone)
     print(f"[*] Phone verification: {phone} (reuse {phone_slot.reuse_count + 1}/{phone_slot.max_reuse_count})")
@@ -779,8 +938,8 @@ def _complete_phone_verification_once_locked(
         if _is_terminal_send_rejection(send_result):
             detail = send_result.get("error_code") or send_result.get("status_code", 0)
             _retire_phone_slot_for_batch(phone_pool, phone_slot, f"phone_send_failed:{detail}")
-        elif phone_slot.provider == "smsbower" and not _should_keep_activation_after_send_failure(send_result):
-            _cancel_smsbower_activation(phone_slot)
+        elif phone_slot.provider in {"smsbower", "nextsms"} and not _should_keep_activation_after_send_failure(send_result):
+            _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         detail = send_result.get("error_code") or send_result.get("status_code", 0)
         return {
@@ -794,6 +953,8 @@ def _complete_phone_verification_once_locked(
     print(f"[*] Phone OTP sent to {phone}, polling for code...")
     if phone_slot.provider == "smsbower":
         code = _wait_smsbower_code(phone_slot)
+    elif phone_slot.provider == "nextsms":
+        code = _wait_nextsms_code(phone_slot)
     else:
         baseline = get_sms_baseline(phone_slot.sms_api_url)
         code = poll_sms_code(
@@ -804,9 +965,9 @@ def _complete_phone_verification_once_locked(
         )
 
     if not code:
-        if phone_slot.provider == "smsbower":
-            print(f"  [smsbower] SMS timeout; cancelling activation {phone_slot.activation_id} so this run can buy a new number")
-            _cancel_smsbower_activation(phone_slot)
+        if phone_slot.provider in {"smsbower", "nextsms"}:
+            print(f"  [{phone_slot.provider}] SMS timeout; cancelling activation {phone_slot.activation_id} so this run can buy a new number")
+            _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
             "ok": False,
@@ -818,10 +979,10 @@ def _complete_phone_verification_once_locked(
     print(f"[*] SMS code received: {code}")
     validate_result = validate_phone_otp(session, did, code, sentinel=sentinel, proxy=proxy)
     if not validate_result.get("ok"):
-        if phone_slot.provider == "smsbower":
+        if phone_slot.provider in {"smsbower", "nextsms"}:
             if _is_terminal_validate_rejection(validate_result):
-                print(f"  [smsbower] phone rejected by OpenAI; cancelling activation {phone_slot.activation_id} so next round buys a new number")
-            _cancel_smsbower_activation(phone_slot)
+                print(f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling activation {phone_slot.activation_id} so next round buys a new number")
+            _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
             "ok": False,
@@ -837,9 +998,9 @@ def _complete_phone_verification_once_locked(
     reuse_count = phone_slot.reuse_count
     max_reuse_count = phone_slot.max_reuse_count
     remaining = phone_slot.remaining
-    if phone_slot.provider == "smsbower" and phone_slot.is_exhausted:
-        print(f"  [smsbower] activation {phone_slot.activation_id} reached reuse limit; completing now")
-        _complete_smsbower_activation(phone_slot)
+    if phone_slot.provider in {"smsbower", "nextsms"} and phone_slot.is_exhausted:
+        print(f"  [{phone_slot.provider}] activation {phone_slot.activation_id} reached reuse limit; completing now")
+        _complete_provider_activation(phone_slot)
         phone_pool.save_state()
 
     return {
@@ -867,8 +1028,8 @@ def print_phone_pool_status(pool: PhonePool):
         current = " <-- CURRENT" if index == pool.current_index else ""
         provider = f" [{phone.provider}]" if phone.provider != "legacy" else ""
         display = phone.phone or "(pending acquire)"
-        service = f" service={phone.service}" if phone.provider == "smsbower" else ""
-        country = f" country={phone.country}" if phone.provider == "smsbower" else ""
+        service = f" service={phone.service}" if phone.provider in {"smsbower", "nextsms"} else ""
+        country = f" country={phone.country}" if phone.provider in {"smsbower", "nextsms"} else ""
         print(
             f"  [{index}] {display}{provider}{service}{country} | "
             f"reuse: {phone.reuse_count}/{phone.max_reuse_count} | {status}{current}"

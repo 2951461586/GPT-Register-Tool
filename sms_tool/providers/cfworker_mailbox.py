@@ -10,6 +10,7 @@ from curl_cffi import requests as curl_requests
 
 
 EMAIL_RE = re.compile(r"(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}")
+OTP_RE = re.compile(r"(^|[^0-9])([0-9]{6})([^0-9]|$)")
 
 
 class CFWorkerMailboxClient:
@@ -75,7 +76,7 @@ class CFWorkerMailboxClient:
                 continue
             messages = _extract_messages(result.get("data"))
             if messages:
-                filtered = _messages_for_mailbox(messages, email, allow_missing_recipient=True)
+                filtered = _messages_for_mailbox(messages, email, allow_missing_recipient=False)
                 if filtered:
                     return [_normalize_message(msg, email=email) for msg in filtered[:limit]]
             if _looks_empty_message_list(result.get("data")):
@@ -83,7 +84,7 @@ class CFWorkerMailboxClient:
                 continue
             single = _extract_single_message(result.get("data"))
             if single:
-                filtered = _messages_for_mailbox([single], email, allow_missing_recipient=True)
+                filtered = _messages_for_mailbox([single], email, allow_missing_recipient=False)
                 if filtered:
                     return [_normalize_message(filtered[0], email=email)]
         try:
@@ -270,27 +271,13 @@ def _normalize_message(msg, email=""):
     if not isinstance(msg, dict):
         msg = {"body": str(msg or "")}
     subject = str(_first(msg, "subject", "title") or "")
-    body_text = str(_first(
-        msg,
-        "bodyPreview",
-        "preview",
-        "text",
-        "content",
-        "body",
-        "html",
-        "raw_text",
-        "raw_html",
-        "extracted_json",
-        "results",
-    ) or "")
+    body_text = _message_body_text(msg)
     body = msg.get("body")
     if isinstance(body, dict):
         body_text = str(body.get("content") or body.get("text") or body_text)
     from_value = _sender(msg)
     received = _format_received_time(_first(msg, "receivedDateTime", "received_at", "created_at", "date", "timestamp"))
     recipients = _message_recipients(msg)
-    if not recipients and email:
-        recipients = [email]
     return {
         "id": str(_first(msg, "id", "message_id") or ""),
         "receivedDateTime": received,
@@ -300,6 +287,29 @@ def _normalize_message(msg, email=""):
         "body": {"content": body_text},
         "toRecipients": [{"emailAddress": {"address": address}} for address in recipients],
     }
+
+
+def _message_body_text(msg):
+    extracted = str(_first(msg, "extracted_json", "results") or "")
+    if _contains_otp(extracted):
+        return extracted
+    return str(_first(
+        msg,
+        "bodyPreview",
+        "preview",
+        "text",
+        "content",
+        "body",
+        "raw_text",
+        "html",
+        "raw_html",
+        "extracted_json",
+        "results",
+    ) or "")
+
+
+def _contains_otp(text):
+    return bool(OTP_RE.search(str(text or "")))
 
 
 def _first(mapping, *keys):

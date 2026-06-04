@@ -74,6 +74,43 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertEqual(records[0].provider, "cfworker")
         self.assertEqual(records[1].provider, "chatai")
 
+    def test_chatai_parser_requires_client_id_and_refresh_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mailboxes.txt"
+            path.write_text("user@hotmail.com----mail-password\n", encoding="utf-8")
+
+            records = _parse_chatai_mailbox_file(path)
+
+        self.assertEqual(records, [])
+
+    def test_chatai_parser_accepts_refresh_token_before_uuid_client_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mailboxes.txt"
+            path.write_text(
+                "user@hotmail.com----pw----refresh-token----8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2\n",
+                encoding="utf-8",
+            )
+
+            records = _parse_chatai_mailbox_file(path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].token, "8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2")
+        self.assertEqual(records[0].refresh_token, "refresh-token")
+
+    def test_chatai_parser_preserves_refresh_token_with_delimiter_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mailboxes.txt"
+            path.write_text(
+                "user@hotmail.com----pw----8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2----part-a----part-b\n",
+                encoding="utf-8",
+            )
+
+            records = _parse_chatai_mailbox_file(path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].token, "8b4ba9dd-3ea5-4e5f-86f1-ddba2230dcf2")
+        self.assertEqual(records[0].refresh_token, "part-a----part-b")
+
     def test_run_batch_does_not_reuse_mailboxes_when_count_exceeds_pool(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mailboxes.txt"

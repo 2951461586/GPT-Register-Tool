@@ -34,19 +34,19 @@
         <StackPanel x:Name="SidebarBottomActions" DockPanel.Dock="Bottom" Margin="12,0,12,14">
           <Button Style="{StaticResource SidebarButton}" Click="Refresh_Click" ToolTip="刷新">
             <StackPanel Orientation="Horizontal">
-              <Path Style="{StaticResource IconPath}" Data="M13 7 A5 5 0 1 0 11.5 10.5 M13 7 V3 H9"/>
+              <Path Style="{StaticResource IconPath}" Data="M13.5 5.5A5.5 5.5 0 1 0 14 10M13.5 5.5V2.5H10.5 M2.5 10.5A5.5 5.5 0 1 0 2 6M2.5 10.5V13.5H5.5"/>
               <TextBlock Tag="SidebarText" Text="刷新" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <Button Style="{StaticResource SidebarButton}" Click="Settings_Click" ToolTip="配置">
             <StackPanel Orientation="Horizontal">
-              <Path Style="{StaticResource IconPath}" Data="M3 4 H13 M3 8 H13 M3 12 H13 M10 2 V6 M6 6 V10 M11 10 V14"/>
+              <Path Style="{StaticResource IconPath}" Data="M8 2.5V4 M8 12V13.5 M3.25 4.25L4.3 5.3 M11.7 10.7L12.75 11.75 M2.5 8H4 M12 8H13.5 M3.25 11.75L4.3 10.7 M11.7 5.3L12.75 4.25 M5.5 8A2.5 2.5 0 1 0 10.5 8A2.5 2.5 0 1 0 5.5 8"/>
               <TextBlock Tag="SidebarText" Text="配置" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <Button Style="{StaticResource SidebarButton}" Click="CancelBatch_Click" ToolTip="取消批次">
             <StackPanel Orientation="Horizontal">
-              <Path Style="{StaticResource IconPath}" Data="M4 4 L12 12 M12 4 L4 12"/>
+              <Path Style="{StaticResource IconPath}" Data="M8 2.5A5.5 5.5 0 1 0 8 13.5A5.5 5.5 0 1 0 8 2.5 M5.8 5.8L10.2 10.2 M10.2 5.8L5.8 10.2"/>
               <TextBlock Tag="SidebarText" Text="取消批次" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
@@ -57,13 +57,13 @@
             <TextBlock Tag="SidebarSection" Text="MAILBOX" Style="{StaticResource SectionLabel}" Margin="6,4,0,7"/>
             <Button Style="{StaticResource SidebarButton}" Click="ImportChataiMailbox_Click" ToolTip="导入Chatai邮箱">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M3 4 H13 M8 4 V14 M5 11 L8 14 L11 11"/>
+                <Path Style="{StaticResource IconPath}" Data="M3 3.5H13V12.5H3Z M5 6.5H11 M8 5V10 M5.8 7.8L8 10L10.2 7.8"/>
                 <TextBlock Tag="SidebarText" Text="导入Chatai邮箱" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="ViewInbox_Click" ToolTip="查看收件箱">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M2 5 H14 V13 H2 Z M2 5 L8 9 L14 5"/>
+                <Path Style="{StaticResource IconPath}" Data="M2.5 5H13.5V12H2.5Z M2.5 5L8 8.8L13.5 5 M4.5 11L6.7 8.9 M11.5 11L9.3 8.9"/>
                 <TextBlock Tag="SidebarText" Text="查看收件箱" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
@@ -71,22 +71,28 @@
             <TextBlock Tag="SidebarSection" Text="REGISTRATION" Style="{StaticResource SectionLabel}"/>
             <Button Style="{StaticResource SidebarButton}" Click="OneClickRegister_Click" ToolTip="一键注册+支付链接">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M8 2 L4 9 H8 L6 14 L12 6 H8 Z"/>
+                <Path Style="{StaticResource IconPath}" Data="M6.5 7.2A2.4 2.4 0 1 0 6.5 2.4A2.4 2.4 0 1 0 6.5 7.2 M2.5 13.5C2.8 10.7 4.3 9.4 6.5 9.4C7.4 9.4 8.2 9.6 8.8 10 M11.5 8.5V13.5 M9 11H14"/>
                 <TextBlock Tag="SidebarText" Text="一键注册+支付链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
 
             <Button Style="{StaticResource SidebarButton}" Click="OneClickSms_Click" ToolTip="一键接码">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M4 3 H12 V13 H4 Z M6 5 H10 M6 8 H10 M8 11 H8"/>
+                <Path Style="{StaticResource IconPath}" Data="M5 2.5H11A1.5 1.5 0 0 1 12.5 4V12A1.5 1.5 0 0 1 11 13.5H5A1.5 1.5 0 0 1 3.5 12V4A1.5 1.5 0 0 1 5 2.5Z M6.5 4.5H9.5 M6 7H10 M6 9H8.6 M7.2 11.5H8.8"/>
                 <TextBlock Tag="SidebarText" Text="一键接码" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="OneClickScan_Click" ToolTip="批量OAuth扫号：检测掉号和二次手机号验证">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M7.2 3A4.2 4.2 0 1 0 7.2 11.4A4.2 4.2 0 1 0 7.2 3 M10.2 10.2L13.5 13.5 M5.4 7.2L6.8 8.6L9.7 5.8"/>
+                <TextBlock Tag="SidebarText" Text="一键扫号" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
 
             <TextBlock Tag="SidebarSection" Text="PAYMENT" Style="{StaticResource SectionLabel}"/>
             <Button Style="{StaticResource SidebarButton}" Click="OneClickPay_Click" ToolTip="一键支付">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M3 5 H13 V12 H3 Z M3 8 H13"/>
+                <Path Style="{StaticResource IconPath}" Data="M2.5 5H13.5V12H2.5Z M2.5 7H13.5 M5 10H7.5 M10.5 10H11.5"/>
                 <TextBlock Tag="SidebarText" Text="一键支付" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
@@ -94,37 +100,43 @@
             <TextBlock Tag="SidebarSection" Text="MAINTENANCE" Style="{StaticResource SectionLabel}"/>
             <Button Style="{StaticResource SidebarButton}" Click="OpenPayPalLink_Click" ToolTip="打开支付链接">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M5 3 H13 V11 M13 3 L6 10 M3 5 V13 H11"/>
+                <Path Style="{StaticResource IconPath}" Data="M5 3H13V11 M13 3L6.5 9.5 M3 5.5V13H10.5"/>
                 <TextBlock Tag="SidebarText" Text="打开支付链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="MarkPayPalComplete_Click" ToolTip="标记支付完成">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M3 8 L6 11 L13 4"/>
+                <Path Style="{StaticResource IconPath}" Data="M8 2.5A5.5 5.5 0 1 0 8 13.5A5.5 5.5 0 1 0 8 2.5 M5.2 8.1L7.1 10L11 6"/>
                 <TextBlock Tag="SidebarText" Text="标记支付完成" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="ImportPaidCpa_Click" ToolTip="导入到 CPA 或 SUB2API">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M4 3 H10 L13 6 V13 H4 Z M10 3 V6 H13"/>
+                <Path Style="{StaticResource IconPath}" Data="M4 2.5H9.8L12.5 5.2V13.5H4Z M9.8 2.5V5.2H12.5 M6 9H10.5 M8.25 6.8V11.2 M6.4 9.35L8.25 11.2L10.1 9.35"/>
                 <TextBlock Tag="SidebarText" Text="一键导入" Margin="10,0,0,0" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Style="{StaticResource SidebarButton}" Click="ExportAccounts_Click" ToolTip="导出 TXT 或 JSON（不含RT）">
+              <StackPanel Orientation="Horizontal">
+                <Path Style="{StaticResource IconPath}" Data="M4 2.5H10L12.5 5V13.5H4Z M10 2.5V5H12.5 M6 8.5H10.5 M6 11H9 M8.25 5.8V10.5 M6.5 8.8L8.25 10.5L10 8.8"/>
+                <TextBlock Tag="SidebarText" Text="一键导出" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="ReimportCpa401_Click" ToolTip="筛选未封禁的 401 账号并重新导入到 CPA 或 SUB2API">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M4 8 A4 4 0 1 1 6 11.5 M4 8 H2 V6 M12 8 A4 4 0 1 1 10 4.5 M12 8 H14 V10"/>
+                <Path Style="{StaticResource IconPath}" Data="M12.8 5.5A5 5 0 0 0 4.2 4.2L3 5.5H6.2 M3.2 10.5A5 5 0 0 0 11.8 11.8L13 10.5H9.8"/>
                 <TextBlock Tag="SidebarText" Text="一键重导" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="RegeneratePayPalLink_Click" ToolTip="重新生成链接">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M12 5 A5 5 0 1 0 13 10 M12 5 V2 H15"/>
+                <Path Style="{StaticResource IconPath}" Data="M12.8 5.6A5 5 0 0 0 4.4 4.2L3.2 5.6H6.2 M3.2 10.4A5 5 0 0 0 11.6 11.8L12.8 10.4H9.8 M6 8H10"/>
                 <TextBlock Tag="SidebarText" Text="重新生成链接" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
             <Button Style="{StaticResource SidebarButton}" Click="DeleteSelected_Click" ToolTip="删除选中">
               <StackPanel Orientation="Horizontal">
-                <Path Style="{StaticResource IconPath}" Data="M4 5 H12 M6 5 V13 M10 5 V13 M5 5 L6 14 H10 L11 5 M6 3 H10"/>
+                <Path Style="{StaticResource IconPath}" Data="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
                 <TextBlock Tag="SidebarText" Text="删除选中" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
@@ -159,7 +171,7 @@
         </Border>
         <Border Grid.Column="1" Margin="0,0,8,0" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4">
           <StackPanel Margin="14,12">
-            <TextBlock Text="邮箱池" Foreground="{StaticResource TextSub}"/>
+            <TextBlock Text="已接码" Foreground="{StaticResource TextSub}"/>
             <TextBlock Text="{Binding MailboxCountText}" FontSize="24" FontWeight="SemiBold"/>
           </StackPanel>
         </Border>
@@ -280,7 +292,7 @@
                     Margin="0,6,20,0" Padding="8,0" Panel.ZIndex="1" Click="ClearLog_Click">
               <StackPanel Orientation="Horizontal">
                 <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
-                      Data="M4 5 H12 M6 5 V13 M10 5 V13 M5 5 L6 14 H10 L11 5 M6 3 H10"/>
+                      Data="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
                 <TextBlock Text="清空" Margin="6,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>

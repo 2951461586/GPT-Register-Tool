@@ -1,5 +1,6 @@
 config.json
 sms_tool/config.json
+services/mail-otp-web/config.json
 outlook_results/
 dist/
 sessions/

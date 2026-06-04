@@ -93,6 +93,7 @@ def main():
     parser.add_argument("--gopay-rebind-phone", default=None, help="New phone number used by WA rebind after payment")
     parser.add_argument("--gopay-rebind-otp", default=None, help="SMS OTP for GoPay change-phone completion")
     parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
+    parser.add_argument("--one-click-scan", action="store_true", help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification")
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
@@ -148,6 +149,9 @@ def main():
         return
     if args.one_click_sms:
         _one_click_sms(args)
+        return
+    if args.one_click_scan:
+        _one_click_scan(args)
         return
 
     pipeline_started = time.time()
@@ -415,7 +419,9 @@ def _view_inbox(args):
     from .session_refresh import _load_seed_session
 
     data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
-    mailbox = _mailbox_from_data(data)
+    mailbox = _mailbox_from_explicit_args(args)
+    if mailbox is None:
+        mailbox = _mailbox_from_data(data)
     if mailbox is None:
         print(json.dumps({
             "ok": False,
@@ -458,6 +464,22 @@ def _public_mail_message(msg):
         "subject": str(msg.get("subject") or msg.get("title") or ""),
         "bodyPreview": str(msg.get("bodyPreview") or msg.get("preview") or body.get("content") or msg.get("text") or "")[:2000],
     }
+
+
+def _mailbox_from_explicit_args(args):
+    if not (getattr(args, "chatai_mailbox_file", None) or getattr(args, "mailbox_file", None)):
+        return None
+    from .mailbox import _load_mailbox_pool
+
+    requested = str(getattr(args, "email", "") or "").strip().lower()
+    mailboxes = _load_mailbox_pool(args)
+    if not mailboxes:
+        return None
+    if requested:
+        for mailbox in mailboxes:
+            if str(getattr(mailbox, "email", "") or "").strip().lower() == requested:
+                return mailbox
+    return mailboxes[0]
 
 
 def _export_codex_json(args):
@@ -849,8 +871,9 @@ def _one_click_sms(args):
         print("[Error] --email, --email-file, or --session-file is required with --one-click-sms")
         raise SystemExit(2)
 
+    one_click_max_reuse = _one_click_sms_max_reuse(args)
     phone_pool = create_phone_pool(
-        max_reuse_count=args.max_reuse_count,
+        max_reuse_count=one_click_max_reuse,
         send_cooldown_seconds=args.phone_send_cooldown,
     )
     if not phone_pool.phones:
@@ -881,7 +904,9 @@ def _one_click_sms(args):
             phone_pool=phone_pool,
         )
         if result.get("ok"):
-            print(f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}")
+            phone = str(result.get("phone") or "").strip()
+            phone_suffix = f" phone={phone}" if phone else ""
+            print(f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}{phone_suffix}")
         else:
             print(f"[FAIL] {email}: {result.get('error', 'unknown')}")
             _persist_one_click_sms_failure(data, json_path, email, result)
@@ -912,6 +937,44 @@ def _one_click_sms(args):
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if ok_count != len(emails):
         raise SystemExit(3)
+
+
+def _one_click_scan(args):
+    """Batch OAuth probe accounts without sending SMS."""
+    from .account_scan import scan_accounts
+    from .session_refresh import _load_seed_session
+    from .storage import list_paypal_accounts
+
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    if not emails and args.session_file:
+        seed, _ = _load_seed_session(session_file=args.session_file)
+        if seed.get("email"):
+            emails = [str(seed.get("email") or "").strip()]
+    if not emails:
+        emails = [str(row.get("email") or "").strip() for row in list_paypal_accounts()]
+    emails = _unique_emails(emails)
+    if not emails:
+        print("[Error] no account email was found for --one-click-scan")
+        raise SystemExit(2)
+
+    summary = scan_accounts(
+        emails,
+        session_file=args.session_file if len(emails) == 1 else "",
+        workers=args.workers,
+        proxy=args.proxy,
+        timeout=args.refresh_timeout,
+    )
+    if summary.get("failed", 0):
+        raise SystemExit(3)
+
+
+def _one_click_sms_max_reuse(args) -> int:
+    requested = int(getattr(args, "max_reuse_count", 0) or 0)
+    if requested and requested != 1:
+        print("[*] One-click SMS forces max_reuse_count=1 so each email account gets its own phone number")
+    return 1
 
 
 def _persist_one_click_sms_failure(data, json_path, email, result):
