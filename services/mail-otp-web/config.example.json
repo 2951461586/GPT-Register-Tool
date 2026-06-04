@@ -1,0 +1,10 @@
+﻿{
+  "bind_host": "127.0.0.1",
+  "port": 8791,
+  "default_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
+  "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+  "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages",
+  "graph_scope": "https://graph.microsoft.com/.default offline_access",
+  "request_timeout_seconds": 25,
+  "message_limit": 15
+}

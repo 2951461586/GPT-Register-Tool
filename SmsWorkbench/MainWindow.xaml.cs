@@ -29,6 +29,14 @@ namespace SmsWorkbench
             new ConfigComboOption("16", "英国 / United Kingdom (+44) - 16", "United Kingdom", "+44"),
             new ConfigComboOption("6", "印度尼西亚 / Indonesia (+62) - 6", "Indonesia", "+62")
         };
+        private static readonly ConfigComboOption[] BillingRegionOptions = new[]
+        {
+            new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
+            new ConfigComboOption("US", "美国 / United States (USD)", "United States", "USD"),
+            new ConfigComboOption("DE", "德国 / Germany (EUR)", "Germany", "EUR"),
+            new ConfigComboOption("FR", "法国 / France (EUR)", "France", "EUR"),
+            new ConfigComboOption("GB", "英国 / United Kingdom (GBP)", "United Kingdom", "GBP"),
+        };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
         private Process runningProcess;
@@ -229,15 +237,20 @@ namespace SmsWorkbench
 
         private void UpdateOverview()
         {
-            int mailboxes = allRows.Count(r => r.AccountType.Contains("邮箱池") || r.AccountType.Contains("Chatai"));
+            int phoneVerified = allRows.Count(IsPhoneVerifiedRow);
             int registered = allRows.Count(IsRegisteredRow);
             int paypal = allRows.Count(IsPayPalCompletedRow);
             int attention = allRows.Count(r => r.Status.Contains("待") || r.Status.Contains("缺") || r.Status.Contains("失败"));
             TotalCountText = allRows.Count.ToString();
-            MailboxCountText = mailboxes.ToString();
+            MailboxCountText = phoneVerified.ToString();
             RegisteredCountText = registered.ToString();
             PaypalCountText = paypal.ToString();
             AttentionCountText = attention.ToString();
+        }
+
+        private bool IsPhoneVerifiedRow(PoolRow row)
+        {
+            return !string.IsNullOrWhiteSpace(row.Phone);
         }
 
         private bool IsRegisteredRow(PoolRow row)
@@ -380,8 +393,12 @@ namespace SmsWorkbench
 
                 if (line.Contains("----"))
                 {
-                    string[] parts = line.Split(new[] { "----" }, StringSplitOptions.None);
+                    string[] parts = line.Split(new[] { "----" }, 4, StringSplitOptions.None);
                     if (parts.Length < 4) continue;
+                    string p2 = parts[2].Trim();
+                    string p3 = parts[3].Trim();
+                    string clientId = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p2 : p3;
+                    string refreshToken = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p3 : p2;
                     allRows.Add(new PoolRow
                     {
                         Id = "M" + (i + 1),
@@ -390,12 +407,12 @@ namespace SmsWorkbench
                         Identifier = parts[0].Trim(),
                         AccountType = "Chatai邮箱池",
                         Status = "已授权",
-                        RefreshToken = Mask(parts[3].Trim()),
+                        RefreshToken = Mask(refreshToken),
                         Notes = path,
                         SourcePath = path,
                         RawLine = line,
-                        ClientId = parts[2].Trim(),
-                        RawRefreshToken = parts[3].Trim(),
+                        ClientId = clientId,
+                        RawRefreshToken = refreshToken,
                         MailboxProvider = "chatai"
                     });
                     continue;
@@ -453,6 +470,7 @@ namespace SmsWorkbench
                     string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
                     string paypalAmount = GetPaypalAmount(rawJson);
                     string importedStatus = GetImportedStatus(rawJson);
+                    string verifiedPhone = GetVerifiedPhone(rawJson);
                     if (IsPaymentLinkMethodMismatch(rawJson, paymentMethod))
                     {
                         paypalStatus = "failed";
@@ -474,6 +492,7 @@ namespace SmsWorkbench
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
                         PayPalAmount = paypalAmount,
                         RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
+                        Phone = verifiedPhone,
                         PayPalUrl = paypalUrl,
                         RefreshToken = isCfWorkerMailbox ? "CFWorker" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
@@ -517,6 +536,7 @@ namespace SmsWorkbench
                         string paypalAmount = GetPaypalAmount(data);
                         string refreshTokenStatus = GetString(data, "refresh_token_status");
                         string importedStatus = GetImportedStatus(data);
+                        string verifiedPhone = GetVerifiedPhone(data);
                         TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
                         string timing = GetTimingText(data);
                         allRows.Add(new PoolRow
@@ -532,6 +552,7 @@ namespace SmsWorkbench
                             PayPalStatus = paypalStatus,
                             PayPalAmount = paypalAmount,
                             RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
+                            Phone = verifiedPhone,
                             PayPalUrl = paypalUrl,
                             RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : Mask(access),
                             Proxy = timing,
@@ -647,6 +668,7 @@ namespace SmsWorkbench
                 MessageBox.Show("请先选择一条 Chatai 或 edu.liziai.cloud 邮箱记录。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            string mailboxLine = FindMailboxLineForRow(row);
             if (!IsCfWorkerRow(row) && (string.IsNullOrWhiteSpace(row.RawRefreshToken) || string.IsNullOrWhiteSpace(row.ClientId)))
             {
                 MessageBox.Show("选中记录不是 Chatai 或 edu.liziai.cloud 邮箱。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -757,6 +779,44 @@ namespace SmsWorkbench
             }
             AddProxy(args);
             RunBackend("一键接码(" + rows.Count + ")", args);
+        }
+
+        private void OneClickScan_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .ToList();
+            if (rows.Count == 0)
+            {
+                rows = allRows
+                    .Where(FilterRow)
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                    .ToList();
+            }
+            rows = rows
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                ShowThemedInfoDialog("一键扫号", "没有找到可扫描的账号。请先勾选账号，或切换到包含账号的筛选范围。");
+                return;
+            }
+
+            var args = new List<string> { "--one-click-scan", "--workers", Math.Min(8, Math.Max(1, rows.Count)).ToString(), "--refresh-timeout", "90" };
+            if (rows.Count > 1)
+            {
+                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_scan_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", rows[0].Identifier });
+                AddSessionFileArg(args, rows[0]);
+            }
+            AddProxy(args);
+            RunBackend("一键扫号(" + rows.Count + ")", args);
         }
 
         private void OneClickPay_Click(object sender, RoutedEventArgs e)
@@ -1203,18 +1263,19 @@ namespace SmsWorkbench
                 string password = JsonString(mailbox, "password");
                 string refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
-                string clientId = JsonString(mailbox, "token");
+                string clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
                 string provider = JsonString(mailbox, "provider");
                 if (email.Length == 0) return "";
                 if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
                 {
                     return "cfworker://" + email;
                 }
-                if (refreshToken.Length == 0) return "";
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
                 {
+                    if (clientId.Length == 0 || refreshToken.Length == 0) return "";
                     return email + "----" + password + "----" + clientId + "----" + refreshToken;
                 }
+                if (refreshToken.Length == 0) return "";
                 return email + "---" + password + "---" + refreshToken + "---" + accessToken + "---0";
             }
             catch
@@ -1239,7 +1300,7 @@ namespace SmsWorkbench
                 string password = JsonString(mailbox, "password");
                 refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
-                clientId = JsonString(mailbox, "token");
+                clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
                 provider = JsonString(mailbox, "provider");
                 if (email.Length == 0) return false;
 
@@ -1249,14 +1310,14 @@ namespace SmsWorkbench
                     return true;
                 }
 
-                if (refreshToken.Length == 0) return false;
-
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
                 {
+                    if (clientId.Length == 0 || refreshToken.Length == 0) return false;
                     mailboxLine = email + "----" + password + "----" + clientId + "----" + refreshToken;
                 }
                 else
                 {
+                    if (refreshToken.Length == 0) return false;
                     mailboxLine = email + "---" + password + "---" + refreshToken + "---" + accessToken + "---0";
                 }
                 return true;
@@ -1359,19 +1420,49 @@ namespace SmsWorkbench
                 StandardErrorEncoding = Encoding.UTF8
             };
 
-            runningProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            runningProcess.OutputDataReceived += (_, ev) => { if (ev.Data != null) UiLog(ev.Data); };
-            runningProcess.ErrorDataReceived += (_, ev) => { if (ev.Data != null) UiLog(ev.Data); };
+            var backendOutput = new StringBuilder();
+            object backendOutputLock = new object();
+            void CaptureBackendLine(string line)
+            {
+                lock (backendOutputLock)
+                {
+                    backendOutput.AppendLine(line);
+                }
+            }
+
+            var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            runningProcess = process;
+            runningProcess.OutputDataReceived += (_, ev) =>
+            {
+                if (ev.Data == null) return;
+                CaptureBackendLine(ev.Data);
+                UiLog(ev.Data);
+            };
+            runningProcess.ErrorDataReceived += (_, ev) =>
+            {
+                if (ev.Data == null) return;
+                CaptureBackendLine(ev.Data);
+                UiLog(ev.Data);
+            };
             runningProcess.Exited += (_, __) =>
             {
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    task.Status = runningProcess.ExitCode == 0 ? "完成" : "失败";
+                    task.Status = process.ExitCode == 0 ? "完成" : "失败";
                     task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString();
                     task.DoneAt = SafeTime(DateTime.Now);
                     StatusText = taskName + " 已结束";
                     RefreshPools();
                     ScrollTaskGridToBottom();
+                    if (taskName.StartsWith("一键扫号", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string output;
+                        lock (backendOutputLock)
+                        {
+                            output = backendOutput.ToString();
+                        }
+                        ShowAccountScanResultDialog(output);
+                    }
                 }), DispatcherPriority.Background);
             };
 
@@ -1869,6 +1960,749 @@ namespace SmsWorkbench
             RunBackend("一键导入" + ImportTargetLabel(target) + " (" + rows.Count + ")", args);
         }
 
+        private void ExportAccounts_Click(object sender, RoutedEventArgs e)
+        {
+            string format = ShowExportFormatDialog();
+            if (format.Length == 0) return;
+
+            var rows = ExportCandidateRows();
+            if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                ExportAccountsJson(rows);
+                return;
+            }
+            ExportAccountsTxt(rows);
+        }
+
+        private List<PoolRow> ExportCandidateRows()
+        {
+            var rows = SelectedRowsOrCurrent();
+            if (rows.Count == 0)
+            {
+                rows = allRows.Where(FilterRow).ToList();
+            }
+            if (rows.Count == 0)
+            {
+                rows = allRows.ToList();
+            }
+            return rows;
+        }
+
+        private void ExportAccountsTxt(List<PoolRow> rows)
+        {
+            var lines = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            int skipped = 0;
+            foreach (PoolRow row in rows)
+            {
+                if (TryBuildAccountExportLine(row, out string line))
+                {
+                    if (seen.Add(line))
+                    {
+                        lines.Add(line);
+                    }
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+
+            if (lines.Count == 0)
+            {
+                ShowThemedInfoDialog("一键导出", "没有找到可导出的账号记录。仅支持包含邮箱、密码、客户端ID、刷新令牌的邮箱记录；CFWorker 或缺少密码/刷新令牌的记录会被跳过。");
+                return;
+            }
+
+            string outputDir = Path.Combine(rootDir, "runtime");
+            Directory.CreateDirectory(outputDir);
+            string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            File.WriteAllLines(outputPath, lines, new UTF8Encoding(false));
+            Log("One-click export wrote " + lines.Count + " account(s), skipped " + skipped + ": " + outputPath);
+            ShowExportCompleteDialog(outputPath, lines.Count, skipped, "TXT", "账号----密码----客户端ID----刷新令牌");
+        }
+
+        private void ExportAccountsJson(List<PoolRow> rows)
+        {
+            var items = new List<Dictionary<string, object>>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int skipped = 0;
+            foreach (PoolRow row in rows)
+            {
+                if (TryBuildAccountExportJson(row, out Dictionary<string, object> item))
+                {
+                    string key = JsonExportDedupKey(item, row);
+                    if (seen.Add(key))
+                    {
+                        items.Add(item);
+                    }
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                ShowThemedInfoDialog("一键导出", "没有找到可导出的 JSON 账号记录。需要账号已生成 session/auth_session 或 SQLite 原始记录。");
+                return;
+            }
+
+            string outputDir = Path.Combine(rootDir, "runtime");
+            Directory.CreateDirectory(outputDir);
+            string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json");
+            object payload = items.Count == 1 ? items[0] : items;
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false));
+            Log("One-click JSON export wrote " + items.Count + " account(s), skipped " + skipped + ": " + outputPath);
+            ShowExportCompleteDialog(outputPath, items.Count, skipped, "JSON（不含RT）", "已移除 refresh_token / refreshToken / oauth_refresh_token 等 RT 字段");
+        }
+
+        private string ShowExportFormatDialog()
+        {
+            string selected = "";
+            var dialog = new Window
+            {
+                Title = "一键导出",
+                Owner = this,
+                Width = 430,
+                SizeToContent = SizeToContent.Height,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "选择导出格式",
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain")
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "TXT 保持原格式；JSON 会导出账号 session 信息并自动移除 RT 字段。",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            Grid.SetRow(header, 0);
+            root.Children.Add(header);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var txtButton = new Button
+            {
+                Content = "导出 TXT",
+                Width = 96,
+                Style = (Style)FindResource("PrimaryButton")
+            };
+            txtButton.Click += (_, __) => { selected = "txt"; dialog.Close(); };
+            var jsonButton = new Button
+            {
+                Content = "导出 JSON",
+                Width = 104,
+                Margin = new Thickness(8, 0, 0, 0),
+                Style = (Style)FindResource("PrimaryButton")
+            };
+            jsonButton.Click += (_, __) => { selected = "json"; dialog.Close(); };
+            var cancelButton = new Button
+            {
+                Content = "取消",
+                Width = 76,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            cancelButton.Click += (_, __) => dialog.Close();
+            actions.Children.Add(txtButton);
+            actions.Children.Add(jsonButton);
+            actions.Children.Add(cancelButton);
+            Grid.SetRow(actions, 1);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+            return selected;
+        }
+
+        private void ShowExportCompleteDialog(string outputPath, int exportedCount, int skippedCount, string formatLabel, string formatDescription)
+        {
+            var dialog = new Window
+            {
+                Title = "一键导出",
+                Owner = this,
+                Width = 520,
+                MinWidth = 460,
+                SizeToContent = SizeToContent.Height,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "导出完成",
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain")
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "已生成账号 " + formatLabel + " 文件：" + formatDescription,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 20,
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            Grid.SetRow(header, 0);
+            root.Children.Add(header);
+
+            var summary = new Border
+            {
+                Background = (Brush)FindResource("PanelBg"),
+                BorderBrush = (Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+            var summaryStack = new StackPanel();
+            summaryStack.Children.Add(new TextBlock
+            {
+                Text = "数量：" + exportedCount + "    跳过：" + skippedCount,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain")
+            });
+            summaryStack.Children.Add(new TextBlock
+            {
+                Text = outputPath,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            summary.Child = summaryStack;
+            Grid.SetRow(summary, 1);
+            root.Children.Add(summary);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var openDirButton = new Button
+            {
+                Content = "打开目录",
+                Width = 92,
+                Style = (Style)FindResource("PrimaryButton")
+            };
+            openDirButton.Click += (_, __) =>
+            {
+                string directory = Path.GetDirectoryName(outputPath) ?? Path.Combine(rootDir, "runtime");
+                OpenPath(directory);
+                dialog.Close();
+            };
+            var closeButton = new Button
+            {
+                Content = "关闭",
+                Width = 76,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            closeButton.Click += (_, __) => dialog.Close();
+            actions.Children.Add(openDirButton);
+            actions.Children.Add(closeButton);
+            Grid.SetRow(actions, 2);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private void ShowAccountScanResultDialog(string backendOutput)
+        {
+            if (!TryExtractScanSummary(backendOutput, out Dictionary<string, object> summary))
+            {
+                ShowThemedInfoDialog("一键扫号", "扫号已结束，但未解析到结果汇总。请查看下方日志确认详情。");
+                return;
+            }
+
+            var results = new List<Dictionary<string, object>>();
+            if (summary.TryGetValue("results", out object rawResults) && rawResults is List<object> items)
+            {
+                foreach (object item in items)
+                {
+                    if (item is Dictionary<string, object> map)
+                    {
+                        results.Add(map);
+                    }
+                }
+            }
+
+            var rtRows = results.Where(r => BoolValue(r, "has_rt")).ToList();
+            var noRtRows = results.Where(r => !BoolValue(r, "has_rt")).ToList();
+
+            var dialog = new Window
+            {
+                Title = "一键扫号结果",
+                Owner = this,
+                Width = 720,
+                MinWidth = 620,
+                SizeToContent = SizeToContent.Height,
+                MaxHeight = 760,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "扫号完成",
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain")
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "总数：" + GetString(summary, "total")
+                    + "    正常：" + GetString(summary, "alive")
+                    + "    掉号：" + GetString(summary, "account_deactivated")
+                    + "    手机验证：" + GetString(summary, "secondary_phone_verification_required")
+                    + "    失败：" + GetString(summary, "failed"),
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = (Brush)FindResource("TextSub")
+            });
+            Grid.SetRow(header, 0);
+            root.Children.Add(header);
+
+            var body = new StackPanel();
+            if (noRtRows.Count > 0)
+            {
+                AddScanResultSection(body, "未接码号结果", noRtRows);
+            }
+            if (rtRows.Count > 0)
+            {
+                AddScanResultSection(body, "已接码号结果", rtRows);
+            }
+            if (body.Children.Count == 0)
+            {
+                body.Children.Add(new TextBlock
+                {
+                    Text = "没有可展示的扫描明细。",
+                    Foreground = (Brush)FindResource("TextSub")
+                });
+            }
+
+            var scroll = new ScrollViewer
+            {
+                Content = body,
+                MaxHeight = 520,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 16, 0, 0)
+            };
+            var ok = new Button { Content = "关闭", Width = 82, Style = (Style)FindResource("PrimaryButton") };
+            ok.Click += (_, __) => dialog.Close();
+            actions.Children.Add(ok);
+            Grid.SetRow(actions, 2);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private void AddScanResultSection(StackPanel parent, string title, List<Dictionary<string, object>> rows)
+        {
+            parent.Children.Add(new TextBlock
+            {
+                Text = title + "（" + rows.Count + "）",
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, parent.Children.Count == 0 ? 0 : 12, 0, 8)
+            });
+
+            var card = new Border
+            {
+                Background = (Brush)FindResource("PanelBg"),
+                BorderBrush = (Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10),
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var stack = new StackPanel();
+            foreach (Dictionary<string, object> row in rows)
+            {
+                string email = GetString(row, "email");
+                string status = ScanStatusLabel(GetString(row, "scan_status"));
+                string error = ScanResultError(row);
+                stack.Children.Add(new TextBlock
+                {
+                    Text = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status,
+                    TextWrapping = TextWrapping.Wrap,
+                    LineHeight = 20,
+                    Margin = new Thickness(0, 0, 0, 6),
+                    Foreground = (Brush)FindResource("TextSub")
+                });
+            }
+            card.Child = stack;
+            parent.Children.Add(card);
+        }
+
+        private string ScanStatusLabel(string status)
+        {
+            string value = (status ?? "").Trim().ToLowerInvariant();
+            return value switch
+            {
+                "alive" => "正常",
+                "alive_probe_inconclusive" => "RT正常 / OAuth深度探测未完成",
+                "account_deactivated" => "账号掉号",
+                "secondary_phone_verification_required" => "手机验证",
+                "phone_verification_required" => "支付完成",
+                "scan_failed" => "扫描失败",
+                _ => value.Length > 0 ? value : "未知"
+            };
+        }
+
+        private string ScanResultError(Dictionary<string, object> row)
+        {
+            foreach (string section in new[] { "oauth", "refresh" })
+            {
+                if (TryGetMap(row, section, out Dictionary<string, object> map))
+                {
+                    string error = GetString(map, "error");
+                    if (error.Length > 0) return error;
+                }
+            }
+            return "";
+        }
+
+        private bool TryExtractScanSummary(string output, out Dictionary<string, object> summary)
+        {
+            summary = null;
+            string text = output ?? "";
+            int end = text.LastIndexOf('}');
+            if (end < 0) return false;
+            for (int start = text.LastIndexOf('{', end); start >= 0; start = start > 0 ? text.LastIndexOf('{', start - 1) : -1)
+            {
+                string candidate = text.Substring(start, end - start + 1);
+                try
+                {
+                    var parsed = JsonTextToObject(candidate);
+                    if (parsed.ContainsKey("results") && parsed.ContainsKey("total"))
+                    {
+                        summary = parsed;
+                        return true;
+                    }
+                }
+                catch
+                {
+                }
+            }
+            return false;
+        }
+
+        private bool BoolValue(Dictionary<string, object> data, string key)
+        {
+            if (data == null || !data.TryGetValue(key, out object value) || value == null) return false;
+            if (value is bool b) return b;
+            string text = Convert.ToString(value)?.Trim() ?? "";
+            return text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1";
+        }
+
+        private bool TryBuildAccountExportJson(PoolRow row, out Dictionary<string, object> item)
+        {
+            item = null;
+            if (row == null) return false;
+            if (!TryLoadAccountDataForRow(row, out Dictionary<string, object> data) || data.Count == 0)
+            {
+                return false;
+            }
+
+            Dictionary<string, object> source = data;
+            if (TryGetMap(data, "auth_session", out Dictionary<string, object> authSession) && authSession.Count > 0)
+            {
+                source = authSession;
+            }
+
+            if (SanitizeExportJsonValue(source) is not Dictionary<string, object> clean || clean.Count == 0)
+            {
+                return false;
+            }
+
+            EnsureJsonExportEmail(clean, row);
+            if (IsPayPalCompletedRow(row))
+            {
+                SetJsonExportPlanTypePlus(clean);
+            }
+
+            item = clean;
+            return true;
+        }
+
+        private bool TryLoadAccountDataForRow(PoolRow row, out Dictionary<string, object> data)
+        {
+            data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            if (row == null) return false;
+
+            string source = (row.SourcePath ?? "").Trim();
+            if (source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) && File.Exists(source))
+            {
+                if (TryLoadAccountDataFromSqlite(row, out data)) return true;
+            }
+
+            var paths = new List<string> { row.Notes, row.SourcePath };
+            foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!File.Exists(path) || !path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    data = ReadJsonObject(path);
+                    return data.Count > 0;
+                }
+                catch
+                {
+                }
+            }
+            return false;
+        }
+
+        private bool TryLoadAccountDataFromSqlite(PoolRow row, out Dictionary<string, object> data)
+        {
+            data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string id = OnlyDigits(row.RawLine);
+                string sql;
+                if (id.Length > 0)
+                {
+                    sql = "SELECT raw_json,json_path FROM accounts WHERE id=" + id + " LIMIT 1";
+                }
+                else
+                {
+                    string email = SqlLiteral((row.Identifier ?? "").Trim());
+                    if (email.Length == 0) return false;
+                    sql = "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower('" + email + "') ORDER BY updated_at DESC LIMIT 1";
+                }
+
+                var rows = SqliteNative.Query(row.SourcePath, sql);
+                if (rows.Count == 0) return false;
+                string rawJson = rows[0].TryGetValue("raw_json", out string raw) ? raw : "";
+                string jsonPath = rows[0].TryGetValue("json_path", out string jp) ? jp : "";
+
+                if (!string.IsNullOrWhiteSpace(jsonPath) && File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        MergeJsonObject(data, ReadJsonObject(jsonPath));
+                    }
+                    catch
+                    {
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(rawJson))
+                {
+                    MergeJsonObject(data, JsonTextToObject(rawJson));
+                }
+                return data.Count > 0;
+            }
+            catch
+            {
+                data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                return false;
+            }
+        }
+
+        private void MergeJsonObject(Dictionary<string, object> target, Dictionary<string, object> source)
+        {
+            if (target == null || source == null) return;
+            foreach (var pair in source)
+            {
+                target[pair.Key] = pair.Value;
+            }
+        }
+
+        private string SqlLiteral(string value)
+        {
+            return (value ?? "").Replace("'", "''");
+        }
+
+        private object SanitizeExportJsonValue(object value)
+        {
+            if (value is Dictionary<string, object> map)
+            {
+                var clean = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                foreach (var pair in map)
+                {
+                    if (IsRtExportKey(pair.Key)) continue;
+                    clean[pair.Key] = SanitizeExportJsonValue(pair.Value);
+                }
+                return clean;
+            }
+            if (value is List<object> list)
+            {
+                return list.Select(SanitizeExportJsonValue).ToList();
+            }
+            return value;
+        }
+
+        private bool IsRtExportKey(string key)
+        {
+            string compact = Regex.Replace(key ?? "", "[^A-Za-z0-9]", "").ToLowerInvariant();
+            return compact == "rt"
+                || compact == "refreshtoken"
+                || compact == "oauthrefreshtoken"
+                || compact == "rawrefreshtoken"
+                || compact.Contains("refreshtoken");
+        }
+
+        private void EnsureJsonExportEmail(Dictionary<string, object> item, PoolRow row)
+        {
+            string email = (row?.Identifier ?? "").Trim();
+            if (email.Length == 0) return;
+            if (!TryGetMap(item, "user", out Dictionary<string, object> user))
+            {
+                user = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                item["user"] = user;
+            }
+            if (GetString(user, "email").Length == 0)
+            {
+                user["email"] = email;
+            }
+        }
+
+        private void SetJsonExportPlanTypePlus(Dictionary<string, object> item)
+        {
+            if (item.ContainsKey("planType"))
+            {
+                item["planType"] = "plus";
+            }
+            if (!TryGetMap(item, "account", out Dictionary<string, object> account))
+            {
+                account = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                item["account"] = account;
+            }
+            account["planType"] = "plus";
+        }
+
+        private string JsonExportDedupKey(Dictionary<string, object> item, PoolRow row)
+        {
+            if (TryGetMap(item, "user", out Dictionary<string, object> user))
+            {
+                string userEmail = GetString(user, "email").Trim();
+                if (userEmail.Length > 0) return userEmail.ToLowerInvariant();
+            }
+            string email = GetString(item, "email").Trim();
+            if (email.Length > 0) return email.ToLowerInvariant();
+            email = (row?.Identifier ?? "").Trim();
+            if (email.Length > 0) return email.ToLowerInvariant();
+            return JsonSerializer.Serialize(item);
+        }
+
+        private bool TryBuildAccountExportLine(PoolRow row, out string line)
+        {
+            line = "";
+            if (row == null) return false;
+
+            string source = FindMailboxLineForRow(row);
+            if (source.Length == 0 && !string.IsNullOrWhiteSpace(row.RawLine))
+            {
+                source = row.RawLine;
+            }
+
+            if (!TryParseMailboxExportParts(source, row, out string email, out string password, out string clientId, out string refreshToken))
+            {
+                return false;
+            }
+
+            if (email.Length == 0 || password.Length == 0 || clientId.Length == 0 || refreshToken.Length == 0)
+            {
+                return false;
+            }
+
+            line = email + "----" + password + "----" + clientId + "----" + refreshToken;
+            return true;
+        }
+
+        private bool TryParseMailboxExportParts(string source, PoolRow row, out string email, out string password, out string clientId, out string refreshToken)
+        {
+            email = "";
+            password = "";
+            clientId = "";
+            refreshToken = "";
+
+            string value = (source ?? "").Trim().TrimStart('\ufeff');
+            if (value.Length == 0 || value.StartsWith("#")) return false;
+            if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (value.Contains("----"))
+            {
+                string[] parts = value.Split(new[] { "----" }, StringSplitOptions.None);
+                if (parts.Length < 4) return false;
+                email = parts[0].Trim();
+                password = parts[1].Trim();
+                string p2 = parts[2].Trim();
+                string p3 = string.Join("----", parts.Skip(3)).Trim();
+                clientId = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p2 : p3;
+                refreshToken = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p3 : p2;
+                return true;
+            }
+
+            if (value.Contains("---"))
+            {
+                string[] parts = value.Split(new[] { "---" }, StringSplitOptions.None);
+                if (parts.Length < 3) return false;
+                email = parts[0].Trim();
+                password = parts[1].Trim();
+                clientId = !string.IsNullOrWhiteSpace(row?.ClientId) ? row.ClientId.Trim() : DefaultMailboxClientId();
+                refreshToken = parts[2].Trim();
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool LooksMicrosoftClientId(string value)
+        {
+            return Regex.IsMatch((value ?? "").Trim(), "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+        }
+
+        private string DefaultMailboxClientId()
+        {
+            string configured = ConfigString("email_registration", "oauth_client_id").Trim();
+            return configured.Length > 0 ? configured : "9e5f94bc-e8a4-4e73-b8be-63364c29d753";
+        }
+
         private void ReimportCpa401_Click(object sender, RoutedEventArgs e)
         {
             string target = ShowImportTargetDialog("一键重导");
@@ -2167,7 +3001,7 @@ namespace SmsWorkbench
                     ["grant_type"] = "refresh_token",
                     ["client_id"] = row.ClientId,
                     ["refresh_token"] = row.RawRefreshToken,
-                    ["scope"] = "offline_access https://graph.microsoft.com/Mail.Read"
+                    ["scope"] = "https://graph.microsoft.com/.default offline_access"
                 };
 
                 try
@@ -2257,6 +3091,19 @@ namespace SmsWorkbench
             string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
             if (!File.Exists(script)) throw new FileNotFoundException("Backend script not found", script);
             var args = new List<string> { "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString() };
+            string mailboxLine = FindMailboxLineForRow(row);
+            if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
+            {
+                mailboxLine = row.RawLine;
+            }
+            string mailboxArg = MailboxArgForLine(mailboxLine);
+            string tempMailboxFile = "";
+            if (mailboxArg.Length > 0)
+            {
+                tempMailboxFile = Path.Combine(Path.GetTempPath(), "view_inbox_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".txt");
+                File.WriteAllText(tempMailboxFile, mailboxLine.Trim() + Environment.NewLine, new UTF8Encoding(false));
+                args.AddRange(new[] { mailboxArg, tempMailboxFile });
+            }
             AddSessionFileArg(args, row);
             AddProxy(args);
             var psi = new ProcessStartInfo
@@ -2842,6 +3689,7 @@ namespace SmsWorkbench
             var codexOauth = GetSection(config, "codex_oauth");
             var phoneReuse = GetSection(config, "phone_reuse");
             var smsBower = GetChildSection(phoneReuse, "smsbower");
+            var nextSms = GetChildSection(phoneReuse, "nextsms");
 
             var dialog = new Window
             {
@@ -2922,12 +3770,21 @@ namespace SmsWorkbench
             AddConfigField(cfForm, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
             AddConfigField(cfForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
 
-            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower 手机号接码、复用次数和 Codex OAuth 接码开关。");
+            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower / NextSMS 手机号接码、复用次数和 Codex OAuth 接码开关。");
             row = 0;
-            AddConfigComboField(phoneForm, comboFields, row++, "接码来源", "phone_source", FirstNonEmpty(GetString(phoneReuse, "source"), "smsbower"), new[] { "smsbower", "phone_pool" });
+            AddConfigComboField(phoneForm, comboFields, row++, "接码来源", "phone_source", FirstNonEmpty(GetString(phoneReuse, "source"), "smsbower"), new[] { "smsbower", "nextsms", "phone_pool" });
             AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
             AddConfigField(phoneForm, fields, row++, "服务代码", "smsbower_service", GetString(smsBower, "service"));
             AddConfigComboField(phoneForm, comboFields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"), SmsBowerCountryOptions, "38");
+            AddConfigField(phoneForm, fields, row++, "NextSMS API Key", "nextsms_api_key", GetString(nextSms, "api_key"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Endpoint", "nextsms_endpoint", FirstNonEmpty(GetString(nextSms, "endpoint"), "https://sms.nextactionplus.com/api/"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Service", "nextsms_service", FirstNonEmpty(GetString(nextSms, "service"), "openai"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Country", "nextsms_country", FirstNonEmpty(GetString(nextSms, "country"), "US"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Pricing", "nextsms_pricing_option", FirstNonEmpty(GetString(nextSms, "pricing_option"), "0"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Pool Size", "nextsms_pool_size", FirstNonEmpty(GetString(nextSms, "pool_size"), "1"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS SMS Timeout", "nextsms_sms_timeout", FirstNonEmpty(GetString(nextSms, "sms_timeout"), "120"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Poll Interval", "nextsms_sms_poll_interval", FirstNonEmpty(GetString(nextSms, "sms_poll_interval"), "5"));
+            AddConfigField(phoneForm, fields, row++, "NextSMS Number Attempts", "nextsms_number_attempts", FirstNonEmpty(GetString(nextSms, "number_attempts"), "3"));
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower服务代码", "smsbower_gopay_service", GetString(smsBower, "gopay_service"));
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower国家代码", "smsbower_gopay_country", GetString(smsBower, "gopay_country"));
             AddConfigField(phoneForm, fields, row++, "GoPay SMSBower最低价格", "smsbower_gopay_min_price", GetString(smsBower, "gopay_min_price"));
@@ -2972,6 +3829,7 @@ namespace SmsWorkbench
             row = 0;
             AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
+            AddConfigComboField(proxyForm, comboFields, row++, "订单生成地区", "paypal_billing_region", GetBillingRegionCode(paypal), BillingRegionOptions, "DE");
 
             var paypalBrowserForm = AddConfigCategory(sidebar, host, categories, "PayPal浏览器", "项目内置浏览器支付、身份生成和接码号码池。");
             row = 0;
@@ -3066,6 +3924,16 @@ namespace SmsWorkbench
                 smsBower["sms_poll_interval"] = ConfigIntegerValue(fields, "smsbower_sms_poll_interval");
                 phoneReuse["source"] = ConfigComboValue(comboFields, "phone_source", "smsbower");
                 phoneReuse["smsbower"] = smsBower;
+                nextSms["api_key"] = fields["nextsms_api_key"].Text.Trim();
+                nextSms["endpoint"] = fields["nextsms_endpoint"].Text.Trim();
+                nextSms["service"] = fields["nextsms_service"].Text.Trim();
+                nextSms["country"] = fields["nextsms_country"].Text.Trim();
+                nextSms["pricing_option"] = ConfigIntegerValue(fields, "nextsms_pricing_option");
+                nextSms["pool_size"] = ConfigIntegerValue(fields, "nextsms_pool_size");
+                nextSms["sms_timeout"] = ConfigIntegerValue(fields, "nextsms_sms_timeout");
+                nextSms["sms_poll_interval"] = ConfigIntegerValue(fields, "nextsms_sms_poll_interval");
+                nextSms["number_attempts"] = ConfigIntegerValue(fields, "nextsms_number_attempts");
+                phoneReuse["nextsms"] = nextSms;
                 phoneReuse["max_reuse_count"] = ConfigIntegerValue(fields, "phone_max_reuse_count");
                 phoneReuse["send_cooldown_seconds"] = ConfigIntegerValue(fields, "phone_send_cooldown_seconds");
                 phoneReuse["send_retry_attempts"] = ConfigIntegerValue(fields, "phone_send_retry_attempts");
@@ -3079,6 +3947,7 @@ namespace SmsWorkbench
                 codexOauth["require_registration_phone_verification"] = ConfigBoolValue(fields, "codex_require_registration_phone_verification", GetBool(codexOauth, "require_registration_phone_verification", true));
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
+                paypal["billing_regions"] = new List<object> { ConfigComboOptionValue(comboFields, "paypal_billing_region", "DE").Value };
                 paypalBrowser["enabled"] = ConfigBoolValue(fields, "paypal_browser_enabled", GetBool(paypalBrowser, "enabled", true));
                 paypalBrowser.Remove("pp_auto_path");
                 paypalBrowser.Remove("engine");
@@ -3521,6 +4390,21 @@ namespace SmsWorkbench
             return "";
         }
 
+        private string GetBillingRegionCode(Dictionary<string, object> paypal)
+        {
+            string value = FirstListValue(paypal, "billing_regions").Trim();
+            if (value.Length == 0)
+            {
+                value = FirstNonEmpty(GetString(paypal, "billing_region"), GetString(paypal, "billing_country"), "DE");
+            }
+            value = value.Trim().ToUpperInvariant();
+            if (BillingRegionOptions.Any(option => option.Value.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            {
+                return value;
+            }
+            return "DE";
+        }
+
         private void SaveConfig(string path, Dictionary<string, object> config)
         {
             var options = new JsonSerializerOptions { WriteIndented = true };
@@ -3627,6 +4511,7 @@ namespace SmsWorkbench
             string status = GetString(data, "paypal_status");
             if (status.Length == 0) status = GetString(paypal, "status");
             if (status.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
+            if (status.Equals("pm_created", StringComparison.OrdinalIgnoreCase)) return prefix + "PM已创建✅";
             if (status.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + "待输入OTP";
             if (status.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(method);
             if (status.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(method);
@@ -3701,6 +4586,50 @@ namespace SmsWorkbench
             {
                 return "";
             }
+        }
+
+        private string GetVerifiedPhone(string rawJson)
+        {
+            if (string.IsNullOrWhiteSpace(rawJson)) return "";
+            try
+            {
+                return GetVerifiedPhone(JsonTextToObject(rawJson));
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private string GetVerifiedPhone(Dictionary<string, object> data)
+        {
+            string topLevelPhone = NormalizePhoneText(FirstNonEmpty(GetString(data, "phone"), GetString(data, "phone_number")));
+            if (TryGetMap(data, "response", out Dictionary<string, object> response)
+                && TryGetMap(response, "phone_verification", out Dictionary<string, object> phoneVerification))
+            {
+                bool ok = GetString(phoneVerification, "ok").Equals("true", StringComparison.OrdinalIgnoreCase)
+                    || GetString(phoneVerification, "ok").Equals("1", StringComparison.OrdinalIgnoreCase);
+                string phone = NormalizePhoneText(FirstNonEmpty(
+                    GetString(phoneVerification, "phone"),
+                    GetString(phoneVerification, "phone_number"),
+                    topLevelPhone
+                ));
+                return ok ? phone : "";
+            }
+
+            string refreshTokenStatus = GetString(data, "refresh_token_status");
+            bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
+                || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
+            return hasRt ? topLevelPhone : "";
+        }
+
+        private string NormalizePhoneText(string raw)
+        {
+            string value = (raw ?? "").Trim();
+            if (value.Length == 0) return "";
+            string digits = new string(value.Where(char.IsDigit).ToArray());
+            if (digits.Length == 0) return "";
+            return "+" + digits;
         }
 
         private string GetPaypalAmount(Dictionary<string, object> data)
@@ -3802,11 +4731,16 @@ namespace SmsWorkbench
             if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
             bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
+            if (status.Equals("account_deactivated", StringComparison.OrdinalIgnoreCase)
+                || LooksAccountDeactivatedError(error)) return "账号掉号";
+            if (hasRt && LooksPhoneVerificationError(error)) return "手机验证";
             if (status.Equals("at_invalid", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("access_token_invalid", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("token_invalidated", StringComparison.OrdinalIgnoreCase)
                 || LooksAtInvalidError(error)) return "AT失效";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
+            if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)
+                || status.Equals("paypal_pm_created", StringComparison.OrdinalIgnoreCase)) return "PM已创建✅";
             if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
             if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)
                 || paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)
@@ -3824,14 +4758,33 @@ namespace SmsWorkbench
                 || text.Contains("token_expired")
                 || text.Contains("authentication token has been invalidated")
                 || text.Contains("could not validate your token")
-                || text.Contains("add_phone_required")
+                || LooksPhoneVerificationError(text)
+                || LooksAccountDeactivatedError(text)
                 || text.Contains("oauth_refresh_http_401");
+        }
+
+        private bool LooksPhoneVerificationError(string error)
+        {
+            string text = (error ?? "").ToLowerInvariant();
+            return text.Contains("secondary_phone_verification_required")
+                || text.Contains("add_phone_required");
+        }
+
+        private bool LooksAccountDeactivatedError(string error)
+        {
+            string text = (error ?? "").ToLowerInvariant();
+            return text.Contains("account_deactivated")
+                || text.Contains("account_deatived")
+                || text.Contains("deleted or deactivated")
+                || text.Contains("account has been deleted")
+                || text.Contains("account has been deactivated");
         }
 
         private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")
         {
             string prefix = string.Equals((paymentMethod ?? "").Trim(), "gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay " : "";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
+            if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)) return prefix + "PM已创建✅";
             if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付失败";
             if (paypalStatus.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + "待输入OTP";
             if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(paymentMethod);
@@ -4157,6 +5110,7 @@ namespace SmsWorkbench
         public string PayPalStatus { get; set; } = "";
         public string PayPalAmount { get; set; } = "";
         public string RefreshTokenStatus { get; set; } = "";
+        public string Phone { get; set; } = "";
         public string PayPalUrl { get; set; } = "";
         public string RefreshToken { get; set; } = "";
         public string Proxy { get; set; } = "";

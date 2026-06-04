@@ -193,6 +193,55 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(send.call_args_list[0].args[3], "+233555123456")
         self.assertEqual(send.call_args_list[1].args[3], "+234555000111")
 
+    def test_smsbower_fraud_guard_keeps_switching_numbers_until_success(self):
+        slot = PhoneSlot(
+            phone="+233555123456",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-1",
+            max_reuse_count=1,
+            number_attempts=1,
+            slot_id="smsbower:0",
+        )
+        pool = PhonePool(phones=[slot])
+        acquired = iter([
+            ("+234555000111", "act-2"),
+            ("+235555000222", "act-3"),
+            ("+236555000333", "act-4"),
+        ])
+
+        def acquire_new_number(item):
+            phone, activation_id = next(acquired)
+            item.phone = phone
+            item.activation_id = activation_id
+            item.reuse_count = 0
+            item.last_sms_code = ""
+            return True
+
+        client = Mock()
+        client.cancel.return_value = True
+        client.complete.return_value = True
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+             patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[
+                 {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
+                 {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
+                 {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
+                 {"ok": True, "status_code": 200},
+             ]) as send, \
+             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="111111"), \
+             patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}):
+            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(send.call_count, 4)
+        self.assertEqual(send.call_args_list[0].args[3], "+233555123456")
+        self.assertEqual(send.call_args_list[1].args[3], "+234555000111")
+        self.assertEqual(send.call_args_list[2].args[3], "+235555000222")
+        self.assertEqual(send.call_args_list[3].args[3], "+236555000333")
+        self.assertEqual(client.cancel.call_count, 3)
+        client.complete.assert_called_once_with("act-4")
+
     def test_smsbower_prepare_switches_number_when_additional_code_unavailable(self):
         slot = PhoneSlot(
             phone="+233555123456",
@@ -452,6 +501,70 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(len(pool.phones), 1)
         self.assertEqual(pool.phones[0].provider, "smsbower")
         self.assertEqual(pool.phones[0].max_reuse_count, 1)
+
+    def test_phone_source_nextsms_uses_nextsms_config(self):
+        with TemporaryDirectory() as tmp:
+            state_path = f"{tmp}/phone_state.json"
+            cfg = {
+                "phone_reuse": {
+                    "source": "nextsms",
+                    "state_file": state_path,
+                    "nextsms": {
+                        "api_key": "nx_sms_test",
+                        "endpoint": "https://sms.nextactionplus.com/api/",
+                        "service": "openai",
+                        "country": "US",
+                        "pricing_option": 1,
+                        "pool_size": 2,
+                    },
+                    "smsbower": {"api_key": "smsbower-key", "pool_size": 1},
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual(len(pool.phones), 2)
+        self.assertEqual(pool.phones[0].provider, "nextsms")
+        self.assertEqual(pool.phones[0].api_key, "nx_sms_test")
+        self.assertEqual(pool.phones[0].service, "openai")
+        self.assertEqual(pool.phones[0].country, "US")
+        self.assertEqual(pool.phones[0].pricing_option, 1)
+
+    def test_nextsms_phone_verification_acquires_and_polls_code(self):
+        slot = PhoneSlot(
+            phone="",
+            provider="nextsms",
+            api_key="nx_sms_test",
+            endpoint="https://sms.nextactionplus.com/api/",
+            service="openai",
+            country="US",
+            max_reuse_count=1,
+            slot_id="nextsms:0",
+        )
+        pool = PhonePool(phones=[slot])
+
+        def acquire_new_number(item):
+            item.phone = "+13000000000"
+            item.activation_id = "ord-1"
+            item.reuse_count = 0
+            item.last_sms_code = ""
+            return True
+
+        client = Mock()
+        client.complete.return_value = True
+        with patch("sms_tool.phone_reuse._acquire_nextsms_number", side_effect=acquire_new_number) as acquire, \
+             patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}) as send, \
+             patch("sms_tool.phone_reuse._wait_nextsms_code", return_value="123456"), \
+             patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
+             patch("sms_tool.phone_reuse._nextsms_client", return_value=client):
+            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["phone"], "+13000000000")
+        self.assertEqual(result["provider"], "nextsms")
+        acquire.assert_called_once_with(slot)
+        self.assertEqual(send.call_args.args[3], "+13000000000")
+        client.complete.assert_called_once_with("ord-1")
 
     def test_saved_state_does_not_override_configured_max_reuse(self):
         with TemporaryDirectory() as tmp:

@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
@@ -52,6 +52,22 @@ class FakePollParamResponse:
 
 class FakeOkResponse:
     status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {}
+
+
+class FakeAcceptedResponse:
+    status_code = 202
+    text = "{}"
+
+    def json(self):
+        return {}
+
+
+class FakeUnprocessableResponse:
+    status_code = 422
     text = "{}"
 
     def json(self):
@@ -113,6 +129,47 @@ class FakeCheckoutHostedResponse:
         }
 
 
+class FakeCheckoutHostedMissingProviderResponse:
+    status_code = 200
+    text = "{}"
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "checkout_session_id": "cs_live_FAKEHOSTED123",
+            "processor_entity": "openai_ie",
+            "url": "https://chatgpt.com/checkout/openai_ie/cs_live_FAKEHOSTED123",
+        }
+
+
+class FakeCheckoutStripeHostedFieldResponse:
+    status_code = 200
+    text = "{}"
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "checkout_session_id": "cs_live_STRIPEHOSTED123",
+            "processor_entity": "openai_ie",
+            "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_STRIPEHOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+        }
+
+
+class FakeCheckout422Response:
+    status_code = 422
+    text = '{"error":"currency not supported"}'
+
+    def raise_for_status(self):
+        raise RuntimeError("422 should be handled before raise_for_status")
+
+    def json(self):
+        return {"error": "currency not supported"}
+
+
 class FakeZeroStripeInitResponse:
     status_code = 200
     text = "{}"
@@ -126,6 +183,26 @@ class FakeZeroStripeInitResponse:
             "total_summary": {"due": 0, "total": 0},
             "invoice": {"amount_due": 0, "total": 0, "currency": "usd"},
             "payment_method_types": ["card", "paypal"],
+        }
+
+
+class FakeStripeInitHostedResponse:
+    def __init__(self, stripe_hosted_url: str, currency: str = "usd"):
+        self.status_code = 200
+        self.text = "{}"
+        self._stripe_hosted_url = stripe_hosted_url
+        self._currency = currency
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "init_checksum": "init_test",
+            "total_summary": {"due": 0, "total": 0},
+            "invoice": {"amount_due": 0, "total": 0, "currency": self._currency},
+            "payment_method_types": ["card", "paypal"],
+            "stripe_hosted_url": self._stripe_hosted_url,
         }
 
 
@@ -264,6 +341,9 @@ class FakeCheckoutSession:
             return FakeOkResponse()
         return self.response
 
+    def get(self, url, params=None, timeout=None):
+        return FakeOkResponse()
+
 
 class StripeConfirmErrorTests(unittest.TestCase):
     def test_confirm_decline_is_terminal(self):
@@ -298,6 +378,54 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertNotIn("elements_session_client[locale]", session.calls[1])
         self.assertEqual(response.removed_unknown_params, ["elements_session_client[locale]"])
 
+    def test_checkout_route_load_retries_accepted_until_ok(self):
+        class RouteSession:
+            def __init__(self):
+                self.headers = {}
+                self.calls = []
+
+            def get(self, url, params=None, timeout=None):
+                self.calls.append({"url": url, "params": params})
+                if url.endswith(".data"):
+                    return FakeAcceptedResponse() if len([c for c in self.calls if c["url"].endswith(".data")]) == 1 else FakeOkResponse()
+                return FakeOkResponse()
+
+        session = RouteSession()
+
+        result = gen_pp_link._chatgpt_load_checkout_route(
+            session,
+            checkout_url="https://chatgpt.com/checkout/openai_ie/cs_live_TEST",
+            log_prefix="[paypal]",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], 200)
+        self.assertEqual([a["status"] for a in result["attempts"]], [202, 200])
+
+    def test_checkout_snapshot_retries_unprocessable_until_ok(self):
+        class SnapshotSession:
+            def __init__(self):
+                self.headers = {}
+                self.calls = 0
+
+            def post(self, url, json=None, data=None, timeout=None):
+                self.calls += 1
+                return FakeUnprocessableResponse() if self.calls <= 5 else FakeOkResponse()
+
+        session = SnapshotSession()
+
+        result = gen_pp_link._chatgpt_checkout_snapshot(
+            session,
+            checkout_url="https://chatgpt.com/checkout/openai_ie/cs_live_TEST",
+            cs_id="cs_live_TEST",
+            processor_entity="openai_ie",
+            log_prefix="[paypal]",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], 200)
+        self.assertGreater(len(result["attempts"]), 5)
+
     def test_terminal_confirm_decline_stops_retry_loop(self):
         terminal_result = {
             "ok": False,
@@ -312,6 +440,48 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(result["error_code"], "stripe_confirm_declined")
         self.assertEqual(result["checkout_attempt"], 1)
         self.assertEqual(try_paypal.call_count, 1)
+
+    def test_missing_hosted_url_falls_back_to_stripe_redirect(self):
+        missing_hosted = {
+            "ok": False,
+            "error": "Hosted checkout requested, but ChatGPT did not return a hosted URL",
+            "error_code": "hosted_checkout_url_missing",
+            "terminal": True,
+        }
+        redirect_ok = {
+            "ok": True,
+            "url": "https://pm-redirects.stripe.com/authorize/acct/test",
+            "link_type": "stripe_redirect",
+        }
+
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={
+                "paypal": {
+                    "proxies": ["direct"],
+                    "max_checkout_retries": 3,
+                    "checkout_only_long_url": False,
+                    "checkout_ui_mode": "hosted",
+                    "link_mode": "chatgpt_checkout",
+                    "confirm_style": "inline_payment_method_data",
+                    "approve_missing_redirect": False,
+                }
+            },
+        ):
+            with patch.object(gen_pp_link, "_try_paypal_link", side_effect=[missing_hosted, redirect_ok]) as try_paypal:
+                result = gen_pp_link.generate_pp_link("eyJ.fake.token")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["fallback_from"], "hosted_checkout_url_missing")
+        self.assertEqual(result["fallback_link_mode"], "stripe_redirect")
+        self.assertEqual(result["checkout_attempt"], 1)
+        self.assertEqual(try_paypal.call_count, 2)
+        self.assertEqual(try_paypal.call_args_list[0].args[1]["paypal"]["checkout_ui_mode"], "hosted")
+        self.assertEqual(try_paypal.call_args_list[1].args[1]["paypal"]["checkout_ui_mode"], "custom")
+        self.assertEqual(try_paypal.call_args_list[1].args[1]["paypal"]["link_mode"], "stripe_redirect")
+        self.assertEqual(try_paypal.call_args_list[1].args[1]["paypal"]["confirm_style"], "payment_method_id")
+        self.assertTrue(try_paypal.call_args_list[1].args[1]["paypal"]["approve_missing_redirect"])
 
     def test_checkout_rate_limit_stops_retry_loop(self):
         rate_limited = {
@@ -381,6 +551,8 @@ class StripeConfirmErrorTests(unittest.TestCase):
         checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
         cfg = {
             "paypal": {
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "require_zero_due": True,
                 "refresh_tax_region": False,
                 "stage_proxies": {"checkout": "direct"},
@@ -413,6 +585,8 @@ class StripeConfirmErrorTests(unittest.TestCase):
         cfg = {
             "paypal": {
                 "link_mode": "chatgpt_checkout",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "require_zero_due": True,
                 "refresh_tax_region": False,
                 "stage_proxies": {"checkout": "direct"},
@@ -448,6 +622,8 @@ class StripeConfirmErrorTests(unittest.TestCase):
         cfg = {
             "paypal": {
                 "link_mode": "chatgpt_checkout",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "checkout_ui_mode": "hosted",
                 "require_zero_due": True,
                 "refresh_tax_region": False,
@@ -463,15 +639,298 @@ class StripeConfirmErrorTests(unittest.TestCase):
 
         with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
             with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()):
-                with patch.object(gen_pp_link, "_post_stripe_form", return_value=FakeZeroStripeInitResponse()) as post_form:
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+                        currency="eur"
+                    ),
+                ) as post_form:
                     result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["checkout_ui_mode"], "hosted")
         self.assertEqual(result["url"], "https://pay.openai.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg")
-        self.assertEqual(result["provider_url"], result["url"])
+        self.assertEqual(result["hosted_checkout_url"], "https://pay.openai.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["provider_url"], "https://pay.openai.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg")
         called_urls = [call.args[1] for call in post_form.call_args_list]
         self.assertEqual(called_urls, ["https://api.stripe.com/v1/payment_pages/cs_live_HOSTED123/init"])
+
+    def test_paypal_hosted_checkout_uses_stripe_init_pay_openai_url(self):
+        checkout = FakeCheckoutSession(FakeCheckoutHostedMissingProviderResponse())
+        cfg = {
+            "paypal": {
+                "link_mode": "chatgpt_checkout",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
+                "checkout_ui_mode": "hosted",
+                "require_zero_due": True,
+                "refresh_tax_region": False,
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = {
+            "country": "DE",
+            "currency": "EUR",
+            "label": "Germany (EUR)",
+            "address": {"country": "DE"},
+        }
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()):
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_FAKEHOSTED123#fidkdWxOYHwnPyd1blppbHNg"
+                    ),
+                ):
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "https://pay.openai.com/c/pay/cs_live_FAKEHOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["hosted_checkout_url"], "https://pay.openai.com/c/pay/cs_live_FAKEHOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["provider_url"], "https://chatgpt.com/checkout/openai_ie/cs_live_FAKEHOSTED123")
+        self.assertIn("pay.openai.com/c/pay/cs_live_FAKEHOSTED123", str(result))
+
+    def test_paypal_default_checkout_only_long_url_uses_de_and_stripe_init(self):
+        checkout = FakeCheckoutSession(FakeCheckoutHostedResponse())
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+                        currency="eur"
+                    ),
+                ) as post_form:
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "hosted_long_url")
+        self.assertEqual(result["url"], "https://pay.openai.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["hosted_checkout_url"], "https://pay.openai.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["billing_country"], "DE")
+        self.assertEqual(result["currency"], "EUR")
+        self.assertEqual(result["stage_proxies"]["stripe_init"], "DIRECT")
+        self.assertEqual(result["stage_proxies"]["payment_method"], "SKIPPED")
+        self.assertEqual(result["stage_proxies"]["confirm"], "SKIPPED")
+        self.assertGreaterEqual(new_session.call_count, 1)
+        self.assertGreaterEqual(post_form.call_count, 1)
+        checkout_posts = [call for call in checkout.calls if "/payments/checkout" in call["url"]]
+        self.assertEqual(len(checkout_posts), 1)
+        self.assertEqual(checkout_posts[0]["json"]["billing_details"], {"country": "DE", "currency": "EUR"})
+        self.assertEqual(checkout_posts[0]["json"]["checkout_ui_mode"], "hosted")
+
+    def test_paypal_default_checkout_only_rejects_chatgpt_checkout_when_no_hosted_url(self):
+        checkout = FakeCheckoutSession(FakeCheckoutHostedMissingProviderResponse())
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(gen_pp_link, "_post_stripe_form", return_value=FakeZeroStripeInitResponse()) as post_form:
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "hosted_checkout_url_missing")
+        self.assertEqual(result["billing_country"], "DE")
+        self.assertEqual(result["stage_proxies"]["stripe_init"], "DIRECT")
+        self.assertGreaterEqual(new_session.call_count, 1)
+        self.assertGreaterEqual(post_form.call_count, 1)
+
+    def test_checkout_only_allow_flag_does_not_bypass_hosted_url_requirement(self):
+        checkout = FakeCheckoutSession(FakeCheckoutHostedMissingProviderResponse())
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "allow_chatgpt_checkout_fallback": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(gen_pp_link, "_post_stripe_form", return_value=FakeZeroStripeInitResponse()) as post_form:
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "hosted_checkout_url_missing")
+        self.assertGreaterEqual(new_session.call_count, 1)
+        self.assertGreaterEqual(post_form.call_count, 1)
+
+    def test_checkout_only_uses_js_hosted_url_priority(self):
+        checkout = FakeCheckoutSession(FakeCheckoutStripeHostedFieldResponse())
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_STRIPEHOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+                        currency="eur"
+                    ),
+                ) as post_form:
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "hosted_long_url")
+        self.assertEqual(
+            result["url"],
+            "https://pay.openai.com/c/pay/cs_live_STRIPEHOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+        )
+        self.assertEqual(result["hosted_checkout_url"], "https://pay.openai.com/c/pay/cs_live_STRIPEHOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertEqual(result["checkout_response_url"], "https://checkout.stripe.com/c/pay/cs_live_STRIPEHOSTED123#fidkdWxOYHwnPyd1blppbHNg")
+        self.assertGreaterEqual(new_session.call_count, 1)
+        self.assertGreaterEqual(post_form.call_count, 1)
+
+    def test_checkout_only_422_retries_same_country_with_usd(self):
+        class SequentialCheckoutSession(FakeCheckoutSession):
+            def __init__(self):
+                super().__init__(FakeCheckout422Response())
+                self.responses = [FakeCheckout422Response(), FakeCheckoutHostedResponse()]
+
+            def post(self, url, json=None, timeout=None):
+                self.calls.append({"url": url, "json": None if json is None else dict(json or {}), "headers": dict(self.headers)})
+                return self.responses.pop(0)
+
+        checkout = SequentialCheckoutSession()
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "hosted_usd_fallback_on_422": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_HOSTED123#fidkdWxOYHwnPyd1blppbHNg",
+                        currency="usd",
+                    ),
+                ):
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        checkout_posts = [call for call in checkout.calls if "/payments/checkout" in call["url"]]
+        self.assertEqual(checkout_posts[0]["json"]["billing_details"], {"country": "DE", "currency": "EUR"})
+        self.assertEqual(checkout_posts[1]["json"]["billing_details"], {"country": "DE", "currency": "USD"})
+        self.assertEqual(result["currency"], "USD")
+        self.assertGreaterEqual(new_session.call_count, 1)
+
+    def test_checkout_only_non_hosted_retries_usd_then_rejects_if_still_non_hosted(self):
+        class SequentialCheckoutSession(FakeCheckoutSession):
+            def __init__(self):
+                super().__init__(FakeCheckoutHostedMissingProviderResponse())
+                self.responses = [
+                    FakeCheckoutHostedMissingProviderResponse(),
+                    FakeCheckoutHostedMissingProviderResponse(),
+                ]
+
+            def post(self, url, json=None, timeout=None):
+                self.calls.append({"url": url, "json": None if json is None else dict(json or {}), "headers": dict(self.headers)})
+                return self.responses.pop(0)
+
+        checkout = SequentialCheckoutSession()
+        cfg = {
+            "paypal": {
+                "checkout_only_long_url": True,
+                "hosted_usd_fallback_on_non_hosted": True,
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions(cfg["paypal"])[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(gen_pp_link, "_post_stripe_form", return_value=FakeZeroStripeInitResponse()):
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "hosted_checkout_url_missing")
+        checkout_posts = [call for call in checkout.calls if "/payments/checkout" in call["url"]]
+        self.assertEqual(checkout_posts[0]["json"]["billing_details"], {"country": "DE", "currency": "EUR"})
+        self.assertEqual(len(checkout_posts), 1)
+        self.assertGreaterEqual(new_session.call_count, 1)
+
+    def test_paypal_stop_after_pm_create_returns_success_without_confirm(self):
+        checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
+        stripe_session = FakeStripeSession()
+        cfg = {
+            "paypal": {
+                "link_mode": "stripe_redirect",
+                "checkout_only_long_url": False,
+                "stop_after_pm_create": True,
+                "require_zero_due": True,
+                "use_elements_session": True,
+                "refresh_tax_region": True,
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = {
+            "country": "US",
+            "currency": "USD",
+            "label": "United States (USD)",
+            "address": {"country": "US"},
+        }
+        steps = []
+
+        def fake_post_form(session, url, body, *, timeout, step):
+            steps.append(step)
+            if step == "pm create":
+                return FakePaymentMethodResponse()
+            if step.startswith("confirm"):
+                self.fail("confirm must not run when stop_after_pm_create is enabled")
+            return FakeZeroStripeInitResponse()
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=stripe_session):
+                with patch.object(gen_pp_link, "_post_stripe_form", side_effect=fake_post_form):
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "pm_created")
+        self.assertEqual(result["paypal_status"], "pm_created")
+        self.assertEqual(result["pm_id"], "pm_TESTPAYPAL")
+        self.assertEqual(result["url"], "")
+        self.assertIn("pm create", steps)
+        self.assertNotIn("confirm", steps)
+        self.assertEqual(result["stage_proxies"]["confirm"], "SKIPPED")
 
     def test_paypal_stripe_redirect_uses_stripe_elements_session_id(self):
         checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
@@ -479,6 +938,8 @@ class StripeConfirmErrorTests(unittest.TestCase):
         cfg = {
             "paypal": {
                 "link_mode": "stripe_redirect",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "require_zero_due": True,
                 "use_elements_session": True,
                 "refresh_tax_region": True,
@@ -517,12 +978,74 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(element_params["checkout_session_id"], "cs_live_TEST123")
         self.assertEqual(element_params["deferred_intent[payment_method_types][1]"], "paypal")
 
+    def test_reference_confirm_mode_matches_fast_external_flow(self):
+        checkout = FakeCheckoutSession(FakeCheckoutOpenAiIeResponse())
+        stripe_session = FakeStripeSession()
+        cfg = {
+            "paypal": {
+                "reference_confirm_mode": True,
+                "link_mode": "chatgpt_checkout",
+                "checkout_ui_mode": "custom",
+                "require_zero_due": True,
+                "use_elements_session": True,
+                "refresh_tax_region": True,
+                "approve_missing_redirect": True,
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions({"billing_regions": ["DE"]})[0]
+        steps = []
+        posted_bodies = {}
+
+        def fake_post_form(session, url, body, *, timeout, step):
+            steps.append(step)
+            posted_bodies[step] = dict(body)
+            if step == "pm create":
+                return FakePaymentMethodResponse()
+            if step.startswith("confirm"):
+                return FakeConfirmRedirectResponse()
+            return FakeZeroStripeInitResponse()
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=stripe_session):
+                with patch.object(gen_pp_link, "_post_stripe_form", side_effect=fake_post_form):
+                    with patch.object(gen_pp_link, "_chatgpt_load_checkout_route") as route_load:
+                        with patch.object(gen_pp_link, "_chatgpt_checkout_snapshot") as snapshot:
+                            with patch.object(gen_pp_link, "_chatgpt_approve_checkout") as approve:
+                                result = gen_pp_link._try_paypal_link(
+                                    "eyJ.fake.token",
+                                    cfg,
+                                    region,
+                                    "",
+                                    payment_method="paypal",
+                                )
+
+        self.assertTrue(result["ok"])
+        self.assertIn("pm-redirects.stripe.com/authorize", result["url"])
+        self.assertEqual(result["checkout_ui_mode"], "hosted")
+        self.assertEqual(result["link_mode"], "stripe_redirect")
+        self.assertEqual(result["region"], "Germany (EUR)")
+        self.assertEqual(steps, ["stripe init", "pm create", "confirm"])
+        self.assertNotIn("tax refresh", steps)
+        route_load.assert_not_called()
+        snapshot.assert_not_called()
+        approve.assert_not_called()
+        checkout_posts = [call for call in checkout.calls if "/payments/checkout" in call["url"]]
+        self.assertEqual(checkout_posts[0]["json"]["billing_details"], {"country": "DE", "currency": "EUR"})
+        self.assertEqual(checkout_posts[0]["json"]["checkout_ui_mode"], "hosted")
+        self.assertNotIn("elements_options_client[saved_payment_method][enable_save]", posted_bodies["stripe init"])
+        self.assertEqual(posted_bodies["confirm"]["client_attribution_metadata[merchant_integration_additional_elements][0]"], "payment")
+        self.assertEqual(posted_bodies["confirm"]["client_attribution_metadata[merchant_integration_additional_elements][1]"], "address")
+        self.assertNotIn("client_attribution_metadata[merchant_integration_additional_elements][2]", posted_bodies["confirm"])
+
     def test_paypal_confirm_open_approves_and_polls_payment_page_redirect(self):
         checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
         stripe_session = FakeStripeSession()
         cfg = {
             "paypal": {
                 "link_mode": "stripe_redirect",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "require_zero_due": True,
                 "use_elements_session": True,
                 "approve_missing_redirect": True,
@@ -567,6 +1090,8 @@ class StripeConfirmErrorTests(unittest.TestCase):
         cfg = {
             "paypal": {
                 "link_mode": "ba_redirect",
+                "stop_after_pm_create": False,
+                "checkout_only_long_url": False,
                 "redirect_url_format": "any",
                 "require_zero_due": True,
                 "use_elements_session": True,
@@ -844,6 +1369,24 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(regions[0]["browser_timezone"], "Europe/Berlin")
         self.assertEqual(regions[0]["address"]["country"], "DE")
 
+    def test_configured_france_billing_region_uses_eur(self):
+        regions = gen_pp_link._billing_regions({"billing_regions": ["FR"]})
+
+        self.assertEqual(regions[0]["country"], "FR")
+        self.assertEqual(regions[0]["currency"], "EUR")
+        self.assertEqual(regions[0]["browser_locale"], "fr-FR")
+        self.assertEqual(regions[0]["browser_timezone"], "Europe/Paris")
+        self.assertEqual(regions[0]["address"]["country"], "FR")
+
+    def test_configured_united_kingdom_billing_region_uses_gbp(self):
+        regions = gen_pp_link._billing_regions({"billing_regions": ["GB"]})
+
+        self.assertEqual(regions[0]["country"], "GB")
+        self.assertEqual(regions[0]["currency"], "GBP")
+        self.assertEqual(regions[0]["browser_locale"], "en-GB")
+        self.assertEqual(regions[0]["browser_timezone"], "Europe/London")
+        self.assertEqual(regions[0]["address"]["country"], "GB")
+
     def test_configured_us_billing_region_matches_original_flow(self):
         regions = gen_pp_link._billing_regions({"billing_regions": ["US"]})
 
@@ -876,6 +1419,34 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(result["payment_method"], "gopay")
         self.assertEqual(try_paypal.call_args.kwargs["payment_method"], "gopay")
         self.assertEqual(try_paypal.call_args.args[2]["country"], "ID")
+
+    def test_default_paypal_config_matches_committed_chatgpt_checkout_us(self):
+        cfg = {
+            "reference_confirm_mode": False,
+            "link_mode": "chatgpt_checkout",
+            "checkout_ui_mode": "hosted",
+            "redirect_url_format": "any",
+            "checkout_only_long_url": False,
+            "stop_after_pm_create": False,
+            "use_elements_session": True,
+            "refresh_tax_region": True,
+            "approve_missing_redirect": False,
+            "resolve_ba_redirect": False,
+            "require_ba_token": False,
+            "billing_regions": ["US"],
+            "confirm_style": "inline_payment_method_data",
+        }
+
+        self.assertFalse(gen_pp_link._reference_confirm_mode(cfg, "paypal"))
+        self.assertEqual(gen_pp_link._payment_link_mode(cfg, "paypal"), "chatgpt_checkout")
+        self.assertEqual(gen_pp_link._checkout_ui_mode(cfg), "hosted")
+        self.assertEqual(gen_pp_link._paypal_redirect_format(cfg), "any")
+        self.assertFalse(gen_pp_link._checkout_only_long_url(cfg, "paypal"))
+        self.assertFalse(gen_pp_link._stop_after_pm_create(cfg, "paypal"))
+        self.assertEqual(gen_pp_link._paypal_confirm_style(cfg), "inline_payment_method_data")
+        region = gen_pp_link._billing_regions(cfg)[0]
+        self.assertEqual(region["country"], "US")
+        self.assertEqual(region["currency"], "USD")
 
 
 if __name__ == "__main__":

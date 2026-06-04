@@ -1,4 +1,5 @@
 import unittest
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from sms_tool import codex_oauth
@@ -16,6 +17,20 @@ class CodexOauthTests(unittest.TestCase):
         self.assertTrue(codex_oauth._needs_phone_verification("https://auth.openai.com/add-phone"))
         self.assertTrue(codex_oauth._needs_phone_verification("https://auth.openai.com/phone-verification"))
         self.assertFalse(codex_oauth._needs_phone_verification("https://auth.openai.com/consent"))
+
+    def test_phone_probe_only_does_not_complete_sms(self):
+        with patch("sms_tool.codex_oauth.complete_phone_verification") as complete:
+            result = codex_oauth._finish_authorization(
+                Mock(),
+                {"state": "s", "code_verifier": "v", "redirect_uri": "http://localhost"},
+                "did",
+                "https://auth.openai.com/add-phone",
+                phone_probe_only=True,
+            )
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["phone_verification_required"])
+        self.assertEqual(result["error"], "add_phone_required")
+        complete.assert_not_called()
 
     def test_protocol_stage_detection_matches_oauth_flow_urls(self):
         self.assertEqual(
@@ -135,6 +150,35 @@ class CodexOauthTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["status_code"], 409)
 
+    def test_resend_409_keeps_existing_otp_search_window(self):
+        send = Mock(status_code=200, text="{}")
+        validate1 = Mock(status_code=400, text='{"error":"bad_code"}')
+        resend = Mock(status_code=409, text='{"error":"already pending"}')
+        validate2 = Mock(status_code=400, text='{"error":"bad_code"}')
+        session = Mock()
+        session.post.side_effect = [send, validate1, resend, validate2]
+        issued_after_values = []
+
+        def poll(*args, **kwargs):
+            issued_after_values.append(kwargs.get("issued_after_unix"))
+            return "123456"
+
+        with patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False), \
+             patch("sms_tool.codex_oauth.time.time", side_effect=[1000, 1005]), \
+             patch("sms_tool.codex_oauth._poll_email_otp", side_effect=poll), \
+             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}):
+            result = codex_oauth._passwordless_login_and_exchange(
+                session=session,
+                oauth={"state": "s", "code_verifier": "v", "redirect_uri": "http://localhost"},
+                data={"email": "user@example.com", "mailbox": {"email": "user@example.com", "refresh_token": "rt", "token": "cid"}},
+                did="did",
+                current_url="https://auth.openai.com/email-verification",
+                timeout=30,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(issued_after_values, [1000, 1000])
+
     def test_single_phone_oauth_lane_stays_locked_until_token_exchange(self):
         class TrackingLock:
             def __init__(self):
@@ -187,6 +231,25 @@ class CodexOauthTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["phone_attempt"], phone_attempt)
         self.assertIn("phone_verified_oauth_redirect_failed", result["error"])
+
+    def test_saved_oauth_result_exposes_phone_for_batch_mapping(self):
+        phone_attempt = {"ok": True, "phone": "+233555123456", "provider": "smsbower"}
+        with TemporaryDirectory() as tmp, \
+             patch("sms_tool.codex_oauth.upsert_account") as upsert:
+            json_path = f"{tmp}/session.json"
+            result = codex_oauth._save_oauth_tokens(
+                {"email": "user@example.com"},
+                json_path,
+                {"access_token": "at", "refresh_token": "rt"},
+                "user@example.com",
+                "codex_oauth_pkce",
+                result={"phone_attempt": phone_attempt},
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["phone"], "+233555123456")
+        self.assertEqual(result["phone_attempt"], phone_attempt)
+        upsert.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -36,6 +36,10 @@ class MailboxAccount:
 
 OTP_RE = re.compile(r"(^|[^0-9])([0-9]{6})([^0-9]|$)")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MS_CLIENT_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 KNOWN_EMAIL_DOMAINS = (
     "hotmail.com",
     "outlook.com",
@@ -43,6 +47,26 @@ KNOWN_EMAIL_DOMAINS = (
     "msn.com",
     "gmail.com",
 )
+
+
+def _looks_ms_client_id(value):
+    return bool(MS_CLIENT_ID_RE.fullmatch(str(value or "").strip()))
+
+
+def _split_chatai_client_refresh(p2, p3):
+    """Accept both Chatai/Microsoft mailbox orders.
+
+    Supported:
+    - email----password----client_id----refresh_token
+    - email----password----refresh_token----client_id
+    """
+    p2 = str(p2 or "").strip()
+    p3 = str(p3 or "").strip()
+    if _looks_ms_client_id(p2):
+        return p2, p3
+    if _looks_ms_client_id(p3):
+        return p3, p2
+    return p2, p3
 
 
 def _email_cfg():
@@ -438,11 +462,13 @@ def _parse_chatai_mailbox_file(path):
             ))
             continue
         if "----" in line:
-            parts = line.split("----")
+            parts = line.split("----", 3)
             if len(parts) < 4:
                 print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
                 continue
-            email, password, client_id, refresh_token = (part.strip() for part in parts[:4])
+            email = parts[0].strip()
+            password = parts[1].strip()
+            client_id, refresh_token = _split_chatai_client_refresh(parts[2], parts[3])
             email = _normalize_mailbox_email(email)
             if not email or not refresh_token:
                 if not email:
@@ -515,10 +541,10 @@ def _record_key(record):
     return (record.email or "").strip().lower()
 
 
-def _ms_oauth_refresh(mailbox):
+def _ms_oauth_refresh(mailbox, proxy=None):
     cfg = _email_cfg()
     client_id = getattr(mailbox, "token", "") or cfg.get("oauth_client_id", "9e5f94bc-e8a4-4e73-b8be-63364c29d753")
-    scope = cfg.get("oauth_scope", "offline_access https://graph.microsoft.com/Mail.Read")
+    scope = cfg.get("oauth_scope", "https://graph.microsoft.com/.default offline_access")
     token_url = cfg.get("oauth_token_url", "https://login.microsoftonline.com/common/oauth2/v2.0/token")
     if not mailbox.refresh_token:
         raise RuntimeError("mailbox refresh_token is required")
@@ -528,7 +554,8 @@ def _ms_oauth_refresh(mailbox):
         "refresh_token": mailbox.refresh_token,
         "scope": scope,
     }
-    r = curl_requests.post(token_url, data=data, impersonate="chrome", timeout=30)
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    r = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome", timeout=30)
     try:
         body = r.json()
     except Exception:
@@ -608,7 +635,7 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
             print(f"[cfworker proxy poll error: {exc}; retrying direct]")
             return _cfworker_client(proxy=None).fetch_messages(mailbox.email, limit=limit)
     cfg = _email_cfg()
-    token = mailbox.access_token or _ms_oauth_refresh(mailbox)
+    token = mailbox.access_token or _ms_oauth_refresh(mailbox, proxy=proxy)
     graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")
     params = {
         "$top": str(max(1, min(int(limit or 25), 100))),
@@ -620,11 +647,12 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
         "Accept": "application/json",
         "Prefer": 'outlook.body-content-type="text"',
     }
-    r = curl_requests.get(graph_url, params=params, headers=headers, impersonate="chrome", timeout=30)
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
     if r.status_code in (401, 403):
-        token = _ms_oauth_refresh(mailbox)
+        token = _ms_oauth_refresh(mailbox, proxy=proxy)
         headers["Authorization"] = "Bearer " + token
-        r = curl_requests.get(graph_url, params=params, headers=headers, impersonate="chrome", timeout=30)
+        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
     try:
         body = r.json()
     except Exception:

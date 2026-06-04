@@ -111,6 +111,37 @@ class StorageDedupTests(unittest.TestCase):
         self.assertEqual(rows[0]["success"], 1)
         self.assertEqual(rows[0]["access_token"], "tok")
 
+    def test_upsert_marks_pm_created_state_without_paypal_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.upsert_account({
+                    "email": "pm@example.com",
+                    "success": True,
+                    "access_token": "at",
+                    "paypal": {
+                        "ok": True,
+                        "link_type": "pm_created",
+                        "pm_id": "pm_TESTPAYPAL",
+                        "url": "",
+                    },
+                }))
+
+                conn = storage._connect()
+                try:
+                    row = conn.execute(
+                        "SELECT status,paypal_status,paypal_ok,paypal_url,paypal_pm_id FROM accounts WHERE email=?",
+                        ("pm@example.com",),
+                    ).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["status"], "paypal_pm_created")
+        self.assertEqual(row["paypal_status"], "pm_created")
+        self.assertEqual(row["paypal_ok"], 1)
+        self.assertEqual(row["paypal_url"], "")
+        self.assertEqual(row["paypal_pm_id"], "pm_TESTPAYPAL")
+
 
 if __name__ == "__main__":
     unittest.main()

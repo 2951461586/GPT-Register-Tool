@@ -41,15 +41,15 @@ Required choices:
 - `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
-- `paypal.billing_regions`: Checkout billing country/currency order. Current PayPal long-link mode uses `["US"]` for US/USD so the hosted checkout exposes PayPal.
+- `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
-- `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL directly instead of attempting BA extraction.
+- `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL from Stripe init instead of attempting BA extraction.
 - `paypal.redirect_url_format`: ignored by the hosted long-link path; kept only for compatibility with the older BA/Stripe redirect path.
 - `paypal.use_elements_session`: current default is `true`; it requests Stripe Elements session data before tax refresh, payment method creation, and confirm.
 - `paypal.resolve_ba_redirect`: current default is `false` for hosted long-link mode.
 - `paypal.require_ba_token`: current default is `false` for hosted long-link mode.
 - `paypal.explicit_proxy_overrides_stage_proxies`: current default is `false`, so a UI/CLI `--proxy` is used as the default candidate proxy but does not override `paypal.stage_proxies.confirm=direct`.
-- `paypal.checkout_ui_mode`: current default is `hosted`; together with `link_mode=chatgpt_checkout` it returns the long provider URL `https://pay.openai.com/c/pay/cs_live_...` and does not enter Stripe confirm/approve. Keep `paypal.require_zero_due=true` to stay strictly on the 0 yuan/free-trial path.
+- `paypal.checkout_ui_mode`: current default is `hosted`; together with `link_mode=chatgpt_checkout` it now follows `ChatGPT checkout -> Stripe /payment_pages/{cs_id}/init -> stripe_hosted_url`, then normalizes `checkout.stripe.com/c/pay/...` to `pay.openai.com/c/pay/...`. It does not enter Stripe confirm/approve. Keep `paypal.require_zero_due=true` to stay strictly on the 0 yuan/free-trial path.
 - `--regenerate-paypal-link --proxy ...`: forces PayPal/Stripe link regeneration through the selected proxy. Batch regeneration is capped by `paypal.max_regenerate_workers` (default `1`) and staggered by `paypal.regenerate_delay_seconds` to avoid checkout `429` rate limits; with `paypal.explicit_proxy_overrides_stage_proxies=false`, `--proxy` still does not override stage-specific routes such as `confirm=direct`.
 - `paypal_browser.browser_engine`: project-local PayPal browser engine, default `camoufox` with `cloakbrowser` fallback support from `sms_tool.paypal_auto`.
 - `paypal_browser.headless` / `paypal_browser.manual_human_verification`: set `headless=false` and `manual_human_verification=true` when PayPal shows a visible "Confirm you're human" challenge so the browser can wait for manual completion.
@@ -62,8 +62,8 @@ Required choices:
 - `codex_oauth.require_registration_refresh_token`: default `true`; a new registration is not counted as successful until Codex OAuth returns a refresh token.
 - `codex_oauth.require_registration_phone_verification`: default `true`; when a phone pool is configured, registration must complete SMS verification before the session is saved.
 - `--registration-at-only`: UI default for "one-click registration + payment link"; skips Codex OAuth/phone SMS and stores the ChatGPT access token only.
-- `--one-click-sms`: runs Codex OAuth for selected existing accounts, completes phone SMS verification via the phone pool, and stores the OAuth refresh token.
-- `phone_reuse.source`: one-click SMS source, `smsbower` for platform-purchased numbers or `phone_pool` for configured `phone----sms_api_url` entries in `phone_reuse.phone_pool`. SMSBower OpenAI defaults to `service=dr`; the desktop config UI restricts country selection to Ghana `38`, Nigeria `19`, Chile `151`, United Kingdom `16`, or Indonesia `6`. One acquired activation or configured number is reused up to `phone_reuse.max_reuse_count` times, default `1`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the SMSBower activation. `phone_reuse.smsbower.number_attempts` controls same-run number replacement for rejected or silent SMSBower numbers, including `fraud_guard`, recently-used phone validation, and SMS receive timeout.
+- `--one-click-sms`: runs Codex OAuth for selected existing accounts, completes phone SMS verification via the phone pool, and stores the OAuth refresh token. Batch one-click SMS forces one phone per email account and prints the successful email→phone mapping in the JSON result.
+- `phone_reuse.source`: one-click SMS source, `smsbower` for SMSBower platform numbers, `nextsms` for NexSMS/NextSMS (`https://sms.nextactionplus.com/api/`) orders, or `phone_pool` for configured `phone----sms_api_url` entries in `phone_reuse.phone_pool`. SMSBower OpenAI defaults to `service=dr`; NextSMS OpenAI defaults to `service=openai`, `country=US`, and `pricing_option=0`. Outside one-click SMS, one acquired activation or configured number is reused up to `phone_reuse.max_reuse_count` times, default `1`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the provider activation/order. Provider `number_attempts` controls same-run number replacement for rejected or silent numbers; `phone_send_failed:fraud_guard` keeps replacing provider numbers until a send succeeds or the provider can no longer supply numbers.
 
 5. Run one registration.
 
@@ -320,11 +320,12 @@ The project is split into explicit responsibility seams:
 - `services/gopay-flow`: project-local GoPay PaymentService and protocol implementation.
 - `services/gopay-app/proto`: GoPay App gRPC protocol contract used by WA rebind mode.
 - `services/gopay-adb`: local ADB HTTP sidecar for OTP notification polling and unlink actions.
+- `services/mail-otp-web`: standalone Microsoft Graph inbox/OTP diagnostic UI. It does not own registration persistence.
 - `sms_tool.codex_oauth`, `sms_tool.codex_export`, `sms_tool.cpa_import`: Codex OAuth/export and CPA upload boundaries.
 - `sms_tool.storage`: SQLite schema, migrations, deduplication, status updates, and session-index rebuilds.
 - `SmsWorkbench`: WPF launcher and management UI. It starts CLI commands and displays local state; protocol details stay in Python modules.
 
-The same split is maintained in [docs/architecture.md](docs/architecture.md).
+The same split is maintained in [docs/architecture.md](docs/architecture.md). Physical directory classification is maintained in [docs/directory-map.md](docs/directory-map.md).
 
 
 ## Cleanup and Ownership Rules
@@ -350,6 +351,7 @@ Ignored local files:
 
 - `config.json`
 - `sms_tool/config.json`
+- `services/mail-otp-web/config.json`
 - `mailbox_tokens.txt`
 - `sessions/`
 - `runtime/`
@@ -361,3 +363,5 @@ Do not commit tokens, mailbox refresh tokens, access tokens, cookies, card data,
 ## Module Boundaries
 
 See [docs/architecture.md](docs/architecture.md) for the responsibility split between UI, CLI orchestration, mailbox providers, registration protocol, PayPal link generation, session refresh, and storage.
+
+See [docs/directory-map.md](docs/directory-map.md) before adding new modules or moving files. New UI work belongs in `SmsWorkbench/`, command/protocol work belongs in `sms_tool/`, optional local providers belong in `services/`, and generated state belongs in `runtime/` or `sessions/`.
