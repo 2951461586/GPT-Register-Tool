@@ -58,8 +58,27 @@ class TargetEndpointResponse:
                 {
                     "message_id": "m3",
                     "from_address": "noreply@tm.openai.com",
+                    "to_address": "target@edu.liziai.cloud",
                     "subject": "Your temporary ChatGPT verification code",
                     "extracted_json": '[{"value":"333333"}]',
+                    "received_at": 1779588674891,
+                }
+            ]
+        }
+
+
+class MissingRecipientEndpointResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {
+            "messages": [
+                {
+                    "message_id": "global-latest",
+                    "from_address": "noreply@tm.openai.com",
+                    "subject": "Your temporary ChatGPT verification code",
+                    "extracted_json": '[{"value":"202123"}]',
                     "received_at": 1779588674891,
                 }
             ]
@@ -136,6 +155,46 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         self.assertIn("/api/messages?address=target%40edu.liziai.cloud", get.call_args_list[1].args[0])
         self.assertEqual(len(messages), 1)
         self.assertIn("333333", messages[0]["bodyPreview"])
+
+    def test_missing_recipient_messages_are_not_assumed_to_match_target_mailbox(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="")
+
+        with patch.object(cfworker_mailbox.curl_requests, "get", return_value=MissingRecipientEndpointResponse()):
+            with self.assertRaises(RuntimeError):
+                client.fetch_messages("target@edu.liziai.cloud", limit=5)
+
+    def test_normalized_message_does_not_synthesize_target_recipient(self):
+        msg = cfworker_mailbox._normalize_message(
+            {
+                "message_id": "global-latest",
+                "subject": "Your temporary ChatGPT verification code",
+                "extracted_json": '[{"value":"202123"}]',
+            },
+            email="target@edu.liziai.cloud",
+        )
+
+        self.assertEqual(msg["toRecipients"], [])
+
+    def test_extracted_json_otp_takes_priority_over_html_numbers(self):
+        msg = cfworker_mailbox._normalize_message(
+            {
+                "message_id": "m-real-code",
+                "to_address": "target@edu.liziai.cloud",
+                "subject": "Your temporary ChatGPT verification code",
+                "extracted_json": '[{"value":"971234"}]',
+                "raw_html": "<html><body>tracking 202123, code 971234</body></html>",
+            },
+            email="target@edu.liziai.cloud",
+        )
+
+        self.assertTrue(msg["bodyPreview"].startswith('[{"value":"971234"}]'))
+        candidate = mailbox_module._email_otp_candidate(
+            MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker"),
+            msg,
+            keyword="verification code",
+            issued_after_unix=0,
+        )
+        self.assertEqual(candidate["otp"], "971234")
 
     def test_cfworker_otp_poll_waits_for_newer_duplicate_code(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")

@@ -46,6 +46,7 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
     if (
         _requires_ba_token(payment_method)
         and paypal.get("ok")
+        and not _is_pm_created(paypal)
         and not _is_chatgpt_checkout_link(paypal)
         and not extract_ba_token(str(paypal.get("url") or ""))
     ):
@@ -56,7 +57,13 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
         paypal["terminal"] = True
         paypal["retryable"] = False
     now = int(time.time())
-    if paypal.get("ok") and paypal.get("url"):
+    if _is_pm_created(paypal):
+        data["paypal"] = paypal
+        data["paypal_status"] = "pm_created"
+        data.pop("paypal_regenerate_error", None)
+        data.pop("paypal_regenerate_error_code", None)
+        data.pop("paypal_regenerate_error_details", None)
+    elif paypal.get("ok") and paypal.get("url"):
         data["paypal"] = paypal
         data["paypal_status"] = "link_ready"
     else:
@@ -89,15 +96,24 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
         Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     upsert_account(data, json_path=json_path)
 
+    success = bool((paypal.get("ok") and paypal.get("url")) or _is_pm_created(paypal))
     return {
-        "ok": bool(paypal.get("ok") and paypal.get("url")),
+        "ok": success,
         "email": data.get("email", ""),
         "paypal_status": data["paypal_status"],
         "paypal_url": data.get("paypal", {}).get("url", "") if isinstance(data.get("paypal"), dict) else "",
         "payment_method": payment_method,
+        "pm_id": data.get("paypal", {}).get("pm_id", "") if isinstance(data.get("paypal"), dict) else "",
         "json_path": json_path,
-        "error": _payment_error(paypal),
+        "error": "" if success else _payment_error(paypal),
     }
+
+
+def _is_pm_created(paypal) -> bool:
+    if not isinstance(paypal, dict) or not paypal.get("ok"):
+        return False
+    link_type = str(paypal.get("link_type") or paypal.get("source") or paypal.get("status") or paypal.get("paypal_status") or "").strip().lower()
+    return bool(str(paypal.get("pm_id") or "").startswith("pm_") and link_type in {"pm_created", "stripe_payment_method"})
 
 
 def _is_checkout_unauthorized(paypal) -> bool:

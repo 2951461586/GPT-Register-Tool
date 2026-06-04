@@ -1,6 +1,6 @@
 # Project Architecture and Boundaries
 
-This document defines the responsibilities of each module so a fresh clone can be configured and run on any Windows machine without hardcoded local paths.
+This document defines the responsibilities of each module so a fresh clone can be configured and run on any Windows machine without hardcoded local paths. For the physical repository classification, see [`directory-map.md`](directory-map.md).
 
 ## Runtime Flow
 
@@ -53,10 +53,26 @@ services/
   gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
   gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
   gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
+  mail-otp-web/             Standalone Microsoft Graph inbox/OTP diagnostic UI.
 tests/                      Offline unit tests; see tests/README.md.
 sessions/                   Generated session JSON, ignored by Git.
 runtime/                    SQLite, debug output, caches, ignored by Git.
 ```
+
+## Ownership Matrix
+
+| Feature surface | Owning module | May call | Must not own |
+| --- | --- | --- | --- |
+| Desktop buttons/dialogs | `SmsWorkbench/` | `chatgpt_phone_reg.py`, SQLite/session read-only display helpers | ChatGPT protocol, payment protocol, mailbox polling loops |
+| CLI command routing | `sms_tool.cli` | Focused command modules | Provider protocol internals or long-lived state mutation outside handlers |
+| Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, mailbox provider clients | Registration success persistence, payment state |
+| Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower`, `sms_tool.nextsms` | SMS provider APIs | ChatGPT account state, payment state |
+| ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
+| Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
+| Payment link generation | `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init | PayPal account signup, final payment authorization |
+| Payment execution | `sms_tool.paypal_browser_auto`, `sms_tool.paypal_auto`, `sms_tool.gopay_payment` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
+| Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
+| Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
 ## Boundary Rules
 
@@ -150,7 +166,27 @@ Payment adapters may call this seam, but must not duplicate SQLite/session mergi
 }
 ```
 
-`paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The current PayPal regeneration path follows the standalone long-link script logic: `paypal.billing_regions=["US"]`, `paypal.link_mode=chatgpt_checkout`, and `paypal.checkout_ui_mode=hosted`. It posts ChatGPT checkout with US/USD hosted mode, verifies the checkout is still 0 due, and stores the hosted provider URL such as `https://pay.openai.com/c/pay/cs_live_...`. It deliberately does not enter Stripe payment-method creation, confirm, or ChatGPT checkout approve, so it avoids the BA-specific `confirm returned no redirect` / `approve blocked` path. `paypal.resolve_ba_redirect=false` and `paypal.require_ba_token=false` are expected in this mode. With `paypal.explicit_proxy_overrides_stage_proxies=false`, a UI/CLI `--proxy` is used as the default candidate proxy but does not override stage-specific routing. Batch regeneration is intentionally conservative: `paypal.max_regenerate_workers` defaults to `1`, and `paypal.regenerate_delay_seconds` staggers accounts so a UI request with `--workers 4` does not fan out four simultaneous checkout creations and trigger `429`. With `paypal.require_zero_due=true`, non-zero checkout totals fail immediately.
+`paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The current PayPal regeneration path follows the standalone long-link script logic with `paypal.link_mode=chatgpt_checkout` and `paypal.checkout_ui_mode=hosted`: it posts ChatGPT checkout for the configured billing region, calls Stripe `/v1/payment_pages/{cs_id}/init`, reads `stripe_hosted_url`, and stores the resulting hosted long URL (`checkout.stripe.com/c/pay/...` normalized to `pay.openai.com/c/pay/...`). It deliberately does not enter Stripe payment-method creation, confirm, or ChatGPT checkout approve, so it avoids the BA-specific `confirm returned no redirect` / `approve blocked` path. `paypal.resolve_ba_redirect=false` and `paypal.require_ba_token=false` are expected in this mode. With `paypal.explicit_proxy_overrides_stage_proxies=false`, a UI/CLI `--proxy` is used as the default candidate proxy but does not override stage-specific routing. Batch regeneration is intentionally conservative: `paypal.max_regenerate_workers` defaults to `1`, and `paypal.regenerate_delay_seconds` staggers accounts so a UI request with `--workers 4` does not fan out four simultaneous checkout creations and trigger `429`. With `paypal.require_zero_due=true`, non-zero checkout totals fail immediately.
+
+### Payment Responsibility Boundary
+
+Payment is split into three independent responsibilities:
+
+1. **Create checkout/link**: `sms_tool.gen_pp_link` and `sms_tool.paypal_links`.
+   They read an access token and return/store a hosted checkout URL or explicit
+   failure details. They do not complete payment.
+2. **Execute an explicit payment command**: `sms_tool.paypal_browser_auto`,
+   `sms_tool.paypal_auto`, and `sms_tool.gopay_payment`. They only run when the
+   user requests `--one-click-pay` or a matching UI action. They use existing
+   account seed data and payment links rather than registering accounts.
+3. **Persist/display payment state**: `sms_tool.storage` and `SmsWorkbench`.
+   Storage normalizes status fields; the UI displays and launches commands. The
+   UI must not infer success from a URL alone.
+
+Registration, mailbox refresh, CPA import, account scan, SQLite rebuild, and
+session refresh must not implicitly run payment execution. Link regeneration may
+update `paypal_url` only through the payment-link seam, and failed regeneration
+must preserve useful existing URLs unless the caller explicitly clears them.
 
 ### PayPal Payment Layer
 
@@ -202,6 +238,8 @@ It must not acquire SMS numbers, poll third-party SMS providers, or run backgrou
 `services/gopay-app/proto` stores the GoPay App service contract used by WA rebind mode. The app-service implementation is a provider boundary: it may be supplied by a local project service or compatible binary, but callers inside `sms_tool` only depend on the proto-level RPC surface.
 
 `services/gopay-adb` owns emulator/ADB HTTP endpoints such as `/health`, `/otp`, `/otp/clear`, and `/gopay/unlink`. It must not know about ChatGPT accounts, SQLite rows, or CPA import.
+
+`services/mail-otp-web` is a standalone operator diagnostic surface for Microsoft Graph inbox/OTP extraction. It accepts the same mailbox account-line formats as `sms_tool.mailbox`, refreshes Microsoft access tokens, displays recent messages, and may return a rotated mailbox refresh token to the operator. It is not the main registration mailbox owner: registration still uses `sms_tool.mailbox`, and this helper service must not edit `hotmail.txt`, session JSON, or SQLite rows directly.
 
 
 ### Removed / Deprecated Surfaces
@@ -306,6 +344,7 @@ Rows are deduplicated by normalized email for display. SQLite/session rows have 
 ```text
 config.json
 sms_tool/config.json
+services/mail-otp-web/config.json
 mailbox_tokens.txt
 sessions/
 runtime/

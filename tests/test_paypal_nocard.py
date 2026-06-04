@@ -466,6 +466,41 @@ class PayPalNoCardUnitTests(unittest.TestCase):
         self.assertNotIn("ba_resolve_error", saved["paypal"])
         follow.assert_not_called()
 
+    def test_regenerate_paypal_link_accepts_pm_created_without_url(self):
+        seed = {"email": "paid@example.com", "access_token": "at_test", "success": True}
+        saved = {}
+
+        def fake_upsert(data, json_path=""):
+            saved.update(data)
+            return True
+
+        pm_created = {
+            "ok": True,
+            "url": "",
+            "link_type": "pm_created",
+            "status": "pm_created",
+            "paypal_status": "pm_created",
+            "payment_method": "paypal",
+            "cs_id": "cs_live_TEST123",
+            "pm_id": "pm_TESTPAYPAL",
+        }
+
+        with patch.object(paypal_links, "_load_seed", return_value=(seed, "")):
+            with patch.object(paypal_links, "generate_pp_link", return_value=pm_created):
+                with patch.object(paypal_links, "CFG", {"paypal": {"require_ba_token": True}}):
+                    with patch.object(paypal_links, "_follow_stripe_redirect") as follow:
+                        with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
+                            result = paypal_links.regenerate_paypal_link(email="paid@example.com")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["paypal_status"], "pm_created")
+        self.assertEqual(result["paypal_url"], "")
+        self.assertEqual(result["pm_id"], "pm_TESTPAYPAL")
+        self.assertEqual(saved["paypal_status"], "pm_created")
+        self.assertEqual(saved["paypal"]["pm_id"], "pm_TESTPAYPAL")
+        self.assertNotIn("paypal_regenerate_error", saved)
+        follow.assert_not_called()
+
     def test_regenerate_paypal_link_does_not_reuse_hosted_link_for_stripe_redirect_target(self):
         old_url = "https://pay.openai.com/c/pay/cs_live_OLD#fragment"
         seed = {

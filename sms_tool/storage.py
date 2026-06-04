@@ -210,6 +210,8 @@ def _paypal_status(data, paypal):
         return "failed"
     if _get(paypal, "url"):
         return "link_ready"
+    if paypal.get("ok") and str(_get(paypal, "pm_id")).startswith("pm_"):
+        return "pm_created"
     if paypal.get("ok"):
         return "ready"
     return "missing"
@@ -253,6 +255,8 @@ def _refresh_token_status(data, auth_session):
 
 def _status(data, paypal, access_token, has_refresh_token=False):
     explicit = str(_get(data, "status")).strip().lower()
+    if explicit in {"account_deactivated", "account_deatived"}:
+        return "account_deactivated"
     if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
         return "at_invalid"
     if _looks_at_invalid(data, paypal):
@@ -261,6 +265,8 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "failed" if data.get("error") else "pending"
     if not data.get("success") and data.get("error") and not has_refresh_token:
         return "failed"
+    if access_token and paypal.get("ok") and str(_get(paypal, "pm_id")).startswith("pm_") and not _get(paypal, "url"):
+        return "paypal_pm_created"
     if access_token and paypal.get("ok"):
         return "paypal_ready"
     if access_token and paypal.get("error"):
@@ -286,7 +292,13 @@ def _looks_at_invalid(data, paypal):
         "authentication token has been invalidated",
         "could not validate your token",
         "add_phone_required",
+        "secondary_phone_verification_required",
         "oauth_refresh_http_401",
+        "account_deactivated",
+        "account_deatived",
+        "deleted or deactivated",
+        "account has been deleted",
+        "account has been deactivated",
     )
     return any(marker in text for marker in markers)
 
@@ -462,6 +474,7 @@ def mark_paypal_status(email, status="completed"):
         data["paypal_updated_at"] = now
         if status == "completed":
             data["paypal_completed_at"] = now
+            _mark_plan_type_plus(data)
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
             """
@@ -477,6 +490,26 @@ def mark_paypal_status(email, status="completed"):
     if json_path:
         _update_session_json(json_path, data)
     return True
+
+
+def _mark_plan_type_plus(data):
+    if not isinstance(data, dict):
+        return
+    data["planType"] = "plus"
+    data["plan_type"] = "plus"
+    account = data.get("account")
+    if not isinstance(account, dict):
+        account = {}
+        data["account"] = account
+    account["planType"] = "plus"
+
+    auth_session = data.get("auth_session")
+    if isinstance(auth_session, dict):
+        auth_account = auth_session.get("account")
+        if not isinstance(auth_account, dict):
+            auth_account = {}
+            auth_session["account"] = auth_account
+        auth_account["planType"] = "plus"
 
 
 def _update_session_json(path, data):

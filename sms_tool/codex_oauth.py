@@ -32,6 +32,7 @@ def refresh_codex_oauth_session(
     timeout=180,
     force_email_otp_login=False,
     phone_pool=None,
+    phone_probe_only=False,
 ):
     result = collect_codex_oauth_tokens(
         data=data,
@@ -39,6 +40,7 @@ def refresh_codex_oauth_session(
         timeout=timeout,
         force_email_otp_login=force_email_otp_login,
         phone_pool=phone_pool,
+        phone_probe_only=phone_probe_only,
     )
     if not result.get("ok"):
         return result
@@ -59,6 +61,7 @@ def collect_codex_oauth_tokens(
     timeout=180,
     force_email_otp_login=False,
     phone_pool=None,
+    phone_probe_only=False,
 ):
     email = str(data.get("email") or "").strip().lower()
     if not email:
@@ -89,6 +92,7 @@ def collect_codex_oauth_tokens(
             timeout=timeout,
             force_email_otp_login=force_email_otp_login,
             phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
         if not result.get("ok"):
             return result
@@ -108,6 +112,7 @@ def _login_and_exchange(
     timeout=180,
     force_email_otp_login=False,
     phone_pool=None,
+    phone_probe_only=False,
 ):
     max_restarts = 2
     for restart_attempt in range(max_restarts + 1):
@@ -150,6 +155,7 @@ def _login_and_exchange(
             timeout=timeout,
             force_email_otp_login=force_email_otp_login,
             phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
         if not result.get("needs_session_restart") or restart_attempt >= max_restarts:
             return result
@@ -172,6 +178,7 @@ def _run_protocol_login_stages(
     timeout=180,
     force_email_otp_login=False,
     phone_pool=None,
+    phone_probe_only=False,
 ):
     allow_takeover = bool(force_email_otp_login or _allow_passwordless_takeover())
     stage = _detect_protocol_stage(current_url)
@@ -180,7 +187,7 @@ def _run_protocol_login_stages(
     print(f"[*] Codex OAuth protocol stage: {stage}")
 
     if _codex_oauth_protocol_ready_stage(stage):
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
         if final.get("ok"):
             final.setdefault("protocol_stage", stage)
         return final
@@ -202,6 +209,7 @@ def _run_protocol_login_stages(
             timeout=timeout,
             reason="email_otp_required" if _needs_email_otp(current_url) else "email_otp_forced",
             phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
@@ -219,6 +227,7 @@ def _run_protocol_login_stages(
             proxy=proxy,
             timeout=timeout,
             phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
         if password_result.get("ok"):
             password_result.setdefault("protocol_stage", "password")
@@ -235,6 +244,7 @@ def _run_protocol_login_stages(
             timeout=timeout,
             reason="password_login_failed",
             phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
@@ -244,7 +254,7 @@ def _run_protocol_login_stages(
         email_otp_result["password_attempt"] = password_result
         return email_otp_result
     elif stage == "add_phone":
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
         if final.get("ok"):
             final.setdefault("protocol_stage", "add_phone")
             return final
@@ -264,7 +274,7 @@ def _run_protocol_login_stages(
         "protocol_stage": stage,
     }
 
-    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
     if final.get("ok"):
         final.setdefault("protocol_stage", stage)
         return final
@@ -290,6 +300,7 @@ def _passwordless_login_and_exchange(
     timeout=180,
     reason="",
     phone_pool=None,
+    phone_probe_only=False,
 ):
     mailbox = _mailbox_from_data(data)
     if mailbox is None:
@@ -317,8 +328,12 @@ def _passwordless_login_and_exchange(
     last_validate_body = ""
     for attempt in range(attempts):
         if attempt > 0:
-            issued_after = int(time.time())
-            _resend_email_otp(session, did, current_url)
+            resend_issued_after = int(time.time())
+            resend_result = _resend_email_otp(session, did, current_url)
+            if int(resend_result.get("status_code") or 0) == 200:
+                issued_after = resend_issued_after
+            elif int(resend_result.get("status_code") or 0) == 409:
+                print("[*] Email OTP resend already pending; keeping previous OTP search window")
         try:
             code = _poll_email_otp(
                 mailbox,
@@ -377,7 +392,7 @@ def _passwordless_login_and_exchange(
             continue
         next_url = _next_url(validate)
         _, current_url = _follow_redirects(session, next_url, proxy=proxy)
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
         if final.get("ok"):
             final["login_method"] = "passwordless_email_otp"
             final["fallback_from"] = reason
@@ -410,7 +425,7 @@ def _passwordless_login_and_exchange(
     }
 
 
-def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, phone_pool=None):
+def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, phone_pool=None, phone_probe_only=False):
     password = str(data.get("password") or "").strip()
     if not password:
         return {
@@ -454,7 +469,7 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
             return email_otp_result
         _, current_url = _follow_redirects(session, email_otp_result.get("next_url", ""), proxy=proxy)
 
-    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
     if final.get("ok"):
         final["login_method"] = "password"
         return final
@@ -516,11 +531,12 @@ def _resend_email_otp(session, did, current_url):
             impersonate="chrome110",
         )
         print(f"[*] Email OTP resend: {response.status_code}")
+        return {"ok": response.status_code in (200, 409), "status_code": response.status_code}
     except Exception:
-        pass
+        return {"ok": False, "status_code": 0}
 
 
-def _finish_authorization(session, oauth, did, current_url, proxy=None, phone_pool=None):
+def _finish_authorization(session, oauth, did, current_url, proxy=None, phone_pool=None, phone_probe_only=False):
     if _has_callback_code(current_url):
         return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
 
@@ -531,6 +547,18 @@ def _finish_authorization(session, oauth, did, current_url, proxy=None, phone_po
             return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
 
     if _needs_phone_verification(current_url):
+        if phone_probe_only:
+            return {
+                "ok": False,
+                "error": "add_phone_required",
+                "phone_verification_required": True,
+                "last_url": _safe_url(current_url),
+                "phone_attempt": {
+                    "ok": False,
+                    "error": "add_phone_required",
+                    "message": "OAuth scan detected phone verification; SMS sending is disabled in probe mode.",
+                },
+            }
         if phone_pool:
             print("[*] Waiting for single-phone OAuth lane...")
             with phone_pool.lock:
@@ -762,13 +790,17 @@ def _save_oauth_tokens(data, json_path, tokens, email, mode, result=None):
         from pathlib import Path
         Path(json_path).write_text(json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8")
     upsert_account(refreshed, json_path=json_path)
-    return {
+    output = {
         "ok": True,
         "mode": mode,
         "email": email,
         "json_path": json_path,
         "refresh_token_status": "oauth_present",
     }
+    if phone_attempt:
+        output["phone"] = phone_attempt.get("phone", "")
+        output["phone_attempt"] = phone_attempt
+    return output
 
 
 def _follow_redirects(session, start_url, proxy=None, max_redirects=18):

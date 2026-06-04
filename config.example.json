@@ -1,282 +1,302 @@
 {
-    "chatgpt": {
-        "auth_base_url": "https://auth.openai.com",
-        "chat_base_url": "https://chatgpt.com",
-        "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
+  "chatgpt": {
+    "auth_base_url": "https://auth.openai.com",
+    "chat_base_url": "https://chatgpt.com",
+    "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
+  },
+  "proxy": {
+    "default": "socks5h://127.0.0.1:7897",
+    "pool": [
+      "socks5h://127.0.0.1:7897"
+    ]
+  },
+  "registration": {
+    "password_random_length": 12,
+    "password_suffix": "!A1",
+    "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  },
+  "email_registration": {
+    "use_as_username": false,
+    "token_file": "mailbox_tokens.txt",
+    "otp_poll_interval": 2,
+    "cfworker_otp_settle_seconds": 3,
+    "cfworker_poll_proxy": true,
+    "cfworker_direct_fallback": false,
+    "email": "",
+    "password": "",
+    "refresh_token": "",
+    "access_token": "",
+    "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
+    "oauth_scope": "https://graph.microsoft.com/.default offline_access",
+    "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
+  },
+  "timeouts": {
+    "request": 20,
+    "http_retries": 3,
+    "retry_delay": 2,
+    "token_cache_ttl": 300
+  },
+  "paypal": {
+    "auto_generate": true,
+    "require_zero_due": true,
+    "max_checkout_retries": 3,
+    "checkout_only_long_url": false,
+    "stop_after_pm_create": false,
+    "link_mode": "chatgpt_checkout",
+    "checkout_ui_mode": "hosted",
+    "redirect_url_format": "any",
+    "use_elements_session": true,
+    "approve_missing_redirect": false,
+    "redirect_poll_timeout_seconds": 30,
+    "redirect_poll_interval_seconds": 1,
+    "resolve_ba_redirect": false,
+    "require_ba_token": false,
+    "explicit_proxy_overrides_stage_proxies": false,
+    "disable_promo_on_confirm_decline": false,
+    "billing_regions": [
+      "DE"
+    ],
+    "proxies": [
+      "socks5h://127.0.0.1:7897"
+    ],
+    "stage_proxies": {
+      "checkout": "socks5h://127.0.0.1:7897",
+      "stripe_init": "socks5h://127.0.0.1:7897",
+      "payment_method": "socks5h://127.0.0.1:7897",
+      "confirm": "direct"
     },
-    "proxy": {
-        "default": "socks5h://127.0.0.1:7897",
-        "pool": [
-            "socks5h://127.0.0.1:7897"
-        ]
-    },
-    "registration": {
-        "password_random_length": 12,
-        "password_suffix": "!A1",
-        "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    },
-    "email_registration": {
-        "use_as_username": false,
-        "token_file": "mailbox_tokens.txt",
-        "otp_poll_interval": 2,
-        "cfworker_otp_settle_seconds": 3,
-        "cfworker_poll_proxy": true,
-        "cfworker_direct_fallback": false,
-        "email": "",
-        "password": "",
-        "refresh_token": "",
-        "access_token": "",
-        "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
-        "oauth_scope": "offline_access https://graph.microsoft.com/Mail.Read",
-        "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
-    },
-    "timeouts": {
-        "request": 20,
-        "http_retries": 3,
-        "retry_delay": 2,
-        "token_cache_ttl": 300
-    },
-    "paypal": {
-        "auto_generate": true,
-        "require_zero_due": true,
-        "max_checkout_retries": 3,
-        "link_mode": "chatgpt_checkout",
-        "checkout_ui_mode": "hosted",
-        "redirect_url_format": "any",
-        "use_elements_session": true,
-        "approve_missing_redirect": false,
-        "redirect_poll_timeout_seconds": 30,
-        "redirect_poll_interval_seconds": 1,
-        "resolve_ba_redirect": false,
-        "require_ba_token": false,
-        "explicit_proxy_overrides_stage_proxies": false,
-        "disable_promo_on_confirm_decline": false,
-        "billing_regions": [
-            "US"
-        ],
-        "proxies": [
-            "socks5h://127.0.0.1:7897"
-        ],
-        "stage_proxies": {
-            "checkout": "socks5h://127.0.0.1:7897",
-            "stripe_init": "socks5h://127.0.0.1:7897",
-            "payment_method": "socks5h://127.0.0.1:7897",
-            "confirm": "direct"
-        },
-        "confirm_style": "inline_payment_method_data",
-        "fallback_to_hosted_checkout_on_blocked": true,
-        "max_regenerate_workers": 1,
-        "regenerate_delay_seconds": 3
-    },
-    "gopay": {
-        "one_click_mode": "protocol",
-        "open_link": true,
-        "auto_generate": true,
-        "provider_api": "byte-v-forge",
-        "payment_service_addr": "127.0.0.1:50051",
-        "grpcurl_path": "grpcurl",
-        "payment_service": "payment.PaymentService",
-        "proto_import_path": "services\\gopay-flow\\proto",
-        "proto_path": "services\\gopay-flow\\proto\\payment.proto",
-        "provider_config_path": "services\\gopay-flow\\config.gopay.base.json",
-        "provider_timeout_seconds": 600,
-        "auto_start_provider": true,
-        "pure_xe_mode": "enhanced",
-        "pure_protocol_timeout_seconds": 35,
-        "pure_protocol_debug": false,
-        "tokenization": "qris",
-        "otp_source": "smsbower",
-        "otp": {
-            "source": "smsbower",
-            "smsbower": {
-                "api_key": "$SMSBOWER_API_KEY",
-                "endpoint": "https://smsbower.page/stubs/handler_api.php",
-                "service": "ni",
-                "service_name": "Gojek",
-                "country": "6",
-                "country_name": "Indonesia",
-                "country_prefix": "+62",
-                "min_price": "0.008",
-                "max_price": "0.02",
-                "min_balance_rp": 1,
-                "balance_wait_timeout_seconds": 120,
-                "balance_poll_interval_seconds": 5,
-                "number_attempts": 3,
-                "skip_phone_probe": true,
-                "register_account": true,
-                "sms_timeout": 120,
-                "sms_poll_interval": 5
-            }
-        },
-        "phone": "",
-        "country_code": "62",
-        "otp_channel": "sms",
-        "pin": "147258",
-        "confirm_after_manual": false,
-        "emulator_exe": "",
-        "adb_path": "",
-        "adb_serial": "emulator-5554",
-        "adb_sidecar_addr": "127.0.0.1:9999",
-        "wa_rebind": {
-            "enabled": false,
-            "rebind_after_payment": true,
-            "gopay_app_service_addr": "127.0.0.1:50060",
-            "gopay_app_service": "gopay_app.GopayAppService",
-            "gopay_app_proto_import_path": "services\\gopay-app\\proto",
-            "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
-            "user_id": "local",
-            "wa_phone": "",
-            "rebind_phone": "",
-            "timeout_seconds": 600
-        },
-        "billing_regions": [
-            "ID"
-        ],
-        "stage_proxies": {
-            "checkout": "socks5h://127.0.0.1:7897",
-            "stripe_init": "socks5h://127.0.0.1:7897",
-            "payment_method": "socks5h://127.0.0.1:7897",
-            "confirm": "socks5h://127.0.0.1:7897"
-        }
-    },
-    "runtime": {
-        "directory": "runtime"
-    },
-    "storage": {
-        "sqlite_path": "runtime/accounts.sqlite3"
-    },
-    "cpa_mode": {
-        "api_url": "http://your-domain.com:8317",
-        "api_token": ""
-    },
-    "sub2api": {
-        "api_url": "http://your-sub2api-domain.com",
-        "api_token": "",
-        "email": "",
-        "password": "",
-        "group_name": "codex",
-        "group_ids": "",
-        "proxy_name": "",
-        "proxy_id": "1,2,3,4,5",
-        "priority": 1,
-        "concurrency": 10
-    },
-    "codex_oauth": {
-        "allow_passwordless_takeover": false,
-        "auto_phone_verification": false,
-        "require_registration_refresh_token": true,
-        "require_registration_phone_verification": true,
-        "registration_timeout": 180
-    },
-    "phone_reuse": {
-        "source": "smsbower",
-        "max_reuse_count": 1,
-        "send_cooldown_seconds": 45,
-        "send_retry_attempts": 3,
-        "send_retry_delay_seconds": 45,
-        "state_file": "runtime/phone_reuse_state.json",
-        "smsbower": {
-            "api_key": "$SMSBOWER_API_KEY",
-            "service": "dr",
-            "service_name": "OpenAI (ChatGPT)",
-            "country": "38",
-            "country_name": "Ghana",
-            "country_prefix": "+233",
-            "gopay_service": "ni",
-            "gopay_country": "6",
-            "gopay_country_name": "Indonesia",
-            "gopay_country_prefix": "+62",
-            "gopay_min_price": "0.008",
-            "gopay_max_price": "0.014",
-            "target_price": "0.054",
-            "max_price": "0.06",
-            "pool_size": 1,
-            "sms_timeout": 120,
-            "sms_poll_interval": 5,
-            "number_attempts": 3,
-            "send_cooldown_seconds": 45,
-            "send_retry_attempts": 3,
-            "send_retry_delay_seconds": 45
-        },
-        "phone_pool": [
-            {
-                "phone": "+10000000000",
-                "sms_api_url": "https://sms.example.com/poll",
-                "provider": "legacy"
-            }
-        ]
-    },
-    "output": {
-        "directory": "sessions",
-        "filename_pattern": "session_{email}_{timestamp}.json"
-    },
-    "paypal_auto": {
-        "phone_number": "",
-        "sms_api_url": "",
-        "sms_poll_interval": 5,
+    "confirm_style": "inline_payment_method_data",
+    "fallback_to_hosted_checkout_on_blocked": true,
+    "max_regenerate_workers": 1,
+    "regenerate_delay_seconds": 3,
+    "reference_confirm_mode": false,
+    "fast_reference_confirm": false,
+    "refresh_tax_region": true,
+    "fallback_to_stripe_redirect_on_missing_hosted": false,
+    "hosted_usd_fallback_on_422": false,
+    "allow_chatgpt_checkout_fallback": true,
+    "hosted_usd_fallback_on_non_hosted": false
+  },
+  "gopay": {
+    "one_click_mode": "protocol",
+    "open_link": true,
+    "auto_generate": true,
+    "provider_api": "byte-v-forge",
+    "payment_service_addr": "127.0.0.1:50051",
+    "grpcurl_path": "grpcurl",
+    "payment_service": "payment.PaymentService",
+    "proto_import_path": "services\\gopay-flow\\proto",
+    "proto_path": "services\\gopay-flow\\proto\\payment.proto",
+    "provider_config_path": "services\\gopay-flow\\config.gopay.base.json",
+    "provider_timeout_seconds": 600,
+    "auto_start_provider": true,
+    "pure_xe_mode": "enhanced",
+    "pure_protocol_timeout_seconds": 35,
+    "pure_protocol_debug": false,
+    "tokenization": "qris",
+    "otp_source": "smsbower",
+    "otp": {
+      "source": "smsbower",
+      "smsbower": {
+        "api_key": "$SMSBOWER_API_KEY",
+        "endpoint": "https://smsbower.page/stubs/handler_api.php",
+        "service": "ni",
+        "service_name": "Gojek",
+        "country": "6",
+        "country_name": "Indonesia",
+        "country_prefix": "+62",
+        "min_price": "0.008",
+        "max_price": "0.02",
+        "min_balance_rp": 1,
+        "balance_wait_timeout_seconds": 120,
+        "balance_poll_interval_seconds": 5,
+        "number_attempts": 3,
+        "skip_phone_probe": true,
+        "register_account": true,
         "sms_timeout": 120,
-        "reverse_engineering": true,
-        "reverse_timeout": 60,
-        "browser_fallback": true,
-        "browser_engine": "camoufox",
-        "geoip": true,
-        "captcha_solver": "passive",
-        "cards": [
-            {
-                "number": "CARD_NUMBER",
-                "exp_month": "MM",
-                "exp_year": "YYYY",
-                "cvv": "CVV"
-            }
-        ],
-        "addresses": [
-            {
-                "line1": "ADDRESS_LINE_1",
-                "city": "CITY",
-                "state": "ST",
-                "postal_code": "ZIP"
-            }
-        ],
-        "card_index_file": "runtime/paypal_card_index.txt",
-        "headless": false,
-        "debug_screenshots": true,
-        "debug_dir": "runtime/paypal_debug"
+        "sms_poll_interval": 5
+      }
     },
-    "paypal_browser": {
-        "enabled": true,
-        "browser_engine": "camoufox",
-        "country": "US",
-        "card_brand": "visa",
-        "email_mode": "random",
-        "headless": false,
-        "manual_human_verification": true,
-        "human_verification_timeout": 300,
-        "phone_pool": [
-            {
-                "phone": "+10000000000",
-                "sms_api_url": "https://sms.example.com/poll"
-            }
-        ],
-        "phone_index_file": "runtime/paypal_browser_phone_index.txt"
+    "phone": "",
+    "country_code": "62",
+    "otp_channel": "sms",
+    "pin": "147258",
+    "confirm_after_manual": false,
+    "emulator_exe": "",
+    "adb_path": "",
+    "adb_serial": "emulator-5554",
+    "adb_sidecar_addr": "127.0.0.1:9999",
+    "wa_rebind": {
+      "enabled": false,
+      "rebind_after_payment": true,
+      "gopay_app_service_addr": "127.0.0.1:50060",
+      "gopay_app_service": "gopay_app.GopayAppService",
+      "gopay_app_proto_import_path": "services\\gopay-app\\proto",
+      "gopay_app_proto_path": "services\\gopay-app\\proto\\gopay_app.proto",
+      "user_id": "local",
+      "wa_phone": "",
+      "rebind_phone": "",
+      "timeout_seconds": 600
     },
-    "paypal_nocard": {
-        "enabled": false,
-        "locale_country": "US",
-        "locale_lang": "en",
-        "otp_timeout": 180,
-        "impersonate": "chrome136",
-        "reuse_saved_url": false,
-        "reuse_saved_ready_url": true,
-        "saved_url_max_age_seconds": 1800,
-        "fallback_to_saved_url": false,
-        "phone_pool": [
-            {
-                "phone": "+10000000000",
-                "sms_api_url": "https://sms.example.com/poll"
-            }
-        ],
-        "card_index_file": "runtime/nocard_card_index.txt",
-        "phone_index_file": "runtime/nocard_phone_index.txt"
+    "billing_regions": [
+      "ID"
+    ],
+    "stage_proxies": {
+      "checkout": "socks5h://127.0.0.1:7897",
+      "stripe_init": "socks5h://127.0.0.1:7897",
+      "payment_method": "socks5h://127.0.0.1:7897",
+      "confirm": "socks5h://127.0.0.1:7897"
     }
+  },
+  "runtime": {
+    "directory": "runtime"
+  },
+  "storage": {
+    "sqlite_path": "runtime/accounts.sqlite3"
+  },
+  "cpa_mode": {
+    "api_url": "http://your-domain.com:8317",
+    "api_token": ""
+  },
+  "sub2api": {
+    "api_url": "http://your-sub2api-domain.com",
+    "api_token": "",
+    "email": "",
+    "password": "",
+    "group_name": "codex",
+    "group_ids": "",
+    "proxy_name": "",
+    "proxy_id": "1,2,3,4,5",
+    "priority": 1,
+    "concurrency": 10
+  },
+  "codex_oauth": {
+    "allow_passwordless_takeover": false,
+    "auto_phone_verification": false,
+    "require_registration_refresh_token": true,
+    "require_registration_phone_verification": true,
+    "registration_timeout": 180
+  },
+  "phone_reuse": {
+    "source": "smsbower",
+    "max_reuse_count": 1,
+    "send_cooldown_seconds": 45,
+    "send_retry_attempts": 3,
+    "send_retry_delay_seconds": 45,
+    "state_file": "runtime/phone_reuse_state.json",
+    "smsbower": {
+      "api_key": "$SMSBOWER_API_KEY",
+      "service": "dr",
+      "service_name": "OpenAI (ChatGPT)",
+      "country": "38",
+      "country_name": "Ghana",
+      "country_prefix": "+233",
+      "gopay_service": "ni",
+      "gopay_country": "6",
+      "gopay_country_name": "Indonesia",
+      "gopay_country_prefix": "+62",
+      "gopay_min_price": "0.008",
+      "gopay_max_price": "0.014",
+      "target_price": "0.054",
+      "max_price": "0.06",
+      "pool_size": 1,
+      "sms_timeout": 120,
+      "sms_poll_interval": 5,
+      "number_attempts": 3,
+      "send_cooldown_seconds": 45,
+      "send_retry_attempts": 3,
+      "send_retry_delay_seconds": 45
+    },
+    "nextsms": {
+      "api_key": "$NEXTSMS_API_KEY",
+      "endpoint": "https://sms.nextactionplus.com/api/",
+      "service": "openai",
+      "country": "US",
+      "pricing_option": 0,
+      "pool_size": 1,
+      "sms_timeout": 120,
+      "sms_poll_interval": 5,
+      "number_attempts": 3
+    },
+    "phone_pool": [
+      {
+        "phone": "+10000000000",
+        "sms_api_url": "https://sms.example.com/poll",
+        "provider": "legacy"
+      }
+    ]
+  },
+  "output": {
+    "directory": "sessions",
+    "filename_pattern": "session_{email}_{timestamp}.json"
+  },
+  "paypal_auto": {
+    "phone_number": "",
+    "sms_api_url": "",
+    "sms_poll_interval": 5,
+    "sms_timeout": 120,
+    "reverse_engineering": true,
+    "reverse_timeout": 60,
+    "browser_fallback": true,
+    "browser_engine": "camoufox",
+    "geoip": true,
+    "captcha_solver": "passive",
+    "cards": [
+      {
+        "number": "CARD_NUMBER",
+        "exp_month": "MM",
+        "exp_year": "YYYY",
+        "cvv": "CVV"
+      }
+    ],
+    "addresses": [
+      {
+        "line1": "ADDRESS_LINE_1",
+        "city": "CITY",
+        "state": "ST",
+        "postal_code": "ZIP"
+      }
+    ],
+    "card_index_file": "runtime/paypal_card_index.txt",
+    "headless": false,
+    "debug_screenshots": true,
+    "debug_dir": "runtime/paypal_debug"
+  },
+  "paypal_browser": {
+    "enabled": true,
+    "browser_engine": "camoufox",
+    "country": "US",
+    "card_brand": "visa",
+    "email_mode": "random",
+    "headless": false,
+    "manual_human_verification": true,
+    "human_verification_timeout": 300,
+    "phone_pool": [
+      {
+        "phone": "+10000000000",
+        "sms_api_url": "https://sms.example.com/poll"
+      }
+    ],
+    "phone_index_file": "runtime/paypal_browser_phone_index.txt"
+  },
+  "paypal_nocard": {
+    "enabled": false,
+    "locale_country": "US",
+    "locale_lang": "en",
+    "otp_timeout": 180,
+    "impersonate": "chrome136",
+    "reuse_saved_url": false,
+    "reuse_saved_ready_url": true,
+    "saved_url_max_age_seconds": 1800,
+    "fallback_to_saved_url": false,
+    "phone_pool": [
+      {
+        "phone": "+10000000000",
+        "sms_api_url": "https://sms.example.com/poll"
+      }
+    ],
+    "card_index_file": "runtime/nocard_card_index.txt",
+    "phone_index_file": "runtime/nocard_phone_index.txt"
+  }
 }

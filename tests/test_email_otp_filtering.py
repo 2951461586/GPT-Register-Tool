@@ -1,5 +1,4 @@
 import unittest
-
 from sms_tool import codex_oauth
 from sms_tool.mailbox import MailboxAccount, _email_otp_candidate
 from sms_tool.registration import (
