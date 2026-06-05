@@ -426,7 +426,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urllib.parse.urlparse(self.path).path
-        if path in {"/", "/index.html"}:
+        if path in {"/", "/index.html", "/mailbox"}:
             raw = INDEX_HTML.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
