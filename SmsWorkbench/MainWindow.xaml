@@ -116,7 +116,7 @@
                 <TextBlock Tag="SidebarText" Text="一键导入" Margin="10,0,0,0" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
-            <Button Style="{StaticResource SidebarButton}" Click="ExportAccounts_Click" ToolTip="导出 TXT 或 JSON（不含RT）">
+            <Button Style="{StaticResource SidebarButton}" Click="ExportAccounts_Click" ToolTip="导出 TXT 或 JSON（保留RT）">
               <StackPanel Orientation="Horizontal">
                 <Path Style="{StaticResource IconPath}" Data="M4 2.5H10L12.5 5V13.5H4Z M10 2.5V5H12.5 M6 8.5H10.5 M6 11H9 M8.25 5.8V10.5 M6.5 8.8L8.25 10.5L10 8.8"/>
                 <TextBlock Tag="SidebarText" Text="一键导出" Margin="10,0,0,0" VerticalAlignment="Center"/>

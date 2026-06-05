@@ -244,10 +244,10 @@ def _oauth_refresh_token(data, auth_session):
 
 def _refresh_token_status(data, auth_session):
     explicit = str(_get(data, "refresh_token_status")).strip()
-    if explicit:
-        return explicit
     if _oauth_refresh_token(data, auth_session):
         return "oauth_present"
+    if explicit:
+        return explicit
     if str(_get(data, "refresh_token")).strip():
         return "legacy_present"
     return "no_rt"
@@ -330,6 +330,11 @@ def upsert_account(data, json_path=""):
     refresh_token_status = _refresh_token_status(data, auth_session)
     has_refresh_token = refresh_token_status in {"oauth_present", "legacy_present"}
     status = _status(data, paypal, access_token, has_refresh_token=has_refresh_token)
+    if oauth_refresh_token or (has_refresh_token and _get(data, "refresh_token")):
+        data = dict(data)
+        data["refresh_token"] = oauth_refresh_token or str(_get(data, "refresh_token")).strip()
+        if oauth_refresh_token:
+            data["oauth_refresh_token"] = oauth_refresh_token
     if has_refresh_token and status != "at_invalid" and _get(data, "error"):
         data = dict(data)
         data.pop("error", None)
@@ -343,7 +348,7 @@ def upsert_account(data, json_path=""):
         "error": "" if has_refresh_token else str(_get(data, "error")),
         "session_token": str(_get(data, "session_token")),
         "access_token": access_token,
-        "refresh_token": str(_get(data, "refresh_token")),
+        "refresh_token": oauth_refresh_token or str(_get(data, "refresh_token")),
         "cookie_header": str(_get(data, "cookie_header")),
         "device_id": str(_get(data, "device_id")),
         "paypal_ok": _as_bool(paypal.get("ok")),
