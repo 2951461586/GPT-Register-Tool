@@ -2049,14 +2049,14 @@ namespace SmsWorkbench
                 return;
             }
 
-            string outputDir = Path.Combine(rootDir, "runtime");
+            string outputDir = Path.Combine(rootDir, "runtime", "account_json");
             Directory.CreateDirectory(outputDir);
             string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json");
             object payload = items.Count == 1 ? items[0] : items;
             var options = new JsonSerializerOptions { WriteIndented = true };
             File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false));
             Log("One-click JSON export wrote " + items.Count + " account(s), skipped " + skipped + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, items.Count, skipped, "JSON（不含RT）", "已移除 refresh_token / refreshToken / oauth_refresh_token 等 RT 字段");
+            ShowExportCompleteDialog(outputPath, items.Count, skipped, "JSON", "保留 RT 字段；未获取 RT 的账号默认留空");
         }
 
         private string ShowExportFormatDialog()
@@ -2087,7 +2087,7 @@ namespace SmsWorkbench
             });
             header.Children.Add(new TextBlock
             {
-                Text = "TXT 保持原格式；JSON 会导出账号 session 信息并自动移除 RT 字段。",
+                Text = "TXT 保持原格式；JSON 会导出账号 session 信息并保留 RT 字段。",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 6, 0, 0),
                 Foreground = (Brush)FindResource("TextSub")
@@ -2451,12 +2451,13 @@ namespace SmsWorkbench
                 source = authSession;
             }
 
-            if (SanitizeExportJsonValue(source) is not Dictionary<string, object> clean || clean.Count == 0)
+            if (CloneExportJsonValue(source) is not Dictionary<string, object> clean || clean.Count == 0)
             {
                 return false;
             }
 
             EnsureJsonExportEmail(clean, row);
+            EnsureJsonExportRefreshToken(clean, data);
             if (IsPayPalCompletedRow(row))
             {
                 SetJsonExportPlanTypePlus(clean);
@@ -2553,33 +2554,22 @@ namespace SmsWorkbench
             return (value ?? "").Replace("'", "''");
         }
 
-        private object SanitizeExportJsonValue(object value)
+        private object CloneExportJsonValue(object value)
         {
             if (value is Dictionary<string, object> map)
             {
                 var clean = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
                 foreach (var pair in map)
                 {
-                    if (IsRtExportKey(pair.Key)) continue;
-                    clean[pair.Key] = SanitizeExportJsonValue(pair.Value);
+                    clean[pair.Key] = CloneExportJsonValue(pair.Value);
                 }
                 return clean;
             }
             if (value is List<object> list)
             {
-                return list.Select(SanitizeExportJsonValue).ToList();
+                return list.Select(CloneExportJsonValue).ToList();
             }
             return value;
-        }
-
-        private bool IsRtExportKey(string key)
-        {
-            string compact = Regex.Replace(key ?? "", "[^A-Za-z0-9]", "").ToLowerInvariant();
-            return compact == "rt"
-                || compact == "refreshtoken"
-                || compact == "oauthrefreshtoken"
-                || compact == "rawrefreshtoken"
-                || compact.Contains("refreshtoken");
         }
 
         private void EnsureJsonExportEmail(Dictionary<string, object> item, PoolRow row)
@@ -2595,6 +2585,37 @@ namespace SmsWorkbench
             {
                 user["email"] = email;
             }
+        }
+
+        private void EnsureJsonExportRefreshToken(Dictionary<string, object> item, Dictionary<string, object> sourceData)
+        {
+            string rt = FirstJsonString(
+                GetString(sourceData, "oauth_refresh_token"),
+                GetString(sourceData, "refresh_token"),
+                NestedJsonString(sourceData, "codex_session", "refresh_token"),
+                NestedJsonString(sourceData, "token", "refresh_token"),
+                NestedJsonString(sourceData, "credentials", "refresh_token")
+            );
+            item["refresh_token"] = rt;
+            if (GetString(item, "oauth_refresh_token").Length == 0 && rt.Length > 0)
+            {
+                item["oauth_refresh_token"] = rt;
+            }
+        }
+
+        private string NestedJsonString(Dictionary<string, object> data, string section, string key)
+        {
+            return TryGetMap(data, section, out Dictionary<string, object> map) ? GetString(map, key) : "";
+        }
+
+        private string FirstJsonString(params string[] values)
+        {
+            foreach (string value in values)
+            {
+                string text = (value ?? "").Trim();
+                if (text.Length > 0) return text;
+            }
+            return "";
         }
 
         private void SetJsonExportPlanTypePlus(Dictionary<string, object> item)
