@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Globalization;
+using System.Windows.Data;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -15,10 +17,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FluentWindow = Wpf.Ui.Controls.FluentWindow;
 
 namespace SmsWorkbench
 {
-    public partial class MainWindow : Window, INotifyPropertyChanged
+    public partial class MainWindow : FluentWindow, INotifyPropertyChanged
     {
         private static readonly HttpClient httpClient = new HttpClient();
         private static readonly ConfigComboOption[] SmsBowerCountryOptions = new[]
@@ -36,6 +39,14 @@ namespace SmsWorkbench
             new ConfigComboOption("DE", "德国 / Germany (EUR)", "Germany", "EUR"),
             new ConfigComboOption("FR", "法国 / France (EUR)", "France", "EUR"),
             new ConfigComboOption("GB", "英国 / United Kingdom (GBP)", "United Kingdom", "GBP"),
+            new ConfigComboOption("IN", "印度 / India (INR)", "India", "INR"),
+            new ConfigComboOption("BR", "巴西 / Brazil (BRL)", "Brazil", "BRL"),
+        };
+        private static readonly ConfigComboOption[] LinkGenerationTypeOptions = new[]
+        {
+            new ConfigComboOption("hosted_long_url", "托管长链接 / Hosted Long URL", "hosted_long_url", "hosted_long_url"),
+            new ConfigComboOption("paypal_direct", "PayPal 直链 / PayPal Direct", "paypal_direct", "paypal_direct"),
+            new ConfigComboOption("paypal_direct_zero_due", "PayPal 直链零金额 / PayPal Direct Zero Due", "paypal_direct_zero_due", "paypal_direct_zero_due"),
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
@@ -58,7 +69,43 @@ namespace SmsWorkbench
         private int currentPage = 1;
         private int filteredCount;
         private bool sidebarCollapsed;
+        private string sidebarToggleGlyph = "‹";
+        private Geometry sidebarToggleGeometry = Geometry.Parse("M 4,3 L 4,13 M 11.5,4 L 7.5,8 L 11.5,12");
         private string chataiMailboxFilePath = "";
+
+        public bool SidebarCollapsed
+        {
+            get => sidebarCollapsed;
+            set
+            {
+                if (sidebarCollapsed == value) return;
+                sidebarCollapsed = value;
+                OnPropertyChanged(nameof(SidebarCollapsed));
+                ApplySidebarCompact(value);
+            }
+        }
+
+        public string SidebarToggleGlyph
+        {
+            get => sidebarToggleGlyph;
+            set
+            {
+                if (sidebarToggleGlyph == value) return;
+                sidebarToggleGlyph = value ?? "";
+                OnPropertyChanged(nameof(SidebarToggleGlyph));
+            }
+        }
+
+        public Geometry SidebarToggleGeometry
+        {
+            get => sidebarToggleGeometry;
+            set
+            {
+                if (Equals(sidebarToggleGeometry, value)) return;
+                sidebarToggleGeometry = value;
+                OnPropertyChanged(nameof(SidebarToggleGeometry));
+            }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -178,6 +225,7 @@ namespace SmsWorkbench
             ScopeFilter = "全部";
             ProxyText = ConfigString("proxy", "default");
             RefreshPools();
+            ApplySidebarCompact(false);
         }
 
         private bool FilterRow(object item)
@@ -267,6 +315,21 @@ namespace SmsWorkbench
             return status.Contains("支付完成")
                 || status.Contains("Payment completed")
                 || row.PayPalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsImportableAccountRow(PoolRow row)
+        {
+            if (row == null) return false;
+            if (string.IsNullOrWhiteSpace(row.Identifier)) return false;
+            if (row.HasAccessToken) return true;
+            string status = (row.Status + " " + row.PayPalStatus).Trim();
+            return status.Contains("已注册")
+                || status.Contains("待支付")
+                || status.Contains("支付完成")
+                || status.Contains("PM已创建")
+                || status.Contains("已导入")
+                || status.Contains("Registered")
+                || status.Contains("Payment completed");
         }
 
         private void DeduplicateRows()
@@ -493,6 +556,7 @@ namespace SmsWorkbench
                         PayPalAmount = paypalAmount,
                         RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                         Phone = verifiedPhone,
+                        HasAccessToken = !string.IsNullOrWhiteSpace(access),
                         PayPalUrl = paypalUrl,
                         RefreshToken = isCfWorkerMailbox ? "CFWorker" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
@@ -553,6 +617,7 @@ namespace SmsWorkbench
                             PayPalAmount = paypalAmount,
                             RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                             Phone = verifiedPhone,
+                            HasAccessToken = !string.IsNullOrWhiteSpace(access),
                             PayPalUrl = paypalUrl,
                             RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : Mask(access),
                             Proxy = timing,
@@ -1792,49 +1857,46 @@ namespace SmsWorkbench
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
-            sidebarCollapsed = !sidebarCollapsed;
-            SidebarColumn.Width = new GridLength(sidebarCollapsed ? 64 : 256);
-            SidebarHeaderPanel.Margin = sidebarCollapsed ? new Thickness(10, 14, 10, 10) : new Thickness(12, 14, 12, 14);
-            SidebarToggleButton.Content = sidebarCollapsed ? "›" : "‹";
-            SidebarToggleButton.Width = sidebarCollapsed ? 34 : 32;
-            SidebarBrandColumn.Width = sidebarCollapsed ? new GridLength(0) : new GridLength(38);
-            SidebarTextColumn.Width = sidebarCollapsed ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-            SidebarToggleColumn.Width = sidebarCollapsed ? new GridLength(1, GridUnitType.Star) : new GridLength(40);
-            SidebarBrand.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            SidebarHeaderText.Visibility = sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            SidebarNavScroll.Visibility = Visibility.Visible;
-            SidebarBottomActions.Visibility = Visibility.Visible;
-            SidebarNavStack.Margin = sidebarCollapsed ? new Thickness(10, 0, 10, 14) : new Thickness(12, 0, 12, 14);
-            SidebarBottomActions.Margin = sidebarCollapsed ? new Thickness(10, 0, 10, 14) : new Thickness(12, 0, 12, 14);
-            SetSidebarCompact(SidebarNavScroll, sidebarCollapsed);
-            SetSidebarCompact(SidebarBottomActions, sidebarCollapsed);
+            SidebarCollapsed = !SidebarCollapsed;
         }
 
-        private void SetSidebarCompact(DependencyObject root, bool compact)
+        private void ApplySidebarCompact(bool compact)
         {
-            Style buttonStyle = (Style)FindResource(compact ? "SidebarIconButton" : "SidebarButton");
-            SetSidebarCompactRecursive(root, compact, buttonStyle);
-        }
-
-        private void SetSidebarCompactRecursive(DependencyObject node, bool compact, Style buttonStyle)
-        {
-            if (node is FrameworkElement element)
+            if (SidebarColumn != null)
             {
-                string tag = element.Tag as string ?? "";
-                if (tag == "SidebarText" || tag == "SidebarSection")
-                {
-                    element.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-                }
-                if (node is Button button && button != SidebarToggleButton)
-                {
-                    button.Style = buttonStyle;
-                }
+                SidebarColumn.Width = compact ? new GridLength(80) : new GridLength(272);
             }
 
-            int children = VisualTreeHelper.GetChildrenCount(node);
-            for (int i = 0; i < children; i++)
+            if (SidebarHost != null)
             {
-                SetSidebarCompactRecursive(VisualTreeHelper.GetChild(node, i), compact, buttonStyle);
+                SidebarHost.ClearValue(FrameworkElement.WidthProperty);
+                SidebarHost.Margin = compact ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
+                SidebarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+            }
+
+            if (SidebarToggleButton != null)
+            {
+                SidebarToggleButton.ToolTip = compact ? "展开侧边栏" : "收起侧边栏";
+            }
+
+            SidebarToggleGlyph = compact ? "›" : "‹";
+            SidebarToggleGeometry = Geometry.Parse(compact
+                ? "M 4,3 L 4,13 M 7.5,4 L 11.5,8 L 7.5,12"
+                : "M 4,3 L 4,13 M 11.5,4 L 7.5,8 L 11.5,12");
+        }
+
+        private static IEnumerable<DependencyObject> FindVisualChildren(DependencyObject node)
+        {
+            if (node == null) yield break;
+            int childCount = VisualTreeHelper.GetChildrenCount(node);
+            for (int i = 0; i < childCount; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(node, i);
+                yield return child;
+                foreach (DependencyObject grandChild in FindVisualChildren(child))
+                {
+                    yield return grandChild;
+                }
             }
         }
 
@@ -1934,14 +1996,14 @@ namespace SmsWorkbench
             if (target.Length == 0) return;
 
             var selected = SelectedRowsOrCurrent()
-                .Where(IsPayPalCompletedRow)
+                .Where(IsImportableAccountRow)
                 .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
                 .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
                 .Select(g => g.First())
                 .ToList();
             var rows = selected.Count > 0
                 ? selected
-                : allRows.Where(IsPayPalCompletedRow)
+                : allRows.Where(IsImportableAccountRow)
                     .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
                     .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
                     .Select(g => g.First())
@@ -1949,15 +2011,234 @@ namespace SmsWorkbench
 
             if (rows.Count == 0)
             {
-                MessageBox.Show("没有找到支付完成的账号。", "一键导入", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("没有找到可导入账号。请先注册账号并获得 access_token/session。", "一键导入", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            string emailFile = Path.Combine(Path.GetTempPath(), "paid_import_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_import_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
             var args = new List<string> { "--import-cpa", "--email-file", emailFile, "--workers", "4", "--refresh-timeout", "60" };
             AddImportTargetArg(args, target);
             RunBackend("一键导入" + ImportTargetLabel(target) + " (" + rows.Count + ")", args);
+        }
+
+        private void ImportTeamTokens_Click(object sender, RoutedEventArgs e)
+        {
+            string target = ShowImportTargetDialog("Team Token导入");
+            if (target.Length == 0) return;
+
+            TeamTokenRunOptions options = ShowTeamTokenRunOptionsDialog();
+            if (options == null) return;
+
+            bool kylChannel = options.Channel.Equals("kyl_protocol", StringComparison.OrdinalIgnoreCase);
+            if (!kylChannel && !File.Exists(options.ScriptPath))
+            {
+                ShowThemedInfoDialog("脚本不存在", "找不到 ChatGPT_team.py：" + options.ScriptPath);
+                return;
+            }
+            if (kylChannel && string.IsNullOrWhiteSpace(options.KylStatePath))
+            {
+                ShowThemedInfoDialog("缺少状态文件", "KYL Protocol Runner 渠道需要填写 STATE_PATH 账号状态 JSON。");
+                return;
+            }
+
+            var args = new List<string>
+            {
+                "--import-team-tokens",
+                "--run-team-script",
+                "--team-channel",
+                options.Channel,
+                "--team-total",
+                options.Count.ToString(),
+                "--team-workers",
+                options.TeamWorkers.ToString(),
+                "--team-script-timeout",
+                options.TimeoutSeconds.ToString(),
+                "--workers",
+                "4"
+            };
+
+            if (kylChannel)
+            {
+                args.Add("--kyl-state-path");
+                args.Add(options.KylStatePath.Trim());
+                args.Add("--kyl-start");
+                args.Add(options.KylStartIndex.ToString());
+                if (!string.IsNullOrWhiteSpace(options.KylCookiePath))
+                {
+                    args.Add("--kyl-cookie-path");
+                    args.Add(options.KylCookiePath.Trim());
+                }
+                if (!string.IsNullOrWhiteSpace(options.KylHarPath))
+                {
+                    args.Add("--kyl-har-path");
+                    args.Add(options.KylHarPath.Trim());
+                }
+                if (!string.IsNullOrWhiteSpace(options.KylFingerprint))
+                {
+                    args.Add("--kyl-fingerprint");
+                    args.Add(options.KylFingerprint.Trim());
+                }
+            }
+            else
+            {
+                args.Add("--team-script");
+                args.Add(options.ScriptPath);
+            }
+
+            AddImportTargetArg(args, target);
+            AddProxy(args);
+            string channelLabel = kylChannel ? "KYL Protocol" : "ChatGPT_team.py";
+            RunBackend("Team Token生成并导入" + ImportTargetLabel(target) + " / " + channelLabel + " (" + options.Count + ")", args);
+        }
+
+        private TeamTokenRunOptions ShowTeamTokenRunOptionsDialog()
+        {
+            var dialog = new Window
+            {
+                Title = "Team Token\u751f\u6210\u5e76\u5bfc\u5165",
+                Owner = this,
+                Width = 560,
+                Height = 430,
+                MinWidth = 520,
+                MinHeight = 360,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            for (int i = 0; i < 7; i++)
+            {
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            void AddRow(int row, string label, Control input)
+            {
+                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+                input.Margin = new Thickness(0, 0, 0, 10);
+                Grid.SetRow(text, row);
+                Grid.SetColumn(text, 0);
+                Grid.SetRow(input, row);
+                Grid.SetColumn(input, 1);
+                root.Children.Add(text);
+                root.Children.Add(input);
+            }
+
+            var channelBox = new ComboBox();
+            channelBox.Items.Add(new ComboBoxItem { Content = "ChatGPT_team.py", Tag = "chatgpt_team" });
+            channelBox.Items.Add(new ComboBoxItem { Content = "KYL Protocol Runner", Tag = "kyl_protocol" });
+            channelBox.SelectedIndex = 0;
+            AddRow(0, "\u751f\u6210\u6e20\u9053", channelBox);
+
+            var countBox = new TextBox { Text = CountValue().ToString() };
+            AddRow(1, "\u751f\u6210\u6570\u91cf", countBox);
+
+            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString() };
+            AddRow(2, "\u811a\u672c\u5e76\u53d1", workerBox);
+
+            var timeoutBox = new TextBox { Text = "1800" };
+            AddRow(3, "\u8d85\u65f6\u79d2", timeoutBox);
+
+            var stateBox = new TextBox { Text = DefaultKylStatePath() };
+            AddRow(4, "KYL STATE_PATH", stateBox);
+
+            var startBox = new TextBox { Text = "0" };
+            AddRow(5, "KYL\u8d77\u59cb\u5e8f\u53f7", startBox);
+
+            var hint = new TextBlock
+            {
+                Text = "KYL \u6e20\u9053\u5df2\u5185\u7f6e HAR \u4e2d\u7684 fingerprint\uff1bcookies \u4ec5\u5728 HAR \u542b Cookie \u65f6\u624d\u4f1a\u5185\u7f6e\u3002STATE_PATH \u9700\u586b\u5199\u8d26\u53f7 email/sub \u5217\u8868\u3002",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            };
+            Grid.SetRow(hint, 6);
+            Grid.SetColumnSpan(hint, 2);
+            root.Children.Add(hint);
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var ok = new Button { Content = "\u5f00\u59cb", Width = 72, Style = (Style)FindResource("PrimaryButton") };
+            var cancel = new Button { Content = "\u53d6\u6d88", Width = 72, Margin = new Thickness(8, 0, 0, 0) };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 7);
+            Grid.SetColumnSpan(actions, 2);
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.Children.Add(actions);
+
+            void UpdateKylFields()
+            {
+                string channel = ((channelBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "chatgpt_team";
+                bool enabled = channel.Equals("kyl_protocol", StringComparison.OrdinalIgnoreCase);
+                stateBox.IsEnabled = enabled;
+                startBox.IsEnabled = enabled;
+            }
+            channelBox.SelectionChanged += (_, __) => UpdateKylFields();
+            UpdateKylFields();
+
+            TeamTokenRunOptions selected = null;
+            ok.Click += (_, __) =>
+            {
+                int count = ParsePositiveInt(countBox.Text, 1, 500, CountValue());
+                int workers = ParsePositiveInt(workerBox.Text, 1, 50, DefaultWorkerCount());
+                int timeout = ParsePositiveInt(timeoutBox.Text, 60, 86400, 1800);
+                string channel = ((channelBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "chatgpt_team";
+                selected = new TeamTokenRunOptions
+                {
+                    Channel = channel,
+                    ScriptPath = DefaultTeamScriptPath(),
+                    Count = count,
+                    TeamWorkers = workers,
+                    TimeoutSeconds = timeout,
+                    KylStatePath = stateBox.Text.Trim(),
+                    KylCookiePath = "",
+                    KylHarPath = "",
+                    KylFingerprint = "",
+                    KylStartIndex = ParsePositiveInt(startBox.Text, 0, 1000000, 0)
+                };
+                CountText = count.ToString();
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+            dialog.Content = new ScrollViewer
+            {
+                Content = root,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            return dialog.ShowDialog() == true ? selected : null;
+        }
+
+        private string DefaultTeamScriptPath()
+        {
+            string projectScript = Path.Combine(rootDir, "scripts", "ChatGPT_team.py");
+            if (File.Exists(projectScript)) return projectScript;
+            string downloaded = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads",
+                "Telegram Desktop",
+                "ChatGPT_team.py"
+            );
+            if (File.Exists(downloaded)) return downloaded;
+            return Path.Combine(rootDir, "ChatGPT_team.py");
+        }
+
+        private string DefaultKylHarPath()
+        {
+            string path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads",
+                "chatgpt.com-1.har"
+            );
+            return File.Exists(path) ? path : "";
+        }
+
+        private string DefaultKylStatePath()
+        {
+            return Path.Combine(rootDir, "scripts", "kyl_protocol_runner", "kyl_state.json");
         }
 
         private void ExportAccounts_Click(object sender, RoutedEventArgs e)
@@ -2782,7 +3063,6 @@ namespace SmsWorkbench
 
             var combo = new ComboBox { SelectedIndex = 0, Margin = new Thickness(0, 0, 0, 18) };
             combo.Items.Add(new ComboBoxItem { Content = "CPA", Tag = "cpa" });
-            combo.Items.Add(new ComboBoxItem { Content = "SUB2API", Tag = "sub2api" });
             Grid.SetRow(combo, 1);
             root.Children.Add(combo);
 
@@ -2816,12 +3096,27 @@ namespace SmsWorkbench
         private void AddImportTargetArg(List<string> args, string target)
         {
             args.Add("--import-target");
-            args.Add((target ?? "").Equals("sub2api", StringComparison.OrdinalIgnoreCase) ? "sub2api" : "cpa");
+            string value = (target ?? "").Trim().ToLowerInvariant();
+            if (value == "sub2api")
+            {
+                args.Add("sub2api");
+            }
+            else if (value == "cliproxyapi")
+            {
+                args.Add("cliproxyapi");
+            }
+            else
+            {
+                args.Add("cpa");
+            }
         }
 
         private string ImportTargetLabel(string target)
         {
-            return (target ?? "").Equals("sub2api", StringComparison.OrdinalIgnoreCase) ? "SUB2API" : "CPA";
+            string value = (target ?? "").Trim().ToLowerInvariant();
+            if (value == "sub2api") return "SUB2API";
+            if (value == "cliproxyapi") return "CLIProxyAPI";
+            return "CPA";
         }
 
         private void RefreshSession_Click(object sender, RoutedEventArgs e)
@@ -3832,7 +4127,6 @@ namespace SmsWorkbench
             row = 0;
             AddConfigField(cpaForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
             AddConfigField(cpaForm, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
-
             var sub2Form = AddConfigCategory(sidebar, host, categories, "SUB2API", "SUB2API 导入、分组和代理配置。");
             row = 0;
             AddConfigField(sub2Form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
@@ -3846,11 +4140,12 @@ namespace SmsWorkbench
             AddConfigField(sub2Form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
             AddConfigField(sub2Form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
 
-            var proxyForm = AddConfigCategory(sidebar, host, categories, "代理 / 支付", "默认代理和 PayPal 链接生成代理。");
+            var proxyForm = AddConfigCategory(sidebar, host, categories, "代理 / 支付", "默认代理、PayPal 链接生成代理和直链模式。");
             row = 0;
             AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
             AddConfigComboField(proxyForm, comboFields, row++, "订单生成地区", "paypal_billing_region", GetBillingRegionCode(paypal), BillingRegionOptions, "DE");
+            AddConfigComboField(proxyForm, comboFields, row++, "PayPal直链生成模式", "paypal_link_generation_type", GetLinkGenerationType(paypal), LinkGenerationTypeOptions, "hosted_long_url");
 
             var paypalBrowserForm = AddConfigCategory(sidebar, host, categories, "PayPal浏览器", "项目内置浏览器支付、身份生成和接码号码池。");
             row = 0;
@@ -3969,6 +4264,7 @@ namespace SmsWorkbench
                 proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
                 paypal["billing_regions"] = new List<object> { ConfigComboOptionValue(comboFields, "paypal_billing_region", "DE").Value };
+                paypal["link_generation_type"] = ConfigComboOptionValue(comboFields, "paypal_link_generation_type", "hosted_long_url").Value;
                 paypalBrowser["enabled"] = ConfigBoolValue(fields, "paypal_browser_enabled", GetBool(paypalBrowser, "enabled", true));
                 paypalBrowser.Remove("pp_auto_path");
                 paypalBrowser.Remove("engine");
@@ -4424,6 +4720,16 @@ namespace SmsWorkbench
                 return value;
             }
             return "DE";
+        }
+
+        private string GetLinkGenerationType(Dictionary<string, object> paypal)
+        {
+            string value = GetString(paypal, "link_generation_type").Trim();
+            if (LinkGenerationTypeOptions.Any(option => option.Value.Equals(value, StringComparison.OrdinalIgnoreCase)))
+            {
+                return value;
+            }
+            return "hosted_long_url";
         }
 
         private void SaveConfig(string path, Dictionary<string, object> config)
@@ -5132,6 +5438,7 @@ namespace SmsWorkbench
         public string PayPalAmount { get; set; } = "";
         public string RefreshTokenStatus { get; set; } = "";
         public string Phone { get; set; } = "";
+        public bool HasAccessToken { get; set; }
         public string PayPalUrl { get; set; } = "";
         public string RefreshToken { get; set; } = "";
         public string Proxy { get; set; } = "";
@@ -5156,6 +5463,20 @@ namespace SmsWorkbench
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
         public string PaymentMethod { get; set; } = "paypal";
+    }
+
+    public sealed class TeamTokenRunOptions
+    {
+        public string Channel { get; set; } = "chatgpt_team";
+        public string ScriptPath { get; set; } = "";
+        public int Count { get; set; } = 1;
+        public int TeamWorkers { get; set; } = 1;
+        public int TimeoutSeconds { get; set; } = 1800;
+        public string KylStatePath { get; set; } = "";
+        public string KylCookiePath { get; set; } = "";
+        public string KylHarPath { get; set; } = "";
+        public string KylFingerprint { get; set; } = "";
+        public int KylStartIndex { get; set; } = 0;
     }
 
     public sealed class TaskRow : INotifyPropertyChanged
@@ -5310,4 +5631,18 @@ namespace SmsWorkbench
             return output;
         }
     }
+    public sealed class CollapsedLabelConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var label = parameter?.ToString() ?? string.Empty;
+            return value is bool collapsed && collapsed ? string.Empty : label;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
 }
