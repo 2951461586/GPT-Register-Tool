@@ -38,7 +38,8 @@ def main():
     parser.add_argument("--mailbox-file", default=None, help="Mailbox token file: email---password---refresh_token---access_token---0")
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay"], default=None, help="Payment link/payment method: paypal or gopay")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi"], default=None, help="Payment link/payment method: paypal, gopay, or upi")
+    parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
     parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
@@ -46,7 +47,27 @@ def main():
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
     parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
-    parser.add_argument("--import-target", choices=["cpa", "sub2api"], default="cpa", help="Target for --import-cpa and 401 re-import")
+    parser.add_argument("--import-team-tokens", action="store_true", help="Import Team Token channel codex token JSON into CPA/SUB2API/CLIProxyAPI")
+    parser.add_argument("--team-channel", choices=["chatgpt_team", "kyl_protocol"], default="chatgpt_team", help="Team Token generation channel")
+    parser.add_argument("--run-team-script", action="store_true", help="Run the selected Team Token channel first, then import generated token JSON")
+    parser.add_argument("--team-script", default=None, help="Path to ChatGPT_team.py")
+    parser.add_argument("--team-total", type=int, default=None, help="Number of accounts to generate through ChatGPT_team.py")
+    parser.add_argument("--team-workers", type=int, default=None, help="Workers passed to ChatGPT_team.py")
+    parser.add_argument("--team-script-timeout", type=int, default=1800, help="Max seconds to wait for ChatGPT_team.py")
+    parser.add_argument("--team-output", default=None, help="Output file passed to ChatGPT_team.py, default registered_only.txt")
+    parser.add_argument("--team-token-dir", default=None, help="Directory containing ChatGPT_team.py codex_tokens JSON files")
+    parser.add_argument("--team-token-file", action="append", default=None, help="One ChatGPT_team.py token JSON file; can be repeated")
+    parser.add_argument("--team-token-file-list", default=None, help="Text file containing ChatGPT_team.py token JSON paths")
+    parser.add_argument("--kyl-state-path", default=None, help="KYL protocol account state JSON path")
+    parser.add_argument("--kyl-cookie-path", default=None, help="KYL protocol CDP cookies JSON path")
+    parser.add_argument("--kyl-har-path", default=None, help="HAR file to extract cookies for KYL protocol channel")
+    parser.add_argument("--kyl-fingerprint", default=None, help="KYL challenge fingerprint; can also be stored in state JSON")
+    parser.add_argument("--kyl-start", type=int, default=0, help="KYL protocol start account index")
+    parser.add_argument("--kyl-runner-dir", default=None, help="KYL protocol runner directory, defaults to scripts/kyl_protocol_runner")
+    parser.add_argument("--kyl-runtime-dir", default=None, help="KYL protocol runtime directory")
+    parser.add_argument("--kyl-auth-dir", default=None, help="Temporary KYL auth output dir before importing")
+    parser.add_argument("--kyl-include-existing", action="store_true", help="Process KYL accounts even when auth JSON already exists")
+    parser.add_argument("--import-target", choices=["cpa", "sub2api", "cliproxyapi"], default="cpa", help="Target for --import-cpa and 401 re-import")
     parser.add_argument("--auto-reimport-cpa-401", action="store_true", help="Read CPA 401/invalid auth files and re-import matching local sessions")
     parser.add_argument("--reimport-cpa-401-survivors", action="store_true", help="Re-login CPA 401 accounts without Access deactivated mail and re-import them")
     parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
@@ -97,6 +118,7 @@ def main():
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
+    parser.add_argument("--phone-source", default=None, choices=["smsbower", "nextsms", "phone_pool"], help="Override phone source for registration/one-click SMS")
     parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()
@@ -116,6 +138,9 @@ def main():
         return
     if args.mark_paypal_status:
         _mark_paypal_status(args)
+        return
+    if args.import_team_tokens:
+        _import_team_tokens(args)
         return
     if args.import_cpa:
         _import_cpa(args)
@@ -200,6 +225,7 @@ def main():
             phone_pool = create_phone_pool(
                 max_reuse_count=args.max_reuse_count,
                 send_cooldown_seconds=args.phone_send_cooldown,
+                source_override=args.phone_source,
             )
             if not phone_pool.phones:
                 if args.phone_reuse:
@@ -223,6 +249,7 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
             payment_method=payment_method,
+            paypal_generation_type=args.paypal_generation_type,
         )
     else:
         mailbox = mailboxes[0] if mailboxes else None
@@ -234,9 +261,43 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
             payment_method=payment_method,
+            paypal_generation_type=args.paypal_generation_type,
         )]
     register_seconds = time.time() - register_started
 
+    _save_registration_results(
+        args,
+        results,
+        effective_count=effective_count,
+        base_dir=base_dir,
+        pipeline_started=pipeline_started,
+        mailbox_seconds=mailbox_seconds,
+        register_seconds=register_seconds,
+        paypal_link=paypal_link,
+        payment_method=payment_method,
+    )
+
+
+def _payment_method(args):
+    value = str(getattr(args, "payment_method", "") or "").strip().lower()
+    if value in {"gopay", "go-pay", "go_pay"}:
+        return "gopay"
+    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        return "upi"
+    return "paypal"
+
+
+def _save_registration_results(
+    args,
+    results,
+    effective_count,
+    base_dir,
+    pipeline_started,
+    mailbox_seconds,
+    register_seconds,
+    paypal_link,
+    payment_method,
+):
     pipeline_seconds = time.time() - pipeline_started
     pipeline_timing = {
         "mailbox_load_seconds": round(mailbox_seconds, 2),
@@ -251,8 +312,12 @@ def main():
 
     saved_count = 0
     db_saved_count = 0
+    import_emails = []
     for data in filter(None, results):
         if not data.get("success", False):
+            failed_email = data.get("email") or data.get("phone") or "unknown"
+            failed_error = str(data.get("error") or "registration_failed")
+            print(f"[!] Registration failed for {failed_email}: {failed_error[:500]}")
             if upsert_account(data):
                 db_saved_count += 1
             continue
@@ -269,11 +334,14 @@ def main():
         if upsert_account(session_data, json_path=out_path):
             db_saved_count += 1
         saved_count += 1
+        if session_data.get("email"):
+            import_emails.append(session_data["email"])
         print(f"[*] Saved session: {out_path}")
 
     success_count = sum(1 for r in results if r and r.get("success"))
     print(f"[*] SQLite index: {database_path()} ({db_saved_count} record(s) upserted)")
     print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
+
     paypal_failures = [
         r for r in results
         if r and r.get("success") and paypal_link and not ((r.get("paypal") or {}).get("ok") and (r.get("paypal") or {}).get("url"))
@@ -281,25 +349,69 @@ def main():
     if paypal_failures:
         for data in paypal_failures:
             paypal = data.get("paypal") or {}
-            label = "GoPay" if payment_method == "gopay" else "PayPal"
+            label = _payment_method_label(payment_method)
             print(f"[Error] {label} link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing payment URL')}")
         raise SystemExit(3)
 
+    if getattr(args, "import_cpa", False):
+        _import_registered_accounts(args, import_emails)
 
-def _payment_method(args):
-    value = str(getattr(args, "payment_method", "") or "").strip().lower()
-    if value in {"gopay", "go-pay", "go_pay"}:
-        return "gopay"
-    return "paypal"
+
+def _import_registered_accounts(args, emails):
+    from .import_targets import import_account_sessions
+
+    emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
+    if not emails:
+        print("[!] No successful registered account to import into CPA/SUB2API")
+        return
+    result = import_account_sessions(
+        args.import_target,
+        emails,
+        export_dir=args.codex_export_dir or "",
+        workers=args.workers,
+        refresh=not args.no_session_refresh,
+        proxy=args.proxy,
+        timeout=args.refresh_timeout,
+        cpa_api_url=args.cpa_api_url or "",
+        cpa_api_token=args.cpa_api_token or "",
+        sub2api_url=args.sub2api_url or "",
+        sub2api_token=args.sub2api_token or "",
+        sub2api_email=args.sub2api_email or "",
+        sub2api_password=args.sub2api_password or "",
+        sub2api_group=args.sub2api_group or "",
+        sub2api_group_ids=args.sub2api_group_ids or "",
+        sub2api_proxy=args.sub2api_proxy or "",
+        sub2api_proxy_id=args.sub2api_proxy_id,
+        sub2api_priority=args.sub2api_priority,
+        sub2api_concurrency=args.sub2api_concurrency,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _payment_method_label(payment_method):
+    raw = str(payment_method or "").strip().lower()
+    if raw in {"gopay", "go-pay", "go_pay"}:
+        value = "gopay"
+    elif raw in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        value = "upi"
+    else:
+        value = "paypal"
+    if value == "gopay":
+        return "GoPay"
+    if value == "upi":
+        return "UPI"
+    return "PayPal"
 
 
 def _payment_link_enabled(payment_method, args):
     if args.skip_paypal_link:
         return False
     paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    if payment_method == "gopay":
-        gopay_cfg = CFG.get("gopay") if isinstance(CFG.get("gopay"), dict) else {}
-        return bool(gopay_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
+    if payment_method in {"gopay", "upi"}:
+        method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+        return bool(method_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
     return bool(paypal_cfg.get("auto_generate", True))
 
 
@@ -574,10 +686,7 @@ def _import_cpa(args):
             sub2api_concurrency=args.sub2api_concurrency,
         )
     else:
-        rows = [
-            row for row in list_paypal_accounts()
-            if str(row.get("paypal_status") or "").strip().lower() == "completed"
-        ]
+        rows = _importable_account_rows()
         emails = [row.get("email", "") for row in rows if row.get("email")]
         result = import_account_sessions(
             args.import_target,
@@ -603,6 +712,84 @@ def _import_cpa(args):
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
+
+
+def _import_team_tokens(args):
+    from .team_token_import import (
+        TEAM_CHANNEL_KYL_PROTOCOL,
+        default_team_script_path,
+        import_team_tokens,
+        run_kyl_protocol_and_import,
+        run_team_script_and_import,
+    )
+
+    common = {
+        "target": args.import_target,
+        "export_dir": args.codex_export_dir or "",
+        "workers": args.workers,
+        "cpa_api_url": args.cpa_api_url or "",
+        "cpa_api_token": args.cpa_api_token or "",
+        "sub2api_url": args.sub2api_url or "",
+        "sub2api_token": args.sub2api_token or "",
+        "sub2api_email": args.sub2api_email or "",
+        "sub2api_password": args.sub2api_password or "",
+        "sub2api_group": args.sub2api_group or "",
+        "sub2api_group_ids": args.sub2api_group_ids or "",
+        "sub2api_proxy": args.sub2api_proxy or "",
+        "sub2api_proxy_id": args.sub2api_proxy_id,
+        "sub2api_priority": args.sub2api_priority,
+        "sub2api_concurrency": args.sub2api_concurrency,
+    }
+    if args.run_team_script:
+        channel = getattr(args, "team_channel", "chatgpt_team") or "chatgpt_team"
+        if channel == TEAM_CHANNEL_KYL_PROTOCOL:
+            result = run_kyl_protocol_and_import(
+                state_path=getattr(args, "kyl_state_path", "") or "",
+                cookie_path=getattr(args, "kyl_cookie_path", "") or "",
+                har_path=getattr(args, "kyl_har_path", "") or "",
+                fingerprint=getattr(args, "kyl_fingerprint", "") or "",
+                total=args.team_total or args.count or 1,
+                protocol_workers=args.team_workers or args.workers or 1,
+                start=getattr(args, "kyl_start", 0) or 0,
+                timeout=args.team_script_timeout,
+                runner_dir=getattr(args, "kyl_runner_dir", "") or "",
+                runtime_path=getattr(args, "kyl_runtime_dir", "") or "",
+                auth_dir=getattr(args, "kyl_auth_dir", "") or "",
+                include_existing=bool(getattr(args, "kyl_include_existing", False)),
+                proxy=args.proxy or "",
+                **common,
+            )
+        else:
+            script_path = args.team_script or default_team_script_path()
+            result = run_team_script_and_import(
+                script_path=script_path,
+                total=args.team_total or args.count or 1,
+                script_workers=args.team_workers or args.workers or 1,
+                proxy=args.proxy or "",
+                output=args.team_output or "registered_only.txt",
+                timeout=args.team_script_timeout,
+                **common,
+            )
+    else:
+        result = import_team_tokens(
+            token_dir=args.team_token_dir or "",
+            token_files=args.team_token_file or [],
+            token_file_list=args.team_token_file_list or "",
+            **common,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _importable_account_rows():
+    rows = []
+    for row in list_paypal_accounts():
+        email = str(row.get("email") or "").strip()
+        access_token = str(row.get("access_token") or "").strip()
+        if email and access_token:
+            rows.append(row)
+    return rows
 
 
 def _auto_reimport_cpa_401(args):
@@ -672,7 +859,13 @@ def _regenerate_paypal_link(args):
             if index > 0 and delay_seconds > 0:
                 time.sleep(delay_seconds * index if workers > 1 else delay_seconds)
             print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-            return index, regenerate_paypal_link(email=item_email, session_file="", proxy=args.proxy, payment_method=payment_method)
+            return index, regenerate_paypal_link(
+                email=item_email,
+                session_file="",
+                proxy=args.proxy,
+                payment_method=payment_method,
+                paypal_generation_type=args.paypal_generation_type,
+            )
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
@@ -690,7 +883,13 @@ def _regenerate_paypal_link(args):
     if not email and not args.session_file:
         print("[Error] --email or --session-file is required with --regenerate-paypal-link")
         return
-    result = regenerate_paypal_link(email=email, session_file=args.session_file or "", proxy=args.proxy, payment_method=_payment_method(args))
+    result = regenerate_paypal_link(
+        email=email,
+        session_file=args.session_file or "",
+        proxy=args.proxy,
+        payment_method=_payment_method(args),
+        paypal_generation_type=args.paypal_generation_type,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
@@ -846,8 +1045,12 @@ def _batch_auto_pay(args):
 
 def _one_click_pay(args):
     """一键支付: PayPal 无卡协议支付。"""
-    if _payment_method(args) == "gopay":
+    payment_method = _payment_method(args)
+    if payment_method == "gopay":
         from .gopay_payment import one_click_pay_batch
+    elif payment_method == "upi":
+        print("[Error] UPI currently supports hosted long-link generation only; one-click payment is not implemented")
+        raise SystemExit(2)
     else:
         from .paypal_browser_auto import one_click_pay_batch
     one_click_pay_batch(args)
@@ -875,6 +1078,7 @@ def _one_click_sms(args):
     phone_pool = create_phone_pool(
         max_reuse_count=one_click_max_reuse,
         send_cooldown_seconds=args.phone_send_cooldown,
+        source_override=args.phone_source,
     )
     if not phone_pool.phones:
         print("[Error] --one-click-sms requires a phone pool. Configure phone_reuse.smsbower.api_key/SMSBOWER_API_KEY or phone_reuse.phone_pool.")
