@@ -1,6 +1,18 @@
 {
   "version": 1,
   "skills": {
+    "hallmark": {
+      "source": "Nutlope/hallmark",
+      "sourceType": "github",
+      "skillPath": "skills/hallmark/SKILL.md",
+      "computedHash": "db9b4e054943282b36cdbd93e574f897f00ef39d57bdecd2c0d7f1df71d8b4d0"
+    },
+    "linear": {
+      "source": "ihlamury/design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/linear/SKILL.md",
+      "computedHash": "d3188f9c84a3f6aa79b4780b51563ef82cd82fdb4c5f790a4e06adf32f251bb6"
+    },
     "rev-dex-dumper": {
       "source": "P4nda0s/reverse-skills",
       "sourceType": "github",

@@ -4,9 +4,11 @@ from .sub2api_import import fetch_sub2api_auth_files, import_sub2api_session, im
 
 TARGET_CPA = "cpa"
 TARGET_SUB2API = "sub2api"
+TARGET_CLIPROXYAPI = "cliproxyapi"
 TARGET_LABELS = {
     TARGET_CPA: "CPA",
     TARGET_SUB2API: "SUB2API",
+    TARGET_CLIPROXYAPI: "CLIProxyAPI",
 }
 
 
@@ -14,6 +16,8 @@ def normalize_import_target(value):
     text = str(value or "").strip().lower().replace("-", "").replace("_", "")
     if text in {"sub2api", "subapi", "s2a"}:
         return TARGET_SUB2API
+    if text in {"cliproxyapi", "cliproxy", "cpaapi"}:
+        return TARGET_CLIPROXYAPI
     return TARGET_CPA
 
 

@@ -9,7 +9,7 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
-  -> PayPal/GoPay payment-link generation or explicit protocol payment
+  -> PayPal/GoPay/UPI payment-link generation or explicit protocol payment
   -> session JSON + SQLite index
   -> status display and maintenance actions
 ```
@@ -32,8 +32,8 @@ sms_tool/
   providers/                External provider clients.
   http_client.py            curl_cffi retry/transport handling.
   registration.py           ChatGPT registration protocol and batch worker control.
-  gen_pp_link.py            PayPal/Stripe hosted payment-link generation.
-  paypal_links.py           Regenerate PayPal links without clobbering old links.
+  gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
+  paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_browser_auto.py    Default PayPal one-click adapter using saved links.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
@@ -76,6 +76,41 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 
 ## Boundary Rules
 
+### PayPal Generation Type
+
+`config.json` `paypal.link_generation_type` is the single selector exposed by
+`[配置] -> [代理/支付] -> PayPal生成类型`:
+
+- `hosted_long_url`（长链）: `checkout -> stripe init -> stripe_hosted_url`, then persist a normalized `pay.openai.com/c/pay/...` hosted long URL.
+- `paypal_direct`（PP直链）: `checkout -> stripe init -> pm create(type=paypal) -> confirm`, then follow Stripe `pm-redirects` to a PayPal `agreements/approve?ba_token=...` URL. The BA token is treated as sensitive and must not be logged in full.
+- `paypal_direct_zero_due`（PP直链-强制0元试用）: same direct PayPal approval flow, but `require_zero_due=true`; if Stripe init shows any non-zero amount, the flow stops with `checkout_not_zero_due` and does not persist a BA approval link. This strict mode also disables hosted-link fallback and old saved-link reuse so UI state cannot show a stale `link_ready` URL after the current zero-due direct generation fails.
+
+- `gpt_pp_core`: ported core from `github.com/jmmy9609-design/gpt-pp`. It keeps only the local protocol engine and maps into the existing generator as `checkout -> Stripe /payment_pages/{cs}/init -> inline PayPal confirm -> pm-redirects.stripe.com/authorize/...`. It does not import the upstream web UI, deployment scripts, or proxy-provider scheduler. Saved-link reuse treats this as a Stripe authorize link mode; strict zero-due behavior is controlled by `paypal.require_zero_due`.
+
+The UI saves the compatible low-level knobs (`checkout_ui_mode`, `link_mode`,
+`confirm_style`, `resolve_ba_redirect`, `require_ba_token`, and
+`require_zero_due`) so the CLI and saved-link regeneration path use the same
+flow without duplicating decision logic in the desktop layer.
+
+### One-click Registration Modes
+
+The desktop `【一键注册+支付链接】` action is only a launcher; mode selection is
+translated into CLI flags and the protocol remains in `sms_tool.registration`.
+
+- `邮箱注册（跳过手机）` is the compatibility/default path. It emits
+  `--registration-at-only --no-phone-reuse`, registers by mailbox email OTP,
+  stores the ChatGPT access token, and then generates the selected payment link.
+- `手机接码注册+绑定邮箱+PP直链0元` keeps the mailbox as the account email, does not
+  use AT-only mode, forces the phone inventory source to SMSBower with
+  `--phone-reuse --phone-source smsbower --max-reuse-count 1`, requires the
+  Codex OAuth phone verification step to succeed, and forces
+  `--paypal-generation-type paypal_direct_zero_due --payment-method paypal`.
+
+This mode does not move SMSBower purchasing logic into the UI. The UI owns only
+the selection and command construction; `sms_tool.phone_reuse` owns SMSBower
+activation/state, `sms_tool.codex_oauth` owns the add-phone/login verification
+step, and `sms_tool.gen_pp_link` owns strict zero-due PayPal direct generation.
+
 ### WPF UI
 
 `SmsWorkbench/MainWindow.xaml.cs` may:
@@ -108,7 +143,7 @@ Payment and CPA operations stay separated in the UI: marking payment complete on
 
 It must not silently replace an explicit empty mailbox file with a new provider purchase. If the user passed a mailbox file and no mailbox was parsed, it exits with code `2`.
 
-Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay payment, PayPal link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
+Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay payment, PayPal/GoPay/UPI link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
 
 ### Mailbox Layer
 
@@ -135,7 +170,6 @@ It must not write registration results or modify mailbox pool files during regis
 
 Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
 
-
 ### Account Seed Layer
 
 `sms_tool.account_seed` owns the shared lookup of account/session seed data. It may:
@@ -150,7 +184,7 @@ Payment adapters may call this seam, but must not duplicate SQLite/session mergi
 
 ### PayPal Link Layer
 
-`sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal redirect URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, or final payment authorization.
+`sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal/GoPay/UPI URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, wallet authorization, or final payment authorization.
 
 `paypal.billing_regions` controls checkout billing country/currency, and `paypal.stage_proxies` can route stages independently:
 
@@ -168,6 +202,8 @@ Payment adapters may call this seam, but must not duplicate SQLite/session mergi
 
 `paypal.billing_regions` controls the Checkout billing country/currency, not the proxy exit. The current PayPal regeneration path follows the standalone long-link script logic with `paypal.link_mode=chatgpt_checkout` and `paypal.checkout_ui_mode=hosted`: it posts ChatGPT checkout for the configured billing region, calls Stripe `/v1/payment_pages/{cs_id}/init`, reads `stripe_hosted_url`, and stores the resulting hosted long URL (`checkout.stripe.com/c/pay/...` normalized to `pay.openai.com/c/pay/...`). It deliberately does not enter Stripe payment-method creation, confirm, or ChatGPT checkout approve, so it avoids the BA-specific `confirm returned no redirect` / `approve blocked` path. `paypal.resolve_ba_redirect=false` and `paypal.require_ba_token=false` are expected in this mode. With `paypal.explicit_proxy_overrides_stage_proxies=false`, a UI/CLI `--proxy` is used as the default candidate proxy but does not override stage-specific routing. Batch regeneration is intentionally conservative: `paypal.max_regenerate_workers` defaults to `1`, and `paypal.regenerate_delay_seconds` staggers accounts so a UI request with `--workers 4` does not fan out four simultaneous checkout creations and trigger `429`. With `paypal.require_zero_due=true`, non-zero checkout totals fail immediately.
 
+The WPF config dropdown and `sms_tool.gen_pp_link` presets currently support `JP`, `US`, `AU`, `DE`, `FR`, `GB`, `IN`, and `BR` for checkout billing-region generation. UPI link generation defaults to `IN`/`INR`, `checkout_ui_mode=hosted`, and `link_mode=chatgpt_checkout`, then stores the hosted `pay.openai.com/c/pay/...` or `checkout.stripe.com/c/pay/...` long link when Stripe init exposes UPI in `payment_method_types`.
+
 ### Payment Responsibility Boundary
 
 Payment is split into three independent responsibilities:
@@ -179,6 +215,8 @@ Payment is split into three independent responsibilities:
    `sms_tool.paypal_auto`, and `sms_tool.gopay_payment`. They only run when the
    user requests `--one-click-pay` or a matching UI action. They use existing
    account seed data and payment links rather than registering accounts.
+   UPI has no one-click execution adapter in this project; it is a hosted-link
+   generation method only.
 3. **Persist/display payment state**: `sms_tool.storage` and `SmsWorkbench`.
    Storage normalizes status fields; the UI displays and launches commands. The
    UI must not infer success from a URL alone.
@@ -266,7 +304,7 @@ python -m unittest discover -s tests
 - Case-insensitive account deduplication.
 - Email normalization before upsert.
 - PayPal status and refresh-token status persistence.
-- Payment method persistence for GoPay/PayPal compatibility.
+- Payment method persistence for GoPay/UPI/PayPal compatibility.
 - Rebuilding SQLite from `sessions/session_*.json`.
 
 `accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same email instead of creating a new row with different casing or a repaired alias spelling.

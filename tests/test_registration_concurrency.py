@@ -9,6 +9,7 @@ from sms_tool.registration import (
     _email_otp_send_url,
     _is_existing_login_redirect,
     _is_user_already_exists,
+    _stored_registration_password,
     run_batch,
 )
 
@@ -159,6 +160,46 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertEqual(len(seen_sentinels), 2)
         self.assertTrue(all(item and item.get("sentinel_token") == "sentinel" for item in seen_sentinels))
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
+
+    def test_run_batch_passes_paypal_generation_type_to_workers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mailboxes.txt"
+            path.write_text("a+oai01@hotmail.com----pw----client----refresh-a\n", encoding="utf-8")
+            mailboxes = _parse_chatai_mailbox_file(path)
+
+        seen = []
+
+        def fake_run_email(**kwargs):
+            seen.append(kwargs.get("paypal_generation_type"))
+            return {"success": True, "email": kwargs["mailbox"].email}
+
+        with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
+            run_batch(
+                count=1,
+                proxy=None,
+                mailboxes=mailboxes,
+                paypal_link=True,
+                workers=1,
+                paypal_generation_type="paypal_direct_zero_due",
+            )
+
+        self.assertEqual(seen, ["paypal_direct_zero_due"])
+
+    def test_stored_registration_password_reuses_non_terminal_failed_password(self):
+        with patch("sms_tool.storage.get_account_record", return_value={
+            "password": "FirstPassword!A1",
+            "error": "email_otp_validate: wrong_email_otp_code",
+            "raw_json": "{}",
+        }):
+            self.assertEqual(_stored_registration_password("a+oai01@hotmail.com"), "FirstPassword!A1")
+
+    def test_stored_registration_password_ignores_password_verify_failures(self):
+        with patch("sms_tool.storage.get_account_record", return_value={
+            "password": "WrongPassword!A1",
+            "error": "password_verify_failed:401",
+            "raw_json": "{}",
+        }):
+            self.assertEqual(_stored_registration_password("a+oai01@hotmail.com"), "")
 
 
 if __name__ == "__main__":

@@ -47,26 +47,6 @@ def main():
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
     parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
-    parser.add_argument("--import-team-tokens", action="store_true", help="Import Team Token channel codex token JSON into CPA/SUB2API/CLIProxyAPI")
-    parser.add_argument("--team-channel", choices=["chatgpt_team", "kyl_protocol"], default="chatgpt_team", help="Team Token generation channel")
-    parser.add_argument("--run-team-script", action="store_true", help="Run the selected Team Token channel first, then import generated token JSON")
-    parser.add_argument("--team-script", default=None, help="Path to ChatGPT_team.py")
-    parser.add_argument("--team-total", type=int, default=None, help="Number of accounts to generate through ChatGPT_team.py")
-    parser.add_argument("--team-workers", type=int, default=None, help="Workers passed to ChatGPT_team.py")
-    parser.add_argument("--team-script-timeout", type=int, default=1800, help="Max seconds to wait for ChatGPT_team.py")
-    parser.add_argument("--team-output", default=None, help="Output file passed to ChatGPT_team.py, default registered_only.txt")
-    parser.add_argument("--team-token-dir", default=None, help="Directory containing ChatGPT_team.py codex_tokens JSON files")
-    parser.add_argument("--team-token-file", action="append", default=None, help="One ChatGPT_team.py token JSON file; can be repeated")
-    parser.add_argument("--team-token-file-list", default=None, help="Text file containing ChatGPT_team.py token JSON paths")
-    parser.add_argument("--kyl-state-path", default=None, help="KYL protocol account state JSON path")
-    parser.add_argument("--kyl-cookie-path", default=None, help="KYL protocol CDP cookies JSON path")
-    parser.add_argument("--kyl-har-path", default=None, help="HAR file to extract cookies for KYL protocol channel")
-    parser.add_argument("--kyl-fingerprint", default=None, help="KYL challenge fingerprint; can also be stored in state JSON")
-    parser.add_argument("--kyl-start", type=int, default=0, help="KYL protocol start account index")
-    parser.add_argument("--kyl-runner-dir", default=None, help="KYL protocol runner directory, defaults to scripts/kyl_protocol_runner")
-    parser.add_argument("--kyl-runtime-dir", default=None, help="KYL protocol runtime directory")
-    parser.add_argument("--kyl-auth-dir", default=None, help="Temporary KYL auth output dir before importing")
-    parser.add_argument("--kyl-include-existing", action="store_true", help="Process KYL accounts even when auth JSON already exists")
     parser.add_argument("--import-target", choices=["cpa", "sub2api", "cliproxyapi"], default="cpa", help="Target for --import-cpa and 401 re-import")
     parser.add_argument("--auto-reimport-cpa-401", action="store_true", help="Read CPA 401/invalid auth files and re-import matching local sessions")
     parser.add_argument("--reimport-cpa-401-survivors", action="store_true", help="Re-login CPA 401 accounts without Access deactivated mail and re-import them")
@@ -138,9 +118,6 @@ def main():
         return
     if args.mark_paypal_status:
         _mark_paypal_status(args)
-        return
-    if args.import_team_tokens:
-        _import_team_tokens(args)
         return
     if args.import_cpa:
         _import_cpa(args)
@@ -708,74 +685,6 @@ def _import_cpa(args):
             sub2api_proxy_id=args.sub2api_proxy_id,
             sub2api_priority=args.sub2api_priority,
             sub2api_concurrency=args.sub2api_concurrency,
-        )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    if not result.get("ok"):
-        raise SystemExit(3)
-
-
-def _import_team_tokens(args):
-    from .team_token_import import (
-        TEAM_CHANNEL_KYL_PROTOCOL,
-        default_team_script_path,
-        import_team_tokens,
-        run_kyl_protocol_and_import,
-        run_team_script_and_import,
-    )
-
-    common = {
-        "target": args.import_target,
-        "export_dir": args.codex_export_dir or "",
-        "workers": args.workers,
-        "cpa_api_url": args.cpa_api_url or "",
-        "cpa_api_token": args.cpa_api_token or "",
-        "sub2api_url": args.sub2api_url or "",
-        "sub2api_token": args.sub2api_token or "",
-        "sub2api_email": args.sub2api_email or "",
-        "sub2api_password": args.sub2api_password or "",
-        "sub2api_group": args.sub2api_group or "",
-        "sub2api_group_ids": args.sub2api_group_ids or "",
-        "sub2api_proxy": args.sub2api_proxy or "",
-        "sub2api_proxy_id": args.sub2api_proxy_id,
-        "sub2api_priority": args.sub2api_priority,
-        "sub2api_concurrency": args.sub2api_concurrency,
-    }
-    if args.run_team_script:
-        channel = getattr(args, "team_channel", "chatgpt_team") or "chatgpt_team"
-        if channel == TEAM_CHANNEL_KYL_PROTOCOL:
-            result = run_kyl_protocol_and_import(
-                state_path=getattr(args, "kyl_state_path", "") or "",
-                cookie_path=getattr(args, "kyl_cookie_path", "") or "",
-                har_path=getattr(args, "kyl_har_path", "") or "",
-                fingerprint=getattr(args, "kyl_fingerprint", "") or "",
-                total=args.team_total or args.count or 1,
-                protocol_workers=args.team_workers or args.workers or 1,
-                start=getattr(args, "kyl_start", 0) or 0,
-                timeout=args.team_script_timeout,
-                runner_dir=getattr(args, "kyl_runner_dir", "") or "",
-                runtime_path=getattr(args, "kyl_runtime_dir", "") or "",
-                auth_dir=getattr(args, "kyl_auth_dir", "") or "",
-                include_existing=bool(getattr(args, "kyl_include_existing", False)),
-                proxy=args.proxy or "",
-                **common,
-            )
-        else:
-            script_path = args.team_script or default_team_script_path()
-            result = run_team_script_and_import(
-                script_path=script_path,
-                total=args.team_total or args.count or 1,
-                script_workers=args.team_workers or args.workers or 1,
-                proxy=args.proxy or "",
-                output=args.team_output or "registered_only.txt",
-                timeout=args.team_script_timeout,
-                **common,
-            )
-    else:
-        result = import_team_tokens(
-            token_dir=args.team_token_dir or "",
-            token_files=args.team_token_file or [],
-            token_file_list=args.team_token_file_list or "",
-            **common,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):

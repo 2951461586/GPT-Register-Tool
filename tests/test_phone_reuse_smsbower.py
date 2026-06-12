@@ -530,6 +530,26 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].country, "US")
         self.assertEqual(pool.phones[0].pricing_option, 1)
 
+    def test_source_override_can_force_smsbower_for_registration(self):
+        with TemporaryDirectory() as tmp:
+            state_path = f"{tmp}/phone_state.json"
+            cfg = {
+                "phone_reuse": {
+                    "source": "phone_pool",
+                    "state_file": state_path,
+                    "smsbower": {"api_key": "smsbower-key", "pool_size": 1},
+                    "phone_pool": [
+                        {"phone": "+15485091782", "sms_api_url": "https://sms789.com/sms/by_key?key=test"}
+                    ],
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool(source_override="smsbower")
+
+        self.assertEqual(len(pool.phones), 1)
+        self.assertEqual(pool.phones[0].provider, "smsbower")
+        self.assertEqual(pool.phones[0].api_key, "smsbower-key")
+
     def test_nextsms_phone_verification_acquires_and_polls_code(self):
         slot = PhoneSlot(
             phone="",
