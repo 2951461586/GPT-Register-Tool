@@ -225,30 +225,50 @@ def _payment_method(data, paypal):
     ).lower()
     if value in {"gopay", "go-pay", "go_pay"}:
         return "gopay"
+    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        return "upi"
     if value:
         return "paypal"
+    pm_types = paypal.get("payment_method_types")
+    if isinstance(pm_types, (list, tuple)):
+        pm_type_values = {str(item or "").strip().lower() for item in pm_types}
+    else:
+        pm_type_values = {str(pm_types or "").strip().lower()} if pm_types else set()
+    currency = str(_get(paypal, "currency")).strip().lower()
+    if "upi" in pm_type_values or currency == "inr":
+        return "upi"
+    if "gopay" in pm_type_values or currency == "idr":
+        return "gopay"
     if _get(paypal, "url"):
         return "paypal"
     return ""
 
 
 def _oauth_refresh_token(data, auth_session):
-    return (
-        str(_get(data, "oauth_refresh_token")).strip()
-        or str(_get(auth_session, "refreshToken")).strip()
-        or str(_get(auth_session, "refresh_token")).strip()
-        or _nested_token(auth_session, "session", "refresh_token")
-        or _nested_token(auth_session, "session", "refreshToken")
+    candidates = (
+        str(_get(data, "oauth_refresh_token")).strip(),
+        str(_get(auth_session, "refreshToken")).strip(),
+        str(_get(auth_session, "refresh_token")).strip(),
+        _nested_token(auth_session, "session", "refresh_token"),
+        _nested_token(auth_session, "session", "refreshToken"),
     )
+    for token in candidates:
+        if _looks_codex_refresh_token(token):
+            return token
+    return ""
+
+
+def _looks_codex_refresh_token(token):
+    return str(token or "").strip().startswith("rt_")
 
 
 def _refresh_token_status(data, auth_session):
     explicit = str(_get(data, "refresh_token_status")).strip()
     if _oauth_refresh_token(data, auth_session):
         return "oauth_present"
-    if explicit:
+    if explicit and explicit != "oauth_present":
         return explicit
-    if str(_get(data, "refresh_token")).strip():
+    if _looks_codex_refresh_token(_get(data, "refresh_token")):
         return "legacy_present"
     return "no_rt"
 

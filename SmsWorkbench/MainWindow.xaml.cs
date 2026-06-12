@@ -23,6 +23,7 @@ namespace SmsWorkbench
 {
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
     {
+        private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
         private static readonly HttpClient httpClient = new HttpClient();
         private static readonly ConfigComboOption[] SmsBowerCountryOptions = new[]
         {
@@ -36,6 +37,7 @@ namespace SmsWorkbench
         {
             new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
             new ConfigComboOption("US", "美国 / United States (USD)", "United States", "USD"),
+            new ConfigComboOption("AU", "澳大利亚 / Australia (AUD)", "Australia", "AUD"),
             new ConfigComboOption("DE", "德国 / Germany (EUR)", "Germany", "EUR"),
             new ConfigComboOption("FR", "法国 / France (EUR)", "France", "EUR"),
             new ConfigComboOption("GB", "英国 / United Kingdom (GBP)", "United Kingdom", "GBP"),
@@ -47,6 +49,7 @@ namespace SmsWorkbench
             new ConfigComboOption("hosted_long_url", "托管长链接 / Hosted Long URL", "hosted_long_url", "hosted_long_url"),
             new ConfigComboOption("paypal_direct", "PayPal 直链 / PayPal Direct", "paypal_direct", "paypal_direct"),
             new ConfigComboOption("paypal_direct_zero_due", "PayPal 直链零金额 / PayPal Direct Zero Due", "paypal_direct_zero_due", "paypal_direct_zero_due"),
+            new ConfigComboOption("gpt_pp_core", "gpt-pp Core Protocol", "gpt_pp_core", "gpt_pp_core"),
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
@@ -211,6 +214,10 @@ namespace SmsWorkbench
         {
             InitializeComponent();
             DataContext = this;
+
+            // Initialize theme colors on startup
+            _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
+            ApplyCustomThemeColors(_currentTheme);
 
             rootDir = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName ?? AppDomain.CurrentDomain.BaseDirectory;
             if (Path.GetFileName(rootDir).Equals("net10", StringComparison.OrdinalIgnoreCase))
@@ -1855,6 +1862,87 @@ namespace SmsWorkbench
 
         private void Settings_Click(object sender, RoutedEventArgs e) => ShowConfigDialog();
 
+        private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+        {
+            _currentTheme = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark 
+                ? Wpf.Ui.Appearance.ApplicationTheme.Light 
+                : Wpf.Ui.Appearance.ApplicationTheme.Dark;
+            
+            Log($"切换主题被点击。新主题: {_currentTheme}");
+            
+            try
+            {
+                Wpf.Ui.Appearance.ApplicationThemeManager.Apply(_currentTheme, Wpf.Ui.Controls.WindowBackdropType.Mica, true);
+                ApplyCustomThemeColors(_currentTheme);
+                Log("主题更新应用成功。");
+            }
+            catch (Exception ex)
+            {
+                Log($"应用主题异常: {ex.Message}");
+            }
+        }
+
+        private void ApplyCustomThemeColors(Wpf.Ui.Appearance.ApplicationTheme theme)
+        {
+            if (theme == Wpf.Ui.Appearance.ApplicationTheme.Dark)
+            {
+                // Antigravity-like premium Dark Theme (deep navy/charcoal, neon/slate accent)
+                SetBrush("AppBg", "#0F1115");
+                SetBrush("PanelBg", "#161920");
+                SetBrush("PanelBg2", "#1E222B");
+                SetBrush("PanelHover", "#242933");
+                SetBrush("Line", "#2C313D");
+                SetBrush("LineStrong", "#4C5467");
+                SetBrush("Primary", "#E9ECEF");
+                SetBrush("PrimarySoft", "#1E222B");
+                SetBrush("Danger", "#FA5252");
+                SetBrush("DangerSoft", "#2B1D1D");
+                SetBrush("DangerBorder", "#8C2A2A");
+                SetBrush("TextMain", "#F1F3F5");
+                SetBrush("TextSub", "#A9B2C3");
+                SetBrush("TextMuted", "#6C7A93");
+                SetBrush("SidebarBg", "#161920");
+                SetBrush("GridAltBg", "#12141A");
+                SetBrush("SplitterBg", "#2C313D");
+                SetBrush("StatusBg", "#0F1115");
+                SetBrush("LogBg", "#0A0B0E");
+                SetBrush("LogBorder", "#1E222B");
+                SetBrush("LogText", "#D1D6E0");
+            }
+            else
+            {
+                // Clean Premium Light Theme (Stripe/Vercel style)
+                SetBrush("AppBg", "#F8F9FA");
+                SetBrush("PanelBg", "#FFFFFF");
+                SetBrush("PanelBg2", "#F1F3F5");
+                SetBrush("PanelHover", "#F1F3F5");
+                SetBrush("Line", "#E9ECEF");
+                SetBrush("LineStrong", "#CED4DA");
+                SetBrush("Primary", "#1A1B1E");
+                SetBrush("PrimarySoft", "#F1F3F5");
+                SetBrush("Danger", "#FA5252");
+                SetBrush("DangerSoft", "#FFF5F5");
+                SetBrush("TextMain", "#1A1B1E");
+                SetBrush("TextSub", "#495057");
+                SetBrush("TextMuted", "#868E96");
+                SetBrush("SidebarBg", "#FFFFFF");
+                SetBrush("GridAltBg", "#F8F9FA");
+                SetBrush("SplitterBg", "#E9ECEF");
+                SetBrush("StatusBg", "#F8F9FA");
+                SetBrush("LogBg", "#1A1B1E");
+                SetBrush("LogBorder", "#2C2E33");
+                SetBrush("LogText", "#E9ECEF");
+            }
+        }
+
+        private void SetBrush(string key, string hexColor)
+        {
+            var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor);
+            var brush = new System.Windows.Media.SolidColorBrush(color);
+            Application.Current.Resources[key] = brush;
+            this.Resources[key] = brush; // Force local window resource update
+        }
+
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
             SidebarCollapsed = !SidebarCollapsed;
@@ -2020,225 +2108,6 @@ namespace SmsWorkbench
             var args = new List<string> { "--import-cpa", "--email-file", emailFile, "--workers", "4", "--refresh-timeout", "60" };
             AddImportTargetArg(args, target);
             RunBackend("一键导入" + ImportTargetLabel(target) + " (" + rows.Count + ")", args);
-        }
-
-        private void ImportTeamTokens_Click(object sender, RoutedEventArgs e)
-        {
-            string target = ShowImportTargetDialog("Team Token导入");
-            if (target.Length == 0) return;
-
-            TeamTokenRunOptions options = ShowTeamTokenRunOptionsDialog();
-            if (options == null) return;
-
-            bool kylChannel = options.Channel.Equals("kyl_protocol", StringComparison.OrdinalIgnoreCase);
-            if (!kylChannel && !File.Exists(options.ScriptPath))
-            {
-                ShowThemedInfoDialog("脚本不存在", "找不到 ChatGPT_team.py：" + options.ScriptPath);
-                return;
-            }
-            if (kylChannel && string.IsNullOrWhiteSpace(options.KylStatePath))
-            {
-                ShowThemedInfoDialog("缺少状态文件", "KYL Protocol Runner 渠道需要填写 STATE_PATH 账号状态 JSON。");
-                return;
-            }
-
-            var args = new List<string>
-            {
-                "--import-team-tokens",
-                "--run-team-script",
-                "--team-channel",
-                options.Channel,
-                "--team-total",
-                options.Count.ToString(),
-                "--team-workers",
-                options.TeamWorkers.ToString(),
-                "--team-script-timeout",
-                options.TimeoutSeconds.ToString(),
-                "--workers",
-                "4"
-            };
-
-            if (kylChannel)
-            {
-                args.Add("--kyl-state-path");
-                args.Add(options.KylStatePath.Trim());
-                args.Add("--kyl-start");
-                args.Add(options.KylStartIndex.ToString());
-                if (!string.IsNullOrWhiteSpace(options.KylCookiePath))
-                {
-                    args.Add("--kyl-cookie-path");
-                    args.Add(options.KylCookiePath.Trim());
-                }
-                if (!string.IsNullOrWhiteSpace(options.KylHarPath))
-                {
-                    args.Add("--kyl-har-path");
-                    args.Add(options.KylHarPath.Trim());
-                }
-                if (!string.IsNullOrWhiteSpace(options.KylFingerprint))
-                {
-                    args.Add("--kyl-fingerprint");
-                    args.Add(options.KylFingerprint.Trim());
-                }
-            }
-            else
-            {
-                args.Add("--team-script");
-                args.Add(options.ScriptPath);
-            }
-
-            AddImportTargetArg(args, target);
-            AddProxy(args);
-            string channelLabel = kylChannel ? "KYL Protocol" : "ChatGPT_team.py";
-            RunBackend("Team Token生成并导入" + ImportTargetLabel(target) + " / " + channelLabel + " (" + options.Count + ")", args);
-        }
-
-        private TeamTokenRunOptions ShowTeamTokenRunOptionsDialog()
-        {
-            var dialog = new Window
-            {
-                Title = "Team Token\u751f\u6210\u5e76\u5bfc\u5165",
-                Owner = this,
-                Width = 560,
-                Height = 430,
-                MinWidth = 520,
-                MinHeight = 360,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(14) };
-            for (int i = 0; i < 7; i++)
-            {
-                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            }
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            void AddRow(int row, string label, Control input)
-            {
-                var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-                input.Margin = new Thickness(0, 0, 0, 10);
-                Grid.SetRow(text, row);
-                Grid.SetColumn(text, 0);
-                Grid.SetRow(input, row);
-                Grid.SetColumn(input, 1);
-                root.Children.Add(text);
-                root.Children.Add(input);
-            }
-
-            var channelBox = new ComboBox();
-            channelBox.Items.Add(new ComboBoxItem { Content = "ChatGPT_team.py", Tag = "chatgpt_team" });
-            channelBox.Items.Add(new ComboBoxItem { Content = "KYL Protocol Runner", Tag = "kyl_protocol" });
-            channelBox.SelectedIndex = 0;
-            AddRow(0, "\u751f\u6210\u6e20\u9053", channelBox);
-
-            var countBox = new TextBox { Text = CountValue().ToString() };
-            AddRow(1, "\u751f\u6210\u6570\u91cf", countBox);
-
-            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString() };
-            AddRow(2, "\u811a\u672c\u5e76\u53d1", workerBox);
-
-            var timeoutBox = new TextBox { Text = "1800" };
-            AddRow(3, "\u8d85\u65f6\u79d2", timeoutBox);
-
-            var stateBox = new TextBox { Text = DefaultKylStatePath() };
-            AddRow(4, "KYL STATE_PATH", stateBox);
-
-            var startBox = new TextBox { Text = "0" };
-            AddRow(5, "KYL\u8d77\u59cb\u5e8f\u53f7", startBox);
-
-            var hint = new TextBlock
-            {
-                Text = "KYL \u6e20\u9053\u5df2\u5185\u7f6e HAR \u4e2d\u7684 fingerprint\uff1bcookies \u4ec5\u5728 HAR \u542b Cookie \u65f6\u624d\u4f1a\u5185\u7f6e\u3002STATE_PATH \u9700\u586b\u5199\u8d26\u53f7 email/sub \u5217\u8868\u3002",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
-            };
-            Grid.SetRow(hint, 6);
-            Grid.SetColumnSpan(hint, 2);
-            root.Children.Add(hint);
-
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-            var ok = new Button { Content = "\u5f00\u59cb", Width = 72, Style = (Style)FindResource("PrimaryButton") };
-            var cancel = new Button { Content = "\u53d6\u6d88", Width = 72, Margin = new Thickness(8, 0, 0, 0) };
-            actions.Children.Add(ok);
-            actions.Children.Add(cancel);
-            Grid.SetRow(actions, 7);
-            Grid.SetColumnSpan(actions, 2);
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.Children.Add(actions);
-
-            void UpdateKylFields()
-            {
-                string channel = ((channelBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "chatgpt_team";
-                bool enabled = channel.Equals("kyl_protocol", StringComparison.OrdinalIgnoreCase);
-                stateBox.IsEnabled = enabled;
-                startBox.IsEnabled = enabled;
-            }
-            channelBox.SelectionChanged += (_, __) => UpdateKylFields();
-            UpdateKylFields();
-
-            TeamTokenRunOptions selected = null;
-            ok.Click += (_, __) =>
-            {
-                int count = ParsePositiveInt(countBox.Text, 1, 500, CountValue());
-                int workers = ParsePositiveInt(workerBox.Text, 1, 50, DefaultWorkerCount());
-                int timeout = ParsePositiveInt(timeoutBox.Text, 60, 86400, 1800);
-                string channel = ((channelBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "chatgpt_team";
-                selected = new TeamTokenRunOptions
-                {
-                    Channel = channel,
-                    ScriptPath = DefaultTeamScriptPath(),
-                    Count = count,
-                    TeamWorkers = workers,
-                    TimeoutSeconds = timeout,
-                    KylStatePath = stateBox.Text.Trim(),
-                    KylCookiePath = "",
-                    KylHarPath = "",
-                    KylFingerprint = "",
-                    KylStartIndex = ParsePositiveInt(startBox.Text, 0, 1000000, 0)
-                };
-                CountText = count.ToString();
-                dialog.DialogResult = true;
-                dialog.Close();
-            };
-            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
-            dialog.Content = new ScrollViewer
-            {
-                Content = root,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-            };
-            return dialog.ShowDialog() == true ? selected : null;
-        }
-
-        private string DefaultTeamScriptPath()
-        {
-            string projectScript = Path.Combine(rootDir, "scripts", "ChatGPT_team.py");
-            if (File.Exists(projectScript)) return projectScript;
-            string downloaded = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads",
-                "Telegram Desktop",
-                "ChatGPT_team.py"
-            );
-            if (File.Exists(downloaded)) return downloaded;
-            return Path.Combine(rootDir, "ChatGPT_team.py");
-        }
-
-        private string DefaultKylHarPath()
-        {
-            string path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads",
-                "chatgpt.com-1.har"
-            );
-            return File.Exists(path) ? path : "";
-        }
-
-        private string DefaultKylStatePath()
-        {
-            return Path.Combine(rootDir, "scripts", "kyl_protocol_runner", "kyl_state.json");
         }
 
         private void ExportAccounts_Click(object sender, RoutedEventArgs e)
@@ -5463,20 +5332,6 @@ namespace SmsWorkbench
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
         public string PaymentMethod { get; set; } = "paypal";
-    }
-
-    public sealed class TeamTokenRunOptions
-    {
-        public string Channel { get; set; } = "chatgpt_team";
-        public string ScriptPath { get; set; } = "";
-        public int Count { get; set; } = 1;
-        public int TeamWorkers { get; set; } = 1;
-        public int TimeoutSeconds { get; set; } = 1800;
-        public string KylStatePath { get; set; } = "";
-        public string KylCookiePath { get; set; } = "";
-        public string KylHarPath { get; set; } = "";
-        public string KylFingerprint { get; set; } = "";
-        public int KylStartIndex { get; set; } = 0;
     }
 
     public sealed class TaskRow : INotifyPropertyChanged

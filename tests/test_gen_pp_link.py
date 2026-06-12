@@ -186,12 +186,29 @@ class FakeZeroStripeInitResponse:
         }
 
 
+class FakeNonZeroStripeInitResponse:
+    status_code = 200
+    text = "{}"
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "init_checksum": "init_test",
+            "total_summary": {"due": 2300, "total": 2300},
+            "invoice": {"amount_due": 2300, "total": 2300, "currency": "eur"},
+            "payment_method_types": ["card", "paypal"],
+        }
+
+
 class FakeStripeInitHostedResponse:
-    def __init__(self, stripe_hosted_url: str, currency: str = "usd"):
+    def __init__(self, stripe_hosted_url: str, currency: str = "usd", payment_method_types=None):
         self.status_code = 200
         self.text = "{}"
         self._stripe_hosted_url = stripe_hosted_url
         self._currency = currency
+        self._payment_method_types = payment_method_types or ["card", "paypal"]
 
     def raise_for_status(self):
         return None
@@ -201,7 +218,7 @@ class FakeStripeInitHostedResponse:
             "init_checksum": "init_test",
             "total_summary": {"due": 0, "total": 0},
             "invoice": {"amount_due": 0, "total": 0, "currency": self._currency},
-            "payment_method_types": ["card", "paypal"],
+            "payment_method_types": self._payment_method_types,
             "stripe_hosted_url": self._stripe_hosted_url,
         }
 
@@ -546,6 +563,7 @@ class StripeConfirmErrorTests(unittest.TestCase):
     def test_paypal_default_link_mode_matches_plugin_checkout(self):
         self.assertEqual(gen_pp_link._payment_link_mode({}, "paypal"), "chatgpt_checkout")
         self.assertEqual(gen_pp_link._payment_link_mode({}, "gopay"), "stripe_redirect")
+        self.assertEqual(gen_pp_link._payment_link_mode({}, "upi"), "chatgpt_checkout")
 
     def test_paypal_chatgpt_checkout_link_mode_skips_confirm(self):
         checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
@@ -1387,6 +1405,24 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(regions[0]["browser_timezone"], "Europe/London")
         self.assertEqual(regions[0]["address"]["country"], "GB")
 
+    def test_configured_india_billing_region_uses_inr(self):
+        regions = gen_pp_link._billing_regions({"billing_regions": ["IN"]})
+
+        self.assertEqual(regions[0]["country"], "IN")
+        self.assertEqual(regions[0]["currency"], "INR")
+        self.assertEqual(regions[0]["browser_locale"], "en-IN")
+        self.assertEqual(regions[0]["browser_timezone"], "Asia/Kolkata")
+        self.assertEqual(regions[0]["address"]["country"], "IN")
+
+    def test_configured_brazil_billing_region_uses_brl(self):
+        regions = gen_pp_link._billing_regions({"billing_regions": ["BR"]})
+
+        self.assertEqual(regions[0]["country"], "BR")
+        self.assertEqual(regions[0]["currency"], "BRL")
+        self.assertEqual(regions[0]["browser_locale"], "pt-BR")
+        self.assertEqual(regions[0]["browser_timezone"], "America/Sao_Paulo")
+        self.assertEqual(regions[0]["address"]["country"], "BR")
+
     def test_configured_us_billing_region_matches_original_flow(self):
         regions = gen_pp_link._billing_regions({"billing_regions": ["US"]})
 
@@ -1394,6 +1430,16 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(regions[0]["currency"], "USD")
         self.assertEqual(regions[0]["browser_timezone"], "Asia/Shanghai")
         self.assertEqual(regions[0]["address"]["country"], "US")
+
+    def test_configured_australia_billing_region_uses_aud(self):
+        regions = gen_pp_link._billing_regions({"billing_regions": ["AU"]})
+
+        self.assertEqual(regions[0]["country"], "AU")
+        self.assertEqual(regions[0]["currency"], "AUD")
+        self.assertEqual(regions[0]["browser_locale"], "en-AU")
+        self.assertEqual(regions[0]["browser_timezone"], "Australia/Sydney")
+        self.assertEqual(regions[0]["address"]["country"], "AU")
+        self.assertEqual(regions[0]["address"]["state"], "NSW")
 
     def test_gopay_default_billing_region_is_indonesia(self):
         cfg = {"paypal": {"billing_regions": ["US"]}}
@@ -1403,6 +1449,16 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(regions[0]["country"], "ID")
         self.assertEqual(regions[0]["currency"], "IDR")
         self.assertEqual(regions[0]["browser_timezone"], "Asia/Jakarta")
+
+    def test_upi_default_billing_region_is_india_hosted_long_link(self):
+        cfg = {"paypal": {"billing_regions": ["US"], "link_mode": "stripe_redirect", "checkout_ui_mode": "custom"}}
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "upi")
+        regions = gen_pp_link._billing_regions(payment_cfg)
+
+        self.assertEqual(regions[0]["country"], "IN")
+        self.assertEqual(regions[0]["currency"], "INR")
+        self.assertEqual(gen_pp_link._checkout_ui_mode(payment_cfg), "hosted")
+        self.assertEqual(gen_pp_link._payment_link_mode(payment_cfg, "upi"), "chatgpt_checkout")
 
     def test_generate_payment_link_passes_gopay_method(self):
         ok_result = {"ok": True, "url": "https://app.midtrans.com/snap/v4/redirection/snap"}
@@ -1419,6 +1475,270 @@ class StripeConfirmErrorTests(unittest.TestCase):
         self.assertEqual(result["payment_method"], "gopay")
         self.assertEqual(try_paypal.call_args.kwargs["payment_method"], "gopay")
         self.assertEqual(try_paypal.call_args.args[2]["country"], "ID")
+
+    def test_generate_payment_link_passes_upi_method_and_india_region(self):
+        ok_result = {"ok": True, "url": "https://pay.openai.com/c/pay/cs_live_UPI"}
+        cfg = {
+            "paypal": {"proxies": ["direct"], "billing_regions": ["DE"], "max_checkout_retries": 3},
+            "upi": {"billing_regions": ["IN"], "max_checkout_retries": 1},
+        }
+
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_try_paypal_link", return_value=ok_result) as try_paypal:
+                result = gen_pp_link.generate_payment_link("eyJ.fake.token", payment_method="upi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["payment_method"], "upi")
+        self.assertEqual(try_paypal.call_args.kwargs["payment_method"], "upi")
+        self.assertEqual(try_paypal.call_args.args[2]["country"], "IN")
+
+    def test_upi_hosted_checkout_uses_stripe_init_long_url(self):
+        checkout = FakeCheckoutSession(FakeCheckoutHostedMissingProviderResponse())
+        cfg = {
+            "paypal": {
+                "billing_regions": ["DE"],
+                "stage_proxies": {"checkout": "direct"},
+            },
+            "upi": {
+                "billing_regions": ["IN"],
+                "checkout_ui_mode": "hosted",
+                "link_mode": "chatgpt_checkout",
+                "require_zero_due": True,
+                "refresh_tax_region": False,
+            },
+        }
+        region = gen_pp_link._billing_regions(gen_pp_link._payment_cfg(cfg, "upi"))[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()) as new_session:
+                with patch.object(
+                    gen_pp_link,
+                    "_post_stripe_form",
+                    return_value=FakeStripeInitHostedResponse(
+                        "https://checkout.stripe.com/c/pay/cs_live_UPI123#fidkdWxOYHwnPyd1blppbHNg",
+                        currency="inr",
+                        payment_method_types=["card", "upi"],
+                    ),
+                ) as post_form:
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="upi")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["payment_method"], "upi")
+        self.assertEqual(result["billing_country"], "IN")
+        self.assertEqual(result["currency"], "INR")
+        self.assertTrue(result["has_upi"])
+        self.assertEqual(result["link_type"], "hosted_long_url")
+        self.assertEqual(result["url"], "https://pay.openai.com/c/pay/cs_live_UPI123#fidkdWxOYHwnPyd1blppbHNg")
+        called_urls = [call.args[1] for call in post_form.call_args_list]
+        self.assertEqual(called_urls, ["https://api.stripe.com/v1/payment_pages/cs_live_FAKEHOSTED123/init"])
+        self.assertGreaterEqual(new_session.call_count, 1)
+
+    def test_paypal_generation_type_hosted_patches_long_link_flow(self):
+        cfg = {
+            "paypal": {
+                "link_generation_type": "hosted_long_url",
+                "checkout_ui_mode": "custom",
+                "link_mode": "stripe_redirect",
+                "resolve_ba_redirect": True,
+                "require_ba_token": True,
+                "require_zero_due": False,
+            }
+        }
+
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "paypal")
+
+        self.assertEqual(payment_cfg["link_generation_type"], "hosted_long_url")
+        self.assertEqual(gen_pp_link._checkout_ui_mode(payment_cfg), "hosted")
+        self.assertEqual(gen_pp_link._payment_link_mode(payment_cfg, "paypal"), "chatgpt_checkout")
+        self.assertFalse(payment_cfg["resolve_ba_redirect"])
+        self.assertFalse(payment_cfg["require_ba_token"])
+
+    def test_paypal_generation_type_direct_patches_ba_approve_flow(self):
+        cfg = {
+            "paypal": {
+                "link_generation_type": "paypal_direct",
+                "checkout_ui_mode": "hosted",
+                "link_mode": "chatgpt_checkout",
+                "confirm_style": "inline_payment_method_data",
+                "require_zero_due": True,
+            }
+        }
+
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "paypal")
+
+        self.assertEqual(payment_cfg["link_generation_type"], "paypal_direct")
+        self.assertEqual(gen_pp_link._checkout_ui_mode(payment_cfg), "custom")
+        self.assertEqual(gen_pp_link._payment_link_mode(payment_cfg, "paypal"), "stripe_redirect")
+        self.assertEqual(gen_pp_link._paypal_confirm_style(payment_cfg), "payment_method_id")
+        self.assertTrue(payment_cfg["resolve_ba_redirect"])
+        self.assertTrue(payment_cfg["require_ba_token"])
+        self.assertFalse(payment_cfg["require_zero_due"])
+
+    def test_paypal_generation_type_direct_zero_due_requires_zero_trial(self):
+        cfg = {
+            "paypal": {
+                "link_generation_type": "paypal_direct_zero_due",
+                "checkout_ui_mode": "hosted",
+                "link_mode": "chatgpt_checkout",
+                "confirm_style": "inline_payment_method_data",
+                "require_zero_due": False,
+            }
+        }
+
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "paypal")
+
+        self.assertEqual(payment_cfg["link_generation_type"], "paypal_direct_zero_due")
+        self.assertEqual(gen_pp_link._checkout_ui_mode(payment_cfg), "custom")
+        self.assertEqual(gen_pp_link._payment_link_mode(payment_cfg, "paypal"), "stripe_redirect")
+        self.assertEqual(gen_pp_link._paypal_confirm_style(payment_cfg), "payment_method_id")
+        self.assertTrue(payment_cfg["resolve_ba_redirect"])
+        self.assertTrue(payment_cfg["require_ba_token"])
+        self.assertTrue(payment_cfg["require_zero_due"])
+
+
+    def test_paypal_generation_type_gpt_pp_core_patches_protocol_flow(self):
+        cfg = {
+            "paypal": {
+                "link_generation_type": "gpt_pp_core",
+                "checkout_ui_mode": "custom",
+                "link_mode": "chatgpt_checkout",
+                "resolve_ba_redirect": True,
+                "require_ba_token": True,
+            }
+        }
+
+        payment_cfg = gen_pp_link._payment_cfg(cfg, "paypal")
+
+        self.assertEqual(payment_cfg["link_generation_type"], "gpt_pp_core")
+        self.assertEqual(gen_pp_link._payment_link_mode(payment_cfg, "paypal"), "stripe_redirect")
+        self.assertEqual(payment_cfg["redirect_url_format"], "stripe_authorize")
+        self.assertFalse(payment_cfg["resolve_ba_redirect"])
+        self.assertFalse(payment_cfg["require_ba_token"])
+        self.assertFalse(payment_cfg["approve_missing_redirect"])
+
+    def test_generate_payment_link_routes_gpt_pp_core_engine(self):
+        ok_result = {
+            "ok": True,
+            "url": "https://pm-redirects.stripe.com/authorize/acct_test/sa_nonce_test",
+            "source": "gpt_pp_core",
+            "payment_method": "paypal",
+        }
+        cfg = {
+            "paypal": {
+                "link_generation_type": "gpt_pp_core",
+                "billing_regions": ["DE"],
+                "max_checkout_retries": 1,
+            }
+        }
+
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_try_gpt_pp_core_link", return_value=ok_result) as try_core:
+                result = gen_pp_link.generate_payment_link("eyJ.fake.token", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["source"], "gpt_pp_core")
+        self.assertEqual(result["checkout_attempt"], 1)
+        try_core.assert_called_once()
+
+    def test_paypal_direct_generation_resolves_stripe_redirect_to_ba_url(self):
+        checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
+        stripe_session = FakeStripeSession()
+        ba_url = "https://www.paypal.com/agreements/approve?ba_token=BA-123"
+        cfg = {
+            "paypal": {
+                "link_generation_type": "paypal_direct",
+                "use_elements_session": True,
+                "refresh_tax_region": True,
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions({"billing_regions": ["DE"]})[0]
+
+        def fake_post_form(session, url, body, *, timeout, step):
+            if step == "pm create":
+                return FakePaymentMethodResponse()
+            if step.startswith("confirm"):
+                return FakeConfirmRedirectResponse()
+            return FakeZeroStripeInitResponse()
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=stripe_session):
+                with patch.object(gen_pp_link, "_post_stripe_form", side_effect=fake_post_form):
+                    with patch.object(gen_pp_link, "_resolve_paypal_approve_url", return_value=(ba_url, {"ok": True, "has_ba_token": True})):
+                        result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], ba_url)
+        self.assertTrue(result["ba_resolved"])
+        self.assertTrue(result["ba_token_present"])
+        self.assertIn("pm-redirects.stripe.com/authorize", result["stripe_redirect_url"])
+        self.assertEqual(result["link_mode"], "stripe_redirect")
+        self.assertEqual(result["checkout_ui_mode"], "custom")
+
+    def test_paypal_direct_zero_due_rejects_non_zero_checkout(self):
+        checkout = FakeCheckoutSession(FakeCheckoutOkResponse())
+        cfg = {
+            "paypal": {
+                "link_generation_type": "paypal_direct_zero_due",
+                "refresh_tax_region": False,
+                "stage_proxies": {"checkout": "direct"},
+            }
+        }
+        region = gen_pp_link._billing_regions({"billing_regions": ["DE"]})[0]
+
+        with patch.object(gen_pp_link, "_build_chatgpt_session", return_value=checkout):
+            with patch.object(gen_pp_link, "_new_session", return_value=FakeStripeSession()):
+                with patch.object(gen_pp_link, "_post_stripe_form", return_value=FakeNonZeroStripeInitResponse()):
+                    result = gen_pp_link._try_paypal_link("eyJ.fake.token", cfg, region, "", payment_method="paypal")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "checkout_not_zero_due")
+        self.assertFalse(result["zero_due_verified"])
+        self.assertEqual(result["amount_due"], 2300)
+
+    def test_paypal_direct_zero_due_does_not_fallback_to_hosted_when_approve_blocked(self):
+        blocked = {
+            "ok": False,
+            "error": "ChatGPT checkout approve was blocked after Stripe confirm returned no redirect",
+            "error_code": "checkout_approve_blocked",
+            "terminal": True,
+            "zero_due_verified": True,
+        }
+        cfg = {"paypal": {"link_generation_type": "paypal_direct_zero_due", "max_checkout_retries": 1}}
+
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_try_paypal_link", return_value=blocked) as try_link:
+                result = gen_pp_link.generate_payment_link("eyJ.fake.token", payment_method="paypal")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "checkout_approve_blocked")
+        self.assertTrue(result["zero_due_verified"])
+        self.assertEqual(try_link.call_count, 1)
+
+    def test_generate_payment_link_can_override_paypal_generation_type(self):
+        ok_result = {
+            "ok": True,
+            "url": "https://www.paypal.com/agreements/approve?ba_token=BA-123",
+            "payment_method": "paypal",
+        }
+        cfg = {
+            "paypal": {
+                "link_generation_type": "hosted_long_url",
+                "billing_regions": ["DE"],
+            }
+        }
+
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_try_paypal_link", return_value=ok_result) as try_link:
+                result = gen_pp_link.generate_payment_link(
+                    "eyJ.fake.token",
+                    payment_method="paypal",
+                    paypal_generation_type="paypal_direct_zero_due",
+                )
+
+        self.assertTrue(result["ok"])
+        payment_cfg = try_link.call_args.args[1]["paypal"]
+        self.assertEqual(payment_cfg["link_generation_type"], "paypal_direct_zero_due")
 
     def test_default_paypal_config_matches_committed_chatgpt_checkout_us(self):
         cfg = {

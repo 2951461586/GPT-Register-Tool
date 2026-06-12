@@ -76,7 +76,9 @@
     "fallback_to_stripe_redirect_on_missing_hosted": false,
     "hosted_usd_fallback_on_422": false,
     "allow_chatgpt_checkout_fallback": true,
-    "hosted_usd_fallback_on_non_hosted": false
+    "hosted_usd_fallback_on_non_hosted": false,
+    "link_generation_type": "hosted_long_url",
+    "gpt_pp_core_note": "Set link_generation_type to gpt_pp_core to use the ported gpt-pp core PayPal authorize extractor"
   },
   "gopay": {
     "one_click_mode": "protocol",
@@ -298,5 +300,17 @@
     ],
     "card_index_file": "runtime/nocard_card_index.txt",
     "phone_index_file": "runtime/nocard_phone_index.txt"
+  },
+  "upi": {
+    "auto_generate": true,
+    "billing_regions": [
+      "IN"
+    ],
+    "link_mode": "chatgpt_checkout",
+    "checkout_ui_mode": "hosted",
+    "redirect_url_format": "any",
+    "use_elements_session": true,
+    "approve_missing_redirect": false,
+    "max_checkout_retries": 3
   }
 }

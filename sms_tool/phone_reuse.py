@@ -324,9 +324,13 @@ def _phone_source(cfg: dict | None = None) -> str:
     return "auto"
 
 
-def create_phone_pool(max_reuse_count: int = 0, send_cooldown_seconds: int | None = None) -> PhonePool:
+def create_phone_pool(
+    max_reuse_count: int = 0,
+    send_cooldown_seconds: int | None = None,
+    source_override: str | None = None,
+) -> PhonePool:
     cfg = _phone_reuse_cfg()
-    source = _phone_source(cfg)
+    source = _phone_source({"source": source_override}) if source_override else _phone_source(cfg)
     max_reuse = max_reuse_count or _int_value(cfg.get("max_reuse_count"), 1)
     send_cooldown = (
         max(0, int(send_cooldown_seconds))
