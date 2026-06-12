@@ -4,6 +4,7 @@ The scan is intentionally probe-only for phone verification: it detects an
 OAuth add-phone challenge but never sends an SMS or consumes a phone number.
 """
 
+import base64
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -49,7 +50,9 @@ def scan_accounts(emails, session_file="", workers=4, proxy=None, timeout=120):
         "secondary_phone_verification_required": secondary_phone_count,
         "failed": max(0, failed_count),
         "results": [_public_scan_result(r) for r in results],
+        "overview": [_scan_overview(r) for r in results],
     }
+    _print_scan_overview(results)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary
 
@@ -98,12 +101,20 @@ def _scan_one(index, total, email, session_file="", proxy=None, timeout=120):
             data["refresh_token_status"] = "oauth_present" if data.get("oauth_refresh_token") else str(data.get("refresh_token_status") or "no_rt")
             data["refresh_token_updated_at"] = int(time.time())
         result = _result(index, email, "alive", True, had_rt or bool(data.get("oauth_refresh_token")), had_phone, refresh_result=refresh_result, oauth_result=oauth_result, started=started)
+        result["subscription_type"] = _subscription_type(data)
+        result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
+        result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
+        result["dropped"] = "否"
         _persist_scan(data, json_path, result)
         print(f"[OK] {email} alive")
         return result
 
     if _looks_account_deactivated(oauth_result):
         result = _result(index, email, "account_deactivated", False, had_rt, had_phone, refresh_result=refresh_result, oauth_result=oauth_result, started=started)
+        result["subscription_type"] = _subscription_type(data)
+        result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
+        result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
+        result["dropped"] = "是"
         _persist_scan(data, json_path, result)
         print(f"[DEACTIVATED] {email}")
         return result
@@ -124,6 +135,10 @@ def _scan_one(index, total, email, session_file="", proxy=None, timeout=120):
             secondary_phone_verification_required=had_rt,
             started=started,
         )
+        result["subscription_type"] = _subscription_type(data)
+        result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
+        result["phone_verification_required_label"] = "是"
+        result["dropped"] = "否"
         _persist_scan(data, json_path, result)
         label = "SECONDARY_PHONE" if had_rt else "PHONE_REQUIRED"
         print(f"[{label}] {email}")
@@ -134,11 +149,19 @@ def _scan_one(index, total, email, session_file="", proxy=None, timeout=120):
     # the add-phone check was inconclusive.
     if refresh_result.get("ok"):
         result = _result(index, email, "alive_probe_inconclusive", True, had_rt, had_phone, refresh_result=refresh_result, oauth_result=oauth_result, started=started)
+        result["subscription_type"] = _subscription_type(data)
+        result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
+        result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
+        result["dropped"] = "否"
         _persist_scan(data, json_path, result)
         print(f"[OK] {email} alive; OAuth probe inconclusive: {oauth_result.get('error', 'unknown')}")
         return result
 
     result = _result(index, email, "scan_failed", False, had_rt, had_phone, refresh_result=refresh_result, oauth_result=oauth_result, started=started)
+    result["subscription_type"] = _subscription_type(data)
+    result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
+    result["phone_verification_required_label"] = "是" if result.get("phone_verification_required") else "否"
+    result["dropped"] = "否"
     _persist_scan(data, json_path, result)
     print(f"[FAIL] {email}: {oauth_result.get('error', refresh_result.get('error', 'unknown'))}")
     return result
@@ -151,6 +174,7 @@ def _persist_scan(data, json_path, result):
     updated["account_scan_status"] = result.get("scan_status", "")
     updated["account_scan_updated_at"] = now
     updated["account_scan"] = _public_scan_result(result)
+    updated["account_scan_overview"] = _scan_overview(result)
 
     status = result.get("scan_status")
     if status == "account_deactivated":
@@ -211,12 +235,110 @@ def _result(index, email, status, ok, had_rt, had_phone, refresh_result=None, oa
     }
 
 
+def _scan_overview(result):
+    dropped_value = str((result or {}).get("dropped") or "").strip().lower()
+    dropped = (
+        str((result or {}).get("scan_status") or "").strip() == "account_deactivated"
+        or dropped_value in {"是", "yes", "true", "1"}
+    )
+    return {
+        "email": str((result or {}).get("email") or "").strip(),
+        "at_status": _at_status_label(result or {}, (result or {}).get("refresh") or {}, (result or {}).get("oauth") or {}),
+        "phone_verification_required": "是" if bool((result or {}).get("phone_verification_required")) else "否",
+        "subscription_type": _subscription_type(result or {}),
+        "dropped": "是" if dropped else "否",
+    }
+
+
+def _print_scan_overview(results):
+    if not results:
+        return
+    print("[*] 扫号概览:")
+    for index, result in enumerate(results, 1):
+        overview = _scan_overview(result)
+        print(
+            f"{index}. {overview['email']} | "
+            f"AT: {overview['at_status']} | "
+            f"需要手机号验证: {overview['phone_verification_required']} | "
+            f"订阅类型: {overview['subscription_type']} | "
+            f"已掉号: {overview['dropped']}"
+        )
+
+
 def _public_scan_result(result):
     output = dict(result or {})
     output.pop("index", None)
     output["refresh"] = _public_oauth_result(output.get("refresh") or {})
     output["oauth"] = _public_oauth_result(output.get("oauth") or {})
     return output
+
+
+def _subscription_type(data):
+    candidates = [
+        (data or {}).get("subscription_type"),
+        _nested_value(data, "planType"),
+        _nested_value(data, "plan_type"),
+        _nested_value(data, "account", "planType"),
+        _nested_value(data, "account", "plan_type"),
+        _nested_value(data, "auth_session", "account", "planType"),
+        _nested_value(data, "auth_session", "account", "plan_type"),
+        _jwt_plan_type(str((data or {}).get("access_token") or "")),
+    ]
+    for value in candidates:
+        normalized = _normalize_subscription_type(value)
+        if normalized:
+            return normalized
+    return "free"
+
+
+def _normalize_subscription_type(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    if "team" in text or "business" in text:
+        return "team"
+    if "plus" in text:
+        return "plus"
+    if "free" in text:
+        return "free"
+    return ""
+
+
+def _nested_value(data, *keys):
+    node = data
+    for key in keys:
+        if not isinstance(node, dict):
+            return ""
+        node = node.get(key)
+    return node
+
+
+def _jwt_plan_type(token):
+    try:
+        parts = token.split(".")
+        if len(parts) < 2 or not parts[1]:
+            return ""
+        payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+        body = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+    except Exception:
+        return ""
+    auth = body.get("https://api.openai.com/auth") if isinstance(body, dict) else {}
+    if isinstance(auth, dict):
+        return auth.get("chatgpt_plan_type") or auth.get("plan_type") or ""
+    return ""
+
+
+def _at_status_label(result, refresh_result=None, oauth_result=None):
+    refresh_ok = bool((refresh_result or {}).get("ok"))
+    oauth_ok = bool((oauth_result or {}).get("ok"))
+    scan_status = str((result or {}).get("scan_status") or "").strip()
+    if scan_status == "account_deactivated":
+        return "AT失效"
+    if oauth_ok and not refresh_ok:
+        return "AT失效已刷新"
+    if refresh_ok or bool((result or {}).get("ok")):
+        return "AT有效"
+    return "AT失效"
 
 
 def _public_oauth_result(result):

@@ -53,6 +53,27 @@ def _failure_result(error, email="", mailbox=None, password=""):
     return result
 
 
+def _stored_registration_password(email):
+    try:
+        from .storage import get_account_record
+        row = get_account_record(email)
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    error = str(row.get("error") or "").lower()
+    if "password_verify_failed" in error:
+        return ""
+    password = str(row.get("password") or "").strip()
+    if password:
+        return password
+    try:
+        raw = json.loads(row.get("raw_json") or "{}")
+    except Exception:
+        raw = {}
+    return str(raw.get("password") or "").strip()
+
+
 
 def _safe_tock():
     timings = _tl()
@@ -505,6 +526,16 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
     return False, last_error
 
 
+def _is_wrong_email_otp_code(data):
+    try:
+        error = (data or {}).get("body", {}).get("error", {})
+        code = str(error.get("code") or "").strip().lower()
+        message = str(error.get("message") or "").strip().lower()
+        return code == "wrong_email_otp_code" or "wrong code" in message
+    except Exception:
+        return False
+
+
 def _cookie_header(session):
     cookies = getattr(session, "cookies", None)
     if not cookies:
@@ -579,17 +610,27 @@ def _with_query_param(url, key, value):
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
 
 
-def _generate_paypal_link(access_token, proxy=None):
-    return _generate_payment_link(access_token, proxy=proxy, payment_method="paypal")
+def _generate_paypal_link(access_token, proxy=None, paypal_generation_type=None):
+    return _generate_payment_link(
+        access_token,
+        proxy=proxy,
+        payment_method="paypal",
+        paypal_generation_type=paypal_generation_type,
+    )
 
 
-def _generate_payment_link(access_token, proxy=None, payment_method="paypal"):
+def _generate_payment_link(access_token, proxy=None, payment_method="paypal", paypal_generation_type=None):
     try:
         from .gen_pp_link import generate_payment_link
     except Exception as e:
         return {"ok": False, "error": f"load_gen_pp_link_failed: {e}"}
     try:
-        return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method)
+        return generate_payment_link(
+            access_token,
+            proxy=proxy,
+            payment_method=payment_method,
+            paypal_generation_type=paypal_generation_type,
+        )
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -597,7 +638,17 @@ def _generate_payment_link(access_token, proxy=None, payment_method="paypal"):
 # ==========================================
 # Core Email Registration Flow
 # ==========================================
-def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypal_link=True, phone_pool=None, codex_oauth=True, payment_method="paypal"):
+def run_email(
+    proxy=None,
+    password=None,
+    sentinel_data=None,
+    mailbox=None,
+    paypal_link=True,
+    phone_pool=None,
+    codex_oauth=True,
+    payment_method="paypal",
+    paypal_generation_type=None,
+):
     """Register a ChatGPT account via mailbox OTP, then create a PayPal payment link."""
     _tl().clear()
 
@@ -622,7 +673,11 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
         return _failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox)
 
     # Step 1: Generate credentials
-    password = password or _generate_password()
+    explicit_password = bool(str(password or "").strip())
+    stored_password = "" if explicit_password else _stored_registration_password(mailbox.email)
+    password_from_storage = bool(stored_password)
+    password = password or stored_password or _generate_password()
+    password_unknown = False
     first, last = _random_name()
     full_name = f"{first} {last}"
     birthdate = _random_birthdate()
@@ -748,6 +803,24 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     _tick("6-Validate email OTP")
     try:
         otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=sentinel_data)
+        if not otp_ok and _is_wrong_email_otp_code(otp_data):
+            print("  Email OTP was rejected; retrying latest mailbox code once...")
+            retry_code = _poll_email_otp(
+                mailbox,
+                subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
+                timeout=min(60, int(email_cfg.get("otp_timeout", 300))),
+                issued_after_unix=otp_send_started,
+                proxy=proxy,
+            )
+            if retry_code and retry_code != code:
+                code = retry_code
+                otp_ok, otp_data = _validate_email_otp(
+                    session,
+                    auth_base,
+                    base_headers,
+                    code,
+                    sentinel_data=sentinel_data,
+                )
         _tock()
     except Exception as e:
         _safe_tock()
@@ -782,7 +855,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
     create_ok = r.status_code == 200
     existing_account = _is_user_already_exists(create_data)
-    password_unknown = False
+    password_unknown = bool(resume_email_verification and not (explicit_password or password_from_storage))
     if not create_ok and existing_account:
         print("  Account already exists, password may differ from generated one; clearing stored password.")
         create_ok = True
@@ -849,7 +922,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
             from .codex_oauth import collect_codex_oauth_tokens
             oauth_seed = {
                 "email": username,
-                "password": password,
+                "password": "" if password_unknown else password,
                 "device_id": did,
                 "cookie_header": _cookie_header(session),
                 "auth_session": auth_body,
@@ -868,7 +941,7 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
                 session=session,
                 proxy=proxy,
                 timeout=int((CFG.get("codex_oauth") or {}).get("registration_timeout", 180)),
-                force_email_otp_login=False,
+                force_email_otp_login=bool(resume_email_verification or password_unknown),
                 phone_pool=phone_pool,
             )
             _tock()
@@ -921,9 +994,22 @@ def run_email(proxy=None, password=None, sentinel_data=None, mailbox=None, paypa
     paypal = {}
     if success and access_token and paypal_link:
         payment_method = str(payment_method or "paypal").strip().lower()
-        payment_label = "GoPay" if payment_method == "gopay" else "PayPal"
+        if payment_method in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+            payment_method = "upi"
+            payment_label = "UPI"
+        elif payment_method in {"gopay", "go-pay", "go_pay"}:
+            payment_method = "gopay"
+            payment_label = "GoPay"
+        else:
+            payment_method = "paypal"
+            payment_label = "PayPal"
         _tick(f"9-Generate {payment_label} link")
-        paypal = _generate_payment_link(access_token, proxy=proxy, payment_method=payment_method)
+        paypal = _generate_payment_link(
+            access_token,
+            proxy=proxy,
+            payment_method=payment_method,
+            paypal_generation_type=paypal_generation_type,
+        )
         paypal.setdefault("payment_method", payment_method)
         paypal.setdefault("method", payment_method)
         print(f"  {payment_label} link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
@@ -987,6 +1073,7 @@ def run_phone(*args, **kwargs):
         phone_pool=kwargs.get("phone_pool"),
         codex_oauth=kwargs.get("codex_oauth", True),
         payment_method=kwargs.get("payment_method", "paypal"),
+        paypal_generation_type=kwargs.get("paypal_generation_type"),
     )
 
 
@@ -1027,7 +1114,17 @@ def _unique_mailboxes(mailboxes):
     return unique
 
 
-def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, phone_pool=None, codex_oauth=True, payment_method="paypal"):
+def run_batch(
+    count=1,
+    proxy=None,
+    mailboxes=None,
+    paypal_link=True,
+    workers=4,
+    phone_pool=None,
+    codex_oauth=True,
+    payment_method="paypal",
+    paypal_generation_type=None,
+):
     mailboxes = _unique_mailboxes(mailboxes)
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
@@ -1064,6 +1161,7 @@ def run_batch(count=1, proxy=None, mailboxes=None, paypal_link=True, workers=4, 
                 codex_oauth=codex_oauth,
                 sentinel_data=sentinel,
                 payment_method=payment_method,
+                paypal_generation_type=paypal_generation_type,
             )
         except Exception as e:
             import traceback; traceback.print_exc()
@@ -1176,6 +1274,7 @@ def _build_session_file(data):
         "paypal": paypal,
         "payment_method": payment_method,
         "paypal_status": paypal_status,
+        "registration_mode": data.get("registration_mode", ""),
         "oauth_refresh_token": oauth_refresh_token or "",
         "refresh_token_status": refresh_token_status,
         "timing": data.get("timing") or {},

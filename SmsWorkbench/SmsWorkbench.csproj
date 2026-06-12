@@ -14,4 +14,9 @@
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\black-kitten.png" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MaterialDesignColors" Version="5.3.2" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
 </Project>

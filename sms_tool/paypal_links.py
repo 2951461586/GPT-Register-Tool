@@ -12,7 +12,7 @@ from .paypal_nocard import _follow_stripe_redirect, extract_ba_token
 from .storage import upsert_account
 
 
-def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal"):
+def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal", paypal_generation_type=None):
     data, json_path = _load_seed(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     if target_email:
@@ -25,7 +25,13 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
     old_paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
     old_paypal_status = str(data.get("paypal_status") or "").strip()
     payment_method = _normalize_payment_method(payment_method)
-    paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method, seed_data=data)
+    paypal = _generate_link(
+        access_token,
+        proxy=proxy,
+        payment_method=payment_method,
+        seed_data=data,
+        paypal_generation_type=paypal_generation_type,
+    )
     checkout_unauthorized = _is_checkout_unauthorized(paypal)
     if checkout_unauthorized:
         refreshed = _refresh_seed_session(target_email, json_path, proxy=proxy, stale_access_token=access_token)
@@ -34,7 +40,13 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
             refreshed_token = _access_token(data)
             if refreshed_token and refreshed_token != access_token:
                 access_token = refreshed_token
-                paypal = _generate_link(access_token, proxy=proxy, payment_method=payment_method, seed_data=data)
+                paypal = _generate_link(
+                    access_token,
+                    proxy=proxy,
+                    payment_method=payment_method,
+                    seed_data=data,
+                    paypal_generation_type=paypal_generation_type,
+                )
             else:
                 paypal = dict(paypal)
                 paypal["refresh_error"] = refreshed.get("error", "refresh_returned_same_access_token")
@@ -67,7 +79,11 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
         data["paypal"] = paypal
         data["paypal_status"] = "link_ready"
     else:
-        can_reuse_old_link = _saved_link_matches_payment_method(old_paypal, payment_method, _payment_cfg(payment_method))
+        payment_cfg = _payment_cfg(payment_method)
+        can_reuse_old_link = (
+            not _disallow_saved_link_reuse(payment_method, payment_cfg)
+            and _saved_link_matches_payment_method(old_paypal, payment_method, payment_cfg)
+        )
         if can_reuse_old_link:
             data["paypal"] = old_paypal
             data["paypal_status"] = old_paypal_status or "link_ready"
@@ -148,20 +164,113 @@ def _normalize_payment_method(value):
     value = str(value or "").strip().lower()
     if value in {"gopay", "go-pay", "go_pay"}:
         return "gopay"
+    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        return "upi"
     return "paypal"
 
 
 def _payment_cfg(payment_method="paypal"):
     if _normalize_payment_method(payment_method) == "paypal":
-        return CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+        return _apply_paypal_generation_type(cfg)
     method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
     return method_cfg
 
 
-def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None):
+def _apply_paypal_generation_type(cfg):
+    raw = str(
+        cfg.get("link_generation_type")
+        or cfg.get("generation_type")
+        or cfg.get("paypal_generation_type")
+        or ""
+    ).strip().lower().replace("-", "_")
+    if raw in {
+        "gpt_pp",
+        "gpt_pp_core",
+        "gpt_pp_protocol",
+        "gpt_pp_paypal",
+        "gpt_pp_paypal_authorize",
+        "gpt_pp_longlink",
+        "gptpp",
+        "pp_gateway",
+        "plus_paypal_gateway",
+    }:
+        patched = dict(cfg)
+        patched["link_mode"] = "stripe_redirect"
+        patched["redirect_url_format"] = "stripe_authorize"
+        patched["resolve_ba_redirect"] = False
+        patched["require_ba_token"] = False
+        patched.setdefault("require_zero_due", False)
+        return patched
+    if raw in {
+        "pp_direct",
+        "paypal_direct",
+        "direct_pp",
+        "paypal_approve",
+        "ba_direct",
+        "ba_approve",
+        "pp_direct_zero_due",
+        "paypal_direct_zero_due",
+        "direct_pp_zero_due",
+        "paypal_approve_zero_due",
+        "ba_direct_zero_due",
+        "ba_approve_zero_due",
+        "pp_direct_0_due",
+        "paypal_direct_0_due",
+        "pp_direct_force_zero",
+        "paypal_direct_force_zero",
+        "paypal_direct_require_zero_due",
+    }:
+        patched = dict(cfg)
+        patched["link_mode"] = "stripe_redirect"
+        patched["redirect_url_format"] = "any"
+        patched["resolve_ba_redirect"] = True
+        patched["require_ba_token"] = True
+        patched["require_zero_due"] = raw not in {"pp_direct", "paypal_direct", "direct_pp", "paypal_approve", "ba_direct", "ba_approve"}
+        return patched
+    if raw in {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"}:
+        patched = dict(cfg)
+        patched["link_mode"] = "chatgpt_checkout"
+        patched["checkout_ui_mode"] = "hosted"
+        patched["resolve_ba_redirect"] = False
+        patched["require_ba_token"] = False
+        return patched
+    return cfg
+
+
+def _disallow_saved_link_reuse(payment_method, payment_cfg):
+    if _normalize_payment_method(payment_method) != "paypal":
+        return False
+    raw = str(
+        payment_cfg.get("link_generation_type")
+        or payment_cfg.get("generation_type")
+        or payment_cfg.get("paypal_generation_type")
+        or ""
+    ).strip().lower().replace("-", "_")
+    return raw in {
+        "pp_direct_zero_due",
+        "paypal_direct_zero_due",
+        "direct_pp_zero_due",
+        "paypal_approve_zero_due",
+        "ba_direct_zero_due",
+        "ba_approve_zero_due",
+        "pp_direct_0_due",
+        "paypal_direct_0_due",
+        "pp_direct_force_zero",
+        "paypal_direct_force_zero",
+        "paypal_direct_require_zero_due",
+    }
+
+
+def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None, paypal_generation_type=None):
     auth_context = seed_data if isinstance(seed_data, dict) else None
     if _normalize_payment_method(payment_method) == "paypal":
-        return generate_pp_link(access_token, proxy=proxy, auth_context=auth_context)
+        return generate_pp_link(
+            access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            paypal_generation_type=paypal_generation_type,
+        )
     return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method, auth_context=auth_context)
 
 
@@ -213,9 +322,12 @@ def _saved_link_matches_payment_method(paypal, payment_method, payment_cfg=None)
         pm_type_values = {str(pm_types or "").strip().lower()} if pm_types else set()
     has_gopay = "gopay" in pm_type_values
     has_paypal = "paypal" in pm_type_values
+    has_upi = "upi" in pm_type_values
     if target == "gopay":
         return method == "gopay" or has_gopay or currency == "idr"
-    if method == "gopay" or has_gopay or currency == "idr":
+    if target == "upi":
+        return method == "upi" or has_upi or currency == "inr"
+    if method == "gopay" or has_gopay or currency == "idr" or method == "upi" or has_upi or currency == "inr":
         return False
     return method == "paypal" or has_paypal or currency == "usd" or not (raw_method or pm_type_values or currency)
 

@@ -1,12 +1,12 @@
 # GPT-Register-Tool
 
-Email-based ChatGPT registration workflow with session persistence and PayPal/GoPay payment automation.
+Email-based ChatGPT registration workflow with session persistence and PayPal/GoPay/UPI payment automation.
 
 The active path is:
 
 ```text
 mailbox source -> ChatGPT email OTP registration -> /api/auth/session access token
--> PayPal/GoPay payment link or protocol payment -> session JSON + SQLite index -> WPF management UI
+-> PayPal/GoPay/UPI payment link or protocol payment -> session JSON + SQLite index -> WPF management UI
 ```
 
 The project does not require machine-specific absolute paths. Runtime data is kept under `sessions/` and `runtime/` by default and is ignored by Git.
@@ -41,7 +41,9 @@ Required choices:
 - `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
-- `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR.
+- `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR. The desktop `[配置] -> [代理/支付] -> 订单生成地区` dropdown supports Japan, United States, Australia, Germany, France, United Kingdom, India, and Brazil.
+- `paypal.link_generation_type`: Desktop `[配置] -> [代理/支付] -> PayPal生成类型` selector. `hosted_long_url`（长链） runs `checkout -> stripe init -> stripe_hosted_url` and stores a `pay.openai.com/c/pay/...` hosted long URL. `paypal_direct`（PP直链） runs `checkout -> stripe init -> pm create(type=paypal) -> confirm`, follows the Stripe `pm-redirects` URL, and stores a `paypal.com/agreements/approve?ba_token=...` approval URL without logging the full token. `paypal_direct_zero_due`（PP直链-强制0元试用） uses the same PP直链 flow but keeps `require_zero_due=true`; if Stripe init does not return `amount_due=0`, generation fails with `checkout_not_zero_due` instead of outputting a non-trial BA link. In this strict mode a failed regeneration does not fall back to hosted long-link mode and does not reuse an older saved BA link.
+- `paypal.link_generation_type=gpt_pp_core`: uses the ported `gpt-pp` core engine (`ChatGPT checkout -> Stripe init -> inline PayPal confirm`) to return the raw `pm-redirects.stripe.com/authorize/...` PayPal authorization long link. It is available from the desktop PayPal generation type dropdown as `gpt-pp Core Protocol`; set `paypal.require_zero_due=true` if this engine must reject non-zero checkout sessions.
 - `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
 - `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL from Stripe init instead of attempting BA extraction.
 - `paypal.redirect_url_format`: ignored by the hosted long-link path; kept only for compatibility with the older BA/Stripe redirect path.
@@ -55,12 +57,14 @@ Required choices:
 - `paypal_browser.headless` / `paypal_browser.manual_human_verification`: set `headless=false` and `manual_human_verification=true` when PayPal shows a visible "Confirm you're human" challenge so the browser can wait for manual completion.
 - `paypal_browser.phone_pool`: PayPal browser payment SMS-phone pool. If empty, the adapter falls back to `paypal_nocard.phone_pool`.
 - `gopay.one_click_mode`: `link`, `provider`, or `wa_rebind`. `provider` uses the local `PaymentService` on `gopay.payment_service_addr`; `wa_rebind` additionally routes GoPay payment OTP through the WA channel and can call a GoPay App service to change phone after payment.
+- `upi.billing_regions`: UPI hosted long-link generation defaults to `["IN"]` and uses `checkout_ui_mode=hosted` + `link_mode=chatgpt_checkout` so the stored URL is the Stripe/OpenAI hosted checkout long link for India/INR. UPI is link-generation only; `--one-click-pay --payment-method upi` is intentionally not implemented.
 - `gopay.payment_service_addr`: local GoPay payment gRPC endpoint, default `127.0.0.1:50051`.
 - `gopay.wa_rebind`: optional WA-channel app-state/rebind settings. `gopay_app_service_addr` points to the GoPay App gRPC provider, `wa_phone` is the WA payment phone, and `rebind_phone` is the phone to bind after payment.
 - `cpa_mode.api_url` / `cpa_mode.api_token`: CPA management API target for one-click import.
 - `codex_oauth.allow_passwordless_takeover`: default `false`; only affects manual Codex export/refresh. CPA import now consumes existing AT-only JSON and no longer depends on RT refresh.
 - `codex_oauth.require_registration_refresh_token`: default `true`; a new registration is not counted as successful until Codex OAuth returns a refresh token.
 - `codex_oauth.require_registration_phone_verification`: default `true`; when a phone pool is configured, registration must complete SMS verification before the session is saved.
+- Desktop `【一键注册+支付链接】` supports two registration modes. `邮箱注册（跳过手机）` keeps the historical AT-only path and emits `--registration-at-only --no-phone-reuse`. `手机接码注册+绑定邮箱+PP直链0元` keeps the selected/purchased mailbox as the account email, enables SMSBower phone verification during the Codex OAuth step, and forces strict zero-due PayPal direct generation with `--phone-reuse --phone-source smsbower --max-reuse-count 1 --paypal-generation-type paypal_direct_zero_due --payment-method paypal`.
 - `--registration-at-only`: UI default for "one-click registration + payment link"; skips Codex OAuth/phone SMS and stores the ChatGPT access token only.
 - `--one-click-sms`: runs Codex OAuth for selected existing accounts, completes phone SMS verification via the phone pool, and stores the OAuth refresh token. Batch one-click SMS forces one phone per email account and prints the successful email→phone mapping in the JSON result.
 - `phone_reuse.source`: one-click SMS source, `smsbower` for SMSBower platform numbers, `nextsms` for NexSMS/NextSMS (`https://sms.nextactionplus.com/api/`) orders, or `phone_pool` for configured `phone----sms_api_url` entries in `phone_reuse.phone_pool`. SMSBower OpenAI defaults to `service=dr`; NextSMS OpenAI defaults to `service=openai`, `country=US`, and `pricing_option=0`. Outside one-click SMS, one acquired activation or configured number is reused up to `phone_reuse.max_reuse_count` times, default `1`. For single-phone batch registration, the phone verification and OAuth token exchange run in one serialized lane; use `phone_reuse.send_cooldown_seconds` or `--phone-send-cooldown` to slow repeated add-phone sends to the same number. `phone_reuse.send_retry_attempts` handles recoverable add-phone rate limits without immediately canceling the provider activation/order. Provider `number_attempts` controls same-run number replacement for rejected or silent numbers; `phone_send_failed:fraud_guard` keeps replacing provider numbers until a send succeeds or the provider can no longer supply numbers.
@@ -132,10 +136,16 @@ List saved PayPal links:
 python chatgpt_phone_reg.py --list-paypal-links
 ```
 
-Regenerate a PayPal link for one account:
+Regenerate a PayPal/GoPay/UPI link for one account:
 
 ```powershell
 python chatgpt_phone_reg.py --email user@example.com --regenerate-paypal-link
+```
+
+For an India UPI hosted long link:
+
+```powershell
+python chatgpt_phone_reg.py --email user@example.com --regenerate-paypal-link --payment-method upi
 ```
 
 Refresh an auth session after manual payment/login:
@@ -310,7 +320,7 @@ The project is split into explicit responsibility seams:
 - `sms_tool.mailbox`: mailbox pool parsing, LuckMail/token mailbox handling, Microsoft token exchange, and OTP polling.
 - `sms_tool.registration`: ChatGPT signup protocol, email OTP validation, access-token retrieval, and batch worker limits.
 - `sms_tool.account_seed`: shared seam for loading session JSON/SQLite account seed data and extracting access tokens.
-- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal link generation and safe persisted-link regeneration.
+- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal/GoPay/UPI link generation and safe persisted-link regeneration.
 - `sms_tool.paypal_browser_auto`: default PayPal one-click payment adapter. It uses existing saved payment links and delegates page automation to `sms_tool.paypal_auto`.
 - `sms_tool.paypal_auto`: project-local browser automation helper. It does not own account lookup or link regeneration.
 - `sms_tool.paypal_nocard`: older explicit no-card PayPal agreement module, kept as an opt-in compatibility path. It is not selected by default registration or one-click PayPal.

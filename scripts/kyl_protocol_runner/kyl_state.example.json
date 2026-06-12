@@ -1,9 +1,0 @@
-﻿{
-  "fingerprint": "",
-  "accounts": [
-    {
-      "email": "account@example.test",
-      "sub": "subject-id-from-kyl-restore"
-    }
-  ]
-}

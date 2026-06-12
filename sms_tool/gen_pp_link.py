@@ -153,6 +153,54 @@ REGION_PRESETS = {
             "state": "London",
         },
     },
+    "IN": {
+        "country": "IN",
+        "currency": "INR",
+        "label": "India (INR)",
+        "browser_locale": "en-IN",
+        "browser_timezone": "Asia/Kolkata",
+        "stripe_locale": "en",
+        "payment_email": "buyer@example.in",
+        "address": {
+            "country": "IN",
+            "line1": "Connaught Place 1",
+            "city": "New Delhi",
+            "postal_code": "110001",
+            "state": "Delhi",
+        },
+    },
+    "BR": {
+        "country": "BR",
+        "currency": "BRL",
+        "label": "Brazil (BRL)",
+        "browser_locale": "pt-BR",
+        "browser_timezone": "America/Sao_Paulo",
+        "stripe_locale": "pt-BR",
+        "payment_email": "buyer@example.br",
+        "address": {
+            "country": "BR",
+            "line1": "Avenida Paulista 1000",
+            "city": "Sao Paulo",
+            "postal_code": "01310-100",
+            "state": "SP",
+        },
+    },
+    "AU": {
+        "country": "AU",
+        "currency": "AUD",
+        "label": "Australia (AUD)",
+        "browser_locale": "en-AU",
+        "browser_timezone": "Australia/Sydney",
+        "stripe_locale": "en",
+        "payment_email": "buyer@example.au",
+        "address": {
+            "country": "AU",
+            "line1": "1 Macquarie Street",
+            "city": "Sydney",
+            "postal_code": "2000",
+            "state": "NSW",
+        },
+    },
     "US": {
         "country": "US",
         "currency": "USD",
@@ -174,11 +222,12 @@ REGION_PRESETS = {
 PAYMENT_METHOD_LABELS = {
     "paypal": "PayPal",
     "gopay": "GoPay",
+    "upi": "UPI",
 }
 
 
 def _log_prefix(payment_method: Any = "") -> str:
-    return "[gopay]" if _normalize_payment_method(payment_method) == "gopay" else "[paypal]"
+    return f"[{_normalize_payment_method(payment_method)}]"
 
 # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Session 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
@@ -300,19 +349,109 @@ def _normalize_payment_method(value: Any) -> str:
     method = str(value or "").strip().lower()
     if method in {"gopay", "go-pay", "go_pay"}:
         return "gopay"
+    if method in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        return "upi"
     return "paypal"
 
 
 def _payment_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
+    payment_method = _normalize_payment_method(payment_method)
     paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
     if payment_method == "paypal":
-        return paypal_cfg
+        return _apply_paypal_generation_type(paypal_cfg)
     method_cfg = cfg.get(payment_method) if isinstance(cfg.get(payment_method), dict) else {}
     merged = dict(paypal_cfg)
     merged.update(method_cfg)
     if not (method_cfg.get("billing_regions") or method_cfg.get("billing_region") or method_cfg.get("billing_country")):
-        merged["billing_regions"] = ["ID"]
+        merged["billing_regions"] = ["IN"] if payment_method == "upi" else ["ID"]
+    if payment_method == "upi":
+        if not method_cfg.get("checkout_ui_mode"):
+            merged["checkout_ui_mode"] = "hosted"
+        if not method_cfg.get("link_mode"):
+            merged["link_mode"] = "chatgpt_checkout"
     return merged
+
+
+def _paypal_generation_type(payment_cfg: dict[str, Any]) -> str:
+    raw = str(
+        payment_cfg.get("link_generation_type")
+        or payment_cfg.get("generation_type")
+        or payment_cfg.get("paypal_generation_type")
+        or ""
+    ).strip().lower().replace("-", "_")
+    if raw in {
+        "pp_direct_zero_due",
+        "paypal_direct_zero_due",
+        "direct_pp_zero_due",
+        "paypal_approve_zero_due",
+        "ba_direct_zero_due",
+        "ba_approve_zero_due",
+        "pp_direct_0_due",
+        "paypal_direct_0_due",
+        "pp_direct_force_zero",
+        "paypal_direct_force_zero",
+        "paypal_direct_require_zero_due",
+    }:
+        return "paypal_direct_zero_due"
+    if raw in {"pp_direct", "paypal_direct", "direct_pp", "paypal_approve", "ba_direct", "ba_approve"}:
+        return "paypal_direct"
+    if raw in {
+        "gpt_pp",
+        "gpt_pp_core",
+        "gpt_pp_protocol",
+        "gpt_pp_paypal",
+        "gpt_pp_paypal_authorize",
+        "gpt_pp_longlink",
+        "gptpp",
+        "pp_gateway",
+        "plus_paypal_gateway",
+    }:
+        return "gpt_pp_core"
+    if raw in {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"}:
+        return "hosted_long_url"
+    return ""
+
+
+def _apply_paypal_generation_type(payment_cfg: dict[str, Any]) -> dict[str, Any]:
+    generation_type = _paypal_generation_type(payment_cfg)
+    if not generation_type:
+        return payment_cfg
+    patched = dict(payment_cfg or {})
+    patched["link_generation_type"] = generation_type
+    if generation_type == "gpt_pp_core":
+        patched["checkout_only_long_url"] = False
+        patched["stop_after_pm_create"] = False
+        patched.setdefault("checkout_ui_mode", "hosted")
+        patched["link_mode"] = "stripe_redirect"
+        patched["redirect_url_format"] = "stripe_authorize"
+        patched["resolve_ba_redirect"] = False
+        patched["require_ba_token"] = False
+        patched["approve_missing_redirect"] = False
+        patched.setdefault("require_zero_due", False)
+        return patched
+    if generation_type in {"paypal_direct", "paypal_direct_zero_due"}:
+        patched["checkout_only_long_url"] = False
+        patched["stop_after_pm_create"] = False
+        patched["checkout_ui_mode"] = "custom"
+        patched["link_mode"] = "stripe_redirect"
+        patched["redirect_url_format"] = "any"
+        patched["confirm_style"] = "payment_method_id"
+        patched["resolve_ba_redirect"] = True
+        patched["require_ba_token"] = True
+        patched["approve_missing_redirect"] = True
+        patched["require_zero_due"] = generation_type == "paypal_direct_zero_due"
+        return patched
+    patched["checkout_only_long_url"] = False
+    patched["stop_after_pm_create"] = False
+    patched["checkout_ui_mode"] = "hosted"
+    patched["link_mode"] = "chatgpt_checkout"
+    patched["redirect_url_format"] = "any"
+    patched["confirm_style"] = "inline_payment_method_data"
+    patched["resolve_ba_redirect"] = False
+    patched["require_ba_token"] = False
+    patched["approve_missing_redirect"] = False
+    patched.setdefault("require_zero_due", True)
+    return patched
 
 
 def _checkout_ui_mode(payment_cfg: dict[str, Any]) -> str:
@@ -404,7 +543,12 @@ def _pm_create_only_cfg(payment_cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _payment_link_mode(payment_cfg: dict[str, Any], payment_method: str) -> str:
-    if _normalize_payment_method(payment_method) != "paypal":
+    payment_method = _normalize_payment_method(payment_method)
+    if payment_method != "paypal":
+        raw = payment_cfg.get("link_mode") or ("chatgpt_checkout" if payment_method == "upi" else "stripe_redirect")
+        mode = str(raw or "").strip().lower().replace("-", "_")
+        if mode in {"hosted", "hosted_long_url", "long_url", "checkout_long_url", "chatgpt_checkout"}:
+            return "chatgpt_checkout"
         return "stripe_redirect"
     raw = (
         payment_cfg.get("link_mode")
@@ -995,6 +1139,8 @@ def _is_payment_redirect_url(value: Any, payment_method: str, redirect_format: s
         )
     if payment_method == "gopay":
         return "gopay" in lower or "midtrans" in lower
+    if payment_method == "upi":
+        return _is_hosted_checkout_url(text) or "upi" in lower or "india" in lower or "npci" in lower
     return False
 
 
@@ -1015,6 +1161,40 @@ def _find_payment_redirect_url(value: Any, payment_method: str, redirect_format:
             if found:
                 return found
     return ""
+
+
+def _paypal_ba_token(value: str) -> str:
+    text = str(value or "")
+    marker = "ba_token="
+    lower = text.lower()
+    if marker not in lower:
+        return ""
+    start = lower.find(marker) + len(marker)
+    end = len(text)
+    for sep in ("&", "#"):
+        pos = text.find(sep, start)
+        if pos != -1:
+            end = min(end, pos)
+    return text[start:end]
+
+
+def _resolve_paypal_approve_url(redirect_url: str, proxy: str = "", log_prefix: str = "[paypal]") -> tuple[str, dict[str, Any]]:
+    if _paypal_ba_token(redirect_url):
+        return redirect_url, {"ok": True, "already_resolved": True}
+    try:
+        from .paypal_nocard import _follow_stripe_redirect
+        resolved = _follow_stripe_redirect(
+            redirect_url,
+            proxy=proxy or None,
+            log=lambda message: print(f"{log_prefix} resolve BA: {message}", file=sys.stderr),
+        )
+    except Exception as exc:
+        return redirect_url, {"ok": False, "error": str(exc)}
+    return resolved or redirect_url, {
+        "ok": bool(_paypal_ba_token(resolved)),
+        "resolved": bool(resolved and resolved != redirect_url),
+        "has_ba_token": bool(_paypal_ba_token(resolved)),
+    }
 
 
 def _intent_summary(intent: Any) -> dict[str, Any]:
@@ -1099,6 +1279,7 @@ def _stripe_confirm_error_result(
     zero_check: dict[str, Any],
     pm_types: list[Any],
     has_paypal: bool,
+    has_upi: bool,
     promo_campaign_id: str,
     checkout_ui_mode: str,
 ) -> dict[str, Any]:
@@ -1125,6 +1306,7 @@ def _stripe_confirm_error_result(
         "tax_amounts": zero_check.get("tax_amounts"),
         "payment_method_types": pm_types,
         "has_paypal": has_paypal,
+        "has_upi": has_upi,
         "promo_campaign_id": promo_campaign_id,
         "checkout_ui_mode": checkout_ui_mode,
         "region": region["label"],
@@ -1355,6 +1537,53 @@ def _zero_due_check(init_data: dict[str, Any]) -> dict[str, Any]:
 
 
 # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鏍稿績娴佺▼ 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+
+
+def _try_gpt_pp_core_link(
+    access_token: str,
+    cfg: dict,
+    region: dict,
+    proxy: str,
+    force_proxy: bool = False,
+    payment_method: str = "paypal",
+    auth_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from .gpt_pp_core import generate_gpt_pp_paypal_link
+
+    payment_cfg = _payment_cfg(cfg, payment_method)
+    checkout_proxy = _stage_proxy(payment_cfg, "checkout", proxy, force_fallback=force_proxy)
+    stripe_init_proxy = _stage_proxy(payment_cfg, "stripe_init", proxy, force_fallback=force_proxy)
+    stripe_confirm_proxy = _stage_proxy(payment_cfg, "confirm", _stage_proxy(payment_cfg, "payment_method", stripe_init_proxy, force_fallback=force_proxy), force_fallback=force_proxy)
+    stripe_pk = str((cfg.get("stripe") or {}).get("publishable_key") or "").strip()
+    promo_campaign_id = _promo_campaign_id(payment_cfg)
+    result = generate_gpt_pp_paypal_link(
+        access_token,
+        proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        stripe_init_proxy=stripe_init_proxy,
+        stripe_confirm_proxy=stripe_confirm_proxy,
+        country=str(region.get("country") or "DE"),
+        currency=str(region.get("currency") or "EUR"),
+        checkout_ui_mode=_checkout_ui_mode(payment_cfg) or "hosted",
+        promo_campaign_id=promo_campaign_id,
+        require_zero=bool(payment_cfg.get("require_zero_due", False)),
+        publishable_key=stripe_pk,
+        timeout=DEFAULT_TIMEOUT,
+        auth_context=auth_context,
+    )
+    result.setdefault("region", region.get("label") or f"{region.get('country', '')} ({region.get('currency', '')})")
+    result.setdefault("billing_country", region.get("country") or "")
+    result.setdefault("currency", str(region.get("currency") or result.get("currency") or "").upper())
+    result.setdefault("promo_campaign_id", promo_campaign_id)
+    result.setdefault("checkout_ui_mode", _checkout_ui_mode(payment_cfg) or "hosted")
+    result.setdefault("link_mode", "stripe_redirect")
+    result.setdefault("redirect_url_format", "stripe_authorize")
+    result.setdefault("payment_method", "paypal")
+    result.setdefault("method", "paypal")
+    result.setdefault("source", "gpt_pp_core")
+    result.setdefault("link_type", "gpt_pp_paypal_authorize")
+    return result
 
 
 def _try_paypal_link(
@@ -1660,6 +1889,7 @@ def _try_paypal_link(
     pm_types = init_data.get("payment_method_types") or []
     has_paypal = any("paypal" in (p or "").lower() for p in pm_types)
     has_gopay = any("gopay" in (p or "").lower() for p in pm_types)
+    has_upi = any("upi" in (p or "").lower() for p in pm_types)
     has_payment_method = any(payment_method in (p or "").lower() for p in pm_types)
     zero_check = _zero_due_check(init_data)
 
@@ -1699,6 +1929,7 @@ def _try_paypal_link(
             "payment_method_types": pm_types,
             "has_paypal": has_paypal,
             "has_gopay": has_gopay,
+            "has_upi": has_upi,
         }
 
     if link_mode == "chatgpt_checkout":
@@ -1765,6 +1996,7 @@ def _try_paypal_link(
                 "payment_method_types": pm_types,
                 "has_paypal": has_paypal,
                 "has_gopay": has_gopay,
+                "has_upi": has_upi,
                 "coupon_state": coupon_state,
                 "promo_campaign_id": promo_campaign_id,
                 "checkout_ui_mode": checkout_ui_mode,
@@ -1850,6 +2082,7 @@ def _try_paypal_link(
             "payment_method_types": pm_types,
             "has_paypal": has_paypal,
             "has_gopay": has_gopay,
+            "has_upi": has_upi,
             "coupon_state": coupon_state,
             "promo_campaign_id": promo_campaign_id,
             "checkout_ui_mode": checkout_ui_mode,
@@ -1964,6 +2197,7 @@ def _try_paypal_link(
                 "payment_method_types": pm_types,
                 "has_paypal": has_paypal,
                 "has_gopay": has_gopay,
+                "has_upi": has_upi,
                 "coupon_state": coupon_state,
                 "promo_campaign_id": promo_campaign_id,
                 "checkout_ui_mode": checkout_ui_mode,
@@ -2161,6 +2395,7 @@ def _try_paypal_link(
             zero_check=zero_check,
             pm_types=pm_types,
             has_paypal=has_paypal,
+            has_upi=has_upi,
             promo_campaign_id=promo_campaign_id,
             checkout_ui_mode=checkout_ui_mode,
         )
@@ -2256,10 +2491,39 @@ def _try_paypal_link(
             ),
         }
 
+    ba_resolve_result: dict[str, Any] = {}
+    stripe_redirect_url = ""
+    if payment_method == "paypal" and bool(payment_cfg.get("resolve_ba_redirect", False)):
+        resolved_url, ba_resolve_result = _resolve_paypal_approve_url(
+            redirect_url,
+            proxy=stripe_confirm_proxy or proxy,
+            log_prefix=log_prefix,
+        )
+        if resolved_url and resolved_url != redirect_url:
+            stripe_redirect_url = redirect_url
+            redirect_url = resolved_url
+            redirect_source = "resolved_paypal_approve"
+        if bool(payment_cfg.get("require_ba_token", False)) and not _paypal_ba_token(redirect_url):
+            return {
+                "ok": False,
+                "error": ba_resolve_result.get("error") or "PayPal BA token was not resolved",
+                "error_code": "paypal_ba_token_missing",
+                "terminal": True,
+                "retryable": False,
+                "ba_resolve_result": ba_resolve_result,
+                "region": region["label"],
+                "payment_method": payment_method,
+                "cs_id": cs_id,
+                "pm_id": pm_id,
+                "redirect_url_format": redirect_format,
+                "checkout_ui_mode": checkout_ui_mode,
+                "link_mode": link_mode,
+            }
+
     promo_applied = bool(zero_check["ok"])
     coupon_state = f"eligible (0 {currency.upper()})" if promo_applied else f"not_eligible ({amount_due or due} {currency.upper()})"
 
-    return {
+    result = {
         "ok": True,
         "url": redirect_url,
         "method": payment_method,
@@ -2277,6 +2541,7 @@ def _try_paypal_link(
         "payment_method_types": pm_types,
         "has_paypal": has_paypal,
         "has_gopay": has_gopay,
+        "has_upi": has_upi,
         "coupon_state": coupon_state,
         "promo_campaign_id": promo_campaign_id,
         "checkout_ui_mode": checkout_ui_mode,
@@ -2284,6 +2549,7 @@ def _try_paypal_link(
         "redirect_url_format": redirect_format,
         "stripe_publishable_key_source": stripe_pk_source,
         "redirect_source": redirect_source,
+        "ba_resolve_result": ba_resolve_result,
         "elements_session_id": elements_session_id,
         "elements_payment_method_types": (
             (elements_session_data.get("payment_method_preference") or {}).get("ordered_payment_method_types")
@@ -2299,6 +2565,11 @@ def _try_paypal_link(
             "confirm": stripe_confirm_proxy or "DIRECT",
         },
     }
+    if stripe_redirect_url:
+        result["stripe_redirect_url"] = stripe_redirect_url
+        result["ba_resolved"] = True
+        result["ba_token_present"] = True
+    return result
 
 
 # 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鍏ュ彛 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -2306,6 +2577,8 @@ def _try_paypal_link(
 
 def _should_fallback_to_hosted_checkout(result: dict[str, Any] | None, payment_method: str, payment_cfg: dict[str, Any]) -> bool:
     if _normalize_payment_method(payment_method) != "paypal":
+        return False
+    if _paypal_generation_type(payment_cfg) in {"paypal_direct", "paypal_direct_zero_due"}:
         return False
     if not isinstance(result, dict) or result.get("ok"):
         return False
@@ -2317,6 +2590,7 @@ def _should_fallback_to_hosted_checkout(result: dict[str, Any] | None, payment_m
 def _hosted_checkout_fallback_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
     cloned = json.loads(json.dumps(cfg or {}))
     paypal_cfg = cloned.setdefault("paypal", {})
+    paypal_cfg["link_generation_type"] = "hosted_long_url"
     paypal_cfg["checkout_ui_mode"] = "hosted"
     paypal_cfg["link_mode"] = "chatgpt_checkout"
     paypal_cfg["resolve_ba_redirect"] = False
@@ -2339,6 +2613,9 @@ def _should_fallback_from_missing_hosted_url(result: dict[str, Any] | None, paym
 def _stripe_redirect_fallback_cfg(cfg: dict[str, Any], payment_method: str) -> dict[str, Any]:
     cloned = json.loads(json.dumps(cfg or {}))
     paypal_cfg = cloned.setdefault("paypal", {})
+    paypal_cfg.pop("link_generation_type", None)
+    paypal_cfg.pop("generation_type", None)
+    paypal_cfg.pop("paypal_generation_type", None)
     paypal_cfg["checkout_only_long_url"] = False
     paypal_cfg["checkout_ui_mode"] = "custom"
     paypal_cfg["link_mode"] = "stripe_redirect"
@@ -2354,6 +2631,7 @@ def generate_payment_link(
     proxy: Any = None,
     payment_method: Any = "paypal",
     auth_context: dict[str, Any] | None = None,
+    paypal_generation_type: str | None = None,
 ) -> dict[str, Any]:
     try:
         cfg = _load_json(DEFAULT_CONFIG_PATH)
@@ -2361,11 +2639,46 @@ def generate_payment_link(
         cfg = {}
 
     payment_method = _normalize_payment_method(payment_method)
+    if payment_method == "paypal" and paypal_generation_type:
+        paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+        paypal_cfg = dict(paypal_cfg)
+        paypal_cfg["link_generation_type"] = str(paypal_generation_type or "").strip()
+        cfg["paypal"] = paypal_cfg
     payment_cfg = _payment_cfg(cfg, payment_method)
     default_proxy = (cfg.get("proxy") or {}).get("default") or "direct"
     proxies, force_proxy = _proxy_candidates(payment_cfg, default_proxy, explicit_proxy=proxy)
     regions = _billing_regions(payment_cfg)
     max_checkout_retries = max(1, int(payment_cfg.get("max_checkout_retries", 3)))
+
+    if payment_method == "paypal" and _paypal_generation_type(payment_cfg) == "gpt_pp_core":
+        last_err = None
+        for region in regions:
+            for proxy in proxies:
+                for attempt in range(1, max_checkout_retries + 1):
+                    try:
+                        if attempt > 1:
+                            print(f"{_log_prefix(payment_method)} gpt-pp retry checkout: attempt={attempt}/{max_checkout_retries}", file=sys.stderr)
+                        result = _try_gpt_pp_core_link(
+                            access_token,
+                            cfg,
+                            region,
+                            proxy,
+                            force_proxy=force_proxy,
+                            payment_method=payment_method,
+                            auth_context=auth_context,
+                        )
+                        result["checkout_attempt"] = attempt
+                        result["payment_method"] = payment_method
+                        result["method"] = payment_method
+                        if result.get("ok") or result.get("terminal"):
+                            return result
+                        if result.get("error"):
+                            last_err = result["error"]
+                    except Exception as e:
+                        last_err = str(e)
+                        print(f"{_log_prefix(payment_method)} gpt-pp attempt failed: {region['label']}+{proxy}: {last_err}", file=sys.stderr)
+                        continue
+        return {"ok": False, "error": f"gpt-pp all attempts failed, last error: {last_err}", "error_code": "gpt_pp_core_failed"}
 
     last_err = None
     for region in regions:
@@ -2479,8 +2792,19 @@ def generate_payment_link(
     return {"ok": False, "error": f"all attempts failed, last error: {last_err}"}
 
 
-def generate_pp_link(access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None) -> dict[str, Any]:
-    return generate_payment_link(access_token, proxy=proxy, payment_method="paypal", auth_context=auth_context)
+def generate_pp_link(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    paypal_generation_type: str | None = None,
+) -> dict[str, Any]:
+    return generate_payment_link(
+        access_token,
+        proxy=proxy,
+        payment_method="paypal",
+        auth_context=auth_context,
+        paypal_generation_type=paypal_generation_type,
+    )
 
 
 def main() -> int:
@@ -2497,7 +2821,7 @@ def main() -> int:
             _cfg = _load_json(DEFAULT_CONFIG_PATH)
         except Exception:
             _cfg = {}
-        _pp_cfg = (_cfg.get("paypal") or {})
+        _pp_cfg = _payment_cfg(_cfg, payment_method)
         _default_proxy = (_cfg.get("proxy") or {}).get("default") or "direct"
         _proxies = _pp_cfg.get("proxies") or [_default_proxy]
         _regions = _billing_regions(_pp_cfg)
@@ -2508,6 +2832,7 @@ def main() -> int:
             "proxies": _proxies,
             "regions": [r["label"] for r in _regions],
             "checkout_ui_mode": _checkout_ui_mode(_pp_cfg),
+            "paypal_generation_type": _paypal_generation_type(_pp_cfg) if payment_method == "paypal" else "",
             "reference_confirm_mode": _reference_confirm_mode(_pp_cfg, payment_method),
             "link_mode": _payment_link_mode(_pp_cfg, payment_method),
             "checkout_only_long_url": _checkout_only_long_url(_pp_cfg, payment_method),

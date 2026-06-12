@@ -623,6 +623,49 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
     }
 
 
+def _email_otp_settle_seconds():
+    try:
+        cfg = _email_cfg()
+        if "otp_settle_seconds" in cfg:
+            return max(0.0, float(cfg.get("otp_settle_seconds", 0)))
+        return max(0.0, float(cfg.get("cfworker_otp_settle_seconds", 3)))
+    except Exception:
+        return 3.0
+
+
+def _candidate_is_newer(candidate, current):
+    if not candidate:
+        return False
+    if not current:
+        return True
+    candidate_ts = int(candidate.get("received_ts") or 0)
+    current_ts = int(current.get("received_ts") or 0)
+    if candidate_ts and current_ts:
+        return candidate_ts > current_ts
+    candidate_id = str(candidate.get("id") or "")
+    current_id = str(current.get("id") or "")
+    return bool(candidate_id and candidate_id != current_id)
+
+
+def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None):
+    latest = None
+    for msg in _fetch_mailbox_messages(mailbox, proxy=proxy):
+        candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+        if not candidate:
+            continue
+        if latest is None:
+            latest = candidate
+            continue
+        candidate_ts = int(candidate.get("received_ts") or 0)
+        latest_ts = int(latest.get("received_ts") or 0)
+        if candidate_ts and latest_ts:
+            if candidate_ts > latest_ts:
+                latest = candidate
+        elif not latest_ts:
+            latest = candidate
+    return latest
+
+
 def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
     if getattr(mailbox, "provider", "") == "cfworker":
         if not _cfworker_poll_proxy_enabled():
@@ -693,13 +736,30 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
     keyword = (subject_keyword or "").lower()
     deadline = time.time() + timeout
     interval = _otp_poll_interval()
+    settle_seconds = _email_otp_settle_seconds()
     while time.time() < deadline:
         try:
-            for msg in _fetch_mailbox_messages(mailbox, proxy=proxy):
-                candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
-                if candidate:
-                    print(f" code:{candidate['otp']}!")
-                    return candidate["otp"]
+            candidate = _latest_email_otp_candidate(
+                mailbox,
+                keyword=keyword,
+                issued_after_unix=issued_after_unix,
+                proxy=proxy,
+            )
+            if candidate:
+                stable_until = time.time() + settle_seconds
+                while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
+                    time.sleep(min(interval, max(0.0, stable_until - time.time())))
+                    newer = _latest_email_otp_candidate(
+                        mailbox,
+                        keyword=keyword,
+                        issued_after_unix=issued_after_unix,
+                        proxy=proxy,
+                    )
+                    if _candidate_is_newer(newer, candidate):
+                        candidate = newer
+                        stable_until = time.time() + settle_seconds
+                print(f" code:{candidate['otp']}!")
+                return candidate["otp"]
         except MailboxTokenExpiredError:
             raise
         except Exception as e:

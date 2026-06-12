@@ -434,6 +434,60 @@ class PayPalNoCardUnitTests(unittest.TestCase):
             )
         )
 
+    def test_paypal_links_payment_cfg_applies_generation_type(self):
+        with patch.object(paypal_links, "CFG", {"paypal": {"link_generation_type": "paypal_direct"}}):
+            direct = paypal_links._payment_cfg("paypal")
+        with patch.object(paypal_links, "CFG", {"paypal": {"link_generation_type": "paypal_direct_zero_due"}}):
+            direct_zero = paypal_links._payment_cfg("paypal")
+        with patch.object(paypal_links, "CFG", {"paypal": {"link_generation_type": "hosted_long_url"}}):
+            hosted = paypal_links._payment_cfg("paypal")
+
+        self.assertEqual(direct["link_mode"], "stripe_redirect")
+        self.assertTrue(direct["resolve_ba_redirect"])
+        self.assertTrue(direct["require_ba_token"])
+        self.assertFalse(direct["require_zero_due"])
+        self.assertEqual(direct_zero["link_mode"], "stripe_redirect")
+        self.assertTrue(direct_zero["resolve_ba_redirect"])
+        self.assertTrue(direct_zero["require_ba_token"])
+        self.assertTrue(direct_zero["require_zero_due"])
+        self.assertEqual(hosted["link_mode"], "chatgpt_checkout")
+        self.assertEqual(hosted["checkout_ui_mode"], "hosted")
+        self.assertFalse(hosted["resolve_ba_redirect"])
+        self.assertFalse(hosted["require_ba_token"])
+
+    def test_regenerate_paypal_link_direct_zero_does_not_reuse_old_ba_link_on_failure(self):
+        old_url = "https://www.paypal.com/agreements/approve?ba_token=BA-OLD123456789"
+        seed = {
+            "email": "paid@example.com",
+            "access_token": "at_test",
+            "success": True,
+            "paypal_status": "link_ready",
+            "paypal": {"ok": True, "url": old_url, "payment_method": "paypal"},
+        }
+        failed = {
+            "ok": False,
+            "error": "ChatGPT checkout approve was blocked after Stripe confirm returned no redirect",
+            "error_code": "checkout_approve_blocked",
+            "zero_due_verified": True,
+        }
+        saved = {}
+
+        def fake_upsert(data, json_path=""):
+            saved.update(data)
+            return True
+
+        with patch.object(paypal_links, "_load_seed", return_value=(seed, "")):
+            with patch.object(paypal_links, "generate_pp_link", return_value=failed):
+                with patch.object(paypal_links, "CFG", {"paypal": {"link_generation_type": "paypal_direct_zero_due"}}):
+                    with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
+                        result = paypal_links.regenerate_paypal_link(email="paid@example.com")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["paypal_status"], "failed")
+        self.assertEqual(result["paypal_url"], "")
+        self.assertEqual(saved["previous_paypal"]["url"], old_url)
+        self.assertEqual(saved["paypal"]["error_code"], "checkout_approve_blocked")
+
     def test_regenerate_paypal_link_keeps_chatgpt_checkout_url(self):
         checkout_url = "https://chatgpt.com/checkout/openai_llc/cs_live_TEST123"
         seed = {"email": "paid@example.com", "access_token": "at_test", "success": True}
@@ -694,6 +748,18 @@ class PayPalNoCardUnitTests(unittest.TestCase):
         self.assertEqual(saved["paypal_status"], "failed")
         self.assertEqual(saved["paypal"].get("url", ""), "")
         self.assertEqual(saved["previous_paypal"]["url"], old_url)
+
+    def test_saved_upi_link_matches_upi_but_not_paypal_or_gopay(self):
+        upi_link = {
+            "ok": True,
+            "url": "https://pay.openai.com/c/pay/cs_live_UPI",
+            "currency": "inr",
+            "payment_method_types": ["card", "upi"],
+        }
+
+        self.assertTrue(paypal_links._saved_link_matches_payment_method(upi_link, "upi", {}))
+        self.assertFalse(paypal_links._saved_link_matches_payment_method(upi_link, "paypal", {"link_mode": "chatgpt_checkout"}))
+        self.assertFalse(paypal_links._saved_link_matches_payment_method(upi_link, "gopay", {}))
 
     def test_sqlite_smoke_reads_existing_paypal_url_when_enabled(self):
         if os.environ.get("PAYPAL_NOCARD_SQLITE_SMOKE") != "1":
