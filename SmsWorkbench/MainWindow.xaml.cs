@@ -73,7 +73,20 @@ namespace SmsWorkbench
         private int filteredCount;
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
-        private Geometry sidebarToggleGeometry = Geometry.Parse("M 4,3 L 4,13 M 11.5,4 L 7.5,8 L 11.5,12");
+        private Geometry sidebarToggleGeometry = Geometry.Parse("M15 18l-6-6 6-6");
+        private Geometry themeIconGeometry;
+        private DispatcherTimer sidebarAnimTimer;
+        private double sidebarAnimTarget;
+        private double sidebarAnimStart;
+
+        // Sun icon (light mode): circle + rays
+        private static readonly Geometry SunIcon = Geometry.Parse(
+            "M12 3V1m0 22v-2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42 " +
+            "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z");
+
+        // Moon icon (dark mode): crescent
+        private static readonly Geometry MoonIcon = Geometry.Parse(
+            "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z");
         private string chataiMailboxFilePath = "";
 
         public bool SidebarCollapsed
@@ -107,6 +120,17 @@ namespace SmsWorkbench
                 if (Equals(sidebarToggleGeometry, value)) return;
                 sidebarToggleGeometry = value;
                 OnPropertyChanged(nameof(SidebarToggleGeometry));
+            }
+        }
+
+        public Geometry ThemeIconGeometry
+        {
+            get => themeIconGeometry;
+            set
+            {
+                if (Equals(themeIconGeometry, value)) return;
+                themeIconGeometry = value;
+                OnPropertyChanged(nameof(ThemeIconGeometry));
             }
         }
 
@@ -218,6 +242,8 @@ namespace SmsWorkbench
             // Initialize theme colors on startup
             _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
             ApplyCustomThemeColors(_currentTheme);
+            SyncMaterialDesignTheme(_currentTheme);
+            ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
 
             rootDir = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName ?? AppDomain.CurrentDomain.BaseDirectory;
             if (Path.GetFileName(rootDir).Equals("net10", StringComparison.OrdinalIgnoreCase))
@@ -1864,21 +1890,43 @@ namespace SmsWorkbench
 
         private void ToggleTheme_Click(object sender, RoutedEventArgs e)
         {
-            _currentTheme = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark 
-                ? Wpf.Ui.Appearance.ApplicationTheme.Light 
+            _currentTheme = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                ? Wpf.Ui.Appearance.ApplicationTheme.Light
                 : Wpf.Ui.Appearance.ApplicationTheme.Dark;
-            
+
             Log($"切换主题被点击。新主题: {_currentTheme}");
-            
+
             try
             {
                 Wpf.Ui.Appearance.ApplicationThemeManager.Apply(_currentTheme, Wpf.Ui.Controls.WindowBackdropType.Mica, true);
                 ApplyCustomThemeColors(_currentTheme);
+                SyncMaterialDesignTheme(_currentTheme);
+                ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
                 Log("主题更新应用成功。");
             }
             catch (Exception ex)
             {
                 Log($"应用主题异常: {ex.Message}");
+            }
+        }
+
+        private void SyncMaterialDesignTheme(Wpf.Ui.Appearance.ApplicationTheme theme)
+        {
+            try
+            {
+                var mdTheme = Application.Current.Resources.MergedDictionaries
+                    .OfType<MaterialDesignThemes.Wpf.BundledTheme>()
+                    .FirstOrDefault();
+                if (mdTheme != null)
+                {
+                    mdTheme.BaseTheme = theme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                        ? MaterialDesignThemes.Wpf.BaseTheme.Dark
+                        : MaterialDesignThemes.Wpf.BaseTheme.Light;
+                }
+            }
+            catch
+            {
+                // MaterialDesign theme sync is best-effort
             }
         }
 
@@ -1898,6 +1946,9 @@ namespace SmsWorkbench
                 SetBrush("Danger", "#FA5252");
                 SetBrush("DangerSoft", "#2B1D1D");
                 SetBrush("DangerBorder", "#8C2A2A");
+                SetBrush("Success", "#51CF66");
+                SetBrush("SuccessSoft", "#1A2E1F");
+                SetBrush("SuccessBorder", "#2B6B3A");
                 SetBrush("TextMain", "#F1F3F5");
                 SetBrush("TextSub", "#A9B2C3");
                 SetBrush("TextMuted", "#6C7A93");
@@ -1908,31 +1959,58 @@ namespace SmsWorkbench
                 SetBrush("LogBg", "#0A0B0E");
                 SetBrush("LogBorder", "#1E222B");
                 SetBrush("LogText", "#D1D6E0");
+
+                ApplyComboBoxThemeKeys(
+                    dropBg: "#161920", dropBorder: "#2C313D", glyph: "#6C7A93",
+                    focused: "#4C5467", pointerOver: "#242933",
+                    disabledBg: "#1E222B", disabledBorder: "#2C313D", disabledFg: "#6C7A93");
             }
             else
             {
-                // Clean Premium Light Theme (Stripe/Vercel style)
-                SetBrush("AppBg", "#F8F9FA");
-                SetBrush("PanelBg", "#FFFFFF");
-                SetBrush("PanelBg2", "#F1F3F5");
-                SetBrush("PanelHover", "#F1F3F5");
-                SetBrush("Line", "#E9ECEF");
-                SetBrush("LineStrong", "#CED4DA");
-                SetBrush("Primary", "#1A1B1E");
-                SetBrush("PrimarySoft", "#F1F3F5");
-                SetBrush("Danger", "#FA5252");
-                SetBrush("DangerSoft", "#FFF5F5");
-                SetBrush("TextMain", "#1A1B1E");
-                SetBrush("TextSub", "#495057");
-                SetBrush("TextMuted", "#868E96");
-                SetBrush("SidebarBg", "#FFFFFF");
-                SetBrush("GridAltBg", "#F8F9FA");
-                SetBrush("SplitterBg", "#E9ECEF");
-                SetBrush("StatusBg", "#F8F9FA");
-                SetBrush("LogBg", "#1A1B1E");
-                SetBrush("LogBorder", "#2C2E33");
-                SetBrush("LogText", "#E9ECEF");
+                // Warm Premium Light Theme
+                SetBrush("AppBg", "#F7F5F0");           // 247,245,240
+                SetBrush("PanelBg", "#F0EEE8");          // 240,238,232
+                SetBrush("PanelBg2", "#DDDAD4");         // 221,218,212
+                SetBrush("PanelHover", "#E3E1DB");       // 227,225,219
+                SetBrush("Line", "#DDDAD4");             // 221,218,212
+                SetBrush("LineStrong", "#C5C2BA");
+                SetBrush("Primary", "#3E3B36");
+                SetBrush("PrimarySoft", "#E3E1DB");      // 227,225,219
+                SetBrush("Danger", "#985248");           // 152,82,72  待支付/未获取
+                SetBrush("DangerSoft", "#ECE2DC");       // 236,226,220
+                SetBrush("DangerBorder", "#C49088");
+                SetBrush("Success", "#3E846F");          // 62,132,111  支付完成/已获取
+                SetBrush("SuccessSoft", "#E0F3E6");      // 224,243,230
+                SetBrush("SuccessBorder", "#8DC5A9");
+                SetBrush("TextMain", "#3E3B36");
+                SetBrush("TextSub", "#6B6860");
+                SetBrush("TextMuted", "#9E9B93");
+                SetBrush("SidebarBg", "#F0EEE8");        // 240,238,232
+                SetBrush("GridAltBg", "#F7F5F0");        // 247,245,240
+                SetBrush("SplitterBg", "#DDDAD4");       // 221,218,212
+                SetBrush("StatusBg", "#F7F5F0");         // 247,245,240
+                SetBrush("LogBg", "#3E3B36");
+                SetBrush("LogBorder", "#55524C");
+                SetBrush("LogText", "#E3E1DB");
+
+                ApplyComboBoxThemeKeys(
+                    dropBg: "#F0EEE8", dropBorder: "#DDDAD4", glyph: "#9E9B93",
+                    focused: "#C5C2BA", pointerOver: "#E3E1DB",
+                    disabledBg: "#DDDAD4", disabledBorder: "#DDDAD4", disabledFg: "#9E9B93");
             }
+        }
+
+        private void ApplyComboBoxThemeKeys(string dropBg, string dropBorder, string glyph,
+            string focused, string pointerOver, string disabledBg, string disabledBorder, string disabledFg)
+        {
+            SetBrush("ComboBoxDropDownBackground", dropBg);
+            SetBrush("ComboBoxDropDownBorderBrush", dropBorder);
+            SetBrush("ComboBoxDropDownGlyphForeground", glyph);
+            SetBrush("ComboBoxBorderBrushFocused", focused);
+            SetBrush("ComboBoxBackgroundPointerOver", pointerOver);
+            SetBrush("ComboBoxBackgroundDisabled", disabledBg);
+            SetBrush("ComboBoxBorderBrushDisabled", disabledBorder);
+            SetBrush("ComboBoxForegroundDisabled", disabledFg);
         }
 
         private void SetBrush(string key, string hexColor)
@@ -1948,20 +2026,41 @@ namespace SmsWorkbench
             SidebarCollapsed = !SidebarCollapsed;
         }
 
+        // Custom TitleBar button handlers
+        private void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2)
+            {
+                // Double-click to toggle maximize/restore
+                WindowState = WindowState == WindowState.Maximized
+                    ? WindowState.Normal
+                    : WindowState.Maximized;
+            }
+            else
+            {
+                DragMove();
+            }
+        }
+
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState.Minimized;
+        }
+
+        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+
         private void ApplySidebarCompact(bool compact)
         {
-            if (SidebarColumn != null)
-            {
-                SidebarColumn.Width = compact ? new GridLength(80) : new GridLength(272);
-            }
-
-            if (SidebarHost != null)
-            {
-                SidebarHost.ClearValue(FrameworkElement.WidthProperty);
-                SidebarHost.Margin = compact ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
-                SidebarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
-            }
-
             if (SidebarToggleButton != null)
             {
                 SidebarToggleButton.ToolTip = compact ? "展开侧边栏" : "收起侧边栏";
@@ -1969,8 +2068,63 @@ namespace SmsWorkbench
 
             SidebarToggleGlyph = compact ? "›" : "‹";
             SidebarToggleGeometry = Geometry.Parse(compact
-                ? "M 4,3 L 4,13 M 7.5,4 L 11.5,8 L 7.5,12"
-                : "M 4,3 L 4,13 M 11.5,4 L 7.5,8 L 11.5,12");
+                ? "M9 18l6-6-6-6"
+                : "M15 18l-6-6 6-6");
+
+            AnimateSidebar(compact);
+        }
+
+        private const double SidebarExpandedWidth = 272;
+        private const double SidebarCollapsedWidth = 80;
+        private const int SidebarAnimDurationMs = 280;
+
+        private void AnimateSidebar(bool collapse)
+        {
+            double target = collapse ? SidebarCollapsedWidth : SidebarExpandedWidth;
+            double current = SidebarColumn?.Width.Value ?? (collapse ? SidebarExpandedWidth : SidebarCollapsedWidth);
+
+            sidebarAnimStart = current;
+            sidebarAnimTarget = target;
+
+            sidebarAnimTimer?.Stop();
+            sidebarAnimTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            sidebarAnimTimer.Tick += (_, __) =>
+            {
+                double elapsed = sw.Elapsed.TotalMilliseconds;
+                double t = Math.Min(1.0, elapsed / SidebarAnimDurationMs);
+                // Ease-out cubic for smooth deceleration
+                double eased = 1 - Math.Pow(1 - t, 3);
+                double value = sidebarAnimStart + (sidebarAnimTarget - sidebarAnimStart) * eased;
+
+                if (SidebarColumn != null)
+                    SidebarColumn.Width = new GridLength(value);
+
+                if (t >= 1.0)
+                {
+                    sidebarAnimTimer.Stop();
+                    sidebarAnimTimer = null;
+                    if (SidebarColumn != null)
+                        SidebarColumn.Width = new GridLength(sidebarAnimTarget);
+
+                    // Update margin and layout after animation completes
+                    if (SidebarHost != null)
+                    {
+                        SidebarHost.ClearValue(FrameworkElement.WidthProperty);
+                        SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
+                        SidebarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+                    }
+                }
+            };
+
+            // Pre-set margin for target state before animation starts
+            if (SidebarHost != null)
+            {
+                SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
+            }
+
+            sidebarAnimTimer.Start();
         }
 
         private static IEnumerable<DependencyObject> FindVisualChildren(DependencyObject node)
@@ -2874,33 +3028,6 @@ namespace SmsWorkbench
             return configured.Length > 0 ? configured : "9e5f94bc-e8a4-4e73-b8be-63364c29d753";
         }
 
-        private void ReimportCpa401_Click(object sender, RoutedEventArgs e)
-        {
-            string target = ShowImportTargetDialog("一键重导");
-            if (target.Length == 0) return;
-
-            string mailboxFile = GetChataiMailboxFilePath();
-            if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
-            {
-                MessageBox.Show("未找到 Chatai 邮箱文件，请先导入。", "缺少邮箱文件", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var args = new List<string>
-            {
-                "--reimport-cpa-401-survivors",
-                "--chatai-mailbox-file",
-                mailboxFile,
-                "--workers",
-                "1",
-                "--refresh-timeout",
-                "180"
-            };
-            AddImportTargetArg(args, target);
-            AddProxy(args);
-            RunBackend("一键重导" + ImportTargetLabel(target), args);
-        }
-
         private string ShowImportTargetDialog(string title)
         {
             string selected = "";
@@ -3591,52 +3718,160 @@ namespace SmsWorkbench
             if (row == null) return;
             string detail = BuildAccountDetail(row);
             string paypalUrl = row.PayPalUrl ?? "";
+            bool hasPayPal = !string.IsNullOrWhiteSpace(paypalUrl);
             var dialog = new Window
             {
                 Title = "账号详情 - " + row.Identifier,
                 Owner = this,
-                Width = 940,
-                Height = 720,
-                MinWidth = 760,
-                MinHeight = 560,
+                Width = 960,
+                Height = 740,
+                MinWidth = 780,
+                MinHeight = 580,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
-            var root = new Grid { Margin = new Thickness(12) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var root = new Grid { Margin = new Thickness(16) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });     // 0: title
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });     // 1: summary
+            if (hasPayPal)
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: paypal url
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // detail
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });     // actions
 
-            var title = new TextBlock
+            // Title with status badge
+            var titlePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+            titlePanel.Children.Add(new TextBlock
             {
                 Text = row.Identifier,
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (!string.IsNullOrWhiteSpace(row.Status))
+            {
+                titlePanel.Children.Add(new Border
+                {
+                    Background = (System.Windows.Media.Brush)FindResource("PrimarySoft"),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8, 2, 8, 2),
+                    Margin = new Thickness(12, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = row.Status,
+                        FontSize = 11,
+                        Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+                    }
+                });
+            }
+            Grid.SetRow(titlePanel, 0);
+            root.Children.Add(titlePanel);
+
+            // Summary cards - 2-column layout
+            var summaryGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (int i = 0; i < 3; i++) summaryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var infoItems = new (string label, string value)[]
+            {
+                ("邮箱", row.Identifier),
+                ("类型", row.AccountType ?? ""),
+                ("状态", row.Status ?? ""),
+                ("支付状态", row.PayPalStatus ?? ""),
+                ("支付金额", row.PayPalAmount ?? ""),
+                ("Refresh Token", row.RefreshTokenStatus ?? ""),
+                ("创建时间", row.CreatedAt ?? ""),
+                ("更新时间", row.CompletedAt ?? ""),
+            };
+
+            int idx = 0;
+            for (int r = 0; r < 3; r++)
+            {
+                for (int c = 0; c < 2 && idx < infoItems.Length; c++, idx++)
+                {
+                    var (label, value) = infoItems[idx];
+                    var card = new Border
+                    {
+                        Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                        BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(12, 8, 12, 8),
+                        Margin = new Thickness(c == 0 ? 0 : 6, r == 0 ? 0 : 6, c == 1 ? 0 : 6, 0)
+                    };
+                    var cardStack = new StackPanel();
+                    cardStack.Children.Add(new TextBlock
+                    {
+                        Text = label,
+                        FontSize = 11,
+                        Foreground = (System.Windows.Media.Brush)FindResource("TextMuted"),
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                    cardStack.Children.Add(new TextBlock
+                    {
+                        Text = string.IsNullOrWhiteSpace(value) ? "—" : value,
+                        FontSize = 13,
+                        FontWeight = FontWeights.Medium,
+                        Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    });
+                    card.Child = cardStack;
+                    Grid.SetRow(card, r);
+                    Grid.SetColumn(card, c);
+                    summaryGrid.Children.Add(card);
+                }
+            }
+            Grid.SetRow(summaryGrid, 1);
+            root.Children.Add(summaryGrid);
+
+            // PayPal URL display (if present)
+            if (hasPayPal)
+            {
+                var urlPanel = new Border
+                {
+                    Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                    BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(12, 6, 12, 6),
+                    Margin = new Thickness(0, 0, 0, 10)
+                };
+                var urlStack = new StackPanel();
+                urlStack.Children.Add(new TextBlock
+                {
+                    Text = "支付订阅链接",
+                    FontSize = 11,
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextMuted"),
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+                urlStack.Children.Add(new TextBox
+                {
+                    Text = paypalUrl,
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    BorderThickness = new Thickness(0),
+                    Background = Brushes.Transparent,
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                    FontSize = 12,
+                    Padding = new Thickness(0)
+                });
+                urlPanel.Child = urlStack;
+                Grid.SetRow(urlPanel, 2);
+                root.Children.Add(urlPanel);
+            }
+
+            // Raw detail text
+            var detailBorder = new Border
+            {
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
                 Margin = new Thickness(0, 0, 0, 10)
             };
-            Grid.SetRow(title, 0);
-            root.Children.Add(title);
-
-            var summary = new Grid
-            {
-                Margin = new Thickness(0, 0, 0, 10),
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg")
-            };
-            summary.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            summary.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 6; i++) summary.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            AddDetailRow(summary, 0, "邮箱", row.Identifier);
-            AddDetailRow(summary, 1, "支付状态", row.PayPalStatus);
-            AddDetailRow(summary, 2, "支付金额", row.PayPalAmount);
-            AddDetailRow(summary, 3, "Refresh", row.RefreshTokenStatus);
-            AddDetailRow(summary, 4, "更新时间", row.CompletedAt);
-            AddDetailRow(summary, 5, "支付订阅链接", paypalUrl);
-            Grid.SetRow(summary, 1);
-            root.Children.Add(summary);
-
             var text = new TextBox
             {
                 Text = detail,
@@ -3650,39 +3885,52 @@ namespace SmsWorkbench
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                MinHeight = 260,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg")
+                MinHeight = 200,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(10, 8, 10, 8)
             };
-            Grid.SetRow(text, 2);
-            root.Children.Add(text);
+            detailBorder.Child = text;
+            int detailRow = hasPayPal ? 3 : 2;
+            Grid.SetRow(detailBorder, detailRow);
+            root.Children.Add(detailBorder);
 
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 10, 0, 0)
-            };
-            var openPayPalButton = new Button { Content = "打开支付链接", Width = 108, IsEnabled = !string.IsNullOrWhiteSpace(paypalUrl) };
+            // Action buttons - two rows for better spacing
+            var actionsGrid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            actionsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            actionsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Left: secondary actions
+            var leftActions = new StackPanel { Orientation = Orientation.Horizontal };
+            var openButton = new Button { Content = "打开源文件", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+            openButton.Click += (_, __) => OpenAccountJson(row);
+            leftActions.Children.Add(openButton);
+
+            // Right: primary actions
+            var rightActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var openPayPalButton = new Button { Content = "打开支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             openPayPalButton.Click += (_, __) => OpenPayPalUrl(paypalUrl, row.Identifier);
-            var copyPayPalButton = new Button { Content = "复制支付链接", Width = 108, IsEnabled = !string.IsNullOrWhiteSpace(paypalUrl) };
+            var copyPayPalButton = new Button { Content = "复制支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl);
-            var markPayPalCompleteButton = new Button { Content = "标记支付完成", Width = 112 };
+            var markPayPalCompleteButton = new Button { Content = "标记支付完成", MinWidth = 120, Style = (System.Windows.Style)FindResource("PrimaryButton"), Margin = new Thickness(0, 0, 8, 0) };
             markPayPalCompleteButton.Click += (_, __) =>
             {
                 MarkPayPalComplete(row);
                 dialog.Close();
             };
-            var openButton = new Button { Content = "打开源文件", Width = 96 };
-            openButton.Click += (_, __) => OpenAccountJson(row);
-            var closeButton = new Button { Content = "关闭", Width = 72 };
+            var closeButton = new Button { Content = "关闭", MinWidth = 80 };
             closeButton.Click += (_, __) => dialog.Close();
-            actions.Children.Add(openPayPalButton);
-            actions.Children.Add(copyPayPalButton);
-            actions.Children.Add(markPayPalCompleteButton);
-            actions.Children.Add(openButton);
-            actions.Children.Add(closeButton);
-            Grid.SetRow(actions, 3);
-            root.Children.Add(actions);
+            rightActions.Children.Add(openPayPalButton);
+            rightActions.Children.Add(copyPayPalButton);
+            rightActions.Children.Add(markPayPalCompleteButton);
+            rightActions.Children.Add(closeButton);
+
+            Grid.SetColumn(leftActions, 0);
+            Grid.SetColumn(rightActions, 1);
+            actionsGrid.Children.Add(leftActions);
+            actionsGrid.Children.Add(rightActions);
+            Grid.SetRow(actionsGrid, detailRow + 1);
+            root.Children.Add(actionsGrid);
 
             dialog.Content = root;
             dialog.ShowDialog();
@@ -3992,7 +4240,7 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "注册要求RT", "codex_require_registration_refresh_token", GetString(codexOauth, "require_registration_refresh_token"));
             AddConfigField(phoneForm, fields, row++, "注册要求手机号", "codex_require_registration_phone_verification", GetString(codexOauth, "require_registration_phone_verification"));
 
-            var cpaForm = AddConfigCategory(sidebar, host, categories, "CPA", "CPA 导入和 401 重导接口配置。");
+            var cpaForm = AddConfigCategory(sidebar, host, categories, "CPA", "CPA 导入接口配置。");
             row = 0;
             AddConfigField(cpaForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
             AddConfigField(cpaForm, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
@@ -4080,7 +4328,7 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 12, 0, 0)
             };
-            var openJsonButton = new Button { Content = "打开JSON", Width = 88 };
+            var openJsonButton = new Button { Content = "打开JSON", Width = 120 };
             openJsonButton.Click += (_, __) => OpenPath(path);
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
