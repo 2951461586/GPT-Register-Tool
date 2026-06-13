@@ -11,28 +11,31 @@
         <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml"/>
       </ResourceDictionary.MergedDictionaries>
 
-      <!-- Semantic Color Palette (Modern Premium Light/Slate Theme) -->
-      <SolidColorBrush x:Key="AppBg" Color="#F8F9FA"/>
-      <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
-      <SolidColorBrush x:Key="PanelBg2" Color="#F1F3F5"/>
-      <SolidColorBrush x:Key="PanelHover" Color="#F1F3F5"/>
-      <SolidColorBrush x:Key="Line" Color="#E9ECEF"/>
-      <SolidColorBrush x:Key="LineStrong" Color="#CED4DA"/>
-      <SolidColorBrush x:Key="Primary" Color="#1A1B1E"/>
-      <SolidColorBrush x:Key="PrimarySoft" Color="#F1F3F5"/>
-      <SolidColorBrush x:Key="Danger" Color="#FA5252"/>
-      <SolidColorBrush x:Key="DangerSoft" Color="#FFF5F5"/>
-      <SolidColorBrush x:Key="DangerBorder" Color="#FFC9C9"/>
-      <SolidColorBrush x:Key="TextMain" Color="#1A1B1E"/>
-      <SolidColorBrush x:Key="TextSub" Color="#495057"/>
-      <SolidColorBrush x:Key="TextMuted" Color="#868E96"/>
-      <SolidColorBrush x:Key="SidebarBg" Color="#FFFFFF"/>
-      <SolidColorBrush x:Key="GridAltBg" Color="#F8F9FA"/>
-      <SolidColorBrush x:Key="SplitterBg" Color="#E9ECEF"/>
-      <SolidColorBrush x:Key="StatusBg" Color="#F8F9FA"/>
-      <SolidColorBrush x:Key="LogBg" Color="#1A1B1E"/>
-      <SolidColorBrush x:Key="LogBorder" Color="#2C2E33"/>
-      <SolidColorBrush x:Key="LogText" Color="#E9ECEF"/>
+      <!-- Semantic Color Palette (Warm Premium Light Theme) -->
+      <SolidColorBrush x:Key="AppBg" Color="#F7F5F0"/>
+      <SolidColorBrush x:Key="PanelBg" Color="#F0EEE8"/>
+      <SolidColorBrush x:Key="PanelBg2" Color="#DDDAD4"/>
+      <SolidColorBrush x:Key="PanelHover" Color="#E3E1DB"/>
+      <SolidColorBrush x:Key="Line" Color="#DDDAD4"/>
+      <SolidColorBrush x:Key="LineStrong" Color="#C5C2BA"/>
+      <SolidColorBrush x:Key="Primary" Color="#3E3B36"/>
+      <SolidColorBrush x:Key="PrimarySoft" Color="#E3E1DB"/>
+      <SolidColorBrush x:Key="Danger" Color="#985248"/>
+      <SolidColorBrush x:Key="DangerSoft" Color="#ECE2DC"/>
+      <SolidColorBrush x:Key="DangerBorder" Color="#C49088"/>
+      <SolidColorBrush x:Key="Success" Color="#3E846F"/>
+      <SolidColorBrush x:Key="SuccessSoft" Color="#E0F3E6"/>
+      <SolidColorBrush x:Key="SuccessBorder" Color="#8DC5A9"/>
+      <SolidColorBrush x:Key="TextMain" Color="#3E3B36"/>
+      <SolidColorBrush x:Key="TextSub" Color="#6B6860"/>
+      <SolidColorBrush x:Key="TextMuted" Color="#9E9B93"/>
+      <SolidColorBrush x:Key="SidebarBg" Color="#F0EEE8"/>
+      <SolidColorBrush x:Key="GridAltBg" Color="#F7F5F0"/>
+      <SolidColorBrush x:Key="SplitterBg" Color="#DDDAD4"/>
+      <SolidColorBrush x:Key="StatusBg" Color="#F7F5F0"/>
+      <SolidColorBrush x:Key="LogBg" Color="#3E3B36"/>
+      <SolidColorBrush x:Key="LogBorder" Color="#55524C"/>
+      <SolidColorBrush x:Key="LogText" Color="#E3E1DB"/>
 
       <Style TargetType="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
@@ -165,7 +168,7 @@
         </Setter>
       </Style>
 
-      <!-- Modernized ComboBox -->
+      <!-- Modernized ComboBox (property-only, uses WPF-UI built-in template) -->
       <Style TargetType="ComboBox">
         <Setter Property="Height" Value="34"/>
         <Setter Property="Padding" Value="10,4"/>
@@ -173,12 +176,16 @@
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
         <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="Cursor" Value="Hand"/>
       </Style>
 
       <Style TargetType="ComboBoxItem">
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
       </Style>
 
       <!-- Modernized DataGrid -->

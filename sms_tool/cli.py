@@ -48,8 +48,6 @@ def main():
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
     parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
     parser.add_argument("--import-target", choices=["cpa", "sub2api", "cliproxyapi"], default="cpa", help="Target for --import-cpa and 401 re-import")
-    parser.add_argument("--auto-reimport-cpa-401", action="store_true", help="Read CPA 401/invalid auth files and re-import matching local sessions")
-    parser.add_argument("--reimport-cpa-401-survivors", action="store_true", help="Re-login CPA 401 accounts without Access deactivated mail and re-import them")
     parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
     parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
@@ -122,11 +120,7 @@ def main():
     if args.import_cpa:
         _import_cpa(args)
         return
-    if args.auto_reimport_cpa_401:
-        _auto_reimport_cpa_401(args)
         return
-    if args.reimport_cpa_401_survivors:
-        _reimport_cpa_401_survivors(args)
         return
     if args.export_codex_json:
         _export_codex_json(args)
@@ -699,53 +693,6 @@ def _importable_account_rows():
         if email and access_token:
             rows.append(row)
     return rows
-
-
-def _auto_reimport_cpa_401(args):
-    from .cpa_import import auto_reimport_cpa_401
-
-    result = auto_reimport_cpa_401(
-        domain_filter=args.cpa_domain_filter or "",
-        export_dir=args.codex_export_dir or "",
-        workers=args.workers,
-        refresh=not args.no_session_refresh,
-        proxy=args.proxy,
-        timeout=args.refresh_timeout,
-        api_url=args.cpa_api_url or "",
-        api_token=args.cpa_api_token or "",
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    if not result.get("ok"):
-        raise SystemExit(3)
-
-
-def _reimport_cpa_401_survivors(args):
-    from .cpa_401_reimport import reimport_cpa_401_survivors
-
-    result = reimport_cpa_401_survivors(
-        target=args.import_target,
-        chatai_mailbox_file=args.chatai_mailbox_file or "",
-        export_dir=args.codex_export_dir or "",
-        refresh=not args.no_session_refresh,
-        proxy=args.proxy,
-        timeout=args.refresh_timeout,
-        api_url=args.cpa_api_url or "",
-        api_token=args.cpa_api_token or "",
-        sub2api_url=args.sub2api_url or "",
-        sub2api_token=args.sub2api_token or "",
-        sub2api_email=args.sub2api_email or "",
-        sub2api_password=args.sub2api_password or "",
-        sub2api_group=args.sub2api_group or "",
-        sub2api_group_ids=args.sub2api_group_ids or "",
-        sub2api_proxy=args.sub2api_proxy or "",
-        sub2api_proxy_id=args.sub2api_proxy_id,
-        sub2api_priority=args.sub2api_priority,
-        sub2api_concurrency=args.sub2api_concurrency,
-        cfworker_domain=args.cfworker_domain or "",
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    if not result.get("ok"):
-        raise SystemExit(3)
 
 
 def _regenerate_paypal_link(args):

@@ -46,7 +46,7 @@ These directories are runtime state and are ignored by Git:
 | Registration/auth | `registration.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, session refresh, optional phone verification. |
 | Payment links | `gen_pp_link.py`, `paypal_links.py` | Create/store hosted payment links from account access tokens; no PayPal account signup. |
 | Payment execution | `paypal_browser_auto.py`, `paypal_auto.py`, `paypal_nocard.py`, `gopay_payment.py`, `gopay_wa_rebind.py`, `grpcurl_client.py` | Execute explicit payment commands only; use account seed and storage seams. |
-| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `cpa_401_reimport.py`, `sub2api_import.py`, `import_targets.py`, `account_scan.py` | Normalize account/session state and external import/export payloads. |
+| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `import_targets.py`, `account_scan.py` | Normalize account/session state and external import/export payloads. |
 | Shared utilities | `http_client.py`, `captcha_solver.py`, `nodriver_*`, `proxy_pool.py`, `utils.py` | Reusable transport/browser/helper logic with minimal state ownership. |
 
 ## `services/` module groups
