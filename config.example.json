@@ -78,7 +78,16 @@
     "allow_chatgpt_checkout_fallback": true,
     "hosted_usd_fallback_on_non_hosted": false,
     "link_generation_type": "hosted_long_url",
-    "gpt_pp_core_note": "Set link_generation_type to gpt_pp_core to use the ported gpt-pp core PayPal authorize extractor"
+    "gpt_pp_core_note": "Set link_generation_type to gpt_pp_core to use the ported gpt-pp core PayPal authorize extractor, or gpt_pp_gateway to use the Go concurrent gateway"
+  },
+  "gpt_pp_gateway": {
+    "addr": "127.0.0.1:8787",
+    "auto_start": true,
+    "source_dir": "scripts/gpt_pp_gateway",
+    "country": "US",
+    "currency": "USD",
+    "allow_non_zero": true,
+    "timeout": 30
   },
   "gopay": {
     "one_click_mode": "protocol",

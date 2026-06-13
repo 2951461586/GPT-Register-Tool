@@ -403,10 +403,17 @@ def _paypal_generation_type(payment_cfg: dict[str, Any]) -> str:
         "gpt_pp_paypal_authorize",
         "gpt_pp_longlink",
         "gptpp",
-        "pp_gateway",
         "plus_paypal_gateway",
     }:
         return "gpt_pp_core"
+    if raw in {
+        "gpt_pp_gateway",
+        "pp_gateway",
+        "pp_gateway_go",
+        "go_gateway",
+        "pp_go",
+    }:
+        return "gpt_pp_gateway"
     if raw in {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"}:
         return "hosted_long_url"
     return ""
@@ -1586,6 +1593,31 @@ def _try_gpt_pp_core_link(
     return result
 
 
+def _try_gpt_pp_gateway_link(
+    access_token: str,
+    cfg: dict,
+    proxy: str,
+    payment_method: str = "paypal",
+) -> dict[str, Any]:
+    """通过 Go 网关提取 PayPal 授权链接（单次）。"""
+    from .gpt_pp_gateway import generate_gateway_paypal_link
+
+    gateway_cfg = cfg.get("gpt_pp_gateway") if isinstance(cfg.get("gpt_pp_gateway"), dict) else {}
+    gateway_addr = str(gateway_cfg.get("addr") or "127.0.0.1:8787").strip()
+    auto_start = bool(gateway_cfg.get("auto_start", True))
+    timeout = int(gateway_cfg.get("timeout", 45) or 45)
+    result = generate_gateway_paypal_link(
+        access_token,
+        proxy=proxy,
+        gateway_addr=gateway_addr,
+        auto_start=auto_start,
+        timeout=timeout,
+    )
+    result.setdefault("payment_method", payment_method)
+    result.setdefault("method", payment_method)
+    return result
+
+
 def _try_paypal_link(
     access_token: str,
     cfg: dict,
@@ -2645,6 +2677,32 @@ def generate_payment_link(
         paypal_cfg["link_generation_type"] = str(paypal_generation_type or "").strip()
         cfg["paypal"] = paypal_cfg
     payment_cfg = _payment_cfg(cfg, payment_method)
+
+    # 自动升级：如果配置了 gpt_pp_gateway 且网关可用，优先使用网关模式
+    gen_type = _paypal_generation_type(payment_cfg)
+    if payment_method == "paypal" and gen_type == "gpt_pp_core" and cfg.get("gpt_pp_gateway"):
+        from .gpt_pp_gateway import GptPpGateway
+        gw_cfg = cfg.get("gpt_pp_gateway") if isinstance(cfg.get("gpt_pp_gateway"), dict) else {}
+        addr = str(gw_cfg.get("addr") or "127.0.0.1:8787")
+        # 快速健康检查（不管理进程生命周期）
+        try:
+            import requests as _req
+            resp = _req.get(f"http://{addr}/api/health", timeout=3)
+            gw_healthy = resp.status_code == 200 and resp.json().get("ok")
+        except Exception:
+            gw_healthy = False
+        if not gw_healthy and bool(gw_cfg.get("auto_start", True)):
+            # 网关未运行，尝试启动
+            gw = GptPpGateway(addr=addr, auto_start=True)
+            if gw.ensure_running():
+                gw_healthy = True
+                # 不 stop，让网关继续运行
+        if gw_healthy:
+            print(f"{_log_prefix(payment_method)} auto-upgrade: gpt_pp_core -> gpt_pp_gateway (gateway available)", file=sys.stderr)
+            payment_cfg = dict(payment_cfg)
+            payment_cfg["link_generation_type"] = "gpt_pp_gateway"
+            gen_type = "gpt_pp_gateway"
+
     default_proxy = (cfg.get("proxy") or {}).get("default") or "direct"
     proxies, force_proxy = _proxy_candidates(payment_cfg, default_proxy, explicit_proxy=proxy)
     regions = _billing_regions(payment_cfg)
@@ -2679,6 +2737,32 @@ def generate_payment_link(
                         print(f"{_log_prefix(payment_method)} gpt-pp attempt failed: {region['label']}+{proxy}: {last_err}", file=sys.stderr)
                         continue
         return {"ok": False, "error": f"gpt-pp all attempts failed, last error: {last_err}", "error_code": "gpt_pp_core_failed"}
+
+    if payment_method == "paypal" and _paypal_generation_type(payment_cfg) == "gpt_pp_gateway":
+        last_err = None
+        for proxy in proxies:
+            for attempt in range(1, max_checkout_retries + 1):
+                try:
+                    if attempt > 1:
+                        print(f"{_log_prefix(payment_method)} gateway retry: attempt={attempt}/{max_checkout_retries}", file=sys.stderr)
+                    result = _try_gpt_pp_gateway_link(
+                        access_token,
+                        cfg,
+                        proxy,
+                        payment_method=payment_method,
+                    )
+                    result["checkout_attempt"] = attempt
+                    result["payment_method"] = payment_method
+                    result["method"] = payment_method
+                    if result.get("ok") or result.get("terminal"):
+                        return result
+                    if result.get("error"):
+                        last_err = result["error"]
+                except Exception as e:
+                    last_err = str(e)
+                    print(f"{_log_prefix(payment_method)} gateway attempt failed: {proxy}: {last_err}", file=sys.stderr)
+                    continue
+        return {"ok": False, "error": f"gpt-pp gateway all attempts failed, last error: {last_err}", "error_code": "gpt_pp_gateway_failed"}
 
     last_err = None
     for region in regions:
