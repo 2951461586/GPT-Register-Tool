@@ -11,7 +11,8 @@
       "Bash(python _fix_all_strings.py)",
       "Bash(python _fix_cookies.py)",
       "Bash(python _fix_cookie_func.py)",
-      "Bash(dir \"E:\\\\java-demo\\\\GPT-Register-Tool\\\\runtime\\\\paypal_debug\")"
+      "Bash(dir \"E:\\\\java-demo\\\\GPT-Register-Tool\\\\runtime\\\\paypal_debug\")",
+      "Bash(git clone *)"
     ],
     "defaultMode": "bypassPermissions"
   }

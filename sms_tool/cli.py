@@ -753,6 +753,9 @@ def _regenerate_paypal_link(args):
 
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
+    if emails and _is_gateway_batch_mode(args):
+        _regenerate_paypal_link_gateway(args, emails)
+        return
     if emails:
         payment_method = _payment_method(args)
         workers = _payment_regenerate_workers(args, payment_method, len(emails))
@@ -826,6 +829,179 @@ def _payment_regenerate_delay_seconds(payment_method: str) -> float:
         return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
     except (TypeError, ValueError):
         return 0.0
+
+
+def _is_gateway_batch_mode(args) -> bool:
+    """检查是否应使用 Go 网关批量模式。"""
+    gen_type = str(getattr(args, "paypal_generation_type", "") or "").strip().lower().replace("-", "_")
+    if gen_type in {"gpt_pp_gateway", "pp_gateway", "pp_gateway_go", "go_gateway", "pp_go"}:
+        return True
+    # 也检查 config 中的 link_generation_type
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    cfg_type = str(
+        paypal_cfg.get("link_generation_type")
+        or paypal_cfg.get("generation_type")
+        or paypal_cfg.get("paypal_generation_type")
+        or ""
+    ).strip().lower().replace("-", "_")
+    return cfg_type in {"gpt_pp_gateway", "pp_gateway", "pp_gateway_go", "go_gateway", "pp_go"}
+
+
+def _regenerate_paypal_link_gateway(args, emails):
+    """通过 Go 网关批量提取 PayPal 授权链接（高并发 NDJSON 流式）。"""
+    import time as _time
+    from json import loads as _loads
+    from pathlib import Path
+
+    from .account_seed import extract_access_token as _access_token
+    from .account_seed import load_account_seed as _load_seed
+    from .gpt_pp_gateway import GptPpGateway
+    from .storage import upsert_account
+
+    gateway_cfg = CFG.get("gpt_pp_gateway") if isinstance(CFG.get("gpt_pp_gateway"), dict) else {}
+    gateway_addr = str(gateway_cfg.get("addr") or "127.0.0.1:8787").strip()
+    auto_start = bool(gateway_cfg.get("auto_start", True))
+    proxy = str(getattr(args, "proxy", "") or "").strip()
+
+    print(f"[*] Gateway batch mode: {len(emails)} account(s), addr={gateway_addr}")
+
+    # 1. 加载所有账号种子数据，提取 access_token
+    accounts: list[dict] = []
+    for item_email in emails:
+        data, json_path = _load_seed(email=item_email.strip())
+        target_email = (item_email.strip() or data.get("email") or "").strip().lower()
+        if target_email:
+            data["email"] = target_email
+        access_token = _access_token(data)
+        accounts.append({
+            "email": target_email,
+            "access_token": access_token,
+            "data": data,
+            "json_path": json_path,
+        })
+
+    # 过滤出有 token 的账号
+    valid = [a for a in accounts if a["access_token"]]
+    invalid = [a for a in accounts if not a["access_token"]]
+    if invalid:
+        print(f"[!] {len(invalid)} account(s) missing access_token, skipping: {[a['email'] for a in invalid]}")
+    if not valid:
+        print("[!] No valid accounts with access_token")
+        raise SystemExit(3)
+
+    tokens = [a["access_token"] for a in valid]
+    print(f"[*] Sending {len(tokens)} token(s) to Go gateway...")
+
+    # 2. 调用网关批量接口
+    gw = GptPpGateway(addr=gateway_addr, auto_start=auto_start)
+    if not gw.ensure_running():
+        print("[!] Go 网关未就绪，回退到单线程模式")
+        _regenerate_paypal_link_fallback(args, emails)
+        return
+
+    try:
+        results_map: dict[int, dict] = {}
+        for result in gw.extract_batch(tokens, proxy=proxy):
+            idx = result.get("_index", -1)
+            if 0 <= idx < len(valid):
+                results_map[idx] = result
+                acct = valid[idx]
+                ok = result.get("ok")
+                url = result.get("url") or result.get("stripe_redirect_url") or ""
+                status = "OK" if ok else "FAIL"
+                print(f"  [{idx + 1}/{len(valid)}] {acct['email']}: {status} {url[:60] if url else result.get('error', '')[:60]}")
+
+        # 3. 回写结果到种子文件
+        ok_count = 0
+        all_results = []
+        for i, acct in enumerate(valid):
+            result = results_map.get(i, {"ok": False, "error": "no_result_from_gateway"})
+            data = acct["data"]
+            json_path = acct["json_path"]
+            now = int(_time.time())
+
+            if result.get("ok") and result.get("url"):
+                data["paypal"] = result
+                data["paypal_status"] = "link_ready"
+                data.pop("paypal_regenerate_error", None)
+                data.pop("paypal_regenerate_error_code", None)
+                ok_count += 1
+            else:
+                data["paypal"] = result
+                data["paypal_status"] = "failed"
+                data["paypal_regenerate_error"] = str(result.get("error") or "")
+                if result.get("error_code"):
+                    data["paypal_regenerate_error_code"] = result["error_code"]
+
+            data["paypal_updated_at"] = now
+            data["payment_method"] = "paypal"
+            data["access_token"] = acct["access_token"]
+            data["success"] = bool(data.get("success", True))
+
+            if json_path:
+                Path(json_path).parent.mkdir(parents=True, exist_ok=True)
+                Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            upsert_account(data, json_path=json_path)
+            all_results.append({
+                "email": acct["email"],
+                "ok": result.get("ok"),
+                "url": result.get("url") or result.get("stripe_redirect_url") or "",
+                "error": result.get("error") or "",
+            })
+
+        # 加上 invalid 的结果
+        for acct in invalid:
+            all_results.append({"email": acct["email"], "ok": False, "error": "missing_access_token"})
+
+        total = len(emails)
+        print(f"\n[*] Gateway batch done: {ok_count}/{len(valid)} succeeded ({total} total)")
+        print(json.dumps({
+            "ok": ok_count == len(valid),
+            "total": total,
+            "success": ok_count,
+            "failed": total - ok_count,
+            "results": all_results,
+        }, ensure_ascii=False, indent=2))
+        if ok_count != len(valid):
+            raise SystemExit(3)
+    finally:
+        if auto_start:
+            gw.stop()
+
+
+def _regenerate_paypal_link_fallback(args, emails):
+    """网关不可用时的回退：ThreadPoolExecutor 逐个调用。"""
+    from .paypal_links import regenerate_paypal_link
+
+    payment_method = _payment_method(args)
+    workers = _payment_regenerate_workers(args, payment_method, len(emails))
+    delay_seconds = _payment_regenerate_delay_seconds(payment_method)
+    print(f"[*] Fallback: {len(emails)} account(s), workers={workers} delay={delay_seconds:g}s")
+    ordered = [None] * len(emails)
+
+    def _run_one(index, item_email):
+        if index > 0 and delay_seconds > 0:
+            time.sleep(delay_seconds * index if workers > 1 else delay_seconds)
+        print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
+        return index, regenerate_paypal_link(
+            email=item_email,
+            session_file="",
+            proxy=args.proxy,
+            payment_method=payment_method,
+            paypal_generation_type=args.paypal_generation_type,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
+        for future in as_completed(futures):
+            index, result = future.result()
+            ordered[index] = result
+
+    results = [r for r in ordered if r is not None]
+    ok_count = sum(1 for r in results if r.get("ok"))
+    print(json.dumps({"ok": ok_count == len(emails), "total": len(emails), "success": ok_count, "failed": len(emails) - ok_count, "results": results}, ensure_ascii=False, indent=2))
+    if ok_count != len(emails):
+        raise SystemExit(3)
 
 
 def _read_email_file(path):
