@@ -13,3 +13,7 @@ cloakbrowser>=1.0.0
 
 # CAPTCHA solving (Playwright-based)
 playwright>=1.40.0
+
+# Go gateway (optional, for high-concurrency PayPal link extraction)
+# Requires Go 1.22+ installed: https://go.dev/dl/
+# The gateway binary is auto-compiled from scripts/gpt_pp_gateway/ on first use
