@@ -33,7 +33,7 @@ These directories are runtime state and are ignored by Git:
 | --- | --- | --- |
 | `sessions/` | Generated `session_*.json` account/session files | Never commit; may contain tokens/cookies. |
 | `runtime/` | SQLite index, caches, logs, debug output | Never commit; summarize redacted state only. |
-| `dist/` | Published WPF executable | Rebuild with `SmsWorkbench/build_dotnet.ps1`; do not commit. |
+| `dist/` | Published WPF executable and installer assets | Rebuild with `SmsWorkbench/build_dotnet.ps1` or `scripts/build_installer.ps1`; do not commit. |
 | `.dotnet/` | Local bundled/runtime SDK | Local machine dependency; do not commit. |
 | `__pycache__/`, `*.pyc` | Python bytecode | Delete or ignore. |
 
