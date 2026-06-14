@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
 ```
 
-7. Build release installers when publishing a Windows build. The installer script rebuilds the desktop app, packages only tracked project files plus the fresh `dist/net10` publish output, and writes assets under `dist/release/`.
+7. Build release installers when publishing a Windows build. The installer script rebuilds the desktop app, packages only tracked project files plus the fresh `dist/net10` publish output, and writes assets under `dist/release/`. The generated setup executable is a graphical Windows installer using the app icon, and it lets users choose the install path; `/S /DIR=...` remains available for silent installs.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD
