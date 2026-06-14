@@ -78,7 +78,7 @@ class SmsBowerActivation:
 
 @dataclass
 class SmsBowerClient:
-    api_key: str
+    api_key: str = ""
     endpoint: str = DEFAULT_ENDPOINT
     timeout: int = 15
 

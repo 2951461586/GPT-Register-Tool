@@ -638,10 +638,22 @@ def _send_phone_otp_with_retries(session, did, current_url, phone_slot: PhoneSlo
     last_result = {}
     for attempt in range(1, attempts + 1):
         _wait_for_send_cooldown(phone_slot)
-        result = send_phone_otp(session, did, current_url, phone, sentinel=sentinel, proxy=proxy)
+        try:
+            result = send_phone_otp(session, did, current_url, phone, sentinel=sentinel, proxy=proxy)
+        except Exception as exc:
+            try:
+                from .phone_proxy import looks_like_proxy_error
+            except Exception:
+                looks_like_proxy_error = lambda value: False
+            if looks_like_proxy_error(exc):
+                result = {"ok": False, "error": "phone_proxy_unavailable", "message": str(exc), "phone": phone}
+            else:
+                raise
         phone_slot.last_send_at = int(time.time())
         last_result = result
         if result.get("ok"):
+            return result
+        if result.get("error") == "phone_proxy_unavailable":
             return result
         if attempt >= attempts or not _should_keep_activation_after_send_failure(result):
             return result
@@ -894,7 +906,7 @@ def _should_retry_with_new_smsbower_number(phone_pool: PhonePool, result: dict) 
     body = str(result.get("body") or "").lower()
     if error == "phone_sms_timeout":
         return True
-    if error in {"smsbower_prepare_failed", "nextsms_prepare_failed", "phone_pool_exhausted"}:
+    if error in {"smsbower_prepare_failed", "nextsms_prepare_failed", "phone_pool_exhausted", "phone_proxy_unavailable"}:
         return False
     if error.startswith("phone_send_failed:"):
         return any(
@@ -930,13 +942,46 @@ def _complete_phone_verification_once_locked(
     if sms_poll_interval:
         phone_slot.sms_poll_interval = sms_poll_interval
 
+    selected_proxy = proxy
+    if phone_slot.provider in {"smsbower", "nextsms"}:
+        try:
+            from .phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
+            proxy_cfg = phone_proxy_cfg()
+        except Exception:
+            apply_proxy_to_session = None
+            select_phone_proxy = None
+            proxy_cfg = {}
+        should_probe_proxy = session is not None and (bool(proxy) or any(proxy_cfg.get(key) for key in ("proxy", "proxy_template", "proxies", "proxy_api_url", "white_api_url", "api_url")))
+        if should_probe_proxy and select_phone_proxy is not None:
+            try:
+                proxy_result = select_phone_proxy(
+                    proxy,
+                    country=phone_slot.country,
+                    provider=phone_slot.provider,
+                    country_cfg={"country": phone_slot.country},
+                )
+            except Exception as exc:
+                proxy_result = {"ok": False, "error": f"phone_proxy_select_failed:{exc}"}
+            if not proxy_result.get("ok"):
+                return {
+                    "ok": False,
+                    "error": "phone_proxy_unavailable",
+                    "message": proxy_result.get("error", "phone_proxy_unavailable"),
+                    "phone": phone_slot.phone,
+                }
+            selected_proxy = proxy_result.get("proxy") or ""
+            if apply_proxy_to_session is not None:
+                apply_proxy_to_session(session, selected_proxy)
+            if selected_proxy:
+                print(f"[*] Phone proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}")
+
     if phone_slot.provider in {"smsbower", "nextsms"} and not _prepare_provider_for_send(phone_slot):
         return {"ok": False, "error": f"{phone_slot.provider}_prepare_failed", "phone": phone_slot.phone}
 
     phone = normalize_phone(phone_slot.phone)
     print(f"[*] Phone verification: {phone} (reuse {phone_slot.reuse_count + 1}/{phone_slot.max_reuse_count})")
 
-    send_result = _send_phone_otp_with_retries(session, did, current_url, phone_slot, phone, sentinel=sentinel, proxy=proxy)
+    send_result = _send_phone_otp_with_retries(session, did, current_url, phone_slot, phone, sentinel=sentinel, proxy=selected_proxy)
     phone_pool.save_state()
     if not send_result.get("ok"):
         if _is_terminal_send_rejection(send_result):
@@ -981,7 +1026,7 @@ def _complete_phone_verification_once_locked(
         }
 
     print(f"[*] SMS code received: {code}")
-    validate_result = validate_phone_otp(session, did, code, sentinel=sentinel, proxy=proxy)
+    validate_result = validate_phone_otp(session, did, code, sentinel=sentinel, proxy=selected_proxy)
     if not validate_result.get("ok"):
         if phone_slot.provider in {"smsbower", "nextsms"}:
             if _is_terminal_validate_rejection(validate_result):

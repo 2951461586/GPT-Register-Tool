@@ -372,6 +372,16 @@
                     <TextBlock Grid.Column="1" Text="标记 PayPal 完成" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
+                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="AtExtractBaLink_Click">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71 M5 3v4 M3 5h4"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="AT 提链" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                  </Grid>
+                </Button>
 
                 <TextBlock Text="管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ImportPaidCpa_Click">

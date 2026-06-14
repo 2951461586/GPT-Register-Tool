@@ -37,6 +37,8 @@ def main():
     parser.add_argument("--luckmail-purchase-domain", default=None, help="LuckMail purchase domain, default outlook.com")
     parser.add_argument("--mailbox-file", default=None, help="Mailbox token file: email---password---refresh_token---access_token---0")
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
+    parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
+    parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
     parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi"], default=None, help="Payment link/payment method: paypal, gopay, or upi")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
@@ -64,6 +66,13 @@ def main():
     parser.add_argument("--sub2api-concurrency", type=int, default=None, help="SUB2API account concurrency, defaults to config or 10")
     parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
+    parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
+    parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link")
+    parser.add_argument("--target-country", default="GB", help="Target country for BA link generation (default: GB)")
+    parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
+    parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
+    parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
+    parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
     parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
@@ -127,6 +136,9 @@ def main():
         return
     if args.regenerate_paypal_link:
         _regenerate_paypal_link(args)
+        return
+    if args.generate_ba_link:
+        _generate_ba_link(args)
         return
     if args.refresh_session:
         _refresh_session(args)
@@ -209,6 +221,38 @@ def main():
                     print(f"[*] Auto-enabled phone verification ({source} mode)")
                 print_phone_pool_status(phone_pool)
 
+    # Phone registration mode (via SMSBower)
+    if getattr(args, "phone_register", False):
+        from .registration import run_phone_register
+        payment_method = _payment_method(args)
+        paypal_link = _payment_link_enabled(payment_method, args)
+        results = []
+        for i in range(effective_count):
+            print(f"\n{'='*60}")
+            print(f"[*] Phone registration {i+1}/{effective_count}")
+            print(f"{'='*60}")
+            result = run_phone_register(
+                proxy=args.proxy,
+                password=args.password,
+                paypal_link=paypal_link,
+                codex_oauth=not args.registration_at_only,
+                payment_method=payment_method,
+                paypal_generation_type=args.paypal_generation_type,
+                smsbower_country=args.smsbower_country,
+            )
+            results.append(result)
+            if result.get("success"):
+                print(f"[OK] Phone registered: {result.get('phone', '')} | AT: {str(result.get('access_token', ''))[:20]}...")
+            else:
+                print(f"[FAIL] {result.get('error', 'unknown')}")
+        _save_registration_results(
+            args, results, effective_count=effective_count, base_dir=base_dir,
+            pipeline_started=pipeline_started, mailbox_seconds=0,
+            register_seconds=time.time() - pipeline_started,
+            paypal_link=paypal_link, payment_method=payment_method,
+        )
+        return
+
     register_started = time.time()
     if effective_count > 1:
         results = run_batch(
@@ -289,7 +333,9 @@ def _save_registration_results(
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             print(f"[!] Registration failed for {failed_email}: {failed_error[:500]}")
-            if upsert_account(data):
+            if failed_error in ("phone_already_registered_or_login_redirect",):
+                print(f"    Skipped: phone number already registered, not saving to database")
+            elif upsert_account(data):
                 db_saved_count += 1
             continue
         session_data = _build_session_file(data)
@@ -695,14 +741,50 @@ def _importable_account_rows():
     return rows
 
 
+def _generate_ba_link(args):
+    """直接从 Access Token 生成 BA 链接。"""
+    from .gen_pp_link import generate_pp_link
+
+    at = (getattr(args, "at", None) or "").strip()
+    if not at:
+        print(json.dumps({"ok": False, "error": "请提供 --at 参数 (Access Token)"}))
+        raise SystemExit(1)
+
+    target_country = (getattr(args, "target_country", None) or "GB").strip().upper()
+    proxy = (getattr(args, "proxy", None) or "").strip() or None
+    checkout_proxy = (getattr(args, "checkout_proxy", None) or "").strip() or None
+    provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
+    approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
+    require_zero = not getattr(args, "no_require_zero", False)
+
+    # 从配置文件加载默认代理
+    if not proxy and not checkout_proxy and not provider_proxy:
+        paypal_cfg = CFG.get("paypal") or {}
+        stage_proxies = paypal_cfg.get("stage_proxies") or {}
+        proxy_default = (CFG.get("proxy") or {}).get("default") or ""
+        checkout_proxy = checkout_proxy or stage_proxies.get("checkout") or proxy_default
+        provider_proxy = provider_proxy or stage_proxies.get("provider") or stage_proxies.get("stripe_init") or proxy_default
+        approve_proxy = approve_proxy or stage_proxies.get("approve") or stage_proxies.get("confirm") or proxy_default
+
+    result = generate_pp_link(
+        access_token=at,
+        proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        require_zero=require_zero,
+    )
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
 def _regenerate_paypal_link(args):
     from .paypal_links import regenerate_paypal_link
 
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
-    if emails and _is_gateway_batch_mode(args):
-        _regenerate_paypal_link_gateway(args, emails)
-        return
     if emails:
         payment_method = _payment_method(args)
         workers = _payment_regenerate_workers(args, payment_method, len(emails))
@@ -748,6 +830,9 @@ def _regenerate_paypal_link(args):
         proxy=args.proxy,
         payment_method=_payment_method(args),
         paypal_generation_type=args.paypal_generation_type,
+        checkout_proxy=getattr(args, "checkout_proxy", None),
+        provider_proxy=getattr(args, "provider_proxy", None),
+        approve_proxy=getattr(args, "approve_proxy", None),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
@@ -776,144 +861,6 @@ def _payment_regenerate_delay_seconds(payment_method: str) -> float:
         return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
     except (TypeError, ValueError):
         return 0.0
-
-
-def _is_gateway_batch_mode(args) -> bool:
-    """检查是否应使用 Go 网关批量模式。"""
-    gen_type = str(getattr(args, "paypal_generation_type", "") or "").strip().lower().replace("-", "_")
-    if gen_type in {"gpt_pp_gateway", "pp_gateway", "pp_gateway_go", "go_gateway", "pp_go"}:
-        return True
-    # 也检查 config 中的 link_generation_type
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    cfg_type = str(
-        paypal_cfg.get("link_generation_type")
-        or paypal_cfg.get("generation_type")
-        or paypal_cfg.get("paypal_generation_type")
-        or ""
-    ).strip().lower().replace("-", "_")
-    return cfg_type in {"gpt_pp_gateway", "pp_gateway", "pp_gateway_go", "go_gateway", "pp_go"}
-
-
-def _regenerate_paypal_link_gateway(args, emails):
-    """通过 Go 网关批量提取 PayPal 授权链接（高并发 NDJSON 流式）。"""
-    import time as _time
-    from json import loads as _loads
-    from pathlib import Path
-
-    from .account_seed import extract_access_token as _access_token
-    from .account_seed import load_account_seed as _load_seed
-    from .gpt_pp_gateway import GptPpGateway
-    from .storage import upsert_account
-
-    gateway_cfg = CFG.get("gpt_pp_gateway") if isinstance(CFG.get("gpt_pp_gateway"), dict) else {}
-    gateway_addr = str(gateway_cfg.get("addr") or "127.0.0.1:8787").strip()
-    auto_start = bool(gateway_cfg.get("auto_start", True))
-    proxy = str(getattr(args, "proxy", "") or "").strip()
-
-    print(f"[*] Gateway batch mode: {len(emails)} account(s), addr={gateway_addr}")
-
-    # 1. 加载所有账号种子数据，提取 access_token
-    accounts: list[dict] = []
-    for item_email in emails:
-        data, json_path = _load_seed(email=item_email.strip())
-        target_email = (item_email.strip() or data.get("email") or "").strip().lower()
-        if target_email:
-            data["email"] = target_email
-        access_token = _access_token(data)
-        accounts.append({
-            "email": target_email,
-            "access_token": access_token,
-            "data": data,
-            "json_path": json_path,
-        })
-
-    # 过滤出有 token 的账号
-    valid = [a for a in accounts if a["access_token"]]
-    invalid = [a for a in accounts if not a["access_token"]]
-    if invalid:
-        print(f"[!] {len(invalid)} account(s) missing access_token, skipping: {[a['email'] for a in invalid]}")
-    if not valid:
-        print("[!] No valid accounts with access_token")
-        raise SystemExit(3)
-
-    tokens = [a["access_token"] for a in valid]
-    print(f"[*] Sending {len(tokens)} token(s) to Go gateway...")
-
-    # 2. 调用网关批量接口
-    gw = GptPpGateway(addr=gateway_addr, auto_start=auto_start)
-    if not gw.ensure_running():
-        print("[!] Go 网关未就绪，回退到单线程模式")
-        _regenerate_paypal_link_fallback(args, emails)
-        return
-
-    try:
-        results_map: dict[int, dict] = {}
-        for result in gw.extract_batch(tokens, proxy=proxy):
-            idx = result.get("_index", -1)
-            if 0 <= idx < len(valid):
-                results_map[idx] = result
-                acct = valid[idx]
-                ok = result.get("ok")
-                url = result.get("url") or result.get("stripe_redirect_url") or ""
-                status = "OK" if ok else "FAIL"
-                print(f"  [{idx + 1}/{len(valid)}] {acct['email']}: {status} {url[:60] if url else result.get('error', '')[:60]}")
-
-        # 3. 回写结果到种子文件
-        ok_count = 0
-        all_results = []
-        for i, acct in enumerate(valid):
-            result = results_map.get(i, {"ok": False, "error": "no_result_from_gateway"})
-            data = acct["data"]
-            json_path = acct["json_path"]
-            now = int(_time.time())
-
-            if result.get("ok") and result.get("url"):
-                data["paypal"] = result
-                data["paypal_status"] = "link_ready"
-                data.pop("paypal_regenerate_error", None)
-                data.pop("paypal_regenerate_error_code", None)
-                ok_count += 1
-            else:
-                data["paypal"] = result
-                data["paypal_status"] = "failed"
-                data["paypal_regenerate_error"] = str(result.get("error") or "")
-                if result.get("error_code"):
-                    data["paypal_regenerate_error_code"] = result["error_code"]
-
-            data["paypal_updated_at"] = now
-            data["payment_method"] = "paypal"
-            data["access_token"] = acct["access_token"]
-            data["success"] = bool(data.get("success", True))
-
-            if json_path:
-                Path(json_path).parent.mkdir(parents=True, exist_ok=True)
-                Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            upsert_account(data, json_path=json_path)
-            all_results.append({
-                "email": acct["email"],
-                "ok": result.get("ok"),
-                "url": result.get("url") or result.get("stripe_redirect_url") or "",
-                "error": result.get("error") or "",
-            })
-
-        # 加上 invalid 的结果
-        for acct in invalid:
-            all_results.append({"email": acct["email"], "ok": False, "error": "missing_access_token"})
-
-        total = len(emails)
-        print(f"\n[*] Gateway batch done: {ok_count}/{len(valid)} succeeded ({total} total)")
-        print(json.dumps({
-            "ok": ok_count == len(valid),
-            "total": total,
-            "success": ok_count,
-            "failed": total - ok_count,
-            "results": all_results,
-        }, ensure_ascii=False, indent=2))
-        if ok_count != len(valid):
-            raise SystemExit(3)
-    finally:
-        if auto_start:
-            gw.stop()
 
 
 def _regenerate_paypal_link_fallback(args, emails):
