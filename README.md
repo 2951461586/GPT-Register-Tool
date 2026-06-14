@@ -90,6 +90,8 @@ python chatgpt_phone_reg.py --count 1
 
 6. Build and start the WPF app. The canonical executable output is `dist/net10/SmsWorkbench.exe`; the build script removes intermediate `SmsWorkbench/bin/Debug/net10.0-windows` and `SmsWorkbench/bin/Release/net10.0-windows` workspaces after publishing.
 
+   构建并启动 WPF 桌面程序。标准输出文件是 `dist/net10/SmsWorkbench.exe`；构建脚本发布完成后会清理 `SmsWorkbench/bin/Debug/net10.0-windows` 和 `SmsWorkbench/bin/Release/net10.0-windows` 等中间目录。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
@@ -97,17 +99,23 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 7. Build release installers when publishing a Windows build. The installer script rebuilds the desktop app, packages only tracked project files plus the fresh `dist/net10` publish output, and writes assets under `dist/release/`. The generated setup executable is a graphical Windows installer using the app icon, and it lets users choose the install path; `/S /DIR=...` remains available for silent installs.
 
+   发布 Windows 版本时构建安装包。安装包脚本会重新构建桌面程序，只打包 Git 已跟踪的项目文件和最新的 `dist/net10` 发布产物，并把发布资产写入 `dist/release/`。生成的安装程序是图形化 Windows 安装向导，使用项目应用图标，支持用户选择安装路径；仍保留 `/S /DIR=...` 静默安装参数。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD
 ```
 
 For internal distribution, build with a reusable self-signed Authenticode certificate and publish the exported `.cer` next to the installer:
 
+内部发布时，可以使用可复用的自签名 Authenticode 证书构建安装包，并把导出的 `.cer` 证书与安装器一起发布：
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD -SelfSign
 ```
 
-Internal users must import `GPT-Register-Tool-Internal-CodeSigning.cer` into both `Trusted Publishers` and `Trusted Root Certification Authorities` before running the installer, otherwise Windows will still treat the self-signed publisher as untrusted. The release also includes `trust_internal_certificate.ps1`, which imports the certificate into the current user certificate stores.
+Internal users must import `GPT-Register-Tool-Internal-CodeSigning.cer` into both `Trusted Publishers` and `Trusted Root Certification Authorities` before running the installer; otherwise Windows will still treat the self-signed publisher as untrusted. The release also includes `trust_internal_certificate.ps1`, which imports the certificate into the current user certificate stores.
+
+内部用户运行安装器前，必须先把 `GPT-Register-Tool-Internal-CodeSigning.cer` 导入 `Trusted Publishers` 和 `Trusted Root Certification Authorities`。否则 Windows 仍会把自签名发布者视为不受信任。Release 中同时提供 `trust_internal_certificate.ps1`，可把证书导入当前用户证书存储。
 
 ## Mailbox Inputs
 
