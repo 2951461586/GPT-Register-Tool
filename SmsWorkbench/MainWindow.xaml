@@ -160,7 +160,8 @@
           </ui:NavigationView.FooterMenuItems>
         </ui:NavigationView>
 
-        <Grid Grid.Column="1" Margin="10,0,14,10">
+        <Page Grid.Column="1" Background="Transparent">
+          <Grid Margin="10,0,14,10">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
               <RowDefinition Height="Auto"/>
@@ -359,7 +360,8 @@
             <Border Grid.Row="5" Background="{DynamicResource StatusBg}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
               <TextBlock Margin="8,4" Text="{Binding StatusText}" Foreground="{DynamicResource TextSub}"/>
             </Border>
-        </Grid>
+          </Grid>
+        </Page>
       </Grid>
     </Grid>
   </materialDesign:DialogHost>
