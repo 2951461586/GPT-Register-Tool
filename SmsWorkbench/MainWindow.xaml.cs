@@ -17,10 +17,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using LiveChartsCore;
-using LiveChartsCore.SkiaSharpView;
-using LiveChartsCore.SkiaSharpView.Painting;
-using SkiaSharp;
 using FluentWindow = Wpf.Ui.Controls.FluentWindow;
 
 namespace SmsWorkbench
@@ -72,7 +68,6 @@ namespace SmsWorkbench
         private string registeredCountText = "0";
         private string paypalCountText = "0";
         private string attentionCountText = "0";
-        private string successRateText = "0%";
         private int currentPage = 1;
         private int filteredCount;
         private bool sidebarCollapsed;
@@ -238,14 +233,6 @@ namespace SmsWorkbench
             set { attentionCountText = value ?? "0"; OnPropertyChanged(nameof(AttentionCountText)); }
         }
 
-        public string SuccessRateText
-        {
-            get => successRateText;
-            set { successRateText = value ?? "0%"; OnPropertyChanged(nameof(SuccessRateText)); }
-        }
-
-        public ISeries[] OverviewPieSeries { get; private set; } = Array.Empty<ISeries>();
-
         public MainWindow()
         {
             InitializeComponent();
@@ -333,51 +320,14 @@ namespace SmsWorkbench
             int phoneVerified = allRows.Count(IsPhoneVerifiedRow);
             int registered = allRows.Count(IsRegisteredRow);
             int paypal = allRows.Count(IsPayPalCompletedRow);
-            int attention = allRows.Count(r => r.Status.Contains("?") || r.Status.Contains("?") || r.Status.Contains("??"));
-            int completed = Math.Max(registered, paypal);
-            int total = allRows.Count;
-            int pending = Math.Max(0, total - completed - attention);
-
-            TotalCountText = total.ToString();
+            int attention = allRows.Count(r => r.Status.Contains("待") || r.Status.Contains("缺") || r.Status.Contains("失败"));
+            TotalCountText = allRows.Count.ToString();
             MailboxCountText = phoneVerified.ToString();
             RegisteredCountText = registered.ToString();
             PaypalCountText = paypal.ToString();
             AttentionCountText = attention.ToString();
-            SuccessRateText = total == 0 ? "0%" : Math.Round(completed * 100.0 / total).ToString("0") + "%";
-            UpdateOverviewChart(completed, pending, attention);
         }
 
-        private void UpdateOverviewChart(int completed, int pending, int attention)
-        {
-            OverviewPieSeries = new ISeries[]
-            {
-                new PieSeries<int>
-                {
-                    Name = "??",
-                    Values = new[] { Math.Max(0, completed) },
-                    Fill = new SolidColorPaint(SKColor.Parse("#3E846F")),
-                    Stroke = null,
-                    DataLabelsSize = 0
-                },
-                new PieSeries<int>
-                {
-                    Name = "???",
-                    Values = new[] { Math.Max(0, pending) },
-                    Fill = new SolidColorPaint(SKColor.Parse("#C5C2BA")),
-                    Stroke = null,
-                    DataLabelsSize = 0
-                },
-                new PieSeries<int>
-                {
-                    Name = "??",
-                    Values = new[] { Math.Max(0, attention) },
-                    Fill = new SolidColorPaint(SKColor.Parse("#985248")),
-                    Stroke = null,
-                    DataLabelsSize = 0
-                }
-            };
-            OnPropertyChanged(nameof(OverviewPieSeries));
-        }
         private bool IsPhoneVerifiedRow(PoolRow row)
         {
             return !string.IsNullOrWhiteSpace(row.Phone);
