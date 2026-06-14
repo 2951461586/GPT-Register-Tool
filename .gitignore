@@ -25,3 +25,6 @@ SmsWorkbench/obj/
 .vs/
 .idea/
 .vscode/
+scripts/installer/bin/
+scripts/installer/obj/
+scripts/installer/payload.zip
