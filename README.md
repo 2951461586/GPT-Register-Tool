@@ -101,6 +101,14 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD
 ```
 
+For internal distribution, build with a reusable self-signed Authenticode certificate and publish the exported `.cer` next to the installer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version vYYYY.MM.DD -SelfSign
+```
+
+Internal users must import `GPT-Register-Tool-Internal-CodeSigning.cer` into both `Trusted Publishers` and `Trusted Root Certification Authorities` before running the installer, otherwise Windows will still treat the self-signed publisher as untrusted. The release also includes `trust_internal_certificate.ps1`, which imports the certificate into the current user certificate stores.
+
 ## Mailbox Inputs
 
 Standard Microsoft Graph/OAuth pool:
