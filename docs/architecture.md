@@ -85,8 +85,6 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 - `paypal_direct`（PP直链）: `checkout -> stripe init -> pm create(type=paypal) -> confirm`, then follow Stripe `pm-redirects` to a PayPal `agreements/approve?ba_token=...` URL. The BA token is treated as sensitive and must not be logged in full.
 - `paypal_direct_zero_due`（PP直链-强制0元试用）: same direct PayPal approval flow, but `require_zero_due=true`; if Stripe init shows any non-zero amount, the flow stops with `checkout_not_zero_due` and does not persist a BA approval link. This strict mode also disables hosted-link fallback and old saved-link reuse so UI state cannot show a stale `link_ready` URL after the current zero-due direct generation fails.
 
-- `gpt_pp_core`: ported core from `github.com/jmmy9609-design/gpt-pp`. It keeps only the local protocol engine and maps into the existing generator as `checkout -> Stripe /payment_pages/{cs}/init -> inline PayPal confirm -> pm-redirects.stripe.com/authorize/...`. It does not import the upstream web UI, deployment scripts, or proxy-provider scheduler. Saved-link reuse treats this as a Stripe authorize link mode; strict zero-due behavior is controlled by `paypal.require_zero_due`.
-
 The UI saves the compatible low-level knobs (`checkout_ui_mode`, `link_mode`,
 `confirm_style`, `resolve_ba_redirect`, `require_ba_token`, and
 `require_zero_due`) so the CLI and saved-link regeneration path use the same

@@ -99,10 +99,165 @@ def _save_sentinel_cache(data):
         json.dump(data, f, ensure_ascii=False)
     print(f"[*] Sentinel token cached")
 
+def _solve_pow(seed, difficulty_hex):
+    """Solve sentinel proof-of-work (SHA3-512). Mirrors standalone-phone-protocol."""
+    import base64
+    import hashlib
+    import struct
+    try:
+        difficulty_int = int(difficulty_hex, 16)
+    except (ValueError, TypeError):
+        return ""
+    prefix_len = (len(difficulty_hex) + 1) // 2
+    for n in range(500000):
+        digest = hashlib.sha3_512(f"{seed}{n}".encode()).digest()
+        value = 0
+        for i in range(prefix_len):
+            value = (value << 8) + digest[i]
+        if value <= difficulty_int:
+            return base64.b64encode(struct.pack(">Q", n)).decode()
+    return ""
+
+
+def _extract_sentinel_http(proxy=None):
+    """Extract sentinel tokens via direct HTTP POST (no browser needed).
+
+    Mirrors fetchSentinelViaProtocol from standalone-phone-protocol.
+    Uses curl_cffi which handles socks5h:// properly with remote DNS.
+    """
+    did = str(uuid.uuid4())
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+
+    flows = ["username_password_create", "oauth_create_account"]
+    results = {}
+
+    for flow in flows:
+        try:
+            resp = session.post(
+                "https://sentinel.openai.com/backend-api/sentinel/req",
+                data=json.dumps({"p": "", "id": did, "flow": flow}),
+                headers={
+                    "Content-Type": "text/plain;charset=UTF-8",
+                    "Accept": "*/*",
+                    "Origin": "https://sentinel.openai.com",
+                    "Referer": "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=20260219f9f6",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+                },
+                timeout=30,
+                impersonate="chrome",
+            )
+            data = resp.json()
+            results[flow] = data
+        except Exception as e:
+            print(f"  [!] HTTP sentinel fetch failed for flow={flow}: {e}")
+            return None
+
+    upc = results.get("username_password_create", {})
+    oauth = results.get("oauth_create_account", {})
+
+    if not upc.get("token"):
+        print("  [!] HTTP sentinel: no token in username_password_create response")
+        return None
+
+    # Solve proof-of-work if required
+    pow_info = upc.get("proofofwork", {})
+    t = ""
+    if pow_info.get("required") and pow_info.get("seed") and pow_info.get("difficulty"):
+        print(f"  [*] Solving sentinel PoW difficulty={pow_info['difficulty']}...")
+        t = _solve_pow(str(pow_info["seed"]), str(pow_info["difficulty"]))
+        if not t:
+            print("  [!] PoW solve failed, proceeding without it")
+
+    # Build sentinel_token (same structure as browser path)
+    sentinel_token_obj = {
+        "p": upc.get("p", ""),
+        "t": t,
+        "c": upc.get("token", ""),
+        "id": did,
+        "flow": "username_password_create",
+    }
+    sentinel_token = json.dumps(sentinel_token_obj)
+
+    # Build sentinel_so_token
+    sentinel_so_obj = {
+        "so": oauth.get("so", oauth.get("token", "")),
+        "c": oauth.get("token", ""),
+        "id": did,
+        "flow": "oauth_create_account",
+    }
+    sentinel_so_token = json.dumps(sentinel_so_obj)
+
+    # Get auth cookies via HTTP (prime the session)
+    try:
+        auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
+        prime_resp = session.get(
+            f"{auth_base}/create-account",
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml",
+            },
+            timeout=30,
+            impersonate="chrome",
+        )
+        # Extract cookies from the session
+        cookie_str = "; ".join(f"{c.name}={c.value}" for c in session.cookies)
+        # Ensure oai-did cookie is set
+        session.cookies.set("oai-did", did, domain=".openai.com")
+        cookie_str = f"oai-did={did}; " + cookie_str
+    except Exception as e:
+        print(f"  [!] Auth prime request failed: {e}")
+        cookie_str = f"oai-did={did}"
+
+    result = {
+        "sentinel_token": sentinel_token,
+        "sentinel_so_token": sentinel_so_token,
+        "cookie_str": cookie_str,
+        "oai_did": did,
+    }
+    _save_sentinel_cache(result)
+    return result
+
+
+def _resolve_proxy_scheme(proxy):
+    """Detect working proxy scheme. Many providers labeled socks5h:// are actually HTTP CONNECT proxies."""
+    if not proxy or not proxy.startswith(("socks5h://", "socks5://")):
+        return proxy
+    # Quick connectivity test: try socks5h first, fall back to http
+    http_proxy = proxy.replace("socks5h://", "http://").replace("socks5://", "http://")
+    for scheme, test_proxy in [(proxy, proxy), ("http://", http_proxy)]:
+        try:
+            s = curl_requests.Session()
+            s.proxies = {"http": test_proxy, "https": test_proxy}
+            s.get("http://ip-api.com/json?fields=query", timeout=15, impersonate="chrome")
+            if scheme != proxy:
+                print(f"[*] Proxy scheme auto-corrected: socks5h:// → http://")
+            return test_proxy
+        except Exception:
+            continue
+    # Both failed, return original and let caller handle
+    print("[!] Warning: proxy connectivity test failed with both socks5h:// and http:// schemes")
+    return proxy
+
+
 def _extract_sentinel(proxy=None):
     cached = _get_cached_sentinel()
     if cached: return cached
-    browser_proxy = proxy.replace("socks5h://", "socks5://") if proxy else None
+
+    # Try HTTP protocol method first (no browser needed, handles proxy natively)
+    print("[*] Extracting sentinel tokens via HTTP protocol...")
+    result = _extract_sentinel_http(proxy)
+    if result:
+        return result
+
+    # Fallback to browser-based extraction
+    print("[*] HTTP method failed, falling back to browser extraction...")
+    # For browser: convert socks5h to socks5 (Chromium doesn't support socks5h)
+    if proxy and proxy.startswith("socks5h://"):
+        browser_proxy = proxy.replace("socks5h://", "socks5://")
+    else:
+        browser_proxy = proxy
     return _extract_sentinel_cloakbrowser(browser_proxy)
 
 
@@ -267,7 +422,11 @@ def _absolute_url(base_url, url):
 def _is_existing_login_redirect(url):
     parsed = urlparse(url or "")
     path = (parsed.path or url or "").lower()
-    return path in {"/log-in", "/login"} or path.endswith("/log-in") or path.endswith("/login")
+    if not path:
+        return False
+    # Normalize: strip trailing slashes
+    path = path.rstrip("/")
+    return path in {"/log-in", "/login"} or path.startswith("/log-in/") or path.startswith("/login/")
 
 
 def _follow_continue_url(session, url, base_headers, referer="", label="continue"):
@@ -651,6 +810,8 @@ def run_email(
 ):
     """Register a ChatGPT account via mailbox OTP, then create a PayPal payment link."""
     _tl().clear()
+
+    proxy = _resolve_proxy_scheme(proxy)
 
     mailbox = _ensure_mailbox_account(mailbox)
     if not mailbox or not mailbox.email:
@@ -1075,6 +1236,296 @@ def run_phone(*args, **kwargs):
         payment_method=kwargs.get("payment_method", "paypal"),
         paypal_generation_type=kwargs.get("paypal_generation_type"),
     )
+
+
+def run_phone_register(
+    proxy=None,
+    password=None,
+    sentinel_data=None,
+    paypal_link=True,
+    codex_oauth=True,
+    payment_method="paypal",
+    paypal_generation_type=None,
+    smsbower_country=None,
+    smsbower_api_key=None,
+    bind_email=None,
+):
+    """Register a ChatGPT account via phone number (SMS OTP), then optionally bind email."""
+    _tl().clear()
+
+    auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
+    chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com")
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36"
+
+    # Load SMSBower config before buying a number so the proxy can be matched
+    # to the phone country and verified first.
+    phone_reuse_cfg = CFG.get("phone_reuse") if isinstance(CFG.get("phone_reuse"), dict) else {}
+    smsbower_cfg = phone_reuse_cfg.get("smsbower") if isinstance(phone_reuse_cfg.get("smsbower"), dict) else {}
+    country = smsbower_country or smsbower_cfg.get("country", "38")
+    api_key = smsbower_api_key or smsbower_cfg.get("api_key", "")
+
+    try:
+        from .phone_proxy import select_phone_proxy
+        proxy_result = select_phone_proxy(proxy, country=country, provider="smsbower", country_cfg=smsbower_cfg)
+    except Exception as exc:
+        proxy_result = {"ok": False, "error": f"phone_proxy_select_failed:{exc}"}
+    if not proxy_result.get("ok"):
+        detail = proxy_result.get("error") or "phone_proxy_unavailable"
+        return _failure_result(f"phone_proxy_unavailable: {detail}")
+    proxy = proxy_result.get("proxy") or ""
+
+    print(f"[*] ChatGPT Phone Registration Started (country={country})")
+    if proxy:
+        print(f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}")
+
+    # Step 0: Acquire phone number from SMSBower
+    _tick("0-Acquire phone number")
+    from .smsbower import SmsBowerClient, normalize_phone
+    sms_client = SmsBowerClient(api_key=api_key)
+    try:
+        activation = sms_client.get_number(service="dr", country=country)
+    except Exception as e:
+        _safe_tock()
+        return _failure_result(f"smsbower_get_number_failed: {e}")
+    phone = normalize_phone(activation.phone)
+    print(f"[*] Phone: {phone}  Activation ID: {activation.activation_id}")
+    _tock()
+
+    # Step 1: Get sentinel tokens
+    if sentinel_data:
+        print("[*] Using provided sentinel tokens")
+    else:
+        _tick("1-Extract sentinel token")
+        sentinel_data = _extract_sentinel(proxy=proxy)
+        _tock()
+    if not sentinel_data or not sentinel_data.get("sentinel_token"):
+        sms_client.cancel(activation.activation_id)
+        return _failure_result("sentinel_extract_failed", email=phone)
+
+    # Step 2: Generate credentials
+    explicit_password = bool(str(password or "").strip())
+    password = password or _generate_password()
+    first, last = _random_name()
+    full_name = f"{first} {last}"
+    birthdate = _random_birthdate()
+    did = str(uuid.uuid4())
+    session_logging_id = str(uuid.uuid4()).replace("-", "")
+
+    _sentinel_token = sentinel_data["sentinel_token"]
+    _sentinel_so_token = sentinel_data["sentinel_so_token"]
+    print(f"[*] Phone: {phone}  Password: {password}  Name: {full_name}  Birth: {birthdate}")
+
+    # Init session
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+    base_headers = {"User-Agent": ua, "Accept": "application/json"}
+
+    try:
+        # Auth flow: prime + signin + authorize
+        _tick("2-Auth flow")
+        request_with_retry(session, "get", f"{auth_base}/create-account", label="Auth prime",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml"}, impersonate="chrome")
+
+        csrf_resp = request_with_retry(session, "get", f"{chat_base}/api/auth/csrf", label="Auth csrf",
+            headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        csrf_token = (_json_or_raw(csrf_resp).get("csrfToken") or "").strip()
+
+        # Key difference: prompt=login (not screen_hint=signup)
+        signin_url = (
+            f"{chat_base}/api/auth/signin/openai"
+            f"?prompt=login&ext-oai-did={did}"
+            f"&auth_session_logging_id={session_logging_id}"
+            f"&login_hint={quote(phone, safe='')}"
+        )
+        signin_payload = {
+            "csrfToken": csrf_token,
+            "callbackUrl": f"{chat_base}/",
+            "json": "true",
+        }
+        signin_resp = request_with_retry(session, "post", signin_url, label="Auth signin", data=urlencode(signin_payload),
+            headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded",
+                     "Origin": chat_base, "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        signin_body = _json_or_raw(signin_resp, limit=1000)
+        auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
+        auth_session_url = _with_query_param(auth_session_url, "device_id", did)
+        r = request_with_retry(session, "get", auth_session_url, label="Auth authorize",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
+            impersonate="chrome")
+        _tock()
+        redirect_path = r.url.split("auth.openai.com")[-1]
+        print(f"  Redirect: {redirect_path}")
+
+        if _is_existing_login_redirect(r.url):
+            sms_client.cancel(activation.activation_id)
+            return _failure_result("phone_already_registered_or_login_redirect", email=phone)
+
+        # Step 3: Register with phone + password
+        _tick("3-User register (phone+password)")
+        r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
+            json={"password": password, "username": phone},
+            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
+                    "openai-sentinel-token": _sentinel_token},
+            impersonate="chrome")
+        _tock()
+
+        reg_data = {}
+        try: reg_data = r.json()
+        except: reg_data = {"_raw": r.text[:300]}
+        print(f"  Status: {r.status_code}")
+        print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
+
+        if r.status_code != 200:
+            err_code = reg_data.get("error", {}).get("code", "")
+            err_msg = reg_data.get("error", {}).get("message", str(reg_data))
+            sms_client.cancel(activation.activation_id)
+            return _failure_result(f"user_register: {err_msg}", email=phone)
+
+        # Step 4: Wait for SMS code from SMSBower
+        _tick("4-Wait SMS code")
+        print(f"[*] Waiting for SMS code on {phone}...")
+        code_result = sms_client.wait_for_code(activation.activation_id, timeout=180, interval=5)
+        _tock()
+
+        if not code_result or not code_result.get("code"):
+            sms_client.cancel(activation.activation_id)
+            return _failure_result("sms_code_timeout", email=phone)
+
+        sms_code = code_result["code"]
+        print(f"[*] SMS code received: {sms_code}")
+
+        # Step 5: Validate phone OTP
+        _tick("5-Validate phone OTP")
+        validate_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/phone-otp/validate",
+            label="Phone OTP validate",
+            json={"code": sms_code},
+            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/phone-verification",
+                    "openai-sentinel-token": _sentinel_token, "oai-device-id": did},
+            impersonate="chrome")
+        _tock()
+
+        validate_data = {}
+        try: validate_data = validate_resp.json()
+        except: validate_data = {"_raw": validate_resp.text[:300]}
+        print(f"  Status: {validate_resp.status_code}")
+        print(f"  Response: {json.dumps(validate_data, ensure_ascii=False)[:300]}")
+
+        if validate_resp.status_code != 200:
+            err_msg = validate_data.get("error", {}).get("message", str(validate_data))
+            sms_client.cancel(activation.activation_id)
+            return _failure_result(f"phone_otp_validate: {err_msg}", email=phone)
+
+        # Mark SMSBower activation as complete
+        try:
+            sms_client.complete(activation.activation_id)
+        except Exception:
+            pass
+
+        continue_url = validate_data.get("continue_url") or validate_resp.headers.get("Location") or ""
+
+        # Step 6: Create account
+        _tick("6-Create account")
+        create_body = {"name": full_name, "birthdate": birthdate}
+        if continue_url:
+            create_body["continue_url"] = continue_url
+        create_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account",
+            label="Create account",
+            json=create_body,
+            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/name",
+                    "openai-sentinel-token": _sentinel_token, "openai-sentinel-so-token": _sentinel_so_token},
+            impersonate="chrome")
+        _tock()
+
+        create_data = {}
+        try: create_data = create_resp.json()
+        except: create_data = {"_raw": create_resp.text[:300]}
+        print(f"  Status: {create_resp.status_code}")
+        print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
+
+        if create_resp.status_code != 200:
+            err_msg = create_data.get("error", {}).get("message", str(create_data))
+            return _failure_result(f"create_account: {err_msg}", email=phone)
+
+    except Exception as e:
+        _safe_tock()
+        try: sms_client.cancel(activation.activation_id)
+        except: pass
+        return _failure_result(f"transport_error: {e}", email=phone)
+
+    # Step 7: Fetch auth session for access_token
+    _tick("7-Auth session")
+    access_token = ""
+    id_token = ""
+    try:
+        for attempt in range(6):
+            session_resp = request_with_retry(session, "get", f"{chat_base}/api/auth/session",
+                label=f"Auth session (attempt {attempt+1})",
+                headers={**base_headers, "Referer": f"{chat_base}/"}, impersonate="chrome")
+            session_data = _json_or_raw(session_resp, limit=2000)
+            access_token = session_data.get("accessToken") or session_data.get("access_token") or ""
+            id_token = session_data.get("idToken") or session_data.get("id_token") or ""
+            if access_token:
+                break
+            time.sleep(1)
+    except Exception as e:
+        print(f"  Auth session error: {e}")
+    _tock()
+
+    if not access_token:
+        return _failure_result("auth_session_no_token", email=phone, password=password)
+
+    print(f"[*] Access token obtained: {access_token[:20]}...")
+
+    # Step 8: (Optional) Codex OAuth
+    refresh_token = ""
+    if codex_oauth:
+        _tick("8-Codex OAuth")
+        try:
+            from .codex_oauth import collect_codex_oauth_tokens
+            oauth_result = collect_codex_oauth_tokens(
+                access_token, proxy=proxy, device_id=did,
+                phone_pool=None,  # phone already verified
+                sentinel_data=sentinel_data,
+            )
+            refresh_token = (oauth_result.get("tokens") or {}).get("refresh_token") or ""
+            if refresh_token:
+                print(f"[*] Refresh token obtained: {refresh_token[:20]}...")
+        except Exception as e:
+            print(f"  Codex OAuth error: {e}")
+        _tock()
+
+    # Step 9: (Optional) Generate payment link
+    paypal_result = {}
+    if paypal_link and access_token:
+        _tick("9-Payment link")
+        try:
+            from .gen_pp_link import generate_paypal_link
+            paypal_result = generate_paypal_link(
+                access_token, CFG, proxy=proxy, payment_method=payment_method,
+            ) or {}
+        except Exception as e:
+            paypal_result = {"ok": False, "error": str(e)}
+        _tock()
+
+    _print_timings()
+
+    return {
+        "success": True,
+        "email": phone,
+        "phone": phone,
+        "password": password,
+        "name": full_name,
+        "birthdate": birthdate,
+        "access_token": access_token,
+        "id_token": id_token,
+        "refresh_token": refresh_token,
+        "paypal": paypal_result,
+        "activation_id": activation.activation_id,
+        "source": "phone_register",
+        "timing": _timing_summary(),
+    }
 
 
 def _registration_requires_refresh_token():

@@ -43,8 +43,21 @@ Required choices:
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
 - `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR. The desktop `[配置] -> [代理/支付] -> 订单生成地区` dropdown supports Japan, United States, Australia, Germany, France, United Kingdom, India, and Brazil.
 - `paypal.link_generation_type`: Desktop `[配置] -> [代理/支付] -> PayPal生成类型` selector. `hosted_long_url`（长链） runs `checkout -> stripe init -> stripe_hosted_url` and stores a `pay.openai.com/c/pay/...` hosted long URL. `paypal_direct`（PP直链） runs `checkout -> stripe init -> pm create(type=paypal) -> confirm`, follows the Stripe `pm-redirects` URL, and stores a `paypal.com/agreements/approve?ba_token=...` approval URL without logging the full token. `paypal_direct_zero_due`（PP直链-强制0元试用） uses the same PP直链 flow but keeps `require_zero_due=true`; if Stripe init does not return `amount_due=0`, generation fails with `checkout_not_zero_due` instead of outputting a non-trial BA link. In this strict mode a failed regeneration does not fall back to hosted long-link mode and does not reuse an older saved BA link.
-- `paypal.link_generation_type=gpt_pp_core`: uses the ported `gpt-pp` core engine (`ChatGPT checkout -> Stripe init -> inline PayPal confirm`) to return the raw `pm-redirects.stripe.com/authorize/...` PayPal authorization long link. It is available from the desktop PayPal generation type dropdown as `gpt-pp Core Protocol`; set `paypal.require_zero_due=true` if this engine must reject non-zero checkout sessions.
-- `paypal.stage_proxies`: optional stage-specific routing for PayPal link generation.
+- `paypal.stage_proxies`: 分段代理路由配置，支持三段式代理池:
+  ```json
+  "stage_proxies": {
+    "checkout": "http://user:pass-JP@gate:1000",
+    "provider": "http://user:pass-GB@gate:1000",
+    "approve": "http://user:pass-GB@gate:1000"
+  }
+  ```
+  - `checkout`: Stage 1 代理 (JP/TH 出口)，用于 ChatGPT checkout 创建
+  - `provider`: Stage 2 代理 (目标国出口)，用于 Stripe init/PM/confirm
+  - `approve`: Stage 3 代理 (目标国出口)，用于 ChatGPT approve + 轮询 redirect
+  - 如果 `approve` 未配置，降级使用 `provider`
+  - CLI 参数 `--checkout-proxy` / `--provider-proxy` / `--approve-proxy` 可覆盖配置文件
+- `paypal.target_country`: 目标国家代码 (如 `GB`, `DE`, `AU`)，默认 `GB`。决定 Stripe checkout 的账单国家和 PayPal BA 链的区域。
+- `paypal.require_zero_due`: 是否要求 0 元金额，默认 `true`。设为 `false` 允许非零金额 (无 promo 时)。
 - `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL from Stripe init instead of attempting BA extraction.
 - `paypal.redirect_url_format`: ignored by the hosted long-link path; kept only for compatibility with the older BA/Stripe redirect path.
 - `paypal.use_elements_session`: current default is `true`; it requests Stripe Elements session data before tax refresh, payment method creation, and confirm.

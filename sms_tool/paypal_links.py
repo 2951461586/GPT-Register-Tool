@@ -12,7 +12,8 @@ from .paypal_nocard import _follow_stripe_redirect, extract_ba_token
 from .storage import upsert_account
 
 
-def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal", paypal_generation_type=None):
+def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal", paypal_generation_type=None,
+                           checkout_proxy=None, provider_proxy=None, approve_proxy=None):
     data, json_path = _load_seed(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     if target_email:
@@ -28,6 +29,9 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
     paypal = _generate_link(
         access_token,
         proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
         payment_method=payment_method,
         seed_data=data,
         paypal_generation_type=paypal_generation_type,
@@ -185,14 +189,6 @@ def _apply_paypal_generation_type(cfg):
         or ""
     ).strip().lower().replace("-", "_")
     if raw in {
-        "gpt_pp",
-        "gpt_pp_core",
-        "gpt_pp_protocol",
-        "gpt_pp_paypal",
-        "gpt_pp_paypal_authorize",
-        "gpt_pp_longlink",
-        "gptpp",
-        "pp_gateway",
         "plus_paypal_gateway",
     }:
         patched = dict(cfg)
@@ -262,7 +258,8 @@ def _disallow_saved_link_reuse(payment_method, payment_cfg):
     }
 
 
-def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None, paypal_generation_type=None):
+def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None, paypal_generation_type=None,
+                   checkout_proxy=None, provider_proxy=None, approve_proxy=None):
     auth_context = seed_data if isinstance(seed_data, dict) else None
     if _normalize_payment_method(payment_method) == "paypal":
         return generate_pp_link(
@@ -270,6 +267,9 @@ def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=
             proxy=proxy,
             auth_context=auth_context,
             paypal_generation_type=paypal_generation_type,
+            checkout_proxy=checkout_proxy,
+            provider_proxy=provider_proxy,
+            approve_proxy=approve_proxy,
         )
     return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method, auth_context=auth_context)
 
