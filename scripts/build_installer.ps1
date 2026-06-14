@@ -1,6 +1,9 @@
 param(
     [string]$Version = "",
-    [switch]$SkipPublish
+    [switch]$SkipPublish,
+    [switch]$SelfSign,
+    [string]$CertificateSubject = "CN=GPT-Register-Tool Internal",
+    [string]$CertificateExportName = "GPT-Register-Tool-Internal-CodeSigning.cer"
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +77,89 @@ function Remove-PackagePath {
     }
 }
 
+function Get-InternalCodeSigningCertificate {
+    param([Parameter(Mandatory = $true)][string]$Subject)
+
+    $now = Get-Date
+    $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert |
+        Where-Object { $_.Subject -eq $Subject -and $_.NotAfter -gt $now } |
+        Sort-Object NotAfter -Descending |
+        Select-Object -First 1
+
+    if ($null -ne $cert) {
+        return $cert
+    }
+
+    Write-Host "Creating self-signed code signing certificate: $Subject"
+    return New-SelfSignedCertificate `
+        -Type CodeSigningCert `
+        -Subject $Subject `
+        -CertStoreLocation "Cert:\CurrentUser\My" `
+        -KeyAlgorithm RSA `
+        -KeyLength 3072 `
+        -HashAlgorithm SHA256 `
+        -KeyExportPolicy Exportable `
+        -NotAfter $now.AddYears(5)
+}
+
+function Sign-FileWithCertificate {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Cannot sign missing file: $Path"
+    }
+
+    Write-Host "Signing $Path"
+    $signature = Set-AuthenticodeSignature -FilePath $Path -Certificate $Certificate -HashAlgorithm SHA256
+    if ($null -eq $signature.SignerCertificate) {
+        throw "Signing failed for ${Path}: no signer certificate was written. Status: $($signature.Status) $($signature.StatusMessage)"
+    }
+    if ($signature.SignerCertificate.Thumbprint -ne $Certificate.Thumbprint) {
+        throw "Signing failed for ${Path}: signer thumbprint $($signature.SignerCertificate.Thumbprint) did not match $($Certificate.Thumbprint)"
+    }
+    if ($signature.Status -ne 'Valid') {
+        Write-Host "Signed with untrusted self-signed chain until the .cer is imported: $($signature.Status) $($signature.StatusMessage)"
+    }
+}
+
+function Export-CodeSigningCertificate {
+    param(
+        [Parameter(Mandatory = $true)][System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    Export-Certificate -Cert $Certificate -FilePath $Path -Force | Out-Null
+    Write-Host "Exported public signing certificate: $Path"
+}
+
+function Assert-AuthenticodeSigned {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
+    )
+
+    $signature = Get-AuthenticodeSignature -FilePath $Path
+    if ($null -eq $signature.SignerCertificate) {
+        throw "Missing Authenticode signature for ${Path}: $($signature.Status) $($signature.StatusMessage)"
+    }
+    if ($signature.SignerCertificate.Thumbprint -ne $Certificate.Thumbprint) {
+        throw "Unexpected signer for ${Path}: $($signature.SignerCertificate.Subject)"
+    }
+    Write-Host "Verified self-signed signature: $Path ($($signature.SignerCertificate.Subject), trust status: $($signature.Status))"
+}
+
+$signingCert = $null
+if ($SelfSign) {
+    $signingCert = Get-InternalCodeSigningCertificate -Subject $CertificateSubject
+}
+
 if (-not $SkipPublish) {
     & (Join-Path $repoRoot "SmsWorkbench\build_dotnet.ps1")
     if ($LASTEXITCODE -ne 0) {
@@ -84,6 +170,11 @@ if (-not $SkipPublish) {
 $desktopExe = Join-Path $publishDir "SmsWorkbench.exe"
 if (-not (Test-Path $desktopExe)) {
     throw "Missing published desktop executable: $desktopExe"
+}
+
+if ($SelfSign) {
+    Sign-FileWithCertificate -Path $desktopExe -Certificate $signingCert
+    Assert-AuthenticodeSigned -Path $desktopExe -Certificate $signingCert
 }
 
 Reset-Directory -Path $installerRoot -AllowedRoot (Join-Path $repoRoot "dist")
@@ -170,17 +261,43 @@ try {
     }
 
     Copy-Item -LiteralPath (Join-Path $installerPublishDir "GPTRegisterToolSetup.exe") -Destination $setupPath -Force
+    if ($SelfSign) {
+        Sign-FileWithCertificate -Path $setupPath -Certificate $signingCert
+        Assert-AuthenticodeSigned -Path $setupPath -Certificate $signingCert
+    }
 }
 finally {
     Remove-Item -LiteralPath (Join-Path $repoRoot "scripts\installer\payload.zip") -Force -ErrorAction SilentlyContinue
 }
 
-$manifestPath = Join-Path $releaseDir "GPT-Register-Tool-$safeVersion.sha256.txt"
-@(
+$certificatePath = $null
+$trustScriptPath = $null
+if ($SelfSign) {
+    $certificatePath = Join-Path $releaseDir $CertificateExportName
+    Export-CodeSigningCertificate -Certificate $signingCert -Path $certificatePath
+    $trustScriptPath = Join-Path $releaseDir "trust_internal_certificate.ps1"
+    Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\installer\trust_internal_certificate.ps1") -Destination $trustScriptPath -Force
+}
+
+$hashLines = @(
     "$(Get-FileHash -Algorithm SHA256 $setupPath | Select-Object -ExpandProperty Hash)  $(Split-Path -Leaf $setupPath)",
     "$(Get-FileHash -Algorithm SHA256 $zipPath | Select-Object -ExpandProperty Hash)  $(Split-Path -Leaf $zipPath)"
-) | Set-Content -Path $manifestPath -Encoding ASCII
+)
+if ($SelfSign -and $certificatePath) {
+    $hashLines += "$(Get-FileHash -Algorithm SHA256 $certificatePath | Select-Object -ExpandProperty Hash)  $(Split-Path -Leaf $certificatePath)"
+}
+if ($SelfSign -and $trustScriptPath) {
+    $hashLines += "$(Get-FileHash -Algorithm SHA256 $trustScriptPath | Select-Object -ExpandProperty Hash)  $(Split-Path -Leaf $trustScriptPath)"
+}
+$manifestPath = Join-Path $releaseDir "GPT-Register-Tool-$safeVersion.sha256.txt"
+$hashLines | Set-Content -Path $manifestPath -Encoding ASCII
 
 Write-Host "Built installer: $setupPath"
 Write-Host "Built portable zip: $zipPath"
+if ($SelfSign -and $certificatePath) {
+    Write-Host "Built signing certificate: $certificatePath"
+}
+if ($SelfSign -and $trustScriptPath) {
+    Write-Host "Built trust helper: $trustScriptPath"
+}
 Write-Host "Wrote checksums: $manifestPath"
