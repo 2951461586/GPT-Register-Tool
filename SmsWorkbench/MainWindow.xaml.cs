@@ -2431,15 +2431,23 @@ namespace SmsWorkbench
             mainPanel.Children.Add(stageProxyPanel);
 
             // 选项
-            var optionPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 16) };
+            var optionPanel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 16) };
             var zeroCheck = new CheckBox
             {
-                Content = "要求 0 元金额",
+                Content = "严格要求 0 元金额 / Strict zero due",
                 IsChecked = true,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 16, 0),
+                Margin = new Thickness(0, 0, 0, 6),
+            };
+            var requireBaCheck = new CheckBox
+            {
+                Content = "必须返回 PayPal BA approve URL / Require BA approve URL",
+                IsChecked = true,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 0),
             };
             optionPanel.Children.Add(zeroCheck);
+            optionPanel.Children.Add(requireBaCheck);
             mainPanel.Children.Add(optionPanel);
 
             // 结果区域
@@ -2514,6 +2522,7 @@ namespace SmsWorkbench
                 string proxy = proxyBox.Text.Trim();
                 string stageProxies = stageProxyBox.Text.Trim();
                 bool requireZero = zeroCheck.IsChecked == true;
+                bool requireBaToken = requireBaCheck.IsChecked == true;
 
                 resultBox.Text = "正在提取...";
                 extractBtn.IsEnabled = false;
@@ -2554,6 +2563,8 @@ namespace SmsWorkbench
 
                     if (!requireZero)
                         args.Add("--no-require-zero");
+                    if (requireBaToken)
+                        args.Add("--require-ba-token");
 
                     var result = await Task.Run(() => RunBackendWithResult("AT 提取 BA 链接", args));
                     resultBox.Text = result;
