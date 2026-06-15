@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
+    parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
     parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
@@ -756,6 +757,7 @@ def _generate_ba_link(args):
     provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
     approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
     require_zero = not getattr(args, "no_require_zero", False)
+    require_ba_token = bool(getattr(args, "require_ba_token", False))
 
     # 从配置文件加载默认代理
     if not proxy and not checkout_proxy and not provider_proxy:
@@ -772,7 +774,9 @@ def _generate_ba_link(args):
         checkout_proxy=checkout_proxy,
         provider_proxy=provider_proxy,
         approve_proxy=approve_proxy,
+        target_country=target_country,
         require_zero=require_zero,
+        require_ba_token=require_ba_token,
     )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
