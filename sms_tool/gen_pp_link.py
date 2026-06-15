@@ -807,10 +807,11 @@ DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
 
 
 def _load_json(path: str) -> dict:
-    """加载 JSON 配置文件。"""
+    """Load a JSON object from disk, accepting UTF-8 files with or without BOM."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except Exception:
         return {}
 
@@ -892,7 +893,9 @@ def generate_pp_link(
     checkout_proxy: str | None = None,
     provider_proxy: str | None = None,
     approve_proxy: str | None = None,
+    target_country: str | None = None,
     require_zero: bool | None = None,
+    require_ba_token: bool | None = None,
 ) -> dict[str, Any]:
     """生成 PayPal BA 直链 (兼容旧接口)。
 
@@ -922,9 +925,11 @@ def generate_pp_link(
     provider_proxy = str(_provider or "").strip()
     approve_proxy = str(_approve or "").strip()
 
-    target_country = str(paypal_cfg.get("target_country") or "GB").upper()
+    target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
     if require_zero is None:
         require_zero = bool(paypal_cfg.get("require_zero_due", True))
+    if require_ba_token is None:
+        require_ba_token = bool(paypal_cfg.get("require_ba_token", False))
 
     # 从 auth_context 提取 email
     email = ""
@@ -945,14 +950,34 @@ def generate_pp_link(
             emit=emit,
         )
         result = extractor.extract()
+        ba_token = str(result.get("ba_token") or "").strip()
+        url = str(result.get("url") or "").strip()
+        link_type = str(result.get("link_type") or "").strip()
+        if require_ba_token and (not ba_token or "paypal_ba" not in link_type):
+            return {
+                "ok": False,
+                "error": "ba_not_resolved",
+                "error_code": "ba_not_resolved",
+                "url": "",
+                "ba_token": "",
+                "cs_id": result.get("cs_id", ""),
+                "link_type": link_type,
+                "amount": result.get("amount"),
+                "currency": result.get("currency", ""),
+                "target_country": result.get("target_country", ""),
+                "checkout_proxy": result.get("checkout_proxy", ""),
+                "provider_proxy": result.get("provider_proxy", ""),
+                "approve_proxy": result.get("approve_proxy", ""),
+                "fallback_url": url,
+            }
 
         # 兼容旧格式
         return {
             "ok": result.get("ok", False),
-            "url": result.get("url", ""),
-            "ba_token": result.get("ba_token", ""),
+            "url": url,
+            "ba_token": ba_token,
             "cs_id": result.get("cs_id", ""),
-            "link_type": result.get("link_type", ""),
+            "link_type": link_type,
             "amount": result.get("amount"),
             "currency": result.get("currency", ""),
             "target_country": result.get("target_country", ""),
