@@ -78,6 +78,8 @@ namespace SmsWorkbench
         private DispatcherTimer sidebarAnimTimer;
         private double sidebarAnimTarget;
         private double sidebarAnimStart;
+        private EventHandler sidebarRenderingHandler;
+        private Stopwatch sidebarAnimStopwatch;
 
         // Sun icon (light mode): circle + rays
         private static readonly Geometry SunIcon = Geometry.Parse(
@@ -2354,7 +2356,7 @@ namespace SmsWorkbench
 
         private const double SidebarExpandedWidth = 272;
         private const double SidebarCollapsedWidth = 80;
-        private const int SidebarAnimDurationMs = 280;
+        private const int SidebarAnimDurationMs = 220;
 
         private void AnimateSidebar(bool collapse)
         {
@@ -2365,26 +2367,46 @@ namespace SmsWorkbench
             sidebarAnimTarget = target;
 
             sidebarAnimTimer?.Stop();
-            sidebarAnimTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-
-            sidebarAnimTimer.Tick += (_, __) =>
+            sidebarAnimTimer = null;
+            if (sidebarRenderingHandler != null)
             {
-                double elapsed = sw.Elapsed.TotalMilliseconds;
+                CompositionTarget.Rendering -= sidebarRenderingHandler;
+                sidebarRenderingHandler = null;
+            }
+            sidebarAnimStopwatch = Stopwatch.StartNew();
+
+            if (SidebarHost != null)
+            {
+                SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
+            }
+
+            sidebarRenderingHandler = (_, __) =>
+            {
+                double elapsed = sidebarAnimStopwatch?.Elapsed.TotalMilliseconds ?? SidebarAnimDurationMs;
                 double t = Math.Min(1.0, elapsed / SidebarAnimDurationMs);
-                // Ease-out cubic for smooth deceleration
-                double eased = 1 - Math.Pow(1 - t, 3);
-                double value = sidebarAnimStart + (sidebarAnimTarget - sidebarAnimStart) * eased;
+                double eased = t < 0.5
+                    ? 4 * t * t * t
+                    : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+                double value = Math.Round(sidebarAnimStart + (sidebarAnimTarget - sidebarAnimStart) * eased, 2);
 
                 if (SidebarColumn != null)
+                {
                     SidebarColumn.Width = new GridLength(value);
+                }
 
                 if (t >= 1.0)
                 {
-                    sidebarAnimTimer.Stop();
-                    sidebarAnimTimer = null;
+                    if (sidebarRenderingHandler != null)
+                    {
+                        CompositionTarget.Rendering -= sidebarRenderingHandler;
+                        sidebarRenderingHandler = null;
+                    }
+                    sidebarAnimStopwatch?.Stop();
+                    sidebarAnimStopwatch = null;
                     if (SidebarColumn != null)
+                    {
                         SidebarColumn.Width = new GridLength(sidebarAnimTarget);
+                    }
 
                     // Update margin and layout after animation completes
                     if (SidebarHost != null)
@@ -2396,13 +2418,7 @@ namespace SmsWorkbench
                 }
             };
 
-            // Pre-set margin for target state before animation starts
-            if (SidebarHost != null)
-            {
-                SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
-            }
-
-            sidebarAnimTimer.Start();
+            CompositionTarget.Rendering += sidebarRenderingHandler;
         }
 
         private static IEnumerable<DependencyObject> FindVisualChildren(DependencyObject node)
@@ -4718,10 +4734,11 @@ namespace SmsWorkbench
             {
                 Title = "配置",
                 Owner = this,
-                Width = 860,
-                Height = 660,
-                MinWidth = 760,
-                MinHeight = 560,
+                Width = Math.Min(1100, SystemParameters.WorkArea.Width - 80),
+                Height = Math.Min(780, SystemParameters.WorkArea.Height - 80),
+                MinWidth = 920,
+                MinHeight = 660,
+                ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
@@ -4731,8 +4748,8 @@ namespace SmsWorkbench
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var content = new Grid();
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(178) });
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetRow(content, 0);
             root.Children.Add(content);
@@ -4752,7 +4769,7 @@ namespace SmsWorkbench
                 BorderBrush = (Brush)FindResource("Line"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10),
+                Padding = new Thickness(12),
                 Child = sidebar
             };
             Grid.SetColumn(sidebarShell, 0);
@@ -4771,7 +4788,7 @@ namespace SmsWorkbench
                 BorderBrush = (Brush)FindResource("Line"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(18),
+                Padding = new Thickness(22),
                 Child = hostScroll
             };
             Grid.SetColumn(hostShell, 2);
@@ -5132,7 +5149,7 @@ namespace SmsWorkbench
             });
 
             var form = new Grid();
-            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(168) });
+            form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
             form.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             panel.Children.Add(form);
             host.Children.Add(panel);
@@ -5162,9 +5179,12 @@ namespace SmsWorkbench
             var text = new TextBlock
             {
                 Text = label,
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 18,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                Margin = new Thickness(0, 0, 12, 10)
+                Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
             Grid.SetColumn(text, 0);
@@ -5173,12 +5193,14 @@ namespace SmsWorkbench
             var box = new TextBox
             {
                 Text = value ?? "",
-                Margin = new Thickness(0, 0, 0, 10),
+                Margin = new Thickness(0, 0, 0, 12),
+                Padding = new Thickness(8, 5, 8, 5),
                 AcceptsReturn = multiline,
                 TextWrapping = multiline ? TextWrapping.NoWrap : TextWrapping.NoWrap,
                 VerticalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
                 HorizontalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
-                MinHeight = multiline ? 112 : 0
+                MinHeight = multiline ? 124 : 36,
+                VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center
             };
             if (multiline)
             {
@@ -5196,9 +5218,12 @@ namespace SmsWorkbench
             var text = new TextBlock
             {
                 Text = label,
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 18,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                Margin = new Thickness(0, 0, 12, 10)
+                Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
             Grid.SetColumn(text, 0);
@@ -5206,8 +5231,11 @@ namespace SmsWorkbench
 
             var combo = new ComboBox
             {
-                Margin = new Thickness(0, 0, 0, 10),
-                IsEditable = false
+                Margin = new Thickness(0, 0, 0, 12),
+                Padding = new Thickness(8, 4, 8, 4),
+                MinHeight = 36,
+                IsEditable = false,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
             string selected = FirstNonEmpty(value, "smsbower").Trim();
             bool matched = false;
@@ -5236,9 +5264,12 @@ namespace SmsWorkbench
             var text = new TextBlock
             {
                 Text = label,
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 18,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                Margin = new Thickness(0, 0, 12, 10)
+                Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
             Grid.SetColumn(text, 0);
@@ -5246,8 +5277,11 @@ namespace SmsWorkbench
 
             var combo = new ComboBox
             {
-                Margin = new Thickness(0, 0, 0, 10),
-                IsEditable = false
+                Margin = new Thickness(0, 0, 0, 12),
+                Padding = new Thickness(8, 4, 8, 4),
+                MinHeight = 36,
+                IsEditable = false,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
             string selected = FirstNonEmpty(value, fallback).Trim();
             bool matched = false;
