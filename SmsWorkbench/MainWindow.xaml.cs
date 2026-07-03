@@ -30,6 +30,7 @@ namespace SmsWorkbench
             new ConfigComboOption("38", "加纳 / Ghana (+233) - 38", "Ghana", "+233"),
             new ConfigComboOption("19", "尼日利亚 / Nigeria (+234) - 19", "Nigeria", "+234"),
             new ConfigComboOption("151", "智利 / Chile (+56) - 151", "Chile", "+56"),
+            new ConfigComboOption("33", "哥伦比亚 / Colombia (+57) - 33", "Colombia", "+57"),
             new ConfigComboOption("16", "英国 / United Kingdom (+44) - 16", "United Kingdom", "+44"),
             new ConfigComboOption("6", "印度尼西亚 / Indonesia (+62) - 6", "Indonesia", "+62")
         };
@@ -928,6 +929,204 @@ namespace SmsWorkbench
             }
             AddProxy(args);
             RunBackend("一键扫号(" + rows.Count + ")", args);
+        }
+
+        private void OneClickK12_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                .Where(IsRegisteredRow)
+                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                rows = allRows
+                    .Where(FilterRow)
+                    .Where(IsRegisteredRow)
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
+                    .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
+                    .Select(g => g.First())
+                    .ToList();
+            }
+            if (rows.Count == 0)
+            {
+                ShowThemedInfoDialog("一键K12", "没有找到可进入 K12 workspace 的已注册账号。请先选择带 access_token 的账号。");
+                return;
+            }
+
+            K12Options options = ShowK12OptionsDialog(rows.Count);
+            if (options == null) return;
+
+            var args = new List<string>
+            {
+                "--one-click-k12",
+                "--k12-route",
+                options.Route,
+                "--k12-workspace-ids",
+                options.WorkspaceIds,
+                "--workers",
+                options.Workers.ToString(),
+                "--k12-retries",
+                options.Retries.ToString(),
+                "--k12-retry-backoff",
+                options.RetryBackoffSeconds.ToString(CultureInfo.InvariantCulture),
+                "--k12-invite-timeout",
+                options.InviteTimeoutSeconds.ToString(),
+                "--refresh-timeout",
+                "30"
+            };
+            if (options.AutoAcceptInvite)
+            {
+                args.Add("--k12-auto-accept");
+            }
+            if (rows.Count > 1)
+            {
+                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_k12_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", rows[0].Identifier });
+                AddSessionFileArg(args, rows[0]);
+            }
+            AddProxy(args);
+            RunBackend("一键K12(" + rows.Count + ")", args);
+        }
+
+        private K12Options ShowK12OptionsDialog(int accountCount)
+        {
+            var dialog = new Window
+            {
+                Title = "一键K12",
+                Owner = this,
+                Width = 560,
+                Height = 360,
+                MinWidth = 520,
+                MinHeight = 330,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var hint = new TextBlock
+            {
+                Text = "将 " + Math.Max(1, accountCount).ToString() + " 个账号批量提交 workspace invite。",
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            };
+            Grid.SetRow(hint, 0);
+            Grid.SetColumnSpan(hint, 2);
+            root.Children.Add(hint);
+
+            var wsLabel = new TextBlock { Text = "Workspace ID", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var wsBox = new TextBox
+            {
+                Text = "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(0, 0, 0, 10),
+                MinHeight = 86
+            };
+            Grid.SetRow(wsLabel, 1);
+            Grid.SetColumn(wsLabel, 0);
+            Grid.SetRow(wsBox, 1);
+            Grid.SetColumn(wsBox, 1);
+            root.Children.Add(wsLabel);
+            root.Children.Add(wsBox);
+
+            var routeLabel = new TextBlock { Text = "动作", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var routeBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            routeBox.Items.Add(new ComboBoxItem { Content = "Request - 主动申请加入", Tag = "request" });
+            routeBox.Items.Add(new ComboBoxItem { Content = "Accept - 接受已有邀请", Tag = "accept" });
+            routeBox.SelectedIndex = 0;
+            Grid.SetRow(routeLabel, 2);
+            Grid.SetColumn(routeLabel, 0);
+            Grid.SetRow(routeBox, 2);
+            Grid.SetColumn(routeBox, 1);
+            root.Children.Add(routeLabel);
+            root.Children.Add(routeBox);
+
+            var retryLabel = new TextBlock { Text = "重试/等待", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var retryPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            var retryBox = new TextBox { Text = "2", Width = 44, Margin = new Thickness(0, 0, 8, 0) };
+            var backoffBox = new TextBox { Text = "5", Width = 44, Margin = new Thickness(0, 0, 8, 0) };
+            var inviteTimeoutBox = new TextBox { Text = "240", Width = 56, Margin = new Thickness(0, 0, 8, 0) };
+            retryPanel.Children.Add(new TextBlock { Text = "次数", VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
+            retryPanel.Children.Add(retryBox);
+            retryPanel.Children.Add(new TextBlock { Text = "间隔秒", VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
+            retryPanel.Children.Add(backoffBox);
+            retryPanel.Children.Add(new TextBlock { Text = "邀请秒", VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
+            retryPanel.Children.Add(inviteTimeoutBox);
+            Grid.SetRow(retryLabel, 3);
+            Grid.SetColumn(retryLabel, 0);
+            Grid.SetRow(retryPanel, 3);
+            Grid.SetColumn(retryPanel, 1);
+            root.Children.Add(retryLabel);
+            root.Children.Add(retryPanel);
+
+            var autoAcceptBox = new CheckBox
+            {
+                Content = new TextBlock
+                {
+                    Text = "请求成功后自动收 k12-invite 邮件并接受/进入空间",
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 390
+                },
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            };
+            Grid.SetRow(autoAcceptBox, 4);
+            Grid.SetColumn(autoAcceptBox, 1);
+            root.Children.Add(autoAcceptBox);
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
+            var cancel = new Button { Content = "取消", Width = 72, Margin = new Thickness(8, 0, 0, 0) };
+            actions.Children.Add(ok);
+            actions.Children.Add(cancel);
+            Grid.SetRow(actions, 5);
+            Grid.SetColumnSpan(actions, 2);
+            root.Children.Add(actions);
+
+            K12Options selected = null;
+            ok.Click += (_, __) =>
+            {
+                string ids = (wsBox.Text ?? "").Trim();
+                if (ids.Length == 0)
+                {
+                    ShowThemedInfoDialog("一键K12", "请填写至少一个 workspace ID。");
+                    return;
+                }
+                selected = new K12Options
+                {
+                    WorkspaceIds = ids,
+                    Route = ((routeBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "request",
+                    Workers = Math.Min(8, Math.Max(1, accountCount)),
+                    Retries = int.TryParse((retryBox.Text ?? "").Trim(), out int retryValue) ? Math.Max(0, retryValue) : 2,
+                    RetryBackoffSeconds = double.TryParse((backoffBox.Text ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double backoffValue) ? Math.Max(0, backoffValue) : 5,
+                    InviteTimeoutSeconds = int.TryParse((inviteTimeoutBox.Text ?? "").Trim(), out int inviteTimeoutValue) ? Math.Max(10, inviteTimeoutValue) : 240,
+                    AutoAcceptInvite = autoAcceptBox.IsChecked == true
+                };
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+            dialog.Content = root;
+            return dialog.ShowDialog() == true ? selected : null;
         }
 
         private void OneClickPay_Click(object sender, RoutedEventArgs e)
@@ -5971,6 +6170,17 @@ namespace SmsWorkbench
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
         public string PaymentMethod { get; set; } = "paypal";
+    }
+
+    public sealed class K12Options
+    {
+        public string WorkspaceIds { get; set; } = "";
+        public string Route { get; set; } = "request";
+        public int Workers { get; set; } = 4;
+        public int Retries { get; set; } = 2;
+        public double RetryBackoffSeconds { get; set; } = 5;
+        public int InviteTimeoutSeconds { get; set; } = 240;
+        public bool AutoAcceptInvite { get; set; } = true;
     }
 
     public sealed class TaskRow : INotifyPropertyChanged

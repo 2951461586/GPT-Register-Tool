@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
+    parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi"], default=None, help="Payment link/payment method: paypal, gopay, or upi")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
@@ -67,8 +68,12 @@ def main():
     parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
-    parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link")
-    parser.add_argument("--target-country", default="GB", help="Target country for BA link generation (default: GB)")
+    parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
+    parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link/--generate-upi-qr")
+    parser.add_argument("--qr-path", default=None, help="Output PNG path for --generate-upi-qr")
+    parser.add_argument("--target-country", default=None, help="Target/order country for PayPal generation; legacy checkout-country alias for UPI")
+    parser.add_argument("--checkout-country", "--billing-country", dest="checkout_country", default=None, help="Hosted/UPI checkout billing country/currency, e.g. US or JP")
+    parser.add_argument("--payment-country", default=None, help="UPI local payment-method country, e.g. IN")
     parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
@@ -103,6 +108,14 @@ def main():
     parser.add_argument("--gopay-rebind-otp", default=None, help="SMS OTP for GoPay change-phone completion")
     parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
     parser.add_argument("--one-click-scan", action="store_true", help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification")
+    parser.add_argument("--one-click-k12", action="store_true", help="Batch request/accept ChatGPT workspace (K12) invites using saved account AT")
+    parser.add_argument("--k12-workspace-ids", default=None, help="Workspace ID list for --one-click-k12, separated by comma or newline")
+    parser.add_argument("--k12-workspace-file", default=None, help="Workspace ID file for --one-click-k12")
+    parser.add_argument("--k12-route", default="request", choices=["request", "accept"], help="K12 invite route: request or accept")
+    parser.add_argument("--k12-retries", type=int, default=2, help="Retry count for each K12 request after the first attempt")
+    parser.add_argument("--k12-retry-backoff", type=float, default=5.0, help="Seconds to wait between K12 retries")
+    parser.add_argument("--k12-auto-accept", action="store_true", help="After request succeeds, wait k12-invite mail and accept/open invite")
+    parser.add_argument("--k12-invite-timeout", type=int, default=240, help="Seconds to wait for K12 invite mail when --k12-auto-accept is enabled")
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
@@ -110,6 +123,11 @@ def main():
     parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()
+    # Keep whether --proxy came from the operator.  Some commands (notably
+    # --generate-ba-link) need an omitted single proxy to mean "use the
+    # configured stage proxies", even though the rest of the CLI still wants
+    # CFG.proxy.default as its normal default proxy.
+    args.proxy_explicit = bool(args.proxy)
     if not args.proxy:
         args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
 
@@ -141,6 +159,9 @@ def main():
     if args.generate_ba_link:
         _generate_ba_link(args)
         return
+    if args.generate_upi_qr:
+        _generate_upi_qr(args)
+        return
     if args.refresh_session:
         _refresh_session(args)
         return
@@ -161,6 +182,9 @@ def main():
         return
     if args.one_click_scan:
         _one_click_scan(args)
+        return
+    if args.one_click_k12:
+        _one_click_k12(args)
         return
 
     pipeline_started = time.time()
@@ -266,6 +290,7 @@ def main():
             codex_oauth=not args.registration_at_only,
             payment_method=payment_method,
             paypal_generation_type=args.paypal_generation_type,
+            registration_mode=args.registration_mode,
         )
     else:
         mailbox = mailboxes[0] if mailboxes else None
@@ -278,6 +303,7 @@ def main():
             codex_oauth=not args.registration_at_only,
             payment_method=payment_method,
             paypal_generation_type=args.paypal_generation_type,
+            registration_mode=args.registration_mode,
         )]
     register_seconds = time.time() - register_started
 
@@ -742,31 +768,88 @@ def _importable_account_rows():
     return rows
 
 
+def _at_payment_stage_args(args, payment_method="paypal"):
+    proxy = (getattr(args, "proxy", None) or "").strip() or None
+    if not getattr(args, "proxy_explicit", False):
+        proxy = None
+    checkout_proxy = (getattr(args, "checkout_proxy", None) or "").strip() or None
+    provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
+    approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
+    if proxy or checkout_proxy or provider_proxy:
+        return proxy, checkout_proxy, provider_proxy, approve_proxy
+
+    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
+    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
+    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    proxy_default = (CFG.get("proxy") or {}).get("default") or ""
+
+    checkout_proxy = method_stage.get("checkout") or paypal_stage.get("checkout") or proxy_default
+    if method == "upi":
+        provider_proxy = (
+            method_stage.get("provider")
+            or method_stage.get("stripe_init")
+            or paypal_stage.get("provider")
+            or paypal_stage.get("stripe_init")
+            or "http://107.150.109.49:11001"
+        )
+        approve_proxy = (
+            method_stage.get("approve")
+            or method_stage.get("confirm")
+            or paypal_stage.get("approve")
+            or paypal_stage.get("confirm")
+            or provider_proxy
+            or "http://107.150.109.49:11001"
+        )
+    else:
+        provider_proxy = (
+            method_stage.get("provider")
+            or method_stage.get("stripe_init")
+            or paypal_stage.get("provider")
+            or paypal_stage.get("stripe_init")
+            or proxy_default
+        )
+        approve_proxy = (
+            method_stage.get("approve")
+            or method_stage.get("confirm")
+            or paypal_stage.get("approve")
+            or paypal_stage.get("confirm")
+            or provider_proxy
+            or proxy_default
+        )
+    return proxy, checkout_proxy, provider_proxy, approve_proxy
+
+
 def _generate_ba_link(args):
-    """直接从 Access Token 生成 BA 链接。"""
+    """??? Access Token ?? PayPal BA ???"""
     from .gen_pp_link import generate_pp_link
 
     at = (getattr(args, "at", None) or "").strip()
     if not at:
-        print(json.dumps({"ok": False, "error": "请提供 --at 参数 (Access Token)"}))
+        print(json.dumps({"ok": False, "error": "??? --at ?? (Access Token)"}))
         raise SystemExit(1)
 
-    target_country = (getattr(args, "target_country", None) or "GB").strip().upper()
-    proxy = (getattr(args, "proxy", None) or "").strip() or None
-    checkout_proxy = (getattr(args, "checkout_proxy", None) or "").strip() or None
-    provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
-    approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    generation_type = (getattr(args, "paypal_generation_type", None) or paypal_cfg.get("link_generation_type") or "").strip().lower().replace("-", "_")
+    hosted_types = {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout", "chatgpt_checkout_link", "checkout_link", "short_checkout", "chatgpt_short_link"}
+    checkout_country = None
+    if generation_type in hosted_types:
+        target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "US").strip().upper()
+        checkout_country = (
+            getattr(args, "checkout_country", None)
+            or (regions[0] if regions else None)
+            or paypal_cfg.get("checkout_country")
+            or paypal_cfg.get("billing_country")
+            or target_country
+            or "US"
+        ).strip().upper()
+    else:
+        target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "GB").strip().upper()
+    proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, "paypal")
     require_zero = not getattr(args, "no_require_zero", False)
     require_ba_token = bool(getattr(args, "require_ba_token", False))
-
-    # 从配置文件加载默认代理
-    if not proxy and not checkout_proxy and not provider_proxy:
-        paypal_cfg = CFG.get("paypal") or {}
-        stage_proxies = paypal_cfg.get("stage_proxies") or {}
-        proxy_default = (CFG.get("proxy") or {}).get("default") or ""
-        checkout_proxy = checkout_proxy or stage_proxies.get("checkout") or proxy_default
-        provider_proxy = provider_proxy or stage_proxies.get("provider") or stage_proxies.get("stripe_init") or proxy_default
-        approve_proxy = approve_proxy or stage_proxies.get("approve") or stage_proxies.get("confirm") or proxy_default
 
     result = generate_pp_link(
         access_token=at,
@@ -775,8 +858,57 @@ def _generate_ba_link(args):
         provider_proxy=provider_proxy,
         approve_proxy=approve_proxy,
         target_country=target_country,
+        checkout_country=checkout_country,
         require_zero=require_zero,
         require_ba_token=require_ba_token,
+        paypal_generation_type=getattr(args, "paypal_generation_type", None),
+    )
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _generate_upi_qr(args):
+    """??? Access Token ???? UPI hosted ???????"""
+    from .gen_pp_link import generate_upi_qr_link
+
+    at = (getattr(args, "at", None) or "").strip()
+    if not at:
+        print(json.dumps({"ok": False, "error": "??? --at ?? (Access Token)"}))
+        raise SystemExit(1)
+
+    upi_cfg = CFG.get("upi") if isinstance(CFG.get("upi"), dict) else {}
+    regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
+    checkout_country = (
+        getattr(args, "checkout_country", None)
+        or getattr(args, "target_country", None)
+        or upi_cfg.get("checkout_country")
+        or upi_cfg.get("checkout_billing_country")
+        or upi_cfg.get("billing_country")
+        or upi_cfg.get("target_country")
+        or (regions[0] if regions else None)
+        or "IN"
+    ).strip().upper()
+    payment_country = (
+        getattr(args, "payment_country", None)
+        or upi_cfg.get("payment_country")
+        or upi_cfg.get("payment_method_country")
+        or "IN"
+    ).strip().upper()
+    proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, "upi")
+    require_zero = not getattr(args, "no_require_zero", False)
+    result = generate_upi_qr_link(
+        access_token=at,
+        proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        target_country=checkout_country,
+        checkout_country=checkout_country,
+        payment_country=payment_country,
+        require_zero=require_zero,
+        qr_path=getattr(args, "qr_path", None),
     )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -921,6 +1053,39 @@ def _read_email_file(path):
             seen.add(email)
             emails.append(email)
     return emails
+
+
+def _one_click_k12(args):
+    from .k12 import load_k12_accounts, parse_workspace_ids, run_k12_batch
+
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    emails = _unique_emails(emails)
+    workspace_ids = parse_workspace_ids(args.k12_workspace_ids or "", args.k12_workspace_file or "")
+    accounts = load_k12_accounts(emails=emails, session_file=args.session_file or "")
+    if not accounts:
+        print("[Error] no account with access_token was found for --one-click-k12")
+        raise SystemExit(2)
+    if not workspace_ids:
+        print("[Error] no workspace id was found for --one-click-k12")
+        raise SystemExit(2)
+    summary = run_k12_batch(
+        accounts,
+        workspace_ids,
+        route=args.k12_route,
+        workers=args.workers,
+        proxy=args.proxy,
+        timeout=max(10, int(args.refresh_timeout or 30)),
+        max_retries=max(0, int(args.k12_retries or 0)),
+        retry_backoff=max(0.0, float(args.k12_retry_backoff or 0)),
+        auto_accept=bool(args.k12_auto_accept),
+        invite_timeout=max(10, int(args.k12_invite_timeout or 240)),
+        export_dir=args.codex_export_dir or "",
+    )
+    if summary.get("failed", 0):
+        raise SystemExit(3)
+
 
 def _auto_pay(args):
     """Run automated PayPal payment for a ChatGPT account."""

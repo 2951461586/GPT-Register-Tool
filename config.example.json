@@ -4,11 +4,18 @@
     "chat_base_url": "https://chatgpt.com",
     "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
   },
+  "mailbox_proxy": "",
   "proxy": {
     "default": "socks5h://127.0.0.1:7897",
     "pool": [
       "socks5h://127.0.0.1:7897"
     ]
+  },
+  "k12": {
+    "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
+    "retries": 2,
+    "retry_backoff_seconds": 5,
+    "invite_timeout_seconds": 240
   },
   "registration": {
     "password_random_length": 12,
@@ -16,6 +23,7 @@
     "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
   },
   "email_registration": {
+    "registration_mode": "passwordless",
     "use_as_username": false,
     "token_file": "mailbox_tokens.txt",
     "otp_poll_interval": 2,
@@ -40,7 +48,7 @@
   "paypal": {
     "auto_generate": true,
     "require_zero_due": true,
-    "target_country": "GB",
+    "target_country": "US",
     "max_checkout_retries": 3,
     "checkout_only_long_url": false,
     "stop_after_pm_create": false,
@@ -56,15 +64,18 @@
     "explicit_proxy_overrides_stage_proxies": false,
     "disable_promo_on_confirm_decline": false,
     "billing_regions": [
-      "DE"
+      "US"
     ],
     "proxies": [
       "socks5h://127.0.0.1:7897"
     ],
     "stage_proxies": {
-      "checkout": "socks5h://user:pass-JP@gate:1000",
-      "provider": "socks5h://user:pass-GB@gate:1000",
-      "approve": "socks5h://user:pass-GB@gate:1000"
+      "checkout": "socks5h://127.0.0.1:7897",
+      "provider": "socks5h://127.0.0.1:7897",
+      "approve": "socks5h://127.0.0.1:7897",
+      "stripe_init": "socks5h://127.0.0.1:7897",
+      "payment_method": "socks5h://127.0.0.1:7897",
+      "confirm": "socks5h://127.0.0.1:7897"
     },
     "confirm_style": "inline_payment_method_data",
     "fallback_to_hosted_checkout_on_blocked": true,
@@ -77,7 +88,8 @@
     "hosted_usd_fallback_on_422": false,
     "allow_chatgpt_checkout_fallback": true,
     "hosted_usd_fallback_on_non_hosted": false,
-    "link_generation_type": "hosted_long_url"
+    "link_generation_type": "hosted_long_url",
+    "stage_proxy_api_urls": {}
   },
   "gopay": {
     "one_click_mode": "protocol",
@@ -303,13 +315,24 @@
   "upi": {
     "auto_generate": true,
     "billing_regions": [
-      "IN"
+      "JP"
     ],
     "link_mode": "chatgpt_checkout",
     "checkout_ui_mode": "hosted",
     "redirect_url_format": "any",
     "use_elements_session": true,
     "approve_missing_redirect": false,
-    "max_checkout_retries": 3
+    "max_checkout_retries": 3,
+    "stage_proxies": {
+      "checkout": "socks5h://user:pass-JP@gate:1000",
+      "provider": "http://107.150.109.49:11001",
+      "stripe_init": "http://107.150.109.49:11001",
+      "approve": "http://107.150.109.49:11001",
+      "confirm": "http://107.150.109.49:11001"
+    },
+    "target_country": "JP",
+    "require_zero_due": true,
+    "checkout_country": "JP",
+    "payment_country": "IN"
   }
 }

@@ -279,6 +279,8 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "account_deactivated"
     if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
         return "at_invalid"
+    if explicit in {"k12_joined", "k12_requested"}:
+        return explicit
     if _looks_at_invalid(data, paypal):
         return "at_invalid"
     if data.get("success") is False and not has_refresh_token:
@@ -508,6 +510,78 @@ def mark_paypal_status(email, status="completed"):
             WHERE lower(email)=lower(?)
             """,
             (status, now, now, raw_json, lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
+
+
+def mark_k12_status(email, workspace_id="", status="k12_joined", result=None, access_token=""):
+    init_database()
+    now = int(time.time())
+    conn = _connect()
+    json_path = ""
+    data = {}
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        raw_json = row["raw_json"] or "{}"
+        json_path = str(row["json_path"] or "").strip()
+        try:
+            data = json.loads(raw_json)
+        except Exception:
+            data = {}
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        k12 = data.get("k12") if isinstance(data.get("k12"), dict) else {}
+        k12.update({
+            "ok": str(status).lower() in {"k12_joined", "k12_requested", "joined", "requested"},
+            "status": status,
+            "workspace_id": str(workspace_id or ""),
+            "updated_at": now,
+        })
+        if isinstance(result, dict):
+            safe_result = {
+                key: value
+                for key, value in result.items()
+                if key not in {"access_token", "cookie", "cookie_header", "authorization"}
+            }
+            k12["last_result"] = safe_result
+            cpa_export = result.get("cpa_export") if isinstance(result.get("cpa_export"), dict) else {}
+            if cpa_export.get("ok") and cpa_export.get("path"):
+                k12["cpa_json_path"] = str(cpa_export.get("path") or "")
+                k12["cpa_account_id"] = str(cpa_export.get("account_id") or "")
+                data["k12_cpa_json_path"] = str(cpa_export.get("path") or "")
+                data["k12_cpa_account_id"] = str(cpa_export.get("account_id") or "")
+        data["k12"] = k12
+        data["k12_status"] = status
+        data["k12_workspace_id"] = str(workspace_id or "")
+        data["k12_updated_at"] = now
+        if access_token:
+            data["access_token"] = str(access_token)
+        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            """
+            UPDATE accounts
+            SET status=?, access_token=COALESCE(NULLIF(?, ''), access_token), updated_at=?, raw_json=?
+            WHERE lower(email)=lower(?)
+            """,
+            (status, str(access_token or ""), now, raw_json, lookup_email),
         )
         conn.commit()
     finally:

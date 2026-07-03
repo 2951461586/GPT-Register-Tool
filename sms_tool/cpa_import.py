@@ -642,6 +642,7 @@ def _existing_cpa_json_with_access_token(email, export_dir=""):
     directory = Path(export_dir) if export_dir else output_dir(CFG) / "codex_exports"
     safe_email = "".join(ch if ch.isalnum() or ch in "_.@+-" else "_" for ch in target_email)
     candidates = [
+        directory / f"codex-{safe_email}-k12.json",
         directory / f"codex-{safe_email}-plus.json",
         directory / f"codex-{safe_email}.json",
     ]

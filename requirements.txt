@@ -13,4 +13,5 @@ cloakbrowser>=1.0.0
 
 # CAPTCHA solving (Playwright-based)
 playwright>=1.40.0
+qrcode[pil]>=7.4.2
 
