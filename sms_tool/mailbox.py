@@ -146,6 +146,30 @@ def _cfworker_client(proxy=None):
     )
 
 
+def _normalize_mailbox_proxy(value):
+    proxy = str(value or "").strip()
+    if not proxy:
+        return ""
+    if "://" not in proxy:
+        proxy = "http://" + proxy
+    return proxy
+
+
+def _configured_mailbox_proxy():
+    email_cfg = _email_cfg()
+    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    return _normalize_mailbox_proxy(
+        CFG.get("mailbox_proxy")
+        or email_cfg.get("mailbox_proxy")
+        or proxy_cfg.get("mailbox_proxy")
+        or proxy_cfg.get("mailbox")
+    )
+
+
+def _resolve_mailbox_proxy(proxy=None):
+    return _configured_mailbox_proxy() or _normalize_mailbox_proxy(proxy)
+
+
 def _luckmail_token_code(mailbox):
     token = getattr(mailbox, "token", "")
     if not token:
@@ -543,6 +567,7 @@ def _record_key(record):
 
 def _ms_oauth_refresh(mailbox, proxy=None):
     cfg = _email_cfg()
+    proxy = _resolve_mailbox_proxy(proxy)
     client_id = getattr(mailbox, "token", "") or cfg.get("oauth_client_id", "9e5f94bc-e8a4-4e73-b8be-63364c29d753")
     scope = cfg.get("oauth_scope", "https://graph.microsoft.com/.default offline_access")
     token_url = cfg.get("oauth_token_url", "https://login.microsoftonline.com/common/oauth2/v2.0/token")
@@ -667,6 +692,7 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
 
 
 def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
+    proxy = _resolve_mailbox_proxy(proxy)
     if getattr(mailbox, "provider", "") == "cfworker":
         if not _cfworker_poll_proxy_enabled():
             return _cfworker_client(proxy=None).fetch_messages(mailbox.email, limit=limit)

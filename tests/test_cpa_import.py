@@ -67,6 +67,23 @@ class CpaImportTests(unittest.TestCase):
         self.assertEqual(uploaded_payload["session_token"], "st_123")
         self.assertNotIn("refresh_token", uploaded_payload)
 
+    def test_existing_cpa_source_prefers_k12_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            export_dir = Path(tmp)
+            (export_dir / "codex-paid@example.com-plus.json").write_text(
+                json.dumps({"email": "paid@example.com", "access_token": "plus_at"}),
+                encoding="utf-8",
+            )
+            k12_path = export_dir / "codex-paid@example.com-k12.json"
+            k12_path.write_text(
+                json.dumps({"email": "paid@example.com", "access_token": "k12_at", "account_id": "ws-1"}),
+                encoding="utf-8",
+            )
+
+            found = cpa_import._existing_cpa_json_with_access_token("paid@example.com", str(export_dir))
+
+        self.assertEqual(found, str(k12_path))
+
     def test_classify_cpa_auth_file_detects_401_probe(self):
         self.assertEqual(
             cpa_import.classify_cpa_auth_file({"probe": {"status_code": 401}, "email": "a@liziai.cloud"}),

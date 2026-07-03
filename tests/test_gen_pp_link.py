@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
@@ -92,6 +92,255 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["url"], "https://checkout.stripe.com/c/pay/cs_test")
         self.assertEqual(result["link_type"], "stripe_hosted")
+
+
+
+
+    def test_chatgpt_checkout_link_returns_chatgpt_checkout_url_without_stripe_init(self):
+        posted = []
+
+        class FakeResponse:
+            status_code = 200
+            text = "{}"
+            headers = {}
+
+            def json(self):
+                return {
+                    "checkout_session_id": "cs_live_CHATGPT",
+                    "processor_entity": "openai_llc",
+                    "publishable_key": "pk_test_unused",
+                }
+
+        class FakeSession:
+            def __init__(self, proxy):
+                self.headers = {}
+
+            def post(self, url, json=None, data=None, timeout=None):
+                posted.append((url, json, data))
+                if url.endswith("/backend-api/payments/checkout"):
+                    return FakeResponse()
+                raise AssertionError(f"unexpected Stripe call: {url}")
+
+        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "chatgpt_checkout_link", "target_country": "US", "billing_regions": ["US"]}}):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+                with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+                    result = gen_pp_link.generate_pp_link("at", paypal_generation_type="chatgpt_checkout_link", target_country="US", checkout_country="US")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "https://chatgpt.com/checkout/openai_llc/cs_live_CHATGPT")
+        self.assertEqual(result["link_type"], "chatgpt_checkout_link")
+        self.assertEqual(result["short_url"], result["url"])
+        self.assertEqual(result["target_country"], "US")
+        self.assertEqual(result["checkout_country"], "US")
+        self.assertEqual(result["currency"], "USD")
+        self.assertEqual(len(posted), 1)
+        self.assertEqual(posted[0][1]["checkout_ui_mode"], "custom")
+
+
+    def test_hosted_generation_uses_jp_checkout_and_short_pay_url(self):
+        posted = []
+
+        class FakeResponse:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.text = "{}"
+                self.headers = {}
+
+            def json(self):
+                return self._body
+
+        class FakeSession:
+            def __init__(self, proxy):
+                self.proxy = proxy
+                self.headers = {}
+
+            def post(self, url, json=None, data=None, timeout=None):
+                posted.append((self.proxy, url, json, data))
+                if url.endswith("/backend-api/payments/checkout"):
+                    return FakeResponse(200, {
+                        "checkout_session_id": "cs_live_SHORT",
+                        "processor_entity": "openai_ie",
+                        "publishable_key": "pk_test",
+                    })
+                if "/payment_pages/cs_live_SHORT/init" in url:
+                    return FakeResponse(200, {
+                        "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SHORT#fragment",
+                        "payment_method_types": ["card", "paypal"],
+                        "currency": "jpy",
+                        "total_summary": {"due": 0, "currency": "jpy"},
+                    })
+                raise AssertionError(url)
+
+        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "hosted_long_url", "billing_regions": ["JP"], "require_zero_due": True}}):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "socks5h://jp-checkout", "provider": "http://jp-provider:11001", "approve": "http://unused"}):
+                with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+                    result = gen_pp_link.generate_pp_link("at")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "https://pay.openai.com/c/pay/cs_live_SHORT#fragment")
+        self.assertEqual(result["short_url"], "https://pay.openai.com/c/pay/cs_live_SHORT")
+        self.assertEqual(result["link_type"], "chatgpt_checkout_hosted_long_url")
+        self.assertEqual(result["checkout_country"], "JP")
+        self.assertEqual(result["billing_country"], "JP")
+        self.assertEqual(result["currency"], "JPY")
+        self.assertEqual(result["ba_token"], "")
+        self.assertEqual(posted[0][2]["billing_details"], {"country": "JP", "currency": "JPY"})
+        self.assertEqual(posted[0][2]["promo_campaign"]["promo_campaign_id"], "plus-1-month-free")
+        self.assertEqual(posted[0][2]["checkout_ui_mode"], "custom")
+        self.assertEqual(len(posted), 2)
+        self.assertNotIn("confirm", posted[1][1])
+
+
+    def test_hosted_generation_keeps_target_separate_from_checkout_country(self):
+        posted = []
+
+        class FakeResponse:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.text = "{}"
+                self.headers = {}
+
+            def json(self):
+                return self._body
+
+        class FakeSession:
+            def __init__(self, proxy):
+                self.headers = {}
+
+            def post(self, url, json=None, data=None, timeout=None):
+                posted.append((url, json, data))
+                if url.endswith("/backend-api/payments/checkout"):
+                    return FakeResponse(200, {"checkout_session_id": "cs_live_SPLIT", "processor_entity": "openai_llc", "publishable_key": "pk_test"})
+                if "/payment_pages/cs_live_SPLIT/init" in url:
+                    return FakeResponse(200, {"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SPLIT#fragment", "payment_method_types": ["card"], "currency": "jpy", "total_summary": {"due": 2727, "currency": "jpy"}})
+                raise AssertionError(url)
+
+        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "hosted_long_url", "target_country": "US", "billing_regions": ["JP"], "require_zero_due": False}}):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+                with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+                    result = gen_pp_link.generate_pp_link("at", target_country="US", checkout_country="JP", require_zero=False)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["target_country"], "US")
+        self.assertEqual(result["checkout_country"], "JP")
+        self.assertEqual(result["billing_country"], "JP")
+        self.assertEqual(result["currency"], "JPY")
+        self.assertEqual(posted[0][1]["billing_details"], {"country": "JP", "currency": "JPY"})
+
+    def test_generate_upi_qr_splits_checkout_and_payment_countries(self):
+        import tempfile
+        from pathlib import Path
+
+        calls = []
+        posted = []
+
+        class FakeResponse:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+                self.text = "{}"
+                self.headers = {}
+                self.url = ""
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError(f"http {self.status_code}")
+
+            def json(self):
+                return self._body
+
+        class FakeSession:
+            def __init__(self, proxy):
+                self.proxy = proxy
+                self.headers = {}
+
+            def post(self, url, json=None, data=None, timeout=None):
+                posted.append((self.proxy, url, json, data))
+                if url.endswith("/backend-api/payments/checkout"):
+                    return FakeResponse(200, {
+                        "checkout_session_id": "cs_live_UPI",
+                        "processor_entity": "openai_ie",
+                        "publishable_key": "pk_test_upi",
+                    })
+                if "/payment_pages/cs_live_UPI/init" in url:
+                    return FakeResponse(200, {
+                        "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_UPI#fidkdWxOYHwnPyd1blpxYHZxWjA0",
+                        "payment_method_types": ["card", "upi"],
+                        "currency": "inr",
+                        "total_summary": {"due": 0, "currency": "inr"},
+                    })
+                raise AssertionError(url)
+
+        def fake_new_session(proxy=""):
+            calls.append(proxy)
+            return FakeSession(proxy)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            qr_path = Path(tmp) / "upi.png"
+            with patch.object(gen_pp_link, "_new_session", side_effect=fake_new_session):
+                with patch.object(gen_pp_link, "_write_qr_png", side_effect=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1]):
+                    result = gen_pp_link.generate_upi_qr_link(
+                        "at",
+                        checkout_proxy="socks5h://jp-checkout",
+                        provider_proxy="http://in-provider:11001",
+                        checkout_country="JP",
+                        payment_country="IN",
+                        require_zero=True,
+                        qr_path=str(qr_path),
+                    )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["payment_method"], "upi")
+            self.assertEqual(result["currency"], "INR")
+            self.assertEqual(result["amount"], 0)
+            self.assertEqual(result["target_country"], "JP")
+            self.assertEqual(result["checkout_country"], "JP")
+            self.assertEqual(result["billing_country"], "JP")
+            self.assertEqual(result["payment_country"], "IN")
+            self.assertEqual(result["checkout_proxy"], "socks5h://jp-checkout")
+            self.assertEqual(result["provider_proxy"], "http://in-provider:11001")
+            self.assertEqual(result["qr_path"], str(qr_path))
+            self.assertTrue(qr_path.exists())
+            checkout_body = posted[0][2]
+            self.assertEqual(checkout_body["billing_details"], {"country": "JP", "currency": "JPY"})
+            self.assertEqual(checkout_body["checkout_ui_mode"], "hosted")
+            self.assertEqual(calls[:2], ["socks5h://jp-checkout", "http://in-provider:11001"])
+
+    def test_generate_upi_qr_requires_upi_payment_method(self):
+        class FakeResponse:
+            status_code = 200
+            text = "{}"
+            headers = {}
+            url = ""
+
+            def __init__(self, body):
+                self._body = body
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return self._body
+
+        class FakeSession:
+            def __init__(self, proxy):
+                self.headers = {}
+
+            def post(self, url, json=None, data=None, timeout=None):
+                if url.endswith("/backend-api/payments/checkout"):
+                    return FakeResponse({"checkout_session_id": "cs_live_NOUPI", "publishable_key": "pk_test"})
+                return FakeResponse({"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_NOUPI", "payment_method_types": ["card"], "currency": "inr", "total_summary": {"due": 0, "currency": "inr"}})
+
+        cfg = {"upi": {"checkout_country": "JP", "payment_country": "IN", "require_zero_due": True}}
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg), patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+            result = gen_pp_link.generate_upi_qr_link("at", checkout_proxy="jp", provider_proxy="in")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "upi_not_available")
+        self.assertEqual(result["checkout_country"], "JP")
+        self.assertEqual(result["payment_country"], "IN")
 
     def test_load_json_accepts_utf8_bom_config(self):
         import json

@@ -36,6 +36,7 @@ import re
 import sys
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
 
@@ -859,7 +860,7 @@ def _stage_proxy_value(stage_proxies: dict, api_urls: dict, key: str, fallback: 
 
 
 def _proxies_from_config(cfg: dict) -> dict:
-    """??????????????
+    """Resolve payment stage proxies from static config or proxy API URLs.
 
     Supports static ``paypal.stage_proxies`` and dynamic plain-text proxy APIs in
     ``paypal.stage_proxy_api_urls``.  API values are resolved at runtime so
@@ -894,6 +895,7 @@ def generate_pp_link(
     provider_proxy: str | None = None,
     approve_proxy: str | None = None,
     target_country: str | None = None,
+    checkout_country: str | None = None,
     require_zero: bool | None = None,
     require_ba_token: bool | None = None,
 ) -> dict[str, Any]:
@@ -924,6 +926,28 @@ def generate_pp_link(
     checkout_proxy = str(_checkout or "").strip()
     provider_proxy = str(_provider or "").strip()
     approve_proxy = str(_approve or "").strip()
+
+    generation_type = _normalized_generation_type(paypal_cfg, paypal_generation_type)
+    if _is_chatgpt_checkout_link_generation_type(generation_type):
+        return generate_chatgpt_checkout_link(
+            access_token=access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            checkout_proxy=checkout_proxy,
+            target_country=target_country,
+            checkout_country=checkout_country,
+        )
+    if _is_hosted_generation_type(generation_type):
+        return generate_hosted_long_url(
+            access_token=access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            checkout_proxy=checkout_proxy,
+            provider_proxy=provider_proxy,
+            target_country=target_country,
+            checkout_country=checkout_country,
+            require_zero=require_zero,
+        )
 
     target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
     if require_zero is None:
@@ -994,6 +1018,477 @@ def generate_pp_link(
         }
 
 
+
+def _normalize_hosted_checkout_url(url: str) -> str:
+    value = str(url or "").strip()
+    if value:
+        return value.replace("checkout.stripe.com", "pay.openai.com")
+    return value
+
+
+def _canonical_checkout_long_url(cs_id: str) -> str:
+    cs_id = str(cs_id or "").strip()
+    return f"https://pay.openai.com/c/pay/{cs_id}" if cs_id else ""
+
+
+def _normalized_generation_type(paypal_cfg: dict[str, Any], override: str | None = None) -> str:
+    raw = str(
+        override
+        or paypal_cfg.get("link_generation_type")
+        or paypal_cfg.get("generation_type")
+        or paypal_cfg.get("paypal_generation_type")
+        or ""
+    ).strip().lower().replace("-", "_")
+    return raw
+
+
+def _is_hosted_generation_type(value: str) -> bool:
+    return value in {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"}
+
+
+def _is_chatgpt_checkout_link_generation_type(value: str) -> bool:
+    return value in {"chatgpt_checkout_link", "checkout_link", "short_checkout", "chatgpt_short_link"}
+
+
+def _chatgpt_checkout_url(processor_entity: str, cs_id: str) -> str:
+    processor_entity = str(processor_entity or "").strip()
+    cs_id = str(cs_id or "").strip()
+    return f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}" if processor_entity and cs_id else ""
+
+
+def _checkout_country_from_cfg(paypal_cfg: dict[str, Any], explicit_country: str | None = None, default: str = "JP") -> str:
+    if explicit_country:
+        return str(explicit_country).strip().upper()
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    candidates = [
+        regions[0] if regions else "",
+        paypal_cfg.get("checkout_country"),
+        paypal_cfg.get("billing_country"),
+        paypal_cfg.get("target_country"),
+        default,
+    ]
+    for candidate in candidates:
+        value = str(candidate or "").strip().upper()
+        if value:
+            return value
+    return default
+
+
+def generate_chatgpt_checkout_link(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    checkout_proxy: str | None = None,
+    target_country: str | None = None,
+    checkout_country: str | None = None,
+) -> dict[str, Any]:
+    """Create a ChatGPT checkout session and return chatgpt.com/checkout/{entity}/{cs_id}."""
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+    stage_proxies = _proxies_from_config(cfg)
+    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    target_country = str(
+        target_country
+        or paypal_cfg.get("target_country")
+        or checkout_country
+        or (regions[0] if regions else None)
+        or "US"
+    ).strip().upper()
+    checkout_country = str(
+        checkout_country
+        or paypal_cfg.get("checkout_country")
+        or paypal_cfg.get("billing_country")
+        or (regions[0] if regions else None)
+        or target_country
+        or "US"
+    ).strip().upper()
+    currency = CURRENCY_MAP.get(checkout_country, "USD")
+
+    def emit(step: str, msg: str, **kw: Any) -> None:
+        print(f"[{step}] {msg}", file=sys.stderr)
+
+    try:
+        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for ChatGPT checkout link")
+        cs = _new_session(checkout_proxy)
+        cs.headers.update({
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Referer": "https://chatgpt.com/",
+        })
+        checkout_body = {
+            "entry_point": "all_plans_pricing_modal",
+            "plan_name": "chatgptplusplan",
+            "billing_details": {"country": checkout_country, "currency": currency},
+            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
+            "checkout_ui_mode": "custom",
+        }
+        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        if r.status_code == 401:
+            return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "link_type": "chatgpt_checkout_link"}
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "link_type": "chatgpt_checkout_link"}
+        checkout_data = r.json() or {}
+        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("session_id") or checkout_data.get("id") or ""
+        if not str(cs_id).startswith("cs_"):
+            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "link_type": "chatgpt_checkout_link"}
+        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        url = _chatgpt_checkout_url(processor_entity, cs_id)
+        emit("checkout", f"checkout success: cs_id={cs_id} entity={processor_entity} country={checkout_country} currency={currency}")
+        return {
+            "ok": True,
+            "url": url,
+            "checkout_url": url,
+            "short_url": url,
+            "ba_token": "",
+            "cs_id": cs_id,
+            "processor_entity": processor_entity,
+            "link_type": "chatgpt_checkout_link",
+            "target_country": target_country,
+            "checkout_country": checkout_country,
+            "billing_country": checkout_country,
+            "currency": currency,
+            "checkout_proxy": checkout_proxy,
+            "provider_proxy": "",
+            "approve_proxy": "",
+            "promo_campaign_id": "plus-1-month-free",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "error_code": "chatgpt_checkout_link_failed", "link_type": "chatgpt_checkout_link", "url": ""}
+
+
+def generate_hosted_long_url(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    checkout_proxy: str | None = None,
+    provider_proxy: str | None = None,
+    target_country: str | None = None,
+    checkout_country: str | None = None,
+    require_zero: bool | None = None,
+) -> dict[str, Any]:
+    """Generate a ChatGPT/Stripe hosted checkout URL without entering BA/approve flow."""
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+    stage_proxies = _proxies_from_config(cfg)
+    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
+    provider_proxy = str(provider_proxy or proxy or stage_proxies["provider"] or "").strip()
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    target_country = str(
+        target_country
+        or paypal_cfg.get("target_country")
+        or checkout_country
+        or (regions[0] if regions else None)
+        or "US"
+    ).strip().upper()
+    checkout_country = str(
+        checkout_country
+        or paypal_cfg.get("checkout_country")
+        or paypal_cfg.get("billing_country")
+        or (regions[0] if regions else None)
+        or target_country
+        or "US"
+    ).strip().upper()
+    currency = CURRENCY_MAP.get(checkout_country, "USD")
+    if require_zero is None:
+        require_zero = bool(paypal_cfg.get("require_zero_due", True))
+
+    def emit(step: str, msg: str, **kw: Any) -> None:
+        print(f"[{step}] {msg}", file=sys.stderr)
+
+    try:
+        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for hosted checkout")
+        cs = _new_session(checkout_proxy)
+        cs.headers.update({
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Referer": "https://chatgpt.com/",
+        })
+        checkout_body = {
+            "entry_point": "all_plans_pricing_modal",
+            "plan_name": "chatgptplusplan",
+            "billing_details": {"country": checkout_country, "currency": currency},
+            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
+            "checkout_ui_mode": "custom",
+        }
+        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        if r.status_code == 401:
+            return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "link_type": "chatgpt_checkout_hosted_long_url"}
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "link_type": "chatgpt_checkout_hosted_long_url"}
+        checkout_data = r.json() or {}
+        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("session_id") or checkout_data.get("id") or ""
+        if not str(cs_id).startswith("cs_"):
+            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "link_type": "chatgpt_checkout_hosted_long_url"}
+        stripe_pk = checkout_data.get("publishable_key") or DEFAULT_STRIPE_PK
+        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        emit("checkout", f"checkout success: cs_id={cs_id} country={checkout_country} currency={currency}")
+
+        emit("stripe_init", f"Stage 2: using {provider_proxy or 'DIRECT'} for Stripe init")
+        stripe = _new_session(provider_proxy)
+        init_body = {
+            "browser_locale": "en-US",
+            "browser_timezone": "Asia/Shanghai",
+            "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+            "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+            "elements_session_client[elements_init_source]": "custom_checkout",
+            "elements_session_client[referrer_host]": "chatgpt.com",
+            "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
+            "elements_session_client[locale]": "en",
+            "elements_session_client[is_aggregation_expected]": "false",
+            "elements_options_client[saved_payment_method][enable_save]": "never",
+            "elements_options_client[saved_payment_method][enable_redisplay]": "never",
+            "key": stripe_pk,
+            "_stripe_version": STRIPE_VERSION,
+        }
+        init_resp = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=init_body, timeout=DEFAULT_TIMEOUT)
+        if init_resp.status_code >= 400:
+            return {"ok": False, "error": f"stripe init failed: {init_resp.status_code} {init_resp.text[:300]}", "error_code": "stripe_init_failed", "link_type": "chatgpt_checkout_hosted_long_url", "cs_id": cs_id, "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country}
+        init = init_resp.json() or {}
+        amount_info = stripe_amount_details(init)
+        amount = amount_info.get("amount")
+        emit("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
+        if require_zero and amount is not None and amount != 0:
+            return {
+                "ok": False,
+                "error": f"checkout_not_zero_due: amount={amount} {amount_info.get('currency')}",
+                "error_code": "checkout_not_zero_due",
+                "link_type": "chatgpt_checkout_hosted_long_url",
+                "url": "",
+                "cs_id": cs_id,
+                "amount": amount,
+                "currency": str(amount_info.get("currency") or currency).upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_method_types": init.get("payment_method_types") or [],
+            }
+        short_url = _canonical_checkout_long_url(cs_id)
+        hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or short_url
+        return {
+            "ok": True,
+            "url": hosted_url,
+            "checkout_url": hosted_url,
+            "short_url": short_url,
+            "stripe_hosted_url": hosted_url,
+            "ba_token": "",
+            "cs_id": cs_id,
+            "processor_entity": processor_entity,
+            "link_type": "chatgpt_checkout_hosted_long_url",
+            "amount": amount,
+            "currency": str(amount_info.get("currency") or currency).upper(),
+            "target_country": target_country,
+            "checkout_country": checkout_country,
+            "billing_country": checkout_country,
+            "payment_method_types": init.get("payment_method_types") or [],
+            "checkout_proxy": checkout_proxy,
+            "provider_proxy": provider_proxy,
+            "approve_proxy": "",
+            "promo_campaign_id": "plus-1-month-free",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "error_code": "hosted_long_url_failed", "link_type": "chatgpt_checkout_hosted_long_url", "url": ""}
+
+
+def _default_qr_path(prefix: str = "upi") -> str:
+    directory = Path(PROJECT_ROOT) / "runtime" / "upi_qr"
+    directory.mkdir(parents=True, exist_ok=True)
+    return str(directory / f"{prefix}_{int(time.time())}_{uuid.uuid4().hex[:8]}.png")
+
+
+def _write_qr_png(data: str, qr_path: str = "") -> str:
+    url = str(data or "").strip()
+    if not url:
+        return ""
+    path = Path(qr_path or _default_qr_path("upi"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import qrcode
+    except Exception as exc:  # pragma: no cover - exercised only when dependency missing
+        raise RuntimeError("qrcode package is required for UPI QR generation; run pip install qrcode[pil]") from exc
+    img = qrcode.make(url)
+    img.save(str(path))
+    return str(path)
+
+
+def _method_cfg(cfg: dict, payment_method: str) -> dict:
+    method = str(payment_method or "").strip().lower().replace("-", "_")
+    section = cfg.get(method) if isinstance(cfg.get(method), dict) else {}
+    return section if isinstance(section, dict) else {}
+
+
+def _payment_stage_proxies_from_config(cfg: dict, payment_method: str) -> dict:
+    method = str(payment_method or "").strip().lower().replace("-", "_")
+    method_cfg = _method_cfg(cfg, method)
+    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
+    method_api = method_cfg.get("stage_proxy_api_urls") if isinstance(method_cfg.get("stage_proxy_api_urls"), dict) else {}
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    paypal_api = paypal_cfg.get("stage_proxy_api_urls") if isinstance(paypal_cfg.get("stage_proxy_api_urls"), dict) else {}
+    proxy_default = (cfg.get("proxy") or {}).get("default") or ""
+
+    def pick(key: str, fallback: str = "") -> str:
+        value = _stage_proxy_value(method_stage, method_api, key)
+        if value:
+            return value
+        return _stage_proxy_value(paypal_stage, paypal_api, key, fallback)
+
+    checkout = pick("checkout", proxy_default)
+    provider = pick("provider") or pick("stripe_init")
+    if method == "upi" and not provider:
+        provider = "http://107.150.109.49:11001"
+    provider = provider or proxy_default
+    approve = pick("approve") or pick("confirm")
+    if method == "upi" and not approve:
+        approve = provider or "http://107.150.109.49:11001"
+    approve = approve or provider or proxy_default
+    return {"checkout": checkout, "provider": provider, "approve": approve}
+
+
+def generate_upi_qr_link(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    checkout_proxy: str | None = None,
+    provider_proxy: str | None = None,
+    approve_proxy: str | None = None,
+    target_country: str | None = None,
+    checkout_country: str | None = None,
+    payment_country: str | None = None,
+    require_zero: bool | None = None,
+    qr_path: str | None = None,
+) -> dict[str, Any]:
+    """Generate a UPI hosted checkout URL and local QR PNG from an AT.
+
+    ``checkout_country`` controls ChatGPT checkout billing country/currency.
+    ``payment_country`` records the intended local payment-method country.  The
+    legacy ``target_country`` argument is kept as a checkout-country alias.
+    """
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    upi_cfg = _method_cfg(cfg, "upi")
+    stage_proxies = _payment_stage_proxies_from_config(cfg, "upi")
+    _checkout = checkout_proxy or proxy or stage_proxies["checkout"]
+    _provider = provider_proxy or proxy or stage_proxies["provider"]
+    _approve = approve_proxy or proxy or stage_proxies["approve"]
+    checkout_proxy = str(_checkout or "").strip()
+    provider_proxy = str(_provider or "").strip()
+    approve_proxy = str(_approve or "").strip()
+    regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
+    checkout_country = str(
+        checkout_country
+        or upi_cfg.get("checkout_country")
+        or upi_cfg.get("checkout_billing_country")
+        or upi_cfg.get("billing_country")
+        or target_country
+        or upi_cfg.get("target_country")
+        or (regions[0] if regions else "IN")
+        or "IN"
+    ).upper()
+    payment_country = str(
+        payment_country
+        or upi_cfg.get("payment_country")
+        or upi_cfg.get("payment_method_country")
+        or "IN"
+    ).upper()
+    target_country = checkout_country
+    currency = CURRENCY_MAP.get(checkout_country, "INR")
+    if require_zero is None:
+        paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+        require_zero = bool(upi_cfg.get("require_zero_due", paypal_cfg.get("require_zero_due", True)))
+
+    def emit(step: str, msg: str, **kw: Any) -> None:
+        print(f"[{step}] {msg}", file=sys.stderr)
+
+    try:
+        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for UPI checkout")
+        cs = _new_session(checkout_proxy)
+        cs.headers.update({
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Referer": "https://chatgpt.com/",
+        })
+        checkout_body = {
+            "entry_point": "all_plans_pricing_modal",
+            "plan_name": "chatgptplusplan",
+            "billing_details": {"country": checkout_country, "currency": currency},
+            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
+            "checkout_ui_mode": "hosted",
+        }
+        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        if r.status_code == 401:
+            return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "payment_method": "upi"}
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "payment_method": "upi"}
+        checkout_data = r.json() or {}
+        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("id", "")
+        if not str(cs_id).startswith("cs_"):
+            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "payment_method": "upi"}
+        stripe_pk = checkout_data.get("publishable_key") or DEFAULT_STRIPE_PK
+        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        emit("checkout", f"checkout success: cs_id={cs_id}")
+
+        emit("stripe_init", f"Stage 2: using {provider_proxy or 'DIRECT'} for Stripe init")
+        stripe = _new_session(provider_proxy)
+        body = {
+            "browser_locale": "en-US",
+            "browser_timezone": "Asia/Shanghai",
+            "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+            "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+            "elements_session_client[elements_init_source]": "hosted_checkout",
+            "elements_session_client[referrer_host]": "chatgpt.com",
+            "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
+            "elements_session_client[locale]": "en",
+            "elements_session_client[is_aggregation_expected]": "false",
+            "elements_options_client[saved_payment_method][enable_save]": "never",
+            "elements_options_client[saved_payment_method][enable_redisplay]": "never",
+            "key": stripe_pk,
+            "_stripe_version": STRIPE_VERSION,
+        }
+        init_resp = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=body, timeout=DEFAULT_TIMEOUT)
+        if init_resp.status_code >= 400:
+            return {"ok": False, "error": f"stripe init failed: {init_resp.status_code} {init_resp.text[:300]}", "error_code": "stripe_init_failed", "payment_method": "upi", "cs_id": cs_id}
+        init = init_resp.json() or {}
+        amount_info = stripe_amount_details(init)
+        amount = amount_info.get("amount")
+        emit("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
+        if require_zero and amount is not None and amount != 0:
+            return {"ok": False, "error": f"checkout_not_zero_due: amount={amount} {amount_info.get('currency')}", "error_code": "checkout_not_zero_due", "payment_method": "upi", "cs_id": cs_id, "amount": amount, "currency": str(amount_info.get("currency") or currency).upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
+        pm_types = [str(item or "").strip().lower() for item in (init.get("payment_method_types") or [])]
+        if pm_types and "upi" not in pm_types:
+            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": str(amount_info.get("currency") or currency).upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
+        hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
+        if not hosted_url:
+            hosted_url = f"https://pay.openai.com/c/pay/{cs_id}"
+        written_qr_path = _write_qr_png(hosted_url, qr_path or "")
+        return {
+            "ok": True,
+            "payment_method": "upi",
+            "method": "upi",
+            "link_type": "upi_hosted_qr",
+            "url": hosted_url,
+            "short_url": hosted_url,
+            "qr_data": hosted_url,
+            "qr_path": written_qr_path,
+            "cs_id": cs_id,
+            "processor_entity": processor_entity,
+            "amount": amount,
+            "currency": str(amount_info.get("currency") or currency).upper(),
+            "target_country": target_country,
+            "checkout_country": checkout_country,
+            "billing_country": checkout_country,
+            "payment_country": payment_country,
+            "payment_method_types": init.get("payment_method_types") or [],
+            "checkout_proxy": checkout_proxy,
+            "provider_proxy": provider_proxy,
+            "approve_proxy": approve_proxy,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "error_code": "upi_qr_failed", "payment_method": "upi", "url": "", "qr_path": ""}
+
+
 def generate_payment_link(
     access_token: str,
     proxy: Any = None,
@@ -1001,13 +1496,16 @@ def generate_payment_link(
     auth_context: dict[str, Any] | None = None,
     paypal_generation_type: str | None = None,
 ) -> dict[str, Any]:
-    """生成支付链接 (兼容旧接口)。
-
-    目前仅支持 PayPal，其他支付方式返回错误。
-    """
-    method = str(payment_method or "paypal").lower().strip()
+    """Generate a payment link or QR by payment method."""
+    method = str(payment_method or "paypal").lower().strip().replace("-", "_")
+    if method in {"upi", "upiqr", "upi_qr"}:
+        return generate_upi_qr_link(
+            access_token=access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+        )
     if method != "paypal":
-        return {"ok": False, "error": f"不支持的支付方式: {method}，仅支持 paypal"}
+        return {"ok": False, "error": f"unsupported payment method: {method}; expected paypal/upi"}
     return generate_pp_link(
         access_token=access_token,
         proxy=proxy,

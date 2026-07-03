@@ -258,7 +258,8 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_falls_back_to_direct_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True}):
+        with patch.object(mailbox_module, "CFG", {}), \
+             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True}):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 proxy_client = type("ProxyClient", (), {})()
                 direct_client = type("DirectClient", (), {})()
@@ -275,7 +276,8 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_does_not_fall_back_to_direct_by_default(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}):
+        with patch.object(mailbox_module, "CFG", {}), \
+             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 proxy_client = type("ProxyClient", (), {})()
                 proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
@@ -290,7 +292,8 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_can_skip_proxy_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}):
+        with patch.object(mailbox_module, "CFG", {}), \
+             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 direct_client = type("DirectClient", (), {})()
                 direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
