@@ -23,7 +23,7 @@
       <Setter Property="Height" Value="46"/>
       <Setter Property="Padding" Value="14,0"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
-      <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
+      <Setter Property="Background" Value="{DynamicResource SidebarButtonBg}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Template">

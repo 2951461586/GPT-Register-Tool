@@ -9,6 +9,7 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
+  -> optional K12 workspace request/accept/leave
   -> PayPal/GoPay/UPI payment-link generation or explicit protocol payment
   -> session JSON + SQLite index
   -> status display and maintenance actions
@@ -28,10 +29,28 @@ sms_tool/
   config.py                 Config loading only.
   paths.py                  Project-relative path resolution.
   account_seed.py           Shared account/session seed lookup and access-token extraction.
-  mailbox.py                Mailbox pool parsing and OTP retrieval.
+  mailbox.py                Mailbox provider routing and OTP retrieval compatibility seam.
+  mailbox_parsers.py        Mailbox import format parsing.
+  mailbox_luckmail.py       LuckMail API and token mailbox polling.
+  mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
+  mailbox_graph.py          Microsoft OAuth refresh boundary.
+  outlook_imap.py           Outlook IMAP fallback fetcher.
+  mail_otp.py               Shared OTP extraction/candidate filtering.
   providers/                External provider clients.
   http_client.py            curl_cffi retry/transport handling.
-  registration.py           ChatGPT registration protocol and batch worker control.
+  registration.py           ChatGPT registration orchestration compatibility seam.
+  auth_flow.py              OpenAI signin/authorize/continue helpers.
+  account_creation.py       Account creation, auth-session fetch, and payment-link helper calls.
+  batch_runner.py           Batch registration concurrency and result ordering.
+  sentinel_tokens.py        Sentinel token extraction/cache/browser fallback.
+  otp_strategy.py           Registration OTP send/resend strategy.
+  auth_state.py             client_auth_session_dump diagnostics.
+  k12.py                    K12 batch orchestration compatibility seam.
+  k12_client.py             K12 request/accept/leave HTTP adapter.
+  k12_invite.py             K12 invite-mail polling and invite URL opening.
+  k12_verify.py             Workspace-switch verification.
+  k12_identity.py           K12 account/user/token identity extraction.
+  k12_export.py             K12 CPA JSON export.
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_browser_auto.py    Default PayPal one-click adapter using saved links.
@@ -42,6 +61,7 @@ sms_tool/
   gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
   session_refresh.py        Refresh auth session after manual login/payment.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
+  session_converter.py      Multi-format session/account export conversion core.
   codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
   codex_sentinel.py         Sentinel/cache cookie helpers for auth.openai.com requests.
   codex_phone.py            Optional add-phone SMS verification boundary.
@@ -68,9 +88,11 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, mailbox provider clients | Registration success persistence, payment state |
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower`, `sms_tool.nextsms` | SMS provider APIs | ChatGPT account state, payment state |
 | ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
+| K12 workspace actions | `sms_tool.k12`, `sms_tool.k12_client`, `sms_tool.k12_invite`, `sms_tool.k12_verify` | account seed/session data, mailbox invite polling, storage status update | Registration, payment execution, mailbox-provider configuration |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
 | Payment link generation | `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init | PayPal account signup, final payment authorization |
 | Payment execution | `sms_tool.paypal_browser_auto`, `sms_tool.paypal_auto`, `sms_tool.gopay_payment` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
+| Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import` | session JSON, account seed, CPA API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
@@ -145,28 +167,62 @@ Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay 
 
 ### Mailbox Layer
 
-`sms_tool/mailbox.py` owns:
+`sms_tool/mailbox.py` is the compatibility seam and high-level router. Focused
+provider/parsing modules own the implementation:
 
-- Chatai file parsing.
-- Standard OAuth mailbox file parsing.
-- LuckMail purchase/token mailbox handling.
-- Microsoft refresh-token exchange.
-- OTP polling.
-- Email normalization for mailbox inputs.
+- `mailbox_parsers.py`: Chatai, token-file, password-file, CFWorker URI, and mailbox email normalization.
+- `mailbox_luckmail.py`: LuckMail order/purchase/token APIs and token mailbox polling.
+- `mailbox_cfworker.py`: CFWorker mailbox creation, message fetch, proxy/direct fallback, and OTP polling.
+- `mailbox_graph.py`: Microsoft OAuth refresh.
+- `outlook_imap.py`: Outlook IMAP fallback when Graph is unavailable or stale.
+- `mail_otp.py`: OTP extraction, recipient filtering, subject matching, issued-after filtering, and candidate ordering.
+
+Registration OTP polling accepts a pipe-separated subject keyword string. The
+registration flow uses both `verification code` and `login code`, because the
+passwordless signup path can receive either subject even when the auth state is
+still a signup transaction. CFWorker mailboxes also use a small
+`cfworker_otp_issued_after_grace_seconds` timestamp grace window to avoid
+dropping a fresh message whose provider timestamp is a few seconds earlier than
+the local resend-return time.
 
 It must not write registration results or modify mailbox pool files during registration.
 
 ### Registration Layer
 
-`sms_tool/registration.py` owns:
+`sms_tool/registration.py` is the orchestration seam. Focused modules own the
+implementation:
 
-- Sentinel token extraction/cache usage.
-- ChatGPT auth/signup flow.
-- OTP validation.
-- Auth session access-token retrieval.
-- Batch worker limits.
+- `auth_flow.py`: signin URL construction, authorize navigation, continue calls, and auth-state URL classification.
+- `account_creation.py`: OTP validation, create-account continuation, `/api/auth/session` fetch, and payment-link helper calls.
+- `batch_runner.py`: concurrent registration worker scheduling, result ordering, and mailbox-count capping.
+- `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel extraction, QuickJS SDK path, PoW/browser fallback, and cache.
+- `auth_state.py`: `client_auth_session_dump` capture and redacted diagnostic summaries.
+- `otp_strategy.py`: OTP send/resend endpoint selection.
 
 Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
+
+If OTP validation succeeds but create-account returns
+`registration_disallowed`, the failure is treated as a provider/server-side
+registration refusal for that mailbox/context, not as a mailbox polling failure.
+The local error path must preserve that create-account code instead of masking
+it with later auth-session transport errors.
+
+### K12 Layer
+
+`sms_tool/k12.py` is the CLI-compatible batch orchestration seam. It keeps the
+old public function names for tests and WPF/CLI callers, while delegating
+implementation to focused modules:
+
+- `k12_client.py`: HTTP adapter for workspace `request`, `accept`, `leave`, token refresh, and `/api/auth/session` fetch.
+- `k12_invite.py`: mailbox lookup, k12-invite mail polling, invite URL extraction, and invite opening.
+- `k12_verify.py`: post-action verification that the current auth session is switched to the expected workspace.
+- `k12_identity.py`: account ID, user ID, access token, and JWT identity extraction.
+- `k12_export.py`: K12-specific CPA JSON export.
+
+K12 request/accept/leave updates SQLite status through `storage.py`. Typical
+statuses are `k12_requested`, `k12_joined`, `k12_left`, and
+`k12_verify_failed`. Workspace `account_id` and ChatGPT `user_id` are different
+identifiers and must not be collapsed.
 
 ### Account Seed Layer
 
@@ -323,7 +379,7 @@ It deliberately does not upload to CPA and does not own phone-number inventory.
 
 `sms_tool/codex_phone.py` owns add-phone completion. It is disabled by default. If OpenAI requests `/add-phone`, the OAuth layer reports `add_phone_required` unless `codex_oauth.auto_phone_verification` is true.
 
-`sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` accepts existing AT-only session JSON, normalizes it into the CPA payload shape, and uploads it without requiring RT.
+`sms_tool/session_converter.py` is the multi-format conversion core used by export-account flows. `sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` accepts existing AT-only session JSON, normalizes it into the CPA payload shape, and uploads it without requiring RT. K12 exports use `k12_export.py` to produce the K12-specific CPA JSON shape after workspace join verification succeeds.
 
 Important behavior:
 
@@ -337,7 +393,14 @@ All paths in `config.example.json` are relative by default:
 ```json
 {
   "email_registration": {
-    "token_file": "mailbox_tokens.txt"
+    "token_file": "mailbox_tokens.txt",
+    "cfworker_otp_issued_after_grace_seconds": 10
+  },
+  "k12": {
+    "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
+    "retries": 2,
+    "retry_backoff_seconds": 5,
+    "invite_timeout_seconds": 240
   },
   "runtime": {
     "directory": "runtime"

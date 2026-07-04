@@ -279,7 +279,7 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "account_deactivated"
     if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
         return "at_invalid"
-    if explicit in {"k12_joined", "k12_requested"}:
+    if explicit in {"k12_joined", "k12_requested", "k12_left", "k12_verify_failed"}:
         return explicit
     if _looks_at_invalid(data, paypal):
         return "at_invalid"
@@ -550,7 +550,7 @@ def mark_k12_status(email, workspace_id="", status="k12_joined", result=None, ac
                 pass
         k12 = data.get("k12") if isinstance(data.get("k12"), dict) else {}
         k12.update({
-            "ok": str(status).lower() in {"k12_joined", "k12_requested", "joined", "requested"},
+            "ok": str(status).lower() in {"k12_joined", "k12_requested", "k12_left", "joined", "requested", "left"},
             "status": status,
             "workspace_id": str(workspace_id or ""),
             "updated_at": now,

@@ -30,6 +30,7 @@
       <SolidColorBrush x:Key="TextSub" Color="#6B6860"/>
       <SolidColorBrush x:Key="TextMuted" Color="#9E9B93"/>
       <SolidColorBrush x:Key="SidebarBg" Color="#F0EEE8"/>
+      <SolidColorBrush x:Key="SidebarButtonBg" Color="#DDDAD4"/>
       <SolidColorBrush x:Key="GridAltBg" Color="#F7F5F0"/>
       <SolidColorBrush x:Key="SplitterBg" Color="#DDDAD4"/>
       <SolidColorBrush x:Key="StatusBg" Color="#F7F5F0"/>

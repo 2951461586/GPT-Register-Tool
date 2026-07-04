@@ -196,6 +196,26 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         )
         self.assertEqual(candidate["otp"], "971234")
 
+    def test_cfworker_json_remark_does_not_make_otp_look_like_css_unit(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+        msg = {
+            "id": "json-remark-code",
+            "receivedDateTime": "2026-07-04T06:00:20Z",
+            "subject": "Your temporary ChatGPT verification code",
+            "bodyPreview": '[{"rule_id":14,"value":"453831","remark":"ChatGPT OTP"}]',
+            "body": {"content": '[{"rule_id":14,"value":"453831","remark":"ChatGPT OTP"}]'},
+            "toRecipients": [{"emailAddress": {"address": "target@edu.liziai.cloud"}}],
+        }
+
+        candidate = mailbox_module._email_otp_candidate(
+            mailbox,
+            msg,
+            keyword="verification code",
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(candidate["otp"], "453831")
+
     def test_cfworker_otp_poll_waits_for_newer_duplicate_code(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
         old = {

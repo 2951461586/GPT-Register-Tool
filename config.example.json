@@ -28,6 +28,7 @@
     "token_file": "mailbox_tokens.txt",
     "otp_poll_interval": 2,
     "cfworker_otp_settle_seconds": 3,
+    "cfworker_otp_issued_after_grace_seconds": 10,
     "cfworker_poll_proxy": true,
     "cfworker_direct_fallback": false,
     "email": "",

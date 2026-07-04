@@ -24,6 +24,8 @@ class K12Tests(unittest.TestCase):
     def test_normalize_route(self):
         self.assertEqual(k12.normalize_k12_route("accept"), "accept")
         self.assertEqual(k12.normalize_k12_route("join"), "accept")
+        self.assertEqual(k12.normalize_k12_route("exit"), "leave")
+        self.assertEqual(k12.normalize_k12_route("leave"), "leave")
         self.assertEqual(k12.normalize_k12_route("anything"), "request")
 
     def test_post_workspace_invite_uses_expected_protocol(self):
@@ -79,6 +81,72 @@ class K12Tests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(session.post.call_count, 2)
         self.assertEqual(session.post.call_args.kwargs["headers"]["authorization"], "Bearer new_at")
+
+    def test_delete_workspace_user_uses_expected_protocol(self):
+        response = Mock()
+        response.status_code = 200
+        response.text = '{"success":true}'
+        session = Mock()
+        session.delete.return_value = response
+
+        with patch("sms_tool.k12.curl_requests.Session", return_value=session):
+            result = k12._delete_workspace_user(
+                {
+                    "email": "a@example.com",
+                    "access_token": "at_123",
+                    "device_id": "did-1",
+                    "user_id": "user-1",
+                },
+                "workspace-1",
+                proxy="http://127.0.0.1:8080",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(session.proxies, {"http": "http://127.0.0.1:8080", "https": "http://127.0.0.1:8080"})
+        args, kwargs = session.delete.call_args
+        self.assertIn("/backend-api/accounts/workspace-1/users/user-1", args[0])
+        self.assertEqual(kwargs["headers"]["authorization"], "Bearer at_123")
+        self.assertEqual(kwargs["headers"]["oai-device-id"], "did-1")
+
+    def test_delete_workspace_user_fetches_session_when_user_id_missing(self):
+        response = Mock()
+        response.status_code = 200
+        response.text = '{"success":true}'
+        session = Mock()
+        session.delete.return_value = response
+        account = {
+            "email": "a@example.com",
+            "access_token": "old_at",
+            "cookie_header": "session=1",
+        }
+
+        with patch("sms_tool.k12.curl_requests.Session", return_value=session), \
+             patch("sms_tool.k12._fetch_auth_session_from_cookie", side_effect=lambda acc, **_: acc.update({"access_token": "new_at", "user_id": "user-2"}) or {"ok": True}):
+            result = k12._delete_workspace_user(account, "workspace-2")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(session.delete.call_args.kwargs["headers"]["authorization"], "Bearer new_at")
+        self.assertIn("/backend-api/accounts/workspace-2/users/user-2", session.delete.call_args.args[0])
+
+    def test_delete_workspace_user_allows_empty_workspace_from_session(self):
+        response = Mock()
+        response.status_code = 200
+        response.text = '{"success":true}'
+        session = Mock()
+        session.delete.return_value = response
+        account = {
+            "email": "a@example.com",
+            "access_token": "old_at",
+            "cookie_header": "session=1",
+        }
+
+        with patch("sms_tool.k12.curl_requests.Session", return_value=session), \
+             patch("sms_tool.k12._fetch_auth_session_from_cookie", side_effect=lambda acc, **_: acc.update({"access_token": "new_at", "user_id": "user-3", "account_id": "workspace-3"}) or {"ok": True}):
+            result = k12._delete_workspace_user(account, "")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["workspace_id"], "workspace-3")
+        self.assertIn("/backend-api/accounts/workspace-3/users/user-3", session.delete.call_args.args[0])
 
     def test_extract_invite_url_and_workspace_id(self):
         url = k12._extract_invite_url('open https://chatgpt.com/k12-invite?foo=1&wId=ws-123&amp;x=2 now')
@@ -139,6 +207,69 @@ class K12Tests(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertEqual(mark.call_args.kwargs["status"], "at_invalid")
+
+    def test_run_k12_leave_marks_left(self):
+        with patch("sms_tool.k12._delete_workspace_user", return_value={
+            "ok": True,
+            "email": "a@example.com",
+            "workspace_id": "ws-1",
+            "route": "leave",
+            "status": 200,
+        }) as delete, patch("sms_tool.k12.mark_k12_status") as mark:
+            result = k12.run_k12_batch(
+                [{"email": "a@example.com", "access_token": "at", "user_id": "user-1"}],
+                ["ws-1"],
+                route="leave",
+                workers=1,
+            )
+
+        self.assertTrue(result["ok"])
+        delete.assert_called_once()
+        self.assertEqual(mark.call_args.kwargs["status"], "k12_left")
+
+    def test_run_k12_leave_allows_empty_workspace_ids(self):
+        with patch("sms_tool.k12._delete_workspace_user", return_value={
+            "ok": True,
+            "email": "a@example.com",
+            "workspace_id": "current-ws",
+            "route": "leave",
+            "status": 200,
+        }) as delete, patch("sms_tool.k12.mark_k12_status"):
+            result = k12.run_k12_batch(
+                [{"email": "a@example.com", "access_token": "at", "user_id": "user-1"}],
+                [],
+                route="leave",
+                workers=1,
+            )
+
+        self.assertTrue(result["ok"])
+        delete.assert_called_once()
+        self.assertEqual(result["results"][0]["workspace_id"], "current-ws")
+
+    def test_run_k12_join_verify_failure_blocks_export(self):
+        with patch("sms_tool.k12._post_workspace_invite", return_value={
+            "ok": True,
+            "email": "a@example.com",
+            "workspace_id": "ws-1",
+            "route": "accept",
+            "status": 200,
+        }), patch("sms_tool.k12._verify_workspace_session", return_value={
+            "ok": False,
+            "expected_workspace_id": "ws-1",
+            "actual_workspace_id": "personal",
+            "error": "workspace_not_switched",
+        }), patch("sms_tool.k12.export_k12_cpa_json") as export, patch("sms_tool.k12.mark_k12_status") as mark:
+            result = k12.run_k12_batch(
+                [{"email": "a@example.com", "access_token": "at", "cookie_header": "session=1"}],
+                ["ws-1"],
+                route="accept",
+                workers=1,
+                verify_session=True,
+            )
+
+        self.assertFalse(result["ok"])
+        export.assert_not_called()
+        self.assertEqual(mark.call_args.kwargs["status"], "k12_verify_failed")
 
     def test_build_k12_cpa_json_matches_reference_shape(self):
         access = _jwt({"exp": 1782973350, "https://api.openai.com/profile": {"email": "a@example.com"}})
