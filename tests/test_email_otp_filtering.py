@@ -1,10 +1,12 @@
 import unittest
 from sms_tool import codex_oauth
 from sms_tool import mailbox as mailbox_module
-from sms_tool.mailbox import MailboxAccount, _email_otp_candidate
+from sms_tool.mailbox import MailboxAccount, _email_otp_candidate, _extract_otp_from_text
 from sms_tool.registration import (
     LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
     REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
+    REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+    _registration_otp_issued_after,
 )
 
 
@@ -38,9 +40,31 @@ class EmailOtpFilteringTests(unittest.TestCase):
         self.assertIsNone(login_candidate)
         self.assertEqual(verification_candidate["otp"], "123456")
 
+    def test_registration_poll_keyword_accepts_login_code_fallback(self):
+        mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
+
+        login_candidate = _email_otp_candidate(
+            mailbox,
+            self._message("Your temporary ChatGPT login code"),
+            keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(login_candidate["otp"], "123456")
+
+    def test_cfworker_registration_otp_issued_after_has_small_grace(self):
+        mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
+        adjusted = _registration_otp_issued_after(mailbox, 1779934004)
+
+        self.assertEqual(adjusted, 1779933994)
+
     def test_login_keyword_is_separate_from_registration_keyword(self):
         self.assertEqual(codex_oauth.LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, LOGIN_EMAIL_OTP_SUBJECT_KEYWORD)
         self.assertNotEqual(LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD)
+
+    def test_otp_extractor_ignores_hex_color_context(self):
+        text = "style=\"color:#123456\" Your ChatGPT verification code is 654321."
+        self.assertEqual(_extract_otp_from_text(text), "654321")
 
     def test_issued_after_filters_pre_send_mail(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")

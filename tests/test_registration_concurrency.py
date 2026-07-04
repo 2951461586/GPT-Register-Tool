@@ -104,7 +104,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         )
         self.assertEqual(_email_otp_send_url({}, "https://auth.openai.com"), "")
 
-    def test_passwordless_email_otp_resend_400_falls_back_to_send(self):
+    def test_passwordless_email_otp_resend_400_falls_back_to_send_when_opted_in(self):
         resend = Mock(status_code=400, text='{"error":"bad resend"}')
         resend.json.return_value = {"error": "bad resend"}
         send = Mock(status_code=200, text='{"success":true}')
@@ -115,7 +115,8 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             calls.append(url)
             return resend if url.endswith("/resend") else send
 
-        with patch("sms_tool.registration.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.registration.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}), \
+             patch("sms_tool.registration.request_with_retry", side_effect=fake_request):
             result = _send_registration_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -126,7 +127,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         self.assertIs(result, send)
         self.assertTrue(calls[0].endswith("/api/accounts/email-otp/resend"))
-        self.assertTrue(calls[1].endswith("/api/accounts/email-otp/send"))
+        self.assertTrue(calls[1].endswith("/api/accounts/passwordless/send-otp"))
 
     def test_passwordless_email_otp_resend_is_json_request(self):
         response = Mock(status_code=200, text='{"success":true}')

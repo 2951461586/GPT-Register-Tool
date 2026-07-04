@@ -1,0 +1,145 @@
+import argparse
+import time
+
+from .mail_otp import _email_otp_candidate, _message_id
+from .mailbox_types import MailboxAccount
+from .providers.cfworker_mailbox import CFWorkerMailboxClient
+
+
+def _cfworker_cfg(email_cfg):
+    nested = email_cfg.get("cfworker") if isinstance(email_cfg.get("cfworker"), dict) else {}
+    return {
+        "worker_url": str(nested.get("worker_url") or email_cfg.get("cfworker_url") or "").strip(),
+        "domain": str(nested.get("domain") or email_cfg.get("cfworker_domain") or "edu.liziai.cloud").strip().lstrip("@"),
+        "admin_token": str(nested.get("admin_token") or email_cfg.get("cfworker_admin_token") or "").strip(),
+        "cf_api_token": str(nested.get("cf_api_token") or email_cfg.get("cfworker_api_token") or "").strip(),
+    }
+
+
+def _cfworker_client(email_cfg, proxy=None):
+    cfg = _cfworker_cfg(email_cfg)
+    return CFWorkerMailboxClient(
+        cfg["worker_url"],
+        admin_token=cfg["admin_token"],
+        cf_api_token=cfg["cf_api_token"],
+        timeout=8,
+        proxy=proxy,
+    )
+
+
+def _cfworker_otp_settle_seconds(email_cfg):
+    try:
+        return max(0.0, float(email_cfg.get("cfworker_otp_settle_seconds", 3)))
+    except Exception:
+        return 3.0
+
+
+def _cfworker_poll_proxy_enabled(email_cfg):
+    value = email_cfg.get("cfworker_poll_proxy", True)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _cfworker_direct_fallback_enabled(email_cfg):
+    value = email_cfg.get("cfworker_direct_fallback", False)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _create_cfworker_mailboxes(args=None, email_cfg=None, client_func=None):
+    args = args or argparse.Namespace()
+    email_cfg = email_cfg or {}
+    cfg = _cfworker_cfg(email_cfg)
+    domain = str(getattr(args, "cfworker_domain", None) or cfg["domain"] or "edu.liziai.cloud").strip().lstrip("@").lower()
+    quantity = max(1, int(getattr(args, "count", None) or 1))
+    print(f"[*] CFWorker mailbox batch: domain={domain} quantity={quantity}")
+    client = (client_func or (lambda proxy=None: _cfworker_client(email_cfg, proxy=proxy)))(proxy=getattr(args, "proxy", None))
+    emails = client.create_mailboxes(count=quantity, domain=domain)
+    accounts = [
+        MailboxAccount(
+            email=email,
+            source=cfg["worker_url"],
+            provider="cfworker",
+        )
+        for email in emails
+    ]
+    for account in accounts:
+        print(f"[*] CFWorker mailbox: {account.email}")
+    return accounts
+
+
+def _fetch_cfworker_messages(mailbox, limit=25, proxy=None, email_cfg=None, client_func=None):
+    email_cfg = email_cfg or {}
+    client_func = client_func or (lambda proxy=None: _cfworker_client(email_cfg, proxy=proxy))
+    if not _cfworker_poll_proxy_enabled(email_cfg):
+        return client_func(proxy=None).fetch_messages(mailbox.email, limit=limit)
+    try:
+        return client_func(proxy=proxy).fetch_messages(mailbox.email, limit=limit)
+    except Exception as exc:
+        if not proxy or not _cfworker_direct_fallback_enabled(email_cfg):
+            raise
+        print(f"[cfworker proxy poll error: {exc}; retrying direct]")
+        return client_func(proxy=None).fetch_messages(mailbox.email, limit=limit)
+
+
+def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, seen_message_id="", proxy=None, fetch_messages_func=None):
+    fetch_messages_func = fetch_messages_func or (lambda mb, **kwargs: [])
+    for msg in fetch_messages_func(mailbox, proxy=proxy):
+        if seen_message_id and _message_id(msg) == seen_message_id:
+            continue
+        candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+        if candidate:
+            return candidate
+    return None
+
+
+def _poll_cfworker_otp(
+    mailbox,
+    subject_keyword="",
+    timeout=300,
+    issued_after_unix=0,
+    proxy=None,
+    email_cfg=None,
+    otp_poll_interval_func=None,
+    fetch_messages_func=None,
+):
+    keyword = (subject_keyword or "").lower()
+    deadline = time.time() + timeout
+    interval = (otp_poll_interval_func or (lambda: 2.0))()
+    settle_seconds = _cfworker_otp_settle_seconds(email_cfg or {})
+    seen_message_id = getattr(mailbox, "seen_message_id", "")
+    while time.time() < deadline:
+        try:
+            candidate = _latest_cfworker_otp_candidate(
+                mailbox,
+                keyword=keyword,
+                issued_after_unix=issued_after_unix,
+                seen_message_id=seen_message_id,
+                proxy=proxy,
+                fetch_messages_func=fetch_messages_func,
+            )
+            if candidate:
+                stable_until = time.time() + settle_seconds
+                while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
+                    time.sleep(min(interval, max(0.0, stable_until - time.time())))
+                    newer = _latest_cfworker_otp_candidate(
+                        mailbox,
+                        keyword=keyword,
+                        issued_after_unix=issued_after_unix,
+                        seen_message_id=seen_message_id,
+                        proxy=proxy,
+                        fetch_messages_func=fetch_messages_func,
+                    )
+                    if newer and newer.get("id") != candidate.get("id"):
+                        candidate = newer
+                        stable_until = time.time() + settle_seconds
+                print(f" code:{candidate['otp']}!")
+                return candidate["otp"]
+        except Exception as e:
+            print(f"[mailbox poll error: {e}]")
+        print(".", end="", flush=True)
+        time.sleep(interval)
+    print(" timeout")
+    return None

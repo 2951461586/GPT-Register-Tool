@@ -111,11 +111,15 @@ def main():
     parser.add_argument("--one-click-k12", action="store_true", help="Batch request/accept ChatGPT workspace (K12) invites using saved account AT")
     parser.add_argument("--k12-workspace-ids", default=None, help="Workspace ID list for --one-click-k12, separated by comma or newline")
     parser.add_argument("--k12-workspace-file", default=None, help="Workspace ID file for --one-click-k12")
-    parser.add_argument("--k12-route", default="request", choices=["request", "accept"], help="K12 invite route: request or accept")
+    parser.add_argument("--k12-route", default="request", choices=["request", "accept", "leave"], help="K12 route: request, accept, or leave workspace")
     parser.add_argument("--k12-retries", type=int, default=2, help="Retry count for each K12 request after the first attempt")
     parser.add_argument("--k12-retry-backoff", type=float, default=5.0, help="Seconds to wait between K12 retries")
     parser.add_argument("--k12-auto-accept", action="store_true", help="After request succeeds, wait k12-invite mail and accept/open invite")
     parser.add_argument("--k12-invite-timeout", type=int, default=240, help="Seconds to wait for K12 invite mail when --k12-auto-accept is enabled")
+    parser.add_argument("--no-k12-verify-session", action="store_true", help="Do not verify /api/auth/session switched to the target workspace after K12 join")
+    parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
+    parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
+    parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
@@ -185,6 +189,9 @@ def main():
         return
     if args.one_click_k12:
         _one_click_k12(args)
+        return
+    if args.convert_session_json:
+        _convert_session_json(args)
         return
 
     pipeline_started = time.time()
@@ -1062,12 +1069,15 @@ def _one_click_k12(args):
     if args.email:
         emails = [(args.email or "").strip()]
     emails = _unique_emails(emails)
-    workspace_ids = parse_workspace_ids(args.k12_workspace_ids or "", args.k12_workspace_file or "")
+    if args.k12_route == "leave" and not (args.k12_workspace_ids or args.k12_workspace_file):
+        workspace_ids = [""]
+    else:
+        workspace_ids = parse_workspace_ids(args.k12_workspace_ids or "", args.k12_workspace_file or "")
     accounts = load_k12_accounts(emails=emails, session_file=args.session_file or "")
     if not accounts:
         print("[Error] no account with access_token was found for --one-click-k12")
         raise SystemExit(2)
-    if not workspace_ids:
+    if not workspace_ids and args.k12_route != "leave":
         print("[Error] no workspace id was found for --one-click-k12")
         raise SystemExit(2)
     summary = run_k12_batch(
@@ -1082,8 +1092,33 @@ def _one_click_k12(args):
         auto_accept=bool(args.k12_auto_accept),
         invite_timeout=max(10, int(args.k12_invite_timeout or 240)),
         export_dir=args.codex_export_dir or "",
+        verify_session=not bool(args.no_k12_verify_session),
     )
     if summary.get("failed", 0):
+        raise SystemExit(3)
+
+
+def _convert_session_json(args):
+    from .session_converter import convert_json_file
+
+    result = convert_json_file(args.convert_session_json, fmt=args.convert_format)
+    output_text = result.get("outputText") or ""
+    if args.convert_output:
+        target = Path(args.convert_output)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(output_text, encoding="utf-8")
+        print(json.dumps({
+            "ok": bool(result.get("converted")),
+            "format": args.convert_format,
+            "converted": len(result.get("converted") or []),
+            "skipped": result.get("skipped") or [],
+            "output": str(target),
+        }, ensure_ascii=False, indent=2))
+    else:
+        print(output_text)
+        if result.get("skipped"):
+            print(json.dumps({"skipped": result.get("skipped")}, ensure_ascii=False, indent=2), file=sys.stderr)
+    if not result.get("converted"):
         raise SystemExit(3)
 
 

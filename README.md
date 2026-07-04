@@ -11,6 +11,20 @@ mailbox source -> ChatGPT email OTP registration -> /api/auth/session access tok
 
 The project does not require machine-specific absolute paths. Runtime data is kept under `sessions/` and `runtime/` by default and is ignored by Git.
 
+## 中文运行要点（近期改造后）
+
+本项目当前以桌面端 `SmsWorkbench` + Python CLI 为主线：桌面端只负责选择账号、弹窗配置、启动命令和展示状态；注册、邮箱收信、K12、导出、支付链接等协议逻辑都在 `sms_tool/` 内维护。
+
+近期重点改造：
+
+- **一键注册**：默认走 HAR 对齐后的 `login_or_signup / passwordless_signup` 邮箱 OTP 流程；支持 `--registration-at-only` 只保存 AT，不强制生成支付链接；桌面端可选择“跳过支付链接/不生成支付链接”。
+- **Sentinel**：优先使用 QuickJS Sentinel SDK 生成 `username_password_create` / `oauth_create_account` 所需 token；失败时再按旧逻辑回退。
+- **邮箱 OTP**：CFWorker 域名邮箱、LuckMail、Microsoft Graph/OAuth、Outlook IMAP 都通过统一 mailbox seam 轮询；CFWorker 已兼容 `verification code` 与 `login code` 两类主题，并为邮件服务端时间戳提供小幅容差，避免刚发码就被 `issued_after` 误过滤。
+- **CFWorker 域名邮箱**：导入格式支持 `cfworker://user@domain`；可用 `--buy-cfworker-mailbox --cfworker-domain <domain>` 购买/创建。若 OTP 验证通过但最终 `create_account` 返回 `registration_disallowed`，说明服务端拒绝该邮箱/注册上下文，不是收件失败。
+- **一键 K12**：支持 workspace `request` / `accept` / `leave`，可配置 workspace ID、重试/backoff、请求成功后自动收邀请邮件并接受、成功后 CPA/K12 JSON 导出、以及验证是否真的切到目标 workspace。
+- **导出账号 / CPA JSON**：`sms_tool/session_converter.py` 引入多格式转换核心，导出逻辑可以识别更宽松的 session 对象形态；K12 成功后会使用 K12 专用 CPA JSON 形态。
+- **模块拆分**：`registration.py`、`mailbox.py`、`k12.py` 已拆成更细的协议/adapter 模块，原文件保留兼容 wrapper，旧 CLI/WPF/测试 patch seam 仍可用。
+
 ## Quick Start
 
 1. Clone the repository.
@@ -41,6 +55,8 @@ Required choices:
 - `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
+- `email_registration.cfworker_*`: CFWorker domain mailbox settings. `cfworker_poll_proxy` controls whether inbox polling uses the selected proxy, `cfworker_direct_fallback` allows direct retry after proxy failure, and `cfworker_otp_issued_after_grace_seconds` controls the timestamp grace window used for fresh OTP filtering.
+- `k12.workspace_ids`: default workspace ID for one-click K12. CLI can override with `--k12-workspace-ids` or `--k12-workspace-file`; desktop dialog can pass request/accept/leave route, retry/backoff, auto-accept, and verify options.
 - `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR. The desktop `[配置] -> [代理/支付] -> 订单生成地区` dropdown supports Japan, United States, Australia, Germany, France, United Kingdom, India, and Brazil.
 - `paypal.link_generation_type`: Desktop `[配置] -> [代理/支付] -> PayPal生成类型` selector. `hosted_long_url`（长链） runs `checkout -> stripe init -> stripe_hosted_url` and stores a `pay.openai.com/c/pay/...` hosted long URL. `paypal_direct`（PP直链） runs `checkout -> stripe init -> pm create(type=paypal) -> confirm`, follows the Stripe `pm-redirects` URL, and stores a `paypal.com/agreements/approve?ba_token=...` approval URL without logging the full token. `paypal_direct_zero_due`（PP直链-强制0元试用） uses the same PP直链 flow but keeps `require_zero_due=true`; if Stripe init does not return `amount_due=0`, generation fails with `checkout_not_zero_due` instead of outputting a non-trial BA link. In this strict mode a failed regeneration does not fall back to hosted long-link mode and does not reuse an older saved BA link.
 - `paypal.stage_proxies`: 分段代理路由配置，支持三段式代理池:
@@ -132,6 +148,16 @@ Chatai mailbox pool:
 email----password----client_id----refresh_token
 ```
 
+CFWorker domain mailbox:
+
+```text
+cfworker://oai-xxxx@edu.liziai.cloud
+```
+
+CFWorker mailboxes are polled through the configured Worker endpoint. OTP extraction accepts both `Your temporary ChatGPT verification code` and `Your temporary ChatGPT login code`, and `email_registration.cfworker_otp_issued_after_grace_seconds` gives the provider a small timestamp grace window so a message received 1-10 seconds before the local resend-return time is still considered fresh.
+
+Google/Gmail-style mailboxes are not a separate provider in the default path. If used, import them only through a provider that can expose messages in one of the supported mailbox seams (for example a Worker/API adapter) rather than assuming a raw `email----password----2FA` line is directly readable by this tool.
+
 The parser accepts UTF-8 with or without BOM. It also repairs the known malformed Chatai alias form:
 
 ```text
@@ -158,6 +184,18 @@ Buy LuckMail mailbox and register:
 
 ```powershell
 python chatgpt_phone_reg.py --buy-luckmail-mailbox --count 1
+```
+
+Create a CFWorker domain mailbox and register without generating a payment link:
+
+```powershell
+python chatgpt_phone_reg.py --buy-cfworker-mailbox --cfworker-domain edu.liziai.cloud --count 1 --workers 1 --registration-at-only --no-phone-reuse --skip-paypal-link
+```
+
+Register again from selected/imported CFWorker mailbox lines:
+
+```powershell
+python chatgpt_phone_reg.py --chatai-mailbox-file selected_mailboxes.txt --count 1 --workers 1 --registration-at-only --no-phone-reuse --skip-paypal-link
 ```
 
 Rebuild SQLite index from existing session JSON files:
@@ -323,6 +361,21 @@ CPA import now accepts existing session JSON that contains an `access_token` eve
 is missing. If the source file does not already have `id_token`, the tool synthesizes a CPA-compatible
 one when possible and uploads the normalized JSON directly to CPA.
 
+Run one-click K12 workspace request/accept/leave:
+
+```powershell
+# request: 向目标 workspace 发起加入/邀请请求
+python chatgpt_phone_reg.py --one-click-k12 --k12-route request --k12-workspace-ids 631e1603-06cf-4f0b-b79b-d09fbfcfe98d --email user@example.com --session-file sessions/session_user.json --workers 1 --k12-retries 2 --k12-retry-backoff 5 --k12-invite-timeout 240
+
+# accept: 直接接受/进入目标 workspace
+python chatgpt_phone_reg.py --one-click-k12 --k12-route accept --k12-workspace-ids 631e1603-06cf-4f0b-b79b-d09fbfcfe98d --email user@example.com
+
+# leave: 退出当前或指定 workspace
+python chatgpt_phone_reg.py --one-click-k12 --k12-route leave --email user@example.com
+```
+
+K12 成功后会更新 SQLite 状态列：`k12_requested`、`k12_joined`、`k12_left` 或 `k12_verify_failed`。当启用自动收邀请邮件时，流程会先 request，再从 mailbox provider 中查找 k12-invite 邮件，解析邀请链接并打开/接受；当启用 workspace verify 时，会刷新 `/api/auth/session` 并确认当前账号实际切到目标 workspace。K12 CPA JSON 默认导出到 `sessions/codex_exports/` 或传入的 `--export-dir`。
+
 ## WPF Behavior
 
 `SmsWorkbench` is a launcher and management UI. It reads `config.json`, starts the Python CLI, displays mailbox/session/SQLite state, and exposes maintenance actions.
@@ -353,8 +406,10 @@ The project is split into explicit responsibility seams:
 
 - `chatgpt_phone_reg.py`: compatibility entrypoint that only delegates into `sms_tool.cli`.
 - `sms_tool.cli`: argument parsing and command orchestration. Optional Codex, CPA, PayPal payment, and session-refresh modules are imported lazily only by the command that needs them.
-- `sms_tool.mailbox`: mailbox pool parsing, LuckMail/token mailbox handling, Microsoft token exchange, and OTP polling.
-- `sms_tool.registration`: ChatGPT signup protocol, email OTP validation, access-token retrieval, and batch worker limits.
+- `sms_tool.mailbox`: mailbox provider routing and OTP polling compatibility seam. Format parsing, LuckMail, CFWorker, Microsoft Graph, Outlook IMAP, and OTP text extraction live in focused modules such as `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `outlook_imap.py`, and `mail_otp.py`.
+- `sms_tool.registration`: ChatGPT signup orchestration compatibility seam. Auth flow, account creation/session fetch, batch runner, Sentinel token extraction, auth-state dump, and OTP strategy live in `auth_flow.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `auth_state.py`, and `otp_strategy.py`.
+- `sms_tool.k12`: K12 batch orchestration compatibility seam. HTTP request/accept/leave lives in `k12_client.py`, invite-mail handling lives in `k12_invite.py`, workspace verification lives in `k12_verify.py`, identity parsing lives in `k12_identity.py`, and CPA JSON export lives in `k12_export.py`.
+- `sms_tool.session_converter`: export-account conversion seam; normalizes supported session JSON shapes into CPA/Codex/K12-compatible payloads.
 - `sms_tool.account_seed`: shared seam for loading session JSON/SQLite account seed data and extracting access tokens.
 - `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal/GoPay/UPI link generation and safe persisted-link regeneration.
 - `sms_tool.paypal_browser_auto`: default PayPal one-click payment adapter. It uses existing saved payment links and delegates page automation to `sms_tool.paypal_auto`.

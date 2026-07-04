@@ -42,8 +42,9 @@ These directories are runtime state and are ignored by Git:
 | Group | Files | Boundary |
 | --- | --- | --- |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config.py`, `paths.py` | Parse commands and resolve config/paths; no vendor protocol implementation. |
-| Mailbox and phone inventory | `mailbox.py`, `providers/`, `smsbower.py`, `nextsms.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; no account persistence except through explicit callers. |
-| Registration/auth | `registration.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, session refresh, optional phone verification. |
+| Mailbox and phone inventory | `mailbox.py`, `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `nextsms.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; no account persistence except through explicit callers. |
+| Registration/auth | `registration.py`, `auth_flow.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification. |
+| K12 workspace | `k12.py`, `k12_client.py`, `k12_invite.py`, `k12_verify.py`, `k12_identity.py`, `k12_export.py` | Workspace request/accept/leave, invite-mail handling, workspace verification, K12 CPA export. |
 | Payment links | `gen_pp_link.py`, `paypal_links.py` | Create/store hosted payment links from account access tokens; no PayPal account signup. |
 | Payment execution | `paypal_browser_auto.py`, `paypal_auto.py`, `paypal_nocard.py`, `gopay_payment.py`, `gopay_wa_rebind.py`, `grpcurl_client.py` | Execute explicit payment commands only; use account seed and storage seams. |
 | Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `import_targets.py`, `account_scan.py` | Normalize account/session state and external import/export payloads. |
@@ -66,7 +67,10 @@ These directories are runtime state and are ignored by Git:
    CLI/backend rather than duplicating protocol logic in C#.
 3. If it talks to a provider, isolate it under `sms_tool/providers/` or
    `services/<provider>/` and expose a small public method.
-4. If it persists account state, route through `sms_tool.storage` or a documented
+4. If it extends mailbox/registration/K12 behavior, prefer adding a focused
+   module behind the existing compatibility seam (`mailbox.py`,
+   `registration.py`, or `k12.py`) rather than growing those seam files.
+5. If it persists account state, route through `sms_tool.storage` or a documented
    storage seam.
-5. If it is runtime output, put it under `runtime/` or `sessions/`, not in source
+6. If it is runtime output, put it under `runtime/` or `sessions/`, not in source
    directories.

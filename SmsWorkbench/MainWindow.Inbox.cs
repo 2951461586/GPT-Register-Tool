@@ -1,0 +1,523 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Globalization;
+using System.Windows.Data;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+using FluentWindow = Wpf.Ui.Controls.FluentWindow;
+
+namespace SmsWorkbench
+{
+    public partial class MainWindow
+    {
+        // Inbox view and mail detail dialog
+        private async void ShowInboxDialog(PoolRow row)
+        {
+            var dialog = new Window
+            {
+                Title = "收件箱 - " + row.Identifier,
+                Owner = this,
+                Width = 860,
+                Height = 640,
+                MinWidth = 700,
+                MinHeight = 500,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(10) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new TextBlock
+            {
+                Text = "正在加载收件箱...",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            Grid.SetRow(header, 0);
+            root.Children.Add(header);
+
+            var mailGrid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                CanUserAddRows = false,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                IsReadOnly = true,
+                RowHeight = 28,
+                GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+                AlternatingRowBackground = (System.Windows.Media.Brush)FindResource("GridAltBg"),
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderThickness = new Thickness(0)
+            };
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = "时间", Binding = new System.Windows.Data.Binding("ReceivedAt"), Width = 150 });
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = "发件人", Binding = new System.Windows.Data.Binding("From"), Width = 200 });
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = "主题", Binding = new System.Windows.Data.Binding("Subject"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            Grid.SetRow(mailGrid, 1);
+            root.Children.Add(mailGrid);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            var refreshBtn = new Button { Content = "刷新", Width = 72 };
+            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            actions.Children.Add(refreshBtn);
+            actions.Children.Add(closeBtn);
+            Grid.SetRow(actions, 2);
+            root.Children.Add(actions);
+
+            var mailItems = new ObservableCollection<MailItem>();
+            mailGrid.ItemsSource = mailItems;
+
+            closeBtn.Click += (_, __) => dialog.Close();
+
+            async Task LoadEmails()
+            {
+                if (IsCfWorkerRow(row))
+                {
+                    header.Text = "正在获取 CFWorker 邮件...";
+                    try
+                    {
+                        mailItems.Clear();
+                        foreach (MailItem item in await FetchCfWorkerInbox(row.Identifier, 25))
+                        {
+                            mailItems.Add(item);
+                        }
+                        header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
+                    }
+                    catch (Exception ex)
+                    {
+                        header.Text = "获取邮件失败：" + ex.Message;
+                        Log("CFWorker收件箱获取失败：" + ex.Message);
+                    }
+                    return;
+                }
+
+                header.Text = "正在刷新令牌...";
+                string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+                var tokenBody = new Dictionary<string, string>
+                {
+                    ["grant_type"] = "refresh_token",
+                    ["client_id"] = row.ClientId,
+                    ["refresh_token"] = row.RawRefreshToken,
+                    ["scope"] = "https://graph.microsoft.com/.default offline_access"
+                };
+
+                try
+                {
+                    mailItems.Clear();
+                    foreach (MailItem item in await FetchBackendInbox(row, 20))
+                    {
+                        mailItems.Add(item);
+                    }
+                    header.Text = row.Identifier + " - " + mailItems.Count + " messages";
+
+                    if (mailItems.Count < 0)
+                    {
+                    var tokenResp = await httpClient.PostAsync(tokenUrl, new FormUrlEncodedContent(tokenBody));
+                    string tokenJson = await tokenResp.Content.ReadAsStringAsync();
+                    if (!tokenResp.IsSuccessStatusCode)
+                    {
+                        header.Text = "令牌刷新失败 (" + (int)tokenResp.StatusCode + ")";
+                        Log("收件箱令牌刷新失败：" + tokenJson);
+                        return;
+                    }
+
+                    using var tokenDoc = JsonDocument.Parse(tokenJson);
+                    string accessToken = tokenDoc.RootElement.GetProperty("access_token").GetString() ?? "";
+
+                    header.Text = "正在获取邮件...";
+                    string mailUrl = "https://graph.microsoft.com/v1.0/me/messages?$top=20&$orderby=receivedDateTime desc&$select=receivedDateTime,from,subject,bodyPreview";
+                    var request = new HttpRequestMessage(HttpMethod.Get, mailUrl);
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                    var mailResp = await httpClient.SendAsync(request);
+                    string mailJson = await mailResp.Content.ReadAsStringAsync();
+
+                    if (!mailResp.IsSuccessStatusCode)
+                    {
+                        header.Text = "获取邮件失败 (" + (int)mailResp.StatusCode + ")";
+                        Log("收件箱获取失败：" + mailJson);
+                        return;
+                    }
+
+                    mailItems.Clear();
+                    using var mailDoc = JsonDocument.Parse(mailJson);
+                    if (mailDoc.RootElement.TryGetProperty("value", out JsonElement values))
+                    {
+                        foreach (JsonElement msg in values.EnumerateArray())
+                        {
+                            string received = msg.TryGetProperty("receivedDateTime", out JsonElement dt) ? dt.GetString() ?? "" : "";
+                            string from = "";
+                            if (msg.TryGetProperty("from", out JsonElement fromObj) &&
+                                fromObj.TryGetProperty("emailAddress", out JsonElement addr) &&
+                                addr.TryGetProperty("address", out JsonElement addrStr))
+                            {
+                                from = addrStr.GetString() ?? "";
+                            }
+                            string subject = msg.TryGetProperty("subject", out JsonElement subj) ? subj.GetString() ?? "" : "";
+                            string preview = msg.TryGetProperty("bodyPreview", out JsonElement bp) ? bp.GetString() ?? "" : "";
+
+                            if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
+                            mailItems.Add(new MailItem { ReceivedAt = received, From = from, Subject = subject, BodyPreview = preview });
+                        }
+                    }
+                    header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    header.Text = "加载失败：" + ex.Message;
+                    Log("收件箱加载异常：" + ex.Message);
+                }
+            }
+
+            refreshBtn.Click += async (_, __) => await LoadEmails();
+            mailGrid.MouseDoubleClick += (_, __) =>
+            {
+                if (mailGrid.SelectedItem is MailItem item)
+                {
+                    ShowMailDetailDialog(item);
+                }
+            };
+
+            dialog.Content = root;
+            dialog.Show();
+            await LoadEmails();
+        }
+
+        private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit)
+        {
+            string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
+            if (!File.Exists(script)) throw new FileNotFoundException("Backend script not found", script);
+            var args = new List<string> { "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString() };
+            string mailboxLine = FindMailboxLineForRow(row);
+            if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
+            {
+                mailboxLine = row.RawLine;
+            }
+            string mailboxArg = MailboxArgForLine(mailboxLine);
+            string tempMailboxFile = "";
+            if (mailboxArg.Length > 0)
+            {
+                tempMailboxFile = Path.Combine(Path.GetTempPath(), "view_inbox_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".txt");
+                File.WriteAllText(tempMailboxFile, mailboxLine.Trim() + Environment.NewLine, new UTF8Encoding(false));
+                args.AddRange(new[] { mailboxArg, tempMailboxFile });
+            }
+            AddSessionFileArg(args, row);
+            AddProxy(args);
+            var psi = new ProcessStartInfo
+            {
+                FileName = "python",
+                Arguments = Quote(script) + " " + JoinArgs(args),
+                WorkingDirectory = rootDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            };
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+            string stdout = await process.StandardOutput.ReadToEndAsync();
+            string stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException((stdout + "\n" + stderr).Trim());
+            }
+            using JsonDocument doc = JsonDocument.Parse(stdout);
+            if (!doc.RootElement.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
+            {
+                string error = JsonString(doc.RootElement, "error");
+                throw new InvalidOperationException(error.Length > 0 ? error : stdout.Trim());
+            }
+            var items = new List<MailItem>();
+            if (doc.RootElement.TryGetProperty("messages", out JsonElement messages) && messages.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement msg in messages.EnumerateArray())
+                {
+                    string received = JsonString(msg, "receivedDateTime");
+                    if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
+                    items.Add(new MailItem
+                    {
+                        ReceivedAt = received,
+                        From = JsonString(msg, "from"),
+                        Subject = JsonString(msg, "subject"),
+                        BodyPreview = JsonString(msg, "bodyPreview")
+                    });
+                }
+            }
+            return items;
+        }
+
+        private bool IsCfWorkerRow(PoolRow row)
+        {
+            if (row == null) return false;
+            return row.MailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase)
+                || row.AccountType.Contains("CFWorker")
+                || row.Identifier.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
+                || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<List<MailItem>> FetchCfWorkerInbox(string email, int limit)
+        {
+            var emailSection = GetSection(ReadJsonObject(Path.Combine(rootDir, "config.json")), "email_registration");
+            string baseUrl = GetString(emailSection, "cfworker_url").Trim().TrimEnd('/');
+            string adminToken = GetString(emailSection, "cfworker_admin_token").Trim();
+            string cfToken = GetString(emailSection, "cfworker_api_token").Trim();
+            if (baseUrl.Length == 0) throw new InvalidOperationException("config.json 缺少 email_registration.cfworker_url");
+
+            string normalizedEmail = email.Trim().ToLowerInvariant();
+            string encoded = Uri.EscapeDataString(normalizedEmail);
+            string domain = normalizedEmail.Contains("@") ? normalizedEmail.Substring(normalizedEmail.LastIndexOf('@') + 1) : "";
+            string[] paths =
+            {
+                "/admin/emails?page=1&domain=" + Uri.EscapeDataString(domain) + "&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
+                "/admin/emails?page=1&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
+                "/api/messages?email=" + encoded + "&limit=" + limit,
+                "/api/messages?address=" + encoded + "&limit=" + limit,
+                "/api/messages?to_address=" + encoded + "&limit=" + limit,
+                "/api/emails/" + encoded + "/messages?limit=" + limit,
+                "/api/mailboxes/" + encoded + "/messages?limit=" + limit,
+                "/api/mailbox/" + encoded + "?limit=" + limit,
+                "/api/inbox/" + encoded + "?limit=" + limit,
+                "/api/messages/" + encoded + "?limit=" + limit,
+                "/messages/" + encoded + "?limit=" + limit,
+                "/inbox/" + encoded + "?limit=" + limit
+            };
+
+            string lastError = "";
+            foreach (string path in paths)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + path);
+                request.Headers.Accept.ParseAdd("application/json");
+                if (adminToken.Length > 0)
+                {
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+                    request.Headers.TryAddWithoutValidation("X-Admin-Token", adminToken);
+                }
+                if (cfToken.Length > 0)
+                {
+                    request.Headers.TryAddWithoutValidation("X-CF-API-Token", cfToken);
+                }
+
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
+                using HttpResponseMessage response = await httpClient.SendAsync(request, cts.Token);
+                string text = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    lastError = ((int)response.StatusCode) + " " + response.ReasonPhrase;
+                    continue;
+                }
+                using JsonDocument doc = JsonDocument.Parse(text.Length == 0 ? "[]" : text);
+                var items = ExtractCfWorkerMailItems(doc.RootElement, email, limit);
+                if (items.Count > 0 || LooksEmptyMessageList(doc.RootElement)) return items;
+            }
+            throw new InvalidOperationException(lastError.Length > 0 ? lastError : "未找到可用的 CFWorker 收件箱接口");
+        }
+
+        private List<MailItem> ExtractCfWorkerMailItems(JsonElement root, string email, int limit)
+        {
+            var array = FindMessageArray(root);
+            var items = new List<MailItem>();
+            if (array.ValueKind != JsonValueKind.Array) return items;
+            foreach (JsonElement msg in array.EnumerateArray())
+            {
+                if (items.Count >= limit) break;
+                string to = JsonStringAny(msg, "to_address", "recipient", "mailbox", "email", "address", "to");
+                if (to.Length > 0 && !to.Contains(email, StringComparison.OrdinalIgnoreCase)) continue;
+                string subject = JsonStringAny(msg, "subject", "title");
+                string from = JsonStringAny(msg, "from_email", "from_address", "sender", "from");
+                string received = JsonStringAny(msg, "receivedDateTime", "received_at", "created_at", "date", "timestamp");
+                string body = JsonStringAny(msg, "bodyPreview", "preview", "text", "content", "body", "html", "extracted_json");
+                if (msg.TryGetProperty("body", out JsonElement bodyObj) && bodyObj.ValueKind == JsonValueKind.Object)
+                {
+                    body = JsonStringAny(bodyObj, "content", "text", "html");
+                }
+                if (from.StartsWith("{")) from = "";
+                received = FormatCfWorkerReceivedAt(received);
+                items.Add(new MailItem
+                {
+                    ReceivedAt = received,
+                    From = from,
+                    Subject = subject,
+                    BodyPreview = body
+                });
+            }
+            return items;
+        }
+
+        private string FormatCfWorkerReceivedAt(string value)
+        {
+            string text = (value ?? "").Trim();
+            if (long.TryParse(text, out long epoch))
+            {
+                try
+                {
+                    DateTimeOffset dto = epoch > 10000000000L
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(epoch)
+                        : DateTimeOffset.FromUnixTimeSeconds(epoch);
+                    return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                }
+                catch
+                {
+                    return text;
+                }
+            }
+            if (text.Length > 19) return text.Substring(0, 19).Replace("T", " ");
+            return text;
+        }
+
+        private JsonElement FindMessageArray(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Array) return element;
+            if (element.ValueKind != JsonValueKind.Object) return default;
+            foreach (string key in new[] { "messages", "mails", "emails", "items", "data", "value", "results" })
+            {
+                if (!element.TryGetProperty(key, out JsonElement child)) continue;
+                if (child.ValueKind == JsonValueKind.Array) return child;
+                JsonElement nested = FindMessageArray(child);
+                if (nested.ValueKind == JsonValueKind.Array) return nested;
+            }
+            return default;
+        }
+
+        private bool LooksEmptyMessageList(JsonElement element)
+        {
+            JsonElement array = FindMessageArray(element);
+            return array.ValueKind == JsonValueKind.Array && array.GetArrayLength() == 0;
+        }
+
+        private string JsonStringAny(JsonElement obj, params string[] properties)
+        {
+            if (obj.ValueKind != JsonValueKind.Object) return obj.ValueKind == JsonValueKind.String ? obj.GetString() ?? "" : "";
+            foreach (string property in properties)
+            {
+                if (!obj.TryGetProperty(property, out JsonElement value)) continue;
+                if (value.ValueKind == JsonValueKind.String) return value.GetString() ?? "";
+                if (value.ValueKind == JsonValueKind.Number) return value.ToString();
+            }
+            return "";
+        }
+
+        private void ShowMailDetailDialog(MailItem item)
+        {
+            if (item == null) return;
+            string code = ExtractVerificationCode(item.BodyPreview);
+            var dialog = new Window
+            {
+                Title = item.Subject.Length > 0 ? item.Subject : "邮件详情",
+                Owner = this,
+                Width = 720,
+                Height = 460,
+                MinWidth = 560,
+                MinHeight = 360,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+            };
+
+            var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var title = new TextBlock
+            {
+                Text = item.Subject,
+                FontSize = 16,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(title, 0);
+            root.Children.Add(title);
+
+            var meta = new TextBlock
+            {
+                Text = item.ReceivedAt + "    " + item.From,
+                Margin = new Thickness(0, 6, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+            };
+            Grid.SetRow(meta, 1);
+            root.Children.Add(meta);
+
+            var body = new TextBox
+            {
+                Text = item.BodyPreview,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalContentAlignment = VerticalAlignment.Top,
+                Height = double.NaN,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line")
+            };
+            Grid.SetRow(body, 2);
+            root.Children.Add(body);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            var copyCodeBtn = new Button { Content = code.Length > 0 ? "复制验证码 " + code : "未识别验证码", MinWidth = 120, IsEnabled = code.Length > 0 };
+            var copyBodyBtn = new Button { Content = "复制正文", Width = 86 };
+            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            copyCodeBtn.Click += (_, __) =>
+            {
+                Clipboard.SetText(code);
+                Log("验证码已复制：" + code);
+            };
+            copyBodyBtn.Click += (_, __) => Clipboard.SetText(item.BodyPreview);
+            closeBtn.Click += (_, __) => dialog.Close();
+            actions.Children.Add(copyCodeBtn);
+            actions.Children.Add(copyBodyBtn);
+            actions.Children.Add(closeBtn);
+            Grid.SetRow(actions, 3);
+            root.Children.Add(actions);
+
+            dialog.Content = root;
+            dialog.ShowDialog();
+        }
+
+        private string ExtractVerificationCode(string text)
+        {
+            Match match = Regex.Match(text ?? "", @"(?<!\d)\d{5,8}(?!\d)");
+            return match.Success ? match.Value : "";
+        }
+
+        private sealed class MailItem
+        {
+            public string ReceivedAt { get; set; } = "";
+            public string From { get; set; } = "";
+            public string Subject { get; set; } = "";
+            public string BodyPreview { get; set; } = "";
+        }
+    }
+}
