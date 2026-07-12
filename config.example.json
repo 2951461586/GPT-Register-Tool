@@ -35,10 +35,40 @@
     "password": "",
     "refresh_token": "",
     "access_token": "",
+    "gmail": {
+      "enabled": false,
+      "auth_mode": "app_password",
+      "email": "",
+      "app_password": "",
+      "login_password": "",
+      "refresh_token": "",
+      "access_token": "",
+      "client_id": "",
+      "client_secret": "",
+      "token_url": "https://oauth2.googleapis.com/token",
+      "imap_enabled": true,
+      "imap_host": "imap.gmail.com",
+      "imap_port": 993,
+      "imap_folders": [
+        "INBOX",
+        "[Gmail]/Spam",
+        "[Gmail]/All Mail"
+      ],
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 465,
+      "smtp_use_ssl": true,
+      "sender_name": ""
+    },
     "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
     "oauth_scope": "https://graph.microsoft.com/.default offline_access",
     "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
+    "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages",
+    "chongzhi": {
+      "enabled": true,
+      "api_url": "https://www.chongzhi.art/api/mailbox/fetch",
+      "rate_limit_seconds": 32,
+      "timeout": 30
+    }
   },
   "timeouts": {
     "request": 20,
@@ -50,6 +80,7 @@
     "auto_generate": true,
     "require_zero_due": true,
     "target_country": "US",
+    "checkout_country": "JP",
     "max_checkout_retries": 3,
     "checkout_only_long_url": false,
     "stop_after_pm_create": false,
@@ -76,8 +107,11 @@
       "approve": "socks5h://127.0.0.1:7897",
       "stripe_init": "socks5h://127.0.0.1:7897",
       "payment_method": "socks5h://127.0.0.1:7897",
-      "confirm": "socks5h://127.0.0.1:7897"
+      "confirm": "socks5h://127.0.0.1:7897",
+      "promotion": ""
     },
+    "promotion_taxes": false,
+    "promo_campaign_id": "plus-1-month-free",
     "confirm_style": "inline_payment_method_data",
     "fallback_to_hosted_checkout_on_blocked": true,
     "max_regenerate_workers": 1,

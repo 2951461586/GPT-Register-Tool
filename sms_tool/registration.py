@@ -7,6 +7,8 @@ from urllib.parse import parse_qs, quote, urlencode, urlparse
 from curl_cffi import requests as curl_requests
 
 from .codex_sentinel import import_cookie_header, load_cached_sentinel, with_sentinel
+from .auth_headers import DEFAULT_USER_AGENT, openai_auth_headers
+from .error_classification import classify_error
 from .config import CFG
 from .http_client import request_with_retry
 from .sentinel_tokens import (
@@ -71,12 +73,16 @@ def _mailbox_snapshot(mailbox):
     return {
         "email": getattr(mailbox, "email", ""),
         "password": getattr(mailbox, "password", ""),
+        "login_password": getattr(mailbox, "login_password", ""),
         "refresh_token": getattr(mailbox, "refresh_token", ""),
         "access_token": getattr(mailbox, "access_token", ""),
         "source": getattr(mailbox, "source", ""),
         "provider": getattr(mailbox, "provider", ""),
         "order_no": getattr(mailbox, "order_no", ""),
         "token": getattr(mailbox, "token", ""),
+        "client_secret": getattr(mailbox, "client_secret", ""),
+        "auth_mode": getattr(mailbox, "auth_mode", ""),
+        "sender_name": getattr(mailbox, "sender_name", ""),
         "purchase_id": getattr(mailbox, "purchase_id", ""),
         "project_name": getattr(mailbox, "project_name", ""),
         "price": getattr(mailbox, "price", ""),
@@ -86,7 +92,7 @@ def _mailbox_snapshot(mailbox):
 
 
 def _failure_result(error, email="", mailbox=None, password=""):
-    result = {"success": False, "error": error, "timing": _timing_summary()}
+    result = {"success": False, "error": error, "failure_class": classify_error(error), "timing": _timing_summary()}
     if email:
         result["email"] = email
     if password:
@@ -180,21 +186,35 @@ def _response_next_url(response, base_url):
     return str(getattr(response, "url", "") or "")
 
 
-def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
-    headers = {
-        **base_headers,
-        "Origin": auth_base,
-        "Referer": current_url or f"{auth_base}/email-verification",
-        "Content-Type": "application/json",
-        "oai-device-id": did,
+def _auth_request_headers(base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None):
+    return {
+        **(base_headers or {}),
+        **openai_auth_headers(
+            did,
+            referer=referer,
+            origin=origin,
+            sentinel_token=sentinel_token,
+            sentinel_so_token=sentinel_so_token,
+            extra=extra or {},
+        ),
     }
-    if sentinel_token:
-        headers["openai-sentinel-token"] = sentinel_token
-    if sentinel_so_token:
-        headers["openai-sentinel-so-token"] = sentinel_so_token
+
+
+def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
+    headers = _auth_request_headers(
+        base_headers,
+        did=did,
+        referer=current_url or f"{auth_base}/email-verification",
+        origin=auth_base,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+        extra={"Content-Type": "application/json"},
+    )
+    last_response = None
     for endpoint in (
         "/api/accounts/passwordless/send-otp",
         "/api/accounts/email-otp/send",
+        "/api/accounts/email-otp/resend",
     ):
         response = request_with_retry(
             session,
@@ -205,11 +225,29 @@ def _send_existing_login_otp(session, auth_base, base_headers, current_url, did,
             headers=headers,
             impersonate="chrome",
         )
-        print(f"  Existing account OTP send: {endpoint} {response.status_code}")
-        if response.status_code in (200, 202, 204, 409):
+        last_response = response
+        body_preview = ""
+        try:
+            body_preview = json.dumps(response.json(), ensure_ascii=False)[:200]
+        except Exception:
+            body_preview = (response.text or "")[:200]
+        print(f"  Existing account OTP send: {endpoint} {response.status_code} {body_preview}")
+        if response.status_code in (200, 202, 204):
             return True, response
+        # 409 may mean "OTP already sent recently" — treat as success but
+        # only when the response body confirms a pending OTP. Otherwise keep
+        # trying alternate endpoints.
+        if response.status_code == 409:
+            body_lower = body_preview.lower()
+            if "already" in body_lower or "pending" in body_lower or "rate" in body_lower or "too_many" in body_lower:
+                return True, response
+            # Ambiguous 409: try next endpoint
+            continue
         if response.status_code not in (400, 404, 405):
             return False, response
+    # All endpoints exhausted; return last response so caller can decide
+    if last_response is not None:
+        return False, last_response
     return False, None
 
 
@@ -266,38 +304,45 @@ def _login_existing_account_with_email_otp(
     current_lower = current_url.lower()
     if "chatgpt.com" in current_lower and ("/api/auth/callback/openai" in current_lower or current_lower.rstrip("/") == chat_base.lower().rstrip("/")):
         return {"ok": True}
-    if "email-verification" not in current_lower and "email-otp" not in current_lower:
-        continue_resp = request_with_retry(
-            session,
-            "post",
-            f"{auth_base}/api/accounts/authorize/continue",
-            label="Existing account continue",
-            json={"username": {"value": username, "kind": "email"}},
-            headers={
-                **base_headers,
-                "Origin": auth_base,
-                "Referer": current_url or f"{auth_base}/log-in",
-                "Content-Type": "application/json",
-                "oai-device-id": did,
-                "openai-sentinel-token": sentinel_token,
-                "openai-sentinel-so-token": sentinel_so_token,
-            },
-            impersonate="chrome",
-        )
-        print(f"  Existing account continue: {continue_resp.status_code}")
-        if continue_resp.status_code != 200:
-            return {"ok": False, "error": f"existing_login_continue_failed:{continue_resp.status_code}"}
 
-        current_url = _response_next_url(continue_resp, auth_base)
-        if current_url:
-            follow_resp = _follow_continue_url(
-                session,
-                current_url,
-                base_headers,
-                referer=current_url,
-                label="Existing account continue follow",
-            )
-            current_url = str(getattr(follow_resp, "url", "") or current_url)
+    # Always call authorize/continue to ensure the auth session transitions
+    # from signup state to login state.  Previously this was skipped when the
+    # authorize redirect landed on /email-verification, which left the session
+    # in a signup state and caused OTP send to return 409.
+    continue_resp = request_with_retry(
+        session,
+        "post",
+        f"{auth_base}/api/accounts/authorize/continue",
+        label="Existing account continue",
+        json={"username": {"value": username, "kind": "email"}},
+        headers=_auth_request_headers(
+            base_headers,
+            did=did,
+            referer=current_url or f"{auth_base}/log-in",
+            origin=auth_base,
+            sentinel_token=sentinel_token,
+            sentinel_so_token=sentinel_so_token,
+            extra={"Content-Type": "application/json"},
+        ),
+        impersonate="chrome",
+    )
+    print(f"  Existing account continue: {continue_resp.status_code}")
+    if continue_resp.status_code == 200:
+        next_url = _response_next_url(continue_resp, auth_base)
+        if next_url:
+            try:
+                follow_resp = _follow_continue_url(
+                    session,
+                    next_url,
+                    base_headers,
+                    referer=next_url,
+                    label="Existing account continue follow",
+                )
+                current_url = str(getattr(follow_resp, "url", "") or next_url)
+            except Exception as e:
+                print(f"  Existing account continue follow transport warning: {e}")
+    elif continue_resp.status_code not in (409, 400):
+        return {"ok": False, "error": f"existing_login_continue_failed:{continue_resp.status_code}"}
 
     otp_send_started = int(time.time())
     ok, otp_send_response = _send_existing_login_otp(
@@ -444,6 +489,32 @@ def _registration_otp_issued_after(mailbox, issued_after_unix):
 
 
 # Payment generation helpers moved to sms_tool.account_creation.
+def _pipeline_payment_link(access_token, proxy, payment_method, paypal_generation_type):
+    """Pipeline Step 9: Generate payment link (PayPal/UPI/GoPay)."""
+    method = str(payment_method or "paypal").strip().lower()
+    if method in {"upi", "upiqr", "upi_qr", "upi-qr"}:
+        method = "upi"
+        label = "UPI"
+    elif method in {"gopay", "go-pay", "go_pay"}:
+        method = "gopay"
+        label = "GoPay"
+    else:
+        method = "paypal"
+        label = "PayPal"
+    _tick(f"9-Generate {label} link")
+    paypal = _generate_payment_link(
+        access_token,
+        proxy=proxy,
+        payment_method=method,
+        paypal_generation_type=paypal_generation_type,
+    )
+    paypal.setdefault("payment_method", method)
+    paypal.setdefault("method", method)
+    print(f"  {label} link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
+    _tock()
+    return paypal
+
+
 def run_email(
     proxy=None,
     password=None,
@@ -456,7 +527,22 @@ def run_email(
     paypal_generation_type=None,
     registration_mode=None,
 ):
-    """Register a ChatGPT account via mailbox OTP, then create a PayPal payment link."""
+    """Register a ChatGPT account via mailbox OTP, then create a payment link.
+
+    Pipeline steps (each timed via _tick/_tock):
+      0. Extract sentinel tokens
+      1. Generate credentials (password, name, birthdate, device_id)
+      2. Auth flow (login_or_signup / passwordless_signup)
+      3. User register (email + password)
+      4. Trigger email OTP send
+      5. Get email OTP from mailbox
+      6. Validate email OTP
+      7. Create account
+      8. Fetch auth session access token
+      8b. Fetch existing account auth session (if create returns already_exists)
+      8c. Codex OAuth PKCE (optional refresh token acquisition)
+      9. Generate payment link (PayPal/UPI/GoPay)
+    """
     _tl().clear()
 
     proxy = _resolve_proxy_scheme(proxy)
@@ -467,7 +553,7 @@ def run_email(
 
     auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
     chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com")
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36"
+    ua = DEFAULT_USER_AGENT
 
     print(f"[*] ChatGPT Email Registration Started")
 
@@ -517,7 +603,7 @@ def run_email(
         _set_oai_did_cookie(session, did)
     else:
         _import_sentinel_cookies(session, sentinel_data, did)
-    base_headers = {"User-Agent": ua, "Accept": "application/json"}
+    base_headers = openai_auth_headers(did, accept="application/json", include_trace=True)
     auth_flow_started = int(time.time())
 
     try:
@@ -575,8 +661,13 @@ def run_email(
             _tick("3-User register (email+password)")
             r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
                 json={"password": password, "username": username},
-                headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
-                        "openai-sentinel-token": _sentinel_token, "oai-device-id": did},
+                headers=_auth_request_headers(
+                    base_headers,
+                    did=did,
+                    referer=f"{auth_base}/create-account/password",
+                    origin=auth_base,
+                    sentinel_token=_sentinel_token,
+                ),
                 impersonate="chrome")
             _tock()
     except Exception as e:
@@ -706,9 +797,14 @@ def run_email(
         create_sentinel_token = _create_account_sentinel_token(sentinel_data, proxy=proxy)
         r = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account", label="Create account",
             json={"name": full_name, "birthdate": birthdate},
-            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/about-you",
-                    "openai-sentinel-token": create_sentinel_token,
-                    "openai-sentinel-so-token": _sentinel_so_token},
+            headers=_auth_request_headers(
+                base_headers,
+                did=did,
+                referer=f"{auth_base}/about-you",
+                origin=auth_base,
+                sentinel_token=create_sentinel_token,
+                sentinel_so_token=_sentinel_so_token,
+            ),
             impersonate="chrome")
         _tock()
     except Exception as e:
@@ -746,9 +842,18 @@ def run_email(
     access_token = _auth_session_access_token(auth_body)
     if existing_account and not access_token:
         print("  Existing account has no ChatGPT session yet; retrying with passwordless email login...")
+        # Create a fresh session for the login flow. The registration session
+        # carries signup-state auth cookies on auth.openai.com that prevent
+        # the login flow from transitioning to a proper login state — OTP
+        # validation succeeds but the auth session redirects to /about-you
+        # (signup) instead of chatgpt.com (login complete).
+        login_session = curl_requests.Session()
+        if proxy:
+            login_session.proxies = {"http": proxy, "https": proxy}
+        _set_oai_did_cookie(login_session, did)
         try:
             existing_login = _login_existing_account_with_email_otp(
-                session=session,
+                session=login_session,
                 username=username,
                 mailbox=mailbox,
                 did=did,
@@ -766,7 +871,7 @@ def run_email(
         if existing_login.get("ok"):
             _tick("8b-Fetch existing account auth session")
             try:
-                auth_session = _fetch_auth_session(session, chat_base, base_headers)
+                auth_session = _fetch_auth_session(login_session, chat_base, base_headers)
                 _tock()
             except Exception as e:
                 _safe_tock()
@@ -774,6 +879,9 @@ def run_email(
                 return _failure_result(f"existing_auth_session_transport: {e}", email=username, mailbox=mailbox, password=password)
             auth_body = auth_session.get("body") or {}
             access_token = _auth_session_access_token(auth_body)
+            if access_token:
+                # Carry over the login session cookies for subsequent requests
+                session = login_session
         else:
             print(f"  Existing account login failed: {existing_login.get('error') or 'unknown'}")
 
@@ -872,27 +980,9 @@ def run_email(
 
     paypal = {}
     if success and access_token and paypal_link:
-        payment_method = str(payment_method or "paypal").strip().lower()
-        if payment_method in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-            payment_method = "upi"
-            payment_label = "UPI"
-        elif payment_method in {"gopay", "go-pay", "go_pay"}:
-            payment_method = "gopay"
-            payment_label = "GoPay"
-        else:
-            payment_method = "paypal"
-            payment_label = "PayPal"
-        _tick(f"9-Generate {payment_label} link")
-        paypal = _generate_payment_link(
-            access_token,
-            proxy=proxy,
-            payment_method=payment_method,
-            paypal_generation_type=paypal_generation_type,
+        paypal = _pipeline_payment_link(
+            access_token, proxy, payment_method, paypal_generation_type
         )
-        paypal.setdefault("payment_method", payment_method)
-        paypal.setdefault("method", payment_method)
-        print(f"  {payment_label} link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
-        _tock()
 
     result = {
         "success": success,
@@ -926,12 +1016,16 @@ def run_email(
         result["mailbox"] = {
             "email": mailbox.email,
             "password": mailbox.password,
+            "login_password": getattr(mailbox, "login_password", ""),
             "refresh_token": mailbox.refresh_token,
             "access_token": mailbox.access_token,
             "source": mailbox.source,
             "provider": getattr(mailbox, "provider", ""),
             "order_no": getattr(mailbox, "order_no", ""),
             "token": getattr(mailbox, "token", ""),
+            "client_secret": getattr(mailbox, "client_secret", ""),
+            "auth_mode": getattr(mailbox, "auth_mode", ""),
+            "sender_name": getattr(mailbox, "sender_name", ""),
             "purchase_id": getattr(mailbox, "purchase_id", ""),
             "project_name": getattr(mailbox, "project_name", ""),
             "price": getattr(mailbox, "price", ""),
@@ -975,7 +1069,7 @@ def run_phone_register(
 
     auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
     chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com")
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36"
+    ua = DEFAULT_USER_AGENT
 
     # Load SMSBower config before buying a number so the proxy can be matched
     # to the phone country and verified first.
@@ -1040,7 +1134,7 @@ def run_phone_register(
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
     _import_sentinel_cookies(session, sentinel_data, did)
-    base_headers = {"User-Agent": ua, "Accept": "application/json"}
+    base_headers = openai_auth_headers(did, accept="application/json", include_trace=True)
 
     try:
         # Auth flow: prime + signin + authorize
@@ -1087,8 +1181,13 @@ def run_phone_register(
         _tick("3-User register (phone+password)")
         r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
             json={"password": password, "username": phone},
-            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/password",
-                    "openai-sentinel-token": _sentinel_token},
+            headers=_auth_request_headers(
+                base_headers,
+                did=did,
+                referer=f"{auth_base}/create-account/password",
+                origin=auth_base,
+                sentinel_token=_sentinel_token,
+            ),
             impersonate="chrome")
         _tock()
 
@@ -1122,8 +1221,13 @@ def run_phone_register(
         validate_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/phone-otp/validate",
             label="Phone OTP validate",
             json={"code": sms_code},
-            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/phone-verification",
-                    "openai-sentinel-token": _sentinel_token, "oai-device-id": did},
+            headers=_auth_request_headers(
+                base_headers,
+                did=did,
+                referer=f"{auth_base}/phone-verification",
+                origin=auth_base,
+                sentinel_token=_sentinel_token,
+            ),
             impersonate="chrome")
         _tock()
 
@@ -1154,8 +1258,14 @@ def run_phone_register(
         create_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account",
             label="Create account",
             json=create_body,
-            headers={**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/create-account/name",
-                    "openai-sentinel-token": _sentinel_token, "openai-sentinel-so-token": _sentinel_so_token},
+            headers=_auth_request_headers(
+                base_headers,
+                did=did,
+                referer=f"{auth_base}/create-account/name",
+                origin=auth_base,
+                sentinel_token=_sentinel_token,
+                sentinel_so_token=_sentinel_so_token,
+            ),
             impersonate="chrome")
         _tock()
 

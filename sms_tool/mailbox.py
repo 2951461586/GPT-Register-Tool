@@ -1,4 +1,5 @@
 import argparse
+import json
 import re
 import time
 from datetime import datetime
@@ -8,6 +9,7 @@ from curl_cffi import requests as curl_requests
 
 from .config import CFG
 from . import outlook_imap
+from . import mailbox_gmail
 from .mail_otp import (
     _candidate_is_newer,
     _email_otp_candidate,
@@ -44,6 +46,7 @@ from .mailbox_luckmail import (
 )
 from . import mailbox_graph
 from .mailbox_graph import MailboxTokenExpiredError
+from . import mailbox_chongzhi
 
 # MailboxAccount and parsers moved to mailbox_types/mailbox_parsers.
 
@@ -53,6 +56,27 @@ def _email_cfg():
 
 def _luckmail_enabled():
     return bool((_email_cfg().get("luckmail_api_key") or "").strip())
+
+
+def _gmail_cfg():
+    email_cfg = _email_cfg()
+    gmail_cfg = email_cfg.get("gmail") if isinstance(email_cfg.get("gmail"), dict) else {}
+    return gmail_cfg
+
+
+def _bool_like(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _gmail_enabled():
+    cfg = _gmail_cfg()
+    if "enabled" in cfg:
+        return _bool_like(cfg.get("enabled"), False)
+    return bool(str(cfg.get("email") or "").strip())
 
 
 def _otp_poll_interval():
@@ -148,6 +172,134 @@ def _default_nb_register_token_file():
     return str(Path.cwd() / "mailbox_tokens.txt")
 
 
+def _canonical_gmail_email(value):
+    text = str(value or "").strip().lower()
+    if "@" not in text:
+        return ""
+    local, domain = text.rsplit("@", 1)
+    if domain not in {"gmail.com", "googlemail.com"}:
+        return ""
+    local = local.split("+", 1)[0].replace(".", "")
+    return f"{local}@gmail.com" if local else ""
+
+
+def _gmail_alias_base_email(email):
+    requested = str(email or "").strip().lower()
+    requested_key = _canonical_gmail_email(requested)
+    if not requested_key:
+        return requested
+    alias_path = Path("runtime") / "gmail_aliases.json"
+    try:
+        if alias_path.exists():
+            alias_map = json.loads(alias_path.read_text(encoding="utf-8"))
+            if isinstance(alias_map, dict):
+                for base, aliases in alias_map.items():
+                    base_text = str(base or "").strip().lower()
+                    if _canonical_gmail_email(base_text) == requested_key:
+                        return base_text
+                    if isinstance(aliases, list):
+                        for alias in aliases:
+                            if _canonical_gmail_email(alias) == requested_key:
+                                return base_text
+    except Exception as exc:
+        print(f"[gmail alias map error: {exc}]")
+    return requested_key
+
+
+def _gmail_mailbox_from_token_files(email):
+    target_key = _canonical_gmail_email(email)
+    if not target_key:
+        return None
+    paths = []
+    configured = str(_email_cfg().get("token_file") or "").strip()
+    if configured:
+        paths.append(configured)
+    paths.append(_default_nb_register_token_file())
+    seen = set()
+    for path in paths:
+        path_key = str(path or "")
+        if not path_key or path_key in seen:
+            continue
+        seen.add(path_key)
+        for record in _parse_mailbox_token_file(path):
+            if mailbox_gmail.is_gmail_mailbox(record) and _canonical_gmail_email(record.email) == target_key:
+                return record
+    return None
+
+
+def _gmail_mailbox_from_config(args=None):
+    args = args or argparse.Namespace()
+    cfg = _gmail_cfg()
+    email_cfg = _email_cfg()
+    requested_email = (
+        getattr(args, "email", None)
+        or cfg.get("email")
+        or email_cfg.get("email")
+        or ""
+    ).strip().lower()
+    if not requested_email:
+        return None
+    if not mailbox_gmail.is_gmail_mailbox(MailboxAccount(email=requested_email, provider="gmail")):
+        return None
+    email = _gmail_alias_base_email(requested_email)
+    cfg_email = str(cfg.get("email") or "").strip().lower()
+    cfg_matches = bool(cfg_email and _canonical_gmail_email(cfg_email) == _canonical_gmail_email(email))
+    if cfg_matches:
+        email = cfg_email
+    explicit_password = str(getattr(args, "email_password", None) or "").strip()
+    explicit_refresh_token = str(getattr(args, "email_refresh_token", None) or "").strip()
+    explicit_access_token = str(getattr(args, "email_access_token", None) or "").strip()
+    if not cfg_matches and not any([explicit_password, explicit_refresh_token, explicit_access_token]):
+        token_mailbox = _gmail_mailbox_from_token_files(email)
+        if token_mailbox is not None:
+            return token_mailbox
+        return None
+    password = (
+        explicit_password
+        or (cfg.get("app_password") if cfg_matches else "")
+        or (cfg.get("password") if cfg_matches else "")
+        or (email_cfg.get("password") if cfg_matches else "")
+        or ""
+    ).strip()
+    refresh_token = (
+        explicit_refresh_token
+        or (cfg.get("refresh_token") if cfg_matches else "")
+        or (email_cfg.get("refresh_token") if cfg_matches else "")
+        or ""
+    ).strip()
+    access_token = (
+        explicit_access_token
+        or (cfg.get("access_token") if cfg_matches else "")
+        or (email_cfg.get("access_token") if cfg_matches else "")
+        or ""
+    ).strip()
+    client_id = str(cfg.get("client_id") or "").strip() if cfg_matches else ""
+    client_secret = str(cfg.get("client_secret") or "").strip() if cfg_matches else ""
+    sender_name = str(cfg.get("sender_name") or "").strip() if cfg_matches else ""
+    login_password = str(cfg.get("login_password") or "").strip() if cfg_matches else ""
+    auth_mode = str(cfg.get("auth_mode") or "").strip().lower() if cfg_matches else ""
+    if not _gmail_enabled() and not any([password, refresh_token, access_token, client_id, client_secret]):
+        return None
+    if not auth_mode:
+        if refresh_token and client_id and client_secret:
+            auth_mode = "oauth_refresh"
+        elif password:
+            auth_mode = "app_password"
+    return MailboxAccount(
+        email=email,
+        password=password,
+        login_password=login_password,
+        refresh_token=refresh_token,
+        access_token=access_token,
+        source="config",
+        provider="gmail",
+        token=client_id,
+        client_secret=client_secret,
+        auth_mode=auth_mode,
+        sender_name=sender_name,
+    )
+
+
 def _mailbox_from_config(args=None):
     args = args or argparse.Namespace()
     luckmail_token = (
@@ -155,6 +307,9 @@ def _mailbox_from_config(args=None):
         or _email_cfg().get("luckmail_token")
         or ""
     ).strip()
+    gmail_mailbox = _gmail_mailbox_from_config(args)
+    if gmail_mailbox is not None and not luckmail_token:
+        return gmail_mailbox
     email = (getattr(args, "email", None) or _email_cfg().get("email") or "").strip().lower()
     if not email and luckmail_token:
         try:
@@ -189,10 +344,13 @@ def _load_mailbox_pool(args=None):
     chatai_file = getattr(args, "chatai_mailbox_file", None)
     if chatai_file:
         return _parse_chatai_mailbox_file(chatai_file)
+    mailbox_file = getattr(args, "mailbox_file", None)
+    if mailbox_file:
+        return _parse_mailbox_token_file(mailbox_file)
     direct = _mailbox_from_config(args)
     if direct:
         return [direct]
-    configured = getattr(args, "mailbox_file", None) or _email_cfg().get("token_file")
+    configured = _email_cfg().get("token_file")
     token_file = configured or _default_nb_register_token_file()
     return _parse_mailbox_token_file(token_file)
 
@@ -219,6 +377,10 @@ def _record_key(record):
 def _ms_oauth_refresh(mailbox, proxy=None, scope_override=None):
     mailbox_graph.curl_requests = curl_requests
     return mailbox_graph.ms_oauth_refresh(mailbox, _email_cfg(), proxy=proxy, scope_override=scope_override)
+
+
+def _gmail_oauth_refresh(mailbox, proxy=None, scope_override=None):
+    return mailbox_gmail.refresh_gmail_access_token(mailbox, _gmail_cfg(), proxy=proxy, scope_override=scope_override)
 
 
 def _email_otp_settle_seconds():
@@ -252,9 +414,49 @@ def _outlook_imap_folders():
     return list(outlook_imap.DEFAULT_FOLDERS)
 
 
-def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None):
+def _gmail_imap_enabled():
+    cfg = _gmail_cfg()
+    if "imap_enabled" in cfg:
+        return _bool_like(cfg.get("imap_enabled"), True)
+    return True
+
+
+def _gmail_imap_folders():
+    cfg = _gmail_cfg()
+    configured = cfg.get("imap_folders")
+    if isinstance(configured, str) and configured.strip():
+        return [part.strip() for part in configured.split(",") if part.strip()]
+    if isinstance(configured, list):
+        return [str(part).strip() for part in configured if str(part).strip()]
+    return list(mailbox_gmail.DEFAULT_IMAP_FOLDERS)
+
+
+def _gmail_imap_host():
+    return str(_gmail_cfg().get("imap_host") or mailbox_gmail.DEFAULT_IMAP_HOST).strip() or mailbox_gmail.DEFAULT_IMAP_HOST
+
+
+def _gmail_imap_port():
+    try:
+        return int(_gmail_cfg().get("imap_port") or mailbox_gmail.DEFAULT_IMAP_PORT)
+    except Exception:
+        return mailbox_gmail.DEFAULT_IMAP_PORT
+
+
+def mailbox_has_inbox_credentials(mailbox):
+    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
+    if provider == "cfworker":
+        return bool(getattr(mailbox, "email", ""))
+    if provider in {"luckmail", "luckmail_token"}:
+        return bool(getattr(mailbox, "token", "") or getattr(mailbox, "email", ""))
+    if mailbox_gmail.is_gmail_mailbox(mailbox):
+        return mailbox_gmail.mailbox_has_credentials(mailbox, _gmail_cfg())
+    return bool(getattr(mailbox, "refresh_token", ""))
+
+
+def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None, override_messages=None):
     latest = None
-    for msg in _fetch_mailbox_messages(mailbox, proxy=proxy):
+    messages = override_messages if override_messages is not None else _fetch_mailbox_messages(mailbox, proxy=proxy)
+    for msg in messages:
         candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
         if not candidate:
             continue
@@ -273,6 +475,26 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
 
 def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
     proxy = _resolve_mailbox_proxy(proxy)
+
+    # ── chongzhi.art first priority ──
+    # If the mailbox has a password and chongzhi is enabled, try the API first.
+    # Fall back to local Graph API / IMAP on any failure.
+    provider = str(getattr(mailbox, "provider", "") or "")
+    if provider == "chongzhi" or (mailbox_chongzhi.chongzhi_enabled(_email_cfg()) and getattr(mailbox, "password", "")):
+        email = str(getattr(mailbox, "email", "") or "").strip()
+        password = str(getattr(mailbox, "password", "") or "").strip()
+        if email and password:
+            try:
+                chongzhi_msgs = mailbox_chongzhi.fetch_chongzhi_messages(
+                    email, password, folder="all", proxy=proxy, email_cfg=_email_cfg(),
+                )
+                if chongzhi_msgs:
+                    return chongzhi_msgs
+                # Empty result means API accepted but no messages yet,
+                # or rate limited — fall through to local fetch as fallback.
+            except Exception as exc:
+                print(f"[chongzhi fallback to local: {exc}]")
+
     if getattr(mailbox, "provider", "") == "cfworker":
         return mailbox_cfworker._fetch_cfworker_messages(
             mailbox,
@@ -280,6 +502,18 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
             proxy=proxy,
             email_cfg=_email_cfg(),
             client_func=_cfworker_client,
+        )
+    if mailbox_gmail.is_gmail_mailbox(mailbox):
+        if not _gmail_imap_enabled():
+            raise RuntimeError("gmail imap is disabled in config")
+        return mailbox_gmail.fetch_gmail_imap_messages(
+            mailbox,
+            token_fetcher=lambda scope: _gmail_oauth_refresh(mailbox, proxy=proxy, scope_override=scope),
+            folders=_gmail_imap_folders(),
+            limit=limit,
+            host=_gmail_imap_host(),
+            port=_gmail_imap_port(),
+            proxy=proxy,
         )
     graph_error = None
     graph_messages = []
@@ -347,6 +581,20 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
 # Message recipient extraction moved to sms_tool.mail_otp.
 
 def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
+    provider = str(getattr(mailbox, "provider", "") or "")
+
+    # ── chongzhi.art OTP polling ──
+    # If the mailbox has a password and chongzhi is enabled, poll via API first.
+    if provider == "chongzhi" or (mailbox_chongzhi.chongzhi_enabled(_email_cfg()) and getattr(mailbox, "password", "")):
+        email = str(getattr(mailbox, "email", "") or "").strip()
+        password = str(getattr(mailbox, "password", "") or "").strip()
+        if email and password:
+            return _poll_chongzhi_otp(
+                mailbox, email=email, password=password,
+                subject_keyword=subject_keyword, timeout=timeout,
+                issued_after_unix=issued_after_unix, proxy=proxy,
+            )
+
     if getattr(mailbox, "provider", "") == "luckmail":
         return _poll_luckmail_otp(mailbox, timeout=timeout)
     if getattr(mailbox, "provider", "") == "luckmail_token":
@@ -430,6 +678,164 @@ def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, see
         proxy=proxy,
         fetch_messages_func=_fetch_mailbox_messages,
     )
+
+
+def _poll_chongzhi_otp(mailbox, email, password, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
+    """Poll for OTP via chongzhi.art API, falling back to local mailbox on failure."""
+    keyword = (subject_keyword or "").lower()
+    deadline = time.time() + timeout
+    interval = _otp_poll_interval()
+    settle_seconds = _email_otp_settle_seconds()
+    local_fallback_attempted = False
+
+    while time.time() < deadline:
+        # Try chongzhi.art first
+        try:
+            messages = mailbox_chongzhi.fetch_chongzhi_messages(
+                email, password, folder="all", proxy=proxy, email_cfg=_email_cfg(),
+            )
+            if messages:
+                candidate = _latest_email_otp_candidate(
+                    mailbox, keyword=keyword,
+                    issued_after_unix=issued_after_unix,
+                    proxy=proxy, override_messages=messages,
+                )
+                # Also check chongzhi pre-extracted OTP
+                if not candidate:
+                    otp = mailbox_chongzhi.chongzhi_latest_otp(
+                        messages, keyword=keyword, issued_after_unix=issued_after_unix,
+                    )
+                    if otp:
+                        candidate = {"otp": otp, "received_ts": 0}
+                if candidate:
+                    # Settle: wait a bit and check again for newer OTP
+                    stable_until = time.time() + settle_seconds
+                    while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
+                        time.sleep(min(interval, max(0.0, stable_until - time.time())))
+                        newer_msgs = mailbox_chongzhi.fetch_chongzhi_messages(
+                            email, password, folder="all", proxy=proxy, email_cfg=_email_cfg(),
+                        )
+                        newer_candidate = _latest_email_otp_candidate(
+                            mailbox, keyword=keyword,
+                            issued_after_unix=issued_after_unix,
+                            proxy=proxy, override_messages=newer_msgs,
+                        )
+                        if newer_candidate and _candidate_is_newer(newer_candidate, candidate):
+                            candidate = newer_candidate
+                            stable_until = time.time() + settle_seconds
+                    otp_code = str(candidate.get("otp") or "")
+                    if otp_code:
+                        print(f" code:{otp_code}!")
+                        return otp_code
+        except Exception as exc:
+            print(f"[chongzhi poll error: {exc}]")
+
+        # If chongzhi returns no messages and we haven't tried local yet,
+        # fall back to local Graph API / IMAP for this poll cycle.
+        if not local_fallback_attempted:
+            local_fallback_attempted = True
+            try:
+                # Temporarily bypass chongzhi routing to use local fetch
+                local_messages = _fetch_mailbox_messages_local(mailbox, limit=25, proxy=proxy)
+                if local_messages:
+                    candidate = _latest_email_otp_candidate(
+                        mailbox, keyword=keyword,
+                        issued_after_unix=issued_after_unix,
+                        proxy=proxy, override_messages=local_messages,
+                    )
+                    if candidate:
+                        otp_code = str(candidate.get("otp") or "")
+                        if otp_code:
+                            print(f" code:{otp_code}! (local fallback)")
+                            return otp_code
+            except Exception as exc:
+                print(f"[local fallback error: {exc}]")
+
+        print(".", end="", flush=True)
+        time.sleep(interval)
+
+    print(" timeout")
+    return None
+
+
+def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
+    """Fetch messages using local Graph API / IMAP only (skip chongzhi.art)."""
+    proxy = _resolve_mailbox_proxy(proxy)
+    if getattr(mailbox, "provider", "") == "cfworker":
+        return mailbox_cfworker._fetch_cfworker_messages(
+            mailbox, limit=limit, proxy=proxy,
+            email_cfg=_email_cfg(), client_func=_cfworker_client,
+        )
+    if mailbox_gmail.is_gmail_mailbox(mailbox):
+        if not _gmail_imap_enabled():
+            raise RuntimeError("gmail imap is disabled in config")
+        return mailbox_gmail.fetch_gmail_imap_messages(
+            mailbox,
+            token_fetcher=lambda scope: _gmail_oauth_refresh(mailbox, proxy=proxy, scope_override=scope),
+            folders=_gmail_imap_folders(), limit=limit,
+            host=_gmail_imap_host(), port=_gmail_imap_port(), proxy=proxy,
+        )
+    graph_error = None
+    graph_messages = []
+    try:
+        cfg = _email_cfg()
+        token = mailbox.access_token or _ms_oauth_refresh(mailbox, proxy=proxy)
+        graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")
+        params = {
+            "$top": str(max(1, min(int(limit or 25), 100))),
+            "$orderby": "receivedDateTime desc",
+            "$select": "id,subject,from,bodyPreview,body,toRecipients,ccRecipients,bccRecipients,internetMessageHeaders,receivedDateTime",
+        }
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+            "Prefer": 'outlook.body-content-type="text"',
+        }
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+        if r.status_code in (401, 403):
+            token = _ms_oauth_refresh(mailbox, proxy=proxy)
+            headers["Authorization"] = "Bearer " + token
+            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+        try:
+            body = r.json()
+        except Exception:
+            body = {"raw": r.text[:500]}
+        if r.status_code < 200 or r.status_code >= 300:
+            raise RuntimeError(f"Graph messages failed: {body}")
+        graph_messages = body.get("value", [])
+    except Exception as exc:
+        graph_error = exc
+
+    imap_messages = []
+    if _outlook_imap_enabled() and outlook_imap.is_outlook_mailbox(mailbox):
+        try:
+            imap_messages = outlook_imap.fetch_outlook_imap_messages(
+                mailbox,
+                token_fetcher=lambda scope: _ms_oauth_refresh(mailbox, proxy=proxy, scope_override=scope),
+                folders=_outlook_imap_folders(),
+                limit=limit,
+            )
+        except MailboxTokenExpiredError:
+            if graph_error:
+                raise
+        except Exception as exc:
+            print(f"[outlook imap error: {exc}]")
+
+    merged = []
+    seen = set()
+    for msg in list(graph_messages or []) + list(imap_messages or []):
+        key = _message_id(msg) or str(msg.get("internetMessageId") or "")
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        merged.append(msg)
+    if merged:
+        return merged
+    if graph_error:
+        raise graph_error
+    return []
 
 
 # moved _poll_luckmail_otp to dedicated mailbox module.

@@ -6,6 +6,29 @@ from sms_tool import codex_oauth
 
 
 class CodexOauthTests(unittest.TestCase):
+    def test_mailbox_from_data_falls_back_to_config_for_gmail(self):
+        fallback = codex_oauth.MailboxAccount(
+            email="liziaicloudxm@gmail.com",
+            provider="gmail",
+            password="abcd efgh ijkl mnop",
+            auth_mode="app_password",
+            source="config",
+        )
+        with patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", side_effect=[False, True]), \
+             patch("sms_tool.mailbox._mailbox_from_config", return_value=fallback) as from_config:
+            result = codex_oauth._mailbox_from_data({"email": "liziaicloudxm@gmail.com"})
+
+        self.assertIs(result, fallback)
+        from_config.assert_called_once()
+
+    def test_mailbox_from_data_does_not_fallback_to_config_for_non_gmail(self):
+        with patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=False), \
+             patch("sms_tool.mailbox._mailbox_from_config") as from_config:
+            result = codex_oauth._mailbox_from_data({"email": "user@example.com"})
+
+        self.assertIsNone(result)
+        from_config.assert_not_called()
+
     def test_account_deactivated_response_is_terminal(self):
         body = '{"error":{"code":"account_deactivated","message":"You do not have an account because it has been deleted or deactivated."}}'
 

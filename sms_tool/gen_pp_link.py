@@ -42,13 +42,12 @@ from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
 
 import requests
 
-# curl_cffi 可选
-_CurlCffiSession = None
-if os.environ.get("USE_CURL_CFFI", "").lower() in ("1", "true", "yes"):
-    try:
-        from curl_cffi.requests import Session as _CurlCffiSession
-    except ImportError:
-        _CurlCffiSession = None
+# curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
+try:
+    from curl_cffi import requests as curl_requests
+except ImportError:
+    curl_requests = None
+_CurlCffiSession = None  # Session API disabled — use functional API instead
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +64,7 @@ CURRENCY_MAP = {
     "US": "USD", "GB": "GBP", "DE": "EUR", "FR": "EUR", "JP": "JPY",
     "AU": "AUD", "CA": "CAD", "SG": "SGD", "NZ": "NZD", "IE": "EUR",
     "TH": "THB", "ID": "IDR", "IN": "INR", "BR": "BRL", "KR": "KRW",
+    "TR": "TRY",
 }
 
 BILLING_DATA = {
@@ -79,6 +79,7 @@ BILLING_DATA = {
     "NZ": {"name": ("James", "Smith"), "street": "1 Queen Street", "city": "Auckland", "state": "Auckland", "postal": "1010"},
     "IE": {"name": ("James", "Smith"), "street": "1 O'Connell Street", "city": "Dublin", "state": "Dublin", "postal": "D01 F5P2"},
     "TH": {"name": ("Somchai", "Prasert"), "street": "123 Sukhumvit Road", "city": "Bangkok", "state": "Bangkok", "postal": "10110"},
+    "TR": {"name": ("Mehmet", "Yilmaz"), "street": "Istiklal Caddesi 123", "city": "Istanbul", "state": "Istanbul", "postal": "34421"},
 }
 
 DEFAULT_TARGET_COUNTRIES = ("AU", "TH", "US", "GB", "DE", "JP", "SG", "NZ", "CA", "IE")
@@ -87,24 +88,71 @@ DEFAULT_CHECKOUT_COUNTRIES = ("JP", "TH")
 PM_REDIRECT_RE = re.compile(r"https://pm-redirects\.stripe\.com/authorize/[^\s\"'<>]+", re.I)
 PAYPAL_BA_RE = re.compile(r"https://www\.paypal\.com/agreements/approve\?[^\s\"']+", re.I)
 
+# ─── UPI 常量 ──────────────────────────────────────────────────────────────────
+
+UPI_CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
+UPI_CHECKOUT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
+UPI_CHECKOUT_APPROVE_URL = "https://chatgpt.com/backend-api/payments/checkout/approve"
+STRIPE_PAYMENT_PAGE_INIT_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/init"
+STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/confirm"
+STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
+UPI_APPROVAL_MAX_ATTEMPTS = 60
+UPI_QR_POLL_MAX_ATTEMPTS = 30
+UPI_QR_POLL_INTERVAL = 1.0
+
+UPI_BILLING_IN = {
+    "name": "Rahul Sharma",
+    "email": "upi-scanner@example.com",
+    "line1": "Flat 302, Sai Residency",
+    "line2": "MG Road, Andheri East",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "postal": "400069",
+    "country": "IN",
+}
+
 # ─── Session 工厂 ─────────────────────────────────────────────────────────────
 
 
 def _new_session(proxy: str = ""):
-    s = None
-    if _CurlCffiSession is not None:
-        try:
-            s = _CurlCffiSession(impersonate="chrome", verify=True)
-        except Exception:
-            s = None
-    if s is None:
-        s = requests.Session()
+    """Create a requests Session for non-checkout stages (Stripe, approve, etc.).
+    The checkout stage uses ``_checkout_post`` instead to avoid Cloudflare
+    session-cookie conflicts."""
+    s = requests.Session()
     s.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
     })
     if proxy:
         s.proxies = {"http": proxy, "https": proxy}
     return s
+
+
+def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
+    """Execute a ChatGPT checkout POST using the functional curl_cffi API.
+
+    The functional API (not Session) is required here because ``curl_cffi``
+    Session accumulates a Cloudflare ``__cf_bm`` cookie that conflicts with
+    the account's own cookies and causes 403 Forbidden on checkout.
+
+    ``extra_headers`` lets callers add endpoint-specific headers such as
+    ``x-openai-target-path``/``x-openai-target-route`` for /checkout/update
+    and /checkout/taxes, plus a per-session Referer.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Referer": "https://chatgpt.com/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    }
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+    if extra_headers:
+        headers.update(extra_headers)
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    if curl_requests is not None:
+        return curl_requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout, impersonate="chrome")
+    return requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout)
 
 
 # ─── 代理工具 ──────────────────────────────────────────────────────────────────
@@ -334,20 +382,38 @@ class PPLinkExtractor:
         checkout_proxy: str = "",
         provider_proxy: str = "",
         approve_proxy: str = "",
+        promotion_proxy: str = "",
         target_country: str = "DE",
+        checkout_country: str = "",
         stripe_pk: str = "",
         require_zero: bool = True,
         emit: Any = None,
+        cookie_header: str = "",
+        promotion_taxes: bool = False,
+        promo_campaign_id: str = "plus-1-month-free",
     ):
         self.access_token = access_token
         self.checkout_proxy = normalize_proxy_url(checkout_proxy)
         self.provider_proxy = normalize_proxy_url(provider_proxy)
         self.approve_proxy = normalize_proxy_url(approve_proxy or provider_proxy)
+        # Promotion stage: apply the 0-due promo to the *existing* checkout via
+        # POST /backend-api/payments/checkout/update, routed through a
+        # promo-eligible region egress. Empty => stage disabled (behaviour
+        # unchanged). This is what makes "0元 + PayPal" possible on one session:
+        # the checkout is created in a PayPal region, then the promo is attached
+        # from a promo-eligible region.
+        self.promotion_proxy = normalize_proxy_url(promotion_proxy)
+        self.enable_promotion = bool(self.promotion_proxy)
+        self.promotion_taxes = bool(promotion_taxes)
+        self.promo_campaign_id = str(promo_campaign_id or "plus-1-month-free")
         self.target_country = target_country.upper()
+        self.checkout_country = (checkout_country or target_country).upper()
         self.currency = CURRENCY_MAP.get(self.target_country, "EUR")
+        self.checkout_currency = CURRENCY_MAP.get(self.checkout_country, "USD")
         self.stripe_pk = stripe_pk or DEFAULT_STRIPE_PK
         self.require_zero = require_zero
         self.emit = emit or (lambda step, msg, **kw: None)
+        self.cookie_header = cookie_header or ""
         self.runtime_version = "6f8494a281"
         self.stripe_js_id = str(uuid.uuid4())
         self.elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
@@ -359,24 +425,20 @@ class PPLinkExtractor:
     # ─── Stage 1: Checkout (JP/TH 代理) ───────────────────────────────────
 
     def _create_checkout(self) -> dict:
-        self._log("checkout", f"Stage 1: 使用 {self.checkout_proxy or 'DIRECT'} 代理创建 checkout")
-        cs = _new_session(self.checkout_proxy)
-        cs.headers.update({
-            "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Referer": "https://chatgpt.com/",
-        })
+        self._log("checkout", f"Stage 1: 使用 {self.checkout_proxy or 'DIRECT'} 代理创建 checkout (billing={self.checkout_country}/{self.checkout_currency}, target={self.target_country})")
         body = {
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
-            "billing_details": {"country": self.target_country, "currency": self.currency},
+            "billing_details": {"country": self.checkout_country, "currency": self.checkout_currency},
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
             "checkout_ui_mode": "custom",
         }
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
-                r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=body, timeout=CHATGPT_TIMEOUT)
+                r = _checkout_post(
+                    "https://chatgpt.com/backend-api/payments/checkout",
+                    body, self.access_token, self.cookie_header, self.checkout_proxy, CHATGPT_TIMEOUT,
+                )
                 if r.status_code == 401:
                     raise Exception("access_token 无效或已过期 (401)")
                 if r.status_code == 429:
@@ -392,18 +454,107 @@ class PPLinkExtractor:
                 self._log("checkout", f"checkout 成功: cs_id={cs_id}")
                 return {
                     "cs_id": cs_id,
-                    "processor_entity": data.get("processor_entity") or ("openai_llc" if self.target_country == "US" else "openai_ie"),
+                    "processor_entity": data.get("processor_entity") or ("openai_llc" if self.checkout_country == "US" else "openai_ie"),
                     "stripe_publishable_key": self.stripe_pk,
-                    "billing_country": self.target_country,
-                    "currency": self.currency,
+                    "billing_country": self.checkout_country,
+                    "currency": self.checkout_currency,
                 }
             except Exception as e:
                 self._log("checkout", f"checkout 第 {attempt} 次失败: {e}")
                 if attempt < RETRY_ATTEMPTS:
-                    cs = _new_session(rotate_proxy_session(self.checkout_proxy))
-                    cs.headers.update({"Authorization": f"Bearer {self.access_token}", "Accept": "application/json", "Content-Type": "application/json"})
+                    self._log("checkout", f"retry {attempt + 1}/{RETRY_ATTEMPTS}")
                 else:
                     raise
+
+    # ─── Stage 1.5: Promotion update (促销可用区代理) ──────────────────────
+
+    def _checkout_page_url(self, cs_id: str, processor_entity: str) -> str:
+        entity = processor_entity or ("openai_llc" if self.checkout_country == "US" else "openai_ie")
+        return f"https://chatgpt.com/checkout/{entity}/{cs_id}"
+
+    def _checkout_update_promotion(self, cs_id: str, processor_entity: str) -> bool:
+        """Apply the 0-due promo to an existing checkout via /checkout/update.
+
+        Routed through ``promotion_proxy`` (a promo-eligible region egress).
+        Returns True on success. Non-fatal on failure: logs and returns False so
+        the downstream ``require_zero`` gate in _stripe_init decides the outcome.
+        """
+        self._log("promotion", f"Stage 1.5: 使用 {self.promotion_proxy or 'DIRECT'} 代理对 cs 打促销 (/checkout/update, promo={self.promo_campaign_id})")
+        body = {
+            "checkout_session_id": cs_id,
+            "processor_entity": processor_entity,
+            "plan_name": "chatgptplusplan",
+            "price_interval": "month",
+            "seat_quantity": 1,
+            "promo_campaign": {
+                "promo_campaign_id": self.promo_campaign_id,
+                "is_coupon_from_query_param": False,
+            },
+        }
+        extra_headers = {
+            "Referer": self._checkout_page_url(cs_id, processor_entity),
+            "x-openai-target-path": "/backend-api/payments/checkout/update",
+            "x-openai-target-route": "/backend-api/payments/checkout/update",
+        }
+        try:
+            r = _checkout_post(
+                "https://chatgpt.com/backend-api/payments/checkout/update",
+                body, self.access_token, self.cookie_header, self.promotion_proxy, CHATGPT_TIMEOUT,
+                extra_headers=extra_headers,
+            )
+        except Exception as e:
+            self._log("promotion", f"checkout/update 请求异常 (忽略, 由 require_zero 兜底): {e}")
+            return False
+        if r.status_code >= 400:
+            self._log("promotion", f"checkout/update 失败 {r.status_code}: {r.text[:200]} (忽略, 由 require_zero 兜底)")
+            return False
+        try:
+            payload = r.json() or {}
+        except Exception:
+            payload = {}
+        if isinstance(payload, dict) and payload.get("success") is False:
+            self._log("promotion", f"checkout/update 被拒: {json.dumps(payload, ensure_ascii=False)[:200]}")
+            return False
+        self._log("promotion", "checkout/update 成功: 促销已应用到当前 checkout")
+        return True
+
+    def _checkout_update_taxes(self, cs_id: str, processor_entity: str) -> bool:
+        """Optionally sync billing/tax region via /checkout/taxes (provider 代理)."""
+        billing = billing_for_country(self.target_country)
+        body = {
+            "checkout_session_id": cs_id,
+            "checkout_email": billing["email"],
+            "billing_country": self.target_country,
+            "billing_name": f"{billing['name'][0]} {billing['name'][1]}",
+            "currency": self.currency,
+            "tax_id": None,
+            "processor_entity": processor_entity,
+            "billing_address": {
+                "line1": billing["street"],
+                "city": billing["city"],
+                "country": self.target_country,
+                "postal_code": billing["postal"],
+            },
+        }
+        extra_headers = {
+            "Referer": self._checkout_page_url(cs_id, processor_entity),
+            "x-openai-target-path": "/backend-api/payments/checkout/taxes",
+            "x-openai-target-route": "/backend-api/payments/checkout/taxes",
+        }
+        try:
+            r = _checkout_post(
+                "https://chatgpt.com/backend-api/payments/checkout/taxes",
+                body, self.access_token, self.cookie_header, self.provider_proxy, CHATGPT_TIMEOUT,
+                extra_headers=extra_headers,
+            )
+        except Exception as e:
+            self._log("promotion", f"checkout/taxes 请求异常 (忽略): {e}")
+            return False
+        if r.status_code >= 400:
+            self._log("promotion", f"checkout/taxes 失败 {r.status_code}: {r.text[:200]} (忽略)")
+            return False
+        self._log("promotion", "checkout/taxes 同步成功")
+        return True
 
     # ─── Stage 2: Stripe init + create PM + confirm (目标国代理) ───────────
 
@@ -482,7 +633,7 @@ class PPLinkExtractor:
     def _stripe_confirm(self, cs_id: str, pm_id: str, init: dict) -> dict:
         self._log("confirm", "Stripe confirm")
         stripe = getattr(self, "_stripe_session", None) or _new_session(self.provider_proxy)
-        processor_entity = "openai_llc" if self.target_country == "US" else "openai_ie"
+        processor_entity = "openai_llc" if self.checkout_country == "US" else "openai_ie"
         chatgpt_return = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor_entity}&plan_type=plus"
         hosted_url = str(init.get("stripe_hosted_url") or "")
         if hosted_url:
@@ -614,6 +765,13 @@ class PPLinkExtractor:
         cs_id = checkout["cs_id"]
         processor_entity = checkout["processor_entity"]
 
+        # Stage 1.5: 促销更新 (可选). 对已创建的 checkout 从促销可用区打 0元促销,
+        # 使 "PayPal 区 checkout + 0元" 能共存于同一会话.
+        if self.enable_promotion:
+            self._checkout_update_promotion(cs_id, processor_entity)
+            if self.promotion_taxes:
+                self._checkout_update_taxes(cs_id, processor_entity)
+
         # Stage 2: Stripe init + create PM + confirm (目标国代理)
         # 复用同一个 Stripe session 保持 cookies
         self._stripe_session = _new_session(self.provider_proxy)
@@ -650,6 +808,7 @@ class PPLinkExtractor:
                                 "amount": stripe_amount_details(init).get("amount"),
                                 "currency": self.currency,
                                 "target_country": self.target_country,
+                                "checkout_country": self.checkout_country,
                             }
                         raise
 
@@ -674,9 +833,11 @@ class PPLinkExtractor:
             "amount": stripe_amount_details(init).get("amount"),
             "currency": self.currency,
             "target_country": self.target_country,
+            "checkout_country": self.checkout_country,
             "checkout_proxy": self.checkout_proxy,
             "provider_proxy": self.provider_proxy,
             "approve_proxy": self.approve_proxy,
+            "promotion_proxy": self.promotion_proxy,
         }
 
 
@@ -690,11 +851,73 @@ def run_batch(
     checkout_countries: list[str] | None = None,
     require_zero: bool = True,
     emit: Any = None,
+    promotion_country: str = "",
+    promotion_countries: list[str] | None = None,
 ) -> dict:
-    """批量矩阵提链: target x checkout 组合，成功即停。"""
+    """批量矩阵提链: 成功即停。
+
+    两种矩阵模式:
+
+    - 默认 (target × checkout): 沿用旧行为, 遍历 target 国 × checkout 出口国。
+      ``promotion_country`` 非空时对每个组合启用促销更新 (/checkout/update)。
+    - 促销矩阵 (paypal_region × promotion_region): 当 ``promotion_countries``
+      非空时启用。对齐参考实现的 zero-amount matrix: checkout/provider/approve
+      都走 PayPal 支持区 (target), promotion 走促销可用区, 目标是同一 checkout
+      同时拿到 0元 + PayPal BA 直链。返回结果附带 ``matrix`` 明细。
+    """
+    log = emit or (lambda step, msg, **kw: print(f"[{step}] {msg}", file=sys.stderr))
+
+    # ── 促销矩阵模式: paypal_region × promotion_region ──────────────────────
+    if promotion_countries:
+        paypal_regions = target_countries or list(DEFAULT_TARGET_COUNTRIES)
+        promo_regions = [c for c in promotion_countries if c]
+        combos = [(pp, promo) for pp in paypal_regions for promo in promo_regions]
+        log("batch", f"促销矩阵: {len(combos)} 个组合 (PayPal 区 × promotion 区), 0元+BA 成功即停")
+        matrix: list[dict[str, Any]] = []
+        for index, (pp_region, promo_region) in enumerate(combos, 1):
+            label = f"{pp_region}<-promo:{promo_region}"
+            log("batch", f"任务 {index}/{len(combos)}: paypal={pp_region} promotion={promo_region}")
+            region_proxy = proxy_for_country_template(proxy_template, pp_region)
+            promotion_proxy = proxy_for_country_template(proxy_template, promo_region)
+            row: dict[str, Any] = {
+                "paypal_region": pp_region, "promotion_region": promo_region,
+                "amount": None, "link_type": "", "status": "failed", "error": "",
+            }
+            try:
+                extractor = PPLinkExtractor(
+                    access_token=access_token,
+                    checkout_proxy=region_proxy,
+                    provider_proxy=region_proxy,
+                    approve_proxy=region_proxy,
+                    promotion_proxy=promotion_proxy,
+                    target_country=pp_region,
+                    checkout_country=pp_region,
+                    require_zero=require_zero,
+                    emit=log,
+                )
+                result = extractor.extract()
+                row["amount"] = result.get("amount")
+                row["link_type"] = result.get("link_type", "")
+                is_zero = result.get("amount") == 0
+                is_ba = "paypal_ba" in str(result.get("link_type") or "")
+                if result.get("ok") and is_zero and is_ba:
+                    row["status"] = "success"
+                    matrix.append(row)
+                    log("batch", f"任务 {label} 成功! 0元+BA url={str(result.get('url'))[:80]}...")
+                    return {"ok": True, "tasks_attempted": index, "tasks_total": len(combos),
+                            "winning_combo": label, "matrix": matrix, **result}
+                row["status"] = "partial" if result.get("ok") else "failed"
+                log("batch", f"任务 {label}: amount={row['amount']} link_type={row['link_type']} (未同时满足 0元+BA)")
+            except Exception as e:
+                row["error"] = str(e)
+                log("batch", f"任务 {label} 失败: {e}")
+            matrix.append(row)
+        return {"ok": False, "error": f"所有 {len(combos)} 个促销矩阵组合均未同时满足 0元+BA",
+                "tasks_attempted": len(combos), "matrix": matrix}
+
+    # ── 默认模式: target × checkout ─────────────────────────────────────────
     targets = target_countries or list(DEFAULT_TARGET_COUNTRIES)
     checkouts = checkout_countries or list(DEFAULT_CHECKOUT_COUNTRIES)
-    log = emit or (lambda step, msg, **kw: print(f"[{step}] {msg}", file=sys.stderr))
 
     tasks = [(t, c) for t in targets for c in checkouts]
     log("batch", f"批量任务: {len(tasks)} 个组合, 提取到第一个 BA 链后停止")
@@ -705,6 +928,10 @@ def run_batch(
 
         checkout_proxy = proxy_for_country_template(proxy_template, checkout)
         target_proxy = proxy_for_country_template(proxy_template, target)
+        promotion_proxy = (
+            proxy_for_country_template(proxy_template, promotion_country)
+            if promotion_country else ""
+        )
 
         try:
             extractor = PPLinkExtractor(
@@ -712,7 +939,9 @@ def run_batch(
                 checkout_proxy=checkout_proxy,
                 provider_proxy=target_proxy,
                 approve_proxy=target_proxy,
+                promotion_proxy=promotion_proxy,
                 target_country=target,
+                checkout_country=checkout,
                 require_zero=require_zero,
                 emit=log,
             )
@@ -739,8 +968,12 @@ def main():
     parser.add_argument("--checkout-proxy", default="", help="Checkout 阶段代理 (JP)")
     parser.add_argument("--provider-proxy", default="", help="Provider/Stripe 阶段代理 (目标国)")
     parser.add_argument("--approve-proxy", default="", help="Approve 阶段代理 (目标国)")
+    parser.add_argument("--promotion-proxy", default="", help="促销更新阶段代理 (促销可用区出口, 如 VN/TH; 用于 /checkout/update 打 0元)")
+    parser.add_argument("--promotion-country", default="", help="批量模式促销更新出口国家 (如 VN/TH)")
+    parser.add_argument("--promotion-countries", default="", help="促销矩阵模式: promotion 出口国列表 (逗号分隔, 如 JP,TH,VN)。设置后 run_batch 走 PayPal区×promotion区 组合搜索")
     parser.add_argument("--proxy-template", default="", help="代理模板 (自动替换国家码)")
     parser.add_argument("--target", default="DE", help="目标国家 (单次模式)")
+    parser.add_argument("--checkout-country", default="", help="Checkout 阶段账单国家 (默认同 target, 如 JP/TR)")
     parser.add_argument("--batch", action="store_true", help="批量矩阵模式")
     parser.add_argument("--target-countries", default="", help="批量模式目标国家 (逗号分隔)")
     parser.add_argument("--checkout-countries", default="JP,TH", help="批量模式 checkout 出口 (逗号分隔)")
@@ -764,12 +997,16 @@ def main():
             parser.error("批量模式需要 --proxy-template")
         targets = [c.strip().upper() for c in args.target_countries.split(",") if c.strip()] if args.target_countries else list(DEFAULT_TARGET_COUNTRIES)
         checkouts = [c.strip().upper() for c in args.checkout_countries.split(",") if c.strip()]
-        result = run_batch(token, template, targets, checkouts, require_zero=require_zero, emit=emit)
+        promotion_countries = [c.strip().upper() for c in args.promotion_countries.split(",") if c.strip()]
+        result = run_batch(token, template, targets, checkouts, require_zero=require_zero, emit=emit,
+                           promotion_country=(args.promotion_country or "").strip().upper(),
+                           promotion_countries=promotion_countries or None)
     else:
         # 单次模式
         checkout_proxy = args.checkout_proxy or args.proxy
         provider_proxy = args.provider_proxy or args.proxy
         approve_proxy = args.approve_proxy or args.proxy
+        promotion_proxy = args.promotion_proxy or ""
         if not checkout_proxy and not provider_proxy:
             parser.error("请提供代理 (--proxy 或 --checkout-proxy + --provider-proxy)")
         extractor = PPLinkExtractor(
@@ -777,7 +1014,9 @@ def main():
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
             approve_proxy=approve_proxy,
+            promotion_proxy=promotion_proxy,
             target_country=args.target,
+            checkout_country=args.checkout_country,
             require_zero=require_zero,
             emit=emit,
         )
@@ -883,7 +1122,13 @@ def _proxies_from_config(cfg: dict) -> dict:
         or provider
         or proxy_default
     )
-    return {"checkout": checkout, "provider": provider, "approve": approve}
+    # Promotion stage is OPT-IN: only resolved from explicit config, no fallback
+    # to provider/default, so leaving it unset keeps the original behaviour.
+    promotion = (
+        _stage_proxy_value(stage_proxies, api_urls, "promotion")
+        or _stage_proxy_value(stage_proxies, api_urls, "promotion_update")
+    )
+    return {"checkout": checkout, "provider": provider, "approve": approve, "promotion": promotion}
 
 
 def generate_pp_link(
@@ -894,6 +1139,7 @@ def generate_pp_link(
     checkout_proxy: str | None = None,
     provider_proxy: str | None = None,
     approve_proxy: str | None = None,
+    promotion_proxy: str | None = None,
     target_country: str | None = None,
     checkout_country: str | None = None,
     require_zero: bool | None = None,
@@ -922,10 +1168,15 @@ def generate_pp_link(
     _checkout = checkout_proxy or proxy or stage_proxies["checkout"]
     _provider = provider_proxy or proxy or stage_proxies["provider"]
     _approve = approve_proxy or proxy or stage_proxies["approve"]
+    # Promotion 阶段 opt-in: 仅显式传入或配置 promotion 代理时启用 (不回退到单代理/默认)
+    _promotion = promotion_proxy if promotion_proxy is not None else stage_proxies.get("promotion", "")
 
     checkout_proxy = str(_checkout or "").strip()
     provider_proxy = str(_provider or "").strip()
     approve_proxy = str(_approve or "").strip()
+    promotion_proxy = str(_promotion or "").strip()
+    promotion_taxes = bool(paypal_cfg.get("promotion_taxes", False))
+    promo_campaign_id = str(paypal_cfg.get("promo_campaign_id") or "plus-1-month-free")
 
     generation_type = _normalized_generation_type(paypal_cfg, paypal_generation_type)
     if _is_chatgpt_checkout_link_generation_type(generation_type):
@@ -950,15 +1201,25 @@ def generate_pp_link(
         )
 
     target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    checkout_country = str(
+        checkout_country
+        or paypal_cfg.get("checkout_country")
+        or paypal_cfg.get("billing_country")
+        or (regions[0] if regions else None)
+        or target_country
+    ).strip().upper()
     if require_zero is None:
         require_zero = bool(paypal_cfg.get("require_zero_due", True))
     if require_ba_token is None:
         require_ba_token = bool(paypal_cfg.get("require_ba_token", False))
 
-    # 从 auth_context 提取 email
+    # 从 auth_context 提取 email 和 cookie_header
     email = ""
+    cookie_header = ""
     if isinstance(auth_context, dict):
         email = str(auth_context.get("email") or "")
+        cookie_header = str(auth_context.get("cookie_header") or "")
 
     def emit(step: str, msg: str, **kw: Any) -> None:
         print(f"[{step}] {msg}", file=sys.stderr)
@@ -969,9 +1230,14 @@ def generate_pp_link(
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
             approve_proxy=approve_proxy,
+            promotion_proxy=promotion_proxy,
             target_country=target_country,
+            checkout_country=checkout_country,
             require_zero=require_zero,
             emit=emit,
+            cookie_header=cookie_header,
+            promotion_taxes=promotion_taxes,
+            promo_campaign_id=promo_campaign_id,
         )
         result = extractor.extract()
         ba_token = str(result.get("ba_token") or "").strip()
@@ -989,9 +1255,11 @@ def generate_pp_link(
                 "amount": result.get("amount"),
                 "currency": result.get("currency", ""),
                 "target_country": result.get("target_country", ""),
+                "checkout_country": result.get("checkout_country", ""),
                 "checkout_proxy": result.get("checkout_proxy", ""),
                 "provider_proxy": result.get("provider_proxy", ""),
                 "approve_proxy": result.get("approve_proxy", ""),
+                "promotion_proxy": result.get("promotion_proxy", ""),
                 "fallback_url": url,
             }
 
@@ -1005,9 +1273,11 @@ def generate_pp_link(
             "amount": result.get("amount"),
             "currency": result.get("currency", ""),
             "target_country": result.get("target_country", ""),
+            "checkout_country": result.get("checkout_country", ""),
             "checkout_proxy": result.get("checkout_proxy", ""),
             "provider_proxy": result.get("provider_proxy", ""),
             "approve_proxy": result.get("approve_proxy", ""),
+            "promotion_proxy": result.get("promotion_proxy", ""),
         }
     except Exception as e:
         return {
@@ -1015,6 +1285,8 @@ def generate_pp_link(
             "error": str(e),
             "url": "",
             "ba_token": "",
+            "target_country": target_country,
+            "checkout_country": checkout_country,
         }
 
 
@@ -1110,13 +1382,9 @@ def generate_chatgpt_checkout_link(
 
     try:
         emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for ChatGPT checkout link")
-        cs = _new_session(checkout_proxy)
-        cs.headers.update({
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Referer": "https://chatgpt.com/",
-        })
+        _cookie = ""
+        if isinstance(auth_context, dict):
+            _cookie = str(auth_context.get("cookie_header") or "")
         checkout_body = {
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
@@ -1124,7 +1392,10 @@ def generate_chatgpt_checkout_link(
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
             "checkout_ui_mode": "custom",
         }
-        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        r = _checkout_post(
+            "https://chatgpt.com/backend-api/payments/checkout",
+            checkout_body, access_token, _cookie, checkout_proxy, CHATGPT_TIMEOUT,
+        )
         if r.status_code == 401:
             return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "link_type": "chatgpt_checkout_link"}
         if r.status_code >= 400:
@@ -1199,13 +1470,9 @@ def generate_hosted_long_url(
 
     try:
         emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for hosted checkout")
-        cs = _new_session(checkout_proxy)
-        cs.headers.update({
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Referer": "https://chatgpt.com/",
-        })
+        _cookie = ""
+        if isinstance(auth_context, dict):
+            _cookie = str(auth_context.get("cookie_header") or "")
         checkout_body = {
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
@@ -1213,7 +1480,10 @@ def generate_hosted_long_url(
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
             "checkout_ui_mode": "custom",
         }
-        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        r = _checkout_post(
+            "https://chatgpt.com/backend-api/payments/checkout",
+            checkout_body, access_token, _cookie, checkout_proxy, CHATGPT_TIMEOUT,
+        )
         if r.status_code == 401:
             return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "link_type": "chatgpt_checkout_hosted_long_url"}
         if r.status_code >= 400:
@@ -1313,6 +1583,217 @@ def _write_qr_png(data: str, qr_path: str = "") -> str:
     return str(path)
 
 
+# ─── UPI 辅助函数 ──────────────────────────────────────────────────────────────
+
+
+def _upi_nested_get(data: Any, path: list[str]) -> Any:
+    """安全地按路径取嵌套值."""
+    current = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _upi_amount_minor(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return round(value) if value == value else None  # reject NaN
+    if isinstance(value, dict):
+        for key in ("amount", "amount_due", "minor", "value"):
+            nested = _upi_amount_minor(value.get(key))
+            if nested is not None:
+                return nested
+    return None
+
+
+def _upi_extract_payment_amount(init_data: Any) -> int:
+    return (
+        _upi_amount_minor(_upi_nested_get(init_data, ["total_summary", "due"]))
+        or _upi_amount_minor(_upi_nested_get(init_data, ["invoice", "amount_due"]))
+        or _upi_amount_minor(_upi_nested_get(init_data, ["elements_options", "amount"]))
+        or 0
+    )
+
+
+def _upi_get_payment_method_types(init_data: Any) -> list[str]:
+    candidates = [
+        _upi_nested_get(init_data, ["elements_options", "payment_method_types"]),
+        init_data.get("payment_method_types") if isinstance(init_data, dict) else None,
+        _upi_nested_get(init_data, ["payment_method_preference", "payment_method_types"]),
+        _upi_nested_get(init_data, ["session", "payment_method_types"]),
+        init_data.get("ordered_payment_method_types") if isinstance(init_data, dict) else None,
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, list) and candidate:
+            return [str(item).lower() for item in candidate]
+    return []
+
+
+def _upi_scan_free_trial(value: Any, depth: int = 0, signals: dict | None = None) -> dict:
+    """递归搜索 Stripe init 响应中的免费试用信号."""
+    if signals is None:
+        signals = {"coupon_name": "", "percent_off": None, "duration_months": None}
+    if depth > 8 or not value or not isinstance(value, (dict, list)):
+        return signals
+    if isinstance(value, list):
+        for item in value:
+            _upi_scan_free_trial(item, depth + 1, signals)
+        return signals
+    for key, next_val in value.items():
+        lower_key = key.lower()
+        if isinstance(next_val, str):
+            lower_val = next_val.lower()
+            if not signals["coupon_name"] and (
+                lower_val.startswith("upi://")
+                or "free trial" in lower_val
+                or "1 month free" in lower_val
+                or "one month free" in lower_val
+                or "plus-1-month-free" in lower_val
+                or "coupon" in lower_key
+                or "promotion" in lower_key
+            ):
+                signals["coupon_name"] = next_val
+        elif isinstance(next_val, (int, float)) and not isinstance(next_val, bool):
+            if lower_key in ("percent_off", "percentoff"):
+                signals["percent_off"] = max(signals["percent_off"] or 0, next_val)
+            if lower_key in ("duration_in_months", "durationmonths"):
+                signals["duration_months"] = max(signals["duration_months"] or 0, next_val)
+        if next_val and isinstance(next_val, (dict, list)):
+            _upi_scan_free_trial(next_val, depth + 1, signals)
+    return signals
+
+
+def _upi_get_free_trial_status(init_data: Any) -> dict:
+    """分析 Stripe init 响应判断是否有免费试用."""
+    due = _upi_extract_payment_amount(init_data)
+    signals = _upi_scan_free_trial(init_data)
+    pm_types = _upi_get_payment_method_types(init_data)
+    coupon = signals["coupon_name"].strip()
+    coupon_lower = coupon.lower()
+    looks_like_trial = any(s in coupon_lower for s in ("free trial", "1 month free", "one month free", "plus-1-month-free"))
+    looks_like_full_discount = (signals["percent_off"] is not None and signals["percent_off"] >= 100) or looks_like_trial
+    return {
+        "has_free_trial": due == 0 or (looks_like_full_discount and signals["percent_off"] is not None and signals["percent_off"] >= 100),
+        "has_upi": "upi" in pm_types,
+        "due": due,
+        "coupon_name": coupon,
+        "percent_off": signals["percent_off"],
+        "duration_months": signals["duration_months"],
+        "payment_method_types": pm_types,
+    }
+
+
+def _upi_merge_qr_key(result: dict, key: str, value: Any) -> None:
+    """将 UPI QR 数据字段合并到 result dict."""
+    if value is None:
+        return
+    normalized_key = key.lower()
+    if isinstance(value, str):
+        if value.startswith("upi://") and not result.get("upi_uri"):
+            result["upi_uri"] = value
+            result["mobile_auth_url"] = value
+        elif value.startswith("https://payments.stripe.com/upi/instructions/") and not result.get("hosted_instructions_url"):
+            result["hosted_instructions_url"] = value
+        elif value.startswith("https://qr.stripe.com/") and "svg" in value.lower() and not result.get("qr_image_url_svg"):
+            result["qr_image_url_svg"] = value
+        elif value.startswith("https://qr.stripe.com/") and "png" in value.lower() and not result.get("qr_image_url_png"):
+            result["qr_image_url_png"] = value
+    known_keys = {
+        "hosted_instructions_url": "hosted_instructions_url",
+        "mobile_auth_url": "mobile_auth_url",
+        "upi_uri": "upi_uri",
+        "image_url_svg": "qr_image_url_svg",
+        "qr_image_url_svg": "qr_image_url_svg",
+        "image_url_png": "qr_image_url_png",
+        "qr_image_url_png": "qr_image_url_png",
+    }
+    if normalized_key in known_keys and isinstance(value, str) and value:
+        out_key = known_keys[normalized_key]
+        result.setdefault(out_key, value)
+    if normalized_key in ("expires_at", "expires_after_timestamp", "qr_expires_at"):
+        try:
+            expires = int(value)
+            if expires > 0 and not result.get("expires_at"):
+                result["expires_at"] = expires
+        except (ValueError, TypeError):
+            pass
+
+
+def _upi_extract_next_action(data: Any) -> dict:
+    """递归遍历 Stripe 响应提取 UPI QR 数据."""
+    result: dict[str, Any] = {}
+    def walk(value: Any, key: str = "") -> None:
+        _upi_merge_qr_key(result, key, value)
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for child_key, child_value in value.items():
+            if child_key == "qr_code" and isinstance(child_value, dict):
+                _upi_merge_qr_key(result, "qr_expires_at", child_value.get("expires_at"))
+                _upi_merge_qr_key(result, "image_url_svg", child_value.get("image_url_svg"))
+                _upi_merge_qr_key(result, "image_url_png", child_value.get("image_url_png"))
+            walk(child_value, child_key)
+    walk(data)
+    return result
+
+
+def _upi_extract_qr_from_html(html: str) -> dict:
+    """从 Stripe hosted instructions HTML 页面解析 UPI QR 数据."""
+    result: dict[str, Any] = {}
+    # 解析 <meta id="payload" data-message="..." />
+    meta_match = re.search(r'<meta\b[^>]*\bid=["\']payload["\'][^>]*\bdata-message=["\']([^"\']+)["\']', html, re.I)
+    if not meta_match:
+        meta_match = re.search(r'<meta\b[^>]*\bdata-message=["\']([^"\']+)["\'][^>]*\bid=["\']payload["\']', html, re.I)
+    if meta_match:
+        import base64
+        raw = meta_match.group(1).replace("&quot;", '"')
+        raw = raw.replace("-", "+").replace("_", "/")
+        padded = raw + "=" * (4 - len(raw) % 4) if len(raw) % 4 else raw
+        try:
+            payload = json.loads(base64.b64decode(padded).decode("utf-8"))
+            if isinstance(payload, dict):
+                _upi_merge_qr_key(result, "mobile_auth_url", payload.get("mobile_auth_url"))
+                _upi_merge_qr_key(result, "upi_uri", payload.get("upi_uri"))
+                _upi_merge_qr_key(result, "expires_at", payload.get("expires_at") or payload.get("expires_after_timestamp"))
+        except Exception:
+            pass
+    # 解析 <img src="https://qr.stripe.com/..." />
+    for img_match in re.finditer(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']', html, re.I):
+        src = img_match.group(1).replace("&amp;", "&")
+        tag = img_match.group(0)
+        if "qr.stripe.com" in src or "QRCode-image" in tag:
+            _upi_merge_qr_key(result, "png" if "png" in src.lower() else "svg", src)
+            break
+    return result
+
+
+def _upi_hydrate_qr_data(qr_data: dict, proxy_url: str) -> dict:
+    """如果 JSON 中没有 upi://，访问 hosted_instructions_url 从 HTML 中解析."""
+    result = dict(qr_data)
+    hosted_url = result.get("hosted_instructions_url")
+    if hosted_url and not result.get("upi_uri"):
+        try:
+            session = _new_session(proxy_url)
+            resp = session.get(hosted_url, timeout=DEFAULT_TIMEOUT, headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Referer": "https://js.stripe.com/",
+            })
+            if resp.status_code < 400:
+                extracted = _upi_extract_qr_from_html(resp.text)
+                for k, v in extracted.items():
+                    if v and not result.get(k):
+                        result[k] = v
+        except Exception:
+            pass
+    return result
+
+
 def _method_cfg(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
     section = cfg.get(method) if isinstance(cfg.get(method), dict) else {}
@@ -1360,11 +1841,19 @@ def generate_upi_qr_link(
     require_zero: bool | None = None,
     qr_path: str | None = None,
 ) -> dict[str, Any]:
-    """Generate a UPI hosted checkout URL and local QR PNG from an AT.
+    """Generate a UPI payment link with full Stripe Confirm + Approve flow.
 
-    ``checkout_country`` controls ChatGPT checkout billing country/currency.
-    ``payment_country`` records the intended local payment-method country.  The
-    legacy ``target_country`` argument is kept as a checkout-country alias.
+    Implements the complete 7-stage UPI extraction pipeline:
+      1. ChatGPT checkout (create cs_id)
+      2. Stripe init (get payment page data)
+      3. Free trial detection (coupon / discount analysis)
+      4. Tax region update (set IN billing address)
+      5. Stripe confirm (submit UPI payment method)
+      6. ChatGPT approve (trigger payment approval)
+      7. Poll payment page → extract upi:// URI → hydrate → render QR
+
+    Returns ``upi://`` deep link + QR PNG path on success, or
+    ``stripe_hosted_url`` as fallback if UPI data is not available.
     """
     cfg = _load_json(DEFAULT_CONFIG_PATH)
     upi_cfg = _method_cfg(cfg, "upi")
@@ -1402,6 +1891,7 @@ def generate_upi_qr_link(
         print(f"[{step}] {msg}", file=sys.stderr)
 
     try:
+        # ── Stage 1: ChatGPT checkout ────────────────────────────────────
         emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for UPI checkout")
         cs = _new_session(checkout_proxy)
         cs.headers.update({
@@ -1415,9 +1905,9 @@ def generate_upi_qr_link(
             "plan_name": "chatgptplusplan",
             "billing_details": {"country": checkout_country, "currency": currency},
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
-            "checkout_ui_mode": "hosted",
+            "checkout_ui_mode": "custom",
         }
-        r = cs.post("https://chatgpt.com/backend-api/payments/checkout", json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        r = cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)
         if r.status_code == 401:
             return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "payment_method": "upi"}
         if r.status_code >= 400:
@@ -1430,16 +1920,18 @@ def generate_upi_qr_link(
         processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
         emit("checkout", f"checkout success: cs_id={cs_id}")
 
+        # ── Stage 2: Stripe init (custom mode) ───────────────────────────
         emit("stripe_init", f"Stage 2: using {provider_proxy or 'DIRECT'} for Stripe init")
         stripe = _new_session(provider_proxy)
-        body = {
+        stripe_js_id = str(uuid.uuid4())
+        init_body = {
             "browser_locale": "en-US",
-            "browser_timezone": "Asia/Shanghai",
+            "browser_timezone": "Asia/Kolkata",
             "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
             "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-            "elements_session_client[elements_init_source]": "hosted_checkout",
+            "elements_session_client[elements_init_source]": "custom_checkout",
             "elements_session_client[referrer_host]": "chatgpt.com",
-            "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
+            "elements_session_client[stripe_js_id]": stripe_js_id,
             "elements_session_client[locale]": "en",
             "elements_session_client[is_aggregation_expected]": "false",
             "elements_options_client[saved_payment_method][enable_save]": "never",
@@ -1447,40 +1939,255 @@ def generate_upi_qr_link(
             "key": stripe_pk,
             "_stripe_version": STRIPE_VERSION,
         }
-        init_resp = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=body, timeout=DEFAULT_TIMEOUT)
+        init_resp = stripe.post(
+            STRIPE_PAYMENT_PAGE_INIT_URL_T.format(cs_id=cs_id),
+            data=init_body, timeout=DEFAULT_TIMEOUT,
+        )
         if init_resp.status_code >= 400:
             return {"ok": False, "error": f"stripe init failed: {init_resp.status_code} {init_resp.text[:300]}", "error_code": "stripe_init_failed", "payment_method": "upi", "cs_id": cs_id}
         init = init_resp.json() or {}
-        amount_info = stripe_amount_details(init)
-        amount = amount_info.get("amount")
-        emit("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
-        if require_zero and amount is not None and amount != 0:
-            return {"ok": False, "error": f"checkout_not_zero_due: amount={amount} {amount_info.get('currency')}", "error_code": "checkout_not_zero_due", "payment_method": "upi", "cs_id": cs_id, "amount": amount, "currency": str(amount_info.get("currency") or currency).upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
-        pm_types = [str(item or "").strip().lower() for item in (init.get("payment_method_types") or [])]
-        if pm_types and "upi" not in pm_types:
-            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": str(amount_info.get("currency") or currency).upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
-        hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
-        if not hosted_url:
-            hosted_url = f"https://pay.openai.com/c/pay/{cs_id}"
-        written_qr_path = _write_qr_png(hosted_url, qr_path or "")
+        emit("stripe_init", f"init success, analyzing free trial...")
+
+        # ── Stage 3: Free trial detection ────────────────────────────────
+        ft_status = _upi_get_free_trial_status(init)
+        amount = ft_status["due"]
+        pm_types = ft_status["payment_method_types"]
+        emit("stripe_init", f"free_trial={ft_status['has_free_trial']} due={amount} coupon={ft_status['coupon_name']} upi={ft_status['has_upi']}")
+        if require_zero and not ft_status["has_free_trial"]:
+            return {
+                "ok": False, "error": f"no_free_trial: due={amount} coupon={ft_status['coupon_name']} percent_off={ft_status['percent_off']}",
+                "error_code": "no_free_trial", "payment_method": "upi", "cs_id": cs_id,
+                "amount": amount, "currency": currency.upper(),
+                "target_country": target_country, "checkout_country": checkout_country,
+                "billing_country": checkout_country, "payment_country": payment_country,
+                "coupon_name": ft_status["coupon_name"], "percent_off": ft_status["percent_off"],
+            }
+        if pm_types and not ft_status["has_upi"]:
+            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": currency.upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
+
+        # ── Stage 4: Tax region update ───────────────────────────────────
+        emit("tax_region", f"Stage 4: updating tax region to IN")
+        tax_body = {
+            "tax_region[country]": UPI_BILLING_IN["country"],
+            "tax_region[postal_code]": UPI_BILLING_IN["postal"],
+            "tax_region[state]": UPI_BILLING_IN["state"],
+            "tax_region[city]": UPI_BILLING_IN["city"],
+            "tax_region[line1]": UPI_BILLING_IN["line1"],
+            "tax_region[line2]": UPI_BILLING_IN["line2"],
+            "key": stripe_pk,
+            "_stripe_version": STRIPE_VERSION,
+        }
+        tax_resp = stripe.post(
+            STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+            data=tax_body, timeout=DEFAULT_TIMEOUT,
+        )
+        if tax_resp.status_code >= 400:
+            emit("tax_region", f"tax region update failed (non-fatal): {tax_resp.status_code} {tax_resp.text[:200]}")
+        else:
+            emit("tax_region", "tax region updated")
+            # Use tax-updated data for confirm
+            init = tax_resp.json() or init
+
+        # ── Stage 5: Stripe confirm (submit UPI payment method) ──────────
+        emit("stripe_confirm", f"Stage 5: Stripe confirm with UPI payment method")
+        confirm_body = {
+            "payment_method_data[type]": "upi",
+            "payment_method_data[billing_details][name]": UPI_BILLING_IN["name"],
+            "payment_method_data[billing_details][email]": UPI_BILLING_IN["email"],
+            "payment_method_data[billing_details][address][line1]": UPI_BILLING_IN["line1"],
+            "payment_method_data[billing_details][address][line2]": UPI_BILLING_IN["line2"],
+            "payment_method_data[billing_details][address][city]": UPI_BILLING_IN["city"],
+            "payment_method_data[billing_details][address][state]": UPI_BILLING_IN["state"],
+            "payment_method_data[billing_details][address][postal_code]": UPI_BILLING_IN["postal"],
+            "payment_method_data[billing_details][address][country]": UPI_BILLING_IN["country"],
+            "expected_amount": str(amount),
+            "expected_payment_method_type": "upi",
+            "return_url": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+            "client_attribution_metadata[client_session_id]": stripe_js_id,
+            "client_attribution_metadata[checkout_session_id]": cs_id,
+            "client_attribution_metadata[merchant_integration_source]": "checkout",
+            "client_attribution_metadata[merchant_integration_version]": "custom",
+            "client_attribution_metadata[merchant_integration_subtype]": "payment-element",
+            "client_attribution_metadata[payment_intent_creation_flow]": "deferred",
+            "client_attribution_metadata[payment_method_selection_flow]": "automatic",
+            "key": stripe_pk,
+            "_stripe_version": STRIPE_VERSION,
+        }
+        init_checksum = init.get("init_checksum") if isinstance(init, dict) else None
+        if init_checksum:
+            confirm_body["init_checksum"] = str(init_checksum)
+        confirm_resp = stripe.post(
+            STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+            data=confirm_body, timeout=DEFAULT_TIMEOUT,
+        )
+        if confirm_resp.status_code >= 400:
+            emit("stripe_confirm", f"confirm failed: {confirm_resp.status_code} {confirm_resp.text[:300]}")
+            # Fallback to hosted URL
+            hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or f"https://pay.openai.com/c/pay/{cs_id}"
+            written_qr_path = _write_qr_png(hosted_url, qr_path or "")
+            return {
+                "ok": True, "payment_method": "upi", "method": "upi",
+                "link_type": "upi_hosted_fallback", "url": hosted_url, "qr_data": hosted_url,
+                "qr_path": written_qr_path, "cs_id": cs_id, "processor_entity": processor_entity,
+                "amount": amount, "currency": currency.upper(),
+                "target_country": target_country, "checkout_country": checkout_country,
+                "billing_country": checkout_country, "payment_country": payment_country,
+                "payment_method_types": pm_types, "checkout_proxy": checkout_proxy,
+                "provider_proxy": provider_proxy, "approve_proxy": approve_proxy,
+                "warning": f"stripe_confirm_failed: {confirm_resp.status_code}",
+            }
+        confirm_data = confirm_resp.json() or {}
+        emit("stripe_confirm", "confirm success")
+
+        # ── Stage 6: ChatGPT approve ─────────────────────────────────────
+        emit("approve", f"Stage 6: ChatGPT approve using {approve_proxy or 'DIRECT'}")
+        approve_session = _new_session(approve_proxy)
+        approve_session.headers.update({
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+        })
+        approval_ok = False
+        approval_data: dict[str, Any] = {}
+        # Try confirm endpoint first
+        try:
+            confirm_chatgpt = approve_session.post(
+                UPI_CHECKOUT_CONFIRM_URL,
+                json={"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
+                timeout=CHATGPT_TIMEOUT,
+            )
+            if confirm_chatgpt.status_code < 400:
+                confirm_json = confirm_chatgpt.json() or {}
+                if str(confirm_json.get("result", "")).lower() == "approved":
+                    emit("approve", "approved via confirm endpoint")
+                    approval_data = confirm_json
+                    approval_ok = True
+                else:
+                    approval_ok = False
+                    approval_data = confirm_json
+            else:
+                approval_ok = False
+                approval_data = {}
+        except Exception:
+            approval_ok = False
+            approval_data = {}
+
+        # If confirm didn't approve, try approve endpoint with retries
+        if not approval_ok:
+            for attempt in range(1, UPI_APPROVAL_MAX_ATTEMPTS + 1):
+                try:
+                    approve_resp = approve_session.post(
+                        UPI_CHECKOUT_APPROVE_URL,
+                        json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                        timeout=CHATGPT_TIMEOUT,
+                    )
+                    if approve_resp.status_code < 400:
+                        approve_json = approve_resp.json() or {}
+                        if str(approve_json.get("result", "")).lower() == "approved":
+                            emit("approve", f"approved on attempt {attempt}")
+                            approval_ok = True
+                            approval_data = approve_json
+                            break
+                    if attempt % 10 == 0:
+                        emit("approve", f"attempt {attempt}/{UPI_APPROVAL_MAX_ATTEMPTS}: status={approve_resp.status_code}")
+                except Exception as ex:
+                    if attempt % 10 == 0:
+                        emit("approve", f"attempt {attempt} exception: {ex}")
+
+        if not approval_ok:
+            emit("approve", "approval failed after all attempts, trying hosted fallback")
+
+        # ── Stage 7: Poll payment page for upi:// URI ────────────────────
+        emit("poll", f"Stage 7: polling payment page for UPI QR data")
+        qr_data: dict[str, Any] = {}
+        # First check confirm/approve responses
+        for source in (confirm_data, approval_data):
+            extracted = _upi_extract_next_action(source)
+            for k, v in extracted.items():
+                if v and not qr_data.get(k):
+                    qr_data[k] = v
+
+        # Poll Stripe payment page
+        for attempt in range(UPI_QR_POLL_MAX_ATTEMPTS):
+            if qr_data.get("upi_uri") or qr_data.get("hosted_instructions_url") or qr_data.get("qr_image_url_svg") or qr_data.get("qr_image_url_png"):
+                break
+            emit("poll", f"poll attempt {attempt + 1}/{UPI_QR_POLL_MAX_ATTEMPTS}")
+            if attempt > 0:
+                time.sleep(UPI_QR_POLL_INTERVAL)
+            try:
+                page_resp = stripe.get(
+                    STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                    params={"key": stripe_pk, "_stripe_version": STRIPE_VERSION},
+                    timeout=DEFAULT_TIMEOUT,
+                )
+                if page_resp.status_code == 200:
+                    extracted = _upi_extract_next_action(page_resp.json() or {})
+                    for k, v in extracted.items():
+                        if v and not qr_data.get(k):
+                            qr_data[k] = v
+                else:
+                    if page_resp.status_code >= 400:
+                        break
+            except Exception:
+                pass
+
+        # If still no upi://, try re-init then hydrate
+        if not qr_data.get("upi_uri") and not qr_data.get("hosted_instructions_url"):
+            emit("poll", "re-init to check for UPI data")
+            try:
+                refresh_resp = stripe.post(
+                    STRIPE_PAYMENT_PAGE_INIT_URL_T.format(cs_id=cs_id),
+                    data=init_body, timeout=DEFAULT_TIMEOUT,
+                )
+                if refresh_resp.status_code == 200:
+                    extracted = _upi_extract_next_action(refresh_resp.json() or {})
+                    for k, v in extracted.items():
+                        if v and not qr_data.get(k):
+                            qr_data[k] = v
+            except Exception:
+                pass
+
+        # Hydrate: fetch hosted_instructions_url HTML if no upi://
+        emit("hydrate", "hydrating UPI QR data from hosted instructions")
+        qr_data = _upi_hydrate_qr_data(qr_data, provider_proxy)
+
+        upi_uri = qr_data.get("upi_uri") or qr_data.get("mobile_auth_url") or ""
+        hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or f"https://pay.openai.com/c/pay/{cs_id}"
+        expires_at = qr_data.get("expires_at") or int(time.time()) + 300
+
+        if upi_uri:
+            emit("done", f"UPI URI extracted: {upi_uri[:40]}...")
+            qr_data_str = upi_uri
+            link_type = "upi_deep_link"
+        else:
+            emit("done", f"no upi:// URI found, falling back to hosted URL")
+            qr_data_str = hosted_url
+            link_type = "upi_hosted_fallback"
+
+        written_qr_path = _write_qr_png(qr_data_str, qr_path or "")
         return {
             "ok": True,
             "payment_method": "upi",
             "method": "upi",
-            "link_type": "upi_hosted_qr",
-            "url": hosted_url,
-            "short_url": hosted_url,
-            "qr_data": hosted_url,
+            "link_type": link_type,
+            "url": upi_uri or hosted_url,
+            "upi_uri": upi_uri,
+            "hosted_url": hosted_url,
+            "qr_data": qr_data_str,
             "qr_path": written_qr_path,
+            "expires_at": expires_at,
             "cs_id": cs_id,
             "processor_entity": processor_entity,
             "amount": amount,
-            "currency": str(amount_info.get("currency") or currency).upper(),
+            "currency": currency.upper(),
             "target_country": target_country,
             "checkout_country": checkout_country,
             "billing_country": checkout_country,
             "payment_country": payment_country,
-            "payment_method_types": init.get("payment_method_types") or [],
+            "payment_method_types": pm_types,
+            "coupon_name": ft_status["coupon_name"],
+            "approval_ok": approval_ok,
             "checkout_proxy": checkout_proxy,
             "provider_proxy": provider_proxy,
             "approve_proxy": approve_proxy,
@@ -1495,14 +2202,21 @@ def generate_payment_link(
     payment_method: Any = "paypal",
     auth_context: dict[str, Any] | None = None,
     paypal_generation_type: str | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
-    """Generate a payment link or QR by payment method."""
+    """Generate a payment link or QR by payment method.
+
+    For UPI, accepts ``checkout_country``, ``payment_country``, ``require_zero``,
+    ``checkout_proxy``, ``provider_proxy``, ``approve_proxy``, ``qr_path`` via
+    ``**kwargs`` and passes them through to :func:`generate_upi_qr_link`.
+    """
     method = str(payment_method or "paypal").lower().strip().replace("-", "_")
     if method in {"upi", "upiqr", "upi_qr"}:
         return generate_upi_qr_link(
             access_token=access_token,
             proxy=proxy,
             auth_context=auth_context,
+            **kwargs,
         )
     if method != "paypal":
         return {"ok": False, "error": f"unsupported payment method: {method}; expected paypal/upi"}

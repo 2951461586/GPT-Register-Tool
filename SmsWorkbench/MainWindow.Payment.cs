@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -116,16 +95,21 @@ namespace SmsWorkbench
 
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
         {
-            ShowAtExtractBaLinkDialog();
+            ShowAtPaymentDialog();
         }
 
-        private void ShowAtExtractBaLinkDialog()
+        /// <summary>
+        /// AT Payment dialog supporting both PayPal BA link and UPI QR extraction.
+        /// UPI mode uses the full 7-stage pipeline: checkout → init → free trial detection →
+        /// tax region → stripe confirm → chatgpt approve → poll for upi:// URI → QR.
+        /// </summary>
+        private void ShowAtPaymentDialog()
         {
             var win = new Window
             {
-                Title = "AT 提取 BA 链接",
-                Width = 560,
-                Height = 620,
+                Title = "AT 支付 (PayPal BA / UPI)",
+                Width = 620,
+                Height = 720,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
                 ResizeMode = ResizeMode.CanResize,
@@ -139,17 +123,34 @@ namespace SmsWorkbench
             };
             var mainPanel = new StackPanel { Margin = new Thickness(24) };
 
-            // 标题
+            // ── 标题 ──────────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "输入 Access Token 提取 PayPal BA 链接",
+                Text = "AT 支付 — PayPal BA / UPI QR",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 16),
             });
 
-            // AT 输入
+            // ── 支付方式选择 ──────────────────────────────────────────────
+            mainPanel.Children.Add(new TextBlock
+            {
+                Text = "支付方式",
+                FontSize = 13,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+            var methodCombo = new ComboBox
+            {
+                SelectedIndex = 0,
+                Margin = new Thickness(0, 0, 0, 12),
+            };
+            methodCombo.Items.Add(new ComboBoxItem { Content = "UPI — 印度统一支付接口 (upi:// QR)" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "PayPal — BA 授权链接 (hosted)" });
+            mainPanel.Children.Add(methodCombo);
+
+            // ── AT 输入 ───────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
                 Text = "Access Token (JWT)",
@@ -172,31 +173,32 @@ namespace SmsWorkbench
             };
             mainPanel.Children.Add(atBox);
 
-            // 目标国家
+            // ── 目标国家 ──────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "目标国家",
+                Text = "结算国家 (账单区域)",
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
             });
             var countryCombo = new ComboBox
             {
-                Height = 32,
-                SelectedIndex = 1,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                SelectedIndex = 0,
                 Margin = new Thickness(0, 0, 0, 12),
             };
-            foreach (var c in new[] { "DE - Germany", "GB - United Kingdom", "US - United States", "AU - Australia", "JP - Japan", "FR - France", "IN - India", "BR - Brazil" })
+            var countries = new[] {
+                "IN - 印度 (UPI)", "DE - 德国", "GB - 英国", "US - 美国",
+                "AU - 澳大利亚", "JP - 日本", "FR - 法国", "BR - 巴西",
+                "SG - 新加坡", "CA - 加拿大", "NZ - 新西兰", "IE - 爱尔兰",
+            };
+            foreach (var c in countries)
                 countryCombo.Items.Add(new ComboBoxItem { Content = c });
             mainPanel.Children.Add(countryCombo);
 
-            // 代理配置
+            // ── 代理配置 ──────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "代理配置 (可选，留空使用配置文件)",
+                Text = "代理 (可选，留空使用配置文件默认值)",
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
@@ -233,18 +235,18 @@ namespace SmsWorkbench
             stageProxyPanel.Children.Add(stageProxyBox);
             mainPanel.Children.Add(stageProxyPanel);
 
-            // 选项
+            // ── 选项 ──────────────────────────────────────────────────────
             var optionPanel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 16) };
             var zeroCheck = new CheckBox
             {
-                Content = "严格要求 0 元金额 / Strict zero due",
+                Content = "严格要求免费试用 / 0 元金额",
                 IsChecked = true,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 6),
             };
             var requireBaCheck = new CheckBox
             {
-                Content = "必须返回 PayPal BA approve URL / Require BA approve URL",
+                Content = "必须返回 PayPal BA 授权 URL (仅 PayPal 模式)",
                 IsChecked = true,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 0),
@@ -253,10 +255,17 @@ namespace SmsWorkbench
             optionPanel.Children.Add(requireBaCheck);
             mainPanel.Children.Add(optionPanel);
 
-            // 结果区域
+            // ── 结果区域 ──────────────────────────────────────────────────
+            mainPanel.Children.Add(new TextBlock
+            {
+                Text = "结果",
+                FontSize = 13,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 4),
+            });
             var resultBox = new TextBox
             {
-                Height = 100,
+                Height = 120,
                 TextWrapping = TextWrapping.Wrap,
                 IsReadOnly = true,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -269,11 +278,11 @@ namespace SmsWorkbench
             };
             mainPanel.Children.Add(resultBox);
 
-            // 按钮面板
+            // ── 按钮面板 ──────────────────────────────────────────────────
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             var extractBtn = new Button
             {
-                Content = "提取 BA 链接",
+                Content = "提取",
                 Height = 32,
                 MinWidth = 100,
                 FontWeight = FontWeights.SemiBold,
@@ -282,6 +291,17 @@ namespace SmsWorkbench
             var copyBtn = new Button
             {
                 Content = "复制链接",
+                Height = 32,
+                MinWidth = 80,
+                IsEnabled = false,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            var openQrBtn = new Button
+            {
+                Content = "打开二维码",
                 Height = 32,
                 MinWidth = 80,
                 IsEnabled = false,
@@ -301,6 +321,7 @@ namespace SmsWorkbench
             };
             btnPanel.Children.Add(extractBtn);
             btnPanel.Children.Add(copyBtn);
+            btnPanel.Children.Add(openQrBtn);
             btnPanel.Children.Add(closeBtn);
             mainPanel.Children.Add(btnPanel);
 
@@ -308,7 +329,20 @@ namespace SmsWorkbench
             win.Content = scrollViewer;
 
             string lastUrl = "";
+            string lastQrPath = "";
 
+            // ── 支付方式切换时更新国家默认值 ──────────────────────────────
+            methodCombo.SelectionChanged += (_, __) =>
+            {
+                bool isUpi = methodCombo.SelectedIndex == 0;
+                if (isUpi)
+                    countryCombo.SelectedIndex = 0; // IN
+                else
+                    countryCombo.SelectedIndex = 2; // GB
+                requireBaCheck.IsEnabled = !isUpi;
+            };
+
+            // ── 提取按钮 ──────────────────────────────────────────────────
             extractBtn.Click += async (_, __) =>
             {
                 string at = atBox.Text.Trim();
@@ -318,7 +352,8 @@ namespace SmsWorkbench
                     return;
                 }
 
-                string country = "GB";
+                bool isUpi = methodCombo.SelectedIndex == 0;
+                string country = "IN";
                 if (countryCombo.SelectedItem is ComboBoxItem ci && ci.Content.ToString().Length >= 2)
                     country = ci.Content.ToString().Substring(0, 2);
 
@@ -327,25 +362,29 @@ namespace SmsWorkbench
                 bool requireZero = zeroCheck.IsChecked == true;
                 bool requireBaToken = requireBaCheck.IsChecked == true;
 
-                resultBox.Text = "正在提取...";
+                resultBox.Text = isUpi ? "正在提取 UPI QR (7 阶段流程)..." : "正在提取 PayPal BA 链接...";
                 extractBtn.IsEnabled = false;
                 copyBtn.IsEnabled = false;
+                openQrBtn.IsEnabled = false;
 
                 try
                 {
-                    var args = new List<string>
+                    var args = new List<string>();
+
+                    if (isUpi)
                     {
-                        "--generate-ba-link",
-                        "--at", at,
-                        "--target-country", country,
-                    };
+                        args.AddRange(new[] { "--generate-upi-qr", "--at", at, "--target-country", country });
+                    }
+                    else
+                    {
+                        args.AddRange(new[] { "--generate-ba-link", "--at", at, "--target-country", country });
+                    }
 
                     if (!string.IsNullOrEmpty(proxy))
                         args.AddRange(new[] { "--proxy", proxy });
 
                     if (!string.IsNullOrEmpty(stageProxies))
                     {
-                        // 解析 checkout=... provider=... approve=...
                         var parts = stageProxies.Split(new[] { ' ', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var part in parts)
                         {
@@ -366,11 +405,11 @@ namespace SmsWorkbench
 
                     if (!requireZero)
                         args.Add("--no-require-zero");
-                    if (requireBaToken)
+                    if (!isUpi && requireBaToken)
                         args.Add("--require-ba-token");
 
-                    var result = await Task.Run(() => RunBackendWithResult("AT 提取 BA 链接", args));
-                    resultBox.Text = result;
+                    string taskName = isUpi ? "AT UPI QR 提取" : "AT BA 链接提取";
+                    var result = await Task.Run(() => RunBackendWithResult(taskName, args));
 
                     // 解析 JSON 结果
                     try
@@ -379,31 +418,100 @@ namespace SmsWorkbench
                         var root = json.RootElement;
                         if (root.TryGetProperty("ok", out var ok) && ok.GetBoolean())
                         {
-                            if (root.TryGetProperty("url", out var url))
+                            var sb = new StringBuilder();
+                            sb.AppendLine("[成功] 提取成功!");
+                            sb.AppendLine();
+
+                            // URL / UPI URI
+                            string url = "";
+                            if (root.TryGetProperty("upi_uri", out var upiUri) && !string.IsNullOrEmpty(upiUri.GetString()))
                             {
-                                lastUrl = url.GetString() ?? "";
-                                copyBtn.IsEnabled = !string.IsNullOrEmpty(lastUrl);
-                                resultBox.Text = $"✅ 提取成功!\n\nURL: {lastUrl}\n\n" +
-                                    (root.TryGetProperty("ba_token", out var bt) ? $"BA Token: {bt.GetString()}\n" : "") +
-                                    (root.TryGetProperty("amount", out var amt) ? $"金额: {amt}" : "") +
-                                    (root.TryGetProperty("currency", out var cur) ? $" {cur.GetString()}\n" : "") +
-                                    (root.TryGetProperty("target_country", out var tc) ? $"目标国: {tc.GetString()}" : "");
+                                url = upiUri.GetString() ?? "";
+                                sb.AppendLine($"UPI URI: {url}"); // UPI URI 为技术字段名，保留
                             }
+                            else if (root.TryGetProperty("url", out var urlEl))
+                            {
+                                url = urlEl.GetString() ?? "";
+                                sb.AppendLine($"链接: {url}");
+                            }
+
+                            if (root.TryGetProperty("hosted_url", out var hostedEl))
+                                sb.AppendLine($"托管 URL: {hostedEl.GetString()}");
+
+                            if (root.TryGetProperty("link_type", out var ltEl))
+                                sb.AppendLine($"链接类型: {ltEl.GetString()}");
+
+                            if (root.TryGetProperty("qr_path", out var qrPathEl))
+                            {
+                                lastQrPath = qrPathEl.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(lastQrPath))
+                                    sb.AppendLine($"QR 图片: {lastQrPath}");
+                            }
+
+                            if (root.TryGetProperty("cs_id", out var csIdEl))
+                                sb.AppendLine($"CS ID: {csIdEl.GetString()}"); // CS ID 为 Stripe 字段名，保留
+
+                            if (root.TryGetProperty("amount", out var amtEl))
+                                sb.AppendLine($"金额: {amtEl}");
+
+                            if (root.TryGetProperty("currency", out var curEl))
+                                sb.AppendLine($"货币: {curEl.GetString()}");
+
+                            if (root.TryGetProperty("coupon_name", out var couponEl))
+                            {
+                                var couponStr = couponEl.GetString();
+                                if (!string.IsNullOrEmpty(couponStr))
+                                    sb.AppendLine($"优惠券: {couponStr}");
+                            }
+
+                            if (root.TryGetProperty("approval_ok", out var apprEl))
+                                sb.AppendLine($"审批状态: {(apprEl.GetBoolean() ? "已批准" : "待处理/失败")}");
+
+                            if (root.TryGetProperty("expires_at", out var expEl))
+                            {
+                                try
+                                {
+                                    var expires = expEl.GetInt64();
+                                    if (expires > 0)
+                                    {
+                                        var dt = DateTimeOffset.FromUnixTimeSeconds(expires).LocalDateTime;
+                                        sb.AppendLine($"过期时间: {dt:yyyy-MM-dd HH:mm:ss}");
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            if (root.TryGetProperty("target_country", out var tcEl))
+                                sb.AppendLine($"国家: {tcEl.GetString()}");
+
+                            if (root.TryGetProperty("warning", out var warnEl))
+                                sb.AppendLine($"警告: {warnEl.GetString()}");
+
+                            resultBox.Text = sb.ToString().TrimEnd();
+                            lastUrl = url;
+                            copyBtn.IsEnabled = !string.IsNullOrEmpty(lastUrl);
+                            openQrBtn.IsEnabled = !string.IsNullOrEmpty(lastQrPath) && File.Exists(lastQrPath);
                         }
                         else
                         {
+                            string error = "";
                             if (root.TryGetProperty("error", out var err))
-                                resultBox.Text = $"❌ 失败: {err.GetString()}";
+                                error = err.GetString() ?? "";
+                            string errorCode = "";
+                            if (root.TryGetProperty("error_code", out var ec))
+                                errorCode = ec.GetString() ?? "";
+                            resultBox.Text = $"[失败] {error}" + (string.IsNullOrEmpty(errorCode) ? "" : $"\n错误代码: {errorCode}");
                         }
                     }
                     catch
                     {
                         // 非 JSON 结果，直接显示
+                        resultBox.Text = result;
                     }
                 }
                 catch (Exception ex)
                 {
-                    resultBox.Text = $"❌ 异常: {ex.Message}";
+                    resultBox.Text = $"[异常] {ex.Message}";
                 }
                 finally
                 {
@@ -411,6 +519,7 @@ namespace SmsWorkbench
                 }
             };
 
+            // ── 复制按钮 ──────────────────────────────────────────────────
             copyBtn.Click += (_, __) =>
             {
                 if (!string.IsNullOrEmpty(lastUrl))
@@ -418,6 +527,26 @@ namespace SmsWorkbench
                     System.Windows.Clipboard.SetText(lastUrl);
                     copyBtn.Content = "已复制!";
                     Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() => copyBtn.Content = "复制链接"));
+                }
+            };
+
+            // ── 打开 QR 按钮 ─────────────────────────────────────────────
+            openQrBtn.Click += (_, __) =>
+            {
+                if (!string.IsNullOrEmpty(lastQrPath) && File.Exists(lastQrPath))
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = lastQrPath,
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"打开 QR 图片失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
                 }
             };
 

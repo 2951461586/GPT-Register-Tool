@@ -4,6 +4,7 @@ import uuid
 from curl_cffi import requests as curl_requests
 
 from .config import CFG
+from .http_client import is_transient_transport_error, request_with_retry
 from .k12_identity import _extract_access_token, _extract_account_id_from_data, _extract_user_id_from_data
 
 
@@ -20,19 +21,28 @@ def _refresh_access_token_from_cookie(account, proxy=None, timeout=30):
     if not cookie:
         return ""
     chat_base = (CFG.get("chatgpt") or {}).get("chat_base_url", "https://chatgpt.com").rstrip("/")
-    proxies = {"http": proxy, "https": proxy} if proxy else None
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
     headers = {
         "accept": "application/json",
         "cookie": cookie,
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
     }
-    response = curl_requests.get(
-        f"{chat_base}/api/auth/session",
-        headers=headers,
-        proxies=proxies,
-        timeout=timeout,
-        impersonate="chrome",
-    )
+    try:
+        response = request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/api/auth/session",
+            label="session refresh",
+            headers=headers,
+            timeout=timeout,
+            impersonate="chrome",
+        )
+    except Exception as exc:
+        if is_transient_transport_error(exc):
+            raise RuntimeError(f"session refresh transport: {exc}")
+        raise
     try:
         body = response.json()
     except Exception:
@@ -56,19 +66,28 @@ def _fetch_auth_session_from_cookie(account, proxy=None, timeout=30):
     if not cookie:
         return {}
     chat_base = (CFG.get("chatgpt") or {}).get("chat_base_url", "https://chatgpt.com").rstrip("/")
-    proxies = {"http": proxy, "https": proxy} if proxy else None
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
     headers = {
         "accept": "application/json",
         "cookie": cookie,
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
     }
-    response = curl_requests.get(
-        f"{chat_base}/api/auth/session",
-        headers=headers,
-        proxies=proxies,
-        timeout=timeout,
-        impersonate="chrome",
-    )
+    try:
+        response = request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/api/auth/session",
+            label="auth session",
+            headers=headers,
+            timeout=timeout,
+            impersonate="chrome",
+        )
+    except Exception as exc:
+        if is_transient_transport_error(exc):
+            raise RuntimeError(f"session fetch transport: {exc}")
+        raise
     try:
         body = response.json()
     except Exception:

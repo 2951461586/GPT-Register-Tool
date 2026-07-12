@@ -9,6 +9,8 @@ import html
 import imaplib
 import re
 from datetime import datetime
+from email.header import decode_header
+from email.utils import formataddr, getaddresses
 from email.utils import parsedate_to_datetime
 
 
@@ -61,6 +63,44 @@ def imap_message_received_ts(message):
         return 0
 
 
+def _decode_header_text(value):
+    raw = str(value or "")
+    if not raw:
+        return ""
+    try:
+        parts = []
+        for chunk, charset in decode_header(raw):
+            if isinstance(chunk, bytes):
+                encoding = charset or "utf-8"
+                try:
+                    parts.append(chunk.decode(encoding, errors="replace"))
+                except Exception:
+                    parts.append(chunk.decode("utf-8", errors="replace"))
+            else:
+                parts.append(str(chunk))
+        return "".join(parts).strip()
+    except Exception:
+        return raw.strip()
+
+
+def _decoded_from_header(value):
+    raw = str(value or "")
+    if not raw:
+        return ""
+    try:
+        parsed = getaddresses([raw])
+        if not parsed:
+            return _decode_header_text(raw)
+        name, address = parsed[0]
+        decoded_name = _decode_header_text(name)
+        address = str(address or "").strip()
+        if decoded_name and address:
+            return formataddr((decoded_name, address))
+        return address or decoded_name or _decode_header_text(raw)
+    except Exception:
+        return _decode_header_text(raw)
+
+
 def imap_message_to_graph_shape(folder, num, raw_bytes):
     msg = email.message_from_bytes(raw_bytes)
     body_text = message_text_from_email_message(msg)
@@ -71,10 +111,12 @@ def imap_message_to_graph_shape(folder, num, raw_bytes):
     headers = [{"name": key, "value": value} for key, value in msg.items()]
     received_ts = imap_message_received_ts(msg)
     received_iso = datetime.fromtimestamp(received_ts).isoformat() if received_ts else ""
+    from_text = _decoded_from_header(msg.get("From", ""))
     return {
         "id": f"imap:{folder}:{num.decode(errors='ignore') if isinstance(num, bytes) else num}",
         "message_id": msg.get("Message-ID", ""),
-        "subject": msg.get("Subject", ""),
+        "subject": _decode_header_text(msg.get("Subject", "")),
+        "from": from_text,
         "bodyPreview": body_text[:1000],
         "body": {"content": body_text},
         "toRecipients": to_recipients,
@@ -114,44 +156,79 @@ def discover_imap_folders(mail, configured=None):
     return picked or configured
 
 
-def fetch_outlook_imap_messages(mailbox, token_fetcher, folders=None, limit=25):
+def _imap_connect_and_auth(mailbox, token_fetcher):
+    """Create a fresh IMAP4_SSL connection and authenticate via XOAUTH2.
+
+    Returns (mail, auth_string) or raises.
+    """
     token = token_fetcher(DEFAULT_IMAP_SCOPE)
     auth_string = f"user={mailbox.email}\x01auth=Bearer {token}\x01\x01"
-    messages = []
     mail = imaplib.IMAP4_SSL("outlook.office365.com", 993)
-    try:
-        typ, _ = mail.authenticate("XOAUTH2", lambda _: auth_string.encode())
-        if typ != "OK":
-            raise RuntimeError("imap XOAUTH2 failed")
-        for folder in discover_imap_folders(mail, folders):
-            try:
-                typ, _ = mail.select(f'"{folder}"', readonly=True)
-                if typ != "OK":
-                    typ, _ = mail.select(folder, readonly=True)
-                if typ != "OK":
-                    continue
-                typ, nums = mail.search(None, "ALL")
-                if typ != "OK" or not nums or not nums[0]:
-                    continue
-                selected = nums[0].split()[-max(1, min(int(limit or 25), 50)):]
-                for num in reversed(selected):
-                    typ, data = mail.fetch(num, "(RFC822)")
-                    if typ != "OK" or not data:
-                        continue
-                    for item in data:
-                        if isinstance(item, tuple) and item[1]:
-                            messages.append(imap_message_to_graph_shape(folder, num, item[1]))
-                            break
-                    if len(messages) >= limit:
-                        return messages
-            except Exception as exc:
-                print(f"[outlook imap folder {folder} error: {exc}]")
-                continue
-    finally:
+    typ, _ = mail.authenticate("XOAUTH2", lambda _: auth_string.encode())
+    if typ != "OK":
         try:
             mail.logout()
         except Exception:
             pass
+        raise RuntimeError("imap XOAUTH2 failed")
+    return mail
+
+
+def fetch_outlook_imap_messages(mailbox, token_fetcher, folders=None, limit=25):
+    messages = []
+    max_retries = 2  # total attempts: initial + 1 reconnect
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            mail = _imap_connect_and_auth(mailbox, token_fetcher)
+        except Exception as exc:
+            if attempt < max_retries:
+                continue
+            raise
+
+        try:
+            for folder in discover_imap_folders(mail, folders):
+                try:
+                    typ, _ = mail.select(f'"{folder}"', readonly=True)
+                    if typ != "OK":
+                        typ, _ = mail.select(folder, readonly=True)
+                    if typ != "OK":
+                        continue
+                    typ, nums = mail.search(None, "ALL")
+                    if typ != "OK" or not nums or not nums[0]:
+                        continue
+                    selected = nums[0].split()[-max(1, min(int(limit or 25), 50)):]
+                    for num in reversed(selected):
+                        typ, data = mail.fetch(num, "(RFC822)")
+                        if typ != "OK" or not data:
+                            continue
+                        for item in data:
+                            if isinstance(item, tuple) and item[1]:
+                                messages.append(imap_message_to_graph_shape(folder, num, item[1]))
+                                break
+                        if len(messages) >= limit:
+                            return messages
+                except Exception as exc:
+                    # Connection-level errors (e.g. "User is authenticated but
+                    # not connected") mean the socket died — break out and retry
+                    # with a fresh connection rather than silently skipping.
+                    error_text = str(exc).lower()
+                    if "not connected" in error_text or "connection" in error_text or "socket" in error_text:
+                        if attempt < max_retries:
+                            break
+                        print(f"[outlook imap folder {folder} error: {exc}]")
+                        continue
+                    print(f"[outlook imap folder {folder} error: {exc}]")
+                    continue
+            else:
+                # All folders processed without connection-level break
+                break
+        finally:
+            try:
+                mail.logout()
+            except Exception:
+                pass
+
     if messages:
         print(f"[outlook imap] fetched {len(messages)} message(s)")
     return messages

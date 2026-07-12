@@ -1,3 +1,15 @@
+# ============================================================================
+# SmsWorkbench 编译脚本 — 唯一支持的桌面程序编译入口
+# ----------------------------------------------------------------------------
+# 输出路径: <repo>/dist/net10/SmsWorkbench.exe
+# 中间产物: SmsWorkbench/bin/{Debug,Release}/net10.0-windows  (发布后自动清理)
+#
+# ⚠ 禁止直接运行 `dotnet build`！直接 build 只输出中间产物且不会自动清理。
+#    所有编译必须通过本脚本完成。
+#
+# 用法:
+#   powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
+# ============================================================================
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot

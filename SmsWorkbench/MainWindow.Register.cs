@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -85,7 +64,7 @@ namespace SmsWorkbench
 
             ChataiMailboxFilePath = targetFile;
             RefreshPools();
-            MessageBox.Show($"导入完成：成功 {imported} 条，跳过 {skipped} 条。", "导入结果", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
         }
 
         private void ViewInbox_Click(object sender, RoutedEventArgs e)
@@ -93,13 +72,13 @@ namespace SmsWorkbench
             PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
             if (row == null)
             {
-                MessageBox.Show("请先选择一条 Chatai 或 edu.liziai.cloud 邮箱记录。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("请先选择一条可收信的邮箱记录（Chatai / Gmail / CFWorker / Graph）。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             string mailboxLine = FindMailboxLineForRow(row);
-            if (!IsCfWorkerRow(row) && (string.IsNullOrWhiteSpace(row.RawRefreshToken) || string.IsNullOrWhiteSpace(row.ClientId)))
+            if (string.IsNullOrWhiteSpace(mailboxLine) || MailboxArgForLine(mailboxLine).Length == 0)
             {
-                MessageBox.Show("选中记录不是 Chatai 或 edu.liziai.cloud 邮箱。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("选中记录缺少可用的邮箱凭据或导入行。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             ShowInboxDialog(row);
@@ -241,11 +220,21 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                ShowThemedInfoDialog("一键扫号", "没有找到可扫描的账号。请先勾选账号，或切换到包含账号的筛选范围。");
+                ShowThemedInfoDialog("额度查询", "没有找到可查询的账号。请先勾选账号，或切换到包含账号的筛选范围。");
                 return;
             }
 
-            var args = new List<string> { "--one-click-scan", "--workers", Math.Min(8, Math.Max(1, rows.Count)).ToString(), "--refresh-timeout", "90" };
+            ScanOptions options = ShowScanOptionsDialog(rows.Count);
+            if (options == null) return;
+
+            var args = new List<string> { "--one-click-scan", "--workers", options.Workers.ToString(), "--refresh-timeout", "90" };
+            args.Add("--no-scan-workspace-status");
+            if (options.QuotaAutoRelogin)
+            {
+                args.Add("--quota-auto-relogin");
+                args.Add("--scan-relogin-mode");
+                args.Add(options.ReloginMode);
+            }
             if (rows.Count > 1)
             {
                 string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_scan_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
@@ -258,315 +247,112 @@ namespace SmsWorkbench
                 AddSessionFileArg(args, rows[0]);
             }
             AddProxy(args);
-            RunBackend("一键扫号(" + rows.Count + ")", args);
+            RunBackend("额度查询(" + rows.Count + ")", args);
         }
 
-        private void OneClickK12_Click(object sender, RoutedEventArgs e)
-        {
-            var rows = SelectedRowsOrCurrent()
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .Where(IsRegisteredRow)
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            if (rows.Count == 0)
-            {
-                rows = allRows
-                    .Where(FilterRow)
-                    .Where(IsRegisteredRow)
-                    .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                    .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                    .Select(g => g.First())
-                    .ToList();
-            }
-            if (rows.Count == 0)
-            {
-                ShowThemedInfoDialog("一键K12", "没有找到可进入 K12 workspace 的已注册账号。请先选择带 access_token 的账号。");
-                return;
-            }
-
-            K12Options options = ShowK12OptionsDialog(rows.Count);
-            if (options == null) return;
-
-            var args = new List<string>
-            {
-                "--one-click-k12",
-                "--k12-route",
-                options.Route,
-            };
-            if (!string.IsNullOrWhiteSpace(options.WorkspaceIds))
-            {
-                args.Add("--k12-workspace-ids");
-                args.Add(options.WorkspaceIds);
-            }
-            args.AddRange(new[]
-            {
-                "--workers",
-                options.Workers.ToString(),
-                "--k12-retries",
-                options.Retries.ToString(),
-                "--k12-retry-backoff",
-                options.RetryBackoffSeconds.ToString(CultureInfo.InvariantCulture),
-                "--k12-invite-timeout",
-                options.InviteTimeoutSeconds.ToString(),
-                "--refresh-timeout",
-                "30"
-            });
-            if (options.AutoAcceptInvite)
-            {
-                args.Add("--k12-auto-accept");
-            }
-            if (rows.Count > 1)
-            {
-                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_k12_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-                args.AddRange(new[] { "--email-file", emailFile });
-            }
-            else
-            {
-                args.AddRange(new[] { "--email", rows[0].Identifier });
-                AddSessionFileArg(args, rows[0]);
-            }
-            AddProxy(args);
-            RunBackend("一键K12(" + rows.Count + ")", args);
-        }
-
-        private K12Options ShowK12OptionsDialog(int accountCount)
+        private ScanOptions ShowScanOptionsDialog(int accountCount)
         {
             var dialog = new Window
             {
-                Title = "一键K12",
+                Title = "额度查询设置",
                 Owner = this,
-                Width = 640,
-                Height = 430,
-                MinWidth = 600,
-                MinHeight = 400,
+                Width = 560,
+                MinWidth = 520,
+                SizeToContent = SizeToContent.Height,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
+                Background = (Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var hint = new TextBlock
+            for (int i = 0; i < 5; i++)
             {
-                Text = "将 " + Math.Max(1, accountCount).ToString() + " 个账号批量执行 K12 workspace 请求/接受/退出。",
-                Margin = new Thickness(0, 0, 0, 10),
+                root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+
+            var title = new TextBlock
+            {
+                Text = "查询 " + Math.Max(1, accountCount).ToString() + " 个账号的额度状态，检测 401/掉号，并可选自动重登刷新 AT。",
+                FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
-                LineHeight = 20,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+                Foreground = (Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 14)
             };
-            Grid.SetRow(hint, 0);
-            Grid.SetColumnSpan(hint, 2);
-            root.Children.Add(hint);
+            Grid.SetRow(title, 0);
+            Grid.SetColumnSpan(title, 2);
+            root.Children.Add(title);
 
-            var wsLabel = new TextBlock { Text = "Workspace ID", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var wsBox = new TextBox
+            var workerLabel = new TextBlock { Text = "并发数", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
+            Grid.SetRow(workerLabel, 1);
+            Grid.SetColumn(workerLabel, 0);
+            root.Children.Add(workerLabel);
+            var workerBox = new TextBox { Text = Math.Min(8, Math.Max(1, accountCount)).ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(workerBox, 1);
+            Grid.SetColumn(workerBox, 1);
+            root.Children.Add(workerBox);
+
+            var quotaRelogin = new CheckBox
             {
-                Text = "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.Wrap,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Margin = new Thickness(0, 0, 0, 10),
-                MinHeight = 92
-            };
-            Grid.SetRow(wsLabel, 1);
-            Grid.SetColumn(wsLabel, 0);
-            Grid.SetRow(wsBox, 1);
-            Grid.SetColumn(wsBox, 1);
-            root.Children.Add(wsLabel);
-            root.Children.Add(wsBox);
-
-            var routeLabel = new TextBlock { Text = "动作", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var routeBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            routeBox.Items.Add(new ComboBoxItem { Content = "Request - 主动申请加入", Tag = "request" });
-            routeBox.Items.Add(new ComboBoxItem { Content = "Accept - 接受已有邀请", Tag = "accept" });
-            routeBox.Items.Add(new ComboBoxItem { Content = "Leave - 退出工作空间", Tag = "leave" });
-            routeBox.SelectedIndex = 0;
-            Grid.SetRow(routeLabel, 2);
-            Grid.SetColumn(routeLabel, 0);
-            Grid.SetRow(routeBox, 2);
-            Grid.SetColumn(routeBox, 1);
-            root.Children.Add(routeLabel);
-            root.Children.Add(routeBox);
-
-            var retryLabel = new TextBlock { Text = "重试/等待", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var retryPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 10), VerticalAlignment = VerticalAlignment.Center };
-            var retryBox = new TextBox { Text = "2", Width = 44, Margin = new Thickness(0, 0, 8, 0) };
-            var backoffBox = new TextBox { Text = "5", Width = 44, Margin = new Thickness(0, 0, 8, 0) };
-            var inviteTimeoutBox = new TextBox { Text = "240", Width = 56, Margin = new Thickness(0, 0, 8, 0) };
-            retryPanel.Children.Add(new TextBlock { Text = "次数", Margin = new Thickness(0, 2, 6, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
-            retryPanel.Children.Add(retryBox);
-            retryPanel.Children.Add(new TextBlock { Text = "间隔秒", Margin = new Thickness(0, 2, 6, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
-            retryPanel.Children.Add(backoffBox);
-            retryPanel.Children.Add(new TextBlock { Text = "邀请秒", Margin = new Thickness(0, 2, 6, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)FindResource("TextSub") });
-            retryPanel.Children.Add(inviteTimeoutBox);
-            Grid.SetRow(retryLabel, 3);
-            Grid.SetColumn(retryLabel, 0);
-            Grid.SetRow(retryPanel, 3);
-            Grid.SetColumn(retryPanel, 1);
-            root.Children.Add(retryLabel);
-            root.Children.Add(retryPanel);
-
-            var autoAcceptBox = new CheckBox
-            {
-                Content = new TextBlock
-                {
-                    Text = "请求成功后自动收 k12-invite 邮件并接受/进入空间",
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 20,
-                    MaxWidth = 440
-                },
+                Content = "遇到 401/掉号时自动重登刷新 AT",
                 IsChecked = true,
                 Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
+                Foreground = (Brush)FindResource("TextMain")
             };
-            Grid.SetRow(autoAcceptBox, 4);
-            Grid.SetColumn(autoAcceptBox, 1);
-            root.Children.Add(autoAcceptBox);
-            string defaultWorkspaceId = "631e1603-06cf-4f0b-b79b-d09fbfcfe98d";
-            routeBox.SelectionChanged += (_, __) =>
-            {
-                string selectedRoute = ((routeBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "request";
-                bool canAutoAccept = selectedRoute == "request";
-                autoAcceptBox.IsEnabled = canAutoAccept;
-                if (!canAutoAccept) autoAcceptBox.IsChecked = false;
-                if (selectedRoute == "leave")
-                {
-                    if ((wsBox.Text ?? "").Trim() == defaultWorkspaceId)
-                    {
-                        wsBox.Text = "";
-                    }
-                    wsLabel.Text = "Workspace ID（可留空）";
-                }
-                else
-                {
-                    if (string.IsNullOrWhiteSpace(wsBox.Text))
-                    {
-                        wsBox.Text = defaultWorkspaceId;
-                    }
-                    wsLabel.Text = "Workspace ID";
-                }
-            };
+            Grid.SetRow(quotaRelogin, 2);
+            Grid.SetColumn(quotaRelogin, 1);
+            root.Children.Add(quotaRelogin);
 
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
-            var cancel = new Button { Content = "取消", Width = 72, Margin = new Thickness(8, 0, 0, 0) };
-            actions.Children.Add(ok);
+            var reloginModeLabel = new TextBlock { Text = "Relogin模式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
+            Grid.SetRow(reloginModeLabel, 3);
+            Grid.SetColumn(reloginModeLabel, 0);
+            root.Children.Add(reloginModeLabel);
+            var reloginModeBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+            reloginModeBox.Items.Add(new ComboBoxItem { Content = "自动：Web Session 优先", Tag = "auto" });
+            reloginModeBox.Items.Add(new ComboBoxItem { Content = "仅 Web Session", Tag = "web_session" });
+            reloginModeBox.Items.Add(new ComboBoxItem { Content = "仅 Codex OAuth", Tag = "codex_oauth" });
+            reloginModeBox.SelectedIndex = 0;
+            Grid.SetRow(reloginModeBox, 3);
+            Grid.SetColumn(reloginModeBox, 1);
+            root.Children.Add(reloginModeBox);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            var cancel = new Button { Content = "取消", Width = 82, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("SecondaryButton") };
+            var ok = new Button { Content = "开始查询", Width = 98, Style = (Style)FindResource("PrimaryButton") };
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 5);
+            actions.Children.Add(ok);
+            Grid.SetRow(actions, 4);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
-            K12Options selected = null;
+            ScanOptions selected = null;
+            cancel.Click += (_, __) => dialog.Close();
             ok.Click += (_, __) =>
             {
-                string ids = (wsBox.Text ?? "").Trim();
-                string selectedRoute = ((routeBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "request";
-                if (ids.Length == 0 && selectedRoute != "leave")
+                selected = new ScanOptions
                 {
-                    ShowThemedInfoDialog("一键K12", "请填写至少一个 workspace ID。");
-                    return;
-                }
-                selected = new K12Options
-                {
-                    WorkspaceIds = ids,
-                    Route = selectedRoute,
-                    Workers = Math.Min(8, Math.Max(1, accountCount)),
-                    Retries = int.TryParse((retryBox.Text ?? "").Trim(), out int retryValue) ? Math.Max(0, retryValue) : 2,
-                    RetryBackoffSeconds = double.TryParse((backoffBox.Text ?? "").Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double backoffValue) ? Math.Max(0, backoffValue) : 5,
-                    InviteTimeoutSeconds = int.TryParse((inviteTimeoutBox.Text ?? "").Trim(), out int inviteTimeoutValue) ? Math.Max(10, inviteTimeoutValue) : 240,
-                    AutoAcceptInvite = autoAcceptBox.IsChecked == true
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount))),
+                    QuotaAutoRelogin = quotaRelogin.IsChecked == true,
+                    ReloginMode = ((reloginModeBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "auto"
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
             };
-            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
+
             dialog.Content = root;
             return dialog.ShowDialog() == true ? selected : null;
         }
 
-        private void OneClickPay_Click(object sender, RoutedEventArgs e)
+        
+        private async void ShowThemedInfoDialog(string title, string message)
         {
-            var rows = SelectedRowsOrCurrent()
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            if (rows.Count == 0)
-            {
-                ShowThemedInfoDialog("未选择账号", "请先勾选或选择要支付的账号记录。");
-                return;
-            }
-            string paymentMethod = ShowPaymentMethodDialog("一键支付", "支付方式");
-            if (paymentMethod.Length == 0) return;
-            var args = new List<string> { "--one-click-pay" };
-            if (rows.Count > 1)
-            {
-                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-                args.AddRange(new[] { "--email-file", emailFile });
-            }
-            else
-            {
-                args.AddRange(new[] { "--email", rows[0].Identifier });
-            }
-            args.Add("--payment-method");
-            args.Add(paymentMethod);
-            AddProxy(args);
-            RunBackend("一键支付 (" + rows.Count + ")", args);
-        }
-
-        private void ShowThemedInfoDialog(string title, string message)
-        {
-            var dialog = new Window
-            {
-                Title = title,
-                Owner = this,
-                Width = 390,
-                MinWidth = 340,
-                SizeToContent = SizeToContent.Height,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg"),
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var root = new StackPanel { Margin = new Thickness(16) };
-            root.Children.Add(new TextBlock
-            {
-                Text = title,
-                FontSize = 16,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            });
-            root.Children.Add(new TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 20,
-                Margin = new Thickness(0, 0, 0, 16),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
-            });
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var ok = new Button { Content = "知道了", Width = 82, Style = (Style)FindResource("PrimaryButton") };
-            ok.Click += (_, __) =>
-            {
-                dialog.DialogResult = true;
-                dialog.Close();
-            };
-            actions.Children.Add(ok);
-            root.Children.Add(actions);
-            dialog.Content = root;
-            dialog.ShowDialog();
+            await DialogFactory.ShowInfoAsync(this, title, message);
         }
 
         private string ShowPaymentMethodDialog(string title, string labelText = "支付方式")
@@ -922,6 +708,7 @@ namespace SmsWorkbench
             if (value.Length == 0 || value.StartsWith("#")) return "";
             if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
+            if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
             return "";
@@ -936,6 +723,13 @@ namespace SmsWorkbench
 
             string email = (row.Identifier ?? "").Trim();
             if (email.Length == 0) return "";
+            var candidateEmails = new List<string> { email };
+            string aliasBaseEmail = ResolveAliasBaseEmail(email);
+            if (!string.IsNullOrWhiteSpace(aliasBaseEmail)
+                && !candidateEmails.Contains(aliasBaseEmail, StringComparer.OrdinalIgnoreCase))
+            {
+                candidateEmails.Add(aliasBaseEmail);
+            }
 
             var paths = new List<string> { row.SourcePath, GetChataiMailboxFilePath(), GetMailboxTokenFile() };
             foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -944,9 +738,11 @@ namespace SmsWorkbench
                 foreach (string raw in File.ReadAllLines(path, Encoding.UTF8))
                 {
                     string value = raw.Trim().TrimStart('\ufeff');
-                    if ((value.StartsWith(email + "----", StringComparison.OrdinalIgnoreCase)
-                        || value.StartsWith(email + "---", StringComparison.OrdinalIgnoreCase))
-                        && MailboxArgForLine(value).Length > 0)
+                    bool matched = candidateEmails.Any(candidate =>
+                        value.StartsWith("gmail://" + candidate, StringComparison.OrdinalIgnoreCase)
+                        || value.StartsWith(candidate + "----", StringComparison.OrdinalIgnoreCase)
+                        || value.StartsWith(candidate + "---", StringComparison.OrdinalIgnoreCase));
+                    if (matched && MailboxArgForLine(value).Length > 0)
                     {
                         return value;
                     }
@@ -969,14 +765,33 @@ namespace SmsWorkbench
 
                 string email = JsonString(mailbox, "email");
                 string password = JsonString(mailbox, "password");
+                string loginPassword = JsonString(mailbox, "login_password");
                 string refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
                 string clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
+                string clientSecret = JsonString(mailbox, "client_secret");
                 string provider = JsonString(mailbox, "provider");
                 if (email.Length == 0) return "";
                 if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
                 {
                     return "cfworker://" + email;
+                }
+                if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (clientId.Length > 0 && clientSecret.Length > 0 && refreshToken.Length > 0)
+                    {
+                        return "gmail://" + email + "----" + clientId + "----" + clientSecret + "----" + refreshToken
+                            + (accessToken.Length > 0 ? "----" + accessToken : "");
+                    }
+                    if (password.Length > 0)
+                    {
+                        if (loginPassword.Length > 0)
+                        {
+                            return "gmail://" + email + "----" + loginPassword + "----" + password;
+                        }
+                        return "gmail://" + email + "---" + password;
+                    }
+                    return "";
                 }
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
                 {
@@ -1006,9 +821,11 @@ namespace SmsWorkbench
 
                 string email = JsonString(mailbox, "email");
                 string password = JsonString(mailbox, "password");
+                string loginPassword = JsonString(mailbox, "login_password");
                 refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
                 clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
+                string clientSecret = JsonString(mailbox, "client_secret");
                 provider = JsonString(mailbox, "provider");
                 if (email.Length == 0) return false;
 
@@ -1016,6 +833,24 @@ namespace SmsWorkbench
                 {
                     mailboxLine = "cfworker://" + email;
                     return true;
+                }
+
+                if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (clientId.Length > 0 && clientSecret.Length > 0 && refreshToken.Length > 0)
+                    {
+                        mailboxLine = "gmail://" + email + "----" + clientId + "----" + clientSecret + "----" + refreshToken
+                            + (accessToken.Length > 0 ? "----" + accessToken : "");
+                        return true;
+                    }
+                    if (password.Length > 0)
+                    {
+                        mailboxLine = loginPassword.Length > 0
+                            ? "gmail://" + email + "----" + loginPassword + "----" + password
+                            : "gmail://" + email + "---" + password;
+                        return true;
+                    }
+                    return false;
                 }
 
                 if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)

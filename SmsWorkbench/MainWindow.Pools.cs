@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -35,18 +14,38 @@ namespace SmsWorkbench
             string scope = DisplayText(ScopeFilter);
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
-            if (scope == "邮箱池" && !row.AccountType.Contains("邮箱池") && !row.AccountType.Contains("Chatai")) return false;
+            if (scope == "邮箱池" && !IsMailboxPoolLikeRow(row)) return false;
             if (scope == "已注册" && !row.AccountType.Contains("Session") && !row.AccountType.Contains("SQLite")) return false;
             if (scope == "待处理" && !row.Status.Contains("待") && !row.Status.Contains("缺") && !row.Status.Contains("失败")) return false;
             if (term.Length == 0) return true;
 
-            string text = (row.Identifier + " " + row.AccountType + " " + row.Status + " " + row.Notes).ToLowerInvariant();
+            string text = (row.Identifier + " " + row.AccountType + " " + row.Status + " " + row.Notes + " " + row.AliasNotes).ToLowerInvariant();
             return text.Contains(term);
+        }
+
+        private bool IsMailboxPoolLikeRow(PoolRow row)
+        {
+            if (row == null) return false;
+            if (row.AccountType.Contains("邮箱池") || row.AccountType.Contains("Chatai")) return true;
+            return row.AccountType.IndexOf("gmail alias", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void EnsureAliasColumn()
+        {
+            if (AccountGrid == null) return;
+            for (int index = AccountGrid.Columns.Count - 1; index >= 0; index--)
+            {
+                if (string.Equals(Convert.ToString(AccountGrid.Columns[index].Header) ?? "", "Alias", StringComparison.OrdinalIgnoreCase))
+                {
+                    AccountGrid.Columns.RemoveAt(index);
+                }
+            }
         }
 
         private void RefreshPools()
         {
             allRows.Clear();
+            LoadGmailAliasNotes();
             LoadMailboxPool();
             LoadSessionPool();
             DeduplicateRows();
@@ -182,6 +181,165 @@ namespace SmsWorkbench
             return value;
         }
 
+        private void LoadGmailAliasNotes()
+        {
+            gmailAliasBases.Clear();
+            gmailAliasMap.Clear();
+
+            string path = Path.Combine(rootDir, "runtime", "gmail_aliases.json");
+            if (!File.Exists(path)) return;
+
+            try
+            {
+                Dictionary<string, object> data = ReadJsonObject(path);
+                foreach (var kv in data)
+                {
+                    string baseEmail = (kv.Key ?? "").Trim().ToLowerInvariant();
+                    string canonical = CanonicalGmailEmail(baseEmail);
+                    if (canonical.Length == 0) continue;
+                    if (!(kv.Value is List<object> items)) continue;
+
+                    var aliases = new List<string>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (object item in items)
+                    {
+                        string alias = Convert.ToString(item)?.Trim() ?? "";
+                        if (alias.Length == 0 || !seen.Add(alias)) continue;
+                        aliases.Add(alias);
+                    }
+                    if (aliases.Count == 0) continue;
+
+                    gmailAliasBases[canonical] = baseEmail;
+                    gmailAliasMap[canonical] = aliases;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("Gmail alias load failed: " + ex.Message);
+            }
+        }
+
+        private string ResolveAliasNotes(string email)
+        {
+            string canonical = CanonicalGmailEmail(email);
+            if (canonical.Length == 0) return "";
+            if (!gmailAliasMap.TryGetValue(canonical, out List<string> aliases) || aliases == null || aliases.Count == 0) return "";
+
+            string baseEmail = gmailAliasBases.TryGetValue(canonical, out string mappedBase) ? mappedBase : canonical;
+            string normalized = NormalizeEmailKey(email);
+            if (normalized.Equals(baseEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Join(" ; ", aliases);
+            }
+            return "Base: " + baseEmail;
+        }
+
+        private string CanonicalGmailEmail(string email)
+        {
+            string value = NormalizeEmailKey(email);
+            int at = value.LastIndexOf('@');
+            if (at <= 0 || at >= value.Length - 1) return "";
+            string local = value.Substring(0, at);
+            string domain = value.Substring(at + 1);
+            if (!domain.Equals("gmail.com", StringComparison.OrdinalIgnoreCase)
+                && !domain.Equals("googlemail.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
+            int plus = local.IndexOf('+');
+            if (plus >= 0) local = local.Substring(0, plus);
+            local = local.Replace(".", "");
+            if (local.Length == 0) return "";
+            return local + "@gmail.com";
+        }
+
+        private List<string> GetMappedGmailAliases(string email)
+        {
+            string canonical = CanonicalGmailEmail(email);
+            if (canonical.Length == 0) return new List<string>();
+            if (!gmailAliasMap.TryGetValue(canonical, out List<string> aliases) || aliases == null)
+            {
+                return new List<string>();
+            }
+            return aliases
+                .Where(alias => !string.IsNullOrWhiteSpace(alias))
+                .Select(alias => alias.Trim())
+                .Where(alias => !NormalizeEmailKey(alias).Equals(NormalizeEmailKey(email), StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private string BuildGmailAliasMailboxLine(string mailboxLine, string aliasEmail)
+        {
+            string value = (mailboxLine ?? "").Trim();
+            if (!value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return value;
+            string payload = value.Substring("gmail://".Length);
+            if (payload.Contains("----"))
+            {
+                string[] parts = payload.Split(new[] { "----" }, StringSplitOptions.None);
+                if (parts.Length >= 2)
+                {
+                    parts[0] = aliasEmail;
+                    return "gmail://" + string.Join("----", parts);
+                }
+            }
+            if (payload.Contains("---"))
+            {
+                string[] parts = payload.Split(new[] { "---" }, StringSplitOptions.None);
+                if (parts.Length >= 2)
+                {
+                    parts[0] = aliasEmail;
+                    return "gmail://" + string.Join("---", parts);
+                }
+            }
+            return value;
+        }
+
+        private void AddGmailAliasPoolRows(
+            string baseEmail,
+            string mailboxLine,
+            string path,
+            int baseIndex,
+            string status,
+            string refreshTokenDisplay,
+            string clientId,
+            string rawRefreshToken)
+        {
+            List<string> aliases = GetMappedGmailAliases(baseEmail);
+            if (aliases.Count == 0) return;
+
+            DateTime fileTime = File.GetLastWriteTime(path);
+            int aliasIndex = 0;
+            foreach (string alias in aliases)
+            {
+                aliasIndex++;
+                string aliasMailboxLine = BuildGmailAliasMailboxLine(mailboxLine, alias);
+                allRows.Add(new PoolRow
+                {
+                    Id = $"M{baseIndex + 1}-A{aliasIndex}",
+                    CreatedAt = SafeTime(fileTime),
+                    CompletedAt = SafeTime(fileTime),
+                    Identifier = alias,
+                    AccountType = "Gmail Alias",
+                    Status = status,
+                    RefreshToken = refreshTokenDisplay,
+                    Notes = "Gmail Base: " + baseEmail + " | " + path,
+                    SourcePath = path,
+                    AliasNotes = "Base: " + baseEmail,
+                    RawLine = aliasMailboxLine,
+                    MailboxLine = aliasMailboxLine,
+                    ClientId = clientId,
+                    RawRefreshToken = rawRefreshToken,
+                    MailboxProvider = "gmail"
+                });
+            }
+        }
+
+        private string GetGmailAliasFilePath()
+        {
+            return Path.Combine(rootDir, "runtime", "gmail_aliases.json");
+        }
+
         private void LoadMailboxPool()
         {
             string tokenFile = GetMailboxTokenFile();
@@ -243,10 +401,64 @@ namespace SmsWorkbench
                         RefreshToken = "CFWorker",
                         Notes = path,
                         SourcePath = path,
+                        AliasNotes = ResolveAliasNotes(email),
                         RawLine = "cfworker://" + email,
                         MailboxLine = "cfworker://" + email,
                         MailboxProvider = "cfworker"
                     });
+                    continue;
+                }
+
+                if (line.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string payload = line.Substring("gmail://".Length).Trim();
+                    string email = "";
+                    string refreshToken = "";
+                    string clientId = "";
+                    string accountType = "Gmail邮箱池";
+                    string status = "可收信";
+                    if (payload.Contains("----"))
+                    {
+                        string[] gmailParts = payload.Split(new[] { "----" }, StringSplitOptions.None);
+                        if (gmailParts.Length >= 2)
+                        {
+                            email = gmailParts[0].Trim();
+                            if (gmailParts.Length >= 4)
+                            {
+                                clientId = gmailParts[1].Trim();
+                                refreshToken = gmailParts[3].Trim();
+                                status = "已授权";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        string[] gmailParts = payload.Split(new[] { "---" }, StringSplitOptions.None);
+                        if (gmailParts.Length >= 2)
+                        {
+                            email = gmailParts[0].Trim();
+                        }
+                    }
+                    if (email.Length == 0) continue;
+                    string refreshTokenDisplay = refreshToken.Length > 0 ? Mask(refreshToken) : "AppPassword";
+                    allRows.Add(new PoolRow
+                    {
+                        Id = "M" + (i + 1),
+                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
+                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
+                        Identifier = email,
+                        AccountType = accountType,
+                        Status = status,
+                        RefreshToken = refreshTokenDisplay,
+                        Notes = path,
+                        SourcePath = path,
+                        RawLine = line,
+                        MailboxLine = line,
+                        ClientId = clientId,
+                        RawRefreshToken = refreshToken,
+                        MailboxProvider = "gmail"
+                    });
+                    AddGmailAliasPoolRows(email, line, path, i, status, refreshTokenDisplay, clientId, refreshToken);
                     continue;
                 }
 
@@ -269,7 +481,9 @@ namespace SmsWorkbench
                         RefreshToken = Mask(refreshToken),
                         Notes = path,
                         SourcePath = path,
+                        AliasNotes = ResolveAliasNotes(parts[0].Trim()),
                         RawLine = line,
+                        MailboxLine = line,
                         ClientId = clientId,
                         RawRefreshToken = refreshToken,
                         MailboxProvider = "chatai"
@@ -290,7 +504,9 @@ namespace SmsWorkbench
                     RefreshToken = Mask(stdParts[2]),
                     Notes = path,
                     SourcePath = path,
+                    AliasNotes = ResolveAliasNotes(stdParts[0].Trim()),
                     RawLine = line,
+                    MailboxLine = line,
                     MailboxProvider = "graph"
                 });
             }
@@ -327,6 +543,16 @@ namespace SmsWorkbench
                     string access = data.TryGetValue("access_token", out string rawAccess) ? rawAccess : "";
                     string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
                     string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
+                    Dictionary<string, object> rawData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(rawJson)) rawData = JsonTextToObject(rawJson);
+                    }
+                    catch { }
+                    foreach (var kv in data)
+                    {
+                        if (!rawData.ContainsKey(kv.Key)) rawData[kv.Key] = kv.Value;
+                    }
                     string paypalAmount = GetPaypalAmount(rawJson);
                     string importedStatus = GetImportedStatus(rawJson);
                     string verifiedPhone = GetVerifiedPhone(rawJson);
@@ -339,14 +565,17 @@ namespace SmsWorkbench
                     }
                     TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
                     bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
+                    bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
                     bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox);
-                    allRows.Add(new PoolRow
+                    var dbRow = new PoolRow
                     {
                         Id = "DB" + data["id"],
                         CreatedAt = UnixTimeText(data.TryGetValue("created_at", out string created) ? created : ""),
                         CompletedAt = UnixTimeText(data.TryGetValue("updated_at", out string updated) ? updated : ""),
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
-                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
+                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
+                        AccountPlanType = GetAccountPlanType(rawData),
+                        QuotaStatus = GetQuotaStatus(rawData),
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
                         PayPalAmount = paypalAmount,
@@ -354,16 +583,19 @@ namespace SmsWorkbench
                         Phone = verifiedPhone,
                         HasAccessToken = !string.IsNullOrWhiteSpace(access),
                         PayPalUrl = paypalUrl,
-                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
+                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
                         Notes = string.IsNullOrWhiteSpace(jsonPath) ? dbPath : jsonPath,
+                        AliasNotes = ResolveAliasNotes(email),
                         SourcePath = dbPath,
                         RawLine = data["id"],
                         ClientId = mailboxClientId,
                         RawRefreshToken = mailboxRefreshToken,
                         MailboxLine = mailboxLine,
                         MailboxProvider = mailboxProvider
-                    });
+                    };
+                    PopulateQuotaFields(dbRow, rawData);
+                    allRows.Add(dbRow);
                 }
                 Log("已从 SQLite 加载账号索引：" + dbPath);
                 return true;
@@ -399,13 +631,16 @@ namespace SmsWorkbench
                         string verifiedPhone = GetVerifiedPhone(data);
                         TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
                         string timing = GetTimingText(data);
-                        allRows.Add(new PoolRow
+                        bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
+                        var sessionRow = new PoolRow
                         {
                             Id = "S" + (allRows.Count + 1),
                             CreatedAt = SafeTime(File.GetCreationTime(path)),
                             CompletedAt = SafeTime(File.GetLastWriteTime(path)),
                             Identifier = email,
-                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : "Session",
+                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isGmailMailbox ? "Session/Gmail" : "Session",
+                            AccountPlanType = GetAccountPlanType(data),
+                            QuotaStatus = GetQuotaStatus(data),
                             Status = importedStatus.Length > 0
                                 ? importedStatus
                                 : DisplayAccountStatus(GetString(data, "status"), "", access, GetString(data, "error"), paypalStatus, refreshTokenStatus, importedStatus),
@@ -415,15 +650,18 @@ namespace SmsWorkbench
                             Phone = verifiedPhone,
                             HasAccessToken = !string.IsNullOrWhiteSpace(access),
                             PayPalUrl = paypalUrl,
-                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : Mask(access),
+                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(access),
                             Proxy = timing,
                             Notes = path,
+                            AliasNotes = ResolveAliasNotes(email),
                             SourcePath = path,
                             ClientId = mailboxClientId,
                             RawRefreshToken = mailboxRefreshToken,
                             MailboxLine = mailboxLine,
                             MailboxProvider = mailboxProvider
-                        });
+                        };
+                        PopulateQuotaFields(sessionRow, data);
+                        allRows.Add(sessionRow);
                     }
                     catch (Exception ex)
                     {
@@ -442,7 +680,14 @@ namespace SmsWorkbench
                 "ALTER TABLE accounts ADD COLUMN paypal_updated_at INTEGER DEFAULT 0",
                 "ALTER TABLE accounts ADD COLUMN refresh_token_status TEXT DEFAULT ''",
                 "ALTER TABLE accounts ADD COLUMN refresh_token_updated_at INTEGER DEFAULT 0",
-                "ALTER TABLE accounts ADD COLUMN oauth_refresh_token TEXT DEFAULT ''"
+                "ALTER TABLE accounts ADD COLUMN oauth_refresh_token TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN workspace_status TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN workspace_id TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN workspace_name TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN workspace_switch_result TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN workspace_updated_at INTEGER DEFAULT 0",
+                "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN quota_status TEXT DEFAULT ''"
             };
             foreach (string sql in migrations)
             {

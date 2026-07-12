@@ -8,6 +8,7 @@ request shape so registration code does not duplicate state-sensitive details.
 import json
 
 from .config import CFG
+from .auth_headers import openai_auth_headers
 from .http_client import request_with_retry
 
 
@@ -57,11 +58,10 @@ def otp_fallback_send_enabled():
 
 def send_registration_email_otp(session, auth_base, base_headers, current_url="", mode="passwordless"):
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/email-verification"
+    did = str((base_headers or {}).get("oai-device-id") or (base_headers or {}).get("Oai-Device-Id") or "").strip()
     headers = {
-        **base_headers,
-        "Accept": "*/*",
-        "Origin": auth_base,
-        "Referer": referer,
+        **(base_headers or {}),
+        **openai_auth_headers(did, referer=referer, origin=auth_base, accept="*/*"),
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",

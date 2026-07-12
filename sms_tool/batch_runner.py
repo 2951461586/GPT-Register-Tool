@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from .error_classification import classify_error
+
 def _unique_mailboxes(mailboxes):
     if not mailboxes:
         return []
@@ -48,7 +50,7 @@ def run_batch_impl(
         print(f"{'#' * 40}")
         try:
             mailbox = mailboxes[i] if mailboxes else None
-            return i, run_email_func(
+            result = run_email_func(
                 proxy=proxy,
                 mailbox=mailbox,
                 paypal_link=paypal_link,
@@ -59,9 +61,22 @@ def run_batch_impl(
                 paypal_generation_type=paypal_generation_type,
                 registration_mode=registration_mode,
             )
+            if isinstance(result, dict) and not result.get("success", False):
+                result.setdefault("failure_class", classify_error(result))
+                if result["failure_class"] == "network":
+                    result.setdefault("dropped", False)
+                elif result["failure_class"] == "account":
+                    result.setdefault("dropped", True)
+            return i, result
         except Exception as e:
             import traceback; traceback.print_exc()
-            return i, {"success": False, "error": str(e)}
+            failure_class = classify_error(str(e))
+            return i, {
+                "success": False,
+                "error": str(e),
+                "failure_class": failure_class,
+                "dropped": True if failure_class == "account" else False if failure_class == "network" else None,
+            }
 
     workers = max(1, min(int(workers or 1), 5, int(count or 1)))
     if workers <= 1:

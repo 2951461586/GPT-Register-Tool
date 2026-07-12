@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -84,13 +63,15 @@ namespace SmsWorkbench
             var summaryGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
             summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 3; i++) summaryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int i = 0; i < 4; i++) summaryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var infoItems = new (string label, string value)[]
             {
                 ("邮箱", row.Identifier),
                 ("类型", row.AccountType ?? ""),
                 ("状态", row.Status ?? ""),
+                ("额度 5h", FormatQuotaWindow(row.Quota5hUsed, row.Quota5hLimit, row.Quota5hRemaining, row.Quota5hPercent)),
+                ("额度 7d", FormatQuotaWindow(row.Quota7dUsed, row.Quota7dLimit, row.Quota7dRemaining, row.Quota7dPercent)),
                 ("支付状态", row.PayPalStatus ?? ""),
                 ("支付金额", row.PayPalAmount ?? ""),
                 ("Refresh Token", row.RefreshTokenStatus ?? ""),
@@ -99,7 +80,7 @@ namespace SmsWorkbench
             };
 
             int idx = 0;
-            for (int r = 0; r < 3; r++)
+            for (int r = 0; r < 4; r++)
             {
                 for (int c = 0; c < 2 && idx < infoItems.Length; c++, idx++)
                 {
@@ -217,6 +198,14 @@ namespace SmsWorkbench
             openButton.Click += (_, __) => OpenAccountJson(row);
             leftActions.Children.Add(openButton);
 
+            var refreshQuotaButton = new Button { Content = "刷新额度", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+            refreshQuotaButton.Click += async (_, __) =>
+            {
+                dialog.Close();
+                await RefreshQuotaForRowAsync(row);
+            };
+            leftActions.Children.Add(refreshQuotaButton);
+
             // Right: primary actions
             var rightActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             var openPayPalButton = new Button { Content = "打开支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
@@ -304,6 +293,12 @@ namespace SmsWorkbench
             {
                 return rawJson;
             }
+        }
+
+        private static string FormatQuotaWindow(string used, string limit, string remaining, string percent)
+        {
+            if (string.IsNullOrEmpty(used) && string.IsNullOrEmpty(limit)) return "—";
+            return $"{used}/{limit} ({percent}) 剩 {remaining}";
         }
 
         private void AddDetailRow(Grid parent, int row, string label, string value)

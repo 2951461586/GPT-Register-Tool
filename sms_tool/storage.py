@@ -17,6 +17,13 @@ EXTRA_COLUMNS = {
     "refresh_token_status": "TEXT DEFAULT ''",
     "refresh_token_updated_at": "INTEGER DEFAULT 0",
     "oauth_refresh_token": "TEXT DEFAULT ''",
+    "workspace_status": "TEXT DEFAULT ''",
+    "workspace_id": "TEXT DEFAULT ''",
+    "workspace_name": "TEXT DEFAULT ''",
+    "workspace_switch_result": "TEXT DEFAULT ''",
+    "workspace_updated_at": "INTEGER DEFAULT 0",
+    "account_type": "TEXT DEFAULT ''",
+    "quota_status": "TEXT DEFAULT ''",
 }
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 KNOWN_EMAIL_DOMAINS = (
@@ -27,6 +34,8 @@ KNOWN_EMAIL_DOMAINS = (
     "gmail.com",
 )
 
+
+# ── Schema & Connection ─────────────────────────────────────────────────────
 
 def database_path(cfg=None):
     cfg = cfg or CFG
@@ -112,6 +121,8 @@ def _ensure_extra_columns(conn):
     """)
 
 
+# ── Data Normalization Helpers ───────────────────────────────────────────────
+
 def _as_bool(value):
     return 1 if bool(value) else 0
 
@@ -189,6 +200,8 @@ def _resolve_account_email(conn, email):
         matched = _find_existing_account_email(conn, canonical)
         return matched or existing
 
+
+# ── Field Extraction ─────────────────────────────────────────────────────────
 
 def _nested_token(data, *keys):
     current = data
@@ -279,6 +292,9 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "account_deactivated"
     if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
         return "at_invalid"
+    failure_class = str(_get(data, "failure_class")).strip().lower()
+    if failure_class == "network" and data.get("success") is False:
+        return "network_failed"
     if explicit in {"k12_joined", "k12_requested", "k12_left", "k12_verify_failed"}:
         return explicit
     if _looks_at_invalid(data, paypal):
@@ -331,6 +347,8 @@ def _success_value(data, access_token):
     return bool(access_token)
 
 
+# ── Account Operations ───────────────────────────────────────────────────────
+
 def upsert_account(data, json_path=""):
     init_database()
     mailbox = _nested(data, "mailbox")
@@ -339,6 +357,7 @@ def upsert_account(data, json_path=""):
     auth_session = _nested(data, "auth_session")
     timing = _nested(data, "timing")
     pipeline_timing = _nested(data, "pipeline_timing")
+    quota = _nested(data, "quota")
     email = _normalize_account_email(_get(data, "email") or _get(mailbox, "email"))
     if not email:
         return False
@@ -350,6 +369,7 @@ def upsert_account(data, json_path=""):
     payment_method = _payment_method(data, paypal)
     oauth_refresh_token = _oauth_refresh_token(data, auth_session)
     refresh_token_status = _refresh_token_status(data, auth_session)
+    workspace = _nested(data, "workspace_scan")
     has_refresh_token = refresh_token_status in {"oauth_present", "legacy_present"}
     status = _status(data, paypal, access_token, has_refresh_token=has_refresh_token)
     if oauth_refresh_token or (has_refresh_token and _get(data, "refresh_token")):
@@ -386,6 +406,13 @@ def upsert_account(data, json_path=""):
         "refresh_token_status": refresh_token_status,
         "refresh_token_updated_at": _as_int(_get(data, "refresh_token_updated_at")) or (now if oauth_refresh_token else 0),
         "oauth_refresh_token": oauth_refresh_token,
+        "workspace_status": str(_get(data, "workspace_status") or _get(workspace, "status")),
+        "workspace_id": "" if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free" else str(_get(data, "workspace_id") or _get(workspace, "actual_workspace_id")),
+        "workspace_name": "" if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free" else str(_get(data, "workspace_name") or _get(workspace, "workspace_name") or _get(workspace, "actual_workspace_name")),
+        "workspace_switch_result": str(_get(data, "workspace_switch_result") or _get(workspace, "switch_status") or _get(workspace, "switch_error")),
+        "workspace_updated_at": _as_int(_get(data, "workspace_updated_at")) or _as_int(_get(workspace, "updated_at")),
+        "account_type": str(_get(data, "account_type") or _get(workspace, "account_type_after")),
+        "quota_status": str(_get(data, "quota_status") or (quota.get("status", "") if isinstance(quota, dict) else "")),
         "mailbox_provider": str(_get(mailbox, "provider") or _get(purchase, "provider")),
         "mailbox_source": str(_get(mailbox, "source") or _get(purchase, "source")),
         "mailbox_token": str(_get(mailbox, "token")),
@@ -467,6 +494,8 @@ def get_account_record(email):
     return dict(row) if row else {}
 
 
+# ── Status Update Operations ─────────────────────────────────────────────────
+
 def mark_paypal_status(email, status="completed"):
     init_database()
     now = int(time.time())
@@ -519,7 +548,7 @@ def mark_paypal_status(email, status="completed"):
     return True
 
 
-def mark_k12_status(email, workspace_id="", status="k12_joined", result=None, access_token=""):
+def mark_quota_status(email, quota_status="", quota_result=None):
     init_database()
     now = int(time.time())
     conn = _connect()
@@ -548,40 +577,26 @@ def mark_k12_status(email, workspace_id="", status="k12_joined", result=None, ac
                     data = {**file_data, **data}
             except Exception:
                 pass
-        k12 = data.get("k12") if isinstance(data.get("k12"), dict) else {}
-        k12.update({
-            "ok": str(status).lower() in {"k12_joined", "k12_requested", "k12_left", "joined", "requested", "left"},
-            "status": status,
-            "workspace_id": str(workspace_id or ""),
-            "updated_at": now,
-        })
-        if isinstance(result, dict):
-            safe_result = {
+        quota = data.get("quota") if isinstance(data.get("quota"), dict) else {}
+        quota["status"] = str(quota_status or "")
+        quota["updated_at"] = now
+        if isinstance(quota_result, dict):
+            quota["last_result"] = {
                 key: value
-                for key, value in result.items()
-                if key not in {"access_token", "cookie", "cookie_header", "authorization"}
+                for key, value in quota_result.items()
+                if key not in {"access_token", "authorization", "cookie", "cookie_header"}
             }
-            k12["last_result"] = safe_result
-            cpa_export = result.get("cpa_export") if isinstance(result.get("cpa_export"), dict) else {}
-            if cpa_export.get("ok") and cpa_export.get("path"):
-                k12["cpa_json_path"] = str(cpa_export.get("path") or "")
-                k12["cpa_account_id"] = str(cpa_export.get("account_id") or "")
-                data["k12_cpa_json_path"] = str(cpa_export.get("path") or "")
-                data["k12_cpa_account_id"] = str(cpa_export.get("account_id") or "")
-        data["k12"] = k12
-        data["k12_status"] = status
-        data["k12_workspace_id"] = str(workspace_id or "")
-        data["k12_updated_at"] = now
-        if access_token:
-            data["access_token"] = str(access_token)
+        data["quota"] = quota
+        data["quota_status"] = str(quota_status or "")
+        data["quota_updated_at"] = now
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
             """
             UPDATE accounts
-            SET status=?, access_token=COALESCE(NULLIF(?, ''), access_token), updated_at=?, raw_json=?
+            SET quota_status=?, updated_at=?, raw_json=?
             WHERE lower(email)=lower(?)
             """,
-            (status, str(access_token or ""), now, raw_json, lookup_email),
+            (str(quota_status or ""), now, raw_json, lookup_email),
         )
         conn.commit()
     finally:
@@ -590,6 +605,8 @@ def mark_k12_status(email, workspace_id="", status="k12_joined", result=None, ac
         _update_session_json(json_path, data)
     return True
 
+
+# ── Session File & Rebuild ───────────────────────────────────────────────────
 
 def _mark_plan_type_plus(data):
     if not isinstance(data, dict):

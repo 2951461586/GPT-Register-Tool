@@ -33,6 +33,8 @@ from .nextsms import (
     normalize_country as normalize_nextsms_country,
     normalize_service as normalize_nextsms_service,
 )
+from .auth_headers import openai_auth_headers_lower
+from .sms_provider import SmsProviderAdapter, provider_name
 
 
 PLACEHOLDER_KEYS = {"", "YOUR_SMSBOWER_API_KEY", "$SMSBOWER_API_KEY", "YOUR_NEXTSMS_API_KEY", "$NEXTSMS_API_KEY"}
@@ -587,11 +589,7 @@ def _prepare_nextsms_for_send(slot: PhoneSlot) -> bool:
 
 
 def _prepare_provider_for_send(slot: PhoneSlot) -> bool:
-    if slot.provider == "smsbower":
-        return _prepare_smsbower_for_send(slot)
-    if slot.provider == "nextsms":
-        return _prepare_nextsms_for_send(slot)
-    return True
+    return _sms_provider_adapter(slot).prepare()
 
 
 def _wait_for_send_cooldown(slot: PhoneSlot):
@@ -707,46 +705,90 @@ def _cancel_smsbower_activation(slot: PhoneSlot):
     _reset_smsbower_slot(slot)
 
 
+class _StaticSmsProviderAdapter(SmsProviderAdapter):
+    def wait_code(self) -> Optional[str]:
+        baseline = get_sms_baseline(self.slot.sms_api_url)
+        return poll_sms_code(
+            self.slot.sms_api_url,
+            baseline,
+            timeout=self.slot.sms_timeout,
+            poll_interval=self.slot.sms_poll_interval,
+        )
+
+    def complete(self) -> None:
+        _reset_provider_slot(self.slot)
+
+    def cancel(self) -> None:
+        _reset_provider_slot(self.slot)
+
+
+class _SmsBowerProviderAdapter(SmsProviderAdapter):
+    provider_key = "smsbower"
+
+    def prepare(self) -> bool:
+        return _prepare_smsbower_for_send(self.slot)
+
+    def wait_code(self) -> Optional[str]:
+        return _wait_smsbower_code(self.slot)
+
+    def complete(self) -> None:
+        _complete_smsbower_activation(self.slot)
+
+    def cancel(self) -> None:
+        _cancel_smsbower_activation(self.slot)
+
+
+class _NexSmsProviderAdapter(SmsProviderAdapter):
+    provider_key = "nextsms"
+
+    def prepare(self) -> bool:
+        return _prepare_nextsms_for_send(self.slot)
+
+    def wait_code(self) -> Optional[str]:
+        return _wait_nextsms_code(self.slot)
+
+    def complete(self) -> None:
+        if self.slot.activation_id:
+            _nextsms_client(self.slot).complete(self.slot.activation_id)
+        _reset_provider_slot(self.slot)
+
+    def cancel(self) -> None:
+        if self.slot.activation_id:
+            _nextsms_client(self.slot).cancel(self.slot.activation_id)
+        _reset_provider_slot(self.slot)
+
+
+def _sms_provider_adapter(slot: PhoneSlot) -> SmsProviderAdapter:
+    name = provider_name(slot)
+    if name == "smsbower":
+        return _SmsBowerProviderAdapter(slot)
+    if name == "nextsms":
+        return _NexSmsProviderAdapter(slot)
+    return _StaticSmsProviderAdapter(slot)
+
+
 def _complete_provider_activation(slot: PhoneSlot):
-    if slot.provider == "smsbower":
-        _complete_smsbower_activation(slot)
-        return
-    if slot.provider == "nextsms":
-        if slot.activation_id:
-            _nextsms_client(slot).complete(slot.activation_id)
-        _reset_provider_slot(slot)
-        return
-    _reset_provider_slot(slot)
+    _sms_provider_adapter(slot).complete()
 
 
 def _cancel_provider_activation(slot: PhoneSlot):
-    if slot.provider == "smsbower":
-        _cancel_smsbower_activation(slot)
-        return
-    if slot.provider == "nextsms":
-        if slot.activation_id:
-            _nextsms_client(slot).cancel(slot.activation_id)
-        _reset_provider_slot(slot)
-        return
-    _reset_provider_slot(slot)
+    _sms_provider_adapter(slot).cancel()
 
 
 def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=None) -> dict:
-    from .codex_sentinel import load_cached_sentinel, with_sentinel
+    from .codex_sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()
-    headers = {
-        "accept": "application/json",
-        "accept-language": "en-US,en;q=0.9",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36",
-        "oai-device-id": did,
-        "Referer": current_url,
-        "content-type": "application/json",
-    }
+    headers = openai_auth_headers_lower(
+        did,
+        referer=current_url,
+        sentinel=sentinel,
+        extra={"content-type": "application/json"},
+    )
     response = session.post(
         "https://auth.openai.com/api/accounts/add-phone/send",
-        headers=with_sentinel(headers, sentinel),
+        headers=headers,
         json={"phone_number": normalize_phone(phone)},
         timeout=30,
         impersonate="chrome110",
@@ -782,21 +824,19 @@ def poll_sms_code(sms_api_url: str, baseline: dict, timeout: int = 120, poll_int
 
 
 def validate_phone_otp(session, did, code: str, sentinel=None, proxy=None) -> dict:
-    from .codex_sentinel import load_cached_sentinel, with_sentinel
+    from .codex_sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()
-    headers = {
-        "accept": "application/json",
-        "accept-language": "en-US,en;q=0.9",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36",
-        "oai-device-id": did,
-        "Referer": "https://auth.openai.com/phone-verification",
-        "content-type": "application/json",
-    }
+    headers = openai_auth_headers_lower(
+        did,
+        referer="https://auth.openai.com/phone-verification",
+        sentinel=sentinel,
+        extra={"content-type": "application/json"},
+    )
     response = session.post(
         "https://auth.openai.com/api/accounts/phone-otp/validate",
-        headers=with_sentinel(headers, sentinel),
+        headers=headers,
         json={"code": code},
         timeout=30,
         impersonate="chrome110",
@@ -1000,18 +1040,7 @@ def _complete_phone_verification_once_locked(
         }
 
     print(f"[*] Phone OTP sent to {phone}, polling for code...")
-    if phone_slot.provider == "smsbower":
-        code = _wait_smsbower_code(phone_slot)
-    elif phone_slot.provider == "nextsms":
-        code = _wait_nextsms_code(phone_slot)
-    else:
-        baseline = get_sms_baseline(phone_slot.sms_api_url)
-        code = poll_sms_code(
-            phone_slot.sms_api_url,
-            baseline,
-            timeout=phone_slot.sms_timeout,
-            poll_interval=phone_slot.sms_poll_interval,
-        )
+    code = _sms_provider_adapter(phone_slot).wait_code()
 
     if not code:
         if phone_slot.provider in {"smsbower", "nextsms"}:

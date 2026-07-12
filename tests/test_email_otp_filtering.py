@@ -66,6 +66,34 @@ class EmailOtpFilteringTests(unittest.TestCase):
         text = "style=\"color:#123456\" Your ChatGPT verification code is 654321."
         self.assertEqual(_extract_otp_from_text(text), "654321")
 
+    def test_otp_candidate_rejects_shadow_tm1_sender(self):
+        mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
+        msg = self._message("Your temporary ChatGPT verification code")
+        msg["from"] = "OpenAI <noreply@tm1.openai.com>"
+        msg["bodyPreview"] = "Your code is 493682."
+
+        self.assertIsNone(_email_otp_candidate(mailbox, msg, keyword="verification"))
+
+    def test_otp_candidate_rejects_non_openai_sender_for_outlook_or_gmail(self):
+        mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
+        msg = self._message("Your temporary ChatGPT verification code")
+        msg["from"] = "Alerts <alerts@example.net>"
+        msg["bodyPreview"] = "Your verification code is 654321."
+
+        self.assertIsNone(_email_otp_candidate(mailbox, msg, keyword="verification"))
+
+    def test_otp_candidate_rejects_tracking_noise_without_otp_context(self):
+        mailbox = MailboxAccount(email="target@gmail.com", provider="gmail")
+        msg = self._message("Delivery notice")
+        msg["bodyPreview"] = "Tracking id 123456. Unsubscribe below."
+        msg["toRecipients"] = [{"emailAddress": {"address": "target@gmail.com"}}]
+
+        self.assertIsNone(_email_otp_candidate(mailbox, msg))
+
+    def test_otp_extractor_rejects_tracking_id_before_real_code(self):
+        text = "Tracking id 123456. Your ChatGPT verification code is 654321."
+        self.assertEqual(_extract_otp_from_text(text), "654321")
+
     def test_issued_after_filters_pre_send_mail(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
 
@@ -110,6 +138,48 @@ class EmailOtpFilteringTests(unittest.TestCase):
                 )
 
         self.assertEqual(code, "169441")
+
+    def test_gmail_alias_recipient_matches_primary_mailbox(self):
+        mailbox = MailboxAccount(email="migueladorno236@gmail.com", provider="gmail")
+        message = {
+            "id": "msg-gmail-1",
+            "receivedDateTime": "2026-07-05T10:00:00Z",
+            "subject": "Your temporary ChatGPT verification code",
+            "bodyPreview": "Your code is 654321.",
+            "body": {"content": ""},
+            "toRecipients": [{"emailAddress": {"address": "M.i.g.u.EL.A.D.orno236+qrzzsw@gmail.com"}}],
+        }
+
+        candidate = _email_otp_candidate(
+            mailbox,
+            message,
+            keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(candidate["otp"], "654321")
+
+    def test_gmail_googlemail_and_plus_are_canonicalized(self):
+        mailbox = MailboxAccount(email="liziaicloudxm@gmail.com", provider="gmail")
+        message = {
+            "id": "msg-gmail-2",
+            "receivedDateTime": "2026-07-05T10:00:01Z",
+            "subject": "Your temporary ChatGPT verification code",
+            "bodyPreview": "Your code is 123456.",
+            "body": {"content": ""},
+            "internetMessageHeaders": [
+                {"name": "Delivered-To", "value": "li.zi.aicl.oudxm+ri1ug@googlemail.com"},
+            ],
+        }
+
+        candidate = _email_otp_candidate(
+            mailbox,
+            message,
+            keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(candidate["otp"], "123456")
 
 
 if __name__ == "__main__":
