@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using Serilog;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -15,12 +16,22 @@ namespace SmsWorkbench
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+            // Configure Serilog + DI container
+            AppServices.Configure(AppDomain.CurrentDomain.BaseDirectory);
+
             var systemTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetSystemTheme();
             var startTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
                 ? Wpf.Ui.Appearance.ApplicationTheme.Dark
                 : Wpf.Ui.Appearance.ApplicationTheme.Light;
             Wpf.Ui.Appearance.ApplicationThemeManager.Apply(startTheme, WindowBackdropType.Mica, true);
             base.OnStartup(e);
+        }
+
+        private void App_OnStartup(object sender, StartupEventArgs e)
+        {
+            var mainWindow = AppServices.Resolve<MainWindow>() ?? new MainWindow();
+            mainWindow.Show();
         }
 
         private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
@@ -48,6 +59,8 @@ namespace SmsWorkbench
         {
             try
             {
+                AppServices.Logger?.Error(ex, "Unhandled exception");
+                // Also write to legacy crash log for backward compatibility
                 string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime");
                 Directory.CreateDirectory(dir);
                 string path = Path.Combine(dir, "ui_errors.log");
@@ -59,6 +72,12 @@ namespace SmsWorkbench
             {
                 // best effort only
             }
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            Log.CloseAndFlush();
+            base.OnExit(e);
         }
     }
 }

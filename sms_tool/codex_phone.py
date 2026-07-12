@@ -6,6 +6,7 @@ or falls back to single-phone paypal_auto helpers when pool is not provided.
 
 from .config import CFG
 from .codex_sentinel import load_cached_sentinel, with_sentinel
+from .auth_headers import openai_auth_headers_lower
 
 
 def complete_phone_verification(session, did, current_url, proxy=None, enabled=False, phone_pool=None):
@@ -124,18 +125,7 @@ def _verify_with_legacy(session, did, current_url, proxy=None):
 
 
 def _oai_headers(did, extra=None):
-    headers = {
-        "accept": "application/json",
-        "accept-language": "en-US,en;q=0.9",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/110.0.0.0 Safari/537.36",
-        "sec-ch-ua": '"Google Chrome";v="110", "Chromium";v="110", "Not_A Brand";v="24"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "oai-device-id": did,
-    }
-    if extra:
-        headers.update(extra)
-    return headers
+    return openai_auth_headers_lower(did, extra=extra)
 
 
 def _next_url(response):

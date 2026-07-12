@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
@@ -53,6 +32,9 @@ namespace SmsWorkbench
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
+        private readonly Dictionary<string, string> gmailAliasBases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<string>> gmailAliasMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        private bool aliasColumnInteractionsHooked;
         private Process runningProcess;
         private int taskSeq = 1;
         private string searchText = "";
@@ -149,7 +131,7 @@ namespace SmsWorkbench
         public string SearchText
         {
             get => searchText;
-            set { searchText = value ?? ""; OnPropertyChanged(nameof(SearchText)); currentPage = 1; RefreshPagedRows(); }
+            set { searchText = value ?? ""; OnPropertyChanged(nameof(SearchText)); currentPage = 1; RefreshPagedRows(); UpdateSearchClearVisibility(); }
         }
 
         public string CountText
@@ -240,6 +222,7 @@ namespace SmsWorkbench
         {
             InitializeComponent();
             DataContext = this;
+            EnsureAliasColumn();
 
             // Initialize theme colors on startup
             _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
@@ -264,7 +247,7 @@ namespace SmsWorkbench
         }
 
         // Moved to MainWindow.Pools.cs: Pool/session loading, filtering, overview.
-        // Moved to MainWindow.Register.cs: Registration, SMS, K12 and selection mailbox argument builders.
+        // Moved to MainWindow.Register.cs: Registration, SMS and selection mailbox argument builders.
 
         // Moved to MainWindow.Tasks.cs: Backend process, task list, deletion and cancellation actions.
 
@@ -283,14 +266,24 @@ namespace SmsWorkbench
         // Moved to MainWindow.Helpers.cs: Path/config helpers, status formatting, external open/copy/log helpers.
     }
 
-    public sealed class PoolRow : INotifyPropertyChanged
+    public sealed partial class PoolRow : ObservableObject
     {
-        private bool isChecked;
+        [ObservableProperty] private bool isChecked;
         public string Id { get; set; } = "";
         public string CreatedAt { get; set; } = "";
         public string CompletedAt { get; set; } = "";
         public string Identifier { get; set; } = "";
         public string AccountType { get; set; } = "";
+        public string AccountPlanType { get; set; } = "";
+        public string QuotaStatus { get; set; } = "";
+        public string Quota5hUsed { get; set; } = "";
+        public string Quota5hLimit { get; set; } = "";
+        public string Quota5hRemaining { get; set; } = "";
+        public string Quota5hPercent { get; set; } = "";
+        public string Quota7dUsed { get; set; } = "";
+        public string Quota7dLimit { get; set; } = "";
+        public string Quota7dRemaining { get; set; } = "";
+        public string Quota7dPercent { get; set; } = "";
         public string Status { get; set; } = "";
         public string PayPalStatus { get; set; } = "";
         public string PayPalAmount { get; set; } = "";
@@ -301,18 +294,13 @@ namespace SmsWorkbench
         public string RefreshToken { get; set; } = "";
         public string Proxy { get; set; } = "";
         public string Notes { get; set; } = "";
+        public string AliasNotes { get; set; } = "";
         public string SourcePath { get; set; } = "";
         public string RawLine { get; set; } = "";
         public string MailboxLine { get; set; } = "";
         public string ClientId { get; set; } = "";
         public string RawRefreshToken { get; set; } = "";
         public string MailboxProvider { get; set; } = "";
-        public bool IsChecked
-        {
-            get => isChecked;
-            set { isChecked = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChecked))); }
-        }
-        public event PropertyChangedEventHandler PropertyChanged;
     }
 
     public sealed class RegisterOptions
@@ -324,31 +312,22 @@ namespace SmsWorkbench
         public bool SkipPaymentLink { get; set; } = false;
     }
 
-    public sealed class K12Options
+        public sealed class ScanOptions
     {
-        public string WorkspaceIds { get; set; } = "";
-        public string Route { get; set; } = "request";
         public int Workers { get; set; } = 4;
-        public int Retries { get; set; } = 2;
-        public double RetryBackoffSeconds { get; set; } = 5;
-        public int InviteTimeoutSeconds { get; set; } = 240;
-        public bool AutoAcceptInvite { get; set; } = true;
+        public bool QuotaAutoRelogin { get; set; } = true;
+        public string ReloginMode { get; set; } = "auto";
     }
 
-    public sealed class TaskRow : INotifyPropertyChanged
+    public sealed partial class TaskRow : ObservableObject
     {
-        private string status = "";
-        private string cost = "";
-        private string doneAt = "";
+        [ObservableProperty] private string status = "";
+        [ObservableProperty] private string cost = "";
+        [ObservableProperty] private string doneAt = "";
         public string Name { get; set; } = "";
         public string Task { get; set; } = "";
         public string Info { get; set; } = "";
         public string Retry { get; set; } = "0";
-        public string Status { get => status; set { status = value; Notify(nameof(Status)); } }
-        public string Cost { get => cost; set { cost = value; Notify(nameof(Cost)); } }
-        public string DoneAt { get => doneAt; set { doneAt = value; Notify(nameof(DoneAt)); } }
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void Notify(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     internal static class SqliteNative
@@ -493,6 +472,70 @@ namespace SmsWorkbench
         {
             var label = parameter?.ToString() ?? string.Empty;
             return value is bool collapsed && collapsed ? string.Empty : label;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    /// Converts a status string (e.g. "支付完成✅", "AT失效", "待处理") into a
+    /// severity keyword ("success", "warn", "danger", "info", "neutral") that
+    /// the StatusBadge style uses to pick the correct colour palette.
+    /// </summary>
+    public sealed class StatusSeverityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            string s = (value as string ?? "").Trim();
+            if (s.Length == 0) return "neutral";
+
+            // Success states (green)
+            if (s.Contains("✅") || s.Contains("完成") || s.Contains("已注册")
+                || s.Contains("已获取") || s.Contains("已导入") || s.Contains("K12已进入")
+                || s.Contains("PM已创建"))
+                return "success";
+
+            // Danger states (red)
+            if (s.Contains("失败") || s.Contains("失效") || s.Contains("掉号")
+                || s.Contains("异常") || s.Contains("无RT") || s.Contains("缺失")
+                || s.Contains("未获取") || s.Contains("K12未切换") || s.Contains("K12已退出"))
+                return "danger";
+
+            // Warning states (amber)
+            if (s.Contains("待") || s.Contains("缺") || s.Contains("OTP")
+                || s.Contains("K12已申请") || s.Contains("旧token"))
+                return "warn";
+
+            // Info states (grey-blue)
+            if (s.Contains("已保存") || s.Contains("待刷新") || s.Contains("未知"))
+                return "info";
+
+            return "neutral";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    /// Converts a raw RefreshTokenStatus value (e.g. "oauth_present",
+    /// "legacy_present", "no_rt") into a short display label.
+    /// </summary>
+    public sealed class RtDisplayConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            string s = (value as string ?? "").Trim();
+            if (s.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return "已获取";
+            if (s.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)) return "旧Token";
+            if (s.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return "无RT";
+            if (s.Equals("missing", StringComparison.OrdinalIgnoreCase)) return "缺失";
+            return s.Length > 0 ? s : "—";
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

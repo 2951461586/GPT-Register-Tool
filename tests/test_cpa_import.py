@@ -94,6 +94,172 @@ class CpaImportTests(unittest.TestCase):
             "active",
         )
 
+    def test_probe_cpa_codex_quota_formats_available_quota(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"status_code": 200, "body": '{"quota":{"remaining":7,"limit":10}}'}
+
+        with patch.object(cpa_import.curl_requests, "post", return_value=FakeResponse()):
+            result = cpa_import.probe_cpa_codex_quota(
+                {"email": "ok@example.com", "auth_index": "abc123"},
+                api_url="https://cpa.example/v0/management/auth-files",
+                api_token="token",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["quota_status"], "7/10")
+
+    def test_probe_local_codex_quota_uses_saved_access_token(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"quota": {"remaining": 3, "limit": 5}}
+
+        with patch.object(cpa_import.curl_requests, "get", return_value=FakeResponse()) as get:
+            result = cpa_import.probe_local_codex_quota(
+                {"email": "ok@example.com", "access_token": "at_123", "chatgpt_account_id": "acc_123"},
+                proxy="http://proxy.example:8080",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "local")
+        self.assertEqual(result["quota_status"], "3/5")
+        call = get.call_args
+        self.assertEqual(call.args[0], cpa_import.CODEX_USAGE_URL)
+        self.assertEqual(call.kwargs["headers"]["Authorization"], "Bearer at_123")
+        self.assertEqual(call.kwargs["headers"]["Chatgpt-Account-Id"], "acc_123")
+        self.assertEqual(call.kwargs["proxies"]["https"], "http://proxy.example:8080")
+
+    def test_refresh_local_quota_statuses_persists_local_result(self):
+        with patch.object(cpa_import, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}), \
+             patch.object(cpa_import, "probe_local_codex_quota", return_value={"ok": True, "quota_status": "可用"}), \
+             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
+            result = cpa_import.refresh_local_quota_statuses(["ok@example.com"])
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "local")
+        self.assertEqual(result["success"], 1)
+        marked.assert_called_once()
+        self.assertEqual(marked.call_args.args[0], "ok@example.com")
+        self.assertEqual(marked.call_args.args[1], "可用")
+
+    def test_refresh_local_quota_statuses_relogin_on_401_then_reprobe(self):
+        with patch.object(
+            cpa_import,
+            "get_account_record",
+            side_effect=[
+                {"email": "ok@example.com", "access_token": "old_at", "json_path": "session.json"},
+                {"email": "ok@example.com", "access_token": "new_at", "json_path": "session.json"},
+            ],
+        ), \
+             patch.object(
+                 cpa_import,
+                 "probe_local_codex_quota",
+                 side_effect=[
+                     {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
+                     {"ok": True, "status": "active", "quota_status": "可用"},
+                 ],
+             ) as probe, \
+             patch.object(cpa_import, "relogin_codex_account", return_value={"ok": True, "mode": "web_session"}) as relogin, \
+             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
+            result = cpa_import.refresh_local_quota_statuses(["ok@example.com"], relogin_on_401=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["results"][0]["quota_status"], "可用")
+        self.assertEqual(probe.call_count, 2)
+        relogin.assert_called_once()
+        self.assertEqual(relogin.call_args.kwargs["mode"], "auto")
+        self.assertEqual(marked.call_args.args[1], "可用")
+
+    def test_refresh_local_quota_statuses_marks_deactivated_after_relogin_failure(self):
+        with patch.object(cpa_import, "get_account_record", return_value={"email": "bad@example.com", "access_token": "old_at"}), \
+             patch.object(cpa_import, "probe_local_codex_quota", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
+             patch.object(cpa_import, "relogin_codex_account", return_value={"ok": False, "error": "account_deactivated"}), \
+             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
+            result = cpa_import.refresh_local_quota_statuses(["bad@example.com"], relogin_on_401=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["results"][0]["quota_status"], "账号停用")
+        self.assertEqual(marked.call_args.args[1], "账号停用")
+
+    def test_relogin_codex_account_auto_uses_web_session_first(self):
+        with patch.object(cpa_import, "relogin_web_session_account", return_value={"ok": True, "mode": "web_session"}) as web, \
+             patch.object(cpa_import, "relogin_local_codex_account") as oauth:
+            result = cpa_import.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "web_session")
+        web.assert_called_once()
+        oauth.assert_not_called()
+
+    def test_relogin_codex_account_auto_falls_back_to_codex_oauth(self):
+        with patch.object(cpa_import, "relogin_web_session_account", return_value={"ok": False, "mode": "web_session", "error": "missing_session_cookie"}), \
+             patch.object(cpa_import, "relogin_local_codex_account", return_value={"ok": True, "mode": "codex_oauth_pkce"}) as oauth:
+            result = cpa_import.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "codex_oauth_pkce")
+        self.assertEqual(result["web_session_attempt"]["error"], "missing_session_cookie")
+        oauth.assert_called_once()
+
+    def test_relogin_codex_account_web_session_only_does_not_fallback(self):
+        with patch.object(cpa_import, "relogin_web_session_account", return_value={"ok": False, "mode": "web_session", "error": "missing_session_cookie"}), \
+             patch.object(cpa_import, "relogin_local_codex_account") as oauth:
+            result = cpa_import.relogin_codex_account({"email": "ok@example.com"}, mode="web_session")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["mode"], "web_session")
+        oauth.assert_not_called()
+
+    def test_refresh_cpa_quota_statuses_persists_matching_email(self):
+        fetch_result = {"ok": True, "files": [{"email": "ok@example.com", "auth_index": "idx1"}]}
+        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result), \
+             patch.object(cpa_import, "probe_cpa_codex_quota", return_value={"ok": True, "status": "active", "quota_status": "??"}), \
+             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
+            result = cpa_import.refresh_cpa_quota_statuses(["ok@example.com"], api_url="https://cpa.example", api_token="token")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["success"], 1)
+        marked.assert_called_once()
+        self.assertEqual(marked.call_args.args[0], "ok@example.com")
+        self.assertEqual(marked.call_args.args[1], "??")
+
+    def test_refresh_cpa_quota_statuses_marks_missing_email_not_imported(self):
+        fetch_result = {"ok": True, "files": [{"email": "other@example.com", "auth_index": "idx1"}]}
+        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result), \
+             patch.object(cpa_import, "probe_cpa_codex_quota") as probe, \
+             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
+            result = cpa_import.refresh_cpa_quota_statuses(["missing@example.com"], api_url="https://cpa.example", api_token="token")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["results"][0]["quota_status"], "未导入CPA")
+        probe.assert_not_called()
+        marked.assert_called_once()
+        self.assertEqual(marked.call_args.args[0], "missing@example.com")
+        self.assertEqual(marked.call_args.args[1], "未导入CPA")
+
+    def test_fetch_cpa_auth_files_uses_config_fallback(self):
+        class FakeResponse:
+            status_code = 200
+            text = ""
+
+            def json(self):
+                return {"files": [{"email": "ok@example.com", "auth_index": "idx1"}]}
+
+        with patch.object(cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management", "token")), \
+             patch.object(cpa_import.curl_requests, "get", return_value=FakeResponse()) as get:
+            result = cpa_import.fetch_cpa_auth_files()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["files"]), 1)
+        self.assertEqual(get.call_args.args[0], "https://cpa.example/v0/management/auth-files")
+
     def test_probe_cpa_codex_quota_detects_invalidated_token(self):
         class FakeResponse:
             status_code = 200

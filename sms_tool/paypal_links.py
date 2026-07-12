@@ -8,7 +8,7 @@ from .account_seed import extract_access_token as _access_token
 from .account_seed import load_account_seed as _load_seed
 from .config import CFG
 from .gen_pp_link import generate_payment_link, generate_pp_link
-from .paypal_nocard import _follow_stripe_redirect, extract_ba_token
+from .paypal_protocol import _follow_stripe_redirect, extract_ba_token
 from .storage import upsert_account
 
 

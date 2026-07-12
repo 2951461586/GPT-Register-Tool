@@ -4,6 +4,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
                  xmlns:local="clr-namespace:SmsWorkbench"
+                 xmlns:hc="https://handyorg.github.io/handycontrol"
                  Title="GPT Register Tool"
                  Width="1360" Height="860" MinWidth="1220" MinHeight="720"
                  WindowStartupLocation="CenterScreen"
@@ -17,6 +18,8 @@
                  WindowCornerPreference="Round">
   <ui:FluentWindow.Resources>
     <local:CollapsedLabelConverter x:Key="CollapsedLabelConverter"/>
+    <local:StatusSeverityConverter x:Key="StatusSeverityConverter"/>
+    <local:RtDisplayConverter x:Key="RtDisplayConverter"/>
     <Style x:Key="SidebarNavButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="HorizontalAlignment" Value="Stretch"/>
       <Setter Property="Margin" Value="0,0,0,10"/>
@@ -308,7 +311,7 @@
                 <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource SidebarScrollBarStyle}"/>
               </ScrollViewer.Resources>
               <StackPanel>
-                <TextBlock Text="运行" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <TextBlock Text="一键操作" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="OneClickRegister_Click">
                   <Grid>
                     <Grid.ColumnDefinitions>
@@ -337,31 +340,13 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"/>
+                            Data="M3 3v18h18 M7 14l4-4 4 4 5-5"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="一键扫号" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="额度查询" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="OneClickK12_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M3 21h18 M5 21V7l7-4 7 4v14 M9 21v-6h6v6 M9 10h.01 M12 10h.01 M15 10h.01"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="一键K12" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="OneClickPay_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M12 1v22 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="一键支付" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
+
+                <TextBlock Text="支付管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="OpenPayPalLink_Click">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -392,28 +377,6 @@
                     <TextBlock Grid.Column="1" Text="AT Payment" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
-
-                <TextBlock Text="管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ImportPaidCpa_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M12 3v12 M8 11l4 4 4-4 M20 21H4"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="一键导入" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ExportAccounts_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M12 21V9 M16 13l-4-4-4 4 M4 3h16"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="导出账号" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="RegeneratePayPalLink_Click">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -424,18 +387,8 @@
                     <TextBlock Grid.Column="1" Text="重生 PayPal 链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="DeleteSelected_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="删除选中" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
 
-                <TextBlock Text="邮箱" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <TextBlock Text="邮箱管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ImportChataiMailbox_Click">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -456,6 +409,40 @@
                     <TextBlock Grid.Column="1" Text="查看收件箱" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
+
+                <TextBlock Text="账号管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ImportPaidCpa_Click">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M12 3v12 M8 11l4 4 4-4 M20 21H4"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="一键导入" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                  </Grid>
+                </Button>
+                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ExportAccounts_Click">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M12 21V9 M16 13l-4-4-4 4 M4 3h16"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="导出账号" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                  </Grid>
+                </Button>
+                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="DeleteSelected_Click">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="删除选中" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                  </Grid>
+                </Button>
+
+                <TextBlock Text="项目设置" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="Refresh_Click">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -520,33 +507,48 @@
               <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Border Grid.Column="0" Margin="0,0,8,0" Padding="14,12" CornerRadius="8" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="总记录" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding TotalCountText}" FontSize="28" FontWeight="Bold"/>
+              <StackPanel Orientation="Horizontal">
+                <Border Width="3" CornerRadius="2" Background="{DynamicResource AccentBlue}" Margin="0,0,10,0"/>
+                <StackPanel>
+                  <TextBlock Text="总记录" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding TotalCountText}" FontSize="28" FontWeight="Bold"/>
+                </StackPanel>
               </StackPanel>
             </Border>
             <Border Grid.Column="1" Margin="0,0,8,0" Padding="14,12" CornerRadius="8" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="已接码" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding MailboxCountText}" FontSize="28" FontWeight="Bold"/>
+              <StackPanel Orientation="Horizontal">
+                <Border Width="3" CornerRadius="2" Background="{DynamicResource AccentOrange}" Margin="0,0,10,0"/>
+                <StackPanel>
+                  <TextBlock Text="已接码" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding MailboxCountText}" FontSize="28" FontWeight="Bold"/>
+                </StackPanel>
               </StackPanel>
             </Border>
             <Border Grid.Column="2" Margin="0,0,8,0" Padding="14,12" CornerRadius="8" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="已注册" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding RegisteredCountText}" FontSize="28" FontWeight="Bold"/>
+              <StackPanel Orientation="Horizontal">
+                <Border Width="3" CornerRadius="2" Background="{DynamicResource AccentGreen}" Margin="0,0,10,0"/>
+                <StackPanel>
+                  <TextBlock Text="已注册" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding RegisteredCountText}" FontSize="28" FontWeight="Bold"/>
+                </StackPanel>
               </StackPanel>
             </Border>
             <Border Grid.Column="3" Margin="0,0,8,0" Padding="14,12" CornerRadius="8" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="支付完成" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding PaypalCountText}" FontSize="28" FontWeight="Bold"/>
+              <StackPanel Orientation="Horizontal">
+                <Border Width="3" CornerRadius="2" Background="{DynamicResource AccentPurple}" Margin="0,0,10,0"/>
+                <StackPanel>
+                  <TextBlock Text="支付完成" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding PaypalCountText}" FontSize="28" FontWeight="Bold"/>
+                </StackPanel>
               </StackPanel>
             </Border>
             <Border Grid.Column="4" Padding="14,12" CornerRadius="8" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <StackPanel>
-                <TextBlock Text="异常/待处理" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding AttentionCountText}" FontSize="28" FontWeight="Bold"/>
+              <StackPanel Orientation="Horizontal">
+                <Border Width="3" CornerRadius="2" Background="{DynamicResource AccentRed}" Margin="0,0,10,0"/>
+                <StackPanel>
+                  <TextBlock Text="异常/待处理" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding AttentionCountText}" FontSize="28" FontWeight="Bold"/>
+                </StackPanel>
               </StackPanel>
             </Border>
           </Grid>
@@ -564,8 +566,32 @@
                   <ColumnDefinition Width="96"/>
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
-                <ComboBox Grid.Column="1" Margin="8,0,0,0" SelectedItem="{Binding ScopeFilter}">
+                <Grid Grid.Column="0">
+                  <TextBox Style="{StaticResource SearchTextBox}" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
+                  <Path Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0"
+                        Data="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"
+                        Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                        IsHitTestVisible="False"/>
+                  <Button x:Name="SearchClearButton" Width="22" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
+                          Padding="0" Background="Transparent" BorderThickness="0" ToolTip="清除搜索"
+                          Click="SearchClear_Click" Visibility="Collapsed">
+                    <Button.Template>
+                      <ControlTemplate TargetType="Button">
+                        <Border x:Name="ClearBg" Background="Transparent" CornerRadius="10">
+                          <Path Width="10" Height="10" Stretch="Uniform" Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                                Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ClearBg" Property="Background" Value="{DynamicResource PanelHover}"/>
+                          </Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Button.Template>
+                  </Button>
+                </Grid>
+                <ComboBox Grid.Column="1" Margin="8,0,0,0" SelectedItem="{Binding ScopeFilter}" ToolTip="筛选范围">
                   <ComboBoxItem Content="全部"/>
                   <ComboBoxItem Content="邮箱池"/>
                   <ComboBoxItem Content="已注册"/>
@@ -575,12 +601,36 @@
                 <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding PageStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>
               </Grid>
               <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Content="首页" Margin="4,0" Click="FirstPage_Click"/>
-                <Button Content="上一页" Margin="4,0" Click="PrevPage_Click"/>
-                <Button Content="清空选择" Margin="4,0" Click="ClearSelection_Click"/>
-                <Button Content="下一页" Margin="4,0" Click="NextPage_Click"/>
-                <Button Content="末页" Margin="4,0" Click="LastPage_Click"/>
-                <Button Content="全选" Margin="4,0" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果"/>
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="FirstPage_Click" ToolTip="首页">
+                  <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                        Data="M11 19l-7-7 7-7 M19 19l-7-7 7-7"/>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="PrevPage_Click" ToolTip="上一页">
+                  <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                        Data="M15 18l-6-6 6-6"/>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="ClearSelection_Click" ToolTip="清空选择">
+                  <StackPanel Orientation="Horizontal">
+                    <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                          Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    <TextBlock Text="清空" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"/>
+                  </StackPanel>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="NextPage_Click" ToolTip="下一页">
+                  <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                        Data="M9 18l6-6-6-6"/>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="LastPage_Click" ToolTip="末页">
+                  <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                        Data="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
+                </Button>
+                <Button Style="{StaticResource IconButton}" Margin="6,0,2,0" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果">
+                  <StackPanel Orientation="Horizontal">
+                    <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                          Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    <TextBlock Text="全选" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"/>
+                  </StackPanel>
+                </Button>
               </WrapPanel>
             </Grid>
           </Border>
@@ -599,22 +649,121 @@
                       SelectionUnit="FullRow"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
                       ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Pixel"
+                      EnableColumnVirtualization="True"
                       SelectionChanged="AccountGrid_SelectionChanged">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="查看详情" Click="CtxViewDetail_Click" FontWeight="Medium">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="查看收件箱" Click="CtxViewInbox_Click">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Header="复制邮箱" Click="CtxCopyEmail_Click">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="复制支付链接" Click="CtxCopyPayPal_Click">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="打开支付链接" Click="CtxOpenPayPal_Click">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Header="刷新额度" Click="CtxRefreshQuota_Click" FontWeight="Medium">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Header="打开源文件" Click="CtxOpenSource_Click">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="标记支付完成" Click="CtxMarkPayPal_Click" FontWeight="Medium">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                </ContextMenu>
+              </DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="80" IsReadOnly="True"/>
                 <DataGridCheckBoxColumn Header="选中" Binding="{Binding IsChecked}" Width="60"/>
                 <DataGridTextColumn Header="创建时间" Binding="{Binding CreatedAt}" Width="155" IsReadOnly="True"/>
                 <DataGridTextColumn Header="更新时间" Binding="{Binding CompletedAt}" Width="155" IsReadOnly="True"/>
                 <DataGridTextColumn Header="邮箱" Binding="{Binding Identifier}" Width="260" IsReadOnly="True"/>
-                <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
-                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="130" IsReadOnly="True"/>
-                <DataGridTextColumn Header="RT" Binding="{Binding RefreshTokenStatus}" Width="78" IsReadOnly="True"/>
-                <DataGridTextColumn Header="支付状态" Binding="{Binding PayPalStatus}" Width="120" IsReadOnly="True"/>
-                <DataGridTextColumn Header="支付金额" Binding="{Binding PayPalAmount}" Width="95" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="详情" Width="70">
+                <DataGridTextColumn Header="账号类型" Binding="{Binding AccountPlanType}" Width="92" IsReadOnly="True"/>
+                <DataGridTemplateColumn Header="额度情况" Width="200" IsReadOnly="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Button Content="查看" Height="24" Padding="6,0" Click="AccountDetail_Click"/>
+                      <TextBlock FontSize="11" VerticalAlignment="Center" Margin="4,0" TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding QuotaStatus}"/>
+                      </TextBlock>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
+                <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
+                        <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="RT" Width="78" IsReadOnly="True">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding RefreshTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
+                        <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding RefreshTokenStatus, Converter={StaticResource RtDisplayConverter}}" TextTrimming="CharacterEllipsis"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="支付状态" Width="120" IsReadOnly="True">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PayPalStatus, Converter={StaticResource StatusSeverityConverter}}">
+                        <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding PayPalStatus}" TextTrimming="CharacterEllipsis"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="支付金额" Binding="{Binding PayPalAmount}" Width="95" IsReadOnly="True"/>
+                <DataGridTemplateColumn Header="详情" Width="80">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Button Height="24" Padding="6,0" Click="AccountDetail_Click" ToolTip="查看详情">
+                        <StackPanel Orientation="Horizontal">
+                          <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                                Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                          <TextBlock Text="查看" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11"/>
+                        </StackPanel>
+                      </Button>
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -639,9 +788,11 @@
                         IsReadOnly="True"
                         RowHeight="26"
                         BorderThickness="0"
-                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                        ScrollViewer.VerticalScrollBarVisibility="Auto"
-                        Loaded="TaskGrid_Loaded">
+ScrollViewer.HorizontalScrollBarVisibility="Auto"
+ScrollViewer.VerticalScrollBarVisibility="Auto"
+VirtualizingPanel.IsVirtualizing="True"
+VirtualizingPanel.VirtualizationMode="Recycling"
+Loaded="TaskGrid_Loaded">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="批次" Binding="{Binding Name}" Width="160"/>
                   <DataGridTextColumn Header="任务" Binding="{Binding Task}" Width="160"/>
@@ -677,6 +828,7 @@
           </Border>
         </Grid>
       </Grid>
+    <hc:Growl x:Name="GrowlContainer"/>
     </Grid>
   </materialDesign:DialogHost>
 </ui:FluentWindow>

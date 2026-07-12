@@ -2,6 +2,7 @@ import json
 from urllib.parse import quote, urlencode, urlparse
 
 from .config import CFG
+from .auth_headers import openai_auth_headers
 from .http_client import request_with_retry
 
 def _json_or_raw(response, limit=500):
@@ -143,15 +144,15 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/create-account"
     headers = {
         **base_headers,
-        "Origin": auth_base,
-        "Referer": referer,
-        "Content-Type": "application/json",
-        "oai-device-id": did,
+        **openai_auth_headers(
+            did,
+            referer=referer,
+            origin=auth_base,
+            sentinel_token=sentinel_token,
+            sentinel_so_token=sentinel_so_token,
+            extra={"Content-Type": "application/json"},
+        ),
     }
-    if sentinel_token:
-        headers["openai-sentinel-token"] = sentinel_token
-    if sentinel_so_token:
-        headers["openai-sentinel-so-token"] = sentinel_so_token
 
     response = request_with_retry(
         session,

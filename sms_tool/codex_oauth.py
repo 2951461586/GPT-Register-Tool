@@ -1,4 +1,5 @@
 ﻿import base64
+import argparse
 import hashlib
 import json
 import secrets
@@ -11,8 +12,10 @@ from curl_cffi import requests as curl_requests
 from .config import CFG
 from .codex_phone import complete_phone_verification
 from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
+from .auth_headers import openai_auth_headers_lower
 from .http_client import request_with_retry
-from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp
+from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
+from . import mailbox_gmail
 from .storage import upsert_account
 
 
@@ -675,20 +678,65 @@ def _select_workspace_if_needed(session, did, current_url, proxy=None):
     workspace_id = workspace_id or str((workspaces[0] or {}).get("id") or "")
     if not workspace_id:
         return {"ok": False}
+    selected = _select_workspace(session, did, current_url, workspace_id, proxy=proxy)
+    if not selected.get("ok"):
+        return selected
+    _, final_url = _follow_redirects(session, selected.get("next_url") or current_url, proxy=proxy)
+    return {"ok": True, "url": final_url, "workspace_id": workspace_id}
+
+
+def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=30, extra_headers=None):
+    workspace_id = str(workspace_id or "").strip()
+    if not workspace_id:
+        return {"ok": False, "error": "missing_workspace_id"}
+    headers = with_sentinel(
+        _oai_headers(did, {"Referer": referer or "https://auth.openai.com/workspace", "content-type": "application/json"}),
+        load_cached_sentinel(),
+    )
+    if isinstance(extra_headers, dict):
+        headers.update(extra_headers)
     response = session.post(
         "https://auth.openai.com/api/accounts/workspace/select",
-        headers=with_sentinel(
-            _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
-            load_cached_sentinel(),
-        ),
+        headers=headers,
         json={"workspace_id": workspace_id},
-        timeout=30,
+        timeout=timeout,
         impersonate="chrome110",
     )
     if response.status_code != 200:
-        return {"ok": False}
-    _, final_url = _follow_redirects(session, _next_url(response), proxy=proxy)
-    return {"ok": True, "url": final_url}
+        return {
+            "ok": False,
+            "workspace_id": workspace_id,
+            "status": response.status_code,
+            "body": (response.text or "")[:300],
+            "error": f"workspace_select_failed:{response.status_code}",
+        }
+    return {"ok": True, "workspace_id": workspace_id, "status": response.status_code, "next_url": _next_url(response)}
+
+
+def select_workspace_by_cookie(cookie_header, workspace_id, device_id="", proxy=None, timeout=30, referer="https://auth.openai.com/workspace"):
+    """Select an auth workspace using saved cookies.
+
+    This is the protocol adapter reused by one-click scan when it needs to move
+    a live browser/session cookie to a fallback workspace before refreshing
+    /api/auth/session.
+    """
+    cookie_header = str(cookie_header or "").strip()
+    if not cookie_header:
+        return {"ok": False, "workspace_id": str(workspace_id or "").strip(), "error": "missing_cookie_header"}
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+    # curl_cffi accepts explicit Cookie headers more reliably than importing a
+    # mixed-domain cookie jar from a serialized browser cookie string.
+    return _select_workspace(
+        session,
+        device_id or "scan",
+        referer,
+        workspace_id,
+        proxy=proxy,
+        timeout=timeout,
+        extra_headers={"cookie": cookie_header},
+    )
 
 
 def _new_oauth_request():
@@ -837,32 +885,32 @@ def _mailbox_from_data(data):
     provider = str(mailbox.get("provider") or "").strip()
     if not email:
         return None
-    if provider != "cfworker" and not refresh_token:
-        return None
-    return MailboxAccount(
+    result = MailboxAccount(
         email=email,
         password=str(mailbox.get("password") or data.get("password") or "").strip(),
+        login_password=str(mailbox.get("login_password") or "").strip(),
         refresh_token=refresh_token,
         access_token=str(mailbox.get("access_token") or "").strip(),
         token=str(mailbox.get("token") or "").strip(),
+        client_secret=str(mailbox.get("client_secret") or "").strip(),
+        auth_mode=str(mailbox.get("auth_mode") or "").strip(),
+        sender_name=str(mailbox.get("sender_name") or "").strip(),
         source=str(mailbox.get("source") or "").strip(),
         provider=provider,
     )
+    if not mailbox_has_inbox_credentials(result):
+        if mailbox_gmail.is_gmail_mailbox(result):
+            from .mailbox import _mailbox_from_config
+
+            fallback = _mailbox_from_config(argparse.Namespace(email=email))
+            if fallback is not None and mailbox_has_inbox_credentials(fallback):
+                return fallback
+        return None
+    return result
 
 
 def _oai_headers(did, extra=None):
-    headers = {
-        "accept": "application/json",
-        "accept-language": "en-US,en;q=0.9",
-        "user-agent": USER_AGENT,
-        "sec-ch-ua": '"Google Chrome";v="110", "Chromium";v="110", "Not_A Brand";v="24"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "oai-device-id": did,
-    }
-    if extra:
-        headers.update(extra)
-    return headers
+    return openai_auth_headers_lower(did, extra=extra)
 
 
 def _next_url(response):

@@ -6,6 +6,7 @@ import sys
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from email.utils import formataddr
 from pathlib import Path
 
 from .config import CFG
@@ -13,6 +14,128 @@ from .mailbox import _load_mailbox_pool, _luckmail_enabled
 from .paths import output_dir
 from .registration import _build_session_file, run_batch, run_email
 from .storage import database_path, get_paypal_url, list_paypal_accounts, mark_paypal_status, rebuild_from_session_dir, upsert_account
+from .commands.helpers import (
+    read_email_file as _read_email_file,
+    unique_emails as _unique_emails,
+    payment_method as _payment_method,
+    payment_method_label as _payment_method_label,
+    public_mail_message as _public_mail_message,
+    public_oauth_result as _public_oauth_result,
+    mailbox_from_explicit_args as _mailbox_from_explicit_args,
+    one_click_sms_max_reuse as _one_click_sms_max_reuse,
+)
+
+
+def _payment_link_enabled(payment_method, args):
+    if args.skip_paypal_link:
+        return False
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    if payment_method in {"gopay", "upi"}:
+        method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+        return bool(method_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
+    return bool(paypal_cfg.get("auto_generate", True))
+
+
+def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
+    requested = max(1, int(getattr(args, "workers", 1) or 1))
+    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    if payment_method == "paypal":
+        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    configured = cfg.get("max_regenerate_workers", cfg.get("regenerate_workers"))
+    try:
+        cap = int(configured)
+    except (TypeError, ValueError):
+        cap = 4
+    cap = max(1, cap)
+    return max(1, min(requested, cap, total))
+
+
+def _payment_regenerate_delay_seconds(payment_method: str) -> float:
+    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    if payment_method == "paypal":
+        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    try:
+        return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _at_payment_stage_args(args, payment_method="paypal"):
+    proxy = (getattr(args, "proxy", None) or "").strip() or None
+    if not getattr(args, "proxy_explicit", False):
+        proxy = None
+    checkout_proxy = (getattr(args, "checkout_proxy", None) or "").strip() or None
+    provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
+    approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
+    if proxy or checkout_proxy or provider_proxy:
+        return proxy, checkout_proxy, provider_proxy, approve_proxy
+
+    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
+    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
+    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    proxy_default = (CFG.get("proxy") or {}).get("default") or ""
+
+    checkout_proxy = method_stage.get("checkout") or paypal_stage.get("checkout") or proxy_default
+    if method == "upi":
+        provider_proxy = (
+            method_stage.get("provider")
+            or method_stage.get("stripe_init")
+            or paypal_stage.get("provider")
+            or paypal_stage.get("stripe_init")
+            or "http://107.150.109.49:11001"
+        )
+        approve_proxy = (
+            method_stage.get("approve")
+            or method_stage.get("confirm")
+            or paypal_stage.get("approve")
+            or paypal_stage.get("confirm")
+            or provider_proxy
+            or "http://107.150.109.49:11001"
+        )
+    else:
+        provider_proxy = (
+            method_stage.get("provider")
+            or method_stage.get("stripe_init")
+            or paypal_stage.get("provider")
+            or paypal_stage.get("stripe_init")
+            or proxy_default
+        )
+        approve_proxy = (
+            method_stage.get("approve")
+            or method_stage.get("confirm")
+            or paypal_stage.get("approve")
+            or paypal_stage.get("confirm")
+            or provider_proxy
+            or proxy_default
+        )
+    return proxy, checkout_proxy, provider_proxy, approve_proxy
+
+
+def _at_promotion_proxy_arg(args, payment_method="paypal"):
+    """Resolve the promotion-update stage proxy (opt-in, promo-eligible region).
+
+    Priority: explicit --promotion-proxy > <method>.stage_proxies.promotion
+    > paypal.stage_proxies.promotion. Returns None when unset so the promotion
+    stage stays disabled (behaviour unchanged).
+    """
+    explicit = (getattr(args, "promotion_proxy", None) or "").strip()
+    if explicit:
+        return explicit
+    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
+    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
+    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
+    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    resolved = (
+        method_stage.get("promotion")
+        or method_stage.get("promotion_update")
+        or paypal_stage.get("promotion")
+        or paypal_stage.get("promotion_update")
+    )
+    return (str(resolved).strip() or None) if resolved else None
+
 
 def main():
     for stream in (sys.stdout, sys.stderr):
@@ -55,6 +178,13 @@ def main():
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
     parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
     parser.add_argument("--cpa-api-token", default=None, help="CPA API token, defaults to cpa/cpa_mode.api_token in config.json")
+    parser.add_argument("--refresh-cpa-quota", action="store_true", help="Refresh quota status and update SQLite; defaults to local access_token probing")
+    parser.add_argument("--refresh-local-quota", action="store_true", help="Refresh quota status locally with saved access_token and update SQLite")
+    parser.add_argument("--quota-usage", action="store_true", help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)")
+    parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
+    parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
+    parser.add_argument("--quota-relogin-timeout", type=int, default=180, help="Timeout in seconds for --quota-auto-relogin")
+    parser.add_argument("--quota-workers", type=int, default=4, help="Concurrent workers for quota refresh")
     parser.add_argument("--sub2api-url", default=None, help="SUB2API base URL, defaults to sub2api.api_url in config.json")
     parser.add_argument("--sub2api-token", default=None, help="SUB2API bearer access token, defaults to sub2api.api_token in config.json")
     parser.add_argument("--sub2api-email", default=None, help="SUB2API login email when no bearer token is configured")
@@ -77,6 +207,7 @@ def main():
     parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
+    parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
@@ -85,6 +216,12 @@ def main():
     parser.add_argument("--refresh-timeout", type=int, default=300, help="Seconds to wait for interactive auth refresh")
     parser.add_argument("--view-inbox", action="store_true", help="Fetch recent mailbox messages for --email/--session-file and print JSON")
     parser.add_argument("--inbox-limit", type=int, default=20, help="Max messages for --view-inbox")
+    parser.add_argument("--gmail-send", action="store_true", help="Send mail through a configured/selected Gmail mailbox")
+    parser.add_argument("--gmail-send-to", default=None, help="Recipient list for --gmail-send, separated by comma/newline")
+    parser.add_argument("--gmail-send-subject", default=None, help="Subject for --gmail-send")
+    parser.add_argument("--gmail-send-body", default=None, help="Plain-text body for --gmail-send")
+    parser.add_argument("--gmail-send-html", default=None, help="Optional HTML body for --gmail-send")
+    parser.add_argument("--gmail-send-self", action="store_true", help="Send --gmail-send to the Gmail mailbox itself")
     parser.add_argument("--browser-refresh-session", action="store_true", help="Use the old browser-based refresh flow")
     parser.add_argument("--headless-refresh", action="store_true", help="Run browser refresh headless; visible browser is default")
     parser.add_argument("--auto-pay", action="store_true", help="Automate PayPal payment (reverse protocol first, browser fallback)")
@@ -93,30 +230,14 @@ def main():
     parser.add_argument("--auto-pay-timeout", type=int, default=180, help="Seconds to wait for auto-pay completion")
     parser.add_argument("--batch-auto-pay", action="store_true", help="Run auto-pay for all pending accounts in SQLite")
     parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
-    parser.add_argument("--one-click-pay", action="store_true", help="一键支付: PayPal 无卡协议支付或 GoPay 支付 (单账号或 --email-file 批量)")
-    parser.add_argument("--one-click-pay-all", action="store_true", help="一键支付: 对所有待支付账号执行支付")
-    parser.add_argument("--gopay-phone", default=None, help="GoPay provider mode phone number override")
-    parser.add_argument("--gopay-country-code", default=None, help="GoPay provider mode country code override, e.g. 62")
-    parser.add_argument("--gopay-otp-channel", default=None, choices=["sms", "wa", "whatsapp", "none"], help="GoPay provider OTP channel")
-    parser.add_argument("--gopay-flow-id", default=None, help="Existing GoPay provider flow_id to complete with --gopay-otp")
-    parser.add_argument("--gopay-otp", default=None, help="GoPay provider OTP code for completing a prepared flow")
-    parser.add_argument("--gopay-pin", default=None, help="GoPay provider PIN for completing provider payment")
-    parser.add_argument("--gopay-wa-phone", default=None, help="WA-channel GoPay phone used for payment/rebind mode")
-    parser.add_argument("--gopay-user-id", default=None, help="GoPay app state user id for WA rebind mode, default local")
-    parser.add_argument("--gopay-auth-otp", default=None, help="WA login OTP for GoPay app auth before rebind")
-    parser.add_argument("--gopay-rebind-phone", default=None, help="New phone number used by WA rebind after payment")
-    parser.add_argument("--gopay-rebind-otp", default=None, help="SMS OTP for GoPay change-phone completion")
     parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
     parser.add_argument("--one-click-scan", action="store_true", help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification")
-    parser.add_argument("--one-click-k12", action="store_true", help="Batch request/accept ChatGPT workspace (K12) invites using saved account AT")
-    parser.add_argument("--k12-workspace-ids", default=None, help="Workspace ID list for --one-click-k12, separated by comma or newline")
-    parser.add_argument("--k12-workspace-file", default=None, help="Workspace ID file for --one-click-k12")
-    parser.add_argument("--k12-route", default="request", choices=["request", "accept", "leave"], help="K12 route: request, accept, or leave workspace")
-    parser.add_argument("--k12-retries", type=int, default=2, help="Retry count for each K12 request after the first attempt")
-    parser.add_argument("--k12-retry-backoff", type=float, default=5.0, help="Seconds to wait between K12 retries")
-    parser.add_argument("--k12-auto-accept", action="store_true", help="After request succeeds, wait k12-invite mail and accept/open invite")
-    parser.add_argument("--k12-invite-timeout", type=int, default=240, help="Seconds to wait for K12 invite mail when --k12-auto-accept is enabled")
-    parser.add_argument("--no-k12-verify-session", action="store_true", help="Do not verify /api/auth/session switched to the target workspace after K12 join")
+    parser.add_argument("--no-scan-workspace-status", action="store_true", help="Deprecated compatibility flag; --one-click-scan no longer performs workspace checks")
+    parser.add_argument("--scan-switch-workspace-id", default=None, help="Deprecated compatibility flag; no longer used")
+    parser.add_argument("--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used")
+    parser.add_argument("--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used")
+    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries ChatGPT web session before Codex OAuth")
+    
     parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
     parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
     parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
@@ -152,7 +273,11 @@ def main():
     if args.import_cpa:
         _import_cpa(args)
         return
+    if args.refresh_cpa_quota or args.refresh_local_quota:
+        _refresh_cpa_quota(args)
         return
+    if getattr(args, "quota_usage", False):
+        _quota_usage(args)
         return
     if args.export_codex_json:
         _export_codex_json(args)
@@ -172,14 +297,14 @@ def main():
     if args.view_inbox:
         _view_inbox(args)
         return
+    if args.gmail_send:
+        _gmail_send(args)
+        return
     if args.auto_pay or args.auto_pay_reverse_only:
         _auto_pay(args)
         return
     if args.batch_auto_pay:
         _batch_auto_pay(args)
-        return
-    if args.one_click_pay or args.one_click_pay_all:
-        _one_click_pay(args)
         return
     if args.one_click_sms:
         _one_click_sms(args)
@@ -187,9 +312,7 @@ def main():
     if args.one_click_scan:
         _one_click_scan(args)
         return
-    if args.one_click_k12:
-        _one_click_k12(args)
-        return
+    
     if args.convert_session_json:
         _convert_session_json(args)
         return
@@ -327,15 +450,6 @@ def main():
     )
 
 
-def _payment_method(args):
-    value = str(getattr(args, "payment_method", "") or "").strip().lower()
-    if value in {"gopay", "go-pay", "go_pay"}:
-        return "gopay"
-    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        return "upi"
-    return "paypal"
-
-
 def _save_registration_results(
     args,
     results,
@@ -439,31 +553,6 @@ def _import_registered_accounts(args, emails):
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
-
-
-def _payment_method_label(payment_method):
-    raw = str(payment_method or "").strip().lower()
-    if raw in {"gopay", "go-pay", "go_pay"}:
-        value = "gopay"
-    elif raw in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        value = "upi"
-    else:
-        value = "paypal"
-    if value == "gopay":
-        return "GoPay"
-    if value == "upi":
-        return "UPI"
-    return "PayPal"
-
-
-def _payment_link_enabled(payment_method, args):
-    if args.skip_paypal_link:
-        return False
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    if payment_method in {"gopay", "upi"}:
-        method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-        return bool(method_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
-    return bool(paypal_cfg.get("auto_generate", True))
 
 
 def _print_paypal_links(email=""):
@@ -577,14 +666,18 @@ def _refresh_session(args):
 
 
 def _view_inbox(args):
+    import contextlib
+    import sys
+
     from .codex_oauth import _mailbox_from_data
     from .mailbox import _fetch_mailbox_messages
     from .session_refresh import _load_seed_session
 
-    data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
-    mailbox = _mailbox_from_explicit_args(args)
-    if mailbox is None:
-        mailbox = _mailbox_from_data(data)
+    with contextlib.redirect_stdout(sys.stderr):
+        data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
+        mailbox = _mailbox_from_explicit_args(args)
+        if mailbox is None:
+            mailbox = _mailbox_from_data(data)
     if mailbox is None:
         print(json.dumps({
             "ok": False,
@@ -593,11 +686,12 @@ def _view_inbox(args):
         }, ensure_ascii=False, indent=2))
         raise SystemExit(2)
     try:
-        messages = _fetch_mailbox_messages(
-            mailbox,
-            limit=max(1, min(int(args.inbox_limit or 20), 100)),
-            proxy=args.proxy,
-        )
+        with contextlib.redirect_stdout(sys.stderr):
+            messages = _fetch_mailbox_messages(
+                mailbox,
+                limit=max(1, min(int(args.inbox_limit or 20), 100)),
+                proxy=args.proxy,
+            )
     except Exception as exc:
         print(json.dumps({
             "ok": False,
@@ -614,35 +708,60 @@ def _view_inbox(args):
     }, ensure_ascii=False, indent=2))
 
 
-def _public_mail_message(msg):
-    msg = msg if isinstance(msg, dict) else {}
-    from_value = msg.get("from")
-    if isinstance(from_value, dict):
-        from_value = ((from_value.get("emailAddress") or {}).get("address") or from_value.get("address") or "")
-    body = msg.get("body") if isinstance(msg.get("body"), dict) else {}
-    return {
-        "id": str(msg.get("id") or msg.get("message_id") or ""),
-        "receivedDateTime": str(msg.get("receivedDateTime") or msg.get("received_at") or msg.get("created_at") or ""),
-        "from": str(from_value or msg.get("from_email") or msg.get("sender") or ""),
-        "subject": str(msg.get("subject") or msg.get("title") or ""),
-        "bodyPreview": str(msg.get("bodyPreview") or msg.get("preview") or body.get("content") or msg.get("text") or "")[:2000],
-    }
+def _gmail_send(args):
+    import contextlib
+    import sys
 
+    from .codex_oauth import _mailbox_from_data
+    from .mailbox import _mailbox_from_config
+    from .mailbox_gmail import is_gmail_mailbox, send_gmail_message
+    from .session_refresh import _load_seed_session
 
-def _mailbox_from_explicit_args(args):
-    if not (getattr(args, "chatai_mailbox_file", None) or getattr(args, "mailbox_file", None)):
-        return None
-    from .mailbox import _load_mailbox_pool
-
-    requested = str(getattr(args, "email", "") or "").strip().lower()
-    mailboxes = _load_mailbox_pool(args)
-    if not mailboxes:
-        return None
-    if requested:
-        for mailbox in mailboxes:
-            if str(getattr(mailbox, "email", "") or "").strip().lower() == requested:
-                return mailbox
-    return mailboxes[0]
+    with contextlib.redirect_stdout(sys.stderr):
+        data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
+        mailbox = _mailbox_from_explicit_args(args)
+        if mailbox is None:
+            mailbox = _mailbox_from_data(data)
+        if mailbox is None:
+            mailbox = _mailbox_from_config(args)
+    if mailbox is None:
+        print(json.dumps({
+            "ok": False,
+            "email": args.email or data.get("email", ""),
+            "error": "missing_gmail_mailbox_credentials",
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(2)
+    if not is_gmail_mailbox(mailbox):
+        print(json.dumps({
+            "ok": False,
+            "email": mailbox.email,
+            "provider": mailbox.provider,
+            "error": "selected_mailbox_is_not_gmail",
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(2)
+    recipients = args.gmail_send_to or ""
+    if args.gmail_send_self or not str(recipients or "").strip():
+        recipients = mailbox.email
+    subject = args.gmail_send_subject or "GPT-Register-Tool Gmail test"
+    body = args.gmail_send_body or "This is a Gmail test message sent by GPT-Register-Tool."
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            result = send_gmail_message(
+                mailbox,
+                recipients,
+                subject=subject,
+                text_body=body,
+                html_body=args.gmail_send_html or "",
+            )
+    except Exception as exc:
+        print(json.dumps({
+            "ok": False,
+            "email": mailbox.email,
+            "provider": mailbox.provider,
+            "error": str(exc),
+        }, ensure_ascii=False, indent=2))
+        raise SystemExit(3)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _export_codex_json(args):
@@ -685,6 +804,16 @@ def _export_codex_json(args):
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
+
+
+def _importable_account_rows():
+    rows = []
+    for row in list_paypal_accounts():
+        email = str(row.get("email") or "").strip()
+        access_token = str(row.get("access_token") or "").strip()
+        if email and access_token:
+            rows.append(row)
+    return rows
 
 
 def _import_cpa(args):
@@ -763,78 +892,108 @@ def _import_cpa(args):
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
-
-
-def _importable_account_rows():
-    rows = []
-    for row in list_paypal_accounts():
-        email = str(row.get("email") or "").strip()
-        access_token = str(row.get("access_token") or "").strip()
-        if email and access_token:
-            rows.append(row)
-    return rows
-
-
-def _at_payment_stage_args(args, payment_method="paypal"):
-    proxy = (getattr(args, "proxy", None) or "").strip() or None
-    if not getattr(args, "proxy_explicit", False):
-        proxy = None
-    checkout_proxy = (getattr(args, "checkout_proxy", None) or "").strip() or None
-    provider_proxy = (getattr(args, "provider_proxy", None) or "").strip() or None
-    approve_proxy = (getattr(args, "approve_proxy", None) or "").strip() or None
-    if proxy or checkout_proxy or provider_proxy:
-        return proxy, checkout_proxy, provider_proxy, approve_proxy
-
-    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
-    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
-    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
-    proxy_default = (CFG.get("proxy") or {}).get("default") or ""
-
-    checkout_proxy = method_stage.get("checkout") or paypal_stage.get("checkout") or proxy_default
-    if method == "upi":
-        provider_proxy = (
-            method_stage.get("provider")
-            or method_stage.get("stripe_init")
-            or paypal_stage.get("provider")
-            or paypal_stage.get("stripe_init")
-            or "http://107.150.109.49:11001"
+    try:
+        from .cpa_import import refresh_cpa_quota_statuses
+        quota_emails = emails if emails else [str(item.get("email") or "") for item in (result.get("results") or []) if isinstance(item, dict)]
+        if not quota_emails and isinstance(result, dict) and result.get("email"):
+            quota_emails = [str(result.get("email") or "")]
+        quota_result = refresh_cpa_quota_statuses(
+            emails=quota_emails,
+            workers=max(1, int(args.quota_workers or args.workers or 4)),
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+            timeout=max(5, int(args.refresh_timeout or 30)),
         )
-        approve_proxy = (
-            method_stage.get("approve")
-            or method_stage.get("confirm")
-            or paypal_stage.get("approve")
-            or paypal_stage.get("confirm")
-            or provider_proxy
-            or "http://107.150.109.49:11001"
+        if quota_result.get("total", 0):
+            print("[*] CPA quota refreshed after import:")
+            print(json.dumps(quota_result, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        print(f"[*] CPA quota refresh after import skipped: {exc}")
+
+
+def _refresh_cpa_quota(args):
+    from .cpa_import import refresh_cpa_quota_statuses, refresh_local_quota_statuses
+    from .storage import list_paypal_accounts
+
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    emails = _unique_emails(emails)
+    if not emails:
+        emails = [str(row.get("email") or "").strip() for row in list_paypal_accounts()]
+    quota_mode = "local" if getattr(args, "refresh_local_quota", False) else str(getattr(args, "quota_mode", "local") or "local")
+    if quota_mode == "cpa":
+        result = refresh_cpa_quota_statuses(
+            emails=emails,
+            workers=max(1, int(args.quota_workers or args.workers or 4)),
+            api_url=args.cpa_api_url or "",
+            api_token=args.cpa_api_token or "",
+            timeout=max(5, int(args.refresh_timeout or 30)),
         )
     else:
-        provider_proxy = (
-            method_stage.get("provider")
-            or method_stage.get("stripe_init")
-            or paypal_stage.get("provider")
-            or paypal_stage.get("stripe_init")
-            or proxy_default
+        result = refresh_local_quota_statuses(
+            emails=emails,
+            workers=max(1, int(args.quota_workers or args.workers or 4)),
+            proxy=args.proxy,
+            timeout=max(5, int(args.refresh_timeout or 30)),
+            relogin_on_401=bool(args.quota_auto_relogin),
+            relogin_timeout=max(30, int(args.quota_relogin_timeout or args.refresh_timeout or 180)),
         )
-        approve_proxy = (
-            method_stage.get("approve")
-            or method_stage.get("confirm")
-            or paypal_stage.get("approve")
-            or paypal_stage.get("confirm")
-            or provider_proxy
-            or proxy_default
-        )
-    return proxy, checkout_proxy, provider_proxy, approve_proxy
+        if quota_mode == "auto" and result.get("failed", 0):
+            fallback = refresh_cpa_quota_statuses(
+                emails=[item.get("email") for item in result.get("results", []) if not item.get("ok")],
+                workers=max(1, int(args.quota_workers or args.workers or 4)),
+                api_url=args.cpa_api_url or "",
+                api_token=args.cpa_api_token or "",
+                timeout=max(5, int(args.refresh_timeout or 30)),
+            )
+            result["fallback_cpa"] = fallback
+            if fallback.get("success", 0):
+                result["ok"] = True
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _quota_usage(args):
+    """Fetch wham/usage 5h/7d quota for a single account and return structured JSON."""
+    from .cpa_import import probe_local_codex_quota, _format_wham_usage_label
+    from .storage import get_account_record
+
+    email = (getattr(args, "email", None) or "").strip()
+    if not email:
+        print(json.dumps({"ok": False, "error": "missing --email"}))
+        raise SystemExit(1)
+
+    account = get_account_record(email)
+    if not account:
+        print(json.dumps({"ok": False, "error": "account_not_found", "email": email}))
+        raise SystemExit(1)
+
+    proxy = getattr(args, "proxy", None) or None
+    timeout = max(5, int(getattr(args, "refresh_timeout", None) or 30))
+    probe = probe_local_codex_quota(account, proxy=proxy, timeout=timeout)
+    result = {
+        "ok": probe.get("ok", False),
+        "email": email,
+        "status": probe.get("status", "unknown"),
+        "quota_status": probe.get("quota_status", ""),
+        "wham_usage": probe.get("wham_usage"),
+        "status_code": probe.get("status_code"),
+        "error": probe.get("error", ""),
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["ok"]:
+        raise SystemExit(3)
 
 
 def _generate_ba_link(args):
-    """??? Access Token ?? PayPal BA ???"""
+    """Generate PayPal BA link from Access Token."""
     from .gen_pp_link import generate_pp_link
 
     at = (getattr(args, "at", None) or "").strip()
     if not at:
-        print(json.dumps({"ok": False, "error": "??? --at ?? (Access Token)"}))
+        print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
     paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
@@ -855,6 +1014,7 @@ def _generate_ba_link(args):
     else:
         target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "GB").strip().upper()
     proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, "paypal")
+    promotion_proxy = _at_promotion_proxy_arg(args, "paypal")
     require_zero = not getattr(args, "no_require_zero", False)
     require_ba_token = bool(getattr(args, "require_ba_token", False))
 
@@ -864,6 +1024,7 @@ def _generate_ba_link(args):
         checkout_proxy=checkout_proxy,
         provider_proxy=provider_proxy,
         approve_proxy=approve_proxy,
+        promotion_proxy=promotion_proxy,
         target_country=target_country,
         checkout_country=checkout_country,
         require_zero=require_zero,
@@ -982,28 +1143,6 @@ def _regenerate_paypal_link(args):
         raise SystemExit(3)
 
 
-def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
-    requested = max(1, int(getattr(args, "workers", 1) or 1))
-    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    configured = cfg.get("max_regenerate_workers", cfg.get("regenerate_workers"))
-    try:
-        cap = int(configured)
-    except (TypeError, ValueError):
-        cap = 4
-    cap = max(1, cap)
-    return max(1, min(requested, cap, total))
-
-
-def _payment_regenerate_delay_seconds(payment_method: str) -> float:
-    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    try:
-        return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _regenerate_paypal_link_fallback(args, emails):
@@ -1041,61 +1180,9 @@ def _regenerate_paypal_link_fallback(args, emails):
         raise SystemExit(3)
 
 
-def _read_email_file(path):
-    if not path:
-        return []
-    if not os.path.exists(path):
-        print(f"[Error] --email-file not found: {path}")
-        raise SystemExit(2)
-    emails = []
-    seen = set()
-    with open(path, "r", encoding="utf-8-sig") as handle:
-        for raw in handle:
-            value = raw.strip()
-            if not value or value.startswith("#"):
-                continue
-            email = value.split()[0].strip().lower()
-            if not email or email in seen:
-                continue
-            seen.add(email)
-            emails.append(email)
-    return emails
 
 
-def _one_click_k12(args):
-    from .k12 import load_k12_accounts, parse_workspace_ids, run_k12_batch
 
-    emails = _read_email_file(args.email_file)
-    if args.email:
-        emails = [(args.email or "").strip()]
-    emails = _unique_emails(emails)
-    if args.k12_route == "leave" and not (args.k12_workspace_ids or args.k12_workspace_file):
-        workspace_ids = [""]
-    else:
-        workspace_ids = parse_workspace_ids(args.k12_workspace_ids or "", args.k12_workspace_file or "")
-    accounts = load_k12_accounts(emails=emails, session_file=args.session_file or "")
-    if not accounts:
-        print("[Error] no account with access_token was found for --one-click-k12")
-        raise SystemExit(2)
-    if not workspace_ids and args.k12_route != "leave":
-        print("[Error] no workspace id was found for --one-click-k12")
-        raise SystemExit(2)
-    summary = run_k12_batch(
-        accounts,
-        workspace_ids,
-        route=args.k12_route,
-        workers=args.workers,
-        proxy=args.proxy,
-        timeout=max(10, int(args.refresh_timeout or 30)),
-        max_retries=max(0, int(args.k12_retries or 0)),
-        retry_backoff=max(0.0, float(args.k12_retry_backoff or 0)),
-        auto_accept=bool(args.k12_auto_accept),
-        invite_timeout=max(10, int(args.k12_invite_timeout or 240)),
-        export_dir=args.codex_export_dir or "",
-        verify_session=not bool(args.no_k12_verify_session),
-    )
-    if summary.get("failed", 0):
-        raise SystemExit(3)
 
 
 def _convert_session_json(args):
@@ -1226,19 +1313,6 @@ def _batch_auto_pay(args):
                 print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
 
 
-def _one_click_pay(args):
-    """一键支付: PayPal 无卡协议支付。"""
-    payment_method = _payment_method(args)
-    if payment_method == "gopay":
-        from .gopay_payment import one_click_pay_batch
-    elif payment_method == "upi":
-        print("[Error] UPI currently supports hosted long-link generation only; one-click payment is not implemented")
-        raise SystemExit(2)
-    else:
-        from .paypal_browser_auto import one_click_pay_batch
-    one_click_pay_batch(args)
-
-
 def _one_click_sms(args):
     """Refresh selected account(s) through Codex OAuth and phone SMS, then store RT."""
     from .codex_oauth import refresh_codex_oauth_session
@@ -1352,16 +1426,17 @@ def _one_click_scan(args):
         workers=args.workers,
         proxy=args.proxy,
         timeout=args.refresh_timeout,
+        workspace_check=False,
+        switch_workspace_id="",
+        fallback_workspace_ids=[],
+        auto_switch_workspace=False,
+        quota_relogin_on_401=bool(args.quota_auto_relogin),
+        relogin_mode=args.scan_relogin_mode,
     )
     if summary.get("failed", 0):
         raise SystemExit(3)
 
 
-def _one_click_sms_max_reuse(args) -> int:
-    requested = int(getattr(args, "max_reuse_count", 0) or 0)
-    if requested and requested != 1:
-        print("[*] One-click SMS forces max_reuse_count=1 so each email account gets its own phone number")
-    return 1
 
 
 def _persist_one_click_sms_failure(data, json_path, email, result):
@@ -1387,24 +1462,3 @@ def _persist_one_click_sms_failure(data, json_path, email, result):
     upsert_account(refreshed, json_path=json_path)
 
 
-def _public_oauth_result(result):
-    if not isinstance(result, dict):
-        return {}
-    output = {key: value for key, value in result.items() if key != "tokens"}
-    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
-    if tokens:
-        output["has_access_token"] = bool(tokens.get("access_token"))
-        output["has_refresh_token"] = bool(tokens.get("refresh_token"))
-    return output
-
-
-def _unique_emails(emails):
-    output = []
-    seen = set()
-    for email in emails or []:
-        value = str(email or "").strip().lower()
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        output.append(value)
-    return output

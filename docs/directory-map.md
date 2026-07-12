@@ -1,4 +1,4 @@
-﻿# Directory Map
+﻿﻿# Directory Map
 
 This file classifies the repository by responsibility. It is intentionally about
 physical placement; `docs/architecture.md` defines the behavioral boundaries.
@@ -42,12 +42,12 @@ These directories are runtime state and are ignored by Git:
 | Group | Files | Boundary |
 | --- | --- | --- |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config.py`, `paths.py` | Parse commands and resolve config/paths; no vendor protocol implementation. |
-| Mailbox and phone inventory | `mailbox.py`, `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `nextsms.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; no account persistence except through explicit callers. |
+| Mailbox and phone inventory | `mailbox.py`, `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `mailbox_gmail.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `nextsms.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; Gmail receive/send stays inside the mailbox seam; no account persistence except through explicit callers. |
 | Registration/auth | `registration.py`, `auth_flow.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification. |
-| K12 workspace | `k12.py`, `k12_client.py`, `k12_invite.py`, `k12_verify.py`, `k12_identity.py`, `k12_export.py` | Workspace request/accept/leave, invite-mail handling, workspace verification, K12 CPA export. |
-| Payment links | `gen_pp_link.py`, `paypal_links.py` | Create/store hosted payment links from account access tokens; no PayPal account signup. |
-| Payment execution | `paypal_browser_auto.py`, `paypal_auto.py`, `paypal_nocard.py`, `gopay_payment.py`, `gopay_wa_rebind.py`, `grpcurl_client.py` | Execute explicit payment commands only; use account seed and storage seams. |
-| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `import_targets.py`, `account_scan.py` | Normalize account/session state and external import/export payloads. |
+| Workspace scan | `k12_client.py`, `k12_identity.py`, `k12_verify.py`, `k12_export.py`, `workspace_scan.py` | Workspace health check, fallback switch, identity parsing. |
+| Payment links | `gen_pp_link.py`, `paypal_links.py` | Create/store hosted payment links from account access tokens; no PayPal account signup. Optional promotion-update stage (`/checkout/update`) for 0元+PayPal — see [`paypal-zero-due-link.md`](paypal-zero-due-link.md). |
+| Payment execution | `paypal_auto.py`, `paypal_nocard.py`, `paypal_protocol.py`, `gopay_wa_rebind.py`, `grpcurl_client.py` | Execute explicit payment commands only; use account seed and storage seams. |
+| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `import_targets.py`, `account_scan.py`, `workspace_scan.py` | Normalize account/session state, scan account/workspace health, and external import/export payloads. |
 | Shared utilities | `http_client.py`, `captcha_solver.py`, `nodriver_*`, `proxy_pool.py`, `utils.py` | Reusable transport/browser/helper logic with minimal state ownership. |
 
 ## `services/` module groups
@@ -69,7 +69,7 @@ These directories are runtime state and are ignored by Git:
    `services/<provider>/` and expose a small public method.
 4. If it extends mailbox/registration/K12 behavior, prefer adding a focused
    module behind the existing compatibility seam (`mailbox.py`,
-   `registration.py`, or `k12.py`) rather than growing those seam files.
+   `registration.py`) rather than growing those seam files.
 5. If it persists account state, route through `sms_tool.storage` or a documented
    storage seam.
 6. If it is runtime output, put it under `runtime/` or `sessions/`, not in source

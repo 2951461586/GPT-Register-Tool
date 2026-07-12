@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -426,7 +405,7 @@ namespace SmsWorkbench
         {
             if (!TryExtractScanSummary(backendOutput, out Dictionary<string, object> summary))
             {
-                ShowThemedInfoDialog("一键扫号", "扫号已结束，但未解析到结果汇总。请查看下方日志确认详情。");
+                ShowThemedInfoDialog("额度查询", "额度查询已结束，但未解析到结果汇总。请查看下方日志确认详情。");
                 return;
             }
 
@@ -447,7 +426,7 @@ namespace SmsWorkbench
 
             var dialog = new Window
             {
-                Title = "一键扫号结果",
+                Title = "额度查询结果",
                 Owner = this,
                 Width = 720,
                 MinWidth = 620,
@@ -466,7 +445,7 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             header.Children.Add(new TextBlock
             {
-                Text = "扫号完成",
+                Text = "查询完成",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
@@ -476,6 +455,7 @@ namespace SmsWorkbench
                 Text = "总数：" + GetString(summary, "total")
                     + "    正常：" + GetString(summary, "alive")
                     + "    掉号：" + GetString(summary, "account_deactivated")
+                    + "    401/AT失效：" + GetString(summary, "at_invalid")
                     + "    手机验证：" + GetString(summary, "secondary_phone_verification_required")
                     + "    失败：" + GetString(summary, "failed"),
                 Margin = new Thickness(0, 6, 0, 0),
@@ -497,7 +477,7 @@ namespace SmsWorkbench
             {
                 body.Children.Add(new TextBlock
                 {
-                    Text = "没有可展示的扫描明细。",
+                    Text = "没有可展示的查询明细。",
                     Foreground = (Brush)FindResource("TextSub")
                 });
             }
@@ -553,9 +533,10 @@ namespace SmsWorkbench
                 string email = GetString(row, "email");
                 string status = ScanStatusLabel(GetString(row, "scan_status"));
                 string error = ScanResultError(row);
+                string line = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status;
                 stack.Children.Add(new TextBlock
                 {
-                    Text = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status,
+                    Text = line,
                     TextWrapping = TextWrapping.Wrap,
                     LineHeight = 20,
                     Margin = new Thickness(0, 0, 0, 6),

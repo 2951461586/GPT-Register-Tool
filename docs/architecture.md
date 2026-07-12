@@ -9,7 +9,6 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
-  -> optional K12 workspace request/accept/leave
   -> PayPal/GoPay/UPI payment-link generation or explicit protocol payment
   -> session JSON + SQLite index
   -> status display and maintenance actions
@@ -34,6 +33,7 @@ sms_tool/
   mailbox_luckmail.py       LuckMail API and token mailbox polling.
   mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
   mailbox_graph.py          Microsoft OAuth refresh boundary.
+  mailbox_gmail.py          Gmail IMAP receive + SMTP send adapter.
   outlook_imap.py           Outlook IMAP fallback fetcher.
   mail_otp.py               Shared OTP extraction/candidate filtering.
   providers/                External provider clients.
@@ -45,19 +45,17 @@ sms_tool/
   sentinel_tokens.py        Sentinel token extraction/cache/browser fallback.
   otp_strategy.py           Registration OTP send/resend strategy.
   auth_state.py             client_auth_session_dump diagnostics.
-  k12.py                    K12 batch orchestration compatibility seam.
-  k12_client.py             K12 request/accept/leave HTTP adapter.
-  k12_invite.py             K12 invite-mail polling and invite URL opening.
+  paypal_protocol.py        Shared PayPal protocol helpers (BA token extraction, Stripe redirect follower).
+  k12_client.py             Workspace request/accept/leave HTTP adapter (used by workspace_scan).
+  k12_identity.py           Account/user/token identity extraction (used by workspace_scan).
   k12_verify.py             Workspace-switch verification.
-  k12_identity.py           K12 account/user/token identity extraction.
-  k12_export.py             K12 CPA JSON export.
+  k12_export.py             K12-specific CPA JSON export.
+  workspace_scan.py         One-click scan Workspace health check and fallback switch adapter.
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
-  paypal_browser_auto.py    Default PayPal one-click adapter using saved links.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
   grpcurl_client.py         Shared grpcurl subprocess boundary.
-  gopay_payment.py          GoPay link/provider/WA-rebind payment entrypoint.
   gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
   session_refresh.py        Refresh auth session after manual login/payment.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
@@ -85,13 +83,12 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | --- | --- | --- | --- |
 | Desktop buttons/dialogs | `SmsWorkbench/` | `chatgpt_phone_reg.py`, SQLite/session read-only display helpers | ChatGPT protocol, payment protocol, mailbox polling loops |
 | CLI command routing | `sms_tool.cli` | Focused command modules | Provider protocol internals or long-lived state mutation outside handlers |
-| Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, mailbox provider clients | Registration success persistence, payment state |
+| Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, Gmail IMAP/SMTP, mailbox provider clients | Registration success persistence, payment state |
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower`, `sms_tool.nextsms` | SMS provider APIs | ChatGPT account state, payment state |
 | ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
-| K12 workspace actions | `sms_tool.k12`, `sms_tool.k12_client`, `sms_tool.k12_invite`, `sms_tool.k12_verify` | account seed/session data, mailbox invite polling, storage status update | Registration, payment execution, mailbox-provider configuration |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
 | Payment link generation | `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init | PayPal account signup, final payment authorization |
-| Payment execution | `sms_tool.paypal_browser_auto`, `sms_tool.paypal_auto`, `sms_tool.gopay_payment` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
+| Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import` | session JSON, account seed, CPA API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
@@ -106,6 +103,20 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 - `hosted_long_url`（长链）: `checkout -> stripe init -> stripe_hosted_url`, then persist a normalized `pay.openai.com/c/pay/...` hosted long URL.
 - `paypal_direct`（PP直链）: `checkout -> stripe init -> pm create(type=paypal) -> confirm`, then follow Stripe `pm-redirects` to a PayPal `agreements/approve?ba_token=...` URL. The BA token is treated as sensitive and must not be logged in full.
 - `paypal_direct_zero_due`（PP直链-强制0元试用）: same direct PayPal approval flow, but `require_zero_due=true`; if Stripe init shows any non-zero amount, the flow stops with `checkout_not_zero_due` and does not persist a BA approval link. This strict mode also disables hosted-link fallback and old saved-link reuse so UI state cannot show a stale `link_ready` URL after the current zero-due direct generation fails.
+
+#### Promotion-update stage（0元 + PayPal 共存）
+
+Optional segmented stage between checkout creation and Stripe init. When
+`paypal.stage_proxies.promotion` is set, the extractor calls
+`POST /backend-api/payments/checkout/update` through a promo-eligible region
+egress to attach the `plus-1-month-free` promo to the **same** checkout that was
+created in a PayPal-supported region. This makes 0-due and PayPal coexist on one
+session (PayPal availability is decided by the checkout's billing region; promo
+eligibility is decided by the egress IP at update time). The stage is opt-in —
+leaving `promotion` empty keeps prior behaviour. See
+[`docs/paypal-zero-due-link.md`](paypal-zero-due-link.md) for the full protocol,
+config keys, CLI usage, and the `PayPal区 × promotion区` matrix search
+(`run_batch(..., promotion_countries=[...])`).
 
 The UI saves the compatible low-level knobs (`checkout_ui_mode`, `link_mode`,
 `confirm_style`, `resolve_ba_redirect`, `require_ba_token`, and
@@ -149,7 +160,16 @@ Payment and CPA operations stay separated in the UI: marking payment complete on
 
 `SmsWorkbench/App.xaml` owns the fixed white-first minimalist visual system for the desktop app, with black and gray used for text, borders, navigation, and log surfaces. App icon assets live under `SmsWorkbench/Assets/`.
 
-`SmsWorkbench/build_dotnet.ps1` publishes the only supported runnable desktop artifact to `dist/net10/SmsWorkbench.exe` and calls `SmsWorkbench/clean_dotnet_workspaces.ps1` after publish so `SmsWorkbench/bin/Debug/net10.0-windows`, `SmsWorkbench/bin/Release/net10.0-windows`, and nested runtime folders such as `win-x64` are not treated as second app distribution directories.
+`SmsWorkbench/build_dotnet.ps1` is the **only** supported build entrypoint. It uses `dotnet publish` (not `dotnet build`) to emit the single canonical runnable desktop artifact to `dist/net10/SmsWorkbench.exe`, then calls `SmsWorkbench/clean_dotnet_workspaces.ps1` to remove intermediate `SmsWorkbench/bin/Debug/net10.0-windows`, `SmsWorkbench/bin/Release/net10.0-windows`, and nested runtime folders such as `win-x64` so they are never treated as second distribution directories.
+
+> **⚠ 禁止直接运行 `dotnet build`**。直接 `dotnet build` 只会输出中间产物到 `SmsWorkbench/bin/Release/net10.0-windows/`，该路径不是分发目录，且不会自动清理。所有编译必须通过 `SmsWorkbench/build_dotnet.ps1` 完成。
+
+```powershell
+# 正确
+powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
+# 错误 — 不要这样做
+dotnet build SmsWorkbench\SmsWorkbench.csproj
+```
 
 ### CLI
 
@@ -170,10 +190,11 @@ Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay 
 `sms_tool/mailbox.py` is the compatibility seam and high-level router. Focused
 provider/parsing modules own the implementation:
 
-- `mailbox_parsers.py`: Chatai, token-file, password-file, CFWorker URI, and mailbox email normalization.
+- `mailbox_parsers.py`: Chatai, token-file, password-file, CFWorker URI, Gmail provider lines, and mailbox email normalization.
 - `mailbox_luckmail.py`: LuckMail order/purchase/token APIs and token mailbox polling.
 - `mailbox_cfworker.py`: CFWorker mailbox creation, message fetch, proxy/direct fallback, and OTP polling.
 - `mailbox_graph.py`: Microsoft OAuth refresh.
+- `mailbox_gmail.py`: Gmail IMAP receive, Gmail SMTP send, app-password auth, and OAuth refresh auth.
 - `outlook_imap.py`: Outlook IMAP fallback when Graph is unavailable or stale.
 - `mail_otp.py`: OTP extraction, recipient filtering, subject matching, issued-after filtering, and candidate ordering.
 
@@ -185,6 +206,9 @@ still a signup transaction. CFWorker mailboxes also use a small
 dropping a fresh message whose provider timestamp is a few seconds earlier than
 the local resend-return time.
 
+Gmail is a first-class mailbox provider. The preferred import shapes are
+`gmail://email---app_password` for app-password mode and
+`gmail://email----client_id----client_secret----refresh_token` for OAuth mode.
 It must not write registration results or modify mailbox pool files during registration.
 
 ### Registration Layer
@@ -206,23 +230,6 @@ If OTP validation succeeds but create-account returns
 registration refusal for that mailbox/context, not as a mailbox polling failure.
 The local error path must preserve that create-account code instead of masking
 it with later auth-session transport errors.
-
-### K12 Layer
-
-`sms_tool/k12.py` is the CLI-compatible batch orchestration seam. It keeps the
-old public function names for tests and WPF/CLI callers, while delegating
-implementation to focused modules:
-
-- `k12_client.py`: HTTP adapter for workspace `request`, `accept`, `leave`, token refresh, and `/api/auth/session` fetch.
-- `k12_invite.py`: mailbox lookup, k12-invite mail polling, invite URL extraction, and invite opening.
-- `k12_verify.py`: post-action verification that the current auth session is switched to the expected workspace.
-- `k12_identity.py`: account ID, user ID, access token, and JWT identity extraction.
-- `k12_export.py`: K12-specific CPA JSON export.
-
-K12 request/accept/leave updates SQLite status through `storage.py`. Typical
-statuses are `k12_requested`, `k12_joined`, `k12_left`, and
-`k12_verify_failed`. Workspace `account_id` and ChatGPT `user_id` are different
-identifiers and must not be collapsed.
 
 ### Account Seed Layer
 
@@ -265,12 +272,11 @@ Payment is split into three independent responsibilities:
 1. **Create checkout/link**: `sms_tool.gen_pp_link` and `sms_tool.paypal_links`.
    They read an access token and return/store a hosted checkout URL or explicit
    failure details. They do not complete payment.
-2. **Execute an explicit payment command**: `sms_tool.paypal_browser_auto`,
-   `sms_tool.paypal_auto`, and `sms_tool.gopay_payment`. They only run when the
-   user requests `--one-click-pay` or a matching UI action. They use existing
-   account seed data and payment links rather than registering accounts.
-   UPI has no one-click execution adapter in this project; it is a hosted-link
-   generation method only.
+2. **Execute an explicit payment command**: `sms_tool.paypal_auto`.
+   It only runs when the user requests `--one-click-pay` or a matching UI action.
+   It uses existing account seed data and payment links rather than registering
+   accounts. UPI has no one-click execution adapter in this project; it is a
+   hosted-link generation method only.
 3. **Persist/display payment state**: `sms_tool.storage` and `SmsWorkbench`.
    Storage normalizes status fields; the UI displays and launches commands. The
    UI must not infer success from a URL alone.
@@ -282,46 +288,13 @@ must preserve useful existing URLs unless the caller explicitly clears them.
 
 ### PayPal Payment Layer
 
-`sms_tool/paypal_browser_auto.py` is the default PayPal boundary for `--one-click-pay`. It uses `sms_tool.account_seed` for account/session seed loading, generates payment persona data locally, and delegates browser page automation to the project-local `sms_tool.paypal_auto` module. It may:
+`sms_tool/paypal_auto.py` owns browser page mechanics: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
 
-- Use the existing SQLite/session `paypal_url` directly.
-- Refuse PayPal browser payment when no saved `paypal_url` exists.
-- Leave link creation to the explicit `--regenerate-paypal-link` command.
-- Run the configured project-local browser engine from `paypal_browser.browser_engine`, defaulting to Camoufox.
-- Detect PayPal human-verification pages and either fail with `paypal_human_verification_required` or wait for manual completion when visible-browser manual verification is enabled.
-- Generate random PayPal signup identity, billing address, and card data inside this repository.
-- Consume one configured phone/SMS endpoint from `paypal_browser.phone_pool`, falling back to `paypal_nocard.phone_pool` for compatibility.
-- Store only redacted browser-payment metadata such as alias email, card last4, phone last4, callback URL, country, and engine.
-- Mark the account `completed` only after the backend reports success.
-
-`sms_tool/paypal_auto.py` owns browser page mechanics only: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
-
-`sms_tool/paypal_nocard.py` remains available as the older explicit no-card agreement implementation, but the CLI no longer selects it for PayPal one-click payment. PayPal browser automation must not run as an implicit side effect of registration, SQLite rebuild, link regeneration, or CPA import. Automated tests for this layer are offline by default.
-
-### GoPay Link And Provider Layer
-
-`sms_tool.gopay_payment` is the only GoPay payment entrypoint used by `--one-click-pay --payment-method gopay`. It may:
-
-- Generate a hosted GoPay link through `sms_tool.gen_pp_link` when `gopay.one_click_mode=link`.
-- Call a local `payment.PaymentService` through `sms_tool.grpcurl_client` when `gopay.one_click_mode=provider`.
-- Switch to WA-channel provider payment when `gopay.one_click_mode=wa_rebind`.
-- Persist GoPay status into the existing `paypal_*` SQLite/session columns for UI compatibility, while recording richer GoPay details under `paypal` and `gopay_wa_rebind`.
-
-It must not implement ChatGPT/Midtrans protocol details inline. SMSBower GoPay account bootstrap is owned by `services/gopay-flow`: it uses the project-local Python pure-protocol client for GoPay Android signup/login/PIN setup, not `services/gopay-app` gRPC and not the old `gopay-deploy` `opai` client.
-
-`sms_tool.grpcurl_client` owns grpcurl process execution and proto path resolution only. Payment modules pass method names, request bodies, service names, and provider configuration into it.
+`sms_tool/paypal_nocard.py` remains available as the older explicit no-card agreement implementation. `sms_tool/paypal_protocol.py` extracts shared protocol helpers (BA token extraction, Stripe redirect follower) used by both `paypal_nocard.py` and `paypal_links.py`.
 
 ### GoPay WA Rebind Layer
 
-`sms_tool.gopay_wa_rebind` adapts the byte-v-forge WA flow to this project without importing its Temporal/orchestrator stack. It may:
-
-- Resolve the WA payment phone from CLI/config.
-- Use `GopayAppService.GetGoPayState` and `UpsertGoPayState` for app state.
-- Start or complete WA login with `AuthStart/AuthComplete`.
-- Start or complete post-payment phone change with `ChangePhoneStart/ChangePhoneComplete`.
-- Return explicit pending states when required OTPs are missing.
-
-It must not acquire SMS numbers, poll third-party SMS providers, or run background workflows. In this project, OTPs are explicit CLI/UI inputs or are read by a separately configured sidecar. This keeps the current desktop tool deterministic and avoids silently running the upstream orchestrator's long-lived workflow model.
+`sms_tool.gopay_wa_rebind` adapts the byte-v-forge WA flow to this project. `sms_tool.grpcurl_client` owns grpcurl process execution and proto path resolution only.
 
 ### Local Provider Services
 
@@ -337,7 +310,7 @@ It must not acquire SMS numbers, poll third-party SMS providers, or run backgrou
 ### Removed / Deprecated Surfaces
 
 - `browser_extensions/paypal_autofill/` is retired. The maintained PayPal browser path is the project-local Python adapter.
-- `tests/test_paypal_autofill_*.py` are retired with that extension; PayPal browser coverage lives in `tests/test_paypal_browser_auto.py`.
+- `tests/test_paypal_autofill_*.py` are retired with that extension.
 - Runtime debug artifacts and `__pycache__` folders are not source surfaces and should be deleted or ignored.
 
 ### Test Layer
@@ -379,7 +352,7 @@ It deliberately does not upload to CPA and does not own phone-number inventory.
 
 `sms_tool/codex_phone.py` owns add-phone completion. It is disabled by default. If OpenAI requests `/add-phone`, the OAuth layer reports `add_phone_required` unless `codex_oauth.auto_phone_verification` is true.
 
-`sms_tool/session_converter.py` is the multi-format conversion core used by export-account flows. `sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` accepts existing AT-only session JSON, normalizes it into the CPA payload shape, and uploads it without requiring RT. K12 exports use `k12_export.py` to produce the K12-specific CPA JSON shape after workspace join verification succeeds.
+`sms_tool/session_converter.py` is the multi-format conversion core used by export-account flows. `sms_tool/codex_export.py` converts session JSON into the compact Codex JSON shape. `sms_tool/cpa_import.py` accepts existing AT-only session JSON, normalizes it into the CPA payload shape, and uploads it without requiring RT.
 
 Important behavior:
 

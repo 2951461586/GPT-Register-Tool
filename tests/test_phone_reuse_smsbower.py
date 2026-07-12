@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from sms_tool import registration
 from sms_tool import phone_reuse
 from sms_tool.phone_reuse import PhonePool, PhoneSlot, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
+from sms_tool.sms_provider import SmsProviderAdapter
 from sms_tool.smsbower import SmsBowerClient, normalize_country, normalize_phone, normalize_service
 
 
@@ -15,6 +16,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(normalize_country("Ghana"), "38")
         self.assertEqual(normalize_country("+233"), "38")
         self.assertEqual(normalize_phone("233555123456"), "+233555123456")
+
+    def test_phone_reuse_uses_common_sms_provider_adapter_contract(self):
+        slot = PhoneSlot(phone="+233555123456", provider="smsbower")
+        adapter = phone_reuse._sms_provider_adapter(slot)
+
+        self.assertIsInstance(adapter, SmsProviderAdapter)
+        self.assertEqual(adapter.provider, "smsbower")
 
     def test_smsbower_activation_completes_immediately_after_reuse_limit(self):
         slot = PhoneSlot(

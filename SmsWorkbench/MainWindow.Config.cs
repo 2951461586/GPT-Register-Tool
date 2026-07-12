@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -30,6 +9,7 @@ namespace SmsWorkbench
             EnsureConfigFile(path);
             var config = ReadJsonObject(path);
             var email = GetSection(config, "email_registration");
+            var gmail = GetChildSection(email, "gmail");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
             var paypalBrowser = GetSection(config, "paypal_browser");
@@ -120,6 +100,27 @@ namespace SmsWorkbench
             int row = 0;
             AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
+
+            var gmailForm = AddConfigCategory(sidebar, host, categories, "Gmail", "Gmail Provider、一键配置、IMAP 收信、K12 invite 自动收取与 SMTP 发信配置。支持导入格式：gmail://邮箱---应用专用密码 或 gmail://邮箱----client_id----client_secret----refresh_token。");
+            row = 0;
+            AddConfigField(gmailForm, fields, row++, "启用 Gmail Provider", "gmail_enabled", FirstNonEmpty(GetString(gmail, "enabled"), "false"));
+            AddConfigComboField(gmailForm, comboFields, row++, "认证模式", "gmail_auth_mode", FirstNonEmpty(GetString(gmail, "auth_mode"), "app_password"), new[] { "app_password", "oauth_refresh" });
+            AddConfigField(gmailForm, fields, row++, "Gmail 邮箱", "gmail_email", FirstNonEmpty(GetString(gmail, "email"), GetString(email, "email")));
+            AddConfigField(gmailForm, fields, row++, "应用专用密码", "gmail_app_password", FirstNonEmpty(GetString(gmail, "app_password"), GetString(gmail, "password")));
+            AddConfigField(gmailForm, fields, row++, "登录密码(可选)", "gmail_login_password", GetString(gmail, "login_password"));
+            AddConfigField(gmailForm, fields, row++, "Refresh Token", "gmail_refresh_token", FirstNonEmpty(GetString(gmail, "refresh_token"), GetString(email, "refresh_token")));
+            AddConfigField(gmailForm, fields, row++, "Access Token", "gmail_access_token", FirstNonEmpty(GetString(gmail, "access_token"), GetString(email, "access_token")));
+            AddConfigField(gmailForm, fields, row++, "Client ID", "gmail_client_id", GetString(gmail, "client_id"));
+            AddConfigField(gmailForm, fields, row++, "Client Secret", "gmail_client_secret", GetString(gmail, "client_secret"));
+            AddConfigField(gmailForm, fields, row++, "Token URL", "gmail_token_url", FirstNonEmpty(GetString(gmail, "token_url"), "https://oauth2.googleapis.com/token"));
+            AddConfigField(gmailForm, fields, row++, "启用 IMAP 收信", "gmail_imap_enabled", FirstNonEmpty(GetString(gmail, "imap_enabled"), "true"));
+            AddConfigField(gmailForm, fields, row++, "IMAP Host", "gmail_imap_host", FirstNonEmpty(GetString(gmail, "imap_host"), "imap.gmail.com"));
+            AddConfigField(gmailForm, fields, row++, "IMAP Port", "gmail_imap_port", FirstNonEmpty(GetString(gmail, "imap_port"), "993"));
+            AddConfigField(gmailForm, fields, row++, "IMAP 文件夹", "gmail_imap_folders", FirstNonEmpty(FormatConfigList(gmail, "imap_folders"), "INBOX,[Gmail]/Spam,[Gmail]/All Mail"));
+            AddConfigField(gmailForm, fields, row++, "SMTP Host", "gmail_smtp_host", FirstNonEmpty(GetString(gmail, "smtp_host"), "smtp.gmail.com"));
+            AddConfigField(gmailForm, fields, row++, "SMTP Port", "gmail_smtp_port", FirstNonEmpty(GetString(gmail, "smtp_port"), "465"));
+            AddConfigField(gmailForm, fields, row++, "SMTP SSL", "gmail_smtp_use_ssl", FirstNonEmpty(GetString(gmail, "smtp_use_ssl"), "true"));
+            AddConfigField(gmailForm, fields, row++, "发件人名称", "gmail_sender_name", GetString(gmail, "sender_name"));
 
             var cfForm = AddConfigCategory(sidebar, host, categories, "CFWorker", "临时域名邮箱和 Cloudflare Worker 接入配置。");
             row = 0;
@@ -255,11 +256,33 @@ namespace SmsWorkbench
             };
             var openJsonButton = new Button { Content = "打开JSON", Width = 120 };
             openJsonButton.Click += (_, __) => OpenPath(path);
+            var gmailAliasButton = new Button { Content = "Gmail Alias", Width = 120, Margin = new Thickness(8, 0, 0, 0) };
+            gmailAliasButton.Click += (_, __) => ShowGmailAliasManagerDialog();
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
             {
                 email["otp_poll_interval"] = fields["otp_poll_interval"].Text.Trim();
                 email["token_file"] = fields["token_file"].Text.Trim();
+                gmail["enabled"] = ConfigBoolValue(fields, "gmail_enabled", GetBool(gmail, "enabled", false));
+                gmail["auth_mode"] = ConfigComboValue(comboFields, "gmail_auth_mode", "app_password");
+                gmail["email"] = fields["gmail_email"].Text.Trim();
+                gmail["app_password"] = fields["gmail_app_password"].Text.Trim();
+                gmail["password"] = fields["gmail_app_password"].Text.Trim();
+                gmail["login_password"] = fields["gmail_login_password"].Text.Trim();
+                gmail["refresh_token"] = fields["gmail_refresh_token"].Text.Trim();
+                gmail["access_token"] = fields["gmail_access_token"].Text.Trim();
+                gmail["client_id"] = fields["gmail_client_id"].Text.Trim();
+                gmail["client_secret"] = fields["gmail_client_secret"].Text.Trim();
+                gmail["token_url"] = fields["gmail_token_url"].Text.Trim();
+                gmail["imap_enabled"] = ConfigBoolValue(fields, "gmail_imap_enabled", GetBool(gmail, "imap_enabled", true));
+                gmail["imap_host"] = fields["gmail_imap_host"].Text.Trim();
+                gmail["imap_port"] = ConfigIntegerValue(fields, "gmail_imap_port");
+                gmail["imap_folders"] = ParseStringList(fields["gmail_imap_folders"].Text);
+                gmail["smtp_host"] = fields["gmail_smtp_host"].Text.Trim();
+                gmail["smtp_port"] = ConfigIntegerValue(fields, "gmail_smtp_port");
+                gmail["smtp_use_ssl"] = ConfigBoolValue(fields, "gmail_smtp_use_ssl", GetBool(gmail, "smtp_use_ssl", true));
+                gmail["sender_name"] = fields["gmail_sender_name"].Text.Trim();
+                email["gmail"] = gmail;
                 email["cfworker_url"] = fields["cfworker_url"].Text.Trim();
                 email["cfworker_domain"] = fields["cfworker_domain"].Text.Trim();
                 email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();
@@ -401,6 +424,7 @@ namespace SmsWorkbench
             var cancelButton = new Button { Content = "取消", Width = 72 };
             cancelButton.Click += (_, __) => dialog.Close();
             actions.Children.Add(openJsonButton);
+            actions.Children.Add(gmailAliasButton);
             actions.Children.Add(saveButton);
             actions.Children.Add(cancelButton);
             Grid.SetRow(actions, 1);
@@ -720,6 +744,29 @@ namespace SmsWorkbench
         {
             string value = FormatPhonePool(primary);
             return value.Length > 0 ? value : FormatPhonePool(fallback);
+        }
+
+        private string FormatConfigList(Dictionary<string, object> data, string key)
+        {
+            if (!data.TryGetValue(key, out object value) || value == null)
+            {
+                return "";
+            }
+            if (value is List<object> list)
+            {
+                return string.Join(",", list.Select(item => Convert.ToString(item) ?? "").Where(item => item.Length > 0));
+            }
+            return Convert.ToString(value) ?? "";
+        }
+
+        private List<object> ParseStringList(string raw)
+        {
+            return (raw ?? "")
+                .Split(new[] { "\r\n", "\n", "," }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(item => item.Trim())
+                .Where(item => item.Length > 0)
+                .Cast<object>()
+                .ToList();
         }
 
         private List<object> ParsePhonePoolLines(string raw)

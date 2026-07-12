@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -43,16 +22,32 @@ namespace SmsWorkbench
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+            var headerPanel = new StackPanel
+            {
+                Margin = new Thickness(0, 0, 0, 8)
+            };
             var header = new TextBlock
             {
                 Text = "正在加载收件箱...",
                 FontSize = 14,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 8)
             };
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
+            headerPanel.Children.Add(header);
+            string gmailOwnership = DescribeGmailAliasOwnership(row.Identifier);
+            if (!string.IsNullOrWhiteSpace(gmailOwnership))
+            {
+                headerPanel.Children.Add(new TextBlock
+                {
+                    Text = gmailOwnership,
+                    FontSize = 12,
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                    Margin = new Thickness(0, 4, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+            Grid.SetRow(headerPanel, 0);
+            root.Children.Add(headerPanel);
 
             var mailGrid = new DataGrid
             {
@@ -242,11 +237,7 @@ namespace SmsWorkbench
             string stdout = await process.StandardOutput.ReadToEndAsync();
             string stderr = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException((stdout + "\n" + stderr).Trim());
-            }
-            using JsonDocument doc = JsonDocument.Parse(stdout);
+            using JsonDocument doc = ParseInboxBackendJson(stdout, stderr, process.ExitCode);
             if (!doc.RootElement.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
             {
                 string error = JsonString(doc.RootElement, "error");
@@ -269,6 +260,57 @@ namespace SmsWorkbench
                 }
             }
             return items;
+        }
+
+        private JsonDocument ParseInboxBackendJson(string stdout, string stderr, int exitCode)
+        {
+            string text = stdout ?? "";
+            if (TryExtractInboxBackendJson(text, out JsonDocument parsed))
+            {
+                return parsed;
+            }
+
+            string errorText = ((stdout ?? "").Trim() + "\n" + (stderr ?? "").Trim()).Trim();
+            if (errorText.Length > 800)
+            {
+                errorText = errorText.Substring(0, 800) + "...";
+            }
+            if (errorText.Length == 0)
+            {
+                errorText = $"backend exited with code {exitCode}, but produced no JSON output";
+            }
+            throw new InvalidOperationException("后端收件箱输出不是纯 JSON，且未找到可解析的结果对象：" + errorText);
+        }
+
+        private bool TryExtractInboxBackendJson(string output, out JsonDocument doc)
+        {
+            doc = null;
+            string text = output ?? "";
+            for (int end = text.LastIndexOf('}'); end >= 0; end = end > 0 ? text.LastIndexOf('}', end - 1) : -1)
+            {
+                for (int start = text.LastIndexOf('{', end); start >= 0; start = start > 0 ? text.LastIndexOf('{', start - 1) : -1)
+                {
+                    string candidate = text.Substring(start, end - start + 1);
+                    try
+                    {
+                        JsonDocument parsed = JsonDocument.Parse(candidate);
+                        if (parsed.RootElement.ValueKind == JsonValueKind.Object
+                            && parsed.RootElement.TryGetProperty("ok", out _)
+                            && (parsed.RootElement.TryGetProperty("messages", out _)
+                                || parsed.RootElement.TryGetProperty("error", out _)
+                                || parsed.RootElement.TryGetProperty("provider", out _)))
+                        {
+                            doc = parsed;
+                            return true;
+                        }
+                        parsed.Dispose();
+                    }
+                    catch (JsonException)
+                    {
+                    }
+                }
+            }
+            return false;
         }
 
         private bool IsCfWorkerRow(PoolRow row)

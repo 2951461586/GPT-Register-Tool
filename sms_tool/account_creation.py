@@ -2,6 +2,7 @@ import json
 import time
 
 from .codex_sentinel import load_cached_sentinel, with_sentinel
+from .auth_headers import openai_auth_headers
 from .config import CFG
 from .http_client import request_with_retry
 from .sentinel_tokens import _extract_sentinel_http
@@ -76,7 +77,16 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
         "/api/accounts/email-verification/verify",
         "/api/accounts/verify-email",
     ]
-    validate_headers = {**base_headers, "Origin": auth_base, "Referer": f"{auth_base}/email-verification", "content-type": "application/json"}
+    did = str((base_headers or {}).get("oai-device-id") or (base_headers or {}).get("Oai-Device-Id") or "").strip()
+    validate_headers = {
+        **(base_headers or {}),
+        **openai_auth_headers(
+            did,
+            referer=f"{auth_base}/email-verification",
+            origin=auth_base,
+            extra={"content-type": "application/json"},
+        ),
+    }
     if use_sentinel:
         sentinel = sentinel_data or load_cached_sentinel()
         validate_headers = with_sentinel(validate_headers, sentinel)

@@ -1,0 +1,25 @@
+// Global using directives — shared across all MainWindow partial class files.
+global using System;
+global using System.Collections.Generic;
+global using System.Collections.ObjectModel;
+global using System.ComponentModel;
+global using System.Diagnostics;
+global using System.IO;
+global using System.Linq;
+global using System.Net.Http;
+global using System.Runtime.InteropServices;
+global using System.Globalization;
+global using System.Windows.Data;
+global using System.Text;
+global using System.Text.Json;
+global using System.Text.RegularExpressions;
+global using System.Threading.Tasks;
+global using System.Windows;
+global using System.Windows.Controls;
+global using System.Windows.Media;
+global using System.Windows.Threading;
+global using CommunityToolkit.Mvvm.ComponentModel;
+global using CommunityToolkit.Mvvm.Input;
+global using FluentWindow = Wpf.Ui.Controls.FluentWindow;
+global using Microsoft.Extensions.DependencyInjection;
+global using Serilog;

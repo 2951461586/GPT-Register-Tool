@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -264,6 +243,215 @@ namespace SmsWorkbench
             decimal displayAmount = amount / 100m;
             string text = displayAmount.ToString("0.00");
             return currency.Length > 0 ? text + " " + currency : text;
+        }
+
+        private string GetAccountPlanType(Dictionary<string, object> data)
+        {
+            if (data == null) return "free";
+            string k12Status = FirstNonEmpty(
+                GetString(data, "k12_status"),
+                NestedString(data, "k12", "status"),
+                NestedString(data, "workspace_scan", "account_type_after"),
+                NestedString(data, "account_scan", "workspace", "account_type_after")
+            ).Trim().ToLowerInvariant();
+            if ((k12Status.Contains("k12") || GetString(data, "k12_workspace_id").Length > 0 || NestedString(data, "k12", "workspace_id").Length > 0)
+                && !k12Status.Contains("left")
+                && !k12Status.Contains("fallback_free"))
+            {
+                return "k12";
+            }
+
+            string value = FirstNonEmpty(
+                GetString(data, "subscription_type"),
+                GetString(data, "plan_type"),
+                GetString(data, "planType"),
+                NestedString(data, "account", "plan_type"),
+                NestedString(data, "account", "planType"),
+                NestedString(data, "auth_session", "account", "plan_type"),
+                NestedString(data, "auth_session", "account", "planType"),
+                JwtAuthString(GetString(data, "access_token"), "chatgpt_plan_type"),
+                JwtAuthString(GetString(data, "access_token"), "plan_type"),
+                GetString(data, "account_type")
+            ).Trim().ToLowerInvariant();
+
+            if (value.Contains("pro")) return "pro";
+            if (value.Contains("team") || value.Contains("business") || value.Contains("enterprise")) return "team";
+            if (value.Contains("k12") || value.Contains("edu")) return "k12";
+            if (value.Contains("plus")) return "plus";
+            return "free";
+        }
+
+        private string GetQuotaStatus(Dictionary<string, object> data)
+        {
+            if (data == null) return "";
+
+            // Try wham_usage from quota.last_result.wham_usage (stored by refresh_local_quota_statuses)
+            string whamLabel = FormatWhamUsageLabel(ExtractWhamUsage(data));
+            if (whamLabel.Length > 0) return whamLabel;
+
+            string explicitValue = FirstNonEmpty(
+                GetString(data, "quota_status"),
+                GetString(data, "quota"),
+                GetString(data, "usage_status"),
+                NestedString(data, "quota", "status"),
+                NestedString(data, "quota", "message"),
+                NestedString(data, "usage", "status"),
+                NestedString(data, "usage", "message"),
+                NestedString(data, "account", "quota_status"),
+                NestedString(data, "auth_session", "account", "quota_status")
+            ).Trim();
+            if (explicitValue.Length > 0) return explicitValue;
+            string remaining = FirstNonEmpty(NestedString(data, "quota", "remaining"), NestedString(data, "usage", "remaining"));
+            string limit = FirstNonEmpty(NestedString(data, "quota", "limit"), NestedString(data, "usage", "limit"));
+            if (remaining.Length > 0 || limit.Length > 0) return remaining + (limit.Length > 0 ? "/" + limit : "");
+            if (GetString(data, "access_token").Trim().Length > 0) return "待刷新";
+            return "未知";
+        }
+
+        /// <summary>
+        /// Extract wham_usage 5h/7d structured data from session JSON.
+        /// Looks under quota.last_result.wham_usage (stored by probe_local_codex_quota -> mark_quota_status).
+        /// </summary>
+        private Dictionary<string, object> ExtractWhamUsage(Dictionary<string, object> data)
+        {
+            if (data == null) return null;
+
+            // Path 1: data["quota"]["last_result"]["wham_usage"]
+            object quotaObj = null;
+            if (data.TryGetValue("quota", out quotaObj) && quotaObj is Dictionary<string, object> quota)
+            {
+                if (quota.TryGetValue("last_result", out object lr) && lr is Dictionary<string, object> lastResult)
+                {
+                    if (lastResult.TryGetValue("wham_usage", out object wham) && wham is Dictionary<string, object> whamDict)
+                        return whamDict;
+                }
+            }
+
+            // Path 2: data["wham_usage"] (direct)
+            if (data.TryGetValue("wham_usage", out object direct) && direct is Dictionary<string, object> directDict)
+                return directDict;
+
+            // Path 3: data["quota"]["wham_usage"]
+            if (quotaObj is Dictionary<string, object> quota2 && quota2.TryGetValue("wham_usage", out object wham2) && wham2 is Dictionary<string, object> whamDict2)
+                return whamDict2;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Format wham_usage into display string: "5h: 3K/10K (30%) | 7d: 12K/50K (24%)"
+        /// </summary>
+        private string FormatWhamUsageLabel(Dictionary<string, object> wham)
+        {
+            if (wham == null || wham.Count == 0) return "";
+            var parts = new List<string>();
+            foreach (string windowKey in new[] { "5h", "7d" })
+            {
+                if (wham.TryGetValue(windowKey, out object w) && w is Dictionary<string, object> window)
+                {
+                    long used = GetLongValue(window, "used");
+                    long limit = GetLongValue(window, "limit");
+                    double percent = GetDoubleValue(window, "percent");
+                    if (used > 0 || limit > 0)
+                        parts.Add($"{windowKey}: {FmtTokenCount(used)}/{FmtTokenCount(limit)} ({percent:F0}%)");
+                }
+            }
+            return parts.Count > 0 ? string.Join(" | ", parts) : "";
+        }
+
+        private string FmtTokenCount(long n)
+        {
+            if (n >= 1_000_000) return $"{n / 1_000_000.0:F1}M";
+            if (n >= 1_000) return $"{n / 1_000.0:F1}K";
+            return n.ToString();
+        }
+
+        private long GetLongValue(Dictionary<string, object> data, string key)
+        {
+            if (data == null || !data.TryGetValue(key, out object val) || val == null) return 0;
+            if (val is long l) return l;
+            if (val is int i) return i;
+            if (val is double d) return (long)d;
+            if (long.TryParse(val.ToString(), out long parsed)) return parsed;
+            return 0;
+        }
+
+        private double GetDoubleValue(Dictionary<string, object> data, string key)
+        {
+            if (data == null || !data.TryGetValue(key, out object val) || val == null) return 0;
+            if (val is double d) return d;
+            if (val is long l) return l;
+            if (val is int i) return i;
+            if (double.TryParse(val.ToString(), out double parsed)) return parsed;
+            return 0;
+        }
+
+        /// <summary>
+        /// Populate PoolRow quota fields from wham_usage data in session JSON.
+        /// </summary>
+        private void PopulateQuotaFields(PoolRow row, Dictionary<string, object> data)
+        {
+            var wham = ExtractWhamUsage(data);
+            if (wham == null) return;
+            foreach (string windowKey in new[] { "5h", "7d" })
+            {
+                if (!wham.TryGetValue(windowKey, out object w) || !(w is Dictionary<string, object> window)) continue;
+                long used = GetLongValue(window, "used");
+                long limit = GetLongValue(window, "limit");
+                long remaining = GetLongValue(window, "remaining");
+                double percent = GetDoubleValue(window, "percent");
+                string usedStr = FmtTokenCount(used);
+                string limitStr = FmtTokenCount(limit);
+                string remStr = FmtTokenCount(remaining);
+                string pctStr = percent.ToString("F0") + "%";
+                if (windowKey == "5h")
+                {
+                    row.Quota5hUsed = usedStr;
+                    row.Quota5hLimit = limitStr;
+                    row.Quota5hRemaining = remStr;
+                    row.Quota5hPercent = pctStr;
+                }
+                else
+                {
+                    row.Quota7dUsed = usedStr;
+                    row.Quota7dLimit = limitStr;
+                    row.Quota7dRemaining = remStr;
+                    row.Quota7dPercent = pctStr;
+                }
+            }
+        }
+
+        private string NestedString(Dictionary<string, object> data, params string[] path)
+        {
+            object current = data;
+            foreach (string key in path)
+            {
+                if (current is not Dictionary<string, object> map) return "";
+                if (!map.TryGetValue(key, out current)) return "";
+            }
+            return Convert.ToString(current) ?? "";
+        }
+
+        private string JwtAuthString(string token, string key)
+        {
+            try
+            {
+                string[] parts = (token ?? "").Split('.');
+                if (parts.Length < 2 || parts[1].Length == 0) return "";
+                string payload = parts[1].Replace('-', '+').Replace('_', '/');
+                payload = payload.PadRight(payload.Length + ((4 - payload.Length % 4) % 4), '=');
+                string json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+                var obj = JsonTextToObject(json);
+                if (TryGetMap(obj, "https://api.openai.com/auth", out Dictionary<string, object> auth))
+                {
+                    return GetString(auth, key);
+                }
+                return GetString(obj, key);
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         private bool IsPaymentLinkMethodMismatch(string rawJson, string paymentMethod)
@@ -706,12 +894,34 @@ namespace SmsWorkbench
 
         private void Log(string text)
         {
+            AppServices.Logger?.Information(text);
             LogText += "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text + Environment.NewLine;
         }
 
         private void UiLog(string text)
         {
+            AppServices.Logger?.Debug("[backend] {Line}", text);
             Dispatcher.BeginInvoke(new Action(() => Log(text)), DispatcherPriority.Background);
+        }
+
+        // ── HandyControl Growl notification helpers (P5) ──
+
+        private static void NotifySuccess(string message)
+        {
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                HandyControl.Controls.Growl.Success(message)), DispatcherPriority.Normal);
+        }
+
+        private static void NotifyWarning(string message)
+        {
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                HandyControl.Controls.Growl.Warning(message)), DispatcherPriority.Normal);
+        }
+
+        private static void NotifyInfo(string message)
+        {
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+                HandyControl.Controls.Growl.Info(message)), DispatcherPriority.Normal);
         }
 
         private void OnPropertyChanged(string name)

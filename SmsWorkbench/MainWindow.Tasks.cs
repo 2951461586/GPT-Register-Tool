@@ -1,24 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Globalization;
-using System.Windows.Data;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using FluentWindow = Wpf.Ui.Controls.FluentWindow;
-
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -28,7 +7,7 @@ namespace SmsWorkbench
         {
             var failedRows = allRows.Where(r =>
                 (r.Status.Contains("失败") || r.Status.Contains("待处理") || r.Status.Contains("缺"))
-                && (r.AccountType.Contains("Chatai") || r.AccountType.Contains("邮箱池"))
+                && IsMailboxPoolLikeRow(r)
                 && !string.IsNullOrWhiteSpace(r.RawLine)).ToList();
 
             if (failedRows.Count == 0)
@@ -77,7 +56,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void RunBackend(string taskName, List<string> args)
+        private async void RunBackend(string taskName, List<string> args)
         {
             if (runningProcess != null && !runningProcess.HasExited)
             {
@@ -121,47 +100,45 @@ namespace SmsWorkbench
 
             var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             runningProcess = process;
-            runningProcess.OutputDataReceived += (_, ev) =>
+            process.OutputDataReceived += (_, ev) =>
             {
                 if (ev.Data == null) return;
                 CaptureBackendLine(ev.Data);
                 UiLog(ev.Data);
             };
-            runningProcess.ErrorDataReceived += (_, ev) =>
+            process.ErrorDataReceived += (_, ev) =>
             {
                 if (ev.Data == null) return;
                 CaptureBackendLine(ev.Data);
                 UiLog(ev.Data);
-            };
-            runningProcess.Exited += (_, __) =>
-            {
-                Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    task.Status = process.ExitCode == 0 ? "完成" : "失败";
-                    task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString();
-                    task.DoneAt = SafeTime(DateTime.Now);
-                    StatusText = taskName + " 已结束";
-                    RefreshPools();
-                    ScrollTaskGridToBottom();
-                    if (taskName.StartsWith("一键扫号", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string output;
-                        lock (backendOutputLock)
-                        {
-                            output = backendOutput.ToString();
-                        }
-                        ShowAccountScanResultDialog(output);
-                    }
-                }), DispatcherPriority.Background);
             };
 
             try
             {
                 Log("启动：" + psi.FileName + " " + psi.Arguments);
-                runningProcess.Start();
-                runningProcess.BeginOutputReadLine();
-                runningProcess.BeginErrorReadLine();
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
                 StatusText = taskName + " 运行中";
+
+                // async/await — no Dispatcher.BeginInvoke needed, returns to UI thread automatically
+                await process.WaitForExitAsync();
+
+                task.Status = process.ExitCode == 0 ? "完成" : "失败";
+                task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString();
+                task.DoneAt = SafeTime(DateTime.Now);
+                StatusText = taskName + " 已结束";
+                RefreshPools();
+                ScrollTaskGridToBottom();
+                if (taskName.StartsWith("额度查询", StringComparison.OrdinalIgnoreCase))
+                {
+                    string output;
+                    lock (backendOutputLock)
+                    {
+                        output = backendOutput.ToString();
+                    }
+                    ShowAccountScanResultDialog(output);
+                }
             }
             catch (Exception ex)
             {
@@ -172,67 +149,26 @@ namespace SmsWorkbench
 
         private string RunBackendWithResult(string taskName, List<string> args)
         {
-            string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
-            if (!File.Exists(script))
-                throw new FileNotFoundException("找不到后端脚本：" + script);
+            Log("启动：python " + string.Join(" ", args));
+            var (stdout, stderr, exitCode) = CliLauncher.RunSync(rootDir, args, Quote, JoinArgs);
 
-            var psi = new ProcessStartInfo
+            // 从 stdout 中提取最后一个 JSON 块
+            if (!string.IsNullOrEmpty(stdout))
             {
-                FileName = "python",
-                Arguments = Quote(script) + " " + JoinArgs(args),
-                WorkingDirectory = rootDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8,
-            };
-
-            var output = new StringBuilder();
-            var error = new StringBuilder();
-
-            using (var process = new Process { StartInfo = psi })
-            {
-                process.OutputDataReceived += (_, ev) => { if (ev.Data != null) { lock (output) output.AppendLine(ev.Data); } };
-                process.ErrorDataReceived += (_, ev) => { if (ev.Data != null) { lock (error) error.AppendLine(ev.Data); } };
-
-                Log("启动：" + psi.FileName + " " + psi.Arguments);
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                process.WaitForExit(120000); // 2 分钟超时
-
-                if (!process.HasExited)
+                int lastBrace = stdout.LastIndexOf('{');
+                if (lastBrace >= 0)
                 {
-                    try { process.Kill(); } catch { }
-                    throw new TimeoutException("后端执行超时 (120s)");
+                    string jsonPart = stdout.Substring(lastBrace);
+                    if (jsonPart.Contains("}"))
+                        return jsonPart;
                 }
-
-                string stdout;
-                string stderr;
-                lock (output) stdout = output.ToString().Trim();
-                lock (error) stderr = error.ToString().Trim();
-
-                // 从 stdout 中提取最后一个 JSON 块
-                if (!string.IsNullOrEmpty(stdout))
-                {
-                    // 尝试找到最后一个 { 开始的 JSON
-                    int lastBrace = stdout.LastIndexOf('{');
-                    if (lastBrace >= 0)
-                    {
-                        string jsonPart = stdout.Substring(lastBrace);
-                        if (jsonPart.Contains("}"))
-                            return jsonPart;
-                    }
-                    return stdout;
-                }
-
-                if (!string.IsNullOrEmpty(stderr))
-                    throw new Exception(stderr);
-
                 return stdout;
             }
+
+            if (!string.IsNullOrEmpty(stderr))
+                throw new Exception(stderr);
+
+            return stdout;
         }
 
         private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();
@@ -248,134 +184,33 @@ namespace SmsWorkbench
             }), DispatcherPriority.Background);
         }
 
-        private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
         {
             var selected = allRows.Where(r => r.IsChecked).ToList();
             if (selected.Count == 0 && SelectedRow != null) selected.Add(SelectedRow);
             if (selected.Count == 0)
             {
-                ShowThemeNoticeDialog("未选择记录", "请先勾选或选择要删除的记录。");
+                await DialogFactory.ShowInfoAsync(this, "未选择记录", "请先勾选或选择要删除的记录。");
                 return;
             }
-            if (!ShowDeleteConfirmDialog(selected.Count)) return;
+            if (!await ShowDeleteConfirmDialog(selected.Count)) return;
             foreach (PoolRow row in selected) DeleteRow(row);
             RefreshPools();
         }
 
-        private void ShowThemeNoticeDialog(string title, string message)
+        private async void ShowThemeNoticeDialog(string title, string message)
         {
-            var dialog = new Window
-            {
-                Title = title,
-                Owner = this,
-                Width = 420,
-                Height = 190,
-                MinWidth = 380,
-                MinHeight = 170,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            body.Children.Add(new TextBlock
-            {
-                Text = title,
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            body.Children.Add(new TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            root.Children.Add(body);
-
-            var okButton = new Button
-            {
-                Content = "知道了",
-                Width = 88,
-                Style = (Style)FindResource("PrimaryButton"),
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            okButton.Click += (_, __) => dialog.Close();
-            Grid.SetRow(okButton, 1);
-            root.Children.Add(okButton);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
+            await DialogFactory.ShowInfoAsync(this, title, message);
         }
 
-        private bool ShowDeleteConfirmDialog(int count)
+        private async Task<bool> ShowDeleteConfirmDialog(int count)
         {
-            bool confirmed = false;
-            var dialog = new Window
-            {
-                Title = "删除记录",
-                Owner = this,
-                Width = 460,
-                Height = 230,
-                MinWidth = 420,
-                MinHeight = 210,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            body.Children.Add(new TextBlock
-            {
-                Text = "删除选中的 " + count + " 条记录？",
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            body.Children.Add(new TextBlock
-            {
-                Text = "将同步清理邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            root.Children.Add(body);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            var cancelButton = new Button { Content = "取消", Width = 76 };
-            cancelButton.Click += (_, __) => dialog.Close();
-            var deleteButton = new Button
-            {
-                Content = "删除",
-                Width = 76,
-                Style = (Style)FindResource("DangerButton")
-            };
-            deleteButton.Click += (_, __) =>
-            {
-                confirmed = true;
-                dialog.Close();
-            };
-            actions.Children.Add(cancelButton);
-            actions.Children.Add(deleteButton);
-            Grid.SetRow(actions, 1);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-            return confirmed;
+            return await DialogFactory.ShowConfirmAsync(
+                this,
+                "删除选中的 " + count + " 条记录？",
+                "将同步清理邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
+                "删除",
+                isDanger: true);
         }
 
         private void DeleteRow(PoolRow row)
@@ -383,9 +218,21 @@ namespace SmsWorkbench
             try
             {
                 string emailKey = NormalizeEmailKey(row.Identifier);
-                int removedPoolLines = DeleteMailboxLines(row, emailKey);
-                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey);
-                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey);
+                bool isGmailAlias = row.AccountType == "Gmail Alias";
+                bool isGmailBase = !isGmailAlias && CanonicalGmailEmail(row.Identifier).Length > 0;
+                bool useCanonicalGmail = isGmailBase;
+
+                // Gmail alias rows are virtual entries derived from the base mailbox
+                // line + alias map; they have no own line in the pool txt file.
+                int removedPoolLines = isGmailAlias ? 0 : DeleteMailboxLines(row, emailKey);
+                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey, useCanonicalGmail);
+                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey, useCanonicalGmail);
+
+                int aliasMapRemoved = RemoveGmailAliasOnDelete(row.Identifier, isGmailBase, isGmailAlias);
+                if (aliasMapRemoved > 0)
+                {
+                    Log("Gmail alias 映射清理 " + aliasMapRemoved + " 条。");
+                }
 
                 if (row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                     && File.Exists(row.SourcePath)
@@ -404,6 +251,69 @@ namespace SmsWorkbench
             {
                 Log("删除失败：" + row.Identifier + " " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Compare two emails for deletion matching. When useCanonicalGmail is
+        /// true, Gmail addresses are compared by their canonical form (dots and
+        /// +tag stripped) so that john.doe@gmail.com, johndoe@gmail.com and
+        /// johndoe+alias@gmail.com all match each other.
+        /// </summary>
+        private bool DeletionEmailMatch(string candidate, string emailKey, bool useCanonicalGmail)
+        {
+            if (emailKey.Length == 0) return false;
+            string normalizedCandidate = NormalizeEmailKey(candidate);
+            if (normalizedCandidate.Length > 0 && normalizedCandidate == emailKey) return true;
+            if (useCanonicalGmail)
+            {
+                string canonicalCandidate = CanonicalGmailEmail(candidate);
+                string canonicalKey = CanonicalGmailEmail(emailKey);
+                if (canonicalCandidate.Length > 0 && canonicalCandidate == canonicalKey) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Remove the deleted alias (or all aliases of a deleted base) from the
+        /// gmail_aliases.json store so the pool row does not reappear on refresh.
+        /// </summary>
+        private int RemoveGmailAliasOnDelete(string identifier, bool isGmailBase, bool isGmailAlias)
+        {
+            if (!isGmailBase && !isGmailAlias) return 0;
+            var store = LoadGmailAliasStore();
+            int removed = 0;
+
+            if (isGmailBase)
+            {
+                string canonical = CanonicalGmailEmail(identifier);
+                foreach (string baseEmail in store.Keys.ToList())
+                {
+                    if (CanonicalGmailEmail(baseEmail) != canonical) continue;
+                    if (store.TryGetValue(baseEmail, out List<string> aliases) && aliases != null)
+                        removed += aliases.Count;
+                    store.Remove(baseEmail);
+                    removed++;
+                }
+            }
+            else // isGmailAlias
+            {
+                string normalizedAlias = NormalizeEmailKey(identifier);
+                foreach (string baseEmail in store.Keys.ToList())
+                {
+                    if (store[baseEmail] == null) continue;
+                    int before = store[baseEmail].Count;
+                    store[baseEmail].RemoveAll(alias =>
+                        NormalizeEmailKey(alias).Equals(normalizedAlias, StringComparison.OrdinalIgnoreCase));
+                    removed += before - store[baseEmail].Count;
+                }
+            }
+
+            if (removed > 0)
+            {
+                SaveGmailAliasStore(store);
+                LoadGmailAliasNotes();
+            }
+            return removed;
         }
 
         private int DeleteMailboxLines(PoolRow row, string emailKey)
@@ -431,7 +341,7 @@ namespace SmsWorkbench
             return removed;
         }
 
-        private int DeleteSqliteAccountRows(PoolRow row, string emailKey)
+        private int DeleteSqliteAccountRows(PoolRow row, string emailKey, bool useCanonicalGmail)
         {
             string dbPath = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
                 ? row.SourcePath
@@ -446,7 +356,7 @@ namespace SmsWorkbench
                 string id = data.TryGetValue("id", out string rawId) ? rawId : "";
                 string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : "";
                 bool matches = explicitId.Length > 0 && id == explicitId;
-                matches = matches || (emailKey.Length > 0 && NormalizeEmailKey(email) == emailKey);
+                matches = matches || DeletionEmailMatch(email, emailKey, useCanonicalGmail);
                 if (!matches) continue;
                 deleteIds.Add(id);
 
@@ -464,7 +374,7 @@ namespace SmsWorkbench
             return deleteIds.Distinct().Count();
         }
 
-        private int DeleteSessionJsonFiles(PoolRow row, string emailKey)
+        private int DeleteSessionJsonFiles(PoolRow row, string emailKey, bool useCanonicalGmail)
         {
             int removed = 0;
             var dirs = new List<string> { GetSessionsDir(), rootDir };
@@ -472,7 +382,7 @@ namespace SmsWorkbench
             {
                 foreach (string path in Directory.GetFiles(dir, "session_*.json", SearchOption.TopDirectoryOnly))
                 {
-                    if (!SessionJsonMatchesEmail(path, emailKey)) continue;
+                    if (!SessionJsonMatchesEmail(path, emailKey, useCanonicalGmail)) continue;
                     if (TryDeleteFile(path)) removed++;
                 }
             }
@@ -485,13 +395,13 @@ namespace SmsWorkbench
             return removed;
         }
 
-        private bool SessionJsonMatchesEmail(string path, string emailKey)
+        private bool SessionJsonMatchesEmail(string path, string emailKey, bool useCanonicalGmail)
         {
             if (emailKey.Length == 0) return false;
             try
             {
                 Dictionary<string, object> data = ReadJsonObject(path);
-                return NormalizeEmailKey(GetString(data, "email")) == emailKey;
+                return DeletionEmailMatch(GetString(data, "email"), emailKey, useCanonicalGmail);
             }
             catch
             {
@@ -502,6 +412,10 @@ namespace SmsWorkbench
         private string MailboxEmailForLine(string line)
         {
             string value = (line ?? "").Trim().TrimStart('\ufeff');
+            if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
+                value = value.Substring("gmail://".Length);
+            else if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase))
+                value = value.Substring("cfworker://".Length);
             if (value.Contains("----")) return value.Split(new[] { "----" }, StringSplitOptions.None).FirstOrDefault() ?? "";
             if (value.Contains("---")) return value.Split(new[] { "---" }, StringSplitOptions.None).FirstOrDefault() ?? "";
             return "";
