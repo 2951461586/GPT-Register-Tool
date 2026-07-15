@@ -145,7 +145,7 @@ namespace SmsWorkbench
                     string status = root.TryGetProperty("status", out var stEl) ? stEl.GetString() ?? "" : "";
                     string msg = $"查询失败：{error}";
                     if (status == "token_invalid")
-                        msg += "\n\nAccess Token 已失效，请先执行额度查询或 relogin 刷新 AT。";
+                        msg += "\n\n额度接口返回 401，当前 Access Token 已失效。";
                     await DialogFactory.ShowInfoAsync(this, $"额度查询：{row.Identifier}", msg);
                     Log($"额度查询失败：{row.Identifier} → {error}");
                 }

@@ -231,17 +231,15 @@ def _paypal_status(data, paypal):
 
 
 def _payment_method(data, paypal):
+    from .payment_link_manager import normalize_payment_method
+
     value = (
         str(_get(data, "payment_method")).strip()
         or str(_get(paypal, "payment_method")).strip()
         or str(_get(paypal, "method")).strip()
     ).lower()
-    if value in {"gopay", "go-pay", "go_pay"}:
-        return "gopay"
-    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        return "upi"
     if value:
-        return "paypal"
+        return normalize_payment_method(value) or value
     pm_types = paypal.get("payment_method_types")
     if isinstance(pm_types, (list, tuple)):
         pm_type_values = {str(item or "").strip().lower() for item in pm_types}
@@ -252,6 +250,9 @@ def _payment_method(data, paypal):
         return "upi"
     if "gopay" in pm_type_values or currency == "idr":
         return "gopay"
+    for method in ("ideal", "pix", "kakao", "blik", "twint"):
+        if method in pm_type_values:
+            return method
     if _get(paypal, "url"):
         return "paypal"
     return ""

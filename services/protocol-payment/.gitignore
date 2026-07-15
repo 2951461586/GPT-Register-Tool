@@ -1,0 +1,7 @@
+**/token.txt
+**/proxy_seeds.txt
+**/proxy_state.json
+**/removed_proxies.jsonl
+**/logs/
+**/dumps/
+**/__pycache__/

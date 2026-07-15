@@ -307,11 +307,9 @@ namespace SmsWorkbench
         public bool SkipPaymentLink { get; set; } = false;
     }
 
-        public sealed class ScanOptions
+    public sealed class ScanOptions
     {
         public int Workers { get; set; } = 4;
-        public bool QuotaAutoRelogin { get; set; } = true;
-        public string ReloginMode { get; set; } = "auto";
     }
 
     public sealed partial class TaskRow : ObservableObject

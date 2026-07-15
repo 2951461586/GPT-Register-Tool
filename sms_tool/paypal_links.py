@@ -7,7 +7,8 @@ from curl_cffi import requests as curl_requests
 from .account_seed import extract_access_token as _access_token
 from .account_seed import load_account_seed as _load_seed
 from .config import CFG
-from .gen_pp_link import generate_payment_link, generate_pp_link
+from .gen_pp_link import generate_pp_link
+from .payment_link_manager import generate_payment_link, normalize_payment_method
 from .paypal_protocol import _follow_stripe_redirect, extract_ba_token
 from .storage import upsert_account
 
@@ -186,19 +187,15 @@ def _at_refresh_failed(paypal) -> bool:
 
 
 def _normalize_payment_method(value):
-    value = str(value or "").strip().lower()
-    if value in {"gopay", "go-pay", "go_pay"}:
-        return "gopay"
-    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        return "upi"
-    return "paypal"
+    return normalize_payment_method(value) or "paypal"
 
 
 def _payment_cfg(payment_method="paypal"):
     if _normalize_payment_method(payment_method) == "paypal":
         cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
         return _apply_paypal_generation_type(cfg)
-    method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
+    method = _normalize_payment_method(payment_method)
+    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
     return method_cfg
 
 
@@ -351,6 +348,8 @@ def _saved_link_matches_payment_method(paypal, payment_method, payment_cfg=None)
         return method == "gopay" or has_gopay or currency == "idr"
     if target == "upi":
         return method == "upi" or has_upi or currency == "inr"
+    if target not in {"paypal", "gopay", "upi"}:
+        return method == target or target in pm_type_values
     if method == "gopay" or has_gopay or currency == "idr" or method == "upi" or has_upi or currency == "inr":
         return False
     return method == "paypal" or has_paypal or currency == "usd" or not (raw_method or pm_type_values or currency)

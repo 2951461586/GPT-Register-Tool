@@ -1,12 +1,13 @@
 # GPT-Register-Tool
 
-Email-based ChatGPT registration workflow with session persistence and PayPal/GoPay/UPI payment automation.
+Email-based ChatGPT registration workflow with session persistence and unified protocol payment-link extraction.
 
 The active path is:
 
 ```text
 mailbox source -> ChatGPT email OTP registration -> /api/auth/session access token
--> PayPal/GoPay/UPI payment link or protocol payment -> session JSON + SQLite index -> WPF management UI
+-> PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT link extraction
+-> session JSON + SQLite index -> WPF management UI
 ```
 
 The project does not require machine-specific absolute paths. Runtime data is kept under `sessions/` and `runtime/` by default and is ignored by Git.
@@ -20,7 +21,10 @@ The project does not require machine-specific absolute paths. Runtime data is ke
 - **一键注册**：默认走 HAR 对齐后的 `login_or_signup / passwordless_signup` 邮箱 OTP 流程；支持 `--registration-at-only` 只保存 AT，不强制生成支付链接；桌面端可选择“跳过支付链接/不生成支付链接”。
 - **Sentinel**：优先使用 QuickJS Sentinel SDK 生成 `username_password_create` / `oauth_create_account` 所需 token；失败时再按旧逻辑回退。
 - **邮箱 OTP**：CFWorker 域名邮箱、LuckMail、Microsoft Graph/OAuth、Outlook IMAP、**Gmail IMAP** 都通过统一 mailbox seam 轮询；CFWorker 已兼容 `verification code` 与 `login code` 两类主题，并为邮件服务端时间戳提供小幅容差，避免刚发码就被 `issued_after` 误过滤。
-- **Gmail Provider**：`gmail` provider 支持 Gmail 导入格式、Gmail IMAP 收信、Gmail SMTP 发信；桌面端 `[配置] -> [Gmail]` 可直接完成配置。每条 Gmail 记录只代表导入时填写的精确邮箱地址，不再生成、映射或复用点号/`+tag` 别名。
+- **Gmail Provider**：`gmail` provider 仍支持 Gmail 导入格式、Gmail IMAP 收信和 Gmail SMTP 发信；设置页不再提供独立 Gmail 模块，高级参数直接编辑 `config.json`。每条 Gmail 记录只代表导入时填写的精确邮箱地址，不生成、映射或复用点号/`+tag` 别名。
+- **协议支付管理器**：`sms_tool.payment_link_manager` 统一 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT 的方法注册、分段代理、运行状态和结果格式。桌面左侧栏使用“协议支付提链”，设置页使用单一“协议支付”分类，不再显示独立 PayPal 浏览器或 GoPay 分类。
+- **额度查询**：桌面额度查询弹窗固定为 `600px` 宽，只调用本地额度接口，不再自动 relogin；接口返回 `401` 时直接显示为“401 / AT失效”。
+- **账号详情**：账号详情页提供“一键复制AT”，仅在账号存在 ChatGPT Access Token 时启用。
 - **CFWorker 域名邮箱**：导入格式支持 `cfworker://user@domain`；可用 `--buy-cfworker-mailbox --cfworker-domain <domain>` 购买/创建。若 OTP 验证通过但最终 `create_account` 返回 `registration_disallowed`，说明服务端拒绝该邮箱/注册上下文，不是收件失败。
 - **导出账号 / CPA JSON**：`sms_tool/session_converter.py` 引入多格式转换核心，导出逻辑可以识别更宽松的 session 对象形态。
 - **模块拆分**：`registration.py`、`mailbox.py` 已拆成更细的协议/adapter 模块，原文件保留兼容 wrapper，旧 CLI/WPF/测试 patch seam 仍可用。
@@ -58,8 +62,8 @@ Required choices:
 - `email_registration.cfworker_*`: CFWorker domain mailbox settings. `cfworker_poll_proxy` controls whether inbox polling uses the selected proxy, `cfworker_direct_fallback` allows direct retry after proxy failure, and `cfworker_otp_issued_after_grace_seconds` controls the timestamp grace window used for fresh OTP filtering.
 - `email_registration.gmail.*`: Gmail provider settings. `enabled + email + app_password` is the simplest receive/send setup. `auth_mode=oauth_refresh` additionally requires `client_id`, `client_secret`, and `refresh_token`. `imap_folders` defaults to `INBOX,[Gmail]/Spam,[Gmail]/All Mail`, and `smtp_*` controls local Gmail SMTP sending.
 - `k12.workspace_ids`: default workspace ID (used by workspace scan fallback).
-- `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR. The desktop `[配置] -> [代理/支付] -> 订单生成地区` dropdown supports Japan, United States, Australia, Germany, France, United Kingdom, India, and Brazil.
-- `paypal.link_generation_type`: Desktop `[配置] -> [代理/支付] -> PayPal生成类型` selector. `hosted_long_url`（长链） runs `checkout -> stripe init -> stripe_hosted_url` and stores a `pay.openai.com/c/pay/...` hosted long URL. `paypal_direct`（PP直链） runs `checkout -> stripe init -> pm create(type=paypal) -> confirm`, follows the Stripe `pm-redirects` URL, and stores a `paypal.com/agreements/approve?ba_token=...` approval URL without logging the full token. `paypal_direct_zero_due`（PP直链-强制0元试用） uses the same PP直链 flow but keeps `require_zero_due=true`; if Stripe init does not return `amount_due=0`, generation fails with `checkout_not_zero_due` instead of outputting a non-trial BA link. In this strict mode a failed regeneration does not fall back to hosted long-link mode and does not reuse an older saved BA link.
+- `paypal.billing_regions`: Checkout billing country/currency order. Current hosted long-link mode uses the configured region order; the default example is `["DE"]` for Germany/EUR. The desktop `[配置] -> [协议支付] -> 订单生成地区` dropdown supports Japan, United States, Australia, Germany, France, United Kingdom, India, and Brazil.
+- `paypal.link_generation_type`: Desktop `[配置] -> [协议支付] -> PayPal生成类型` selector. `hosted_long_url`（长链） runs `checkout -> stripe init -> stripe_hosted_url` and stores a `pay.openai.com/c/pay/...` hosted long URL. `paypal_direct`（PP直链） runs `checkout -> stripe init -> pm create(type=paypal) -> confirm`, follows the Stripe `pm-redirects` URL, and stores a `paypal.com/agreements/approve?ba_token=...` approval URL without logging the full token. `paypal_direct_zero_due`（PP直链-强制0元试用） uses the same PP直链 flow but keeps `require_zero_due=true`; if Stripe init does not return `amount_due=0`, generation fails with `checkout_not_zero_due` instead of outputting a non-trial BA link. In this strict mode a failed regeneration does not fall back to hosted long-link mode and does not reuse an older saved BA link.
 - `paypal.stage_proxies`: 分段代理路由配置，支持三段式代理池:
   ```json
   "stage_proxies": {
@@ -73,6 +77,7 @@ Required choices:
   - `approve`: Stage 3 代理 (目标国出口)，用于 ChatGPT approve + 轮询 redirect
   - 如果 `approve` 未配置，降级使用 `provider`
   - CLI 参数 `--checkout-proxy` / `--provider-proxy` / `--approve-proxy` 可覆盖配置文件
+- `protocol_payments`: 统一协议提链配置。`enabled_methods` 控制可用方式，`reference_root` 默认指向 `services/protocol-payment`，`state_file` 记录状态机结果，`methods.<method>.proxy` 为 iDEAL/PIX/Kakao Pay/BLIK/TWINT 的 sticky 代理 Seed。BLIK 还需要 `methods.blik.blik_code` 或 CLI `--blik-code`。
 - `paypal.target_country`: 目标国家代码 (如 `GB`, `DE`, `AU`)，默认 `GB`。决定 Stripe checkout 的账单国家和 PayPal BA 链的区域。
 - `paypal.require_zero_due`: 是否要求 0 元金额，默认 `true`。设为 `false` 允许非零金额 (无 promo 时)。
 - `paypal.link_mode`: current default is `chatgpt_checkout`, which stores the hosted long checkout URL from Stripe init instead of attempting BA extraction.
@@ -242,10 +247,22 @@ List saved PayPal links:
 python chatgpt_phone_reg.py --list-paypal-links
 ```
 
-Regenerate a PayPal/GoPay/UPI link for one account:
+Regenerate any supported protocol payment link for one account:
 
 ```powershell
 python chatgpt_phone_reg.py --email user@example.com --regenerate-paypal-link
+```
+
+List unified payment methods and local adapter availability:
+
+```powershell
+python chatgpt_phone_reg.py --list-payment-methods
+```
+
+Extract directly from an Access Token:
+
+```powershell
+python chatgpt_phone_reg.py --extract-payment-link --payment-method pix --at <ACCESS_TOKEN> --proxy <STICKY_PROXY_SEED>
 ```
 
 For an India UPI hosted long link:
@@ -444,7 +461,8 @@ The project is split into explicit responsibility seams:
 - `sms_tool.registration`: ChatGPT signup orchestration compatibility seam. Auth flow, account creation/session fetch, batch runner, Sentinel token extraction, auth-state dump, and OTP strategy live in `auth_flow.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `auth_state.py`, and `otp_strategy.py`.
 - `sms_tool.session_converter`: export-account conversion seam; normalizes supported session JSON shapes into CPA/Codex-compatible payloads.
 - `sms_tool.account_seed`: shared seam for loading session JSON/SQLite account seed data and extracting access tokens.
-- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: hosted Stripe/PayPal/GoPay/UPI link generation and safe persisted-link regeneration.
+- `sms_tool.payment_link_manager`: unified payment-method registry, state machine, adapter routing, normalized result schema, and JSONL run history.
+- `sms_tool.gen_pp_link` / `sms_tool.paypal_links`: native PayPal/UPI generation and safe persisted-link regeneration compatibility seams.
 - `sms_tool.paypal_auto`: project-local browser automation helper. It does not own account lookup or link regeneration.
 - `sms_tool.paypal_nocard`: older explicit no-card PayPal agreement module, kept as an opt-in compatibility path.
 - `sms_tool.gopay_wa_rebind`: WA-channel GoPay app auth and change-phone orchestration after a successful provider payment.
@@ -452,6 +470,7 @@ The project is split into explicit responsibility seams:
 - `services/gopay-flow`: project-local GoPay PaymentService and protocol implementation.
 - `services/gopay-app/proto`: GoPay App gRPC protocol contract used by WA rebind mode.
 - `services/gopay-adb`: local ADB HTTP sidecar for OTP notification polling and unlink actions.
+- `services/protocol-payment`: vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT protocol extractors used by the unified manager.
 - `services/mail-otp-web`: standalone Microsoft Graph inbox/OTP diagnostic UI. It does not own registration persistence.
 - `sms_tool.codex_oauth`, `sms_tool.codex_export`, `sms_tool.cpa_import`: Codex OAuth/export and CPA upload boundaries.
 - `sms_tool.storage`: SQLite schema, migrations, deduplication, status updates, and session-index rebuilds.

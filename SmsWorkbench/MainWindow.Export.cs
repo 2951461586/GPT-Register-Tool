@@ -421,15 +421,16 @@ namespace SmsWorkbench
                 }
             }
 
-            var rtRows = results.Where(r => BoolValue(r, "has_rt")).ToList();
-            var noRtRows = results.Where(r => !BoolValue(r, "has_rt")).ToList();
+            bool directQuota = results.Any(r => TryGetMap(r, "probe", out Dictionary<string, object> _));
+            var rtRows = directQuota ? new List<Dictionary<string, object>>() : results.Where(r => BoolValue(r, "has_rt")).ToList();
+            var noRtRows = directQuota ? results : results.Where(r => !BoolValue(r, "has_rt")).ToList();
 
             var dialog = new Window
             {
                 Title = "额度查询结果",
                 Owner = this,
-                Width = 720,
-                MinWidth = 620,
+                Width = 600,
+                MinWidth = 560,
                 SizeToContent = SizeToContent.Height,
                 MaxHeight = 760,
                 ResizeMode = ResizeMode.CanResize,
@@ -450,14 +451,19 @@ namespace SmsWorkbench
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
+            int directOk = results.Count(QuotaProbeSucceeded);
+            int direct401 = results.Count(QuotaProbeReturned401);
+            int directFailed = Math.Max(0, results.Count - directOk - direct401);
             header.Children.Add(new TextBlock
             {
-                Text = "总数：" + GetString(summary, "total")
-                    + "    正常：" + GetString(summary, "alive")
-                    + "    掉号：" + GetString(summary, "account_deactivated")
-                    + "    401/AT失效：" + GetString(summary, "at_invalid")
-                    + "    手机验证：" + GetString(summary, "secondary_phone_verification_required")
-                    + "    失败：" + GetString(summary, "failed"),
+                Text = directQuota
+                    ? "总数：" + results.Count + "    正常：" + directOk + "    401/AT失效：" + direct401 + "    其他失败：" + directFailed
+                    : "总数：" + GetString(summary, "total")
+                        + "    正常：" + GetString(summary, "alive")
+                        + "    掉号：" + GetString(summary, "account_deactivated")
+                        + "    401/AT失效：" + GetString(summary, "at_invalid")
+                        + "    手机验证：" + GetString(summary, "secondary_phone_verification_required")
+                        + "    失败：" + GetString(summary, "failed"),
                 Margin = new Thickness(0, 6, 0, 0),
                 Foreground = (Brush)FindResource("TextSub")
             });
@@ -467,7 +473,7 @@ namespace SmsWorkbench
             var body = new StackPanel();
             if (noRtRows.Count > 0)
             {
-                AddScanResultSection(body, "未接码号结果", noRtRows);
+                AddScanResultSection(body, directQuota ? "额度接口结果" : "未接码号结果", noRtRows);
             }
             if (rtRows.Count > 0)
             {
@@ -531,8 +537,18 @@ namespace SmsWorkbench
             foreach (Dictionary<string, object> row in rows)
             {
                 string email = GetString(row, "email");
-                string status = ScanStatusLabel(GetString(row, "scan_status"));
-                string error = ScanResultError(row);
+                string status;
+                string error;
+                if (TryGetMap(row, "probe", out Dictionary<string, object> probe))
+                {
+                    status = QuotaProbeStatusLabel(probe);
+                    error = GetString(probe, "error");
+                }
+                else
+                {
+                    status = ScanStatusLabel(GetString(row, "scan_status"));
+                    error = ScanResultError(row);
+                }
                 string line = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status;
                 stack.Children.Add(new TextBlock
                 {
@@ -560,6 +576,31 @@ namespace SmsWorkbench
                 "scan_failed" => "扫描失败",
                 _ => value.Length > 0 ? value : "未知"
             };
+        }
+
+        private bool QuotaProbeSucceeded(Dictionary<string, object> row)
+        {
+            return TryGetMap(row, "probe", out Dictionary<string, object> probe) && BoolValue(probe, "ok");
+        }
+
+        private bool QuotaProbeReturned401(Dictionary<string, object> row)
+        {
+            if (!TryGetMap(row, "probe", out Dictionary<string, object> probe)) return false;
+            string status = GetString(probe, "status").Trim().ToLowerInvariant();
+            return GetString(probe, "status_code") == "401" || status == "token_invalid";
+        }
+
+        private string QuotaProbeStatusLabel(Dictionary<string, object> probe)
+        {
+            if (GetString(probe, "status_code") == "401" || GetString(probe, "status").Equals("token_invalid", StringComparison.OrdinalIgnoreCase))
+            {
+                return "401 / AT失效";
+            }
+            if (BoolValue(probe, "ok"))
+            {
+                return FirstNonEmpty(GetString(probe, "quota_status"), "额度正常");
+            }
+            return FirstNonEmpty(GetString(probe, "quota_status"), GetString(probe, "status"), "查询失败");
         }
 
         private string ScanResultError(Dictionary<string, object> row)

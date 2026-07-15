@@ -9,7 +9,7 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
-  -> PayPal/GoPay/UPI payment-link generation or explicit protocol payment
+  -> unified PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT link extraction
   -> session JSON + SQLite index
   -> status display and maintenance actions
 ```
@@ -52,6 +52,7 @@ sms_tool/
   k12_export.py             K12-specific CPA JSON export.
   workspace_scan.py         One-click scan Workspace health check and fallback switch adapter.
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
+  payment_link_manager.py   Unified method registry, state machine, adapter routing, and redacted run history.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
@@ -71,6 +72,7 @@ services/
   gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
   gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
   gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
+  protocol-payment/         Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT protocol extractors.
   mail-otp-web/             Standalone Microsoft Graph inbox/OTP diagnostic UI.
 tests/                      Offline unit tests; see tests/README.md.
 sessions/                   Generated session JSON, ignored by Git.
@@ -87,7 +89,7 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower`, `sms_tool.nextsms` | SMS provider APIs | ChatGPT account state, payment state |
 | ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
-| Payment link generation | `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init | PayPal account signup, final payment authorization |
+| Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init, protocol adapters | PayPal account signup, final payment authorization |
 | Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import` | session JSON, account seed, CPA API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
@@ -98,7 +100,7 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 ### PayPal Generation Type
 
 `config.json` `paypal.link_generation_type` is the single selector exposed by
-`[配置] -> [代理/支付] -> PayPal生成类型`:
+`[配置] -> [协议支付] -> PayPal生成类型`:
 
 - `hosted_long_url`（长链）: `checkout -> stripe init -> stripe_hosted_url`, then persist a normalized `pay.openai.com/c/pay/...` hosted long URL.
 - `paypal_direct`（PP直链）: `checkout -> stripe init -> pm create(type=paypal) -> confirm`, then follow Stripe `pm-redirects` to a PayPal `agreements/approve?ba_token=...` URL. The BA token is treated as sensitive and must not be logged in full.
@@ -272,7 +274,14 @@ The WPF config dropdown and `sms_tool.gen_pp_link` presets currently support `JP
 
 Payment is split into three independent responsibilities:
 
-1. **Create checkout/link**: `sms_tool.gen_pp_link` and `sms_tool.paypal_links`.
+All create-link requests first enter `sms_tool.payment_link_manager`. It moves
+each run through `created -> validating -> preparing_proxy -> running ->
+extracting -> completed/failed`, dispatches the native or vendored adapter,
+normalizes the result, and appends a redacted record to
+`runtime/payment_link_runs.jsonl`.
+
+1. **Create checkout/link**: `sms_tool.payment_link_manager`,
+   `sms_tool.gen_pp_link`, and `sms_tool.paypal_links`.
    They read an access token and return/store a hosted checkout URL or explicit
    failure details. They do not complete payment.
 2. **Execute an explicit payment command**: `sms_tool.paypal_auto`.

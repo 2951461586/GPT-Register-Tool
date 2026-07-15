@@ -491,17 +491,11 @@ def _registration_otp_issued_after(mailbox, issued_after_unix):
 
 # Payment generation helpers moved to sms_tool.account_creation.
 def _pipeline_payment_link(access_token, proxy, payment_method, paypal_generation_type):
-    """Pipeline Step 9: Generate payment link (PayPal/UPI/GoPay)."""
-    method = str(payment_method or "paypal").strip().lower()
-    if method in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        method = "upi"
-        label = "UPI"
-    elif method in {"gopay", "go-pay", "go_pay"}:
-        method = "gopay"
-        label = "GoPay"
-    else:
-        method = "paypal"
-        label = "PayPal"
+    """Pipeline Step 9: Generate a protocol payment link."""
+    from .payment_link_manager import normalize_payment_method, payment_method_label
+
+    method = normalize_payment_method(payment_method) or "paypal"
+    label = payment_method_label(method)
     _tick(f"9-Generate {label} link")
     paypal = _generate_payment_link(
         access_token,
@@ -543,7 +537,7 @@ def run_email(
       8. Fetch auth session access token
       8b. Fetch existing account auth session (if create returns already_exists)
       8c. Codex OAuth PKCE (optional refresh token acquisition)
-      9. Generate payment link (PayPal/UPI/GoPay)
+      9. Generate protocol payment link
     """
     _tl().clear()
 
