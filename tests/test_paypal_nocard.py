@@ -12,6 +12,13 @@ from sms_tool import paypal_links, paypal_nocard
 
 
 class PayPalNoCardUnitTests(unittest.TestCase):
+    def test_checkout_unauthorized_recognizes_token_401_without_checkout_word(self):
+        self.assertTrue(
+            paypal_links._is_checkout_unauthorized(
+                {"ok": False, "error": "access_token invalid or expired (401)"}
+            )
+        )
+
     def test_extract_ba_and_ec_tokens(self):
         self.assertEqual(
             paypal_nocard.extract_ba_token("https://www.paypal.com/agreements/approve?ba_token=BA-123_ABC-def"),
@@ -617,10 +624,19 @@ class PayPalNoCardUnitTests(unittest.TestCase):
             ]) as gen:
                 with patch.object(paypal_links, "_refresh_seed_session", return_value={"ok": True}):
                     with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
-                        result = paypal_links.regenerate_paypal_link(email="paid@example.com")
+                        result = paypal_links.regenerate_paypal_link(
+                            email="paid@example.com",
+                            checkout_proxy="http://checkout",
+                            provider_proxy="http://provider",
+                            approve_proxy="http://approve",
+                        )
 
         self.assertTrue(result["ok"])
         self.assertEqual([call.args[0] for call in gen.call_args_list], ["old_at", "new_at"])
+        for call in gen.call_args_list:
+            self.assertEqual(call.kwargs["checkout_proxy"], "http://checkout")
+            self.assertEqual(call.kwargs["provider_proxy"], "http://provider")
+            self.assertEqual(call.kwargs["approve_proxy"], "http://approve")
         self.assertEqual(saved["access_token"], "new_at")
 
     def test_refresh_seed_session_falls_back_when_cookie_refresh_returns_same_token(self):

@@ -20,7 +20,7 @@ The project does not require machine-specific absolute paths. Runtime data is ke
 - **一键注册**：默认走 HAR 对齐后的 `login_or_signup / passwordless_signup` 邮箱 OTP 流程；支持 `--registration-at-only` 只保存 AT，不强制生成支付链接；桌面端可选择“跳过支付链接/不生成支付链接”。
 - **Sentinel**：优先使用 QuickJS Sentinel SDK 生成 `username_password_create` / `oauth_create_account` 所需 token；失败时再按旧逻辑回退。
 - **邮箱 OTP**：CFWorker 域名邮箱、LuckMail、Microsoft Graph/OAuth、Outlook IMAP、**Gmail IMAP** 都通过统一 mailbox seam 轮询；CFWorker 已兼容 `verification code` 与 `login code` 两类主题，并为邮件服务端时间戳提供小幅容差，避免刚发码就被 `issued_after` 误过滤。
-- **Gmail Provider**：新增 `gmail` provider，支持 Gmail 导入格式、Gmail IMAP 收信、Gmail SMTP 发信；桌面端 `[配置] -> [Gmail]` 可直接完成一键配置。
+- **Gmail Provider**：`gmail` provider 支持 Gmail 导入格式、Gmail IMAP 收信、Gmail SMTP 发信；桌面端 `[配置] -> [Gmail]` 可直接完成配置。每条 Gmail 记录只代表导入时填写的精确邮箱地址，不再生成、映射或复用点号/`+tag` 别名。
 - **CFWorker 域名邮箱**：导入格式支持 `cfworker://user@domain`；可用 `--buy-cfworker-mailbox --cfworker-domain <domain>` 购买/创建。若 OTP 验证通过但最终 `create_account` 返回 `registration_disallowed`，说明服务端拒绝该邮箱/注册上下文，不是收件失败。
 - **导出账号 / CPA JSON**：`sms_tool/session_converter.py` 引入多格式转换核心，导出逻辑可以识别更宽松的 session 对象形态。
 - **模块拆分**：`registration.py`、`mailbox.py` 已拆成更细的协议/adapter 模块，原文件保留兼容 wrapper，旧 CLI/WPF/测试 patch seam 仍可用。
@@ -176,7 +176,9 @@ gmail://user@gmail.com----client_id.apps.googleusercontent.com----client_secret-
 
 > 注意：Gmail 的稳定协议接入依赖 **应用专用密码** 或 **OAuth refresh token**。单独的 “邮箱----密码----2FA/TOTP 密钥” 不是当前项目的 Gmail IMAP/SMTP 直接导入格式。
 
-The parser accepts UTF-8 with or without BOM. It also repairs the known malformed Chatai alias form:
+> Gmail alias 功能已移除。邮箱池、OTP 收件人匹配和凭据查找都使用完整邮箱地址进行精确匹配；`user@gmail.com` 的凭据不会自动用于 `u.ser+tag@gmail.com` 或 `user@googlemail.com`。
+
+The parser accepts UTF-8 with or without BOM. It also repairs the known malformed Chatai compact form:
 
 ```text
 name@+aliasdomain.com -> name+alias@domain.com
@@ -416,6 +418,7 @@ UI responsibilities are intentionally thin:
 - The account list supports row selection plus checkbox-backed batch actions; double-clicking a row no longer opens details.
 - Account details are opened from the explicit detail button.
 - The inbox view uses an in-app mail detail popup and can copy recognized 5-8 digit verification codes.
+- Gmail rows are loaded only from actual mailbox records. The desktop app no longer exposes an alias manager or creates virtual Gmail alias rows.
 - Marking payment complete updates PayPal status only. CPA import is a separate operation.
 - The desktop UI uses a fixed gray-dominant minimalist dark theme; black is reserved for the sidebar, log console, and other low-emphasis surfaces.
 - Desktop icons are generated from the same kitten mark: `SmsWorkbench/Assets/app-icon.ico` and `SmsWorkbench/Assets/black-kitten.png`.
@@ -429,7 +432,7 @@ chrome.exe --new-window --incognito <paypal_url>
 
 If Chrome is not installed in a standard location, the app falls back to the system default browser.
 
-The account list deduplicates rows by normalized email. When a mailbox pool entry later gains SQLite/session status, the SQLite/session row is shown instead of a second duplicate mailbox row.
+The account list deduplicates rows by the exact normalized email address. When a mailbox pool entry later gains SQLite/session status, the SQLite/session row is shown instead of a second duplicate mailbox row.
 
 ## Project Modules
 

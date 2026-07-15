@@ -210,6 +210,28 @@ def main():
     parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
+    # ─── Omakse integration ───────────────────────────────────────────────
+    parser.add_argument("--omakse-extract", action="store_true", help="Extract PayPal links via omakse server (POST /api/link-extract/jobs)")
+    parser.add_argument("--omakse-us-pay", action="store_true", help="Run US PayPal protocol payment via omakse server")
+    parser.add_argument("--omakse-base-url", default=None, help="Omakse server base URL (default: http://oai.omakse.xyz)")
+    parser.add_argument("--omakse-local-proxy", default=None, help="Local proxy to reach the omakse server")
+    parser.add_argument("--omakse-us-proxies", default=None, help="US proxy list for link extraction (newline-separated)")
+    parser.add_argument("--omakse-promo-proxies", default=None, help="Promotion-region proxy list for link extraction (newline-separated)")
+    parser.add_argument("--omakse-provider-country", default="US", help="PayPal provider country for link extraction")
+    parser.add_argument("--omakse-promo-country", default="VN", help="Promotion region country for link extraction")
+    parser.add_argument("--omakse-concurrency", type=int, default=5, help="Concurrency for link extraction")
+    parser.add_argument("--omakse-max-attempts", type=int, default=3, help="Max attempts per credential for link extraction")
+    parser.add_argument("--omakse-poll-interval", type=float, default=1.5, help="Seconds between status polls")
+    parser.add_argument("--omakse-max-poll-seconds", type=int, default=300, help="Max seconds to poll for job completion")
+    parser.add_argument("--ba-token", default=None, help="PayPal BA token for --omakse-us-pay")
+    parser.add_argument("--omakse-phone-country", default="US", help="Phone country for US protocol payment")
+    parser.add_argument("--omakse-phone-cc", default="1", help="Phone country code for US protocol payment")
+    parser.add_argument("--omakse-proxy-region", default="US", help="Proxy region for US protocol payment")
+    parser.add_argument("--omakse-client-id", default=None, help="Client ID for US protocol payment (auto-generated if omitted)")
+    parser.add_argument("--omakse-randomize-device", action="store_true", help="Randomize device fingerprint for US payment")
+    parser.add_argument("--omakse-preconfirm-phone", action="store_true", help="Pre-confirm phone in US payment flow")
+    parser.add_argument("--omakse-send-otp", action="store_true", help="Send phone OTP in US payment flow")
+    parser.add_argument("--omakse-load-return-url", action="store_true", help="Load return URL in US payment flow")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
     parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
     parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
@@ -290,6 +312,12 @@ def main():
         return
     if args.generate_upi_qr:
         _generate_upi_qr(args)
+        return
+    if args.omakse_extract:
+        _omakse_extract(args)
+        return
+    if args.omakse_us_pay:
+        _omakse_us_pay(args)
         return
     if args.refresh_session:
         _refresh_session(args)
@@ -1110,6 +1138,11 @@ def _regenerate_paypal_link(args):
                 proxy=args.proxy,
                 payment_method=payment_method,
                 paypal_generation_type=args.paypal_generation_type,
+                checkout_proxy=getattr(args, "checkout_proxy", None),
+                provider_proxy=getattr(args, "provider_proxy", None),
+                approve_proxy=getattr(args, "approve_proxy", None),
+                promotion_proxy=getattr(args, "promotion_proxy", None),
+                require_zero=not getattr(args, "no_require_zero", False),
             )
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -1137,6 +1170,8 @@ def _regenerate_paypal_link(args):
         checkout_proxy=getattr(args, "checkout_proxy", None),
         provider_proxy=getattr(args, "provider_proxy", None),
         approve_proxy=getattr(args, "approve_proxy", None),
+        promotion_proxy=getattr(args, "promotion_proxy", None),
+        require_zero=not getattr(args, "no_require_zero", False),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
@@ -1165,6 +1200,9 @@ def _regenerate_paypal_link_fallback(args, emails):
             proxy=args.proxy,
             payment_method=payment_method,
             paypal_generation_type=args.paypal_generation_type,
+            checkout_proxy=getattr(args, "checkout_proxy", None),
+            provider_proxy=getattr(args, "provider_proxy", None),
+            approve_proxy=getattr(args, "approve_proxy", None),
         )
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -1461,4 +1499,113 @@ def _persist_one_click_sms_failure(data, json_path, email, result):
             print(f"[!] Failed to update session JSON {json_path}: {exc}")
     upsert_account(refreshed, json_path=json_path)
 
+
+# ─── Omakse handlers ──────────────────────────────────────────────────────────
+
+def _omakse_extract(args):
+    """Extract PayPal links via the omakse server."""
+    from .omakse_client import extract_links, extract_links_for_account
+
+    # Resolve credentials: explicit --at, or look up by --email
+    at = (args.at or "").strip()
+    email = (args.email or "").strip()
+
+    # Resolve US proxies
+    us_proxies = (args.omakse_us_proxies or "").strip()
+    if not us_proxies:
+        # Fall back to config stage_proxies.checkout or proxy.default
+        paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+        stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+        us_proxies = stage.get("checkout") or (CFG.get("proxy") or {}).get("default", "")
+        if us_proxies:
+            print(f"[*] Using checkout stage proxy as US proxy: {us_proxies}", file=sys.stderr)
+
+    # Resolve promotion proxies
+    promo_proxies = (args.omakse_promo_proxies or "").strip()
+    if not promo_proxies:
+        paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+        stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+        promo_proxies = stage.get("promotion") or ""
+
+    if at:
+        print(f"[*] Starting omakse link extraction with explicit AT...", file=sys.stderr)
+        result = extract_links(
+            credentials=at,
+            us_proxies=us_proxies,
+            promotion_proxies=promo_proxies,
+            provider_country=args.omakse_provider_country,
+            promotion_country=args.omakse_promo_country,
+            concurrency=args.omakse_concurrency,
+            max_attempts=args.omakse_max_attempts,
+            poll_interval=args.omakse_poll_interval,
+            max_poll_seconds=args.omakse_max_poll_seconds,
+            base_url=args.omakse_base_url,
+            proxy=args.omakse_local_proxy or "",
+        )
+    elif email:
+        print(f"[*] Starting omakse link extraction for {email}...", file=sys.stderr)
+        result = extract_links_for_account(
+            email=email,
+            us_proxies=us_proxies,
+            promotion_proxies=promo_proxies,
+            provider_country=args.omakse_provider_country,
+            promotion_country=args.omakse_promo_country,
+            concurrency=args.omakse_concurrency,
+            max_attempts=args.omakse_max_attempts,
+            poll_interval=args.omakse_poll_interval,
+            max_poll_seconds=args.omakse_max_poll_seconds,
+            base_url=args.omakse_base_url,
+            proxy=args.omakse_local_proxy or "",
+        )
+    else:
+        print("[Error] --omakse-extract requires --at <TOKEN> or --email <EMAIL>", file=sys.stderr)
+        raise SystemExit(2)
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _omakse_us_pay(args):
+    """Run US PayPal protocol payment via the omakse server."""
+    from .omakse_client import run_us_payment_and_wait
+
+    ba_token = (args.ba_token or "").strip()
+    if not ba_token:
+        print("[Error] --omakse-us-pay requires --ba-token <BA-TOKEN>", file=sys.stderr)
+        raise SystemExit(2)
+
+    # Resolve payment proxy: explicit --checkout-proxy, or config stage
+    proxy = (args.checkout_proxy or "").strip()
+    if not proxy:
+        paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
+        stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+        proxy = stage.get("checkout") or (CFG.get("proxy") or {}).get("default", "")
+        if proxy:
+            print(f"[*] Using config proxy for US payment: {proxy}", file=sys.stderr)
+
+    if not proxy:
+        print("[Error] No proxy available for US payment. Use --checkout-proxy or configure proxy.default", file=sys.stderr)
+        raise SystemExit(2)
+
+    result = run_us_payment_and_wait(
+        ba_token=ba_token,
+        proxy=proxy,
+        phone_country=args.omakse_phone_country,
+        phone_country_code=args.omakse_phone_cc,
+        proxy_region=args.omakse_proxy_region,
+        client_id=args.omakse_client_id,
+        randomize_device=args.omakse_randomize_device,
+        preconfirm_phone=args.omakse_preconfirm_phone,
+        send_phone_otp=args.omakse_send_otp,
+        load_return_url=args.omakse_load_return_url,
+        poll_interval=args.omakse_poll_interval,
+        max_poll_seconds=args.omakse_max_poll_seconds,
+        base_url=args.omakse_base_url,
+        local_proxy=args.omakse_local_proxy or "",
+    )
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
 

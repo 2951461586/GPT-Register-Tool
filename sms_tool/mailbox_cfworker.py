@@ -10,7 +10,7 @@ def _cfworker_cfg(email_cfg):
     nested = email_cfg.get("cfworker") if isinstance(email_cfg.get("cfworker"), dict) else {}
     return {
         "worker_url": str(nested.get("worker_url") or email_cfg.get("cfworker_url") or "").strip(),
-        "domain": str(nested.get("domain") or email_cfg.get("cfworker_domain") or "edu.liziai.cloud").strip().lstrip("@"),
+        "domain": str(nested.get("domain") or email_cfg.get("cfworker_domain") or "liziai.cloud").strip().lstrip("@"),
         "admin_token": str(nested.get("admin_token") or email_cfg.get("cfworker_admin_token") or "").strip(),
         "cf_api_token": str(nested.get("cf_api_token") or email_cfg.get("cfworker_api_token") or "").strip(),
     }
@@ -18,11 +18,16 @@ def _cfworker_cfg(email_cfg):
 
 def _cfworker_client(email_cfg, proxy=None):
     cfg = _cfworker_cfg(email_cfg)
+    nested = email_cfg.get("cfworker") if isinstance(email_cfg.get("cfworker"), dict) else {}
+    try:
+        timeout = max(5, int(nested.get("timeout") or email_cfg.get("cfworker_timeout_seconds") or 30))
+    except (TypeError, ValueError):
+        timeout = 30
     return CFWorkerMailboxClient(
         cfg["worker_url"],
         admin_token=cfg["admin_token"],
         cf_api_token=cfg["cf_api_token"],
-        timeout=8,
+        timeout=timeout,
         proxy=proxy,
     )
 
@@ -52,7 +57,7 @@ def _create_cfworker_mailboxes(args=None, email_cfg=None, client_func=None):
     args = args or argparse.Namespace()
     email_cfg = email_cfg or {}
     cfg = _cfworker_cfg(email_cfg)
-    domain = str(getattr(args, "cfworker_domain", None) or cfg["domain"] or "edu.liziai.cloud").strip().lstrip("@").lower()
+    domain = str(getattr(args, "cfworker_domain", None) or cfg["domain"] or "liziai.cloud").strip().lstrip("@").lower()
     quantity = max(1, int(getattr(args, "count", None) or 1))
     print(f"[*] CFWorker mailbox batch: domain={domain} quantity={quantity}")
     client = (client_func or (lambda proxy=None: _cfworker_client(email_cfg, proxy=proxy)))(proxy=getattr(args, "proxy", None))
@@ -87,9 +92,11 @@ def _fetch_cfworker_messages(mailbox, limit=25, proxy=None, email_cfg=None, clie
 def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, seen_message_id="", proxy=None, fetch_messages_func=None):
     fetch_messages_func = fetch_messages_func or (lambda mb, **kwargs: [])
     for msg in fetch_messages_func(mailbox, proxy=proxy):
-        if seen_message_id and _message_id(msg) == seen_message_id:
-            continue
         candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
+        if seen_message_id and _message_id(msg) == seen_message_id:
+            received_ts = int((candidate or {}).get("received_ts") or 0)
+            if not issued_after_unix or not received_ts or received_ts < issued_after_unix:
+                continue
         if candidate:
             return candidate
     return None

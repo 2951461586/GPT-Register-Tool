@@ -52,7 +52,8 @@ def _normalize_mailbox_email(email):
 
 
 def _is_cfworker_line(line):
-    return line.lower().startswith("cfworker://") or line.lower().endswith("@edu.liziai.cloud")
+    lowered = line.lower()
+    return lowered.startswith("cfworker://") or lowered.endswith("@edu.liziai.cloud") or lowered.endswith("@liziai.cloud")
 
 
 def _is_gmail_line(line):

@@ -885,9 +885,10 @@ def _mailbox_from_data(data):
     provider = str(mailbox.get("provider") or "").strip()
     if not email:
         return None
+    mailbox_password = mailbox.get("password") if "password" in mailbox else data.get("password")
     result = MailboxAccount(
         email=email,
-        password=str(mailbox.get("password") or data.get("password") or "").strip(),
+        password=str(mailbox_password or "").strip(),
         login_password=str(mailbox.get("login_password") or "").strip(),
         refresh_token=refresh_token,
         access_token=str(mailbox.get("access_token") or "").strip(),

@@ -527,7 +527,7 @@ namespace SmsWorkbench
             var sourceLabel = new TextBlock { Text = "注册方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "edu.liziai.cloud (CFWorker)", Tag = "cfworker" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "liziai.cloud (CFWorker)", Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
             Grid.SetRow(sourceLabel, 0);
@@ -707,7 +707,8 @@ namespace SmsWorkbench
             string value = (line ?? "").Trim().TrimStart('\ufeff');
             if (value.Length == 0 || value.StartsWith("#")) return "";
             if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
-                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
+                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
@@ -724,12 +725,6 @@ namespace SmsWorkbench
             string email = (row.Identifier ?? "").Trim();
             if (email.Length == 0) return "";
             var candidateEmails = new List<string> { email };
-            string aliasBaseEmail = ResolveAliasBaseEmail(email);
-            if (!string.IsNullOrWhiteSpace(aliasBaseEmail)
-                && !candidateEmails.Contains(aliasBaseEmail, StringComparer.OrdinalIgnoreCase))
-            {
-                candidateEmails.Add(aliasBaseEmail);
-            }
 
             var paths = new List<string> { row.SourcePath, GetChataiMailboxFilePath(), GetMailboxTokenFile() };
             foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))

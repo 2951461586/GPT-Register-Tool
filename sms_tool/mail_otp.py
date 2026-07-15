@@ -146,6 +146,8 @@ def _allowed_otp_sender(sender_text):
 
 def _bad_otp_sender(sender_text):
     text = str(sender_text or "").lower()
+    if re.search(r"\bbounces?\+[^\s@]+@tm1\.openai\.com\b", text):
+        return False
     return any(marker in text for marker in BAD_OTP_SENDER_MARKERS)
 
 
@@ -191,9 +193,6 @@ def _canonical_mailbox_email(value):
     local, domain = text.rsplit("@", 1)
     if not local or not domain:
         return ""
-    if domain in GMAIL_DOMAINS:
-        local = local.split("+", 1)[0].replace(".", "")
-        domain = "gmail.com"
     return f"{local}@{domain}"
 
 

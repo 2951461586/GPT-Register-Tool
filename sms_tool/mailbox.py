@@ -172,43 +172,9 @@ def _default_nb_register_token_file():
     return str(Path.cwd() / "mailbox_tokens.txt")
 
 
-def _canonical_gmail_email(value):
-    text = str(value or "").strip().lower()
-    if "@" not in text:
-        return ""
-    local, domain = text.rsplit("@", 1)
-    if domain not in {"gmail.com", "googlemail.com"}:
-        return ""
-    local = local.split("+", 1)[0].replace(".", "")
-    return f"{local}@gmail.com" if local else ""
-
-
-def _gmail_alias_base_email(email):
-    requested = str(email or "").strip().lower()
-    requested_key = _canonical_gmail_email(requested)
-    if not requested_key:
-        return requested
-    alias_path = Path("runtime") / "gmail_aliases.json"
-    try:
-        if alias_path.exists():
-            alias_map = json.loads(alias_path.read_text(encoding="utf-8"))
-            if isinstance(alias_map, dict):
-                for base, aliases in alias_map.items():
-                    base_text = str(base or "").strip().lower()
-                    if _canonical_gmail_email(base_text) == requested_key:
-                        return base_text
-                    if isinstance(aliases, list):
-                        for alias in aliases:
-                            if _canonical_gmail_email(alias) == requested_key:
-                                return base_text
-    except Exception as exc:
-        print(f"[gmail alias map error: {exc}]")
-    return requested_key
-
-
 def _gmail_mailbox_from_token_files(email):
-    target_key = _canonical_gmail_email(email)
-    if not target_key:
+    target_email = str(email or "").strip().lower()
+    if not target_email or "@" not in target_email:
         return None
     paths = []
     configured = str(_email_cfg().get("token_file") or "").strip()
@@ -222,7 +188,7 @@ def _gmail_mailbox_from_token_files(email):
             continue
         seen.add(path_key)
         for record in _parse_mailbox_token_file(path):
-            if mailbox_gmail.is_gmail_mailbox(record) and _canonical_gmail_email(record.email) == target_key:
+            if mailbox_gmail.is_gmail_mailbox(record) and str(record.email or "").strip().lower() == target_email:
                 return record
     return None
 
@@ -241,9 +207,9 @@ def _gmail_mailbox_from_config(args=None):
         return None
     if not mailbox_gmail.is_gmail_mailbox(MailboxAccount(email=requested_email, provider="gmail")):
         return None
-    email = _gmail_alias_base_email(requested_email)
+    email = requested_email
     cfg_email = str(cfg.get("email") or "").strip().lower()
-    cfg_matches = bool(cfg_email and _canonical_gmail_email(cfg_email) == _canonical_gmail_email(email))
+    cfg_matches = bool(cfg_email and cfg_email == email)
     if cfg_matches:
         email = cfg_email
     explicit_password = str(getattr(args, "email_password", None) or "").strip()

@@ -5,6 +5,158 @@ from sms_tool import gen_pp_link
 
 
 class GeneratePpLinkContractTests(unittest.TestCase):
+    def test_strict_zero_due_rejects_unknown_amount(self):
+        class FakeResponse:
+            status_code = 200
+            text = "{}"
+
+            def json(self):
+                return {}
+
+        class FakeSession:
+            def post(self, *args, **kwargs):
+                return FakeResponse()
+
+        extractor = gen_pp_link.PPLinkExtractor("at", require_zero=True)
+        extractor._stripe_session = FakeSession()
+
+        with self.assertRaises(gen_pp_link.CheckoutNotZeroDueError):
+            extractor._stripe_init("cs_test")
+
+    def test_zero_due_generation_type_forces_zero_and_ba_requirements(self):
+        seen = {}
+
+        class FakeExtractor:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def extract(self):
+                return {
+                    "ok": True,
+                    "url": "https://checkout.stripe.com/c/pay/cs_test",
+                    "ba_token": "",
+                    "link_type": "stripe_hosted",
+                }
+
+        cfg = {"paypal": {"require_zero_due": False, "require_ba_token": False}}
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+                with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
+                    result = gen_pp_link.generate_pp_link(
+                        "at",
+                        paypal_generation_type="paypal_direct_zero_due",
+                    )
+
+        self.assertTrue(seen["require_zero"])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "ba_not_resolved")
+
+    def test_hosted_strict_zero_rejects_unknown_amount(self):
+        class FakeResponse:
+            def __init__(self, body):
+                self.status_code = 200
+                self._body = body
+                self.text = "{}"
+                self.headers = {}
+
+            def json(self):
+                return self._body
+
+        class FakeSession:
+            def post(self, *args, **kwargs):
+                return FakeResponse({})
+
+        checkout = FakeResponse({
+            "checkout_session_id": "cs_test",
+            "processor_entity": "openai_ie",
+            "publishable_key": "pk_test",
+        })
+        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"require_zero_due": True}}):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+                with patch.object(gen_pp_link, "_checkout_post", return_value=checkout):
+                    with patch.object(gen_pp_link, "_new_session", return_value=FakeSession()):
+                        result = gen_pp_link.generate_hosted_long_url("at", require_zero=True)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "checkout_not_zero_due")
+        self.assertIsNone(result["amount"])
+
+    def test_default_proxy_does_not_override_configured_stage_proxies(self):
+        seen = {}
+
+        class FakeExtractor:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def extract(self):
+                return {
+                    "ok": True,
+                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-test",
+                    "ba_token": "BA-test",
+                    "link_type": "paypal_ba_approve",
+                }
+
+        cfg = {
+            "paypal": {
+                "explicit_proxy_overrides_stage_proxies": False,
+                "stage_proxies": {
+                    "checkout": "http://checkout",
+                    "provider": "http://provider",
+                    "approve": "http://approve",
+                },
+            }
+        }
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
+                result = gen_pp_link.generate_pp_link("at", proxy="http://default")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen["checkout_proxy"], "http://checkout")
+        self.assertEqual(seen["provider_proxy"], "http://provider")
+        self.assertEqual(seen["approve_proxy"], "http://approve")
+
+    def test_explicit_proxy_can_override_stages_when_enabled(self):
+        seen = {}
+
+        class FakeExtractor:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def extract(self):
+                return {
+                    "ok": True,
+                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-test",
+                    "ba_token": "BA-test",
+                    "link_type": "paypal_ba_approve",
+                }
+
+        cfg = {
+            "paypal": {
+                "explicit_proxy_overrides_stage_proxies": True,
+                "stage_proxies": {
+                    "checkout": "http://checkout",
+                    "provider": "http://provider",
+                    "approve": "http://approve",
+                },
+            }
+        }
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
+                result = gen_pp_link.generate_pp_link("at", proxy="http://explicit")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen["checkout_proxy"], "http://explicit")
+        self.assertEqual(seen["provider_proxy"], "http://explicit")
+        self.assertEqual(seen["approve_proxy"], "http://explicit")
+
+    def test_supported_billing_countries_do_not_reuse_german_address(self):
+        germany = gen_pp_link.billing_for_country("DE")
+
+        for country in ("IN", "BR"):
+            billing = gen_pp_link.billing_for_country(country)
+            self.assertEqual(billing["country"], country)
+            self.assertNotEqual(billing["street"], germany["street"])
+
     def test_target_country_override_is_passed_to_extractor(self):
         seen = {}
 

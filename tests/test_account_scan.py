@@ -90,10 +90,10 @@ class AccountScanTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertFalse(workspace_probe.call_args.kwargs["enabled"])
 
-    def test_gmail_scan_lane_key_groups_aliases(self):
+    def test_gmail_scan_lane_key_keeps_exact_address(self):
         self.assertEqual(
             account_scan._gmail_scan_lane_key("S.a.m.p.LE.M.A.iler236+qrzzsw@gmail.com"),
-            "samplemailer236@gmail.com",
+            "s.a.m.p.le.m.a.iler236+qrzzsw@gmail.com",
         )
 
     def test_persist_scan_clears_workspace_id_for_free_account(self):
