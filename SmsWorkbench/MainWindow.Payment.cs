@@ -2,7 +2,7 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Payment link and AT BA-link actions
+        // Payment-link actions and unified protocol extractor
         private void OpenSessions_Click(object sender, RoutedEventArgs e) => OpenPath(GetSessionsDir());
 
         private void OpenDatabase_Click(object sender, RoutedEventArgs e) => OpenPath(GetDatabasePath());
@@ -15,7 +15,7 @@ namespace SmsWorkbench
             if (row == null) return;
             if (string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
-                MessageBox.Show("选中账号没有可打开的 PayPal 支付链接。", "无支付链接", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("选中账号没有可打开的支付链接。", "无支付链接", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             OpenPayPalUrl(row.PayPalUrl, row.Identifier);
@@ -95,19 +95,17 @@ namespace SmsWorkbench
 
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
         {
-            ShowAtPaymentDialog();
+            ShowProtocolPaymentDialog();
         }
 
         /// <summary>
-        /// AT Payment dialog supporting both PayPal BA link and UPI QR extraction.
-        /// UPI mode uses the full 7-stage pipeline: checkout → init → free trial detection →
-        /// tax region → stripe confirm → chatgpt approve → poll for upi:// URI → QR.
+        /// Unified protocol payment-link extractor.
         /// </summary>
-        private void ShowAtPaymentDialog()
+        private void ShowProtocolPaymentDialog()
         {
             var win = new Window
             {
-                Title = "AT 支付 (PayPal BA / UPI)",
+                Title = "协议支付提链",
                 Width = 620,
                 Height = 720,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -126,7 +124,7 @@ namespace SmsWorkbench
             // ── 标题 ──────────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "AT 支付 — PayPal BA / UPI QR",
+                Text = "协议支付链接提取",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
@@ -146,8 +144,14 @@ namespace SmsWorkbench
                 SelectedIndex = 0,
                 Margin = new Thickness(0, 0, 0, 12),
             };
-            methodCombo.Items.Add(new ComboBoxItem { Content = "UPI — 印度统一支付接口 (upi:// QR)" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "PayPal — BA 授权链接 (hosted)" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "PayPal — 美国/全球 BA 授权链接", Tag = "paypal|US" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "GoPay — 印尼协议支付", Tag = "gopay|ID" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "UPI — 印度统一支付接口", Tag = "upi|IN" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "iDEAL — 荷兰银行支付", Tag = "ideal|NL" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "PIX — 巴西即时支付", Tag = "pix|BR" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "Kakao Pay — 韩国钱包支付", Tag = "kakao|KR" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "BLIK — 波兰银行码支付", Tag = "blik|PL" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "TWINT — 瑞士钱包支付", Tag = "twint|CH" });
             mainPanel.Children.Add(methodCombo);
 
             // ── AT 输入 ───────────────────────────────────────────────────
@@ -187,9 +191,10 @@ namespace SmsWorkbench
                 Margin = new Thickness(0, 0, 0, 12),
             };
             var countries = new[] {
-                "IN - 印度 (UPI)", "DE - 德国", "GB - 英国", "US - 美国",
-                "AU - 澳大利亚", "JP - 日本", "FR - 法国", "BR - 巴西",
-                "SG - 新加坡", "CA - 加拿大", "NZ - 新西兰", "IE - 爱尔兰",
+                "US - 美国", "ID - 印度尼西亚", "IN - 印度", "NL - 荷兰",
+                "BR - 巴西", "KR - 韩国", "PL - 波兰", "CH - 瑞士",
+                "DE - 德国", "GB - 英国", "JP - 日本", "FR - 法国",
+                "AU - 澳大利亚", "SG - 新加坡", "CA - 加拿大", "NZ - 新西兰", "IE - 爱尔兰",
             };
             foreach (var c in countries)
                 countryCombo.Items.Add(new ComboBoxItem { Content = c });
@@ -235,6 +240,26 @@ namespace SmsWorkbench
             stageProxyPanel.Children.Add(stageProxyBox);
             mainPanel.Children.Add(stageProxyPanel);
 
+            var blikCodePanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 12) };
+            blikCodePanel.Children.Add(new TextBlock
+            {
+                Text = "BLIK 六位码",
+                FontSize = 13,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+            var blikCodeBox = new TextBox
+            {
+                MaxLength = 6,
+                Height = 28,
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+            };
+            blikCodePanel.Children.Add(blikCodeBox);
+            mainPanel.Children.Add(blikCodePanel);
+
             // ── 选项 ──────────────────────────────────────────────────────
             var optionPanel = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 16) };
             var zeroCheck = new CheckBox
@@ -246,7 +271,7 @@ namespace SmsWorkbench
             };
             var requireBaCheck = new CheckBox
             {
-                Content = "必须返回 PayPal BA 授权 URL (仅 PayPal 模式)",
+                Content = "必须返回 PayPal BA 授权 URL",
                 IsChecked = true,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 0),
@@ -331,16 +356,32 @@ namespace SmsWorkbench
             string lastUrl = "";
             string lastQrPath = "";
 
+            string SelectedMethod()
+            {
+                if (methodCombo.SelectedItem is not ComboBoxItem item) return "paypal";
+                string tag = Convert.ToString(item.Tag) ?? "paypal|US";
+                return tag.Split('|')[0];
+            }
+
             // ── 支付方式切换时更新国家默认值 ──────────────────────────────
             methodCombo.SelectionChanged += (_, __) =>
             {
-                bool isUpi = methodCombo.SelectedIndex == 0;
-                if (isUpi)
-                    countryCombo.SelectedIndex = 0; // IN
-                else
-                    countryCombo.SelectedIndex = 2; // GB
-                requireBaCheck.IsEnabled = !isUpi;
+                string method = SelectedMethod();
+                string tag = Convert.ToString((methodCombo.SelectedItem as ComboBoxItem)?.Tag) ?? "paypal|US";
+                string[] tagParts = tag.Split('|');
+                string defaultCountry = tagParts.Length > 1 ? tagParts[1] : "US";
+                for (int index = 0; index < countryCombo.Items.Count; index++)
+                {
+                    if (countryCombo.Items[index] is ComboBoxItem countryItem && Convert.ToString(countryItem.Content)?.StartsWith(defaultCountry + " ", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        countryCombo.SelectedIndex = index;
+                        break;
+                    }
+                }
+                requireBaCheck.IsEnabled = method == "paypal";
+                blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
             };
+            methodCombo.SelectedIndex = 0;
 
             // ── 提取按钮 ──────────────────────────────────────────────────
             extractBtn.Click += async (_, __) =>
@@ -352,8 +393,8 @@ namespace SmsWorkbench
                     return;
                 }
 
-                bool isUpi = methodCombo.SelectedIndex == 0;
-                string country = "IN";
+                string method = SelectedMethod();
+                string country = "US";
                 if (countryCombo.SelectedItem is ComboBoxItem ci && ci.Content.ToString().Length >= 2)
                     country = ci.Content.ToString().Substring(0, 2);
 
@@ -362,7 +403,7 @@ namespace SmsWorkbench
                 bool requireZero = zeroCheck.IsChecked == true;
                 bool requireBaToken = requireBaCheck.IsChecked == true;
 
-                resultBox.Text = isUpi ? "正在提取 UPI QR (7 阶段流程)..." : "正在提取 PayPal BA 链接...";
+                resultBox.Text = "正在执行 " + PaymentMethodLabel(method) + " 协议提链...";
                 extractBtn.IsEnabled = false;
                 copyBtn.IsEnabled = false;
                 openQrBtn.IsEnabled = false;
@@ -371,14 +412,7 @@ namespace SmsWorkbench
                 {
                     var args = new List<string>();
 
-                    if (isUpi)
-                    {
-                        args.AddRange(new[] { "--generate-upi-qr", "--at", at, "--target-country", country });
-                    }
-                    else
-                    {
-                        args.AddRange(new[] { "--generate-ba-link", "--at", at, "--target-country", country });
-                    }
+                    args.AddRange(new[] { "--extract-payment-link", "--payment-method", method, "--at", at, "--target-country", country });
 
                     if (!string.IsNullOrEmpty(proxy))
                         args.AddRange(new[] { "--proxy", proxy });
@@ -405,10 +439,12 @@ namespace SmsWorkbench
 
                     if (!requireZero)
                         args.Add("--no-require-zero");
-                    if (!isUpi && requireBaToken)
+                    if (method == "paypal" && requireBaToken)
                         args.Add("--require-ba-token");
+                    if (method == "blik" && !string.IsNullOrWhiteSpace(blikCodeBox.Text))
+                        args.AddRange(new[] { "--blik-code", blikCodeBox.Text.Trim() });
 
-                    string taskName = isUpi ? "AT UPI QR 提取" : "AT BA 链接提取";
+                    string taskName = PaymentMethodLabel(method) + " 协议提链";
                     var result = await Task.Run(() => RunBackendWithResult(taskName, args));
 
                     // 解析 JSON 结果
@@ -440,6 +476,12 @@ namespace SmsWorkbench
 
                             if (root.TryGetProperty("link_type", out var ltEl))
                                 sb.AppendLine($"链接类型: {ltEl.GetString()}");
+
+                            if (root.TryGetProperty("run_id", out var runIdEl))
+                                sb.AppendLine($"任务 ID: {runIdEl.GetString()}");
+
+                            if (root.TryGetProperty("manager_state", out var stateEl))
+                                sb.AppendLine($"状态机: {stateEl.GetString()}");
 
                             if (root.TryGetProperty("qr_path", out var qrPathEl))
                             {

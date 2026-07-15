@@ -2829,27 +2829,16 @@ def generate_payment_link(
     paypal_generation_type: str | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Generate a payment link or QR by payment method.
+    """Compatibility entrypoint backed by the unified payment-link manager."""
+    from .payment_link_manager import generate_payment_link as managed_generate
 
-    For UPI, accepts ``checkout_country``, ``payment_country``, ``require_zero``,
-    ``checkout_proxy``, ``provider_proxy``, ``approve_proxy``, ``qr_path`` via
-    ``**kwargs`` and passes them through to :func:`generate_upi_qr_link`.
-    """
-    method = str(payment_method or "paypal").lower().strip().replace("-", "_")
-    if method in {"upi", "upiqr", "upi_qr"}:
-        return generate_upi_qr_link(
-            access_token=access_token,
-            proxy=proxy,
-            auth_context=auth_context,
-            **kwargs,
-        )
-    if method != "paypal":
-        return {"ok": False, "error": f"unsupported payment method: {method}; expected paypal/upi"}
-    return generate_pp_link(
+    return managed_generate(
         access_token=access_token,
         proxy=proxy,
+        payment_method=payment_method,
         auth_context=auth_context,
         paypal_generation_type=paypal_generation_type,
+        **kwargs,
     )
 
 

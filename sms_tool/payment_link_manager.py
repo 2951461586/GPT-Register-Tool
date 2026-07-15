@@ -1,0 +1,425 @@
+"""Unified state machine for protocol payment-link extraction.
+
+Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`.  GoPay uses the
+project-local PaymentService, while iDEAL/PIX/Kakao Pay/BLIK/TWINT run the
+vendored protocol extractors under ``services/protocol-payment``.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+from .config import CFG
+from .paths import project_path, runtime_file
+
+
+@dataclass(frozen=True)
+class PaymentMethodSpec:
+    key: str
+    label: str
+    country: str
+    currency: str
+    adapter: str
+    script: str = ""
+
+
+PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
+    "paypal": PaymentMethodSpec("paypal", "PayPal", "US", "USD", "native"),
+    "gopay": PaymentMethodSpec("gopay", "GoPay", "ID", "IDR", "gopay"),
+    "upi": PaymentMethodSpec("upi", "UPI", "IN", "INR", "native"),
+    "ideal": PaymentMethodSpec("ideal", "iDEAL", "NL", "EUR", "script", "ideal/ideal_qr_extract.py"),
+    "pix": PaymentMethodSpec("pix", "PIX", "BR", "BRL", "pix", "pix/run_pix.py"),
+    "kakao": PaymentMethodSpec("kakao", "Kakao Pay", "KR", "KRW", "script", "kakao/kakao_extract.py"),
+    "blik": PaymentMethodSpec("blik", "BLIK", "PL", "PLN", "script", "blik/blik_qr_extract.py"),
+    "twint": PaymentMethodSpec("twint", "TWINT", "CH", "CHF", "script", "twint/twint_extract.py"),
+}
+
+_ALIASES = {
+    "go_pay": "gopay",
+    "go-pay": "gopay",
+    "upiqr": "upi",
+    "upi_qr": "upi",
+    "upi-qr": "upi",
+    "kakao_pay": "kakao",
+    "kakao-pay": "kakao",
+}
+
+_TRANSITIONS = {
+    "created": {"validating", "failed"},
+    "validating": {"preparing_proxy", "failed"},
+    "preparing_proxy": {"running", "failed"},
+    "running": {"extracting", "failed"},
+    "extracting": {"completed", "failed"},
+    "completed": set(),
+    "failed": set(),
+}
+
+_STATE_LOCK = threading.Lock()
+_URL_RE = re.compile(r"(?:https?://|upi://)[^\s\"'<>]+", re.IGNORECASE)
+
+
+class PaymentLinkRun:
+    def __init__(self, method: str):
+        self.run_id = uuid.uuid4().hex
+        self.method = method
+        self.state = "created"
+        self.history: list[dict[str, Any]] = []
+        self._record("created", "任务已创建")
+
+    def move(self, state: str, message: str = "") -> None:
+        allowed = _TRANSITIONS.get(self.state, set())
+        if state not in allowed:
+            raise RuntimeError(f"invalid payment state transition: {self.state} -> {state}")
+        self.state = state
+        self._record(state, message)
+
+    def fail(self, message: str) -> None:
+        if self.state not in {"completed", "failed"}:
+            self.state = "failed"
+            self._record("failed", message)
+
+    def _record(self, state: str, message: str) -> None:
+        self.history.append({"state": state, "at": int(time.time()), "message": message})
+
+
+def normalize_payment_method(value: Any) -> str:
+    method = str(value or "paypal").strip().lower().replace(" ", "_")
+    method = _ALIASES.get(method, method)
+    return method if method in PAYMENT_METHODS else ""
+
+
+def payment_method_label(value: Any) -> str:
+    method = normalize_payment_method(value)
+    return PAYMENT_METHODS[method].label if method else str(value or "")
+
+
+def supported_payment_methods() -> list[dict[str, Any]]:
+    root = _reference_root()
+    output = []
+    for spec in PAYMENT_METHODS.values():
+        available = spec.adapter in {"native", "gopay"} or (root / spec.script).is_file()
+        output.append({
+            "key": spec.key,
+            "label": spec.label,
+            "country": spec.country,
+            "currency": spec.currency,
+            "adapter": spec.adapter,
+            "available": available,
+        })
+    return output
+
+
+def generate_payment_link(
+    access_token: str,
+    proxy: Any = None,
+    payment_method: Any = "paypal",
+    auth_context: dict[str, Any] | None = None,
+    paypal_generation_type: str | None = None,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    method = normalize_payment_method(payment_method)
+    run = PaymentLinkRun(method or str(payment_method or ""))
+
+    def move(state: str, message: str) -> None:
+        run.move(state, message)
+        if progress:
+            progress(dict(run.history[-1], run_id=run.run_id, method=run.method))
+
+    try:
+        move("validating", "校验支付方式和 Access Token")
+        if not method:
+            raise ValueError(f"unsupported payment method: {payment_method}")
+        if not str(access_token or "").strip():
+            raise ValueError("access_token is required")
+        spec = PAYMENT_METHODS[method]
+        enabled = _enabled_methods()
+        if enabled and method not in enabled:
+            raise ValueError(f"payment method disabled by protocol_payments.enabled_methods: {method}")
+        move("preparing_proxy", "加载分段代理和协议适配器")
+        move("running", f"执行 {spec.label} 协议提链")
+
+        if method == "paypal":
+            from .gen_pp_link import generate_pp_link
+            native_kwargs = _select_kwargs(kwargs, {
+                "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
+                "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
+                "checkout_country", "require_zero", "require_ba_token",
+            })
+            result = generate_pp_link(
+                access_token=access_token,
+                proxy=proxy,
+                auth_context=auth_context,
+                paypal_generation_type=paypal_generation_type,
+                **native_kwargs,
+            )
+        elif method == "upi":
+            from .gen_pp_link import generate_upi_qr_link
+            native_kwargs = _select_kwargs(kwargs, {
+                "checkout_proxy", "provider_proxy", "approve_proxy", "target_country",
+                "checkout_country", "payment_country", "require_zero", "qr_path",
+            })
+            result = generate_upi_qr_link(
+                access_token=access_token,
+                proxy=proxy,
+                auth_context=auth_context,
+                **native_kwargs,
+            )
+        elif method == "gopay":
+            result = _generate_gopay_link(access_token, proxy=proxy, **kwargs)
+        else:
+            result = _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
+
+        move("extracting", "归一化链接、二维码和协议结果")
+        normalized = _normalize_result(spec, result)
+        if not normalized.get("ok"):
+            run.fail(str(normalized.get("error") or f"{spec.label} extraction failed"))
+            normalized.update({
+                "run_id": run.run_id,
+                "manager_state": run.state,
+                "state_history": run.history,
+            })
+            _persist_run(normalized)
+            return normalized
+        run.move("completed", "协议支付链接提取完成")
+        normalized.update({
+            "run_id": run.run_id,
+            "manager_state": run.state,
+            "state_history": run.history,
+        })
+        _persist_run(normalized)
+        return normalized
+    except Exception as exc:
+        run.fail(str(exc))
+        failed = {
+            "ok": False,
+            "error": str(exc),
+            "error_code": "payment_link_manager_failed",
+            "payment_method": method or str(payment_method or ""),
+            "run_id": run.run_id,
+            "manager_state": run.state,
+            "state_history": run.history,
+            "url": "",
+        }
+        _persist_run(failed)
+        return failed
+
+
+def _generate_gopay_link(access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
+    from .grpcurl_client import call_grpcurl
+
+    cfg = CFG.get("gopay") if isinstance(CFG.get("gopay"), dict) else {}
+    phone = str(kwargs.get("phone") or cfg.get("phone") or cfg.get("phone_number") or "").strip()
+    country_code = str(kwargs.get("country_code") or cfg.get("country_code") or "+62").strip()
+    otp_channel = str(kwargs.get("otp_channel") or cfg.get("otp_channel") or "sms").strip()
+    body: dict[str, Any] = {
+        "credential": {"accessToken": access_token},
+        "useAccountToken": True,
+        "tokenization": str(kwargs.get("tokenization") or cfg.get("tokenization") or "one_time").strip(),
+        "gopayPhone": phone,
+        "otpChannel": otp_channel,
+        "gopayCountryCode": country_code,
+        "proxyUrl": str(kwargs.get("provider_proxy") or kwargs.get("checkout_proxy") or proxy or "").strip(),
+    }
+    rpc = "StartGoPay" if phone else "CreateCheckoutLink"
+    if rpc == "CreateCheckoutLink":
+        body = {"credential": body["credential"]}
+    response = call_grpcurl(
+        rpc,
+        body,
+        addr=str(cfg.get("payment_service_addr") or "127.0.0.1:50051"),
+        service=str(cfg.get("payment_service") or "payment.PaymentService"),
+        grpcurl=str(cfg.get("grpcurl_path") or "grpcurl"),
+        proto_path=str(cfg.get("proto_path") or "services/gopay-flow/proto/payment.proto"),
+        proto_import_path=str(cfg.get("proto_import_path") or "services/gopay-flow/proto"),
+        timeout_seconds=int(cfg.get("provider_timeout_seconds") or 600),
+    )
+    if not bool(response.get("success")):
+        return {"ok": False, "error": response.get("errorMessage") or response.get("error_message") or "GoPay provider failed"}
+    url = str(response.get("checkoutUrl") or response.get("checkout_url") or "").strip()
+    return {
+        "ok": bool(url),
+        "url": url,
+        "checkout_url": url,
+        "cs_id": response.get("checkoutSessionId") or response.get("checkout_session_id") or "",
+        "flow_id": response.get("flowId") or response.get("flow_id") or "",
+        "otp_required": bool(response.get("otpRequired") or response.get("otp_required")),
+        "link_type": "gopay_protocol_checkout",
+        "warning": "未配置 GoPay 手机号，仅生成 checkout 链接" if not phone else "",
+    }
+
+
+def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
+    root = _reference_root()
+    script = root / spec.script
+    if not script.is_file():
+        return {"ok": False, "error": f"protocol extractor not found: {script}"}
+
+    cfg = _protocol_cfg()
+    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), dict) else {}
+    if not isinstance(method_cfg, dict):
+        method_cfg = {}
+    timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    seed_proxy = str(
+        kwargs.get("seed_proxy")
+        or proxy
+        or kwargs.get("provider_proxy")
+        or kwargs.get("checkout_proxy")
+        or method_cfg.get("proxy")
+        or ""
+    ).strip()
+    if not seed_proxy:
+        return {"ok": False, "error": f"{spec.label} requires a proxy seed"}
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    command = [sys.executable, str(script)]
+    proxy_file = ""
+    try:
+        if spec.key == "pix":
+            env["OPENAI_ACCESS_TOKEN"] = access_token
+            command.extend(["--quiet", "--proxy", seed_proxy])
+            provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
+            promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
+            if provider_proxy:
+                command.extend(["--br-proxy", provider_proxy])
+            if promotion_proxy:
+                command.extend(["--vn-proxy", promotion_proxy])
+        else:
+            handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
+            with handle:
+                handle.write(seed_proxy + "\n")
+            proxy_file = handle.name
+            if spec.key == "ideal":
+                env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
+            elif spec.key == "kakao":
+                env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": proxy_file})
+            elif spec.key == "blik":
+                blik_code = str(kwargs.get("blik_code") or method_cfg.get("blik_code") or "").strip()
+                env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single", "IDEAL_BLIK_CODE": blik_code})
+            elif spec.key == "twint":
+                env.update({"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"})
+
+        proc = subprocess.run(
+            command,
+            cwd=str(script.parent),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        parsed = _last_json_object(proc.stdout or "") if spec.key == "pix" else {}
+        if parsed:
+            parsed["ok"] = bool(parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_qr_code"))
+            parsed["url"] = parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_hosted_instructions_url") or ""
+            parsed["qr_data"] = parsed.get("pix_qr_code") or ""
+            return parsed
+        url = _last_payment_url(output)
+        if proc.returncode != 0 or not url:
+            return {"ok": False, "error": _tail(output) or f"extractor exited {proc.returncode}", "exit_code": proc.returncode}
+        return {"ok": True, "url": url, "link_type": f"{spec.key}_protocol", "raw_output_tail": _tail(output)}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
+    finally:
+        if proxy_file:
+            try:
+                Path(proxy_file).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
+    data = dict(result) if isinstance(result, dict) else {"ok": False, "error": str(result)}
+    data.setdefault("payment_method", spec.key)
+    data.setdefault("method", spec.key)
+    data.setdefault("target_country", spec.country)
+    data.setdefault("currency", spec.currency)
+    data.setdefault("link_type", f"{spec.key}_protocol")
+    if not data.get("url"):
+        data["url"] = data.get("long_url") or data.get("provider_redirect_url") or data.get("checkout_url") or data.get("upi_uri") or ""
+    if data.get("ok") and not (data.get("url") or data.get("qr_data") or data.get("qr_path")):
+        data["ok"] = False
+        data["error"] = f"{spec.label} extractor returned no link or QR data"
+    return data
+
+
+def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if key in allowed and value is not None}
+
+
+def _protocol_cfg() -> dict[str, Any]:
+    value = CFG.get("protocol_payments")
+    return value if isinstance(value, dict) else {}
+
+
+def _enabled_methods() -> set[str]:
+    raw = _protocol_cfg().get("enabled_methods")
+    if isinstance(raw, str):
+        values = re.split(r"[,;\s]+", raw)
+    elif isinstance(raw, (list, tuple, set)):
+        values = list(raw)
+    else:
+        return set(PAYMENT_METHODS)
+    return {method for value in values if (method := normalize_payment_method(value))}
+
+
+def _reference_root() -> Path:
+    configured = _protocol_cfg().get("reference_root") or "services/protocol-payment"
+    return project_path(configured)
+
+
+def _state_path() -> Path:
+    configured = str(_protocol_cfg().get("state_file") or "").strip()
+    return project_path(configured) if configured else runtime_file(CFG, "payment_link_runs.jsonl")
+
+
+def _persist_run(result: dict[str, Any]) -> None:
+    path = _state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {}
+    for key, value in result.items():
+        lowered = key.lower()
+        if key == "raw_output" or "token" in lowered or "proxy" in lowered:
+            continue
+        record[key] = value
+    with _STATE_LOCK:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+
+def _last_json_object(text: str) -> dict[str, Any]:
+    decoder = json.JSONDecoder()
+    for index in reversed([i for i, char in enumerate(text) if char == "{"]):
+        try:
+            value, end = decoder.raw_decode(text[index:])
+        except Exception:
+            continue
+        if isinstance(value, dict) and not text[index + end :].strip():
+            return value
+    return {}
+
+
+def _last_payment_url(text: str) -> str:
+    urls = [match.group(0).rstrip(".,);]") for match in _URL_RE.finditer(text or "")]
+    ignored = ("api.stripe.com", "chatgpt.com/backend-api", "ipinfo.io", "ip-api.com")
+    candidates = [url for url in urls if not any(marker in url.lower() for marker in ignored)]
+    return candidates[-1] if candidates else ""
+
+
+def _tail(text: str, limit: int = 1200) -> str:
+    value = str(text or "").strip()
+    return value[-limit:]

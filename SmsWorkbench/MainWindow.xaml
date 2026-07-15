@@ -354,7 +354,7 @@
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="打开 PayPal 链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="打开支付链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="MarkPayPalComplete_Click">
@@ -364,7 +364,7 @@
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Data="M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="标记 PayPal 完成" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="标记支付完成" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="AtExtractBaLink_Click">
@@ -374,7 +374,7 @@
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71 M5 3v4 M3 5h4"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="AT Payment" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="协议支付提链" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="RegeneratePayPalLink_Click">
@@ -384,7 +384,7 @@
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Data="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="重生 PayPal 链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="重新生成支付链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
 

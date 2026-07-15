@@ -30,7 +30,7 @@ def _payment_link_enabled(payment_method, args):
     if args.skip_paypal_link:
         return False
     paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    if payment_method in {"gopay", "upi"}:
+    if payment_method != "paypal":
         method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
         return bool(method_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
     return bool(paypal_cfg.get("auto_generate", True))
@@ -164,7 +164,7 @@ def main():
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi"], default=None, help="Payment link/payment method: paypal, gopay, or upi")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint"], default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
@@ -199,6 +199,8 @@ def main():
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
     parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
+    parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
+    parser.add_argument("--list-payment-methods", action="store_true", help="List protocol payment methods and adapter availability")
     parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link/--generate-upi-qr")
     parser.add_argument("--qr-path", default=None, help="Output PNG path for --generate-upi-qr")
     parser.add_argument("--target-country", default=None, help="Target/order country for PayPal generation; legacy checkout-country alias for UPI")
@@ -210,6 +212,7 @@ def main():
     parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
+    parser.add_argument("--blik-code", default=None, help="Six-digit BLIK code for protocol extraction")
     # ─── Omakse integration ───────────────────────────────────────────────
     parser.add_argument("--omakse-extract", action="store_true", help="Extract PayPal links via omakse server (POST /api/link-extract/jobs)")
     parser.add_argument("--omakse-us-pay", action="store_true", help="Run US PayPal protocol payment via omakse server")
@@ -306,6 +309,12 @@ def main():
         return
     if args.regenerate_paypal_link:
         _regenerate_paypal_link(args)
+        return
+    if args.list_payment_methods:
+        _list_payment_methods()
+        return
+    if args.extract_payment_link:
+        _extract_payment_link(args)
         return
     if args.generate_ba_link:
         _generate_ba_link(args)
@@ -964,8 +973,7 @@ def _refresh_cpa_quota(args):
             workers=max(1, int(args.quota_workers or args.workers or 4)),
             proxy=args.proxy,
             timeout=max(5, int(args.refresh_timeout or 30)),
-            relogin_on_401=bool(args.quota_auto_relogin),
-            relogin_timeout=max(30, int(args.quota_relogin_timeout or args.refresh_timeout or 180)),
+            relogin_on_401=False,
         )
         if quota_mode == "auto" and result.get("failed", 0):
             fallback = refresh_cpa_quota_statuses(
@@ -1107,6 +1115,55 @@ def _generate_upi_qr(args):
         qr_path=getattr(args, "qr_path", None),
     )
 
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _list_payment_methods():
+    from .payment_link_manager import supported_payment_methods
+
+    print(json.dumps({"ok": True, "methods": supported_payment_methods()}, ensure_ascii=False, indent=2))
+
+
+def _extract_payment_link(args):
+    """Extract any supported protocol payment link from an Access Token."""
+    from .payment_link_manager import generate_payment_link
+
+    at = (getattr(args, "at", None) or "").strip()
+    if not at:
+        print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}, ensure_ascii=False))
+        raise SystemExit(1)
+    method = _payment_method(args)
+    proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
+    kwargs = {
+        "checkout_proxy": checkout_proxy,
+        "provider_proxy": provider_proxy,
+        "approve_proxy": approve_proxy,
+        "promotion_proxy": _at_promotion_proxy_arg(args, method),
+        "require_zero": not getattr(args, "no_require_zero", False),
+    }
+    target_country = (getattr(args, "target_country", None) or "").strip().upper()
+    checkout_country = (getattr(args, "checkout_country", None) or target_country).strip().upper()
+    if target_country:
+        kwargs["target_country"] = target_country
+    if checkout_country:
+        kwargs["checkout_country"] = checkout_country
+    if method == "paypal":
+        kwargs["require_ba_token"] = bool(getattr(args, "require_ba_token", False))
+    if method == "upi":
+        kwargs["payment_country"] = (getattr(args, "payment_country", None) or "IN").strip().upper()
+        kwargs["qr_path"] = getattr(args, "qr_path", None)
+    if method == "blik":
+        kwargs["blik_code"] = getattr(args, "blik_code", None)
+
+    result = generate_payment_link(
+        access_token=at,
+        proxy=proxy,
+        payment_method=method,
+        paypal_generation_type=getattr(args, "paypal_generation_type", None),
+        **kwargs,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)

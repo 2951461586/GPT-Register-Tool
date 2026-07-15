@@ -227,14 +227,7 @@ namespace SmsWorkbench
             ScanOptions options = ShowScanOptionsDialog(rows.Count);
             if (options == null) return;
 
-            var args = new List<string> { "--one-click-scan", "--workers", options.Workers.ToString(), "--refresh-timeout", "90" };
-            args.Add("--no-scan-workspace-status");
-            if (options.QuotaAutoRelogin)
-            {
-                args.Add("--quota-auto-relogin");
-                args.Add("--scan-relogin-mode");
-                args.Add(options.ReloginMode);
-            }
+            var args = new List<string> { "--refresh-local-quota", "--quota-workers", options.Workers.ToString(), "--refresh-timeout", "90" };
             if (rows.Count > 1)
             {
                 string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_scan_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
@@ -256,8 +249,8 @@ namespace SmsWorkbench
             {
                 Title = "额度查询设置",
                 Owner = this,
-                Width = 560,
-                MinWidth = 520,
+                Width = 600,
+                MinWidth = 560,
                 SizeToContent = SizeToContent.Height,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -267,14 +260,14 @@ namespace SmsWorkbench
             var root = new Grid { Margin = new Thickness(18) };
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 3; i++)
             {
                 root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             }
 
             var title = new TextBlock
             {
-                Text = "查询 " + Math.Max(1, accountCount).ToString() + " 个账号的额度状态，检测 401/掉号，并可选自动重登刷新 AT。",
+                Text = "查询 " + Math.Max(1, accountCount).ToString() + " 个账号的额度状态。仅调用额度查询接口，不自动重登；接口返回 401 时原样显示。",
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("TextSub"),
@@ -293,30 +286,6 @@ namespace SmsWorkbench
             Grid.SetColumn(workerBox, 1);
             root.Children.Add(workerBox);
 
-            var quotaRelogin = new CheckBox
-            {
-                Content = "遇到 401/掉号时自动重登刷新 AT",
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(quotaRelogin, 2);
-            Grid.SetColumn(quotaRelogin, 1);
-            root.Children.Add(quotaRelogin);
-
-            var reloginModeLabel = new TextBlock { Text = "Relogin模式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
-            Grid.SetRow(reloginModeLabel, 3);
-            Grid.SetColumn(reloginModeLabel, 0);
-            root.Children.Add(reloginModeLabel);
-            var reloginModeBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            reloginModeBox.Items.Add(new ComboBoxItem { Content = "自动：Web Session 优先", Tag = "auto" });
-            reloginModeBox.Items.Add(new ComboBoxItem { Content = "仅 Web Session", Tag = "web_session" });
-            reloginModeBox.Items.Add(new ComboBoxItem { Content = "仅 Codex OAuth", Tag = "codex_oauth" });
-            reloginModeBox.SelectedIndex = 0;
-            Grid.SetRow(reloginModeBox, 3);
-            Grid.SetColumn(reloginModeBox, 1);
-            root.Children.Add(reloginModeBox);
-
             var actions = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -327,7 +296,7 @@ namespace SmsWorkbench
             var ok = new Button { Content = "开始查询", Width = 98, Style = (Style)FindResource("PrimaryButton") };
             actions.Children.Add(cancel);
             actions.Children.Add(ok);
-            Grid.SetRow(actions, 4);
+            Grid.SetRow(actions, 2);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -337,9 +306,7 @@ namespace SmsWorkbench
             {
                 selected = new ScanOptions
                 {
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount))),
-                    QuotaAutoRelogin = quotaRelogin.IsChecked == true,
-                    ReloginMode = ((reloginModeBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "auto"
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount)))
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
@@ -375,8 +342,7 @@ namespace SmsWorkbench
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var label = new TextBlock { Text = labelText, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var box = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            box.Items.Add(new ComboBoxItem { Content = "PayPal", Tag = "paypal" });
-            box.Items.Add(new ComboBoxItem { Content = "GoPay", Tag = "gopay" });
+            AddPaymentMethodItems(box);
             box.SelectedIndex = 0;
             Grid.SetRow(label, 0);
             Grid.SetColumn(label, 0);
@@ -448,8 +414,7 @@ namespace SmsWorkbench
 
             var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            paymentBox.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
-            paymentBox.Items.Add(new ComboBoxItem { Content = "GoPay 支付链接", Tag = "gopay" });
+            AddPaymentMethodItems(paymentBox);
             paymentBox.SelectedIndex = 0;
             Grid.SetRow(paymentLabel, 2);
             Grid.SetColumn(paymentLabel, 0);
@@ -557,8 +522,7 @@ namespace SmsWorkbench
 
             var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            paymentBox.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
-            paymentBox.Items.Add(new ComboBoxItem { Content = "GoPay 支付链接", Tag = "gopay" });
+            AddPaymentMethodItems(paymentBox);
             paymentBox.SelectedIndex = 0;
             Grid.SetRow(paymentLabel, 3);
             Grid.SetColumn(paymentLabel, 0);

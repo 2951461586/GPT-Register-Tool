@@ -44,7 +44,30 @@ namespace SmsWorkbench
 
         private string NormalizePaymentMethod(string paymentMethod)
         {
-            return string.Equals((paymentMethod ?? "").Trim(), "gopay", StringComparison.OrdinalIgnoreCase) ? "gopay" : "paypal";
+            string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+            return value switch
+            {
+                "gopay" or "go_pay" => "gopay",
+                "upi" or "upiqr" or "upi_qr" => "upi",
+                "ideal" => "ideal",
+                "pix" => "pix",
+                "kakao" or "kakao_pay" => "kakao",
+                "blik" => "blik",
+                "twint" => "twint",
+                _ => "paypal"
+            };
+        }
+
+        private void AddPaymentMethodItems(ComboBox box)
+        {
+            box.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
+            box.Items.Add(new ComboBoxItem { Content = "GoPay 印尼协议", Tag = "gopay" });
+            box.Items.Add(new ComboBoxItem { Content = "UPI 印度协议", Tag = "upi" });
+            box.Items.Add(new ComboBoxItem { Content = "iDEAL 荷兰协议", Tag = "ideal" });
+            box.Items.Add(new ComboBoxItem { Content = "PIX 巴西协议", Tag = "pix" });
+            box.Items.Add(new ComboBoxItem { Content = "Kakao Pay 韩国协议", Tag = "kakao" });
+            box.Items.Add(new ComboBoxItem { Content = "BLIK 波兰协议", Tag = "blik" });
+            box.Items.Add(new ComboBoxItem { Content = "TWINT 瑞士协议", Tag = "twint" });
         }
 
         private int CountValue()
@@ -103,7 +126,7 @@ namespace SmsWorkbench
             string method = GetString(data, "payment_method");
             if (method.Length == 0) method = GetString(paypal, "payment_method");
             if (method.Length == 0) method = GetString(paypal, "method");
-            string prefix = method.Equals("gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay " : "";
+            string prefix = NormalizePaymentMethod(method) == "paypal" ? "" : PaymentMethodLabel(method) + " ";
             if (IsPaymentLinkMethodMismatch(data, method)) return prefix + "支付失败";
             string status = GetString(data, "paypal_status");
             if (status.Length == 0) status = GetString(paypal, "status");
@@ -480,17 +503,34 @@ namespace SmsWorkbench
                 || GetString(paypal, "method").Length > 0
                 || GetString(paypal, "type").Length > 0;
             string currency = GetString(paypal, "currency").Trim().ToLowerInvariant();
-            bool hasGoPayType = PaymentMethodTypesContain(paypal, "gopay");
-            bool hasPayPalType = PaymentMethodTypesContain(paypal, "paypal");
-            if (requested == "gopay")
+            string detected = hasSavedMethod ? savedMethod : "";
+            if (detected.Length == 0)
             {
-                return (hasSavedMethod && savedMethod == "paypal")
-                    || hasPayPalType
-                    || currency == "usd";
+                foreach (string candidate in new[] { "paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint" })
+                {
+                    if (PaymentMethodTypesContain(paypal, candidate))
+                    {
+                        detected = candidate;
+                        break;
+                    }
+                }
             }
-            return (hasSavedMethod && savedMethod == "gopay")
-                || hasGoPayType
-                || currency == "idr";
+            if (detected.Length == 0)
+            {
+                detected = currency switch
+                {
+                    "idr" => "gopay",
+                    "inr" => "upi",
+                    "brl" => "pix",
+                    "krw" => "kakao",
+                    "pln" => "blik",
+                    "chf" => "twint",
+                    "eur" when requested == "ideal" => "ideal",
+                    "usd" => "paypal",
+                    _ => ""
+                };
+            }
+            return detected.Length > 0 && detected != requested;
         }
 
         private bool PaymentMethodTypesContain(Dictionary<string, object> paypal, string expected)
@@ -592,7 +632,7 @@ namespace SmsWorkbench
 
         private string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")
         {
-            string prefix = string.Equals((paymentMethod ?? "").Trim(), "gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay " : "";
+            string prefix = NormalizePaymentMethod(paymentMethod) == "paypal" ? "" : PaymentMethodLabel(paymentMethod) + " ";
             if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
             if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)) return prefix + "PM已创建✅";
             if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付失败";
@@ -611,7 +651,17 @@ namespace SmsWorkbench
 
         private string PaymentMethodLabel(string paymentMethod)
         {
-            return NormalizePaymentMethod(paymentMethod).Equals("gopay", StringComparison.OrdinalIgnoreCase) ? "GoPay" : "PayPal";
+            return NormalizePaymentMethod(paymentMethod) switch
+            {
+                "gopay" => "GoPay",
+                "upi" => "UPI",
+                "ideal" => "iDEAL",
+                "pix" => "PIX",
+                "kakao" => "Kakao Pay",
+                "blik" => "BLIK",
+                "twint" => "TWINT",
+                _ => "PayPal"
+            };
         }
 
         private string DisplayRtStatus(string refreshTokenStatus)

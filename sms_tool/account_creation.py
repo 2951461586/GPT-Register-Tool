@@ -209,7 +209,7 @@ def _generate_paypal_link(access_token, proxy=None, paypal_generation_type=None)
 
 def _generate_payment_link(access_token, proxy=None, payment_method="paypal", paypal_generation_type=None):
     try:
-        from .gen_pp_link import generate_payment_link
+        from .payment_link_manager import generate_payment_link
     except Exception as e:
         return {"ok": False, "error": f"load_gen_pp_link_failed: {e}"}
     try:

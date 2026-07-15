@@ -46,28 +46,16 @@ def unique_emails(emails):
 
 def payment_method(args):
     """Normalize payment method from args."""
-    value = str(getattr(args, "payment_method", "") or "").strip().lower()
-    if value in {"gopay", "go-pay", "go_pay"}:
-        return "gopay"
-    if value in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        return "upi"
-    return "paypal"
+    from ..payment_link_manager import normalize_payment_method
+
+    return normalize_payment_method(getattr(args, "payment_method", "")) or "paypal"
 
 
 def payment_method_label(payment_method):
     """Human-readable payment method label."""
-    raw = str(payment_method or "").strip().lower()
-    if raw in {"gopay", "go-pay", "go_pay"}:
-        value = "gopay"
-    elif raw in {"upi", "upiqr", "upi_qr", "upi-qr"}:
-        value = "upi"
-    else:
-        value = "paypal"
-    if value == "gopay":
-        return "GoPay"
-    if value == "upi":
-        return "UPI"
-    return "PayPal"
+    from ..payment_link_manager import payment_method_label as label
+
+    return label(payment_method) or "PayPal"
 
 
 def public_mail_message(msg):

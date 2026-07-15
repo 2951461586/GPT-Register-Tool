@@ -227,6 +227,28 @@
       "confirm": "socks5h://127.0.0.1:7897"
     }
   },
+  "protocol_payments": {
+    "enabled_methods": [
+      "paypal",
+      "gopay",
+      "upi",
+      "ideal",
+      "pix",
+      "kakao",
+      "blik",
+      "twint"
+    ],
+    "reference_root": "services/protocol-payment",
+    "state_file": "runtime/payment_link_runs.jsonl",
+    "timeout_seconds": 900,
+    "methods": {
+      "ideal": { "proxy": "", "timeout_seconds": 900 },
+      "pix": { "proxy": "", "timeout_seconds": 900 },
+      "kakao": { "proxy": "", "timeout_seconds": 900 },
+      "blik": { "proxy": "", "blik_code": "", "timeout_seconds": 900 },
+      "twint": { "proxy": "", "timeout_seconds": 900 }
+    }
+  },
   "runtime": {
     "directory": "runtime"
   },

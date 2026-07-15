@@ -9,6 +9,8 @@ namespace SmsWorkbench
             string detail = BuildAccountDetail(row);
             string paypalUrl = row.PayPalUrl ?? "";
             bool hasPayPal = !string.IsNullOrWhiteSpace(paypalUrl);
+            string accessToken = ResolveAccountAccessToken(row);
+            bool hasAccessToken = !string.IsNullOrWhiteSpace(accessToken);
             var dialog = new Window
             {
                 Title = "账号详情 - " + row.Identifier,
@@ -198,6 +200,17 @@ namespace SmsWorkbench
             openButton.Click += (_, __) => OpenAccountJson(row);
             leftActions.Children.Add(openButton);
 
+            var copyAtButton = new Button { Content = "一键复制AT", MinWidth = 100, IsEnabled = hasAccessToken, Margin = new Thickness(0, 0, 8, 0) };
+            copyAtButton.Click += async (_, __) =>
+            {
+                if (!hasAccessToken) return;
+                Clipboard.SetText(accessToken);
+                copyAtButton.Content = "已复制";
+                await Task.Delay(1200);
+                copyAtButton.Content = "一键复制AT";
+            };
+            leftActions.Children.Add(copyAtButton);
+
             var refreshQuotaButton = new Button { Content = "刷新额度", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
             refreshQuotaButton.Click += async (_, __) =>
             {
@@ -234,6 +247,22 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             dialog.ShowDialog();
+        }
+
+        private string ResolveAccountAccessToken(PoolRow row)
+        {
+            if (!TryLoadAccountDataForRow(row, out Dictionary<string, object> data) || data.Count == 0)
+            {
+                return "";
+            }
+            return FirstNonEmpty(
+                GetString(data, "access_token"),
+                GetString(data, "accessToken"),
+                NestedString(data, "auth_session", "access_token"),
+                NestedString(data, "auth_session", "accessToken"),
+                NestedString(data, "session", "access_token"),
+                NestedString(data, "session", "accessToken")
+            );
         }
 
         private void OpenAccountJson(PoolRow row)
