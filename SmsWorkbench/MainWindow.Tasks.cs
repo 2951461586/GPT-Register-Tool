@@ -218,21 +218,9 @@ namespace SmsWorkbench
             try
             {
                 string emailKey = NormalizeEmailKey(row.Identifier);
-                bool isGmailAlias = row.AccountType == "Gmail Alias";
-                bool isGmailBase = !isGmailAlias && CanonicalGmailEmail(row.Identifier).Length > 0;
-                bool useCanonicalGmail = isGmailBase;
-
-                // Gmail alias rows are virtual entries derived from the base mailbox
-                // line + alias map; they have no own line in the pool txt file.
-                int removedPoolLines = isGmailAlias ? 0 : DeleteMailboxLines(row, emailKey);
-                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey, useCanonicalGmail);
-                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey, useCanonicalGmail);
-
-                int aliasMapRemoved = RemoveGmailAliasOnDelete(row.Identifier, isGmailBase, isGmailAlias);
-                if (aliasMapRemoved > 0)
-                {
-                    Log("Gmail alias 映射清理 " + aliasMapRemoved + " 条。");
-                }
+                int removedPoolLines = DeleteMailboxLines(row, emailKey);
+                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey);
+                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey);
 
                 if (row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                     && File.Exists(row.SourcePath)
@@ -253,67 +241,11 @@ namespace SmsWorkbench
             }
         }
 
-        /// <summary>
-        /// Compare two emails for deletion matching. When useCanonicalGmail is
-        /// true, Gmail addresses are compared by their canonical form (dots and
-        /// +tag stripped) so that john.doe@gmail.com, johndoe@gmail.com and
-        /// johndoe+alias@gmail.com all match each other.
-        /// </summary>
-        private bool DeletionEmailMatch(string candidate, string emailKey, bool useCanonicalGmail)
+        private bool DeletionEmailMatch(string candidate, string emailKey)
         {
             if (emailKey.Length == 0) return false;
             string normalizedCandidate = NormalizeEmailKey(candidate);
-            if (normalizedCandidate.Length > 0 && normalizedCandidate == emailKey) return true;
-            if (useCanonicalGmail)
-            {
-                string canonicalCandidate = CanonicalGmailEmail(candidate);
-                string canonicalKey = CanonicalGmailEmail(emailKey);
-                if (canonicalCandidate.Length > 0 && canonicalCandidate == canonicalKey) return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// Remove the deleted alias (or all aliases of a deleted base) from the
-        /// gmail_aliases.json store so the pool row does not reappear on refresh.
-        /// </summary>
-        private int RemoveGmailAliasOnDelete(string identifier, bool isGmailBase, bool isGmailAlias)
-        {
-            if (!isGmailBase && !isGmailAlias) return 0;
-            var store = LoadGmailAliasStore();
-            int removed = 0;
-
-            if (isGmailBase)
-            {
-                string canonical = CanonicalGmailEmail(identifier);
-                foreach (string baseEmail in store.Keys.ToList())
-                {
-                    if (CanonicalGmailEmail(baseEmail) != canonical) continue;
-                    if (store.TryGetValue(baseEmail, out List<string> aliases) && aliases != null)
-                        removed += aliases.Count;
-                    store.Remove(baseEmail);
-                    removed++;
-                }
-            }
-            else // isGmailAlias
-            {
-                string normalizedAlias = NormalizeEmailKey(identifier);
-                foreach (string baseEmail in store.Keys.ToList())
-                {
-                    if (store[baseEmail] == null) continue;
-                    int before = store[baseEmail].Count;
-                    store[baseEmail].RemoveAll(alias =>
-                        NormalizeEmailKey(alias).Equals(normalizedAlias, StringComparison.OrdinalIgnoreCase));
-                    removed += before - store[baseEmail].Count;
-                }
-            }
-
-            if (removed > 0)
-            {
-                SaveGmailAliasStore(store);
-                LoadGmailAliasNotes();
-            }
-            return removed;
+            return normalizedCandidate.Length > 0 && normalizedCandidate == emailKey;
         }
 
         private int DeleteMailboxLines(PoolRow row, string emailKey)
@@ -341,7 +273,7 @@ namespace SmsWorkbench
             return removed;
         }
 
-        private int DeleteSqliteAccountRows(PoolRow row, string emailKey, bool useCanonicalGmail)
+        private int DeleteSqliteAccountRows(PoolRow row, string emailKey)
         {
             string dbPath = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
                 ? row.SourcePath
@@ -356,7 +288,7 @@ namespace SmsWorkbench
                 string id = data.TryGetValue("id", out string rawId) ? rawId : "";
                 string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : "";
                 bool matches = explicitId.Length > 0 && id == explicitId;
-                matches = matches || DeletionEmailMatch(email, emailKey, useCanonicalGmail);
+                matches = matches || DeletionEmailMatch(email, emailKey);
                 if (!matches) continue;
                 deleteIds.Add(id);
 
@@ -374,7 +306,7 @@ namespace SmsWorkbench
             return deleteIds.Distinct().Count();
         }
 
-        private int DeleteSessionJsonFiles(PoolRow row, string emailKey, bool useCanonicalGmail)
+        private int DeleteSessionJsonFiles(PoolRow row, string emailKey)
         {
             int removed = 0;
             var dirs = new List<string> { GetSessionsDir(), rootDir };
@@ -382,7 +314,7 @@ namespace SmsWorkbench
             {
                 foreach (string path in Directory.GetFiles(dir, "session_*.json", SearchOption.TopDirectoryOnly))
                 {
-                    if (!SessionJsonMatchesEmail(path, emailKey, useCanonicalGmail)) continue;
+                    if (!SessionJsonMatchesEmail(path, emailKey)) continue;
                     if (TryDeleteFile(path)) removed++;
                 }
             }
@@ -395,13 +327,13 @@ namespace SmsWorkbench
             return removed;
         }
 
-        private bool SessionJsonMatchesEmail(string path, string emailKey, bool useCanonicalGmail)
+        private bool SessionJsonMatchesEmail(string path, string emailKey)
         {
             if (emailKey.Length == 0) return false;
             try
             {
                 Dictionary<string, object> data = ReadJsonObject(path);
-                return DeletionEmailMatch(GetString(data, "email"), emailKey, useCanonicalGmail);
+                return DeletionEmailMatch(GetString(data, "email"), emailKey);
             }
             catch
             {

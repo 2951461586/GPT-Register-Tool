@@ -34,18 +34,6 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
             };
             headerPanel.Children.Add(header);
-            string gmailOwnership = DescribeGmailAliasOwnership(row.Identifier);
-            if (!string.IsNullOrWhiteSpace(gmailOwnership))
-            {
-                headerPanel.Children.Add(new TextBlock
-                {
-                    Text = gmailOwnership,
-                    FontSize = 12,
-                    Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                    Margin = new Thickness(0, 4, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
-            }
             Grid.SetRow(headerPanel, 0);
             root.Children.Add(headerPanel);
 
@@ -319,6 +307,7 @@ namespace SmsWorkbench
             return row.MailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase)
                 || row.AccountType.Contains("CFWorker")
                 || row.Identifier.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
+                || row.Identifier.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
         }
 

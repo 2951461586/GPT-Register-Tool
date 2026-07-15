@@ -28,6 +28,7 @@
     "token_file": "mailbox_tokens.txt",
     "otp_poll_interval": 2,
     "cfworker_otp_settle_seconds": 3,
+    "cfworker_timeout_seconds": 30,
     "cfworker_otp_issued_after_grace_seconds": 10,
     "cfworker_poll_proxy": true,
     "cfworker_direct_fallback": false,
@@ -82,6 +83,10 @@
     "target_country": "US",
     "checkout_country": "JP",
     "max_checkout_retries": 3,
+    "max_stage_retries": 3,
+    "preflight_proxy_check": true,
+    "proxy_probe_timeout_seconds": 12,
+    "rotate_proxy_sessions": true,
     "checkout_only_long_url": false,
     "stop_after_pm_create": false,
     "link_mode": "chatgpt_checkout",
@@ -109,6 +114,31 @@
       "payment_method": "socks5h://127.0.0.1:7897",
       "confirm": "socks5h://127.0.0.1:7897",
       "promotion": ""
+    },
+    "stage_proxy_countries": {
+      "checkout": "JP",
+      "promotion": "",
+      "provider": "US",
+      "stripe_init": "US",
+      "payment_method": "US",
+      "confirm": "US",
+      "approve": "US"
+    },
+    "stage_proxy_pools": {
+      "checkout": [],
+      "promotion": [],
+      "provider": [],
+      "stripe_init": [],
+      "payment_method": [],
+      "confirm": [],
+      "approve": []
+    },
+    "proxy_health": {
+      "enabled": true,
+      "state_file": "runtime/paypal_proxy_state.json",
+      "fail_skip_after": 2,
+      "fail_cooldown_seconds": 180,
+      "zero_cache_ttl_seconds": 1800
     },
     "promotion_taxes": false,
     "promo_campaign_id": "plus-1-month-free",

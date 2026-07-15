@@ -147,7 +147,7 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertEqual(messages, [])
         self.assertEqual(fetch.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
 
-    def test_gmail_config_alias_uses_base_login_email(self):
+    def test_gmail_config_requires_exact_login_email(self):
         with patch.object(mailbox_module, "_email_cfg", return_value={
             "gmail": {
                 "enabled": True,
@@ -156,15 +156,13 @@ class GmailMailboxTests(unittest.TestCase):
                 "auth_mode": "app_password",
             }
         }):
-            mailbox = mailbox_module._mailbox_from_config(
+            mailbox = mailbox_module._gmail_mailbox_from_config(
                 type("Args", (), {"email": "liziaiclou.dxm+pj8@gmail.com"})()
             )
 
-        self.assertIsNotNone(mailbox)
-        self.assertEqual(mailbox.email, "liziaicloudxm@gmail.com")
-        self.assertEqual(mailbox.password, "abcd efgh ijkl mnop")
+        self.assertIsNone(mailbox)
 
-    def test_gmail_alias_uses_matching_token_file_instead_of_config_password(self):
+    def test_gmail_alias_does_not_reuse_token_file_credentials(self):
         with TemporaryDirectory() as tmp:
             token_file = Path(tmp) / "mailbox_tokens.txt"
             token_file.write_text(
@@ -180,13 +178,11 @@ class GmailMailboxTests(unittest.TestCase):
                     "auth_mode": "app_password",
                 },
             }):
-                mailbox = mailbox_module._mailbox_from_config(
+                mailbox = mailbox_module._gmail_mailbox_from_config(
                     type("Args", (), {"email": "mi.g.u.el.ad.o.rno236+43wqm@gmail.com"})()
                 )
 
-        self.assertIsNotNone(mailbox)
-        self.assertEqual(mailbox.email, "migueladorno236@gmail.com")
-        self.assertEqual(mailbox.password, "qrst uvwx yzab vfgv")
+        self.assertIsNone(mailbox)
 
     def test_send_gmail_message_with_app_password(self):
         mailbox = MailboxAccount(

@@ -1,10 +1,48 @@
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import cli
 
 
 class GenerateBaLinkCliProxyTests(unittest.TestCase):
+    def test_batch_regenerate_forwards_stage_proxy_overrides(self):
+        seen = []
+
+        def fake_regenerate(**kwargs):
+            seen.append(kwargs)
+            return {"ok": True, "email": kwargs["email"]}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            email_file = Path(tmp) / "emails.txt"
+            email_file.write_text("one@example.com\n", encoding="utf-8")
+            argv = [
+                "chatgpt_phone_reg.py",
+                "--regenerate-paypal-link",
+                "--email-file",
+                str(email_file),
+                "--checkout-proxy",
+                "http://checkout",
+                "--provider-proxy",
+                "http://provider",
+                "--approve-proxy",
+                "http://approve",
+                "--promotion-proxy",
+                "http://promotion",
+                "--no-require-zero",
+            ]
+            with patch("sys.argv", argv):
+                with patch("sms_tool.paypal_links.regenerate_paypal_link", side_effect=fake_regenerate):
+                    cli.main()
+
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0]["checkout_proxy"], "http://checkout")
+        self.assertEqual(seen[0]["provider_proxy"], "http://provider")
+        self.assertEqual(seen[0]["approve_proxy"], "http://approve")
+        self.assertEqual(seen[0]["promotion_proxy"], "http://promotion")
+        self.assertFalse(seen[0]["require_zero"])
+
     def test_generate_ba_link_prefers_stage_proxies_when_proxy_not_explicit(self):
         seen = {}
         cfg = {

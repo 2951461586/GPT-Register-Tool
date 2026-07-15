@@ -29,6 +29,23 @@ class CodexOauthTests(unittest.TestCase):
         self.assertIsNone(result)
         from_config.assert_not_called()
 
+    def test_cfworker_mailbox_does_not_inherit_chatgpt_account_password(self):
+        data = {
+            "email": "target@liziai.cloud",
+            "password": "ChatGPTPassword!A1",
+            "mailbox": {
+                "email": "target@liziai.cloud",
+                "provider": "cfworker",
+                "password": "",
+                "source": "https://worker.example",
+            },
+        }
+        with patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=True):
+            result = codex_oauth._mailbox_from_data(data)
+
+        self.assertEqual(result.provider, "cfworker")
+        self.assertEqual(result.password, "")
+
     def test_account_deactivated_response_is_terminal(self):
         body = '{"error":{"code":"account_deactivated","message":"You do not have an account because it has been deleted or deactivated."}}'
 

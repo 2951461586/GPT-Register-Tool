@@ -32,9 +32,6 @@ namespace SmsWorkbench
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
-        private readonly Dictionary<string, string> gmailAliasBases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, List<string>> gmailAliasMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        private bool aliasColumnInteractionsHooked;
         private Process runningProcess;
         private int taskSeq = 1;
         private string searchText = "";
@@ -222,7 +219,6 @@ namespace SmsWorkbench
         {
             InitializeComponent();
             DataContext = this;
-            EnsureAliasColumn();
 
             // Initialize theme colors on startup
             _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
@@ -294,7 +290,6 @@ namespace SmsWorkbench
         public string RefreshToken { get; set; } = "";
         public string Proxy { get; set; } = "";
         public string Notes { get; set; } = "";
-        public string AliasNotes { get; set; } = "";
         public string SourcePath { get; set; } = "";
         public string RawLine { get; set; } = "";
         public string MailboxLine { get; set; } = "";

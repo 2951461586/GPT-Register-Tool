@@ -28,7 +28,7 @@ namespace SmsWorkbench
             catch
             {
             }
-            return "edu.liziai.cloud";
+            return "liziai.cloud";
         }
 
         private void AddPaypalOption(List<string> args, string paymentMethod = "paypal", bool skipPaymentLink = false)

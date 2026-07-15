@@ -209,6 +209,9 @@ the local resend-return time.
 Gmail is a first-class mailbox provider. The preferred import shapes are
 `gmail://email---app_password` for app-password mode and
 `gmail://email----client_id----client_secret----refresh_token` for OAuth mode.
+Gmail credentials and OTP recipients are matched by the complete normalized
+address. Dotted local parts, `+tag` addresses, and `googlemail.com` variants are
+not rewritten to another mailbox, and no alias mapping file is read.
 It must not write registration results or modify mailbox pool files during registration.
 
 ### Registration Layer
@@ -334,7 +337,7 @@ python -m unittest discover -s tests
 - Payment method persistence for GoPay/UPI/PayPal compatibility.
 - Rebuilding SQLite from `sessions/session_*.json`.
 
-`accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same email instead of creating a new row with different casing or a repaired alias spelling.
+`accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same complete email address instead of creating a new row with different casing.
 
 ### Codex OAuth and CPA Layer
 

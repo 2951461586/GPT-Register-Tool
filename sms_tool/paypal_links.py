@@ -13,7 +13,8 @@ from .storage import upsert_account
 
 
 def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method="paypal", paypal_generation_type=None,
-                           checkout_proxy=None, provider_proxy=None, approve_proxy=None):
+                           checkout_proxy=None, provider_proxy=None, approve_proxy=None,
+                           promotion_proxy=None, require_zero=None):
     data, json_path = _load_seed(email=email, session_file=session_file)
     target_email = (email or data.get("email") or "").strip().lower()
     if target_email:
@@ -32,6 +33,8 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
         checkout_proxy=checkout_proxy,
         provider_proxy=provider_proxy,
         approve_proxy=approve_proxy,
+        promotion_proxy=promotion_proxy,
+        require_zero=require_zero,
         payment_method=payment_method,
         seed_data=data,
         paypal_generation_type=paypal_generation_type,
@@ -47,6 +50,11 @@ def regenerate_paypal_link(email="", session_file="", proxy=None, payment_method
                 paypal = _generate_link(
                     access_token,
                     proxy=proxy,
+                    checkout_proxy=checkout_proxy,
+                    provider_proxy=provider_proxy,
+                    approve_proxy=approve_proxy,
+                    promotion_proxy=promotion_proxy,
+                    require_zero=require_zero,
                     payment_method=payment_method,
                     seed_data=data,
                     paypal_generation_type=paypal_generation_type,
@@ -142,7 +150,20 @@ def _is_checkout_unauthorized(paypal) -> bool:
     if str(paypal.get("error_code") or "") == "checkout_unauthorized":
         return True
     error = str(paypal.get("error") or "")
-    return "401" in error and "checkout" in error.lower()
+    lower = error.lower()
+    if "401" not in lower:
+        return False
+    return any(
+        marker in lower
+        for marker in (
+            "checkout",
+            "access_token",
+            "access token",
+            "token_invalid",
+            "token invalid",
+            "authentication token",
+        )
+    )
 
 
 def _at_refresh_failed(paypal) -> bool:
@@ -259,7 +280,8 @@ def _disallow_saved_link_reuse(payment_method, payment_cfg):
 
 
 def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=None, paypal_generation_type=None,
-                   checkout_proxy=None, provider_proxy=None, approve_proxy=None):
+                   checkout_proxy=None, provider_proxy=None, approve_proxy=None,
+                   promotion_proxy=None, require_zero=None):
     auth_context = seed_data if isinstance(seed_data, dict) else None
     if _normalize_payment_method(payment_method) == "paypal":
         return generate_pp_link(
@@ -270,6 +292,8 @@ def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
             approve_proxy=approve_proxy,
+            promotion_proxy=promotion_proxy,
+            require_zero=require_zero,
         )
     return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method, auth_context=auth_context)
 

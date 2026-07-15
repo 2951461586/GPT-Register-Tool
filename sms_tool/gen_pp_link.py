@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PP 直链生成器 -- 分段代理池版。
+r"""PP 直链生成器 -- 分段代理池版。
 
 参考 F:\epsoft\app\app.py 的三段式代理路由:
   Stage 1: checkout (JP/TH 代理) → 创建 ChatGPT checkout session
@@ -42,6 +42,25 @@ from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
 
 import requests
 
+try:
+    from .paypal_proxy import (
+        PayPalProxyState,
+        infer_proxy_country,
+        is_retryable_network_error,
+        probe_proxy,
+        redact_proxy_url,
+        rotate_proxy_session as rotate_stage_proxy_session,
+    )
+except ImportError:  # pragma: no cover - direct script execution
+    from paypal_proxy import (  # type: ignore
+        PayPalProxyState,
+        infer_proxy_country,
+        is_retryable_network_error,
+        probe_proxy,
+        redact_proxy_url,
+        rotate_proxy_session as rotate_stage_proxy_session,
+    )
+
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:
     from curl_cffi import requests as curl_requests
@@ -59,6 +78,17 @@ STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_man
 DEFAULT_TIMEOUT = 30
 CHATGPT_TIMEOUT = 45
 RETRY_ATTEMPTS = 3
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
+
+
+class CheckoutNotZeroDueError(Exception):
+    def __init__(self, amount: int | None, currency: str = ""):
+        self.amount = amount
+        self.currency = str(currency or "").upper()
+        amount_label = "unknown" if amount is None else str(amount)
+        super().__init__(f"checkout_not_zero_due: amount={amount_label} {self.currency}".rstrip())
+
 
 CURRENCY_MAP = {
     "US": "USD", "GB": "GBP", "DE": "EUR", "FR": "EUR", "JP": "JPY",
@@ -80,6 +110,9 @@ BILLING_DATA = {
     "IE": {"name": ("James", "Smith"), "street": "1 O'Connell Street", "city": "Dublin", "state": "Dublin", "postal": "D01 F5P2"},
     "TH": {"name": ("Somchai", "Prasert"), "street": "123 Sukhumvit Road", "city": "Bangkok", "state": "Bangkok", "postal": "10110"},
     "TR": {"name": ("Mehmet", "Yilmaz"), "street": "Istiklal Caddesi 123", "city": "Istanbul", "state": "Istanbul", "postal": "34421"},
+    "IN": {"name": ("Rahul", "Sharma"), "street": "Flat 302, Sai Residency", "city": "Mumbai", "state": "Maharashtra", "postal": "400069"},
+    "BR": {"name": ("Joao", "Silva"), "street": "Avenida Paulista 1000", "city": "Sao Paulo", "state": "SP", "postal": "01310-100"},
+    "KR": {"name": ("Minjun", "Kim"), "street": "123 Teheran-ro", "city": "Seoul", "state": "Seoul", "postal": "06134"},
 }
 
 DEFAULT_TARGET_COUNTRIES = ("AU", "TH", "US", "GB", "DE", "JP", "SG", "NZ", "CA", "IE")
@@ -222,17 +255,63 @@ def proxy_for_country_template(template: str, country: str) -> str:
 
 def rotate_proxy_session(proxy: str) -> str:
     """轮换代理的 session ID (支持 Kookeey 数字 sid 和 cliproxy 字母 sid)。"""
-    if "sid-" not in proxy:
-        return proxy
-    # cliproxy 格式: sid-ZLaanVyM (字母数字混合)
-    m = re.search(r"sid-([A-Za-z0-9]+)", proxy)
-    if m:
-        old_sid = m.group(1)
-        # 生成新的随机 session ID (8位字母数字)
-        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-        new_sid = "".join(random.choice(chars) for _ in range(len(old_sid)))
-        return proxy[:m.start(1)] + new_sid + proxy[m.end(1):]
-    return proxy
+    return rotate_stage_proxy_session(proxy)
+
+
+def find_submission_attempt(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    direct = payload.get("submission_attempt")
+    if isinstance(direct, dict):
+        return direct
+    for value in payload.values():
+        if isinstance(value, dict):
+            found = find_submission_attempt(value)
+            if found:
+                return found
+        elif isinstance(value, list):
+            for item in value:
+                found = find_submission_attempt(item)
+                if found:
+                    return found
+    return {}
+
+
+def _compact_diagnostic(value: Any, limit: int = 180) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def stripe_confirm_error_diagnostics(response: Any, cs_id: str, pm_id: str, init_payload: dict) -> str:
+    try:
+        payload = response.json() or {}
+    except Exception:
+        payload = {}
+    error = payload.get("error") if isinstance(payload, dict) else {}
+    error = error if isinstance(error, dict) else {}
+    submission = find_submission_attempt(payload)
+    parts = [
+        f"stripe_confirm_failed:http={getattr(response, 'status_code', 0)}",
+        f"cs_id={str(cs_id)[:18]}",
+        f"pm_id={str(pm_id)[:18]}",
+        f"amount={stripe_amount_details(init_payload).get('amount')}",
+        f"init_checksum={'present' if init_payload.get('init_checksum') else 'missing'}",
+    ]
+    for label, value in (
+        ("error_type", error.get("type")),
+        ("error_code", error.get("code")),
+        ("error_param", error.get("param")),
+        ("error_message", error.get("message")),
+        ("submission_state", submission.get("state")),
+        ("submission_reason", submission.get("reason")),
+        ("submission_code", submission.get("code")),
+        ("submission_message", submission.get("message")),
+    ):
+        if value not in (None, ""):
+            parts.append(f"{label}={_compact_diagnostic(value)}")
+    if len(parts) == 5:
+        parts.append(f"body={_compact_diagnostic(getattr(response, 'text', ''))}")
+    return "; ".join(parts)
 
 
 # ─── URL 提取 ──────────────────────────────────────────────────────────────────
@@ -381,6 +460,9 @@ class PPLinkExtractor:
         access_token: str,
         checkout_proxy: str = "",
         provider_proxy: str = "",
+        stripe_init_proxy: str = "",
+        payment_method_proxy: str = "",
+        confirm_proxy: str = "",
         approve_proxy: str = "",
         promotion_proxy: str = "",
         target_country: str = "DE",
@@ -391,10 +473,19 @@ class PPLinkExtractor:
         cookie_header: str = "",
         promotion_taxes: bool = False,
         promo_campaign_id: str = "plus-1-month-free",
+        preflight_proxy_check: bool = False,
+        rotate_proxy_sessions: bool = False,
+        proxy_probe_timeout: float = 12,
+        max_stage_retries: int = RETRY_ATTEMPTS,
+        proxy_state: PayPalProxyState | None = None,
+        stage_proxy_countries: dict[str, str] | None = None,
     ):
         self.access_token = access_token
         self.checkout_proxy = normalize_proxy_url(checkout_proxy)
         self.provider_proxy = normalize_proxy_url(provider_proxy)
+        self.stripe_init_proxy = normalize_proxy_url(stripe_init_proxy or provider_proxy)
+        self.payment_method_proxy = normalize_proxy_url(payment_method_proxy or provider_proxy)
+        self.confirm_proxy = normalize_proxy_url(confirm_proxy or provider_proxy)
         self.approve_proxy = normalize_proxy_url(approve_proxy or provider_proxy)
         # Promotion stage: apply the 0-due promo to the *existing* checkout via
         # POST /backend-api/payments/checkout/update, routed through a
@@ -418,14 +509,82 @@ class PPLinkExtractor:
         self.stripe_js_id = str(uuid.uuid4())
         self.elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
         self.elements_session_config_id = str(uuid.uuid4())
+        self.preflight_proxy_check = bool(preflight_proxy_check)
+        self.rotate_proxy_sessions = bool(rotate_proxy_sessions)
+        self.proxy_probe_timeout = max(1.0, float(proxy_probe_timeout or 12))
+        self.max_stage_retries = max(1, int(max_stage_retries or RETRY_ATTEMPTS))
+        self.proxy_state = proxy_state or PayPalProxyState(
+            Path(PROJECT_ROOT) / "runtime" / "paypal_proxy_state.json",
+            enabled=False,
+        )
+        countries = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
+        self.stage_proxy_countries = {
+            "checkout": str(countries.get("checkout") or self.checkout_country).upper(),
+            "promotion": str(countries.get("promotion") or "").upper(),
+            "provider": str(countries.get("provider") or self.target_country).upper(),
+            "stripe_init": str(countries.get("stripe_init") or countries.get("provider") or self.target_country).upper(),
+            "payment_method": str(countries.get("payment_method") or countries.get("provider") or self.target_country).upper(),
+            "confirm": str(countries.get("confirm") or countries.get("provider") or self.target_country).upper(),
+            "approve": str(countries.get("approve") or self.target_country).upper(),
+        }
+        self.proxy_exits: dict[str, dict[str, Any]] = {}
+        self._active_stage = ""
 
     def _log(self, step: str, msg: str, **kw):
         self.emit(step, msg, **kw)
 
+    def _reset_stripe_context(self) -> None:
+        self.stripe_js_id = str(uuid.uuid4())
+        self.elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
+        self.elements_session_config_id = str(uuid.uuid4())
+
+    def _set_stripe_proxy(self, proxy: str) -> Any:
+        stripe = getattr(self, "_stripe_session", None)
+        if stripe is None:
+            stripe = _new_session(proxy)
+            self._stripe_session = stripe
+        elif hasattr(stripe, "proxies"):
+            stripe.proxies = {"http": proxy, "https": proxy} if proxy else {}
+        return stripe
+
+    def _prepare_stage_proxy(self, stage: str, proxy: str, attempt: int = 1) -> str:
+        expected_country = self.stage_proxy_countries.get(stage, "")
+        prepared = normalize_proxy_url(proxy)
+        if prepared and self.rotate_proxy_sessions:
+            prepared = rotate_stage_proxy_session(prepared, expected_country)
+        label = redact_proxy_url(prepared)
+        if not prepared:
+            self.proxy_exits[stage] = {"ok": True, "country_code": "", "ip": "", "proxy": "DIRECT"}
+            return prepared
+        if not self.preflight_proxy_check:
+            self._log("proxy", f"{stage} attempt={attempt} proxy={label} (preflight disabled)")
+            return prepared
+        self._log("proxy", f"{stage} attempt={attempt} checking expected={expected_country or 'ANY'} proxy={label}")
+        result = probe_proxy(
+            prepared,
+            expected_country=expected_country,
+            stage=stage,
+            timeout=self.proxy_probe_timeout,
+        )
+        self.proxy_exits[stage] = {**result.to_dict(), "proxy": label}
+        self.proxy_state.record_result(stage, prepared, result.ok, result.error, result.country_code)
+        if not result.ok:
+            raise RuntimeError(
+                f"proxy_preflight_failed:{stage}:expected={expected_country or 'ANY'}:"
+                f"actual={result.country_code or 'unknown'}:{result.error}"
+            )
+        self._log("proxy", f"{stage} exit={result.ip}/{result.country_code} {result.country}")
+        return prepared
+
+    def _record_stage_result(self, stage: str, proxy: str, success: bool, reason: str = "") -> None:
+        country = str((self.proxy_exits.get(stage) or {}).get("country_code") or self.stage_proxy_countries.get(stage) or "")
+        self.proxy_state.record_result(stage, proxy, success, reason, country)
+
     # ─── Stage 1: Checkout (JP/TH 代理) ───────────────────────────────────
 
     def _create_checkout(self) -> dict:
-        self._log("checkout", f"Stage 1: 使用 {self.checkout_proxy or 'DIRECT'} 代理创建 checkout (billing={self.checkout_country}/{self.checkout_currency}, target={self.target_country})")
+        base_proxy = self.checkout_proxy
+        self._log("checkout", f"Stage 1: proxy={redact_proxy_url(base_proxy)} billing={self.checkout_country}/{self.checkout_currency} target={self.target_country}")
         body = {
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
@@ -433,11 +592,13 @@ class PPLinkExtractor:
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
             "checkout_ui_mode": "custom",
         }
-        for attempt in range(1, RETRY_ATTEMPTS + 1):
+        for attempt in range(1, self.max_stage_retries + 1):
+            attempt_proxy = base_proxy
             try:
+                attempt_proxy = self._prepare_stage_proxy("checkout", base_proxy, attempt)
                 r = _checkout_post(
                     "https://chatgpt.com/backend-api/payments/checkout",
-                    body, self.access_token, self.cookie_header, self.checkout_proxy, CHATGPT_TIMEOUT,
+                    body, self.access_token, self.cookie_header, attempt_proxy, CHATGPT_TIMEOUT,
                 )
                 if r.status_code == 401:
                     raise Exception("access_token 无效或已过期 (401)")
@@ -451,6 +612,8 @@ class PPLinkExtractor:
                 pk = data.get("publishable_key") or ""
                 if pk.startswith("pk_"):
                     self.stripe_pk = pk
+                self.checkout_proxy = attempt_proxy
+                self._record_stage_result("checkout", attempt_proxy, True)
                 self._log("checkout", f"checkout 成功: cs_id={cs_id}")
                 return {
                     "cs_id": cs_id,
@@ -460,9 +623,11 @@ class PPLinkExtractor:
                     "currency": self.checkout_currency,
                 }
             except Exception as e:
+                self._record_stage_result("checkout", attempt_proxy, False, str(e))
                 self._log("checkout", f"checkout 第 {attempt} 次失败: {e}")
-                if attempt < RETRY_ATTEMPTS:
-                    self._log("checkout", f"retry {attempt + 1}/{RETRY_ATTEMPTS}")
+                retryable = is_retryable_network_error(e) or "proxy_preflight_failed" in str(e)
+                if attempt < self.max_stage_retries and retryable:
+                    self._log("checkout", f"retry {attempt + 1}/{self.max_stage_retries} with a new proxy session")
                 else:
                     raise
 
@@ -479,7 +644,7 @@ class PPLinkExtractor:
         Returns True on success. Non-fatal on failure: logs and returns False so
         the downstream ``require_zero`` gate in _stripe_init decides the outcome.
         """
-        self._log("promotion", f"Stage 1.5: 使用 {self.promotion_proxy or 'DIRECT'} 代理对 cs 打促销 (/checkout/update, promo={self.promo_campaign_id})")
+        self._log("promotion", f"Stage 1.5: proxy={redact_proxy_url(self.promotion_proxy)} promo={self.promo_campaign_id}")
         body = {
             "checkout_session_id": cs_id,
             "processor_entity": processor_entity,
@@ -497,15 +662,18 @@ class PPLinkExtractor:
             "x-openai-target-route": "/backend-api/payments/checkout/update",
         }
         try:
+            self.promotion_proxy = self._prepare_stage_proxy("promotion", self.promotion_proxy)
             r = _checkout_post(
                 "https://chatgpt.com/backend-api/payments/checkout/update",
                 body, self.access_token, self.cookie_header, self.promotion_proxy, CHATGPT_TIMEOUT,
                 extra_headers=extra_headers,
             )
         except Exception as e:
+            self._record_stage_result("promotion", self.promotion_proxy, False, str(e))
             self._log("promotion", f"checkout/update 请求异常 (忽略, 由 require_zero 兜底): {e}")
             return False
         if r.status_code >= 400:
+            self._record_stage_result("promotion", self.promotion_proxy, False, f"HTTP {r.status_code}")
             self._log("promotion", f"checkout/update 失败 {r.status_code}: {r.text[:200]} (忽略, 由 require_zero 兜底)")
             return False
         try:
@@ -513,13 +681,21 @@ class PPLinkExtractor:
         except Exception:
             payload = {}
         if isinstance(payload, dict) and payload.get("success") is False:
+            self._record_stage_result("promotion", self.promotion_proxy, False, "promotion_rejected")
             self._log("promotion", f"checkout/update 被拒: {json.dumps(payload, ensure_ascii=False)[:200]}")
             return False
+        self._record_stage_result("promotion", self.promotion_proxy, True)
         self._log("promotion", "checkout/update 成功: 促销已应用到当前 checkout")
         return True
 
     def _checkout_update_taxes(self, cs_id: str, processor_entity: str) -> bool:
         """Optionally sync billing/tax region via /checkout/taxes (provider 代理)."""
+        try:
+            taxes_proxy = self._prepare_stage_proxy("provider", self.provider_proxy)
+        except Exception as e:
+            self._record_stage_result("provider", self.provider_proxy, False, str(e))
+            self._log("promotion", f"checkout/taxes provider proxy failed (ignored): {e}")
+            return False
         billing = billing_for_country(self.target_country)
         body = {
             "checkout_session_id": cs_id,
@@ -544,7 +720,7 @@ class PPLinkExtractor:
         try:
             r = _checkout_post(
                 "https://chatgpt.com/backend-api/payments/checkout/taxes",
-                body, self.access_token, self.cookie_header, self.provider_proxy, CHATGPT_TIMEOUT,
+                body, self.access_token, self.cookie_header, taxes_proxy, CHATGPT_TIMEOUT,
                 extra_headers=extra_headers,
             )
         except Exception as e:
@@ -559,8 +735,9 @@ class PPLinkExtractor:
     # ─── Stage 2: Stripe init + create PM + confirm (目标国代理) ───────────
 
     def _stripe_init(self, cs_id: str) -> dict:
-        self._log("stripe_init", f"Stage 2: 使用 {self.provider_proxy or 'DIRECT'} 代理 Stripe init")
-        stripe = getattr(self, "_stripe_session", None) or _new_session(self.provider_proxy)
+        self._active_stage = "stripe_init"
+        self._log("stripe_init", f"Stage 2: proxy={redact_proxy_url(self.stripe_init_proxy)} Stripe init")
+        stripe = self._set_stripe_proxy(self.stripe_init_proxy)
         body = {
             "browser_locale": "en-US",
             "browser_timezone": "Asia/Shanghai",
@@ -583,8 +760,9 @@ class PPLinkExtractor:
         amount_info = stripe_amount_details(init)
         amount = amount_info.get("amount")
         self._log("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
-        if self.require_zero and amount is not None and amount != 0:
-            raise Exception(f"要求 0 元但实际金额={amount} {amount_info.get('currency')}")
+        self.proxy_state.record_zero_result(self.checkout_proxy, self.checkout_country, amount)
+        if self.require_zero and amount != 0:
+            raise CheckoutNotZeroDueError(amount, amount_info.get("currency", ""))
         # 检查 PayPal 是否可用
         pm_types = init.get("payment_method_types") or []
         if pm_types and "paypal" not in [str(t).lower() for t in pm_types]:
@@ -592,8 +770,9 @@ class PPLinkExtractor:
         return init
 
     def _create_payment_method(self, cs_id: str) -> str:
+        self._active_stage = "payment_method"
         self._log("payment_method", f"创建 PayPal payment_method")
-        stripe = getattr(self, "_stripe_session", None) or _new_session(self.provider_proxy)
+        stripe = self._set_stripe_proxy(self.payment_method_proxy)
         billing = billing_for_country(self.target_country)
         body = {
             "type": "paypal",
@@ -631,8 +810,9 @@ class PPLinkExtractor:
         return pm_id
 
     def _stripe_confirm(self, cs_id: str, pm_id: str, init: dict) -> dict:
+        self._active_stage = "confirm"
         self._log("confirm", "Stripe confirm")
-        stripe = getattr(self, "_stripe_session", None) or _new_session(self.provider_proxy)
+        stripe = self._set_stripe_proxy(self.confirm_proxy)
         processor_entity = "openai_llc" if self.checkout_country == "US" else "openai_ie"
         chatgpt_return = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor_entity}&plan_type=plus"
         hosted_url = str(init.get("stripe_hosted_url") or "")
@@ -683,13 +863,16 @@ class PPLinkExtractor:
         }
         r = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm", data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code >= 400:
-            raise Exception(f"confirm 失败: {r.status_code} {r.text[:300]}")
+            diagnostics = stripe_confirm_error_diagnostics(r, cs_id, pm_id, init)
+            self._log("confirm", diagnostics)
+            raise Exception(diagnostics)
         return r.json()
 
     # ─── Stage 3: Approve (目标国代理) + 轮询 redirect ─────────────────────
 
     def _chatgpt_approve(self, cs_id: str, processor_entity: str):
-        self._log("approve", f"Stage 3: 使用 {self.approve_proxy or 'DIRECT'} 代理 ChatGPT approve")
+        self._active_stage = "approve"
+        self._log("approve", f"Stage 3: proxy={redact_proxy_url(self.approve_proxy)} ChatGPT approve")
         cs = _new_session(self.approve_proxy)
         cs.headers.update({
             "Authorization": f"Bearer {self.access_token}",
@@ -756,6 +939,57 @@ class PPLinkExtractor:
             time.sleep(1)
         raise Exception(f"轮询超时 ({timeout_seconds}s)")
 
+    def _run_provider_stages(self, cs_id: str) -> tuple[dict, str, dict]:
+        base_proxies = {
+            "provider": self.provider_proxy,
+            "stripe_init": self.stripe_init_proxy,
+            "payment_method": self.payment_method_proxy,
+            "confirm": self.confirm_proxy,
+        }
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_stage_retries + 1):
+            try:
+                self._active_stage = "provider"
+                self.provider_proxy = self._prepare_stage_proxy("provider", base_proxies["provider"], attempt)
+                self._active_stage = "stripe_init"
+                self.stripe_init_proxy = self._prepare_stage_proxy("stripe_init", base_proxies["stripe_init"], attempt)
+                self._active_stage = "payment_method"
+                self.payment_method_proxy = self._prepare_stage_proxy("payment_method", base_proxies["payment_method"], attempt)
+                self._active_stage = "confirm"
+                self.confirm_proxy = self._prepare_stage_proxy("confirm", base_proxies["confirm"], attempt)
+                self._reset_stripe_context()
+                self._stripe_session = _new_session(self.stripe_init_proxy)
+                init = self._stripe_init(cs_id)
+                stripe_hosted_url = str(init.get("stripe_hosted_url") or "")
+                self._log("stripe_init", f"stripe_hosted_url={stripe_hosted_url[:80]}...")
+                pm_id = self._create_payment_method(cs_id)
+                confirm_data = self._stripe_confirm(cs_id, pm_id, init)
+                for stage, proxy in (
+                    ("provider", self.provider_proxy),
+                    ("stripe_init", self.stripe_init_proxy),
+                    ("payment_method", self.payment_method_proxy),
+                    ("confirm", self.confirm_proxy),
+                ):
+                    self._record_stage_result(stage, proxy, True)
+                return init, stripe_hosted_url, confirm_data
+            except Exception as exc:
+                last_error = exc
+                stage = self._active_stage or "provider"
+                failed_proxy = {
+                    "provider": self.provider_proxy,
+                    "stripe_init": self.stripe_init_proxy,
+                    "payment_method": self.payment_method_proxy,
+                    "confirm": self.confirm_proxy,
+                }.get(stage, self.provider_proxy)
+                self._record_stage_result(stage, failed_proxy, False, str(exc))
+                retryable = is_retryable_network_error(exc) or "proxy_preflight_failed" in str(exc)
+                self._log(stage, f"stage attempt {attempt}/{self.max_stage_retries} failed: {exc}")
+                if not retryable or attempt >= self.max_stage_retries:
+                    raise
+                self._log(stage, "retrying provider stages with new proxy sessions")
+        assert last_error is not None
+        raise last_error
+
     # ─── 主流程 ────────────────────────────────────────────────────────────
 
     def extract(self) -> dict:
@@ -772,15 +1006,9 @@ class PPLinkExtractor:
             if self.promotion_taxes:
                 self._checkout_update_taxes(cs_id, processor_entity)
 
-        # Stage 2: Stripe init + create PM + confirm (目标国代理)
-        # 复用同一个 Stripe session 保持 cookies
-        self._stripe_session = _new_session(self.provider_proxy)
-        init = self._stripe_init(cs_id)
-        stripe_hosted_url = str(init.get("stripe_hosted_url") or "")
-        self._log("stripe_init", f"stripe_hosted_url={stripe_hosted_url[:80]}...")
-
-        pm_id = self._create_payment_method(cs_id)
-        confirm_data = self._stripe_confirm(cs_id, pm_id, init)
+        # Stage 2: Stripe init + create PM + confirm. Each stage can use its own
+        # egress while the Stripe session keeps its cookies and identifiers.
+        init, stripe_hosted_url, confirm_data = self._run_provider_stages(cs_id)
 
         # 尝试从 confirm 提取 redirect URL (仅真正的 PayPal/Stripe 授权链接)
         redirect_url = extract_redirect_url(confirm_data)
@@ -788,16 +1016,27 @@ class PPLinkExtractor:
         # 如果 confirm 没有返回 redirect，走 approve 流程
         if not redirect_url:
             self._log("approve", "confirm 未返回 redirect，走 ChatGPT approve 流程")
-            for attempt in range(1, RETRY_ATTEMPTS + 1):
+            base_approve_proxy = self.approve_proxy
+            for attempt in range(1, self.max_stage_retries + 1):
                 try:
+                    self.approve_proxy = self._prepare_stage_proxy("approve", base_approve_proxy, attempt)
                     self._chatgpt_approve(cs_id, processor_entity)
                     redirect_url = self._poll_payment_page(cs_id, timeout_seconds=45)
+                    self._record_stage_result("approve", self.approve_proxy, True)
                     break
                 except Exception as e:
+                    self._record_stage_result("approve", self.approve_proxy, False, str(e))
                     self._log("approve", f"approve 第 {attempt} 次失败: {e}")
-                    if attempt >= RETRY_ATTEMPTS:
+                    if attempt >= self.max_stage_retries:
                         # 降级: 返回 stripe_hosted_url
                         if stripe_hosted_url:
+                            self.proxy_state.record_pair_result(
+                                self.checkout_proxy,
+                                self.provider_proxy,
+                                self.approve_proxy,
+                                False,
+                                "approve_fallback_to_hosted",
+                            )
                             self._log("approve", "降级返回 stripe_hosted_url")
                             return {
                                 "ok": True,
@@ -823,6 +1062,12 @@ class PPLinkExtractor:
 
         ba_token = extract_ba_token(redirect_url)
         self._log("done", f"✅ 提取成功! ba_token={ba_token[:30]}...")
+        self.proxy_state.record_pair_result(
+            self.checkout_proxy,
+            self.provider_proxy,
+            self.approve_proxy,
+            True,
+        )
 
         return {
             "ok": True,
@@ -834,10 +1079,14 @@ class PPLinkExtractor:
             "currency": self.currency,
             "target_country": self.target_country,
             "checkout_country": self.checkout_country,
-            "checkout_proxy": self.checkout_proxy,
-            "provider_proxy": self.provider_proxy,
-            "approve_proxy": self.approve_proxy,
-            "promotion_proxy": self.promotion_proxy,
+            "checkout_proxy": redact_proxy_url(self.checkout_proxy),
+            "promotion_proxy": redact_proxy_url(self.promotion_proxy),
+            "provider_proxy": redact_proxy_url(self.provider_proxy),
+            "stripe_init_proxy": redact_proxy_url(self.stripe_init_proxy),
+            "payment_method_proxy": redact_proxy_url(self.payment_method_proxy),
+            "confirm_proxy": redact_proxy_url(self.confirm_proxy),
+            "approve_proxy": redact_proxy_url(self.approve_proxy),
+            "proxy_exits": self.proxy_exits,
         }
 
 
@@ -866,12 +1115,26 @@ def run_batch(
       同时拿到 0元 + PayPal BA 直链。返回结果附带 ``matrix`` 明细。
     """
     log = emit or (lambda step, msg, **kw: print(f"[{step}] {msg}", file=sys.stderr))
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
+    state = _paypal_proxy_state(paypal_cfg)
+    preflight = bool(paypal_cfg.get("preflight_proxy_check", False))
+    rotate_sessions = bool(paypal_cfg.get("rotate_proxy_sessions", False))
+    probe_timeout = float(paypal_cfg.get("proxy_probe_timeout_seconds", 12) or 12)
+    max_stage_retries = int(paypal_cfg.get("max_stage_retries", RETRY_ATTEMPTS) or RETRY_ATTEMPTS)
 
     # ── 促销矩阵模式: paypal_region × promotion_region ──────────────────────
     if promotion_countries:
         paypal_regions = target_countries or list(DEFAULT_TARGET_COUNTRIES)
         promo_regions = [c for c in promotion_countries if c]
         combos = [(pp, promo) for pp in paypal_regions for promo in promo_regions]
+        combos.sort(
+            key=lambda item: state.pair_score(
+                proxy_for_country_template(proxy_template, item[0]),
+                proxy_for_country_template(proxy_template, item[0]),
+            ),
+            reverse=True,
+        )
         log("batch", f"促销矩阵: {len(combos)} 个组合 (PayPal 区 × promotion 区), 0元+BA 成功即停")
         matrix: list[dict[str, Any]] = []
         for index, (pp_region, promo_region) in enumerate(combos, 1):
@@ -888,12 +1151,29 @@ def run_batch(
                     access_token=access_token,
                     checkout_proxy=region_proxy,
                     provider_proxy=region_proxy,
+                    stripe_init_proxy=region_proxy,
+                    payment_method_proxy=region_proxy,
+                    confirm_proxy=region_proxy,
                     approve_proxy=region_proxy,
                     promotion_proxy=promotion_proxy,
                     target_country=pp_region,
                     checkout_country=pp_region,
                     require_zero=require_zero,
                     emit=log,
+                    preflight_proxy_check=preflight,
+                    rotate_proxy_sessions=rotate_sessions,
+                    proxy_probe_timeout=probe_timeout,
+                    max_stage_retries=max_stage_retries,
+                    proxy_state=state,
+                    stage_proxy_countries={
+                        "checkout": pp_region,
+                        "promotion": promo_region,
+                        "provider": pp_region,
+                        "stripe_init": pp_region,
+                        "payment_method": pp_region,
+                        "confirm": pp_region,
+                        "approve": pp_region,
+                    },
                 )
                 result = extractor.extract()
                 row["amount"] = result.get("amount")
@@ -920,6 +1200,16 @@ def run_batch(
     checkouts = checkout_countries or list(DEFAULT_CHECKOUT_COUNTRIES)
 
     tasks = [(t, c) for t in targets for c in checkouts]
+    tasks.sort(
+        key=lambda item: (
+            state.pair_score(
+                proxy_for_country_template(proxy_template, item[1]),
+                proxy_for_country_template(proxy_template, item[0]),
+            ),
+            1 if state.zero_status(proxy_for_country_template(proxy_template, item[1]), item[1])[0] == "ok" else 0,
+        ),
+        reverse=True,
+    )
     log("batch", f"批量任务: {len(tasks)} 个组合, 提取到第一个 BA 链后停止")
 
     for index, (target, checkout) in enumerate(tasks, 1):
@@ -938,12 +1228,29 @@ def run_batch(
                 access_token=access_token,
                 checkout_proxy=checkout_proxy,
                 provider_proxy=target_proxy,
+                stripe_init_proxy=target_proxy,
+                payment_method_proxy=target_proxy,
+                confirm_proxy=target_proxy,
                 approve_proxy=target_proxy,
                 promotion_proxy=promotion_proxy,
                 target_country=target,
                 checkout_country=checkout,
                 require_zero=require_zero,
                 emit=log,
+                preflight_proxy_check=preflight,
+                rotate_proxy_sessions=rotate_sessions,
+                proxy_probe_timeout=probe_timeout,
+                max_stage_retries=max_stage_retries,
+                proxy_state=state,
+                stage_proxy_countries={
+                    "checkout": checkout,
+                    "promotion": promotion_country,
+                    "provider": target,
+                    "stripe_init": target,
+                    "payment_method": target,
+                    "confirm": target,
+                    "approve": target,
+                },
             )
             result = extractor.extract()
             log("batch", f"任务 {task_label} 成功! url={result['url'][:80]}...")
@@ -1098,7 +1405,64 @@ def _stage_proxy_value(stage_proxies: dict, api_urls: dict, key: str, fallback: 
     return str((stage_proxies or {}).get(key) or fallback or "").strip()
 
 
-def _proxies_from_config(cfg: dict) -> dict:
+def _proxy_health_cfg(paypal_cfg: dict) -> dict:
+    value = paypal_cfg.get("proxy_health") if isinstance(paypal_cfg.get("proxy_health"), dict) else {}
+    return value or {}
+
+
+def _paypal_proxy_state(paypal_cfg: dict) -> PayPalProxyState:
+    health = _proxy_health_cfg(paypal_cfg)
+    state_file = str(health.get("state_file") or "runtime/paypal_proxy_state.json").strip()
+    state_path = Path(state_file).expanduser()
+    if not state_path.is_absolute():
+        state_path = Path(PROJECT_ROOT) / state_path
+    key = (
+        str(state_path),
+        bool(health.get("enabled", True)),
+        int(health.get("fail_skip_after", 2) or 2),
+        int(health.get("fail_cooldown_seconds", 180) or 0),
+        int(health.get("zero_cache_ttl_seconds", 1800) or 0),
+    )
+    state = _PAYPAL_PROXY_STATE_CACHE.get(key)
+    if state is None:
+        state = PayPalProxyState(
+            state_path,
+            enabled=key[1],
+            fail_skip_after=key[2],
+            fail_cooldown_seconds=key[3],
+            zero_cache_ttl_seconds=key[4],
+        )
+        _PAYPAL_PROXY_STATE_CACHE[key] = state
+    return state
+
+
+def _proxy_pool_values(paypal_cfg: dict, key: str) -> list[str]:
+    pools = paypal_cfg.get("stage_proxy_pools") if isinstance(paypal_cfg.get("stage_proxy_pools"), dict) else {}
+    raw = pools.get(key)
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    return [normalize_proxy_url(item) for item in raw if str(item or "").strip()]
+
+
+def _rank_stage_proxy(
+    paypal_cfg: dict,
+    state: PayPalProxyState,
+    stage: str,
+    configured_value: str,
+    *,
+    country: str = "",
+    checkout_proxy: str = "",
+) -> str:
+    candidates = _proxy_pool_values(paypal_cfg, stage)
+    if configured_value:
+        candidates.append(normalize_proxy_url(configured_value))
+    ranked = state.rank(stage, candidates, country=country, checkout_proxy=checkout_proxy)
+    return ranked[0] if ranked else (normalize_proxy_url(configured_value) if configured_value else "")
+
+
+def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
     """Resolve payment stage proxies from static config or proxy API URLs.
 
     Supports static ``paypal.stage_proxies`` and dynamic plain-text proxy APIs in
@@ -1109,26 +1473,101 @@ def _proxies_from_config(cfg: dict) -> dict:
     stage_proxies = paypal_cfg.get("stage_proxies") or {}
     api_urls = paypal_cfg.get("stage_proxy_api_urls") or {}
     proxy_default = (cfg.get("proxy") or {}).get("default") or ""
+    state = _paypal_proxy_state(paypal_cfg)
 
-    checkout = _stage_proxy_value(stage_proxies, api_urls, "checkout", proxy_default)
-    provider = (
+    checkout_value = _stage_proxy_value(stage_proxies, api_urls, "checkout", proxy_default)
+    checkout = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "checkout",
+        checkout_value,
+        country=checkout_country,
+    )
+    provider_value = (
         _stage_proxy_value(stage_proxies, api_urls, "provider")
         or _stage_proxy_value(stage_proxies, api_urls, "stripe_init")
         or proxy_default
     )
-    approve = (
+    provider = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "provider",
+        provider_value,
+        country=target_country,
+        checkout_proxy=checkout,
+    )
+    stripe_init_value = _stage_proxy_value(stage_proxies, api_urls, "stripe_init") or provider
+    stripe_init = _rank_stage_proxy(
+        paypal_cfg, state, "stripe_init", stripe_init_value, country=target_country, checkout_proxy=checkout,
+    )
+    payment_method_value = _stage_proxy_value(stage_proxies, api_urls, "payment_method") or provider
+    payment_method = _rank_stage_proxy(
+        paypal_cfg, state, "payment_method", payment_method_value, country=target_country, checkout_proxy=checkout,
+    )
+    confirm_value = _stage_proxy_value(stage_proxies, api_urls, "confirm") or provider
+    confirm = _rank_stage_proxy(
+        paypal_cfg, state, "confirm", confirm_value, country=target_country, checkout_proxy=checkout,
+    )
+    approve_value = (
         _stage_proxy_value(stage_proxies, api_urls, "approve")
-        or _stage_proxy_value(stage_proxies, api_urls, "confirm")
+        or confirm
         or provider
         or proxy_default
     )
+    approve = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "approve",
+        approve_value,
+        country=target_country,
+        checkout_proxy=checkout,
+    )
     # Promotion stage is OPT-IN: only resolved from explicit config, no fallback
     # to provider/default, so leaving it unset keeps the original behaviour.
-    promotion = (
+    promotion_value = (
         _stage_proxy_value(stage_proxies, api_urls, "promotion")
         or _stage_proxy_value(stage_proxies, api_urls, "promotion_update")
     )
-    return {"checkout": checkout, "provider": provider, "approve": approve, "promotion": promotion}
+    promotion = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "promotion",
+        promotion_value,
+    )
+    return {
+        "checkout": checkout,
+        "promotion": promotion,
+        "provider": provider,
+        "stripe_init": stripe_init,
+        "payment_method": payment_method,
+        "confirm": confirm,
+        "approve": approve,
+    }
+
+
+def _stage_proxy_is_configured(paypal_cfg: dict, *keys: str) -> bool:
+    stage_proxies = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    api_urls = paypal_cfg.get("stage_proxy_api_urls") if isinstance(paypal_cfg.get("stage_proxy_api_urls"), dict) else {}
+    return any(str(stage_proxies.get(key) or api_urls.get(key) or "").strip() for key in keys)
+
+
+def _resolve_stage_proxy(
+    explicit_stage_proxy: Any,
+    single_proxy: Any,
+    configured_proxy: Any,
+    configured: bool,
+    single_proxy_overrides: bool,
+) -> str:
+    explicit_value = str(explicit_stage_proxy or "").strip()
+    if explicit_value:
+        return explicit_value
+    single_value = str(single_proxy or "").strip()
+    configured_value = str(configured_proxy or "").strip()
+    if single_proxy_overrides and single_value:
+        return single_value
+    if configured and configured_value:
+        return configured_value
+    return single_value or configured_value
 
 
 def generate_pp_link(
@@ -1138,6 +1577,9 @@ def generate_pp_link(
     paypal_generation_type: str | None = None,
     checkout_proxy: str | None = None,
     provider_proxy: str | None = None,
+    stripe_init_proxy: str | None = None,
+    payment_method_proxy: str | None = None,
+    confirm_proxy: str | None = None,
     approve_proxy: str | None = None,
     promotion_proxy: str | None = None,
     target_country: str | None = None,
@@ -1162,17 +1604,68 @@ def generate_pp_link(
     """
     cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = cfg.get("paypal") or {}
-    stage_proxies = _proxies_from_config(cfg)
+    target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
+    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    checkout_country = str(
+        checkout_country
+        or paypal_cfg.get("checkout_country")
+        or paypal_cfg.get("billing_country")
+        or (regions[0] if regions else None)
+        or target_country
+    ).strip().upper()
+    stage_proxies = _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
 
-    # 代理优先级: 明确传入的分段代理 > 单代理 > 配置文件 > 默认
-    _checkout = checkout_proxy or proxy or stage_proxies["checkout"]
-    _provider = provider_proxy or proxy or stage_proxies["provider"]
-    _approve = approve_proxy or proxy or stage_proxies["approve"]
+    single_proxy_overrides = bool(paypal_cfg.get("explicit_proxy_overrides_stage_proxies", False))
+    _checkout = _resolve_stage_proxy(
+        checkout_proxy,
+        proxy,
+        stage_proxies["checkout"],
+        _stage_proxy_is_configured(paypal_cfg, "checkout"),
+        single_proxy_overrides,
+    )
+    _provider = _resolve_stage_proxy(
+        provider_proxy,
+        proxy,
+        stage_proxies["provider"],
+        _stage_proxy_is_configured(paypal_cfg, "provider", "stripe_init"),
+        single_proxy_overrides,
+    )
+    _stripe_init = _resolve_stage_proxy(
+        stripe_init_proxy,
+        provider_proxy or proxy,
+        stage_proxies.get("stripe_init", _provider),
+        _stage_proxy_is_configured(paypal_cfg, "stripe_init"),
+        single_proxy_overrides,
+    )
+    _payment_method = _resolve_stage_proxy(
+        payment_method_proxy,
+        provider_proxy or proxy,
+        stage_proxies.get("payment_method", _provider),
+        _stage_proxy_is_configured(paypal_cfg, "payment_method"),
+        single_proxy_overrides,
+    )
+    _confirm = _resolve_stage_proxy(
+        confirm_proxy,
+        provider_proxy or proxy,
+        stage_proxies.get("confirm", _provider),
+        _stage_proxy_is_configured(paypal_cfg, "confirm"),
+        single_proxy_overrides,
+    )
+    _approve = _resolve_stage_proxy(
+        approve_proxy,
+        proxy,
+        stage_proxies["approve"],
+        _stage_proxy_is_configured(paypal_cfg, "approve", "confirm"),
+        single_proxy_overrides,
+    )
     # Promotion 阶段 opt-in: 仅显式传入或配置 promotion 代理时启用 (不回退到单代理/默认)
     _promotion = promotion_proxy if promotion_proxy is not None else stage_proxies.get("promotion", "")
 
     checkout_proxy = str(_checkout or "").strip()
     provider_proxy = str(_provider or "").strip()
+    stripe_init_proxy = str(_stripe_init or provider_proxy).strip()
+    payment_method_proxy = str(_payment_method or provider_proxy).strip()
+    confirm_proxy = str(_confirm or provider_proxy).strip()
     approve_proxy = str(_approve or "").strip()
     promotion_proxy = str(_promotion or "").strip()
     promotion_taxes = bool(paypal_cfg.get("promotion_taxes", False))
@@ -1195,23 +1688,19 @@ def generate_pp_link(
             auth_context=auth_context,
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
+            stripe_init_proxy=stripe_init_proxy,
             target_country=target_country,
             checkout_country=checkout_country,
             require_zero=require_zero,
         )
 
-    target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
-    checkout_country = str(
-        checkout_country
-        or paypal_cfg.get("checkout_country")
-        or paypal_cfg.get("billing_country")
-        or (regions[0] if regions else None)
-        or target_country
-    ).strip().upper()
-    if require_zero is None:
+    if _is_zero_due_generation_type(generation_type):
+        require_zero = True
+    elif require_zero is None:
         require_zero = bool(paypal_cfg.get("require_zero_due", True))
-    if require_ba_token is None:
+    if _is_paypal_direct_generation_type(generation_type):
+        require_ba_token = True
+    elif require_ba_token is None:
         require_ba_token = bool(paypal_cfg.get("require_ba_token", False))
 
     # 从 auth_context 提取 email 和 cookie_header
@@ -1224,11 +1713,26 @@ def generate_pp_link(
     def emit(step: str, msg: str, **kw: Any) -> None:
         print(f"[{step}] {msg}", file=sys.stderr)
 
+    state = _paypal_proxy_state(paypal_cfg)
+    configured_countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
+    stage_proxy_countries = {
+        "checkout": str(configured_countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country).upper(),
+        "promotion": str(configured_countries.get("promotion") or infer_proxy_country(promotion_proxy) or "").upper(),
+        "provider": str(configured_countries.get("provider") or infer_proxy_country(provider_proxy) or target_country).upper(),
+        "stripe_init": str(configured_countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country).upper(),
+        "payment_method": str(configured_countries.get("payment_method") or infer_proxy_country(payment_method_proxy) or target_country).upper(),
+        "confirm": str(configured_countries.get("confirm") or infer_proxy_country(confirm_proxy) or target_country).upper(),
+        "approve": str(configured_countries.get("approve") or infer_proxy_country(approve_proxy) or target_country).upper(),
+    }
+    extractor = None
     try:
         extractor = PPLinkExtractor(
             access_token=access_token,
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
+            stripe_init_proxy=stripe_init_proxy,
+            payment_method_proxy=payment_method_proxy,
+            confirm_proxy=confirm_proxy,
             approve_proxy=approve_proxy,
             promotion_proxy=promotion_proxy,
             target_country=target_country,
@@ -1238,6 +1742,12 @@ def generate_pp_link(
             cookie_header=cookie_header,
             promotion_taxes=promotion_taxes,
             promo_campaign_id=promo_campaign_id,
+            preflight_proxy_check=bool(paypal_cfg.get("preflight_proxy_check", False)),
+            rotate_proxy_sessions=bool(paypal_cfg.get("rotate_proxy_sessions", False)),
+            proxy_probe_timeout=float(paypal_cfg.get("proxy_probe_timeout_seconds", 12) or 12),
+            max_stage_retries=int(paypal_cfg.get("max_stage_retries", paypal_cfg.get("max_checkout_retries", RETRY_ATTEMPTS)) or RETRY_ATTEMPTS),
+            proxy_state=state,
+            stage_proxy_countries=stage_proxy_countries,
         )
         result = extractor.extract()
         ba_token = str(result.get("ba_token") or "").strip()
@@ -1258,8 +1768,12 @@ def generate_pp_link(
                 "checkout_country": result.get("checkout_country", ""),
                 "checkout_proxy": result.get("checkout_proxy", ""),
                 "provider_proxy": result.get("provider_proxy", ""),
+                "stripe_init_proxy": result.get("stripe_init_proxy", ""),
+                "payment_method_proxy": result.get("payment_method_proxy", ""),
+                "confirm_proxy": result.get("confirm_proxy", ""),
                 "approve_proxy": result.get("approve_proxy", ""),
                 "promotion_proxy": result.get("promotion_proxy", ""),
+                "proxy_exits": result.get("proxy_exits", {}),
                 "fallback_url": url,
             }
 
@@ -1276,10 +1790,34 @@ def generate_pp_link(
             "checkout_country": result.get("checkout_country", ""),
             "checkout_proxy": result.get("checkout_proxy", ""),
             "provider_proxy": result.get("provider_proxy", ""),
+            "stripe_init_proxy": result.get("stripe_init_proxy", ""),
+            "payment_method_proxy": result.get("payment_method_proxy", ""),
+            "confirm_proxy": result.get("confirm_proxy", ""),
             "approve_proxy": result.get("approve_proxy", ""),
             "promotion_proxy": result.get("promotion_proxy", ""),
+            "proxy_exits": result.get("proxy_exits", {}),
+        }
+    except CheckoutNotZeroDueError as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "error_code": "checkout_not_zero_due",
+            "url": "",
+            "ba_token": "",
+            "amount": e.amount,
+            "currency": e.currency,
+            "target_country": target_country,
+            "checkout_country": checkout_country,
         }
     except Exception as e:
+        if extractor is not None:
+            extractor.proxy_state.record_pair_result(
+                extractor.checkout_proxy,
+                extractor.provider_proxy,
+                extractor.approve_proxy,
+                False,
+                str(e),
+            )
         return {
             "ok": False,
             "error": str(e),
@@ -1314,6 +1852,23 @@ def _normalized_generation_type(paypal_cfg: dict[str, Any], override: str | None
     return raw
 
 
+def _is_paypal_direct_generation_type(value: str) -> bool:
+    return value in {
+        "pp_direct", "paypal_direct", "direct_pp", "paypal_approve", "ba_direct", "ba_approve",
+        "pp_direct_zero_due", "paypal_direct_zero_due", "direct_pp_zero_due", "paypal_approve_zero_due",
+        "ba_direct_zero_due", "ba_approve_zero_due", "pp_direct_0_due", "paypal_direct_0_due",
+        "pp_direct_force_zero", "paypal_direct_force_zero", "paypal_direct_require_zero_due",
+    }
+
+
+def _is_zero_due_generation_type(value: str) -> bool:
+    return value in {
+        "pp_direct_zero_due", "paypal_direct_zero_due", "direct_pp_zero_due", "paypal_approve_zero_due",
+        "ba_direct_zero_due", "ba_approve_zero_due", "pp_direct_0_due", "paypal_direct_0_due",
+        "pp_direct_force_zero", "paypal_direct_force_zero", "paypal_direct_require_zero_due",
+    }
+
+
 def _is_hosted_generation_type(value: str) -> bool:
     return value in {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"}
 
@@ -1346,6 +1901,41 @@ def _checkout_country_from_cfg(paypal_cfg: dict[str, Any], explicit_country: str
     return default
 
 
+def _prepare_configured_stage_proxy(
+    paypal_cfg: dict,
+    state: PayPalProxyState,
+    stage: str,
+    proxy: str,
+    expected_country: str,
+    emit: Any,
+) -> tuple[str, dict[str, Any]]:
+    prepared = normalize_proxy_url(proxy)
+    expected = str(expected_country or "").upper()
+    if prepared and bool(paypal_cfg.get("rotate_proxy_sessions", False)):
+        prepared = rotate_stage_proxy_session(prepared, expected)
+    if not prepared:
+        return "", {"ok": True, "stage": stage, "proxy": "DIRECT"}
+    label = redact_proxy_url(prepared)
+    if not bool(paypal_cfg.get("preflight_proxy_check", False)):
+        emit("proxy", f"{stage} proxy={label} (preflight disabled)")
+        return prepared, {"ok": True, "stage": stage, "proxy": label}
+    result = probe_proxy(
+        prepared,
+        expected_country=expected,
+        stage=stage,
+        timeout=float(paypal_cfg.get("proxy_probe_timeout_seconds", 12) or 12),
+    )
+    state.record_result(stage, prepared, result.ok, result.error, result.country_code)
+    detail = {**result.to_dict(), "proxy": label}
+    if not result.ok:
+        raise RuntimeError(
+            f"proxy_preflight_failed:{stage}:expected={expected or 'ANY'}:"
+            f"actual={result.country_code or 'unknown'}:{result.error}"
+        )
+    emit("proxy", f"{stage} exit={result.ip}/{result.country_code} {result.country}")
+    return prepared, detail
+
+
 def generate_chatgpt_checkout_link(
     access_token: str,
     proxy: Any = None,
@@ -1357,8 +1947,6 @@ def generate_chatgpt_checkout_link(
     """Create a ChatGPT checkout session and return chatgpt.com/checkout/{entity}/{cs_id}."""
     cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
-    stage_proxies = _proxies_from_config(cfg)
-    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
     regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
     target_country = str(
         target_country
@@ -1376,12 +1964,23 @@ def generate_chatgpt_checkout_link(
         or "US"
     ).strip().upper()
     currency = CURRENCY_MAP.get(checkout_country, "USD")
+    stage_proxies = _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
+    state = _paypal_proxy_state(paypal_cfg)
 
     def emit(step: str, msg: str, **kw: Any) -> None:
         print(f"[{step}] {msg}", file=sys.stderr)
 
     try:
-        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for ChatGPT checkout link")
+        expected_country = str(
+            ((paypal_cfg.get("stage_proxy_countries") or {}).get("checkout") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else "")
+            or infer_proxy_country(checkout_proxy)
+            or checkout_country
+        ).upper()
+        checkout_proxy, proxy_exit = _prepare_configured_stage_proxy(
+            paypal_cfg, state, "checkout", checkout_proxy, expected_country, emit,
+        )
+        emit("checkout", f"Stage 1: proxy={redact_proxy_url(checkout_proxy)} for ChatGPT checkout link")
         _cookie = ""
         if isinstance(auth_context, dict):
             _cookie = str(auth_context.get("cookie_header") or "")
@@ -1420,9 +2019,10 @@ def generate_chatgpt_checkout_link(
             "checkout_country": checkout_country,
             "billing_country": checkout_country,
             "currency": currency,
-            "checkout_proxy": checkout_proxy,
+            "checkout_proxy": redact_proxy_url(checkout_proxy),
             "provider_proxy": "",
             "approve_proxy": "",
+            "proxy_exits": {"checkout": proxy_exit},
             "promo_campaign_id": "plus-1-month-free",
         }
     except Exception as e:
@@ -1435,6 +2035,7 @@ def generate_hosted_long_url(
     auth_context: dict[str, Any] | None = None,
     checkout_proxy: str | None = None,
     provider_proxy: str | None = None,
+    stripe_init_proxy: str | None = None,
     target_country: str | None = None,
     checkout_country: str | None = None,
     require_zero: bool | None = None,
@@ -1442,9 +2043,6 @@ def generate_hosted_long_url(
     """Generate a ChatGPT/Stripe hosted checkout URL without entering BA/approve flow."""
     cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
-    stage_proxies = _proxies_from_config(cfg)
-    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
-    provider_proxy = str(provider_proxy or proxy or stage_proxies["provider"] or "").strip()
     regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
     target_country = str(
         target_country
@@ -1462,6 +2060,11 @@ def generate_hosted_long_url(
         or "US"
     ).strip().upper()
     currency = CURRENCY_MAP.get(checkout_country, "USD")
+    stage_proxies = _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
+    provider_proxy = str(provider_proxy or proxy or stage_proxies["provider"] or "").strip()
+    stripe_init_proxy = str(stripe_init_proxy or stage_proxies.get("stripe_init") or provider_proxy).strip()
+    state = _paypal_proxy_state(paypal_cfg)
     if require_zero is None:
         require_zero = bool(paypal_cfg.get("require_zero_due", True))
 
@@ -1469,7 +2072,16 @@ def generate_hosted_long_url(
         print(f"[{step}] {msg}", file=sys.stderr)
 
     try:
-        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for hosted checkout")
+        countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
+        checkout_proxy, checkout_exit = _prepare_configured_stage_proxy(
+            paypal_cfg,
+            state,
+            "checkout",
+            checkout_proxy,
+            str(countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country),
+            emit,
+        )
+        emit("checkout", f"Stage 1: proxy={redact_proxy_url(checkout_proxy)} for hosted checkout")
         _cookie = ""
         if isinstance(auth_context, dict):
             _cookie = str(auth_context.get("cookie_header") or "")
@@ -1496,8 +2108,16 @@ def generate_hosted_long_url(
         processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
         emit("checkout", f"checkout success: cs_id={cs_id} country={checkout_country} currency={currency}")
 
-        emit("stripe_init", f"Stage 2: using {provider_proxy or 'DIRECT'} for Stripe init")
-        stripe = _new_session(provider_proxy)
+        stripe_init_proxy, stripe_exit = _prepare_configured_stage_proxy(
+            paypal_cfg,
+            state,
+            "stripe_init",
+            stripe_init_proxy,
+            str(countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country),
+            emit,
+        )
+        emit("stripe_init", f"Stage 2: proxy={redact_proxy_url(stripe_init_proxy)} for Stripe init")
+        stripe = _new_session(stripe_init_proxy)
         init_body = {
             "browser_locale": "en-US",
             "browser_timezone": "Asia/Shanghai",
@@ -1519,11 +2139,13 @@ def generate_hosted_long_url(
         init = init_resp.json() or {}
         amount_info = stripe_amount_details(init)
         amount = amount_info.get("amount")
+        state.record_zero_result(checkout_proxy, checkout_country, amount)
         emit("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
-        if require_zero and amount is not None and amount != 0:
+        if require_zero and amount != 0:
+            amount_label = "unknown" if amount is None else str(amount)
             return {
                 "ok": False,
-                "error": f"checkout_not_zero_due: amount={amount} {amount_info.get('currency')}",
+                "error": f"checkout_not_zero_due: amount={amount_label} {amount_info.get('currency')}",
                 "error_code": "checkout_not_zero_due",
                 "link_type": "chatgpt_checkout_hosted_long_url",
                 "url": "",
@@ -1553,9 +2175,11 @@ def generate_hosted_long_url(
             "checkout_country": checkout_country,
             "billing_country": checkout_country,
             "payment_method_types": init.get("payment_method_types") or [],
-            "checkout_proxy": checkout_proxy,
-            "provider_proxy": provider_proxy,
+            "checkout_proxy": redact_proxy_url(checkout_proxy),
+            "provider_proxy": redact_proxy_url(provider_proxy),
+            "stripe_init_proxy": redact_proxy_url(stripe_init_proxy),
             "approve_proxy": "",
+            "proxy_exits": {"checkout": checkout_exit, "stripe_init": stripe_exit},
             "promo_campaign_id": "plus-1-month-free",
         }
     except Exception as e:
@@ -1883,6 +2507,7 @@ def generate_upi_qr_link(
     ).upper()
     target_country = checkout_country
     currency = CURRENCY_MAP.get(checkout_country, "INR")
+    payment_currency = CURRENCY_MAP.get(payment_country, "INR")
     if require_zero is None:
         paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
         require_zero = bool(upi_cfg.get("require_zero_due", paypal_cfg.get("require_zero_due", True)))
@@ -1905,7 +2530,7 @@ def generate_upi_qr_link(
             "plan_name": "chatgptplusplan",
             "billing_details": {"country": checkout_country, "currency": currency},
             "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
-            "checkout_ui_mode": "custom",
+            "checkout_ui_mode": str(upi_cfg.get("checkout_ui_mode") or "hosted"),
         }
         r = cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)
         if r.status_code == 401:
@@ -1957,13 +2582,13 @@ def generate_upi_qr_link(
             return {
                 "ok": False, "error": f"no_free_trial: due={amount} coupon={ft_status['coupon_name']} percent_off={ft_status['percent_off']}",
                 "error_code": "no_free_trial", "payment_method": "upi", "cs_id": cs_id,
-                "amount": amount, "currency": currency.upper(),
+                "amount": amount, "currency": payment_currency.upper(),
                 "target_country": target_country, "checkout_country": checkout_country,
                 "billing_country": checkout_country, "payment_country": payment_country,
                 "coupon_name": ft_status["coupon_name"], "percent_off": ft_status["percent_off"],
             }
         if pm_types and not ft_status["has_upi"]:
-            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": currency.upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
+            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": payment_currency.upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
 
         # ── Stage 4: Tax region update ───────────────────────────────────
         emit("tax_region", f"Stage 4: updating tax region to IN")
@@ -2029,7 +2654,7 @@ def generate_upi_qr_link(
                 "ok": True, "payment_method": "upi", "method": "upi",
                 "link_type": "upi_hosted_fallback", "url": hosted_url, "qr_data": hosted_url,
                 "qr_path": written_qr_path, "cs_id": cs_id, "processor_entity": processor_entity,
-                "amount": amount, "currency": currency.upper(),
+                "amount": amount, "currency": payment_currency.upper(),
                 "target_country": target_country, "checkout_country": checkout_country,
                 "billing_country": checkout_country, "payment_country": payment_country,
                 "payment_method_types": pm_types, "checkout_proxy": checkout_proxy,
@@ -2180,7 +2805,7 @@ def generate_upi_qr_link(
             "cs_id": cs_id,
             "processor_entity": processor_entity,
             "amount": amount,
-            "currency": currency.upper(),
+            "currency": payment_currency.upper(),
             "target_country": target_country,
             "checkout_country": checkout_country,
             "billing_country": checkout_country,

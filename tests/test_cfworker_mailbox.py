@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_module
+from sms_tool import mailbox_cfworker as mailbox_cfworker_module
 from sms_tool.mailbox import MailboxAccount
 from sms_tool.providers import cfworker_mailbox
 from sms_tool.providers.cfworker_mailbox import CFWorkerMailboxClient
@@ -106,6 +107,19 @@ class RawTextEndpointResponse:
 
 
 class CFWorkerMailboxClientTests(unittest.TestCase):
+    def test_cfworker_client_uses_configurable_timeout(self):
+        with patch.object(mailbox_cfworker_module, "CFWorkerMailboxClient") as client:
+            mailbox_cfworker_module._cfworker_client(
+                {
+                    "cfworker_url": "https://worker.example",
+                    "cfworker_timeout_seconds": 30,
+                },
+                proxy="socks5h://127.0.0.1:7897",
+            )
+
+        self.assertEqual(client.call_args.kwargs["timeout"], 30)
+        self.assertEqual(client.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
+
     def test_admin_email_list_uses_proxy_filters_recipient_and_exposes_otp_body(self):
         proxy = "socks5h://127.0.0.1:7897"
         client = CFWorkerMailboxClient(
@@ -196,6 +210,36 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         )
         self.assertEqual(candidate["otp"], "971234")
 
+    def test_rfc822_body_otp_beats_decoy_extracted_json(self):
+        msg = cfworker_mailbox._normalize_message(
+            {
+                "message_id": "m-rfc822-code",
+                "to_address": "target@liziai.cloud",
+                "from_address": "bounces@em7877.tm.openai.com",
+                "subject": "Your temporary ChatGPT verification code",
+                "extracted_json": '[{"value":"308662"}]',
+                "body": (
+                    "From: OpenAI <noreply@tm.openai.com>\r\n"
+                    "Subject: Your temporary ChatGPT verification code\r\n"
+                    "MIME-Version: 1.0\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n\r\n"
+                    "<html><body><div style=\"color:#353740\">"
+                    + (" " * 120)
+                    + "</div><strong>333350</strong></body></html>"
+                ),
+            },
+            email="target@liziai.cloud",
+        )
+
+        candidate = mailbox_module._email_otp_candidate(
+            MailboxAccount(email="target@liziai.cloud", provider="cfworker"),
+            msg,
+            keyword="verification code",
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(candidate["otp"], "333350")
+
     def test_cfworker_json_remark_does_not_make_otp_look_like_css_unit(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
         msg = {
@@ -240,6 +284,31 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 code = mailbox_module._poll_email_otp(mailbox, timeout=1)
 
         self.assertEqual(code, "222222")
+
+    def test_cfworker_seen_message_is_accepted_when_it_is_inside_current_otp_window(self):
+        mailbox = MailboxAccount(
+            email="target@edu.liziai.cloud",
+            provider="cfworker",
+            seen_message_id="pre-sent",
+        )
+        message = {
+            "id": "pre-sent",
+            "receivedDateTime": "2026-07-14T01:28:23Z",
+            "subject": "Your temporary ChatGPT verification code",
+            "bodyPreview": "Your verification code is 866835",
+            "body": {"content": ""},
+            "toRecipients": [{"emailAddress": {"address": "target@edu.liziai.cloud"}}],
+        }
+
+        candidate = mailbox_cfworker_module._latest_cfworker_otp_candidate(
+            mailbox,
+            keyword="verification code",
+            issued_after_unix=1783992490,
+            seen_message_id=mailbox.seen_message_id,
+            fetch_messages_func=lambda _mailbox, **_kwargs: [message],
+        )
+
+        self.assertEqual(candidate["otp"], "866835")
 
     def test_email_otp_candidate_accepts_code_in_subject(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")

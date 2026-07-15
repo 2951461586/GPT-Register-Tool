@@ -4,6 +4,8 @@ import time
 import uuid
 import urllib.error
 import urllib.request
+from email import policy
+from email.parser import Parser
 from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
@@ -23,9 +25,9 @@ class CFWorkerMailboxClient:
         if not self.base_url:
             raise RuntimeError("cfworker_url is required")
 
-    def create_mailboxes(self, count=1, domain="edu.liziai.cloud"):
+    def create_mailboxes(self, count=1, domain="liziai.cloud"):
         count = max(1, min(int(count or 1), 200))
-        domain = str(domain or "edu.liziai.cloud").strip().lstrip("@").lower()
+        domain = str(domain or "liziai.cloud").strip().lstrip("@").lower()
         payload = {"domain": domain, "count": count, "quantity": count}
         candidates = [
             ("POST", "/api/mailboxes", payload),
@@ -290,6 +292,10 @@ def _normalize_message(msg, email=""):
 
 
 def _message_body_text(msg):
+    raw_body = str(_first(msg, "body", "raw_text", "text", "content", "html", "raw_html") or "")
+    decoded_body = _decode_rfc822_body(raw_body)
+    if decoded_body:
+        return decoded_body
     extracted = str(_first(msg, "extracted_json", "results") or "")
     if _contains_otp(extracted):
         return extracted
@@ -306,6 +312,31 @@ def _message_body_text(msg):
         "extracted_json",
         "results",
     ) or "")
+
+
+def _decode_rfc822_body(raw):
+    value = str(raw or "")
+    if not value or not re.search(r"(?mi)^(from|subject|content-type|mime-version):", value):
+        return ""
+    try:
+        message = Parser(policy=policy.default).parsestr(value)
+    except Exception:
+        return ""
+    parts = []
+    for part in message.walk() if message.is_multipart() else (message,):
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_content_type() not in {"text/plain", "text/html"}:
+            continue
+        try:
+            content = part.get_content()
+        except Exception:
+            payload = part.get_payload(decode=True)
+            charset = part.get_content_charset() or "utf-8"
+            content = payload.decode(charset, "replace") if isinstance(payload, bytes) else str(payload or "")
+        if content:
+            parts.append(str(content))
+    return "\n".join(parts)
 
 
 def _contains_otp(text):

@@ -853,7 +853,8 @@ namespace SmsWorkbench
             string value = (source ?? "").Trim().TrimStart('\ufeff');
             if (value.Length == 0 || value.StartsWith("#")) return false;
             if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
-                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase))
+                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }

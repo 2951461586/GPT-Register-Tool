@@ -56,6 +56,7 @@ from . import account_creation as _account_creation
 from . import otp_strategy as _otp_strategy
 from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
 from .paths import runtime_file
+from .registration_progress import registration_stage, track_registration
 from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
@@ -515,6 +516,7 @@ def _pipeline_payment_link(access_token, proxy, payment_method, paypal_generatio
     return paypal
 
 
+@track_registration
 def run_email(
     proxy=None,
     password=None,
@@ -550,6 +552,7 @@ def run_email(
     mailbox = _ensure_mailbox_account(mailbox)
     if not mailbox or not mailbox.email:
         return _failure_result("mailbox_required", mailbox=mailbox)
+    registration_stage("mailbox_ready")
 
     auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
     chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com")
@@ -561,6 +564,7 @@ def run_email(
     if sentinel_data:
         print("[*] Using provided sentinel tokens")
     else:
+        registration_stage("sentinel")
         _tick("0-Extract sentinel token")
         sentinel_data = _extract_sentinel(proxy=proxy, force_fresh=True)
         _tock()
@@ -608,6 +612,7 @@ def run_email(
 
     try:
         # Auth flow: prime + signin + authorize
+        registration_stage("auth_flow")
         _tick("2-Auth flow")
         auth_flow_started = int(time.time())
         if registration_mode == "passwordless":
@@ -658,6 +663,7 @@ def run_email(
             print("  Registration mode: passwordless_signup (HAR login_or_signup)")
         else:
             # Step 4: Register with username + password
+            registration_stage("user_register")
             _tick("3-User register (email+password)")
             r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
                 json={"password": password, "username": username},
@@ -696,6 +702,7 @@ def run_email(
     _snapshot_mailbox_message(mailbox, proxy=proxy)
 
     # Step 4: Trigger email OTP send
+    registration_stage("email_otp_send")
     _tick("4-Trigger email OTP")
     continue_url = _email_otp_send_url(reg_data, auth_base, resume_email_verification)
     otp_send_started = int(time.time())
@@ -735,6 +742,7 @@ def run_email(
     otp_issued_after = _registration_otp_issued_after(mailbox, otp_issued_after)
 
     # Step 5: Get email OTP
+    registration_stage("email_otp_wait")
     _tick("5-Get email OTP")
     email_cfg = CFG.get("email_registration", {})
     code = _poll_email_otp(
@@ -749,6 +757,7 @@ def run_email(
         return _failure_result("email_otp_poll_timeout", email=username, mailbox=mailbox, password=password)
 
     # Step 6: Validate email OTP
+    registration_stage("email_otp_validate")
     _tick("6-Validate email OTP")
     try:
         otp_ok, otp_data = _validate_email_otp(
@@ -792,6 +801,7 @@ def run_email(
         print(f"  Email OTP continue transport warning: {e}")
 
     # Step 7: Create account
+    registration_stage("create_account")
     _tick("7-Create account")
     try:
         create_sentinel_token = _create_account_sentinel_token(sentinel_data, proxy=proxy)
@@ -830,6 +840,7 @@ def run_email(
         print(f"  Create account continue transport warning: {e}")
 
     # Step 8: Fetch ChatGPT auth session access token
+    registration_stage("auth_session")
     _tick("8-Fetch auth session")
     try:
         auth_session = _fetch_auth_session(session, chat_base, base_headers)
@@ -893,6 +904,7 @@ def run_email(
     oauth_refresh_token = ""
     id_token = ""
     if create_ok and codex_oauth:
+        registration_stage("codex_oauth")
         _tick("8c-Codex OAuth refresh token")
         try:
             from .codex_oauth import collect_codex_oauth_tokens
@@ -980,6 +992,7 @@ def run_email(
 
     paypal = {}
     if success and access_token and paypal_link:
+        registration_stage("payment_link")
         paypal = _pipeline_payment_link(
             access_token, proxy, payment_method, paypal_generation_type
         )
@@ -1332,9 +1345,11 @@ def run_phone_register(
     if paypal_link and access_token:
         _tick("9-Payment link")
         try:
-            from .gen_pp_link import generate_paypal_link
-            paypal_result = generate_paypal_link(
-                access_token, CFG, proxy=proxy, payment_method=payment_method,
+            paypal_result = _generate_payment_link(
+                access_token,
+                proxy=proxy,
+                payment_method=payment_method,
+                paypal_generation_type=paypal_generation_type,
             ) or {}
         except Exception as e:
             paypal_result = {"ok": False, "error": str(e)}

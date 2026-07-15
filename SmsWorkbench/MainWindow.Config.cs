@@ -256,8 +256,6 @@ namespace SmsWorkbench
             };
             var openJsonButton = new Button { Content = "打开JSON", Width = 120 };
             openJsonButton.Click += (_, __) => OpenPath(path);
-            var gmailAliasButton = new Button { Content = "Gmail Alias", Width = 120, Margin = new Thickness(8, 0, 0, 0) };
-            gmailAliasButton.Click += (_, __) => ShowGmailAliasManagerDialog();
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
             {
@@ -424,7 +422,6 @@ namespace SmsWorkbench
             var cancelButton = new Button { Content = "取消", Width = 72 };
             cancelButton.Click += (_, __) => dialog.Close();
             actions.Children.Add(openJsonButton);
-            actions.Children.Add(gmailAliasButton);
             actions.Children.Add(saveButton);
             actions.Children.Add(cancelButton);
             Grid.SetRow(actions, 1);

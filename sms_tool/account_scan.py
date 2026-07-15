@@ -632,8 +632,7 @@ def _gmail_scan_lane_key(email):
     local, domain = value.rsplit("@", 1)
     if domain not in {"gmail.com", "googlemail.com"}:
         return ""
-    local = local.split("+", 1)[0].replace(".", "")
-    return f"{local}@gmail.com" if local else ""
+    return value if local else ""
 
 
 def _workspace_probe(data, proxy=None, timeout=120, enabled=True, switch_workspace_id="", fallback_workspace_ids=None, auto_switch_workspace=False):

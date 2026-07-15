@@ -74,6 +74,17 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
         self.assertIsNone(_email_otp_candidate(mailbox, msg, keyword="verification"))
 
+    def test_otp_candidate_accepts_tm1_bounce_delivery_sender(self):
+        mailbox = MailboxAccount(email="target@liziai.cloud", provider="cfworker")
+        msg = self._message("Your temporary ChatGPT login code")
+        msg["from"] = "bounce+abc.target=liziai.cloud@tm1.openai.com"
+        msg["bodyPreview"] = "Your login code is 213244."
+        msg["toRecipients"] = [{"emailAddress": {"address": "target@liziai.cloud"}}]
+
+        candidate = _email_otp_candidate(mailbox, msg, keyword="login code")
+
+        self.assertEqual(candidate["otp"], "213244")
+
     def test_otp_candidate_rejects_non_openai_sender_for_outlook_or_gmail(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
         msg = self._message("Your temporary ChatGPT verification code")
@@ -139,7 +150,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
         self.assertEqual(code, "169441")
 
-    def test_gmail_alias_recipient_matches_primary_mailbox(self):
+    def test_gmail_alias_recipient_does_not_match_primary_mailbox(self):
         mailbox = MailboxAccount(email="migueladorno236@gmail.com", provider="gmail")
         message = {
             "id": "msg-gmail-1",
@@ -157,9 +168,9 @@ class EmailOtpFilteringTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(candidate["otp"], "654321")
+        self.assertIsNone(candidate)
 
-    def test_gmail_googlemail_and_plus_are_canonicalized(self):
+    def test_gmail_googlemail_plus_recipient_does_not_match(self):
         mailbox = MailboxAccount(email="liziaicloudxm@gmail.com", provider="gmail")
         message = {
             "id": "msg-gmail-2",
@@ -179,7 +190,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(candidate["otp"], "123456")
+        self.assertIsNone(candidate)
 
 
 if __name__ == "__main__":

@@ -62,7 +62,14 @@ def request_with_retry(session, method, url, *, label="", attempts=None, retry_d
     max_attempts = max(base_attempts, 5)
     for attempt in range(1, max_attempts + 1):
         try:
-            return caller(url, **kwargs)
+            attempt_kwargs = dict(kwargs)
+            if attempt > 1:
+                # OTP waits frequently leave an upstream keep-alive socket stale.
+                # Preserve the session cookie jar but force a fresh connection.
+                headers = dict(attempt_kwargs.get("headers") or {})
+                headers["Connection"] = "close"
+                attempt_kwargs["headers"] = headers
+            return caller(url, **attempt_kwargs)
         except Exception as error:
             last_error = error
             if not is_transient_transport_error(error):
