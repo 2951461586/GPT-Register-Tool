@@ -106,7 +106,74 @@ class RawTextEndpointResponse:
         }
 
 
+class AdminAllResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {
+            "messages": [
+                {
+                    "id": "worker-row-id",
+                    "message_id": "smtp-message-id",
+                    "to_address": "target@liziai.cloud",
+                    "from_address": "noreply@tm.openai.com",
+                    "subject": "=?UTF-8?B?5L2g55qEIENoYXRHUFQg5Li05pe26aqM6K+B56CB?=",
+                    "bodyPreview": "Received: by cloudflare-email.net",
+                    "receivedDateTime": "2026-07-15T07:49:27.297Z",
+                }
+            ]
+        }
+
+
+class AdminDetailResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {
+            "ok": True,
+            "message": {
+                "id": "worker-row-id",
+                "to_address": "target@liziai.cloud",
+                "subject": "=?UTF-8?B?5L2g55qEIENoYXRHUFQg5Li05pe26aqM6K+B56CB?=",
+                "body": (
+                    "From: ChatGPT <noreply@tm.openai.com>\r\n"
+                    "Subject: =?UTF-8?B?5L2g55qEIENoYXRHUFQg5Li05pe26aqM6K+B56CB?=\r\n"
+                    "MIME-Version: 1.0\r\n"
+                    "Content-Transfer-Encoding: quoted-printable\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n\r\n"
+                    "<html><head><style>.code{font-size:24px}</style></head>"
+                    "<body><p>=E4=BD=A0=E7=9A=84=E9=AA=8C=E8=AF=81=E7=A0=81=E6=98=AF "
+                    "<strong>302959</strong></p></body></html>"
+                ),
+            },
+        }
+
+
 class CFWorkerMailboxClientTests(unittest.TestCase):
+    def test_admin_all_hydrates_detail_and_decodes_chinese_mime_message(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
+
+        with patch.object(
+            cfworker_mailbox.curl_requests,
+            "get",
+            side_effect=[AdminAllResponse(), AdminDetailResponse()],
+        ) as get:
+            messages = client._fetch_admin_messages("target@liziai.cloud", limit=5)
+
+        normalized = cfworker_mailbox._normalize_message(messages[0], email="target@liziai.cloud")
+        self.assertEqual(normalized["subject"], "你的 ChatGPT 临时验证码")
+        self.assertIn("你的验证码是 302959", normalized["body"]["content"])
+        self.assertNotIn("font-size", normalized["body"]["content"])
+        self.assertIn("/admin/all?limit=100", get.call_args_list[0].args[0])
+        self.assertIn("/admin/msg?id=worker-row-id&email=target%40liziai.cloud", get.call_args_list[1].args[0])
+
+    def test_mixed_plain_and_encoded_rfc2047_subject_is_decoded(self):
+        subject = "OpenAI - Access =?UTF-8?Q?Deactivated=0A=0A=5BC-q4RKCjo6DIKv=5D?="
+
+        self.assertEqual(cfworker_mailbox._decode_header_value(subject), "OpenAI - Access Deactivated\n\n[C-q4RKCjo6DIKv]")
+
     def test_cfworker_client_uses_configurable_timeout(self):
         with patch.object(mailbox_cfworker_module, "CFWorkerMailboxClient") as client:
             mailbox_cfworker_module._cfworker_client(
@@ -240,6 +307,64 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         self.assertEqual(candidate["otp"], "333350")
 
+    def test_html_body_otp_beats_header_number_in_extracted_json(self):
+        msg = cfworker_mailbox._normalize_message(
+            {
+                "message_id": "m-html-code",
+                "to_address": "target@liziai.cloud",
+                "from_address": "bounce+bda784@tm1.openai.com",
+                "subject": "Your temporary ChatGPT verification code",
+                "extracted_json": '[{"value":"682375"}]',
+                "body": (
+                    '<html><head><style>.top{color:#202123}</style></head><body>'
+                    '<p>Enter this temporary verification code to continue:</p>'
+                    '<strong>096114</strong></body></html>'
+                ),
+            },
+            email="target@liziai.cloud",
+        )
+
+        candidate = mailbox_module._email_otp_candidate(
+            MailboxAccount(email="target@liziai.cloud", provider="cfworker"),
+            msg,
+            keyword="verification code",
+            issued_after_unix=0,
+        )
+
+        self.assertEqual(candidate["otp"], "096114")
+
+    def test_plain_text_detail_strips_leading_css_and_uses_visible_otp(self):
+        msg = cfworker_mailbox._normalize_message(
+            {
+                "message_id": "m-css-prefix",
+                "to_address": "target@liziai.cloud",
+                "from_address": "bounce+6261d9@tm1.openai.com",
+                "subject": "Your temporary ChatGPT verification code",
+                "extracted_json": '[{"value":"682375"}]',
+                "body": (
+                    "#bodyCell { padding: 20px; } #bodyTable { width: 560px; } "
+                    "@media only screen and (max-width: 480px) { "
+                    "#bodyCell, #bodyTable, body { width: 100% !important; } "
+                    "a, blockquote, body, li, p, table, td { -webkit-text-size-adjust: none !important; } "
+                    "body { min-width: 100% !important; } } "
+                    "Enter this temporary verification code to continue: 388302 "
+                    "Please ignore this email if this wasn’t you trying to create a ChatGPT account. "
+                    "Best, The ChatGPT team ChatGPT Help center"
+                ),
+            },
+            email="target@liziai.cloud",
+        )
+
+        self.assertTrue(msg["bodyPreview"].startswith("Enter this temporary verification code"))
+        self.assertNotIn("#bodyCell", msg["bodyPreview"])
+        candidate = mailbox_module._email_otp_candidate(
+            MailboxAccount(email="target@liziai.cloud", provider="cfworker"),
+            msg,
+            keyword="verification code",
+            issued_after_unix=0,
+        )
+        self.assertEqual(candidate["otp"], "388302")
+
     def test_cfworker_json_remark_does_not_make_otp_look_like_css_unit(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
         msg = {
@@ -284,6 +409,37 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 code = mailbox_module._poll_email_otp(mailbox, timeout=1)
 
         self.assertEqual(code, "222222")
+
+    def test_cfworker_otp_poll_skips_rejected_newer_code(self):
+        mailbox = MailboxAccount(email="target@liziai.cloud", provider="cfworker")
+        messages = [
+            {
+                "id": "newer-rejected",
+                "receivedDateTime": "2026-07-16T07:22:44Z",
+                "subject": "Your temporary ChatGPT verification code",
+                "bodyPreview": '[{"value":"682375"}]',
+                "body": {"content": ""},
+                "toRecipients": [{"emailAddress": {"address": "target@liziai.cloud"}}],
+            },
+            {
+                "id": "older-active",
+                "receivedDateTime": "2026-07-16T07:21:57Z",
+                "subject": "Your temporary ChatGPT verification code",
+                "bodyPreview": '[{"value":"659948"}]',
+                "body": {"content": ""},
+                "toRecipients": [{"emailAddress": {"address": "target@liziai.cloud"}}],
+            },
+        ]
+
+        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0, "otp_poll_interval": 0.01}):
+            with patch.object(mailbox_module, "_fetch_mailbox_messages", return_value=messages):
+                code = mailbox_module._poll_email_otp(
+                    mailbox,
+                    timeout=1,
+                    excluded_otps={"682375"},
+                )
+
+        self.assertEqual(code, "659948")
 
     def test_cfworker_seen_message_is_accepted_when_it_is_inside_current_otp_window(self):
         mailbox = MailboxAccount(

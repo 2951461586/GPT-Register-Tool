@@ -8,7 +8,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | Path | Classification | Owner / responsibility | Notes |
 | --- | --- | --- | --- |
 | `sms_tool/` | Python application core | CLI orchestration, mailbox handling, registration, payment links, payment adapters, storage, account scans | Keep command-specific imports lazy in `sms_tool.cli`. |
-| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, dialogs, local command execution, desktop publish scripts | UI starts CLI commands; protocol/business logic stays in `sms_tool`. |
+| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, read-only SMSBower catalog adapter, local command execution, desktop publish scripts | UI starts CLI commands; activation/payment/business logic stays in `sms_tool`. |
 | `services/` | Local provider services | Optional GoPay, ADB, and mailbox helper services used by CLI/UI | Services expose explicit process/API boundaries and should not write account SQLite directly. |
 | `tests/` | Offline verification | Unit tests for module seams and persistence semantics | Live vendor/browser tests must be opt-in. |
 | `docs/` | Source-owned documentation | Architecture, boundaries, directory map, and operating notes | Do not place runtime logs or screenshots here unless deliberately curated. |
@@ -42,7 +42,7 @@ These directories are runtime state and are ignored by Git:
 | Group | Files | Boundary |
 | --- | --- | --- |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config.py`, `paths.py` | Parse commands and resolve config/paths; no vendor protocol implementation. |
-| Mailbox and phone inventory | `mailbox.py`, `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `mailbox_gmail.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `nextsms.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; Gmail receive/send stays inside the mailbox seam and uses exact mailbox addresses without alias expansion; no account persistence except through explicit callers. |
+| Mailbox and phone inventory | `mailbox.py`, `mailbox_parsers.py`, `mailbox_luckmail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `mailbox_gmail.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `phone_reuse.py` | Acquire/poll mailboxes or phone activations; Gmail receive/send stays inside the mailbox seam and uses exact mailbox addresses without alias expansion; no account persistence except through explicit callers. |
 | Registration/auth | `registration.py`, `auth_flow.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification. |
 | Workspace scan | `k12_client.py`, `k12_identity.py`, `k12_verify.py`, `k12_export.py`, `workspace_scan.py` | Workspace health check, fallback switch, identity parsing. |
 | Payment links | `payment_link_manager.py`, `gen_pp_link.py`, `paypal_links.py` | Unified state machine and adapters plus native link generation/reuse. Optional promotion-update stage (`/checkout/update`) for 0元+PayPal — see [`paypal-zero-due-link.md`](paypal-zero-due-link.md). |
@@ -66,6 +66,8 @@ These directories are runtime state and are ignored by Git:
    implementation in a focused module under `sms_tool/`.
 2. If it is a desktop button/dialog, put UI code in `SmsWorkbench/` and call the
    CLI/backend rather than duplicating protocol logic in C#.
+   Read-only provider metadata needed before launch belongs in a focused catalog
+   module such as `SmsBowerCatalogClient.cs`, not in a `MainWindow` handler.
 3. If it talks to a provider, isolate it under `sms_tool/providers/` or
    `services/<provider>/` and expose a small public method.
 4. If it extends mailbox/registration/K12 behavior, prefer adding a focused
@@ -75,3 +77,5 @@ These directories are runtime state and are ignored by Git:
    storage seam.
 6. If it is runtime output, put it under `runtime/` or `sessions/`, not in source
    directories.
+7. Sidebar actions that require an email must use the selected-email seam and
+   the themed `未选择邮箱` dialog; do not call `MessageBox.Show` for that state.

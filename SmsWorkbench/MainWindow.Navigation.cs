@@ -5,7 +5,7 @@ namespace SmsWorkbench
         // Session refresh, row selection and paging filters
         private void RefreshSession_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedAccountRow();
+            PoolRow row = SelectedEmailRowOrNotify("刷新 Session");
             if (row == null) return;
             var args = new List<string> { "--email", row.Identifier, "--refresh-session" };
             AddSessionFileArg(args, row);
@@ -24,14 +24,34 @@ namespace SmsWorkbench
             }
         }
 
-        private PoolRow SelectedAccountRow()
+        private PoolRow SelectedEmailRowOrNotify(string action)
         {
             PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
             if (row == null)
             {
-                MessageBox.Show("请先选择一条账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowEmailSelectionRequired(action);
             }
             return row;
+        }
+
+        private List<PoolRow> SelectedEmailRowsOrNotify(string action)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(row => !string.IsNullOrWhiteSpace(row.Identifier))
+                .GroupBy(row => row.Identifier.Trim().ToLowerInvariant())
+                .Select(group => group.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                ShowEmailSelectionRequired(action);
+            }
+            return rows;
+        }
+
+        private void ShowEmailSelectionRequired(string action)
+        {
+            string detail = string.IsNullOrWhiteSpace(action) ? "执行此操作" : action.Trim();
+            ShowThemedInfoDialog("未选择邮箱", $"请先勾选或选择邮箱账号后再{detail}。");
         }
 
         private List<PoolRow> SelectedRowsOrCurrent()

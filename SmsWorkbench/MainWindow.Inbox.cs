@@ -82,7 +82,7 @@ namespace SmsWorkbench
                     try
                     {
                         mailItems.Clear();
-                        foreach (MailItem item in await FetchCfWorkerInbox(row.Identifier, 25))
+                        foreach (MailItem item in await FetchBackendInbox(row, 25))
                         {
                             mailItems.Add(item);
                         }
@@ -309,135 +309,6 @@ namespace SmsWorkbench
                 || row.Identifier.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || row.Identifier.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private async Task<List<MailItem>> FetchCfWorkerInbox(string email, int limit)
-        {
-            var emailSection = GetSection(ReadJsonObject(Path.Combine(rootDir, "config.json")), "email_registration");
-            string baseUrl = GetString(emailSection, "cfworker_url").Trim().TrimEnd('/');
-            string adminToken = GetString(emailSection, "cfworker_admin_token").Trim();
-            string cfToken = GetString(emailSection, "cfworker_api_token").Trim();
-            if (baseUrl.Length == 0) throw new InvalidOperationException("config.json 缺少 email_registration.cfworker_url");
-
-            string normalizedEmail = email.Trim().ToLowerInvariant();
-            string encoded = Uri.EscapeDataString(normalizedEmail);
-            string domain = normalizedEmail.Contains("@") ? normalizedEmail.Substring(normalizedEmail.LastIndexOf('@') + 1) : "";
-            string[] paths =
-            {
-                "/admin/emails?page=1&domain=" + Uri.EscapeDataString(domain) + "&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
-                "/admin/emails?page=1&address=" + encoded + "&to_address=" + encoded + "&email=" + encoded,
-                "/api/messages?email=" + encoded + "&limit=" + limit,
-                "/api/messages?address=" + encoded + "&limit=" + limit,
-                "/api/messages?to_address=" + encoded + "&limit=" + limit,
-                "/api/emails/" + encoded + "/messages?limit=" + limit,
-                "/api/mailboxes/" + encoded + "/messages?limit=" + limit,
-                "/api/mailbox/" + encoded + "?limit=" + limit,
-                "/api/inbox/" + encoded + "?limit=" + limit,
-                "/api/messages/" + encoded + "?limit=" + limit,
-                "/messages/" + encoded + "?limit=" + limit,
-                "/inbox/" + encoded + "?limit=" + limit
-            };
-
-            string lastError = "";
-            foreach (string path in paths)
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, baseUrl + path);
-                request.Headers.Accept.ParseAdd("application/json");
-                if (adminToken.Length > 0)
-                {
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
-                    request.Headers.TryAddWithoutValidation("X-Admin-Token", adminToken);
-                }
-                if (cfToken.Length > 0)
-                {
-                    request.Headers.TryAddWithoutValidation("X-CF-API-Token", cfToken);
-                }
-
-                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
-                using HttpResponseMessage response = await httpClient.SendAsync(request, cts.Token);
-                string text = await response.Content.ReadAsStringAsync();
-                if (!response.IsSuccessStatusCode)
-                {
-                    lastError = ((int)response.StatusCode) + " " + response.ReasonPhrase;
-                    continue;
-                }
-                using JsonDocument doc = JsonDocument.Parse(text.Length == 0 ? "[]" : text);
-                var items = ExtractCfWorkerMailItems(doc.RootElement, email, limit);
-                if (items.Count > 0 || LooksEmptyMessageList(doc.RootElement)) return items;
-            }
-            throw new InvalidOperationException(lastError.Length > 0 ? lastError : "未找到可用的 CFWorker 收件箱接口");
-        }
-
-        private List<MailItem> ExtractCfWorkerMailItems(JsonElement root, string email, int limit)
-        {
-            var array = FindMessageArray(root);
-            var items = new List<MailItem>();
-            if (array.ValueKind != JsonValueKind.Array) return items;
-            foreach (JsonElement msg in array.EnumerateArray())
-            {
-                if (items.Count >= limit) break;
-                string to = JsonStringAny(msg, "to_address", "recipient", "mailbox", "email", "address", "to");
-                if (to.Length > 0 && !to.Contains(email, StringComparison.OrdinalIgnoreCase)) continue;
-                string subject = JsonStringAny(msg, "subject", "title");
-                string from = JsonStringAny(msg, "from_email", "from_address", "sender", "from");
-                string received = JsonStringAny(msg, "receivedDateTime", "received_at", "created_at", "date", "timestamp");
-                string body = JsonStringAny(msg, "bodyPreview", "preview", "text", "content", "body", "html", "extracted_json");
-                if (msg.TryGetProperty("body", out JsonElement bodyObj) && bodyObj.ValueKind == JsonValueKind.Object)
-                {
-                    body = JsonStringAny(bodyObj, "content", "text", "html");
-                }
-                if (from.StartsWith("{")) from = "";
-                received = FormatCfWorkerReceivedAt(received);
-                items.Add(new MailItem
-                {
-                    ReceivedAt = received,
-                    From = from,
-                    Subject = subject,
-                    BodyPreview = body
-                });
-            }
-            return items;
-        }
-
-        private string FormatCfWorkerReceivedAt(string value)
-        {
-            string text = (value ?? "").Trim();
-            if (long.TryParse(text, out long epoch))
-            {
-                try
-                {
-                    DateTimeOffset dto = epoch > 10000000000L
-                        ? DateTimeOffset.FromUnixTimeMilliseconds(epoch)
-                        : DateTimeOffset.FromUnixTimeSeconds(epoch);
-                    return dto.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-                }
-                catch
-                {
-                    return text;
-                }
-            }
-            if (text.Length > 19) return text.Substring(0, 19).Replace("T", " ");
-            return text;
-        }
-
-        private JsonElement FindMessageArray(JsonElement element)
-        {
-            if (element.ValueKind == JsonValueKind.Array) return element;
-            if (element.ValueKind != JsonValueKind.Object) return default;
-            foreach (string key in new[] { "messages", "mails", "emails", "items", "data", "value", "results" })
-            {
-                if (!element.TryGetProperty(key, out JsonElement child)) continue;
-                if (child.ValueKind == JsonValueKind.Array) return child;
-                JsonElement nested = FindMessageArray(child);
-                if (nested.ValueKind == JsonValueKind.Array) return nested;
-            }
-            return default;
-        }
-
-        private bool LooksEmptyMessageList(JsonElement element)
-        {
-            JsonElement array = FindMessageArray(element);
-            return array.ValueKind == JsonValueKind.Array && array.GetArrayLength() == 0;
         }
 
         private string JsonStringAny(JsonElement obj, params string[] properties)

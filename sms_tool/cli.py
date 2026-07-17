@@ -269,7 +269,7 @@ def main():
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
-    parser.add_argument("--phone-source", default=None, choices=["smsbower", "nextsms", "phone_pool"], help="Override phone source for registration/one-click SMS")
+    parser.add_argument("--phone-source", default=None, choices=["smsbower", "phone_pool"], help="Override phone source for registration/one-click SMS")
     parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()

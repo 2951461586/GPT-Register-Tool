@@ -4,7 +4,7 @@
     "chat_base_url": "https://chatgpt.com",
     "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
   },
-  "mailbox_proxy": "",
+  "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
     "default": "socks5h://127.0.0.1:7897",
     "pool": [
@@ -32,6 +32,10 @@
     "cfworker_otp_issued_after_grace_seconds": 10,
     "cfworker_poll_proxy": true,
     "cfworker_direct_fallback": false,
+    "cfworker_url": "https://tempmail.example.com",
+    "cfworker_domain": "example.com",
+    "cfworker_admin_token": "",
+    "cfworker_api_token": "",
     "email": "",
     "password": "",
     "refresh_token": "",
@@ -298,34 +302,16 @@
       "gopay_country_prefix": "+62",
       "gopay_min_price": "0.008",
       "gopay_max_price": "0.014",
+      "min_price": "0.054",
       "target_price": "0.054",
-      "max_price": "0.06",
-      "pool_size": 1,
+      "max_price": "0.054",
       "sms_timeout": 120,
       "sms_poll_interval": 5,
       "number_attempts": 3,
       "send_cooldown_seconds": 45,
       "send_retry_attempts": 3,
       "send_retry_delay_seconds": 45
-    },
-    "nextsms": {
-      "api_key": "$NEXTSMS_API_KEY",
-      "endpoint": "https://sms.nextactionplus.com/api/",
-      "service": "openai",
-      "country": "US",
-      "pricing_option": 0,
-      "pool_size": 1,
-      "sms_timeout": 120,
-      "sms_poll_interval": 5,
-      "number_attempts": 3
-    },
-    "phone_pool": [
-      {
-        "phone": "+10000000000",
-        "sms_api_url": "https://sms.example.com/poll",
-        "provider": "legacy"
-      }
-    ]
+    }
   },
   "output": {
     "directory": "sessions",

@@ -18,6 +18,24 @@ FAKE_OTP_CONTEXT_MARKERS = (
     "color",
     "background",
     "border",
+    "font-size",
+    "padding",
+    "margin",
+    "radius",
+    "hex",
+    "rgb",
+    "rgba",
+    "received",
+    "arc-",
+    "dkim",
+    "spf",
+    "content-type",
+    "mime",
+    "boundary",
+    "for <",
+    "m=+",
+    "timestamp",
+    "message-id",
 )
 
 def _extract_otp_from_text(text):
@@ -26,6 +44,17 @@ def _extract_otp_from_text(text):
     for match in OTP_RE.finditer(text):
         code = match.group(2)
         start, end = match.span(2)
+        # Skip numbers that are part of an email address
+        around = text[max(0, start - 3):min(len(text), end + 3)]
+        if re.search(r"[a-z0-9._%+-]\.?\d{6}@|@.*\d{6}[a-z0-9._-]", around, re.I):
+            continue
+        # Skip if preceded/followed by hex-ish chars (part of longer token)
+        char_before = text[start - 1] if start > 0 else ""
+        char_after = text[end] if end < len(text) else ""
+        if char_before and re.match(r"[a-fA-F0-9-]", char_before):
+            continue
+        if char_after and re.match(r"[a-fA-F0-9-]", char_after):
+            continue
         before = text[max(0, start - 2):start]
         after = text[end:end + 2]
         context = text[max(0, start - 80):min(len(text), end + 80)]

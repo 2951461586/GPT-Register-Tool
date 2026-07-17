@@ -83,10 +83,10 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 
 | Feature surface | Owning module | May call | Must not own |
 | --- | --- | --- | --- |
-| Desktop buttons/dialogs | `SmsWorkbench/` | `chatgpt_phone_reg.py`, SQLite/session read-only display helpers | ChatGPT protocol, payment protocol, mailbox polling loops |
+| Desktop buttons/dialogs | `SmsWorkbench/` | `chatgpt_phone_reg.py`, SQLite/session read-only display helpers, read-only SMSBower catalog lookup | ChatGPT activation lifecycle, payment protocol, mailbox polling loops |
 | CLI command routing | `sms_tool.cli` | Focused command modules | Provider protocol internals or long-lived state mutation outside handlers |
 | Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, Gmail IMAP/SMTP, mailbox provider clients | Registration success persistence, payment state |
-| Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower`, `sms_tool.nextsms` | SMS provider APIs | ChatGPT account state, payment state |
+| Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower` | SMS provider APIs | ChatGPT account state, payment state |
 | ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
 | Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init, protocol adapters | PayPal account signup, final payment authorization |
@@ -145,6 +145,14 @@ activation/state, `sms_tool.codex_oauth` owns the add-phone/login verification
 step, and `sms_tool.gen_pp_link` owns strict zero-due PayPal direct generation.
 
 ### WPF UI
+
+The desktop has three explicit seams for the SMS and account-selection surface:
+
+- `MainWindow.Navigation.cs` owns selected-email lookup, normalization, and the themed `未选择邮箱` notice. Sidebar handlers call this seam rather than creating their own WPF message boxes.
+- `DialogFactory.cs` owns application-themed information and confirmation windows.
+- `SmsBowerCatalogClient.cs` owns the read-only `getCountries` / `getPricesV2` catalog lookup and response parsing used by the one-click SMS dialog. It cannot purchase, poll, complete, or cancel an activation; those lifecycle operations remain in `sms_tool.smsbower` and `sms_tool.phone_reuse`.
+
+The desktop settings page exposes SMSBower credentials and advanced timing/retry controls only. OpenAI service, country, and price-tier selection belong to the `一键接码` workflow. Static phone-pool editing is intentionally absent from the desktop surface.
 
 `SmsWorkbench/MainWindow.xaml.cs` may:
 
@@ -324,6 +332,7 @@ must preserve useful existing URLs unless the caller explicitly clears them.
 - `browser_extensions/paypal_autofill/` is retired. The maintained PayPal browser path is the project-local Python adapter.
 - `tests/test_paypal_autofill_*.py` are retired with that extension.
 - Runtime debug artifacts and `__pycache__` folders are not source surfaces and should be deleted or ignored.
+- Backup binaries such as `*.exe~` and unused duplicate artwork are not source surfaces.
 
 ### Test Layer
 

@@ -26,7 +26,6 @@ namespace SmsWorkbench
             var codexOauth = GetSection(config, "codex_oauth");
             var phoneReuse = GetSection(config, "phone_reuse");
             var smsBower = GetChildSection(phoneReuse, "smsbower");
-            var nextSms = GetChildSection(phoneReuse, "nextsms");
 
             var dialog = new Window
             {
@@ -108,25 +107,9 @@ namespace SmsWorkbench
             AddConfigField(cfForm, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
             AddConfigField(cfForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
 
-            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower / NextSMS 手机号接码、复用次数和 Codex OAuth 接码开关。");
+            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower 凭据和 Codex OAuth 接码高级设置。");
             row = 0;
-            AddConfigComboField(phoneForm, comboFields, row++, "接码来源", "phone_source", FirstNonEmpty(GetString(phoneReuse, "source"), "smsbower"), new[] { "smsbower", "nextsms", "phone_pool" });
             AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
-            AddConfigField(phoneForm, fields, row++, "服务代码", "smsbower_service", GetString(smsBower, "service"));
-            AddConfigComboField(phoneForm, comboFields, row++, "国家代码", "smsbower_country", GetString(smsBower, "country"), SmsBowerCountryOptions, "38");
-            AddConfigField(phoneForm, fields, row++, "NextSMS API Key", "nextsms_api_key", GetString(nextSms, "api_key"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Endpoint", "nextsms_endpoint", FirstNonEmpty(GetString(nextSms, "endpoint"), "https://sms.nextactionplus.com/api/"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Service", "nextsms_service", FirstNonEmpty(GetString(nextSms, "service"), "openai"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Country", "nextsms_country", FirstNonEmpty(GetString(nextSms, "country"), "US"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Pricing", "nextsms_pricing_option", FirstNonEmpty(GetString(nextSms, "pricing_option"), "0"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Pool Size", "nextsms_pool_size", FirstNonEmpty(GetString(nextSms, "pool_size"), "1"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS SMS Timeout", "nextsms_sms_timeout", FirstNonEmpty(GetString(nextSms, "sms_timeout"), "120"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Poll Interval", "nextsms_sms_poll_interval", FirstNonEmpty(GetString(nextSms, "sms_poll_interval"), "5"));
-            AddConfigField(phoneForm, fields, row++, "NextSMS Number Attempts", "nextsms_number_attempts", FirstNonEmpty(GetString(nextSms, "number_attempts"), "3"));
-            AddConfigField(phoneForm, fields, row++, "最低价格", "smsbower_min_price", GetString(smsBower, "min_price"));
-            AddConfigField(phoneForm, fields, row++, "最高价格", "smsbower_max_price", GetString(smsBower, "max_price"));
-            AddConfigField(phoneForm, fields, row++, "目标价格", "smsbower_target_price", GetString(smsBower, "target_price"));
-            AddConfigField(phoneForm, fields, row++, "号码池数量", "smsbower_pool_size", GetString(smsBower, "pool_size"));
             AddConfigField(phoneForm, fields, row++, "短信等待秒", "smsbower_sms_timeout", GetString(smsBower, "sms_timeout"));
             AddConfigField(phoneForm, fields, row++, "短信轮询间隔秒", "smsbower_sms_poll_interval", GetString(smsBower, "sms_poll_interval"));
             AddConfigField(phoneForm, fields, row++, "复用次数", "phone_max_reuse_count", GetString(phoneReuse, "max_reuse_count"));
@@ -134,7 +117,6 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "发码重试次数", "phone_send_retry_attempts", GetString(phoneReuse, "send_retry_attempts"));
             AddConfigField(phoneForm, fields, row++, "发码重试延迟秒", "phone_send_retry_delay_seconds", GetString(phoneReuse, "send_retry_delay_seconds"));
             AddConfigField(phoneForm, fields, row++, "状态文件", "phone_state_file", GetString(phoneReuse, "state_file"));
-            AddConfigField(phoneForm, fields, row++, "固定号码池", "phone_pool_lines", FormatPhonePool(phoneReuse), multiline: true);
             AddConfigField(phoneForm, fields, row++, "OAuth超时秒", "codex_registration_timeout", GetString(codexOauth, "registration_timeout"));
             AddConfigField(phoneForm, fields, row++, "允许邮箱OTP兜底", "codex_allow_passwordless_takeover", GetString(codexOauth, "allow_passwordless_takeover"));
             AddConfigField(phoneForm, fields, row++, "自动手机验证", "codex_auto_phone_verification", GetString(codexOauth, "auto_phone_verification"));
@@ -200,35 +182,19 @@ namespace SmsWorkbench
                 email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();
                 email["cfworker_api_token"] = fields["cfworker_api_token"].Text.Trim();
                 smsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
-                smsBower["service"] = fields["smsbower_service"].Text.Trim();
-                var smsBowerCountry = ConfigComboOptionValue(comboFields, "smsbower_country", "38");
-                smsBower["country"] = smsBowerCountry.Value;
-                smsBower["country_name"] = smsBowerCountry.Metadata;
-                smsBower["country_prefix"] = smsBowerCountry.Extra;
-                smsBower["min_price"] = fields["smsbower_min_price"].Text.Trim();
-                smsBower["max_price"] = fields["smsbower_max_price"].Text.Trim();
-                smsBower["target_price"] = fields["smsbower_target_price"].Text.Trim();
-                smsBower["pool_size"] = ConfigIntegerValue(fields, "smsbower_pool_size");
+                smsBower["service"] = "dr";
+                smsBower["service_name"] = "OpenAI (ChatGPT)";
+                smsBower.Remove("pool_size");
                 smsBower["sms_timeout"] = ConfigIntegerValue(fields, "smsbower_sms_timeout");
                 smsBower["sms_poll_interval"] = ConfigIntegerValue(fields, "smsbower_sms_poll_interval");
-                phoneReuse["source"] = ConfigComboValue(comboFields, "phone_source", "smsbower");
+                phoneReuse["source"] = "smsbower";
                 phoneReuse["smsbower"] = smsBower;
-                nextSms["api_key"] = fields["nextsms_api_key"].Text.Trim();
-                nextSms["endpoint"] = fields["nextsms_endpoint"].Text.Trim();
-                nextSms["service"] = fields["nextsms_service"].Text.Trim();
-                nextSms["country"] = fields["nextsms_country"].Text.Trim();
-                nextSms["pricing_option"] = ConfigIntegerValue(fields, "nextsms_pricing_option");
-                nextSms["pool_size"] = ConfigIntegerValue(fields, "nextsms_pool_size");
-                nextSms["sms_timeout"] = ConfigIntegerValue(fields, "nextsms_sms_timeout");
-                nextSms["sms_poll_interval"] = ConfigIntegerValue(fields, "nextsms_sms_poll_interval");
-                nextSms["number_attempts"] = ConfigIntegerValue(fields, "nextsms_number_attempts");
-                phoneReuse["nextsms"] = nextSms;
                 phoneReuse["max_reuse_count"] = ConfigIntegerValue(fields, "phone_max_reuse_count");
                 phoneReuse["send_cooldown_seconds"] = ConfigIntegerValue(fields, "phone_send_cooldown_seconds");
                 phoneReuse["send_retry_attempts"] = ConfigIntegerValue(fields, "phone_send_retry_attempts");
                 phoneReuse["send_retry_delay_seconds"] = ConfigIntegerValue(fields, "phone_send_retry_delay_seconds");
                 phoneReuse["state_file"] = fields["phone_state_file"].Text.Trim();
-                phoneReuse["phone_pool"] = ParsePhonePoolLines(fields["phone_pool_lines"].Text);
+                phoneReuse.Remove("phone_pool");
                 codexOauth["registration_timeout"] = ConfigIntegerValue(fields, "codex_registration_timeout");
                 codexOauth["allow_passwordless_takeover"] = ConfigBoolValue(fields, "codex_allow_passwordless_takeover", GetBool(codexOauth, "allow_passwordless_takeover", false));
                 codexOauth["auto_phone_verification"] = ConfigBoolValue(fields, "codex_auto_phone_verification", GetBool(codexOauth, "auto_phone_verification", false));
@@ -546,12 +512,18 @@ namespace SmsWorkbench
 
         private ConfigComboOption ConfigComboOptionValue(Dictionary<string, ComboBox> fields, string key, string fallback)
         {
-            if (fields.TryGetValue(key, out ComboBox combo) && combo.SelectedItem is ConfigComboOption selected)
+            if (fields.TryGetValue(key, out ComboBox combo))
             {
-                return selected;
+                if (combo.SelectedItem is ConfigComboOption selected)
+                {
+                    return selected;
+                }
+                return combo.Items.OfType<ConfigComboOption>()
+                    .FirstOrDefault(option => option.Value.Equals(fallback, StringComparison.OrdinalIgnoreCase))
+                    ?? combo.Items.OfType<ConfigComboOption>().FirstOrDefault()
+                    ?? new ConfigComboOption(fallback, fallback, fallback, fallback);
             }
-            return SmsBowerCountryOptions.FirstOrDefault(option => option.Value.Equals(fallback, StringComparison.OrdinalIgnoreCase))
-                ?? SmsBowerCountryOptions.First();
+            return new ConfigComboOption(fallback, fallback, fallback, fallback);
         }
 
         private bool ConfigBoolValue(Dictionary<string, TextBox> fields, string key, bool fallback)
@@ -585,30 +557,6 @@ namespace SmsWorkbench
             return fallback;
         }
 
-        private string FormatPhonePool(Dictionary<string, object> phoneReuse)
-        {
-            if (!phoneReuse.TryGetValue("phone_pool", out object value) || value is not List<object> list)
-            {
-                return "";
-            }
-            var lines = new List<string>();
-            foreach (object item in list)
-            {
-                if (item is not Dictionary<string, object> entry) continue;
-                string phone = GetString(entry, "phone").Trim();
-                string smsApiUrl = GetString(entry, "sms_api_url").Trim();
-                if (phone.Length == 0 || smsApiUrl.Length == 0) continue;
-                lines.Add(phone + "----" + smsApiUrl);
-            }
-            return string.Join(Environment.NewLine, lines);
-        }
-
-        private string FormatPhonePool(Dictionary<string, object> primary, Dictionary<string, object> fallback)
-        {
-            string value = FormatPhonePool(primary);
-            return value.Length > 0 ? value : FormatPhonePool(fallback);
-        }
-
         private string FormatConfigList(Dictionary<string, object> data, string key)
         {
             if (!data.TryGetValue(key, out object value) || value == null)
@@ -630,41 +578,6 @@ namespace SmsWorkbench
                 .Where(item => item.Length > 0)
                 .Cast<object>()
                 .ToList();
-        }
-
-        private List<object> ParsePhonePoolLines(string raw)
-        {
-            var items = new List<object>();
-            foreach (string sourceLine in (raw ?? "").Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
-            {
-                string line = sourceLine.Trim();
-                if (line.Length == 0) continue;
-                string phone = "";
-                string smsApiUrl = "";
-                int marker = line.IndexOf("----", StringComparison.Ordinal);
-                if (marker >= 0)
-                {
-                    phone = line.Substring(0, marker).Trim();
-                    smsApiUrl = line.Substring(marker + 4).Trim();
-                }
-                else
-                {
-                    Match match = Regex.Match(line, @"^(\+\d+)\s+(\S+)$");
-                    if (match.Success)
-                    {
-                        phone = match.Groups[1].Value.Trim();
-                        smsApiUrl = match.Groups[2].Value.Trim();
-                    }
-                }
-                if (phone.Length == 0 || smsApiUrl.Length == 0) continue;
-                items.Add(new Dictionary<string, object>
-                {
-                    ["phone"] = phone,
-                    ["sms_api_url"] = smsApiUrl,
-                    ["provider"] = "legacy"
-                });
-            }
-            return items;
         }
 
         private string FirstListValue(Dictionary<string, object> data, string key)

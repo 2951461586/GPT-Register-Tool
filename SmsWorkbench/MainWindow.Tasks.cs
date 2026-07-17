@@ -186,21 +186,11 @@ namespace SmsWorkbench
 
         private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
         {
-            var selected = allRows.Where(r => r.IsChecked).ToList();
-            if (selected.Count == 0 && SelectedRow != null) selected.Add(SelectedRow);
-            if (selected.Count == 0)
-            {
-                await DialogFactory.ShowInfoAsync(this, "未选择记录", "请先勾选或选择要删除的记录。");
-                return;
-            }
+            var selected = SelectedEmailRowsOrNotify("删除");
+            if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
             foreach (PoolRow row in selected) DeleteRow(row);
             RefreshPools();
-        }
-
-        private async void ShowThemeNoticeDialog(string title, string message)
-        {
-            await DialogFactory.ShowInfoAsync(this, title, message);
         }
 
         private async Task<bool> ShowDeleteConfirmDialog(int count)

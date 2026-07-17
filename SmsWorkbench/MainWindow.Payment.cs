@@ -11,7 +11,7 @@ namespace SmsWorkbench
 
         private void OpenPayPalLink_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedAccountRow();
+            PoolRow row = SelectedEmailRowOrNotify("打开支付链接");
             if (row == null) return;
             if (string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
@@ -23,16 +23,8 @@ namespace SmsWorkbench
 
         private void RegeneratePayPalLink_Click(object sender, RoutedEventArgs e)
         {
-            var rows = SelectedRowsOrCurrent()
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            if (rows.Count == 0)
-            {
-                ShowThemedInfoDialog("未选择账号", "请先勾选或选择要重新生成链接的账号记录。");
-                return;
-            }
+            var rows = SelectedEmailRowsOrNotify("重新生成支付链接");
+            if (rows.Count == 0) return;
             string paymentMethod = ShowPaymentMethodDialog("重新生成链接", "生链方式");
             if (paymentMethod.Length == 0) return;
 
@@ -57,7 +49,9 @@ namespace SmsWorkbench
 
         private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
         {
-            MarkPayPalComplete(SelectedRowsOrCurrent());
+            var rows = SelectedEmailRowsOrNotify("标记支付完成");
+            if (rows.Count == 0) return;
+            MarkPayPalComplete(rows);
         }
 
         private void MarkPayPalComplete(PoolRow row)
@@ -74,7 +68,7 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                MessageBox.Show("请先勾选或选择账号记录。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowEmailSelectionRequired("标记支付完成");
                 return;
             }
 

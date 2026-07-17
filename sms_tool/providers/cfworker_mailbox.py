@@ -5,7 +5,10 @@ import uuid
 import urllib.error
 import urllib.request
 from email import policy
+from email.header import decode_header, make_header
 from email.parser import Parser
+from html import unescape
+from html.parser import HTMLParser
 from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
@@ -105,6 +108,16 @@ class CFWorkerMailboxClient:
     def _fetch_admin_messages(self, email, limit):
         if not self.admin_token:
             return None
+        scan_limit = max(100, min(500, limit * 4))
+        all_result = self._request("GET", f"/admin/all?limit={scan_limit}", allow_404=True)
+        all_endpoint_available = bool(all_result.get("ok"))
+        if all_result.get("ok"):
+            messages = _messages_for_mailbox(_extract_messages(all_result.get("data")), email, allow_missing_recipient=False)
+            if messages:
+                return [self._fetch_admin_message_detail(msg, email) for msg in messages[:limit]]
+        if not all_result.get("ok") and all_result.get("error") != "not_found":
+            raise RuntimeError(all_result.get("error") or "cfworker admin all failed")
+
         domain = email.rsplit("@", 1)[1] if "@" in email else ""
         domain_query = f"&domain={quote(domain, safe='')}" if domain else ""
         collected = []
@@ -116,7 +129,7 @@ class CFWorkerMailboxClient:
             result = self._request("GET", f"/admin/emails?page={page}{domain_query}{address_query}", allow_404=True)
             if not result.get("ok"):
                 if result.get("error") == "not_found":
-                    return None
+                    return [] if all_endpoint_available else None
                 raise RuntimeError(result.get("error") or "cfworker admin emails failed")
             data = result.get("data")
             messages = _extract_messages(data)
@@ -131,7 +144,24 @@ class CFWorkerMailboxClient:
             if len(collected) >= limit or not messages:
                 break
             page += 1
-        return collected
+        return [self._fetch_admin_message_detail(msg, email) for msg in collected[:limit]]
+
+    def _fetch_admin_message_detail(self, message, email):
+        if not isinstance(message, dict):
+            return message
+        message_id = str(_first(message, "id", "message_id") or "").strip()
+        if not message_id:
+            return message
+        recipients = _message_recipients(message)
+        detail_email = recipients[0] if recipients else str(email or "").strip().lower()
+        path = f"/admin/msg?id={quote(message_id, safe='')}&email={quote(detail_email, safe='')}"
+        result = self._request("GET", path, allow_404=True)
+        if not result.get("ok"):
+            return message
+        detail = _extract_single_message(result.get("data"))
+        if not detail:
+            return message
+        return {**message, **detail}
 
     def _request(self, method, path, json_body=None, allow_404=False):
         url = self.base_url + path
@@ -272,11 +302,11 @@ def _looks_empty_message_list(data):
 def _normalize_message(msg, email=""):
     if not isinstance(msg, dict):
         msg = {"body": str(msg or "")}
-    subject = str(_first(msg, "subject", "title") or "")
+    subject = _decode_header_value(_first(msg, "subject", "title"))
     body_text = _message_body_text(msg)
     body = msg.get("body")
     if isinstance(body, dict):
-        body_text = str(body.get("content") or body.get("text") or body_text)
+        body_text = _display_text(body.get("content") or body.get("text") or body_text)
     from_value = _sender(msg)
     received = _format_received_time(_first(msg, "receivedDateTime", "received_at", "created_at", "date", "timestamp"))
     recipients = _message_recipients(msg)
@@ -296,10 +326,17 @@ def _message_body_text(msg):
     decoded_body = _decode_rfc822_body(raw_body)
     if decoded_body:
         return decoded_body
+    displayed_body = _display_text(raw_body)
     extracted = str(_first(msg, "extracted_json", "results") or "")
-    if _contains_otp(extracted):
+    displayed_codes = {match.group(2) for match in OTP_RE.finditer(displayed_body)}
+    extracted_codes = {match.group(2) for match in OTP_RE.finditer(extracted)}
+    if displayed_codes and extracted_codes and displayed_codes.intersection(extracted_codes):
         return extracted
-    return str(_first(
+    if displayed_codes:
+        return displayed_body
+    if extracted_codes:
+        return extracted
+    return _display_text(_first(
         msg,
         "bodyPreview",
         "preview",
@@ -316,13 +353,14 @@ def _message_body_text(msg):
 
 def _decode_rfc822_body(raw):
     value = str(raw or "")
-    if not value or not re.search(r"(?mi)^(from|subject|content-type|mime-version):", value):
+    if not value or not re.search(r"(?mi)^(from|subject|content-type|mime-version|received|dkim-signature|arc-|return-path|sender|to|date):", value):
         return ""
     try:
         message = Parser(policy=policy.default).parsestr(value)
     except Exception:
         return ""
-    parts = []
+    plain_parts = []
+    html_parts = []
     for part in message.walk() if message.is_multipart() else (message,):
         if part.get_content_maintype() == "multipart":
             continue
@@ -335,8 +373,101 @@ def _decode_rfc822_body(raw):
             charset = part.get_content_charset() or "utf-8"
             content = payload.decode(charset, "replace") if isinstance(payload, bytes) else str(payload or "")
         if content:
-            parts.append(str(content))
-    return "\n".join(parts)
+            if part.get_content_type() == "text/plain":
+                plain_parts.append(_display_text(content))
+            else:
+                html_parts.append(_display_text(content))
+    return "\n".join(part for part in (plain_parts or html_parts) if part)
+
+
+def _decode_header_value(value):
+    text = str(value or "")
+    if not text:
+        return ""
+    try:
+        return str(make_header(decode_header(text)))
+    except Exception:
+        return text
+
+
+def _display_text(value):
+    text = str(value or "")
+    if not text:
+        return ""
+    if re.search(r"(?is)<(?:html|body|div|table|p|span|strong|title|br)\b", text):
+        parser = _ReadableHtmlParser()
+        try:
+            parser.feed(text)
+            parser.close()
+            text = parser.text()
+        except Exception:
+            text = re.sub(r"(?is)<[^>]+>", " ", text)
+    text = unescape(text).replace("\r\n", "\n").replace("\r", "\n")
+    text = _strip_leading_css(text)
+    text = "\n".join(re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n"))
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _strip_leading_css(value):
+    text = str(value or "")
+    position = 0
+    while position < len(text):
+        start = position
+        while start < len(text) and text[start].isspace():
+            start += 1
+        opening = text.find("{", start)
+        if opening < 0 or opening - start > 500:
+            break
+        selector = text[start:opening].strip()
+        simple_selector = re.fullmatch(r"(?:[#.]?[a-z][\w-]*)(?:\s*,\s*[#.]?[a-z][\w-]*)*", selector, re.I)
+        if not (simple_selector or re.match(r"(?i)^@media\b", selector)):
+            break
+        depth = 0
+        closing = -1
+        for index in range(opening, len(text)):
+            if text[index] == "{":
+                depth += 1
+            elif text[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    closing = index
+                    break
+        if closing < 0:
+            break
+        position = closing + 1
+    return text[position:] if position else text
+
+
+class _ReadableHtmlParser(HTMLParser):
+    BLOCK_TAGS = {"br", "p", "div", "tr", "li", "table", "section", "article", "h1", "h2", "h3", "h4"}
+    SKIP_TAGS = {"style", "script", "head"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in self.SKIP_TAGS:
+            self.skip_depth += 1
+        elif not self.skip_depth and tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.SKIP_TAGS and self.skip_depth:
+            self.skip_depth -= 1
+        elif not self.skip_depth and tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if not self.skip_depth:
+            self.parts.append(data)
+
+    def text(self):
+        return "".join(self.parts)
 
 
 def _contains_otp(text):

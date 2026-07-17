@@ -18,7 +18,6 @@ python -m unittest discover -s tests
 - `test_email_otp_filtering.py` covers message recipient, subject, and body OTP filtering.
 - `test_storage_dedup.py` covers SQLite account upsert and email normalization behavior.
 - `test_gen_pp_link.py` covers hosted Stripe/PayPal link generation error handling.
-- `test_nextsms.py` covers the NexSMS phone-provider adapter.
 - `test_codex_oauth.py` covers OAuth/passwordless/add-phone routing decisions.
 - `test_paypal_browser_auto.py` covers the project-local PayPal browser adapter without launching a browser.
 - Account/session seed loading is centralized in `sms_tool.account_seed`; payment tests should patch that seam or the adapter-specific alias instead of duplicating SQLite/session setup.

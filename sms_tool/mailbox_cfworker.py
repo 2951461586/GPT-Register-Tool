@@ -89,15 +89,24 @@ def _fetch_cfworker_messages(mailbox, limit=25, proxy=None, email_cfg=None, clie
         return client_func(proxy=None).fetch_messages(mailbox.email, limit=limit)
 
 
-def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, seen_message_id="", proxy=None, fetch_messages_func=None):
+def _latest_cfworker_otp_candidate(
+    mailbox,
+    keyword="",
+    issued_after_unix=0,
+    seen_message_id="",
+    proxy=None,
+    fetch_messages_func=None,
+    excluded_otps=None,
+):
     fetch_messages_func = fetch_messages_func or (lambda mb, **kwargs: [])
+    excluded_otps = {str(value or "").strip() for value in (excluded_otps or ())}
     for msg in fetch_messages_func(mailbox, proxy=proxy):
         candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
         if seen_message_id and _message_id(msg) == seen_message_id:
             received_ts = int((candidate or {}).get("received_ts") or 0)
             if not issued_after_unix or not received_ts or received_ts < issued_after_unix:
                 continue
-        if candidate:
+        if candidate and candidate.get("otp") not in excluded_otps:
             return candidate
     return None
 
@@ -111,6 +120,7 @@ def _poll_cfworker_otp(
     email_cfg=None,
     otp_poll_interval_func=None,
     fetch_messages_func=None,
+    excluded_otps=None,
 ):
     keyword = (subject_keyword or "").lower()
     deadline = time.time() + timeout
@@ -126,6 +136,7 @@ def _poll_cfworker_otp(
                 seen_message_id=seen_message_id,
                 proxy=proxy,
                 fetch_messages_func=fetch_messages_func,
+                excluded_otps=excluded_otps,
             )
             if candidate:
                 stable_until = time.time() + settle_seconds
@@ -138,6 +149,7 @@ def _poll_cfworker_otp(
                         seen_message_id=seen_message_id,
                         proxy=proxy,
                         fetch_messages_func=fetch_messages_func,
+                        excluded_otps=excluded_otps,
                     )
                     if newer and newer.get("id") != candidate.get("id"):
                         candidate = newer

@@ -17,6 +17,22 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(normalize_country("+233"), "38")
         self.assertEqual(normalize_phone("233555123456"), "+233555123456")
 
+    def test_smsbower_exact_tier_is_forwarded_to_get_number_v2(self):
+        response = Mock(text="ACCESS_NUMBER:act-1:573001234567")
+        response.raise_for_status.return_value = None
+        client = SmsBowerClient(api_key="test-key")
+
+        with patch("sms_tool.smsbower._requests.get", return_value=response) as request:
+            activation = client.get_number(service="dr", country="33", min_price="0.026", max_price="0.026")
+
+        self.assertEqual(activation.activation_id, "act-1")
+        self.assertEqual(activation.country, "33")
+        params = request.call_args.kwargs["params"]
+        self.assertEqual(params["service"], "dr")
+        self.assertEqual(params["country"], "33")
+        self.assertEqual(params["minPrice"], "0.026")
+        self.assertEqual(params["maxPrice"], "0.026")
+
     def test_phone_reuse_uses_common_sms_provider_adapter_contract(self):
         slot = PhoneSlot(phone="+233555123456", provider="smsbower")
         adapter = phone_reuse._sms_provider_adapter(slot)
@@ -510,33 +526,58 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].provider, "smsbower")
         self.assertEqual(pool.phones[0].max_reuse_count, 1)
 
-    def test_phone_source_nextsms_uses_nextsms_config(self):
+    def test_smsbower_pool_uses_last_selected_country_and_exact_tier(self):
         with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
             cfg = {
                 "phone_reuse": {
-                    "source": "nextsms",
-                    "state_file": state_path,
-                    "nextsms": {
-                        "api_key": "nx_sms_test",
-                        "endpoint": "https://sms.nextactionplus.com/api/",
-                        "service": "openai",
-                        "country": "US",
-                        "pricing_option": 1,
-                        "pool_size": 2,
+                    "source": "smsbower",
+                    "state_file": f"{tmp}/phone_state.json",
+                    "smsbower": {
+                        "api_key": "test-key",
+                        "service": "dr",
+                        "country": "33",
+                        "min_price": "0.026",
+                        "max_price": "0.026",
+                        "target_price": "0.026",
                     },
-                    "smsbower": {"api_key": "smsbower-key", "pool_size": 1},
                 }
             }
             with patch.dict(phone_reuse.CFG, cfg, clear=False):
                 pool = create_phone_pool()
 
-        self.assertEqual(len(pool.phones), 2)
-        self.assertEqual(pool.phones[0].provider, "nextsms")
-        self.assertEqual(pool.phones[0].api_key, "nx_sms_test")
-        self.assertEqual(pool.phones[0].service, "openai")
-        self.assertEqual(pool.phones[0].country, "US")
-        self.assertEqual(pool.phones[0].pricing_option, 1)
+        self.assertEqual(pool.phones[0].service, "dr")
+        self.assertEqual(pool.phones[0].country, "33")
+        self.assertEqual(pool.phones[0].min_price, "0.026")
+        self.assertEqual(pool.phones[0].max_price, "0.026")
+
+    def test_saved_smsbower_activation_is_not_reused_after_tier_change(self):
+        with TemporaryDirectory() as tmp:
+            state_path = f"{tmp}/phone_state.json"
+            with open(state_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    '{"current_index":0,"phones":[{"slot_id":"smsbower:0","provider":"smsbower",'
+                    '"service":"dr","country":"38","min_price":"0.054","max_price":"0.054",'
+                    '"phone":"+233555123456","activation_id":"act-old","reuse_count":0}]}'
+                )
+            cfg = {
+                "phone_reuse": {
+                    "source": "smsbower",
+                    "state_file": state_path,
+                    "smsbower": {
+                        "api_key": "test-key",
+                        "service": "dr",
+                        "country": "33",
+                        "min_price": "0.026",
+                        "max_price": "0.026",
+                    },
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual(pool.phones[0].country, "33")
+        self.assertEqual(pool.phones[0].phone, "")
+        self.assertEqual(pool.phones[0].activation_id, "")
 
     def test_source_override_can_force_smsbower_for_registration(self):
         with TemporaryDirectory() as tmp:
@@ -557,42 +598,6 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(len(pool.phones), 1)
         self.assertEqual(pool.phones[0].provider, "smsbower")
         self.assertEqual(pool.phones[0].api_key, "smsbower-key")
-
-    def test_nextsms_phone_verification_acquires_and_polls_code(self):
-        slot = PhoneSlot(
-            phone="",
-            provider="nextsms",
-            api_key="nx_sms_test",
-            endpoint="https://sms.nextactionplus.com/api/",
-            service="openai",
-            country="US",
-            max_reuse_count=1,
-            slot_id="nextsms:0",
-        )
-        pool = PhonePool(phones=[slot])
-
-        def acquire_new_number(item):
-            item.phone = "+13000000000"
-            item.activation_id = "ord-1"
-            item.reuse_count = 0
-            item.last_sms_code = ""
-            return True
-
-        client = Mock()
-        client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._acquire_nextsms_number", side_effect=acquire_new_number) as acquire, \
-             patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}) as send, \
-             patch("sms_tool.phone_reuse._wait_nextsms_code", return_value="123456"), \
-             patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._nextsms_client", return_value=client):
-            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["phone"], "+13000000000")
-        self.assertEqual(result["provider"], "nextsms")
-        acquire.assert_called_once_with(slot)
-        self.assertEqual(send.call_args.args[3], "+13000000000")
-        client.complete.assert_called_once_with("ord-1")
 
     def test_saved_state_does_not_override_configured_max_reuse(self):
         with TemporaryDirectory() as tmp:
