@@ -1,4 +1,6 @@
 config.json
+.agents/skills/
+.claude/
 sms_tool/config.json
 services/mail-otp-web/config.json
 outlook_results/
