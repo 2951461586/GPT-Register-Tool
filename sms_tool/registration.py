@@ -768,8 +768,9 @@ def run_email(
                 mailbox,
                 subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
                 timeout=min(60, int(email_cfg.get("otp_timeout", 300))),
-                issued_after_unix=otp_issued_after,
+                issued_after_unix=_registration_otp_issued_after(mailbox, max(0, auth_flow_started - 5)),
                 proxy=proxy,
+                excluded_otps={code},
             )
             if retry_code and retry_code != code:
                 code = retry_code

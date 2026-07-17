@@ -546,7 +546,7 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
 
 # Message recipient extraction moved to sms_tool.mail_otp.
 
-def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
+def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None):
     provider = str(getattr(mailbox, "provider", "") or "")
 
     # ── chongzhi.art OTP polling ──
@@ -572,6 +572,7 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
             timeout=timeout,
             issued_after_unix=issued_after_unix,
             proxy=proxy,
+            excluded_otps=excluded_otps,
         )
     keyword = (subject_keyword or "").lower()
     deadline = time.time() + timeout
@@ -585,7 +586,7 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
                 issued_after_unix=issued_after_unix,
                 proxy=proxy,
             )
-            if candidate:
+            if candidate and candidate.get("otp") not in {str(value or "").strip() for value in (excluded_otps or ())}:
                 stable_until = time.time() + settle_seconds
                 while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
                     time.sleep(min(interval, max(0.0, stable_until - time.time())))
@@ -622,7 +623,7 @@ def _cfworker_direct_fallback_enabled():
     return mailbox_cfworker._cfworker_direct_fallback_enabled(_email_cfg())
 
 
-def _poll_cfworker_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
+def _poll_cfworker_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None):
     return mailbox_cfworker._poll_cfworker_otp(
         mailbox,
         subject_keyword=subject_keyword,
@@ -632,6 +633,7 @@ def _poll_cfworker_otp(mailbox, subject_keyword="", timeout=300, issued_after_un
         email_cfg=_email_cfg(),
         otp_poll_interval_func=_otp_poll_interval,
         fetch_messages_func=_fetch_mailbox_messages,
+        excluded_otps=excluded_otps,
     )
 
 

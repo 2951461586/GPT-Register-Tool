@@ -16,6 +16,8 @@ session.json
 __pycache__/
 *.py[cod]
 .pytest_cache/
+*~
+*.bak
 runtime/*.log
 runtime/**/*.log
 

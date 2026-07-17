@@ -69,12 +69,8 @@ namespace SmsWorkbench
 
         private void ViewInbox_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
-            if (row == null)
-            {
-                MessageBox.Show("请先选择一条可收信的邮箱记录（Chatai / Gmail / CFWorker / Graph）。", "未选择邮箱", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+            PoolRow row = SelectedEmailRowOrNotify("查看收件箱");
+            if (row == null) return;
             string mailboxLine = FindMailboxLineForRow(row);
             if (string.IsNullOrWhiteSpace(mailboxLine) || MailboxArgForLine(mailboxLine).Length == 0)
             {
@@ -173,20 +169,17 @@ namespace SmsWorkbench
             args.Add("--no-phone-reuse");
         }
 
-        private void OneClickSms_Click(object sender, RoutedEventArgs e)
+        private async void OneClickSms_Click(object sender, RoutedEventArgs e)
         {
-            var rows = SelectedRowsOrCurrent()
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            if (rows.Count == 0)
+            var rows = SelectedEmailRowsOrNotify("接码");
+            if (rows.Count == 0) return;
+
+            if (!await ShowSmsBowerOneClickDialogAsync())
             {
-                MessageBox.Show("请先勾选或选择要接码的邮箱账号。", "未选择账号", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            var args = new List<string> { "--one-click-sms", "--workers", "1", "--refresh-timeout", "60" };
+            var args = new List<string> { "--one-click-sms", "--phone-source", "smsbower", "--workers", "1", "--refresh-timeout", "60" };
             if (rows.Count > 1)
             {
                 string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_sms_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
@@ -314,12 +307,6 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             return dialog.ShowDialog() == true ? selected : null;
-        }
-
-        
-        private async void ShowThemedInfoDialog(string title, string message)
-        {
-            await DialogFactory.ShowInfoAsync(this, title, message);
         }
 
         private string ShowPaymentMethodDialog(string title, string labelText = "支付方式")

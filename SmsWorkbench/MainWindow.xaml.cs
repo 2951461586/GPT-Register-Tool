@@ -4,15 +4,6 @@ namespace SmsWorkbench
     {
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
         private static readonly HttpClient httpClient = new HttpClient();
-        private static readonly ConfigComboOption[] SmsBowerCountryOptions = new[]
-        {
-            new ConfigComboOption("38", "加纳 / Ghana (+233) - 38", "Ghana", "+233"),
-            new ConfigComboOption("19", "尼日利亚 / Nigeria (+234) - 19", "Nigeria", "+234"),
-            new ConfigComboOption("151", "智利 / Chile (+56) - 151", "Chile", "+56"),
-            new ConfigComboOption("33", "哥伦比亚 / Colombia (+57) - 33", "Colombia", "+57"),
-            new ConfigComboOption("16", "英国 / United Kingdom (+44) - 16", "United Kingdom", "+44"),
-            new ConfigComboOption("6", "印度尼西亚 / Indonesia (+62) - 6", "Indonesia", "+62")
-        };
         private static readonly ConfigComboOption[] BillingRegionOptions = new[]
         {
             new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
