@@ -140,9 +140,12 @@ namespace SmsWorkbench
             AddConfigField(sub2Form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
             AddConfigField(sub2Form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
 
+            var networkForm = AddConfigCategory(sidebar, host, categories, "网络代理", "注册、邮箱、接码、额度查询等非支付功能统一使用本地 7897 端口。");
+            row = 0;
+            AddConfigField(networkForm, fields, row++, "非支付代理（固定）", "non_payment_proxy", LocalNonPaymentProxy, isReadOnly: true);
+
             var proxyForm = AddConfigCategory(sidebar, host, categories, "协议支付", "统一管理 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK 和 TWINT 提链。");
             row = 0;
-            AddConfigField(proxyForm, fields, row++, "默认代理", "default_proxy", GetString(proxy, "default"));
             AddConfigField(proxyForm, fields, row++, "启用方式", "protocol_enabled_methods", FirstNonEmpty(FormatConfigList(protocolPayments, "enabled_methods"), "paypal,gopay,upi,ideal,pix,kakao,blik,twint"));
             AddConfigField(proxyForm, fields, row++, "提链器目录", "protocol_reference_root", FirstNonEmpty(GetString(protocolPayments, "reference_root"), "services/protocol-payment"));
             AddConfigField(proxyForm, fields, row++, "状态文件", "protocol_state_file", FirstNonEmpty(GetString(protocolPayments, "state_file"), "runtime/payment_link_runs.jsonl"));
@@ -235,6 +238,17 @@ namespace SmsWorkbench
                 sub2api["proxy_id"] = fields["sub2api_proxy_id"].Text.Trim();
                 sub2api["priority"] = fields["sub2api_priority"].Text.Trim();
                 sub2api["concurrency"] = fields["sub2api_concurrency"].Text.Trim();
+                proxy["default"] = LocalNonPaymentProxy;
+                proxy["pool"] = new List<object> { LocalNonPaymentProxy };
+                config["mailbox_proxy"] = LocalNonPaymentProxy;
+                phoneReuse["proxy"] = LocalNonPaymentProxy;
+                phoneReuse["proxy_match_phone_country"] = false;
+                phoneReuse["proxy_random_sid"] = false;
+                phoneReuse.Remove("proxy_api_url");
+                phoneReuse.Remove("white_api_url");
+                phoneReuse.Remove("api_url");
+                phoneReuse.Remove("proxy_template");
+                phoneReuse.Remove("proxies");
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
@@ -247,7 +261,6 @@ namespace SmsWorkbench
                 config["codex_oauth"] = codexOauth;
                 config["phone_reuse"] = phoneReuse;
                 SaveConfig(path, config);
-                ProxyText = fields["default_proxy"].Text.Trim();
                 Log("配置已保存。");
                 dialog.Close();
             };
@@ -344,7 +357,15 @@ namespace SmsWorkbench
             }
         }
 
-        private void AddConfigField(Grid form, Dictionary<string, TextBox> fields, int row, string label, string key, string value, bool multiline = false)
+        private void AddConfigField(
+            Grid form,
+            Dictionary<string, TextBox> fields,
+            int row,
+            string label,
+            string key,
+            string value,
+            bool multiline = false,
+            bool isReadOnly = false)
         {
             form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var text = new TextBlock
@@ -371,7 +392,8 @@ namespace SmsWorkbench
                 VerticalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
                 HorizontalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
                 MinHeight = multiline ? 124 : 36,
-                VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center
+                VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center,
+                IsReadOnly = isReadOnly
             };
             if (multiline)
             {

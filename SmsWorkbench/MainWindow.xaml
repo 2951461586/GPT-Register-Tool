@@ -726,7 +726,7 @@
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True">
+                <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">

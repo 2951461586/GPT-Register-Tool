@@ -115,6 +115,44 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertEqual(seen["provider_proxy"], "http://provider")
         self.assertEqual(seen["approve_proxy"], "http://approve")
 
+    def test_operator_stage_country_overrides_configured_preflight_countries(self):
+        seen = {}
+
+        class FakeExtractor:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def extract(self):
+                return {
+                    "ok": True,
+                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-test",
+                    "ba_token": "BA-test",
+                    "link_type": "paypal_ba_approve",
+                }
+
+        cfg = {
+            "paypal": {
+                "stage_proxy_countries": {"checkout": "US", "approve": "TR", "promotion": "TR"},
+                "stage_proxies": {
+                    "checkout": "http://checkout",
+                    "provider": "http://provider",
+                    "approve": "http://approve",
+                    "promotion": "http://promotion",
+                },
+            }
+        }
+        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
+            with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
+                result = gen_pp_link.generate_pp_link(
+                    "at",
+                    stage_proxy_countries={"checkout": "JP", "approve": "DE", "promotion": "BR"},
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen["stage_proxy_countries"]["checkout"], "JP")
+        self.assertEqual(seen["stage_proxy_countries"]["approve"], "DE")
+        self.assertEqual(seen["stage_proxy_countries"]["promotion"], "BR")
+
     def test_explicit_proxy_can_override_stages_when_enabled(self):
         seen = {}
 

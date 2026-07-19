@@ -96,6 +96,7 @@ class SmsBowerClient:
         country: str = GHANA_COUNTRY_CODE,
         max_price: str = "",
         min_price: str = "",
+        provider_ids: str = "",
     ) -> SmsBowerActivation:
         service_code = normalize_service(service)
         country_code = normalize_country(country)
@@ -104,6 +105,8 @@ class SmsBowerClient:
             params["maxPrice"] = str(max_price)
         if min_price:
             params["minPrice"] = str(min_price)
+        if provider_ids:
+            params["providerIds"] = str(provider_ids)
 
         result = self._do("getNumberV2", params)
         if result.startswith("{"):

@@ -29,6 +29,24 @@ def is_outlook_mailbox(mailbox):
     return domain in OUTLOOK_DOMAINS or getattr(mailbox, "provider", "") == "chatai"
 
 
+def outlook_login_email(mailbox):
+    """Return the Microsoft mailbox principal used for OAuth IMAP login.
+
+    ChatGPT may register a ``+alias`` address, but Microsoft XOAUTH2 expects the
+    owning mailbox address rather than that delivery alias.
+    """
+    explicit = str(getattr(mailbox, "login_email", "") or "").strip().lower()
+    if explicit:
+        return explicit
+    value = str(getattr(mailbox, "email", "") or "").strip().lower()
+    if "@" not in value:
+        return value
+    local, domain = value.rsplit("@", 1)
+    if domain in OUTLOOK_DOMAINS and "+" in local:
+        return local.split("+", 1)[0] + "@" + domain
+    return value
+
+
 def message_text_from_email_message(message):
     parts = []
     if message.is_multipart():
@@ -162,7 +180,7 @@ def _imap_connect_and_auth(mailbox, token_fetcher):
     Returns (mail, auth_string) or raises.
     """
     token = token_fetcher(DEFAULT_IMAP_SCOPE)
-    auth_string = f"user={mailbox.email}\x01auth=Bearer {token}\x01\x01"
+    auth_string = f"user={outlook_login_email(mailbox)}\x01auth=Bearer {token}\x01\x01"
     mail = imaplib.IMAP4_SSL("outlook.office365.com", 993)
     typ, _ = mail.authenticate("XOAUTH2", lambda _: auth_string.encode())
     if typ != "OK":

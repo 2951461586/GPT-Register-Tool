@@ -207,7 +207,7 @@ namespace SmsWorkbench
                 args.AddRange(new[] { mailboxArg, tempMailboxFile });
             }
             AddSessionFileArg(args, row);
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             var psi = new ProcessStartInfo
             {
                 FileName = "python",

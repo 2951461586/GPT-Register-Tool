@@ -1,5 +1,7 @@
 import unittest
 import tempfile
+import io
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,6 +9,113 @@ from sms_tool import cli
 
 
 class GenerateBaLinkCliProxyTests(unittest.TestCase):
+    def test_extract_payment_link_uses_selected_account_access_token(self):
+        seen = {}
+        cfg = {"paypal": {}, "output": {"directory": "sessions"}}
+
+        def fake_generate_payment_link(**kwargs):
+            seen.update(kwargs)
+            return {"ok": True, "url": "https://example.test/pay"}
+
+        argv = [
+            "chatgpt_phone_reg.py",
+            "--extract-payment-link",
+            "--email",
+            "selected@example.com",
+            "--payment-method",
+            "paypal",
+        ]
+        with patch.object(cli, "CFG", cfg):
+            with patch("sys.argv", argv):
+                with patch("sms_tool.session_refresh._load_seed_session", return_value=({
+                    "email": "selected@example.com",
+                    "access_token": "selected-at",
+                    "cookie_header": "session=cookie",
+                }, "session.json")):
+                    with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                        cli.main()
+
+        self.assertEqual(seen["access_token"], "selected-at")
+        self.assertEqual(seen["auth_context"]["email"], "selected@example.com")
+
+    def test_extract_payment_link_rotates_configured_stage_proxies_to_selected_countries(self):
+        seen = {}
+        cfg = {
+            "paypal": {
+                "stage_proxies": {
+                    "checkout": "http://user:base-US-12345678-5m@gate.example:1000",
+                    "provider": "http://user:base-GB-12345678-5m@gate.example:1000",
+                    "approve": "http://user:base-TR-12345678-5m@gate.example:1000",
+                    "promotion": "http://user:base-TR-12345678-5m@gate.example:1000",
+                }
+            },
+            "output": {"directory": "sessions"},
+        }
+
+        def fake_generate_payment_link(**kwargs):
+            seen.update(kwargs)
+            return {"ok": True, "url": "https://example.test/pay"}
+
+        argv = [
+            "chatgpt_phone_reg.py",
+            "--extract-payment-link",
+            "--at",
+            "at-test",
+            "--checkout-proxy-country",
+            "JP",
+            "--approve-proxy-country",
+            "DE",
+            "--update-proxy-country",
+            "BR",
+        ]
+        with patch.object(cli, "CFG", cfg):
+            with patch("sys.argv", argv):
+                with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                    cli.main()
+
+        self.assertIn("base-JP-", seen["checkout_proxy"])
+        self.assertIn("base-DE-", seen["approve_proxy"])
+        self.assertIn("base-BR-", seen["promotion_proxy"])
+        self.assertEqual(seen["stage_proxy_countries"], {"checkout": "JP", "approve": "DE", "promotion": "BR"})
+
+    def test_payment_proxy_probe_reports_three_operator_stages(self):
+        cfg = {
+            "paypal": {
+                "stage_proxies": {
+                    "checkout": "http://checkout.example:1000",
+                    "approve": "http://approve.example:1000",
+                    "promotion": "http://update.example:1000",
+                }
+            },
+            "output": {"directory": "sessions"},
+        }
+
+        def fake_probe(proxy, expected_country="", stage="proxy", timeout=12):
+            from sms_tool.paypal_proxy import ProxyProbeResult
+            return ProxyProbeResult(True, stage, expected_country, "203.0.113.10", expected_country, "Test")
+
+        stdout = io.StringIO()
+        argv = [
+            "chatgpt_phone_reg.py",
+            "--test-payment-proxies",
+            "--checkout-proxy-country",
+            "US",
+            "--approve-proxy-country",
+            "GB",
+            "--update-proxy-country",
+            "JP",
+        ]
+        with patch.object(cli, "CFG", cfg):
+            with patch("sys.argv", argv):
+                with patch("sms_tool.paypal_proxy.probe_proxy", side_effect=fake_probe):
+                    with patch("sys.stdout", stdout):
+                        cli.main()
+
+        result = json.loads(stdout.getvalue())
+        self.assertTrue(result["ok"])
+        self.assertEqual(set(result["stages"]), {"checkout", "approve", "update"})
+        self.assertEqual(result["stages"]["update"]["expected_country"], "JP")
+
     def test_batch_regenerate_forwards_stage_proxy_overrides(self):
         seen = []
 

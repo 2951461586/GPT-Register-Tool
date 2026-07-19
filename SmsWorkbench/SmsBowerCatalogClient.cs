@@ -11,11 +11,28 @@ namespace SmsWorkbench
             string endpoint)
         {
             Task<string> countriesTask = GetTextAsync(httpClient, endpoint, apiKey, "getCountries");
-            Task<string> pricesTask = GetTextAsync(httpClient, endpoint, apiKey, "getPricesV2", OpenAiService);
+            Task<string> pricesTask = GetTextAsync(httpClient, endpoint, apiKey, "getPricesV3", OpenAiService);
             await Task.WhenAll(countriesTask, pricesTask);
 
             var metadata = ParseCountries(await countriesTask);
             return ParsePriceTiers(await pricesTask, metadata);
+        }
+
+        internal static async Task<string> LoadBalanceAsync(HttpClient httpClient, string apiKey, string endpoint)
+        {
+            string separator = endpoint.Contains('?') ? "&" : "?";
+            string url = endpoint + separator
+                + "api_key=" + Uri.EscapeDataString(apiKey)
+                + "&action=getBalance";
+            using HttpResponseMessage response = await httpClient.GetAsync(url);
+            string body = (await response.Content.ReadAsStringAsync()).Trim();
+            response.EnsureSuccessStatusCode();
+            const string prefix = "ACCESS_BALANCE:";
+            if (!body.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(body.Length > 160 ? body[..160] : body);
+            }
+            return body[prefix.Length..].Trim();
         }
 
         private static Dictionary<string, SmsBowerCountryMetadata> ParseCountries(string json)
@@ -55,8 +72,13 @@ namespace SmsWorkbench
                 }
 
                 var tiers = service.EnumerateObject()
-                    .Select(ParseTier)
+                    .Select(ParseOffer)
                     .Where(item => item != null && item.Count > 0)
+                    .GroupBy(item => item.Price)
+                    .Select(group => new SmsBowerPriceTier(
+                        group.Key.ToString("0.########", CultureInfo.InvariantCulture),
+                        group.Sum(item => item.Count),
+                        string.Join(",", group.Select(item => item.ProviderId).Where(value => value.Length > 0).Distinct())))
                     .OrderBy(item => item.NumericPrice)
                     .ToList();
                 if (tiers.Count == 0) continue;
@@ -76,15 +98,24 @@ namespace SmsWorkbench
                 .ToList();
         }
 
-        private static SmsBowerPriceTier ParseTier(JsonProperty property)
+        private static SmsBowerProviderOffer ParseOffer(JsonProperty property)
         {
-            int count = JsonInteger(property.Value);
+            string priceText = property.Value.ValueKind == JsonValueKind.Object
+                ? JsonString(property.Value, "price", "")
+                : property.Name;
+            int count = property.Value.ValueKind == JsonValueKind.Object
+                && property.Value.TryGetProperty("count", out JsonElement countElement)
+                    ? JsonInteger(countElement)
+                    : JsonInteger(property.Value);
+            string providerId = property.Value.ValueKind == JsonValueKind.Object
+                ? JsonString(property.Value, "provider_id", property.Name)
+                : "";
             if (count <= 0
-                || !decimal.TryParse(property.Name, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal price))
+                || !decimal.TryParse(priceText, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal price))
             {
                 return null;
             }
-            return new SmsBowerPriceTier(price.ToString("0.########", CultureInfo.InvariantCulture), count);
+            return new SmsBowerProviderOffer(price, count, providerId);
         }
 
         private static async Task<string> GetTextAsync(
@@ -129,6 +160,7 @@ namespace SmsWorkbench
         }
 
         private sealed record SmsBowerCountryMetadata(string EnglishName, string ChineseName);
+        private sealed record SmsBowerProviderOffer(decimal Price, int Count, string ProviderId);
     }
 
     internal sealed class SmsBowerCountryChoice
@@ -156,16 +188,18 @@ namespace SmsWorkbench
 
     internal sealed class SmsBowerPriceTier
     {
-        internal SmsBowerPriceTier(string price, int count)
+        internal SmsBowerPriceTier(string price, int count, string providerIds = "")
         {
             Price = price;
             Count = count;
+            ProviderIds = providerIds ?? "";
             decimal.TryParse(price, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal numericPrice);
             NumericPrice = numericPrice;
         }
 
         public string Price { get; }
         public int Count { get; }
+        public string ProviderIds { get; }
         public decimal NumericPrice { get; }
         public string DisplayName => $"${Price} / 个 · 库存 {Count}";
     }

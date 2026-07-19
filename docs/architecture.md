@@ -97,6 +97,21 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 
 ## Boundary Rules
 
+### Proxy Routing Boundary
+
+Non-payment traffic has one owner and one fixed route: `http://127.0.0.1:7897`.
+The desktop `AddNonPaymentProxy` seam applies it to registration, mailbox,
+SMS verification, quota refresh, workspace/account scans, and session refresh.
+`proxy.default`, `proxy.pool`, `mailbox_proxy`, and the phone-verification proxy
+are normalized to the same value when desktop settings are saved.
+
+Payment traffic is deliberately outside this rule. PayPal and protocol-payment
+modules resolve `stage_proxies` from their payment configuration. A default
+non-payment proxy supplied by the desktop is not considered an explicit payment
+override, so configured checkout/provider/confirm/approve/promotion routes keep
+their existing behavior. Only an operator-provided payment proxy may explicitly
+override those stages where the payment module permits it.
+
 ### PayPal Generation Type
 
 `config.json` `paypal.link_generation_type` is the single selector exposed by
@@ -157,6 +172,7 @@ The desktop settings page exposes SMSBower credentials and advanced timing/retry
 `SmsWorkbench/MainWindow.xaml.cs` may:
 
 - Read `config.json`.
+- Apply the fixed local non-payment proxy when launching non-payment commands.
 - Create temporary mailbox selection files.
 - Start `chatgpt_phone_reg.py`.
 - Display SQLite/session/mailbox state.
@@ -389,6 +405,11 @@ All paths in `config.example.json` are relative by default:
   "email_registration": {
     "token_file": "mailbox_tokens.txt",
     "cfworker_otp_issued_after_grace_seconds": 10
+  },
+  "mailbox_proxy": "http://127.0.0.1:7897",
+  "proxy": {
+    "default": "http://127.0.0.1:7897",
+    "pool": ["http://127.0.0.1:7897"]
   },
   "k12": {
     "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",

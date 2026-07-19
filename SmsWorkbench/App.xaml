@@ -245,24 +245,32 @@
           <Setter.Value>
             <ControlTemplate TargetType="ComboBox">
               <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="32"/>
+                </Grid.ColumnDefinitions>
                 <ToggleButton x:Name="ToggleButton"
+                              Grid.ColumnSpan="2"
                               Focusable="False"
                               IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                               ClickMode="Press"
                               Template="{StaticResource ComboBoxToggleButton}"/>
                 <ContentPresenter x:Name="ContentSite"
+                                  Grid.Column="0"
+                                  ClipToBounds="True"
                                   IsHitTestVisible="False"
                                   Content="{TemplateBinding SelectionBoxItem}"
                                   ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                   ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                  Margin="{TemplateBinding Padding}"
+                                  Margin="10,0,4,0"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                   TextBlock.Foreground="{TemplateBinding Foreground}"
                                   TextBlock.FontSize="{TemplateBinding FontSize}"/>
                 <TextBox x:Name="PART_EditableTextBox"
-                         Margin="{TemplateBinding Padding}"
-                         HorizontalAlignment="Left"
+                         Grid.Column="0"
+                         Margin="10,0,4,0"
+                         HorizontalAlignment="Stretch"
                          VerticalAlignment="Center"
                          Background="Transparent"
                          Focusable="True"
@@ -272,6 +280,7 @@
                          BorderThickness="0"
                          Text="{TemplateBinding Text}"/>
                 <Popup x:Name="Popup"
+                       Grid.ColumnSpan="2"
                        Placement="Bottom"
                        IsOpen="{TemplateBinding IsDropDownOpen}"
                        AllowsTransparency="True"

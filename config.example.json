@@ -6,9 +6,9 @@
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
-    "default": "socks5h://127.0.0.1:7897",
+    "default": "http://127.0.0.1:7897",
     "pool": [
-      "socks5h://127.0.0.1:7897"
+      "http://127.0.0.1:7897"
     ]
   },
   "k12": {
@@ -289,6 +289,9 @@
     "send_retry_attempts": 3,
     "send_retry_delay_seconds": 45,
     "state_file": "runtime/phone_reuse_state.json",
+    "proxy": "http://127.0.0.1:7897",
+    "proxy_match_phone_country": false,
+    "proxy_random_sid": false,
     "smsbower": {
       "api_key": "$SMSBOWER_API_KEY",
       "service": "dr",
