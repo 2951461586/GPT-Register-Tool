@@ -46,7 +46,11 @@ class PhoneProxyTests(unittest.TestCase):
         self.assertEqual(calls, ['socks5h://u:p@h:1', 'http://u:p@h:1'])
 
     def test_select_phone_proxy_matches_country_refreshes_sid(self):
-        with patch.object(phone_proxy, '_configured_proxy_api_url', return_value=''), \
+        with patch.object(phone_proxy, 'phone_proxy_cfg', return_value={
+                 'proxy_match_phone_country': True,
+                 'proxy_random_sid': True,
+             }), \
+             patch.object(phone_proxy, '_configured_proxy_api_url', return_value=''), \
              patch.object(phone_proxy, 'configured_base_proxy', return_value='http://u-region-JP-sid-ABCDEFGH-t-5:p@h:1'), \
              patch.object(phone_proxy, 'probe_proxy_with_scheme_detection') as probe:
             probe.side_effect = lambda proxy, expected_country='', use_cache=True: {
@@ -74,6 +78,26 @@ class PhoneProxyTests(unittest.TestCase):
             result = phone_proxy.select_phone_proxy(country='16')
         self.assertTrue(result['ok'])
         self.assertEqual(result['proxy'], 'http://103.49.62.181:19001')
+
+    def test_local_non_payment_proxy_does_not_require_country_match(self):
+        with patch.object(phone_proxy, 'phone_proxy_cfg', return_value={
+            'proxy_match_phone_country': False,
+            'proxy_random_sid': False,
+        }), patch.object(phone_proxy, 'probe_proxy_with_scheme_detection') as probe:
+            probe.return_value = {
+                'ok': True,
+                'proxy': 'http://127.0.0.1:7897',
+                'ip': '127.0.0.1',
+                'country_code': '',
+            }
+            result = phone_proxy.select_phone_proxy(
+                explicit_proxy='http://127.0.0.1:7897',
+                country='16',
+            )
+
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['proxy'], 'http://127.0.0.1:7897')
+        self.assertEqual(probe.call_args.args[1], '')
 
 
 class PhoneReuseProxyGateTests(unittest.TestCase):

@@ -3,13 +3,10 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Path/config helpers, status formatting, external open/copy/log helpers
-        private void AddProxy(List<string> args)
+        private void AddNonPaymentProxy(List<string> args)
         {
-            if (!string.IsNullOrWhiteSpace(ProxyText))
-            {
-                args.Add("--proxy");
-                args.Add(ProxyText.Trim());
-            }
+            args.Add("--proxy");
+            args.Add(LocalNonPaymentProxy);
         }
 
         private string GetConfiguredCfWorkerDomain()

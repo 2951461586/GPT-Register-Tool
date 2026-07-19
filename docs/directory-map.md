@@ -8,7 +8,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | Path | Classification | Owner / responsibility | Notes |
 | --- | --- | --- | --- |
 | `sms_tool/` | Python application core | CLI orchestration, mailbox handling, registration, payment links, payment adapters, storage, account scans | Keep command-specific imports lazy in `sms_tool.cli`. |
-| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, read-only SMSBower catalog adapter, local command execution, desktop publish scripts | UI starts CLI commands; activation/payment/business logic stays in `sms_tool`. |
+| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, fixed non-payment proxy launcher, read-only SMSBower catalog adapter, local command execution, desktop publish scripts | UI starts CLI commands; payment stage routing and other business logic stay in `sms_tool`. |
 | `services/` | Local provider services | Optional GoPay, ADB, and mailbox helper services used by CLI/UI | Services expose explicit process/API boundaries and should not write account SQLite directly. |
 | `tests/` | Offline verification | Unit tests for module seams and persistence semantics | Live vendor/browser tests must be opt-in. |
 | `docs/` | Source-owned documentation | Architecture, boundaries, directory map, and operating notes | Do not place runtime logs or screenshots here unless deliberately curated. |

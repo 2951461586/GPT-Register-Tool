@@ -1586,6 +1586,7 @@ def generate_pp_link(
     checkout_country: str | None = None,
     require_zero: bool | None = None,
     require_ba_token: bool | None = None,
+    stage_proxy_countries: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """生成 PayPal BA 直链 (兼容旧接口)。
 
@@ -1680,6 +1681,7 @@ def generate_pp_link(
             checkout_proxy=checkout_proxy,
             target_country=target_country,
             checkout_country=checkout_country,
+            stage_proxy_countries=stage_proxy_countries,
         )
     if _is_hosted_generation_type(generation_type):
         return generate_hosted_long_url(
@@ -1692,6 +1694,7 @@ def generate_pp_link(
             target_country=target_country,
             checkout_country=checkout_country,
             require_zero=require_zero,
+            stage_proxy_countries=stage_proxy_countries,
         )
 
     if _is_zero_due_generation_type(generation_type):
@@ -1715,14 +1718,15 @@ def generate_pp_link(
 
     state = _paypal_proxy_state(paypal_cfg)
     configured_countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
+    country_overrides = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
     stage_proxy_countries = {
-        "checkout": str(configured_countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country).upper(),
-        "promotion": str(configured_countries.get("promotion") or infer_proxy_country(promotion_proxy) or "").upper(),
-        "provider": str(configured_countries.get("provider") or infer_proxy_country(provider_proxy) or target_country).upper(),
-        "stripe_init": str(configured_countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country).upper(),
-        "payment_method": str(configured_countries.get("payment_method") or infer_proxy_country(payment_method_proxy) or target_country).upper(),
-        "confirm": str(configured_countries.get("confirm") or infer_proxy_country(confirm_proxy) or target_country).upper(),
-        "approve": str(configured_countries.get("approve") or infer_proxy_country(approve_proxy) or target_country).upper(),
+        "checkout": str(country_overrides.get("checkout") or configured_countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country).upper(),
+        "promotion": str(country_overrides.get("promotion") or configured_countries.get("promotion") or infer_proxy_country(promotion_proxy) or "").upper(),
+        "provider": str(country_overrides.get("provider") or configured_countries.get("provider") or infer_proxy_country(provider_proxy) or target_country).upper(),
+        "stripe_init": str(country_overrides.get("stripe_init") or configured_countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country).upper(),
+        "payment_method": str(country_overrides.get("payment_method") or configured_countries.get("payment_method") or infer_proxy_country(payment_method_proxy) or target_country).upper(),
+        "confirm": str(country_overrides.get("confirm") or configured_countries.get("confirm") or infer_proxy_country(confirm_proxy) or target_country).upper(),
+        "approve": str(country_overrides.get("approve") or configured_countries.get("approve") or infer_proxy_country(approve_proxy) or target_country).upper(),
     }
     extractor = None
     try:
@@ -1943,6 +1947,7 @@ def generate_chatgpt_checkout_link(
     checkout_proxy: str | None = None,
     target_country: str | None = None,
     checkout_country: str | None = None,
+    stage_proxy_countries: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Create a ChatGPT checkout session and return chatgpt.com/checkout/{entity}/{cs_id}."""
     cfg = _load_json(DEFAULT_CONFIG_PATH)
@@ -1972,8 +1977,10 @@ def generate_chatgpt_checkout_link(
         print(f"[{step}] {msg}", file=sys.stderr)
 
     try:
+        country_overrides = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
         expected_country = str(
-            ((paypal_cfg.get("stage_proxy_countries") or {}).get("checkout") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else "")
+            country_overrides.get("checkout")
+            or ((paypal_cfg.get("stage_proxy_countries") or {}).get("checkout") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else "")
             or infer_proxy_country(checkout_proxy)
             or checkout_country
         ).upper()
@@ -2039,6 +2046,7 @@ def generate_hosted_long_url(
     target_country: str | None = None,
     checkout_country: str | None = None,
     require_zero: bool | None = None,
+    stage_proxy_countries: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Generate a ChatGPT/Stripe hosted checkout URL without entering BA/approve flow."""
     cfg = _load_json(DEFAULT_CONFIG_PATH)
@@ -2073,12 +2081,13 @@ def generate_hosted_long_url(
 
     try:
         countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
+        country_overrides = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
         checkout_proxy, checkout_exit = _prepare_configured_stage_proxy(
             paypal_cfg,
             state,
             "checkout",
             checkout_proxy,
-            str(countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country),
+            str(country_overrides.get("checkout") or countries.get("checkout") or infer_proxy_country(checkout_proxy) or checkout_country),
             emit,
         )
         emit("checkout", f"Stage 1: proxy={redact_proxy_url(checkout_proxy)} for hosted checkout")
@@ -2113,7 +2122,7 @@ def generate_hosted_long_url(
             state,
             "stripe_init",
             stripe_init_proxy,
-            str(countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country),
+            str(country_overrides.get("stripe_init") or country_overrides.get("provider") or countries.get("stripe_init") or infer_proxy_country(stripe_init_proxy) or target_country),
             emit,
         )
         emit("stripe_init", f"Stage 2: proxy={redact_proxy_url(stripe_init_proxy)} for Stripe init")

@@ -56,10 +56,10 @@ copy config.example.json config.json
 
 Required choices:
 
-- `proxy.default`: local HTTP/SOCKS proxy, or `direct`.
+- `proxy.default`: fixed non-payment proxy `http://127.0.0.1:7897`. Desktop registration, mailbox, SMS verification, quota refresh, session refresh, and other non-payment commands all use this local port.
 - `email_registration.token_file`: relative mailbox pool path such as `mailbox_tokens.txt`, or leave empty and use LuckMail.
 - `email_registration.luckmail_api_key`: required only for LuckMail purchase/token flows.
-- `mailbox_proxy`: dedicated proxy for inbox loading and OTP polling. It takes precedence over the registration/payment proxy; use `http://127.0.0.1:7897` to keep mailbox traffic on the local Clash proxy.
+- `mailbox_proxy`: inbox loading and OTP polling proxy, also fixed to `http://127.0.0.1:7897`.
 - `email_registration.cfworker_*`: CFWorker domain mailbox settings. `cfworker_url` can point at a custom Worker domain, `cfworker_admin_token` is sent as both `Authorization: Bearer` and `X-Admin-Token`, `cfworker_poll_proxy` controls whether inbox polling uses the selected proxy, `cfworker_direct_fallback` allows direct retry after proxy failure, and `cfworker_otp_issued_after_grace_seconds` controls the timestamp grace window used for fresh OTP filtering. Inbox list/detail reads are normalized by the Python mailbox adapter, including RFC 2047 subjects and quoted-printable/base64 MIME bodies.
 - `email_registration.gmail.*`: Gmail provider settings. `enabled + email + app_password` is the simplest receive/send setup. `auth_mode=oauth_refresh` additionally requires `client_id`, `client_secret`, and `refresh_token`. `imap_folders` defaults to `INBOX,[Gmail]/Spam,[Gmail]/All Mail`, and `smtp_*` controls local Gmail SMTP sending.
 - `k12.workspace_ids`: default workspace ID (used by workspace scan fallback).
@@ -78,6 +78,8 @@ Required choices:
   - `approve`: Stage 3 代理 (目标国出口)，用于 ChatGPT approve + 轮询 redirect
   - 如果 `approve` 未配置，降级使用 `provider`
   - CLI 参数 `--checkout-proxy` / `--provider-proxy` / `--approve-proxy` 可覆盖配置文件
+  - 桌面端“协议支付提链”可分别选择 `checkout` / `approve` / `update` 的目标地区（US/GB/DE/JP/BR/TR/VN），选择历史固定保存在 `runtime/protocol_payment_history.json`；“测试出口”会实际探测三段代理的 IP 和国家。
+  - 对应 CLI 参数为 `--checkout-proxy-country` / `--approve-proxy-country` / `--update-proxy-country`，`--test-payment-proxies` 可独立测试出口。
 - `protocol_payments`: 统一协议提链配置。`enabled_methods` 控制可用方式，`reference_root` 默认指向 `services/protocol-payment`，`state_file` 记录状态机结果，`methods.<method>.proxy` 为 iDEAL/PIX/Kakao Pay/BLIK/TWINT 的 sticky 代理 Seed。BLIK 还需要 `methods.blik.blik_code` 或 CLI `--blik-code`。
 - `paypal.target_country`: 目标国家代码 (如 `GB`, `DE`, `AU`)，默认 `GB`。决定 Stripe checkout 的账单国家和 PayPal BA 链的区域。
 - `paypal.require_zero_due`: 是否要求 0 元金额，默认 `true`。设为 `false` 允许非零金额 (无 promo 时)。
@@ -87,6 +89,7 @@ Required choices:
 - `paypal.resolve_ba_redirect`: current default is `false` for hosted long-link mode.
 - `paypal.require_ba_token`: current default is `false` for hosted long-link mode.
 - `paypal.explicit_proxy_overrides_stage_proxies`: current default is `false`, so a UI/CLI `--proxy` is used as the default candidate proxy but does not override `paypal.stage_proxies.confirm=direct`.
+- Payment routing is the exception to the local-7897 rule. PayPal, GoPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, and TWINT continue to use their method/stage proxy configuration; non-payment `proxy.default` must not replace configured payment stages.
 - `paypal.checkout_ui_mode`: current default is `hosted`; together with `link_mode=chatgpt_checkout` it now follows `ChatGPT checkout -> Stripe /payment_pages/{cs_id}/init -> stripe_hosted_url`, then normalizes `checkout.stripe.com/c/pay/...` to `pay.openai.com/c/pay/...`. It does not enter Stripe confirm/approve. Keep `paypal.require_zero_due=true` to stay strictly on the 0 yuan/free-trial path.
 - `--regenerate-paypal-link --proxy ...`: forces PayPal/Stripe link regeneration through the selected proxy. Batch regeneration is capped by `paypal.max_regenerate_workers` (default `1`) and staggered by `paypal.regenerate_delay_seconds` to avoid checkout `429` rate limits; with `paypal.explicit_proxy_overrides_stage_proxies=false`, `--proxy` still does not override stage-specific routes such as `confirm=direct`.
 - `paypal_browser.browser_engine`: project-local PayPal browser engine, default `camoufox` with `cloakbrowser` fallback support from `sms_tool.paypal_auto`.
@@ -198,7 +201,7 @@ When `--chatai-mailbox-file` or `--mailbox-file` is explicitly provided and no m
 Register from configured mailbox source:
 
 ```powershell
-python chatgpt_phone_reg.py --count 4 --workers 4 --proxy socks5h://127.0.0.1:7897
+python chatgpt_phone_reg.py --count 4 --workers 4 --proxy http://127.0.0.1:7897
 ```
 
 Register from Chatai file:
@@ -288,13 +291,13 @@ python chatgpt_phone_reg.py --email user@example.com --mark-paypal-status comple
 Run PayPal browser payment automation for an existing account with a saved payment link:
 
 ```powershell
-python chatgpt_phone_reg.py --email user@example.com --one-click-pay --proxy socks5h://127.0.0.1:7897
+python chatgpt_phone_reg.py --email user@example.com --one-click-pay --proxy <PAYMENT_PROXY>
 ```
 
 Batch mode accepts one email per line:
 
 ```powershell
-python chatgpt_phone_reg.py --one-click-pay --email-file pending_emails.txt --workers 4 --proxy socks5h://127.0.0.1:7897
+python chatgpt_phone_reg.py --one-click-pay --email-file pending_emails.txt --workers 4 --proxy <PAYMENT_PROXY>
 ```
 
 The PayPal one-click path uses `sms_tool.paypal_auto`, generates PayPal signup identity/address/card data inside this project, then runs the project-local browser flow against the already saved SQLite/session `paypal_url`. It does not regenerate PayPal links; run `--regenerate-paypal-link` explicitly before one-click payment when an account has no saved link. The older pure HTTP no-card module remains in `sms_tool.paypal_nocard` but is no longer the default PayPal `--one-click-pay` path.

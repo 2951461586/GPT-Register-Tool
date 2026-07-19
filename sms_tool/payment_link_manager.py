@@ -155,7 +155,7 @@ def generate_payment_link(
             native_kwargs = _select_kwargs(kwargs, {
                 "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
                 "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
-                "checkout_country", "require_zero", "require_ba_token",
+                "checkout_country", "require_zero", "require_ba_token", "stage_proxy_countries",
             })
             result = generate_pp_link(
                 access_token=access_token,

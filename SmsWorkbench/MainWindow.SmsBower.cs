@@ -18,10 +18,19 @@ namespace SmsWorkbench
 
             string endpoint = FirstNonEmpty(GetString(smsBower, "endpoint"), SmsBowerCatalogClient.DefaultEndpoint);
             IReadOnlyList<SmsBowerCountryChoice> countries;
+            string balance = "--";
             try
             {
                 System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
                 countries = await SmsBowerCatalogClient.LoadOpenAiCatalogAsync(httpClient, apiKey, endpoint);
+                try
+                {
+                    balance = await SmsBowerCatalogClient.LoadBalanceAsync(httpClient, apiKey, endpoint);
+                }
+                catch (Exception balanceError)
+                {
+                    AppServices.Logger?.Warning(balanceError, "Failed to load SMSBower balance");
+                }
             }
             catch (Exception exc)
             {
@@ -70,16 +79,28 @@ namespace SmsWorkbench
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+            var headingPanel = new StackPanel
+            {
+                Margin = new Thickness(0, 0, 0, 18)
+            };
             var heading = new TextBlock
             {
                 Text = "选择 SMSBower 号码",
                 FontSize = 20,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 18)
+                Margin = new Thickness(0, 0, 0, 4)
             };
-            Grid.SetRow(heading, 0);
-            root.Children.Add(heading);
+            var balanceText = new TextBlock
+            {
+                Text = "当前平台余额：$" + balance,
+                FontSize = 13,
+                Foreground = (Brush)FindResource("TextSub")
+            };
+            headingPanel.Children.Add(heading);
+            headingPanel.Children.Add(balanceText);
+            Grid.SetRow(headingPanel, 0);
+            root.Children.Add(headingPanel);
 
             var servicePanel = CreateSmsBowerDialogRow("服务商", out ContentControl serviceHost);
             serviceHost.Content = new TextBlock
@@ -198,6 +219,14 @@ namespace SmsWorkbench
             smsBower["min_price"] = chosenTier.Price;
             smsBower["max_price"] = chosenTier.Price;
             smsBower["target_price"] = chosenTier.Price;
+            if (string.IsNullOrWhiteSpace(chosenTier.ProviderIds))
+            {
+                smsBower.Remove("provider_ids");
+            }
+            else
+            {
+                smsBower["provider_ids"] = chosenTier.ProviderIds;
+            }
             phoneReuse["smsbower"] = smsBower;
             SaveConfig(path, config);
             return true;

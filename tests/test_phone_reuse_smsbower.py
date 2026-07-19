@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 
 from sms_tool import registration
 from sms_tool import phone_reuse
-from sms_tool.phone_reuse import PhonePool, PhoneSlot, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
+from sms_tool.phone_reuse import PhonePool, PhoneSlot, _complete_smsbower_activation, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
 from sms_tool.sms_provider import SmsProviderAdapter
-from sms_tool.smsbower import SmsBowerClient, normalize_country, normalize_phone, normalize_service
+from sms_tool.smsbower import SmsBowerActivation, SmsBowerClient, normalize_country, normalize_phone, normalize_service
 
 
 class SmsBowerPhoneReuseTests(unittest.TestCase):
@@ -23,7 +23,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = SmsBowerClient(api_key="test-key")
 
         with patch("sms_tool.smsbower._requests.get", return_value=response) as request:
-            activation = client.get_number(service="dr", country="33", min_price="0.026", max_price="0.026")
+            activation = client.get_number(
+                service="dr",
+                country="33",
+                min_price="0.026",
+                max_price="0.026",
+                provider_ids="3243,3253",
+            )
 
         self.assertEqual(activation.activation_id, "act-1")
         self.assertEqual(activation.country, "33")
@@ -32,6 +38,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(params["country"], "33")
         self.assertEqual(params["minPrice"], "0.026")
         self.assertEqual(params["maxPrice"], "0.026")
+        self.assertEqual(params["providerIds"], "3243,3253")
 
     def test_phone_reuse_uses_common_sms_provider_adapter_contract(self):
         slot = PhoneSlot(phone="+233555123456", provider="smsbower")
@@ -39,6 +46,77 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
 
         self.assertIsInstance(adapter, SmsProviderAdapter)
         self.assertEqual(adapter.provider, "smsbower")
+
+    def test_smsbower_acquire_refreshes_provider_ids_for_selected_tier(self):
+        slot = PhoneSlot(
+            phone="",
+            provider="smsbower",
+            api_key="test-key",
+            service="dr",
+            country="33",
+            min_price="0.026",
+            max_price="0.026",
+        )
+        client = Mock()
+        client.get_prices.return_value = [
+            {"country_id": "33", "service": "dr", "provider_id": "3243", "price": "0.026", "count": 3},
+            {"country_id": "33", "service": "dr", "provider_id": "3288", "price": "0.052", "count": 64},
+        ]
+        client.get_number.return_value = SmsBowerActivation("act-1", "+573001234567", "dr", "33", "0.026")
+
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            prepared = _prepare_smsbower_for_send(slot)
+
+        self.assertTrue(prepared)
+        self.assertEqual(slot.provider_ids, "3243")
+        client.get_number.assert_called_once_with(
+            service="dr",
+            country="33",
+            min_price="0.026",
+            max_price="0.026",
+            provider_ids="3243",
+        )
+
+    def test_smsbower_no_numbers_retries_up_to_ten_times(self):
+        slot = PhoneSlot(
+            phone="",
+            provider="smsbower",
+            api_key="test-key",
+            service="dr",
+            country="33",
+            min_price="0.017",
+            max_price="0.017",
+        )
+        client = Mock()
+        client.get_prices.return_value = []
+        client.get_number.side_effect = RuntimeError("getNumber error: NO_NUMBERS")
+
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_reuse.time.sleep") as sleep:
+            prepared = _prepare_smsbower_for_send(slot)
+
+        self.assertFalse(prepared)
+        self.assertEqual(client.get_number.call_count, 10)
+        self.assertEqual(sleep.call_count, 9)
+
+    def test_smsbower_complete_falls_back_to_cancel_and_resets_slot(self):
+        slot = PhoneSlot(
+            phone="+573001234567",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-1",
+        )
+        client = Mock()
+        client.complete.return_value = False
+        client.cancel.return_value = True
+
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            _complete_smsbower_activation(slot)
+
+        client.complete.assert_called_once_with("act-1")
+        client.cancel.assert_called_once_with("act-1")
+        self.assertEqual(slot.activation_id, "")
+        self.assertEqual(slot.phone, "")
 
     def test_smsbower_activation_completes_immediately_after_reuse_limit(self):
         slot = PhoneSlot(
@@ -412,6 +490,99 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
             self.assertEqual(next_pool.phones[0].phone, "")
             self.assertEqual(next_pool.phones[0].activation_id, "")
 
+    def test_smsbower_phone_already_in_use_cancels_and_retries_up_to_ten(self):
+        slot = PhoneSlot(
+            phone="+573000000001",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-1",
+            max_reuse_count=1,
+            number_attempts=1,
+            slot_id="smsbower:0",
+        )
+        pool = PhonePool(phones=[slot])
+        next_number = 2
+
+        def acquire_new_number(item):
+            nonlocal next_number
+            item.phone = f"+5730000000{next_number:02d}"
+            item.activation_id = f"act-{next_number}"
+            item.reuse_count = 0
+            item.last_sms_code = ""
+            next_number += 1
+            return True
+
+        rejected = {
+            "ok": False,
+            "status_code": 400,
+            "body": '{"error":{"message":"Phone number already in use. Please use a different phone number."}}',
+        }
+        client = Mock()
+        client.cancel.return_value = True
+        client.complete.return_value = True
+        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
+             patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
+             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="123456"), \
+             patch("sms_tool.phone_reuse.validate_phone_otp", side_effect=[rejected] * 9 + [
+                 {"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}
+             ]), \
+             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["activation_id"], "act-10")
+        self.assertEqual(client.cancel.call_count, 9)
+        self.assertEqual(acquire.call_count, 9)
+        client.complete.assert_called_once_with("act-10")
+
+    def test_smsbower_phone_in_use_send_failure_cancels_and_retries_up_to_ten(self):
+        slot = PhoneSlot(
+            phone="+573000000001",
+            provider="smsbower",
+            api_key="test-key",
+            activation_id="act-1",
+            max_reuse_count=1,
+            number_attempts=1,
+            slot_id="smsbower:0",
+        )
+        pool = PhonePool(phones=[slot])
+        next_number = 2
+
+        def acquire_new_number(item):
+            nonlocal next_number
+            item.phone = f"+5730000000{next_number:02d}"
+            item.activation_id = f"act-{next_number}"
+            item.reuse_count = 0
+            item.last_sms_code = ""
+            next_number += 1
+            return True
+
+        rejected = {
+            "ok": False,
+            "status_code": 400,
+            "error_code": "phone_number_in_use",
+            "body": '{"error":{"message":"Phone number already in use. Please use a different phone number."}}',
+            "message": "Phone number already in use. Please use a different phone number.",
+        }
+        client = Mock()
+        client.cancel.return_value = True
+        client.complete.return_value = True
+        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
+             patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[rejected] * 9 + [{"ok": True}]), \
+             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="123456") as wait_code, \
+             patch("sms_tool.phone_reuse.validate_phone_otp", return_value={
+                 "ok": True, "continue_url": "http://localhost/callback?code=x&state=y"
+             }), \
+             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["activation_id"], "act-10")
+        self.assertEqual(client.cancel.call_count, 9)
+        self.assertEqual(acquire.call_count, 9)
+        wait_code.assert_called_once()
+        client.complete.assert_called_once_with("act-10")
+
     def test_phone_pool_state_does_not_override_configured_send_retries(self):
         with TemporaryDirectory() as tmp:
             state_path = f"{tmp}/phone_state.json"
@@ -539,6 +710,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
                         "min_price": "0.026",
                         "max_price": "0.026",
                         "target_price": "0.026",
+                        "provider_ids": "3243,3253",
                     },
                 }
             }
@@ -549,6 +721,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].country, "33")
         self.assertEqual(pool.phones[0].min_price, "0.026")
         self.assertEqual(pool.phones[0].max_price, "0.026")
+        self.assertEqual(pool.phones[0].provider_ids, "3243,3253")
 
     def test_saved_smsbower_activation_is_not_reused_after_tier_change(self):
         with TemporaryDirectory() as tmp:

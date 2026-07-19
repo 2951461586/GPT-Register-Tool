@@ -6,7 +6,7 @@ namespace SmsWorkbench
         private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             AddPaypalOption(args);
             RunBackend("邮箱池注册", args);
         }
@@ -88,7 +88,7 @@ namespace SmsWorkbench
                 if (selectedOptions == null) return;
                 var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(pendingArgs);
-                AddProxy(pendingArgs);
+                AddNonPaymentProxy(pendingArgs);
                 AddPaypalOption(pendingArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
                 RunBackend(selectedOptions.SkipPaymentLink ? "选中未注册邮箱注册" : "选中未注册邮箱注册+支付链接", pendingArgs);
                 return;
@@ -105,7 +105,7 @@ namespace SmsWorkbench
                 if (selectedOptions == null) return;
                 var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(selectedArgs);
-                AddProxy(selectedArgs);
+                AddNonPaymentProxy(selectedArgs);
                 AddPaypalOption(selectedArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
                 RunBackend(selectedOptions.SkipPaymentLink ? "选中邮箱注册" : "选中邮箱注册+支付链接", selectedArgs);
                 return;
@@ -122,7 +122,7 @@ namespace SmsWorkbench
                     "--count",
                     options.Count.ToString(),
                 };
-                if (!string.IsNullOrWhiteSpace(ProxyText)) phoneArgs.AddRange(new[] { "--proxy", ProxyText.Trim() });
+                phoneArgs.AddRange(new[] { "--proxy", LocalNonPaymentProxy });
                 AddPaypalOption(phoneArgs, options.PaymentMethod, options.SkipPaymentLink);
                 RunBackend(options.SkipPaymentLink ? "手机号注册 (SMSBower)" : "手机号注册+支付链接 (SMSBower)", phoneArgs);
                 return;
@@ -141,7 +141,7 @@ namespace SmsWorkbench
                     options.Workers.ToString()
                 };
                 AddRegistrationAtOnlyArgs(cfArgs);
-                AddProxy(cfArgs);
+                AddNonPaymentProxy(cfArgs);
                 AddPaypalOption(cfArgs, options.PaymentMethod, options.SkipPaymentLink);
                 RunBackend(options.SkipPaymentLink ? "CFWorker邮箱注册" : "CFWorker邮箱注册+支付链接", cfArgs);
                 return;
@@ -158,7 +158,7 @@ namespace SmsWorkbench
             }
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddRegistrationAtOnlyArgs(args);
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             AddPaypalOption(args, options.PaymentMethod, options.SkipPaymentLink);
             RunBackend(taskName, args);
         }
@@ -180,6 +180,13 @@ namespace SmsWorkbench
             }
 
             var args = new List<string> { "--one-click-sms", "--phone-source", "smsbower", "--workers", "1", "--refresh-timeout", "60" };
+            if (!TryCreateMailboxFile(rows, out string mailboxArg, out string mailboxFile, out int mailboxCount)
+                || mailboxCount != rows.Count)
+            {
+                ShowThemedInfoDialog("未选择邮箱", "一键接码需要读取邮箱验证码。请先导入并选择包含完整邮箱凭据的账号。");
+                return;
+            }
+            args.AddRange(new[] { mailboxArg, mailboxFile });
             if (rows.Count > 1)
             {
                 string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_sms_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
@@ -191,7 +198,7 @@ namespace SmsWorkbench
                 args.AddRange(new[] { "--email", rows[0].Identifier });
                 AddSessionFileArg(args, rows[0]);
             }
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             RunBackend("一键接码(" + rows.Count + ")", args);
         }
 
@@ -232,7 +239,7 @@ namespace SmsWorkbench
                 args.AddRange(new[] { "--email", rows[0].Identifier });
                 AddSessionFileArg(args, rows[0]);
             }
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             RunBackend("额度查询(" + rows.Count + ")", args);
         }
 
@@ -576,24 +583,33 @@ namespace SmsWorkbench
 
         private bool TryCreateSelectedMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount)
         {
-            mailboxArg = "--chatai-mailbox-file";
+            return TryCreateMailboxFile(SelectedRowsOrCurrent(), out mailboxArg, out mailboxFile, out selectedCount);
+        }
+
+        private bool TryCreateMailboxFile(IEnumerable<PoolRow> rows, out string mailboxArg, out string mailboxFile, out int selectedCount)
+        {
+            mailboxArg = "";
             mailboxFile = "";
             selectedCount = 0;
             var lines = new List<string>();
-            foreach (PoolRow row in SelectedRowsOrCurrent())
+            var mailboxArgs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PoolRow row in rows ?? Enumerable.Empty<PoolRow>())
             {
                 string line = (row.RawLine ?? "").Trim().TrimStart('\ufeff');
                 if (MailboxArgForLine(line).Length == 0)
                 {
                     line = FindMailboxLineForRow(row);
                 }
-                if (MailboxArgForLine(line).Length > 0)
+                string lineArg = MailboxArgForLine(line);
+                if (lineArg.Length > 0)
                 {
                     lines.Add(line.Trim());
+                    mailboxArgs.Add(lineArg);
                 }
             }
-            if (lines.Count == 0) return false;
+            if (lines.Count == 0 || mailboxArgs.Count != 1) return false;
 
+            mailboxArg = mailboxArgs.First();
             mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
             selectedCount = lines.Count;

@@ -4,6 +4,7 @@ namespace SmsWorkbench
     {
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
         private static readonly HttpClient httpClient = new HttpClient();
+        private const string LocalNonPaymentProxy = "http://127.0.0.1:7897";
         private static readonly ConfigComboOption[] BillingRegionOptions = new[]
         {
             new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
@@ -28,7 +29,6 @@ namespace SmsWorkbench
         private string searchText = "";
         private string countText = "1";
         private string pageSizeText = "25";
-        private string proxyText = "";
         private object scopeFilter = "全部";
         private bool skipPaypalLink;
         private string logText = "";
@@ -134,12 +134,6 @@ namespace SmsWorkbench
             set { pageSizeText = value ?? "25"; OnPropertyChanged(nameof(PageSizeText)); currentPage = 1; RefreshPagedRows(); }
         }
 
-        public string ProxyText
-        {
-            get => proxyText;
-            set { proxyText = value ?? ""; OnPropertyChanged(nameof(ProxyText)); }
-        }
-
         public object ScopeFilter
         {
             get => scopeFilter;
@@ -228,7 +222,6 @@ namespace SmsWorkbench
             }
 
             ScopeFilter = "全部";
-            ProxyText = ConfigString("proxy", "default");
             RefreshPools();
             ApplySidebarCompact(false);
         }

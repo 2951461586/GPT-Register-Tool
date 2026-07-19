@@ -89,19 +89,23 @@ namespace SmsWorkbench
 
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
         {
-            ShowProtocolPaymentDialog();
+            PoolRow selectedAccount = SelectedRowsOrCurrent()
+                .Where(row => !string.IsNullOrWhiteSpace(row.Identifier))
+                .FirstOrDefault();
+            ShowProtocolPaymentDialog(selectedAccount);
         }
 
         /// <summary>
         /// Unified protocol payment-link extractor.
         /// </summary>
-        private void ShowProtocolPaymentDialog()
+        private void ShowProtocolPaymentDialog(PoolRow selectedAccount = null)
         {
+            ProtocolPaymentPreferences preferences = LoadProtocolPaymentPreferences();
             var win = new Window
             {
                 Title = "协议支付提链",
                 Width = 620,
-                Height = 720,
+                Height = 760,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
                 ResizeMode = ResizeMode.CanResize,
@@ -124,6 +128,25 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 16),
             });
+
+            if (selectedAccount != null)
+            {
+                mainPanel.Children.Add(new Border
+                {
+                    Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                    BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(12, 9, 12, 9),
+                    Margin = new Thickness(0, 0, 0, 14),
+                    CornerRadius = new CornerRadius(6),
+                    Child = new TextBlock
+                    {
+                        Text = "选中账号：" + selectedAccount.Identifier + "\n请选择需要提取的支付链接方式。",
+                        Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                });
+            }
 
             // ── 支付方式选择 ──────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
@@ -149,13 +172,15 @@ namespace SmsWorkbench
             mainPanel.Children.Add(methodCombo);
 
             // ── AT 输入 ───────────────────────────────────────────────────
-            mainPanel.Children.Add(new TextBlock
+            var atLabel = new TextBlock
             {
                 Text = "Access Token (JWT)",
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
-            });
+                Visibility = selectedAccount == null ? Visibility.Visible : Visibility.Collapsed,
+            };
+            mainPanel.Children.Add(atLabel);
             var atBox = new TextBox
             {
                 Height = 80,
@@ -168,6 +193,7 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
                 Margin = new Thickness(0, 0, 0, 12),
+                Visibility = selectedAccount == null ? Visibility.Visible : Visibility.Collapsed,
             };
             mainPanel.Children.Add(atBox);
 
@@ -204,6 +230,7 @@ namespace SmsWorkbench
             });
             var proxyBox = new TextBox
             {
+                Text = preferences.Proxy,
                 Height = 28,
                 FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = 12,
@@ -214,24 +241,68 @@ namespace SmsWorkbench
             };
             mainPanel.Children.Add(proxyBox);
 
-            var stageProxyPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+            ComboBox CreateStageCountryCombo(string selectedCountry)
+            {
+                var combo = new ComboBox { MinWidth = 145 };
+                foreach (var item in new[] {
+                    ("US", "美国 US"), ("GB", "英国 GB"), ("DE", "德国 DE"),
+                    ("JP", "日本 JP"), ("BR", "巴西 BR"), ("TR", "土耳其 TR"),
+                    ("VN", "越南 VN"),
+                })
+                {
+                    combo.Items.Add(new ComboBoxItem { Content = item.Item2, Tag = item.Item1 });
+                }
+                string wanted = (selectedCountry ?? "").Trim().ToUpperInvariant();
+                combo.SelectedIndex = 0;
+                for (int index = 0; index < combo.Items.Count; index++)
+                {
+                    if (combo.Items[index] is ComboBoxItem option
+                        && string.Equals(Convert.ToString(option.Tag), wanted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        combo.SelectedIndex = index;
+                        break;
+                    }
+                }
+                return combo;
+            }
+
+            var stageProxyPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 12) };
             stageProxyPanel.Children.Add(new TextBlock
             {
-                Text = "分段代理 (格式: checkout=... provider=... approve=...)",
-                FontSize = 11,
+                Text = "分段代理目标地区",
+                FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                Margin = new Thickness(0, 0, 0, 2),
+                Margin = new Thickness(0, 0, 0, 5),
             });
-            var stageProxyBox = new TextBox
+
+            var stageGrid = new Grid();
+            stageGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            stageGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            stageGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            var checkoutCountryCombo = CreateStageCountryCombo(FirstNonEmpty(preferences.CheckoutCountry, "US"));
+            var approveCountryCombo = CreateStageCountryCombo(FirstNonEmpty(preferences.ApproveCountry, "TR"));
+            var updateCountryCombo = CreateStageCountryCombo(FirstNonEmpty(preferences.UpdateCountry, "TR"));
+            var stageControls = new[]
             {
-                Height = 28,
-                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-                FontSize = 11,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                ("Checkout", checkoutCountryCombo),
+                ("Approve", approveCountryCombo),
+                ("Update", updateCountryCombo),
             };
-            stageProxyPanel.Children.Add(stageProxyBox);
+            for (int index = 0; index < stageControls.Length; index++)
+            {
+                var stageColumn = new StackPanel { Margin = new Thickness(index == 0 ? 0 : 5, 0, index == 2 ? 0 : 5, 0) };
+                stageColumn.Children.Add(new TextBlock
+                {
+                    Text = stageControls[index].Item1,
+                    FontSize = 11,
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                    Margin = new Thickness(0, 0, 0, 3),
+                });
+                stageColumn.Children.Add(stageControls[index].Item2);
+                Grid.SetColumn(stageColumn, index);
+                stageGrid.Children.Add(stageColumn);
+            }
+            stageProxyPanel.Children.Add(stageGrid);
             mainPanel.Children.Add(stageProxyPanel);
 
             var blikCodePanel = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 12) };
@@ -307,6 +378,16 @@ namespace SmsWorkbench
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 8, 0),
             };
+            var testProxyBtn = new Button
+            {
+                Content = "测试出口",
+                Height = 32,
+                MinWidth = 88,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
             var copyBtn = new Button
             {
                 Content = "复制链接",
@@ -338,6 +419,7 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
             };
+            btnPanel.Children.Add(testProxyBtn);
             btnPanel.Children.Add(extractBtn);
             btnPanel.Children.Add(copyBtn);
             btnPanel.Children.Add(openQrBtn);
@@ -357,6 +439,38 @@ namespace SmsWorkbench
                 return tag.Split('|')[0];
             }
 
+            string ComboCode(ComboBox combo)
+            {
+                return combo.SelectedItem is ComboBoxItem item
+                    ? (Convert.ToString(item.Tag) ?? "").Trim().ToUpperInvariant()
+                    : "";
+            }
+
+            void AddStageCountryArgs(List<string> args)
+            {
+                string checkoutStage = ComboCode(checkoutCountryCombo);
+                string approveStage = ComboCode(approveCountryCombo);
+                string updateStage = ComboCode(updateCountryCombo);
+                if (checkoutStage.Length > 0) args.AddRange(new[] { "--checkout-proxy-country", checkoutStage });
+                if (approveStage.Length > 0) args.AddRange(new[] { "--approve-proxy-country", approveStage });
+                if (updateStage.Length > 0) args.AddRange(new[] { "--update-proxy-country", updateStage });
+            }
+
+            void SaveSelection()
+            {
+                SaveProtocolPaymentPreferences(new ProtocolPaymentPreferences
+                {
+                    Method = SelectedMethod(),
+                    Proxy = proxyBox.Text.Trim(),
+                    TargetCountry = countryCombo.SelectedItem is ComboBoxItem targetItem
+                        ? (Convert.ToString(targetItem.Content) ?? "").Substring(0, 2)
+                        : "US",
+                    CheckoutCountry = ComboCode(checkoutCountryCombo),
+                    ApproveCountry = ComboCode(approveCountryCombo),
+                    UpdateCountry = ComboCode(updateCountryCombo),
+                });
+            }
+
             // ── 支付方式切换时更新国家默认值 ──────────────────────────────
             methodCombo.SelectionChanged += (_, __) =>
             {
@@ -374,14 +488,80 @@ namespace SmsWorkbench
                 }
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
+                stageProxyPanel.Visibility = method == "paypal" || method == "upi" ? Visibility.Visible : Visibility.Collapsed;
+                updateCountryCombo.IsEnabled = method == "paypal";
             };
-            methodCombo.SelectedIndex = 0;
+            for (int index = 0; index < methodCombo.Items.Count; index++)
+            {
+                if (methodCombo.Items[index] is ComboBoxItem item
+                    && string.Equals(Convert.ToString(item.Tag)?.Split('|')[0], preferences.Method, StringComparison.OrdinalIgnoreCase))
+                {
+                    methodCombo.SelectedIndex = index;
+                    break;
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(preferences.TargetCountry))
+            {
+                for (int index = 0; index < countryCombo.Items.Count; index++)
+                {
+                    if (countryCombo.Items[index] is ComboBoxItem item
+                        && Convert.ToString(item.Content)?.StartsWith(preferences.TargetCountry + " ", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        countryCombo.SelectedIndex = index;
+                        break;
+                    }
+                }
+            }
+
+            testProxyBtn.Click += async (_, __) =>
+            {
+                SaveSelection();
+                var args = new List<string> { "--test-payment-proxies", "--payment-method", SelectedMethod() };
+                string proxy = proxyBox.Text.Trim();
+                if (proxy.Length > 0) args.AddRange(new[] { "--proxy", proxy });
+                AddStageCountryArgs(args);
+
+                resultBox.Text = "正在测试 checkout / approve / update 代理出口...";
+                testProxyBtn.IsEnabled = false;
+                extractBtn.IsEnabled = false;
+                try
+                {
+                    string result = await Task.Run(() => RunBackendWithResult("测试协议支付代理", args));
+                    using JsonDocument json = JsonDocument.Parse(result);
+                    JsonElement root = json.RootElement;
+                    var lines = new List<string>();
+                    bool allOk = root.TryGetProperty("ok", out JsonElement okEl) && okEl.GetBoolean();
+                    lines.Add(allOk ? "[成功] 代理出口符合选择" : "[失败] 存在不可用或地区不匹配的代理");
+                    if (root.TryGetProperty("stages", out JsonElement stagesEl) && stagesEl.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (string stage in new[] { "checkout", "approve", "update" })
+                        {
+                            if (!stagesEl.TryGetProperty(stage, out JsonElement stageEl)) continue;
+                            string ip = stageEl.TryGetProperty("ip", out JsonElement ipEl) ? ipEl.GetString() ?? "" : "";
+                            string actual = stageEl.TryGetProperty("country_code", out JsonElement ccEl) ? ccEl.GetString() ?? "" : "";
+                            string expected = stageEl.TryGetProperty("expected_country", out JsonElement expectedEl) ? expectedEl.GetString() ?? "" : "";
+                            string error = stageEl.TryGetProperty("error", out JsonElement errorEl) ? errorEl.GetString() ?? "" : "";
+                            lines.Add($"{stage}: {ip} / {actual} (目标 {expected})" + (error.Length > 0 ? $" - {error}" : ""));
+                        }
+                    }
+                    resultBox.Text = string.Join(Environment.NewLine, lines);
+                }
+                catch (Exception ex)
+                {
+                    resultBox.Text = "[异常] " + ex.Message;
+                }
+                finally
+                {
+                    testProxyBtn.IsEnabled = true;
+                    extractBtn.IsEnabled = true;
+                }
+            };
 
             // ── 提取按钮 ──────────────────────────────────────────────────
             extractBtn.Click += async (_, __) =>
             {
                 string at = atBox.Text.Trim();
-                if (string.IsNullOrEmpty(at))
+                if (selectedAccount == null && string.IsNullOrEmpty(at))
                 {
                     resultBox.Text = "请输入 Access Token";
                     return;
@@ -393,9 +573,9 @@ namespace SmsWorkbench
                     country = ci.Content.ToString().Substring(0, 2);
 
                 string proxy = proxyBox.Text.Trim();
-                string stageProxies = stageProxyBox.Text.Trim();
                 bool requireZero = zeroCheck.IsChecked == true;
                 bool requireBaToken = requireBaCheck.IsChecked == true;
+                SaveSelection();
 
                 resultBox.Text = "正在执行 " + PaymentMethodLabel(method) + " 协议提链...";
                 extractBtn.IsEnabled = false;
@@ -406,30 +586,21 @@ namespace SmsWorkbench
                 {
                     var args = new List<string>();
 
-                    args.AddRange(new[] { "--extract-payment-link", "--payment-method", method, "--at", at, "--target-country", country });
+                    args.AddRange(new[] { "--extract-payment-link", "--payment-method", method, "--target-country", country });
+                    if (selectedAccount != null)
+                    {
+                        args.AddRange(new[] { "--email", selectedAccount.Identifier });
+                        AddSessionFileArg(args, selectedAccount);
+                    }
+                    else
+                    {
+                        args.AddRange(new[] { "--at", at });
+                    }
 
                     if (!string.IsNullOrEmpty(proxy))
                         args.AddRange(new[] { "--proxy", proxy });
 
-                    if (!string.IsNullOrEmpty(stageProxies))
-                    {
-                        var parts = stageProxies.Split(new[] { ' ', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var part in parts)
-                        {
-                            var kv = part.Split('=', 2);
-                            if (kv.Length == 2)
-                            {
-                                string key = kv[0].Trim().ToLowerInvariant();
-                                string val = kv[1].Trim();
-                                if (key == "checkout" || key == "checkout-proxy")
-                                    args.AddRange(new[] { "--checkout-proxy", val });
-                                else if (key == "provider" || key == "provider-proxy")
-                                    args.AddRange(new[] { "--provider-proxy", val });
-                                else if (key == "approve" || key == "approve-proxy")
-                                    args.AddRange(new[] { "--approve-proxy", val });
-                            }
-                        }
-                    }
+                    AddStageCountryArgs(args);
 
                     if (!requireZero)
                         args.Add("--no-require-zero");
@@ -586,9 +757,124 @@ namespace SmsWorkbench
                 }
             };
 
-            closeBtn.Click += (_, __) => win.Close();
+            closeBtn.Click += (_, __) =>
+            {
+                SaveSelection();
+                win.Close();
+            };
+            win.Closed += (_, __) => SaveSelection();
 
             win.ShowDialog();
+        }
+
+        private ProtocolPaymentPreferences LoadProtocolPaymentPreferences()
+        {
+            string path = ProtocolPaymentPreferencesPath();
+            try
+            {
+                if (File.Exists(path))
+                {
+                    ProtocolPaymentHistoryFile saved = JsonSerializer.Deserialize<ProtocolPaymentHistoryFile>(
+                        File.ReadAllText(path, Encoding.UTF8),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (saved?.Last != null) return saved.Last;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("读取协议支付历史选择失败：" + ex.Message);
+            }
+
+            var defaults = new ProtocolPaymentPreferences();
+            try
+            {
+                Dictionary<string, object> config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                Dictionary<string, object> paypal = GetSection(config, "paypal");
+                Dictionary<string, object> countries = GetSection(paypal, "stage_proxy_countries");
+                defaults.CheckoutCountry = FirstNonEmpty(GetString(countries, "checkout"), "US");
+                defaults.ApproveCountry = FirstNonEmpty(GetString(countries, "approve"), "TR");
+                defaults.UpdateCountry = FirstNonEmpty(GetString(countries, "promotion"), "TR");
+                defaults.TargetCountry = FirstNonEmpty(GetString(paypal, "target_country"), "US");
+            }
+            catch
+            {
+            }
+            return defaults;
+        }
+
+        private void SaveProtocolPaymentPreferences(ProtocolPaymentPreferences preferences)
+        {
+            if (preferences == null) return;
+            string path = ProtocolPaymentPreferencesPath();
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path) ?? rootDir);
+                ProtocolPaymentHistoryFile saved = null;
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        saved = JsonSerializer.Deserialize<ProtocolPaymentHistoryFile>(
+                            File.ReadAllText(path, Encoding.UTF8),
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
+                    catch
+                    {
+                    }
+                }
+                saved ??= new ProtocolPaymentHistoryFile();
+                saved.History ??= new List<ProtocolPaymentHistoryEntry>();
+                string signature = preferences.Signature();
+                if (saved.History.Count == 0 || !string.Equals(saved.History[0].Signature, signature, StringComparison.Ordinal))
+                {
+                    saved.History.Insert(0, new ProtocolPaymentHistoryEntry
+                    {
+                        SavedAt = DateTimeOffset.Now.ToString("O"),
+                        Signature = signature,
+                        Selection = preferences,
+                    });
+                }
+                saved.History = saved.History.Take(20).ToList();
+                saved.Last = preferences;
+                File.WriteAllText(path, JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                Log("保存协议支付历史选择失败：" + ex.Message);
+            }
+        }
+
+        private string ProtocolPaymentPreferencesPath()
+        {
+            return Path.Combine(rootDir, "runtime", "protocol_payment_history.json");
+        }
+
+        private sealed class ProtocolPaymentPreferences
+        {
+            public string Method { get; set; } = "paypal";
+            public string Proxy { get; set; } = "";
+            public string TargetCountry { get; set; } = "US";
+            public string CheckoutCountry { get; set; } = "US";
+            public string ApproveCountry { get; set; } = "TR";
+            public string UpdateCountry { get; set; } = "TR";
+
+            public string Signature()
+            {
+                return string.Join("|", Method, Proxy, TargetCountry, CheckoutCountry, ApproveCountry, UpdateCountry);
+            }
+        }
+
+        private sealed class ProtocolPaymentHistoryEntry
+        {
+            public string SavedAt { get; set; } = "";
+            public string Signature { get; set; } = "";
+            public ProtocolPaymentPreferences Selection { get; set; } = new ProtocolPaymentPreferences();
+        }
+
+        private sealed class ProtocolPaymentHistoryFile
+        {
+            public ProtocolPaymentPreferences Last { get; set; } = new ProtocolPaymentPreferences();
+            public List<ProtocolPaymentHistoryEntry> History { get; set; } = new List<ProtocolPaymentHistoryEntry>();
         }
 
     }

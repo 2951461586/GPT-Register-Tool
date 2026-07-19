@@ -29,7 +29,7 @@ namespace SmsWorkbench
             File.WriteAllLines(tempFile, lines, new UTF8Encoding(false));
 
             var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(), "--workers", "4" };
-            AddProxy(args);
+            AddNonPaymentProxy(args);
             AddPaypalOption(args);
             RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
         }
@@ -152,15 +152,20 @@ namespace SmsWorkbench
             Log("启动：python " + string.Join(" ", args));
             var (stdout, stderr, exitCode) = CliLauncher.RunSync(rootDir, args, Quote, JoinArgs);
 
-            // 从 stdout 中提取最后一个 JSON 块
+            // 从 stdout 中提取最后一个完整 JSON 块；不能只取最后一个“{”，结果里可能有嵌套对象。
             if (!string.IsNullOrEmpty(stdout))
             {
-                int lastBrace = stdout.LastIndexOf('{');
-                if (lastBrace >= 0)
+                for (int start = stdout.LastIndexOf('{'); start >= 0; start = stdout.LastIndexOf('{', start - 1))
                 {
-                    string jsonPart = stdout.Substring(lastBrace);
-                    if (jsonPart.Contains("}"))
-                        return jsonPart;
+                    string candidate = stdout.Substring(start).Trim();
+                    try
+                    {
+                        using JsonDocument _ = JsonDocument.Parse(candidate);
+                        return candidate;
+                    }
+                    catch (JsonException)
+                    {
+                    }
                 }
                 return stdout;
             }

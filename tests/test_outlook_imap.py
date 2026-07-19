@@ -5,6 +5,12 @@ from sms_tool import outlook_imap
 
 
 class OutlookImapTests(unittest.TestCase):
+    def test_plus_alias_uses_base_address_for_oauth_login(self):
+        class Mailbox:
+            email = "owner+oai01@outlook.com"
+
+        self.assertEqual(outlook_imap.outlook_login_email(Mailbox()), "owner@outlook.com")
+
     def test_html_message_is_normalized_to_graph_shape(self):
         msg = EmailMessage()
         msg["Subject"] = "Your temporary ChatGPT verification code"
