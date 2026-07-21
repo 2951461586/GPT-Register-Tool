@@ -26,6 +26,16 @@
     "registration_mode": "passwordless",
     "use_as_username": false,
     "token_file": "mailbox_tokens.txt",
+    "remail": {
+      "enabled": false,
+      "base_url": "https://remail.aishop6.com",
+      "api_key": "",
+      "project_id": 2,
+      "product_id": 5,
+      "service_mode": "code",
+      "supply": "private_first",
+      "email_suffix": "outlook.com"
+    },
     "otp_poll_interval": 2,
     "cfworker_otp_settle_seconds": 3,
     "cfworker_timeout_seconds": 30,

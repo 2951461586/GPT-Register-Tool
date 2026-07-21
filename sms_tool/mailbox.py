@@ -28,22 +28,7 @@ from .mailbox_parsers import (
     _parse_mailbox_password_file,
     _parse_chatai_mailbox_file,
 )
-from .mailbox_luckmail import (
-    _create_luckmail_order,
-    _create_luckmail_purchase,
-    _latest_luckmail_message,
-    _latest_luckmail_message_id,
-    _luckmail_mail_time,
-    _luckmail_request,
-    _luckmail_token_alive,
-    _luckmail_token_client,
-    _luckmail_token_code,
-    _luckmail_token_email,
-    _luckmail_token_mails,
-    _poll_luckmail_otp,
-    _poll_luckmail_token_otp,
-    _snapshot_luckmail_token_message,
-)
+from . import mailbox_remail
 from . import mailbox_graph
 from .mailbox_graph import MailboxTokenExpiredError
 from . import mailbox_chongzhi
@@ -54,8 +39,8 @@ def _email_cfg():
     return CFG.get("email_registration", {})
 
 
-def _luckmail_enabled():
-    return bool((_email_cfg().get("luckmail_api_key") or "").strip())
+def _remail_enabled():
+    return mailbox_remail._remail_enabled()
 
 
 def _gmail_cfg():
@@ -87,12 +72,6 @@ def _otp_poll_interval():
 
 
 # moved _normalize_mailbox_email to dedicated mailbox module.
-
-# moved _luckmail_headers to dedicated mailbox module.
-
-# moved _luckmail_url to dedicated mailbox module.
-
-# moved _luckmail_token_client to dedicated mailbox module.
 
 def _cfworker_cfg():
     return mailbox_cfworker._cfworker_cfg(_email_cfg())
@@ -126,39 +105,18 @@ def _resolve_mailbox_proxy(proxy=None):
     return _configured_mailbox_proxy() or _normalize_mailbox_proxy(proxy)
 
 
-# moved _luckmail_token_code to dedicated mailbox module.
-
-# moved _luckmail_token_mails to dedicated mailbox module.
-
-# moved _luckmail_token_alive to dedicated mailbox module.
-
-# moved _luckmail_token_email to dedicated mailbox module.
-
-# moved _latest_luckmail_message to dedicated mailbox module.
-
-# moved _latest_luckmail_message_id to dedicated mailbox module.
-
 def _snapshot_mailbox_message(mailbox, proxy=None):
     provider = getattr(mailbox, "provider", "")
-    if provider == "cfworker":
+    if provider in {"cfworker", "remail"}:
         try:
             messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
             message_id = _message_id(messages[0]) if messages else ""
             mailbox.seen_message_id = message_id
             return message_id
         except Exception as e:
-            print(f"[cfworker snapshot error: {e}]")
+            print(f"[{provider} snapshot error: {e}]")
             return ""
-    return _snapshot_luckmail_token_message(mailbox)
-
-
-# moved _snapshot_luckmail_token_message to dedicated mailbox module.
-
-# moved _luckmail_request to dedicated mailbox module.
-
-# moved _create_luckmail_order to dedicated mailbox module.
-
-# moved _create_luckmail_purchase to dedicated mailbox module.
+    return ""
 
 def _create_cfworker_mailboxes(args=None):
     return mailbox_cfworker._create_cfworker_mailboxes(
@@ -268,30 +226,31 @@ def _gmail_mailbox_from_config(args=None):
 
 def _mailbox_from_config(args=None):
     args = args or argparse.Namespace()
-    luckmail_token = (
-        getattr(args, "luckmail_token", None)
-        or _email_cfg().get("luckmail_token")
-        or ""
-    ).strip()
+    remail_cfg = mailbox_remail._remail_cfg()
+    remail_token = str(getattr(args, "remail_token", None) or remail_cfg.get("service_token") or "").strip()
     gmail_mailbox = _gmail_mailbox_from_config(args)
-    if gmail_mailbox is not None and not luckmail_token:
+    if gmail_mailbox is not None and not remail_token:
         return gmail_mailbox
     email = (getattr(args, "email", None) or _email_cfg().get("email") or "").strip().lower()
-    if not email and luckmail_token:
-        try:
-            email = _luckmail_token_email(luckmail_token)
-        except Exception as e:
-            print(f"[luckmail token mailbox resolve error: {e}]")
+    if not email and remail_token:
+        email = str(remail_cfg.get("delivery_email") or "").strip().lower()
     if not email:
         return None
+    if remail_token:
+        return MailboxAccount(
+            email=email,
+            source="remail_config",
+            provider="remail",
+            token=remail_token,
+            order_no=str(remail_cfg.get("order_no") or "").strip(),
+        )
     return MailboxAccount(
         email=email,
         password=(getattr(args, "email_password", None) or _email_cfg().get("password") or "").strip(),
         refresh_token=(getattr(args, "email_refresh_token", None) or _email_cfg().get("refresh_token") or "").strip(),
         access_token=(getattr(args, "email_access_token", None) or _email_cfg().get("access_token") or "").strip(),
-        source="luckmail_purchase" if luckmail_token else "config",
-        provider="luckmail_token" if luckmail_token else "graph",
-        token=luckmail_token,
+        source="config",
+        provider="graph",
     )
 
 
@@ -303,8 +262,11 @@ def _mailbox_from_config(args=None):
 
 def _load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
-    if getattr(args, "buy_luckmail_mailbox", False):
-        return _create_luckmail_purchase(args)
+    if getattr(args, "buy_remail_mailbox", False):
+        mode = getattr(args, "remail_service_mode", None) or "purchase"
+        return mailbox_remail._create_remail_mailboxes(args, service_mode=mode)
+    if getattr(args, "remail_service_mode", None):
+        return mailbox_remail._create_remail_mailboxes(args, service_mode=args.remail_service_mode)
     if getattr(args, "buy_cfworker_mailbox", False):
         return _create_cfworker_mailboxes(args)
     chatai_file = getattr(args, "chatai_mailbox_file", None)
@@ -331,8 +293,8 @@ def _pick_mailbox(index=0, args=None):
 def _ensure_mailbox_account(mailbox=None):
     if mailbox:
         return mailbox
-    if _luckmail_enabled():
-        return _create_luckmail_order()
+    if _remail_enabled():
+        return mailbox_remail._create_remail_order(service_mode="code")
     return None
 
 
@@ -412,8 +374,8 @@ def mailbox_has_inbox_credentials(mailbox):
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     if provider == "cfworker":
         return bool(getattr(mailbox, "email", ""))
-    if provider in {"luckmail", "luckmail_token"}:
-        return bool(getattr(mailbox, "token", "") or getattr(mailbox, "email", ""))
+    if provider == "remail":
+        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         return mailbox_gmail.mailbox_has_credentials(mailbox, _gmail_cfg())
     return bool(getattr(mailbox, "refresh_token", ""))
@@ -469,6 +431,8 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
             email_cfg=_email_cfg(),
             client_func=_cfworker_client,
         )
+    if getattr(mailbox, "provider", "") == "remail":
+        return mailbox_remail._fetch_remail_messages(mailbox, limit=limit, proxy=proxy)
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         if not _gmail_imap_enabled():
             raise RuntimeError("gmail imap is disabled in config")
@@ -543,7 +507,6 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
         raise graph_error
     return []
 
-
 # Message recipient extraction moved to sms_tool.mail_otp.
 
 def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None):
@@ -561,10 +524,16 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
                 issued_after_unix=issued_after_unix, proxy=proxy,
             )
 
-    if getattr(mailbox, "provider", "") == "luckmail":
-        return _poll_luckmail_otp(mailbox, timeout=timeout)
-    if getattr(mailbox, "provider", "") == "luckmail_token":
-        return _poll_luckmail_token_otp(mailbox, timeout=timeout, issued_after_unix=issued_after_unix)
+    if getattr(mailbox, "provider", "") == "remail":
+        return mailbox_remail._poll_remail_otp(
+            mailbox,
+            subject_keyword=subject_keyword,
+            timeout=timeout,
+            issued_after_unix=issued_after_unix,
+            proxy=_resolve_mailbox_proxy(proxy),
+            excluded_otps=excluded_otps,
+            poll_interval=_otp_poll_interval(),
+        )
     if getattr(mailbox, "provider", "") == "cfworker":
         return _poll_cfworker_otp(
             mailbox,
@@ -804,10 +773,3 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
     if graph_error:
         raise graph_error
     return []
-
-
-# moved _poll_luckmail_otp to dedicated mailbox module.
-
-# moved _luckmail_mail_time to dedicated mailbox module.
-
-# moved _poll_luckmail_token_otp to dedicated mailbox module.

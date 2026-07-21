@@ -30,7 +30,7 @@ sms_tool/
   account_seed.py           Shared account/session seed lookup and access-token extraction.
   mailbox.py                Mailbox provider routing and OTP retrieval compatibility seam.
   mailbox_parsers.py        Mailbox import format parsing.
-  mailbox_luckmail.py       LuckMail API and token mailbox polling.
+  mailbox_remail.py         ReMail order, pickup, and OTP polling.
   mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
   mailbox_graph.py          Microsoft OAuth refresh boundary.
   mailbox_gmail.py          Gmail IMAP receive + SMTP send adapter.
@@ -217,7 +217,7 @@ Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay 
 provider/parsing modules own the implementation:
 
 - `mailbox_parsers.py`: Chatai, token-file, password-file, CFWorker URI, Gmail provider lines, and mailbox email normalization.
-- `mailbox_luckmail.py`: LuckMail order/purchase/token APIs and token mailbox polling.
+- `mailbox_remail.py`: ReMail short-lived/long-lived ordering, authenticated pickup credentials, message normalization, and OTP polling.
 - `mailbox_cfworker.py`: CFWorker mailbox creation, message fetch, proxy/direct fallback, and OTP polling.
 - `mailbox_graph.py`: Microsoft OAuth refresh.
 - `mailbox_gmail.py`: Gmail IMAP receive, Gmail SMTP send, app-password auth, and OAuth refresh auth.

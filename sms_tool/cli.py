@@ -10,7 +10,7 @@ from email.utils import formataddr
 from pathlib import Path
 
 from .config import CFG
-from .mailbox import _load_mailbox_pool, _luckmail_enabled
+from .mailbox import _load_mailbox_pool, _remail_enabled
 from .paths import output_dir
 from .registration import _build_session_file, _mailbox_snapshot, run_batch, run_email
 from .storage import database_path, get_paypal_url, list_paypal_accounts, mark_paypal_status, rebuild_from_session_dir, upsert_account
@@ -183,13 +183,15 @@ def main():
     parser.add_argument("--email-password", default=None, help="Mailbox password")
     parser.add_argument("--email-refresh-token", default=None, help="Mailbox refresh token")
     parser.add_argument("--email-access-token", default=None, help="Mailbox access token")
-    parser.add_argument("--luckmail-token", default=None, help="LuckMail purchased mailbox token")
-    parser.add_argument("--buy-luckmail-mailbox", action="store_true", help="Buy LuckMail long-term mailbox before registration")
+    parser.add_argument("--remail-token", default=None, help="ReMail service token; requires --email")
+    parser.add_argument("--buy-remail-mailbox", action="store_true", help="Buy ReMail long-term mailbox before registration")
     parser.add_argument("--buy-cfworker-mailbox", action="store_true", help="Use CF Worker temp mailboxes before registration")
     parser.add_argument("--cfworker-domain", default=None, help="CF Worker mailbox domain, default cfworker_domain in config.json")
-    parser.add_argument("--luckmail-purchase-project", default=None, help="LuckMail purchase project code, default openai")
-    parser.add_argument("--luckmail-purchase-email-type", default=None, help="LuckMail purchase email type, default ms_imap")
-    parser.add_argument("--luckmail-purchase-domain", default=None, help="LuckMail purchase domain, default outlook.com")
+    parser.add_argument("--remail-service-mode", choices=["code", "purchase"], default=None, help="ReMail service mode override")
+    parser.add_argument("--remail-supply", choices=["private_first", "public_only"], default=None, help="ReMail inventory policy")
+    parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
+    parser.add_argument("--remail-project-id", type=int, default=None, help="ReMail project ID")
+    parser.add_argument("--remail-product-id", type=int, default=None, help="ReMail product ID")
     parser.add_argument("--mailbox-file", default=None, help="Mailbox token file: email---password---refresh_token---access_token---0")
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
@@ -403,25 +405,26 @@ def main():
         or args.email
         or args.email_refresh_token
         or args.email_access_token
-        or args.luckmail_token
-        or args.buy_luckmail_mailbox
+        or args.remail_token
+        or args.buy_remail_mailbox
+        or args.remail_service_mode
         or args.buy_cfworker_mailbox
     )
     if not mailboxes and explicit_mailbox_source:
         print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
         raise SystemExit(2)
-    if not mailboxes and not _luckmail_enabled():
-        print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure LuckMail")
+    if not mailboxes and not _remail_enabled():
+        print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure ReMail")
         raise SystemExit(2)
     payment_method = _payment_method(args)
     paypal_link = _payment_link_enabled(payment_method, args)
 
     requested_count = max(1, int(args.count or 1))
     effective_count = requested_count
-    if getattr(args, "buy_luckmail_mailbox", False):
+    if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(f"[!] Requested {requested_count} mailbox(es), LuckMail returned {effective_count}; registering returned mailboxes only.")
+            print(f"[!] Requested {requested_count} mailbox(es), ReMail returned {effective_count}; registering returned mailboxes only.")
     elif getattr(args, "buy_cfworker_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
