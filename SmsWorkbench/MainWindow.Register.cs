@@ -147,6 +147,24 @@ namespace SmsWorkbench
                 return;
             }
 
+            if (options.Source == "remail")
+            {
+                var remailArgs = new List<string>
+                {
+                    "--remail-service-mode",
+                    "code",
+                    "--count",
+                    options.Count.ToString(),
+                    "--workers",
+                    options.Workers.ToString()
+                };
+                AddRegistrationAtOnlyArgs(remailArgs);
+                AddNonPaymentProxy(remailArgs);
+                AddPaypalOption(remailArgs, options.PaymentMethod, options.SkipPaymentLink);
+                RunBackend(options.SkipPaymentLink ? "ReMail邮箱注册" : "ReMail邮箱注册+支付链接", remailArgs);
+                return;
+            }
+
             string mailboxArg = "--chatai-mailbox-file";
             string mailboxFile = GetChataiMailboxFilePath();
             int count = options.Count;
@@ -486,6 +504,7 @@ namespace SmsWorkbench
             var sourceLabel = new TextBlock { Text = "注册方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail（短效接码）", Tag = "remail" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "liziai.cloud (CFWorker)", Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;

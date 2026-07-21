@@ -9,6 +9,7 @@ namespace SmsWorkbench
             EnsureConfigFile(path);
             var config = ReadJsonObject(path);
             var email = GetSection(config, "email_registration");
+            var remail = GetChildSection(email, "remail");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
             var gopay = GetSection(config, "gopay");
@@ -100,6 +101,16 @@ namespace SmsWorkbench
             AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
 
+            var remailForm = AddConfigCategory(sidebar, host, categories, "ReMail", "ReMail短效接码与长效邮箱配置。");
+            row = 0;
+            AddConfigField(remailForm, fields, row++, "启用", "remail_enabled", FirstNonEmpty(GetString(remail, "enabled"), "true"));
+            AddConfigField(remailForm, fields, row++, "API地址", "remail_base_url", FirstNonEmpty(GetString(remail, "base_url"), "https://remail.aishop6.com"));
+            AddConfigField(remailForm, fields, row++, "API Key", "remail_api_key", GetString(remail, "api_key"));
+            AddConfigField(remailForm, fields, row++, "项目ID", "remail_project_id", FirstNonEmpty(GetString(remail, "project_id"), "2"));
+            AddConfigField(remailForm, fields, row++, "产品ID", "remail_product_id", FirstNonEmpty(GetString(remail, "product_id"), "5"));
+            AddConfigField(remailForm, fields, row++, "库存策略", "remail_supply", FirstNonEmpty(GetString(remail, "supply"), "private_first"));
+            AddConfigField(remailForm, fields, row++, "邮箱后缀", "remail_email_suffix", FirstNonEmpty(GetString(remail, "email_suffix"), "outlook.com"));
+
             var cfForm = AddConfigCategory(sidebar, host, categories, "CFWorker", "临时域名邮箱和 Cloudflare Worker 接入配置。");
             row = 0;
             AddConfigField(cfForm, fields, row++, "CFWorker URL", "cfworker_url", GetString(email, "cfworker_url"));
@@ -180,6 +191,15 @@ namespace SmsWorkbench
             {
                 email["otp_poll_interval"] = fields["otp_poll_interval"].Text.Trim();
                 email["token_file"] = fields["token_file"].Text.Trim();
+                remail["enabled"] = ConfigBoolValue(fields, "remail_enabled", true);
+                remail["base_url"] = fields["remail_base_url"].Text.Trim();
+                remail["api_key"] = fields["remail_api_key"].Text.Trim();
+                remail["project_id"] = ConfigIntegerValue(fields, "remail_project_id");
+                remail["product_id"] = ConfigIntegerValue(fields, "remail_product_id");
+                remail["service_mode"] = "code";
+                remail["supply"] = fields["remail_supply"].Text.Trim();
+                remail["email_suffix"] = fields["remail_email_suffix"].Text.Trim();
+                email["remail"] = remail;
                 email["cfworker_url"] = fields["cfworker_url"].Text.Trim();
                 email["cfworker_domain"] = fields["cfworker_domain"].Text.Trim();
                 email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();

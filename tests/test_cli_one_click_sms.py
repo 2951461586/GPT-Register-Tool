@@ -24,8 +24,8 @@ class OneClickSmsCliTests(unittest.TestCase):
                 email_refresh_token=None,
                 email_access_token=None,
                 email_password=None,
-                luckmail_token=None,
-                buy_luckmail_mailbox=False,
+                remail_token=None,
+                buy_remail_mailbox=False,
                 buy_cfworker_mailbox=False,
             )
 
