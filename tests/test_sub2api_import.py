@@ -260,6 +260,110 @@ class Sub2ApiImportTests(unittest.TestCase):
         self.assertEqual(result["files"][0]["email"], "bad@example.com")
         self.assertEqual(result["files"][0]["probe"]["status_code"], 401)
 
+    def test_auto_auth_mode_falls_back_to_oauth_on_agent_identity_403(self):
+        """When auth_mode=auto and Agent Identity registration returns 403
+        ('Agent registry is not enabled'), the import should fall back to
+        oauth mode instead of failing."""
+        source_data = {
+            "email": "free@example.com",
+            "access_token": "fake-at",
+            "refresh_token": "fake-rt",
+            "plan_type": "free",
+        }
+
+        def fake_load_cpa_source(email, session_file="", export_dir=""):
+            return {"ok": True, "data": source_data, "path": "session.json", "mode": "codex_session_json"}
+
+        agent_error = {
+            "ok": False,
+            "error": "agent_registration_http_403",
+            "status_code": 403,
+            "message": "Agent registry is not enabled.",
+        }
+
+        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
+             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error), \
+             patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa:
+            result = sub2api_import._prepare_sub2api_import_data(
+                "free@example.com",
+                auth_mode="auto",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["auth_mode"], "oauth")
+        self.assertEqual(result["mode"], "codex_session_json")
+        self.assertTrue(any("agent_identity_fallback_to_oauth" in w for w in result["warnings"]))
+        write_cpa.assert_called_once()
+
+    def test_explicit_agent_identity_mode_falls_back_on_403_registry_disabled(self):
+        """Even when auth_mode=agent_identity is explicitly set, a 403 'Agent
+        registry is not enabled' error should fall back to oauth because the
+        account permanently doesn't support Agent Registry."""
+        source_data = {
+            "email": "free@example.com",
+            "access_token": "fake-at",
+            "refresh_token": "fake-rt",
+            "plan_type": "free",
+        }
+
+        def fake_load_cpa_source(email, session_file="", export_dir=""):
+            return {"ok": True, "data": source_data, "path": "session.json", "mode": "codex_session_json"}
+
+        agent_error = {
+            "ok": False,
+            "error": "agent_registration_http_403",
+            "status_code": 403,
+            "message": "Agent registry is not enabled.",
+        }
+
+        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
+             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error), \
+             patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa:
+            result = sub2api_import._prepare_sub2api_import_data(
+                "free@example.com",
+                auth_mode="agent_identity",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["auth_mode"], "oauth")
+        self.assertTrue(any("agent_identity_fallback_to_oauth" in w for w in result["warnings"]))
+        write_cpa.assert_called_once()
+
+    def test_explicit_agent_identity_mode_does_not_fall_back_on_non_403_error(self):
+        """When auth_mode=agent_identity is explicitly set and the error is NOT
+        a 403 registry-disabled error, the error should be returned directly
+        without falling back to oauth."""
+        source_data = {
+            "email": "free@example.com",
+            "access_token": "fake-at",
+            "refresh_token": "fake-rt",
+            "plan_type": "free",
+        }
+
+        def fake_load_cpa_source(email, session_file="", export_dir=""):
+            return {"ok": True, "data": source_data, "path": "session.json", "mode": "codex_session_json"}
+
+        agent_error = {
+            "ok": False,
+            "error": "agent_registration_request_failed",
+        }
+
+        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
+             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
+             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error):
+            result = sub2api_import._prepare_sub2api_import_data(
+                "free@example.com",
+                auth_mode="agent_identity",
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "agent_registration_request_failed")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -231,26 +231,41 @@ def _prepare_sub2api_import_data(email, session_file="", export_dir="", auth_mod
     use_agent_identity = mode == "agent_identity" or (mode == "auto" and plan_type == "free")
     if use_agent_identity:
         if plan_type and plan_type != "free":
-            return {"ok": False, "error": "agent_identity_requires_free_plan", "plan_type": plan_type}
-        created = create_agent_identity(source_result["data"], proxy=proxy, timeout=min(max(int(timeout or 30), 1), 60))
-        if not created.get("ok"):
-            return created
-        persisted = write_agent_identity(created["data"], export_dir=export_dir)
-        if not persisted.get("ok"):
-            return persisted
-        identity = persisted["data"]["agent_identity"]
-        return {
-            "ok": True,
-            "data": persisted["data"],
-            "email": str(identity.get("email") or email).strip().lower(),
-            "path": persisted["path"],
-            "mode": "agent_identity_json",
-            "auth_mode": "agent_identity",
-            "source_path": source_result.get("path", ""),
-            "source_mode": source_result.get("mode", ""),
-            "refresh_token_status": "not_required",
-            "warnings": created.get("warnings", []),
-        }
+            if mode == "agent_identity":
+                return {"ok": False, "error": "agent_identity_requires_free_plan", "plan_type": plan_type}
+        else:
+            created = create_agent_identity(source_result["data"], proxy=proxy, timeout=min(max(int(timeout or 30), 1), 60))
+            if created.get("ok"):
+                persisted = write_agent_identity(created["data"], export_dir=export_dir)
+                if persisted.get("ok"):
+                    identity = persisted["data"]["agent_identity"]
+                    return {
+                        "ok": True,
+                        "data": persisted["data"],
+                        "email": str(identity.get("email") or email).strip().lower(),
+                        "path": persisted["path"],
+                        "mode": "agent_identity_json",
+                        "auth_mode": "agent_identity",
+                        "source_path": source_result.get("path", ""),
+                        "source_mode": source_result.get("mode", ""),
+                        "refresh_token_status": "not_required",
+                        "warnings": created.get("warnings", []),
+                    }
+                elif mode == "agent_identity" and not _is_agent_registry_disabled(persisted):
+                    return persisted
+            elif mode == "agent_identity" and not _is_agent_registry_disabled(created):
+                return created
+            # Fall back to oauth when agent identity fails.
+            # This covers both auth_mode="auto" (always fall back) and
+            # auth_mode="agent_identity" when the error is HTTP 403
+            # ("Agent registry is not enabled") — a permanent condition
+            # that won't be resolved by retrying.
+            fallback_warning = (
+                f"agent_identity_fallback_to_oauth: {created.get('error', 'unknown')}"
+                if not created.get("ok")
+                else f"agent_identity_persist_failed: {persisted.get('error', 'unknown')}"
+            )
+            warnings.append(fallback_warning)
 
     if not token_data.get("access_token"):
         return {"ok": False, "error": "missing_access_token"}
@@ -291,6 +306,17 @@ def _normalize_auth_mode(value):
     if text in {"oauth", "token", "session"}:
         return "oauth"
     return "auto"
+
+
+def _is_agent_registry_disabled(result):
+    """Check if an agent identity error result is HTTP 403 'Agent registry is
+    not enabled' — a permanent condition that means the account will never
+    support Agent Registry, so the caller should fall back to oauth."""
+    if not isinstance(result, dict):
+        return False
+    error = str(result.get("error") or "").strip().lower()
+    message = str(result.get("message") or "").strip().lower()
+    return error == "agent_registration_http_403" or "agent registry is not enabled" in message
 
 
 def upload_to_sub2api(
