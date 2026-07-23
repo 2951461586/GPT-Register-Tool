@@ -68,12 +68,21 @@ def public_mail_message(msg):
         sender_address = str(email_address.get("address") or from_value.get("address") or "").strip()
         from_value = formataddr((sender_name, sender_address)) if sender_name and sender_address else (sender_address or sender_name)
     body = msg.get("body") if isinstance(msg.get("body"), dict) else {}
+    recipients = msg.get("toRecipients") if isinstance(msg.get("toRecipients"), list) else []
+    recipient = ""
+    if recipients and isinstance(recipients[0], dict):
+        email_address = recipients[0].get("emailAddress")
+        if isinstance(email_address, dict):
+            recipient = str(email_address.get("address") or "").strip()
     return {
         "id": str(msg.get("id") or msg.get("message_id") or ""),
         "receivedDateTime": str(msg.get("receivedDateTime") or msg.get("received_at") or msg.get("created_at") or ""),
         "from": str(from_value or msg.get("from_email") or msg.get("sender") or ""),
+        "recipient": recipient or str(msg.get("recipient") or msg.get("to") or ""),
         "subject": str(msg.get("subject") or msg.get("title") or ""),
         "bodyPreview": str(msg.get("bodyPreview") or msg.get("preview") or body.get("content") or msg.get("text") or "")[:2000],
+        "body": str(body.get("content") or msg.get("text") or msg.get("bodyPreview") or ""),
+        "verificationCode": str(msg.get("verificationCode") or ""),
     }
 
 

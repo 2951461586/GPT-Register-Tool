@@ -587,7 +587,7 @@ def run_email(
     # Use original sentinel tokens — do NOT patch the embedded id, as it breaks the HMAC signature
     _sentinel_token = sentinel_data["sentinel_token"]
     _sentinel_so_token = sentinel_data["sentinel_so_token"]
-    print(f"[*] Username: {username}  Password: {password}  Name: {full_name}  Birth: {birthdate}")
+    print(f"[*] Username: {username}  Password: [stored]  Name: {full_name}  Birth: {birthdate}")
 
     # Init curl_cffi session
     session = curl_requests.Session()
@@ -678,7 +678,7 @@ def run_email(
     if registration_mode != "passwordless":
         reg_data = {}
         try: reg_data = r.json()
-        except: reg_data = {"_raw": r.text[:300]}
+        except (ValueError, TypeError): reg_data = {"_raw": r.text[:300]}
         print(f"  Status: {r.status_code}")
         print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
@@ -819,7 +819,7 @@ def run_email(
 
     create_data = {}
     try: create_data = r.json()
-    except: create_data = {"_raw": r.text[:300]}
+    except (ValueError, TypeError): create_data = {"_raw": r.text[:300]}
     print(f"  Status: {r.status_code}")
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
     create_ok = r.status_code == 200
@@ -985,6 +985,31 @@ def run_email(
             or "phone_verification_required"
         )
 
+    agent_identity_registration = {}
+    if success and access_token and _register_agent_identity_on_free_signup():
+        registration_stage("agent_identity")
+        _tick("8d-Register Agent Identity")
+        agent_identity_registration = _provision_signup_agent_identity(
+            email=username,
+            access_token=access_token,
+            id_token=id_token,
+            auth_session=auth_body,
+            proxy=proxy,
+        )
+        _tock()
+        if agent_identity_registration.get("ok"):
+            action = "reused" if agent_identity_registration.get("reused") else "registered"
+            print(
+                f"  Agent Identity {action}: "
+                f"{agent_identity_registration.get('agent_runtime_id', '')}"
+            )
+            print(f"  Agent Identity file: {agent_identity_registration.get('path', '')}")
+        else:
+            print(
+                "  Agent Identity registration failed: "
+                f"{agent_identity_registration.get('error', 'unknown')}"
+            )
+
     paypal = {}
     if success and access_token and paypal_link:
         registration_stage("payment_link")
@@ -1018,6 +1043,7 @@ def run_email(
         "payment_method": (paypal.get("payment_method") or payment_method or "paypal") if paypal else (payment_method or "paypal"),
         "registration_mode": registration_mode_used,
         "device_id": did,
+        "agent_identity_registration": agent_identity_registration,
         "timing": _timing_summary(),
     }
     if mailbox:
@@ -1201,7 +1227,7 @@ def run_phone_register(
 
         reg_data = {}
         try: reg_data = r.json()
-        except: reg_data = {"_raw": r.text[:300]}
+        except (ValueError, TypeError): reg_data = {"_raw": r.text[:300]}
         print(f"  Status: {r.status_code}")
         print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
@@ -1241,7 +1267,7 @@ def run_phone_register(
 
         validate_data = {}
         try: validate_data = validate_resp.json()
-        except: validate_data = {"_raw": validate_resp.text[:300]}
+        except (ValueError, TypeError): validate_data = {"_raw": validate_resp.text[:300]}
         print(f"  Status: {validate_resp.status_code}")
         print(f"  Response: {json.dumps(validate_data, ensure_ascii=False)[:300]}")
 
@@ -1279,7 +1305,7 @@ def run_phone_register(
 
         create_data = {}
         try: create_data = create_resp.json()
-        except: create_data = {"_raw": create_resp.text[:300]}
+        except (ValueError, TypeError): create_data = {"_raw": create_resp.text[:300]}
         print(f"  Status: {create_resp.status_code}")
         print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
 
@@ -1290,7 +1316,7 @@ def run_phone_register(
     except Exception as e:
         _safe_tock()
         try: sms_client.cancel(activation.activation_id)
-        except: pass
+        except Exception: pass
         return _failure_result(f"transport_error: {e}", email=phone)
 
     # Step 7: Fetch auth session for access_token
@@ -1378,6 +1404,55 @@ def _registration_requires_phone_verification(phone_pool=None):
     cfg = CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
     default = bool(phone_pool)
     return bool(cfg.get("require_registration_phone_verification", default))
+
+
+def _register_agent_identity_on_free_signup():
+    cfg = CFG.get("agent_identity") if isinstance(CFG.get("agent_identity"), dict) else {}
+    return bool(cfg.get("register_on_free_signup", False))
+
+
+def _provision_signup_agent_identity(email, access_token, id_token="", auth_session=None, proxy=None):
+    cfg = CFG.get("agent_identity") if isinstance(CFG.get("agent_identity"), dict) else {}
+    try:
+        timeout = max(1, min(int(cfg.get("registration_timeout", 30) or 30), 120))
+    except (TypeError, ValueError):
+        timeout = 30
+    source = {
+        "email": str(email or "").strip().lower(),
+        "access_token": str(access_token or "").strip(),
+        "id_token": str(id_token or "").strip(),
+        "auth_session": auth_session if isinstance(auth_session, dict) else {},
+    }
+    try:
+        from .agent_identity import provision_agent_identity
+
+        result = provision_agent_identity(
+            source,
+            proxy=proxy or "",
+            timeout=timeout,
+            reuse_existing=True,
+        )
+    except Exception:
+        return {"ok": False, "status": "failed", "error": "agent_identity_provision_failed"}
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "status": "failed",
+            "error": str(result.get("error") or "agent_identity_provision_failed"),
+            **({"status_code": result.get("status_code")} if result.get("status_code") else {}),
+            **({"message": result.get("message")} if result.get("message") else {}),
+        }
+    identity = (result.get("data") or {}).get("agent_identity") or {}
+    return {
+        "ok": True,
+        "status": "reused" if result.get("reused") else "registered",
+        "reused": bool(result.get("reused")),
+        "auth_mode": "agent_identity",
+        "agent_runtime_id": str(identity.get("agent_runtime_id") or ""),
+        "plan_type": str(identity.get("plan_type") or result.get("plan_type") or "free"),
+        "private_key_validated": True,
+        "path": str(result.get("path") or ""),
+    }
 
 
 def _oauth_result_summary(result):
@@ -1509,6 +1584,7 @@ def _build_session_file(data):
         "refresh_token_status": refresh_token_status,
         "timing": data.get("timing") or {},
         "pipeline_timing": data.get("pipeline_timing") or {},
+        "agent_identity_registration": data.get("agent_identity_registration") or {},
         "purchase": data.get("purchase") or purchase,
         "mailbox": {
             "email": mailbox.get("email", ""),

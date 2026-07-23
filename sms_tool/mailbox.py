@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import re
 import time
 from datetime import datetime
@@ -227,7 +228,12 @@ def _gmail_mailbox_from_config(args=None):
 def _mailbox_from_config(args=None):
     args = args or argparse.Namespace()
     remail_cfg = mailbox_remail._remail_cfg()
-    remail_token = str(getattr(args, "remail_token", None) or remail_cfg.get("service_token") or "").strip()
+    remail_token = str(
+        getattr(args, "remail_token", None)
+        or os.environ.get("REMAIL_SERVICE_TOKEN")
+        or remail_cfg.get("service_token")
+        or ""
+    ).strip()
     gmail_mailbox = _gmail_mailbox_from_config(args)
     if gmail_mailbox is not None and not remail_token:
         return gmail_mailbox
@@ -401,7 +407,7 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
     return latest
 
 
-def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
+def _fetch_mailbox_messages(mailbox, limit=25, proxy=None, include_body=False):
     proxy = _resolve_mailbox_proxy(proxy)
 
     # ── chongzhi.art first priority ──
@@ -432,7 +438,12 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None):
             client_func=_cfworker_client,
         )
     if getattr(mailbox, "provider", "") == "remail":
-        return mailbox_remail._fetch_remail_messages(mailbox, limit=limit, proxy=proxy)
+        return mailbox_remail._fetch_remail_messages(
+            mailbox,
+            limit=limit,
+            proxy=proxy,
+            include_body=include_body,
+        )
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         if not _gmail_imap_enabled():
             raise RuntimeError("gmail imap is disabled in config")

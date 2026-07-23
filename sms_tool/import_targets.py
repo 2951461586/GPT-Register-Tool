@@ -45,6 +45,8 @@ def import_account_session(
     sub2api_proxy_id=None,
     sub2api_priority=None,
     sub2api_concurrency=None,
+    sub2api_auth_mode="",
+    sub2api_verify_after_import=None,
 ):
     target = normalize_import_target(target)
     if target == TARGET_SUB2API:
@@ -65,6 +67,8 @@ def import_account_session(
             proxy_id=sub2api_proxy_id,
             priority=sub2api_priority,
             concurrency=sub2api_concurrency,
+            auth_mode=sub2api_auth_mode,
+            verify_after_import=sub2api_verify_after_import,
         )
     return import_cpa_session(
         email=email,
@@ -98,6 +102,8 @@ def import_account_sessions(
     sub2api_proxy_id=None,
     sub2api_priority=None,
     sub2api_concurrency=None,
+    sub2api_auth_mode="",
+    sub2api_verify_after_import=None,
 ):
     target = normalize_import_target(target)
     if target == TARGET_SUB2API:
@@ -118,6 +124,8 @@ def import_account_sessions(
             proxy_id=sub2api_proxy_id,
             priority=sub2api_priority,
             concurrency=sub2api_concurrency,
+            auth_mode=sub2api_auth_mode,
+            verify_after_import=sub2api_verify_after_import,
         )
     return import_cpa_sessions(
         emails,

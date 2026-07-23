@@ -280,6 +280,7 @@ namespace SmsWorkbench
         public string ClientId { get; set; } = "";
         public string RawRefreshToken { get; set; } = "";
         public string MailboxProvider { get; set; } = "";
+        public string MailboxToken { get; set; } = "";
     }
 
     public sealed class RegisterOptions

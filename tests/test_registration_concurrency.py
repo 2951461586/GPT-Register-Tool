@@ -268,14 +268,17 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.append(mailbox.email)
             return {"success": False, "email": mailbox.email, "error": "stub"}
 
-        with patch("sms_tool.registration._extract_sentinel", return_value={"sentinel_token": "sentinel"}):
+        with patch("sms_tool.batch_runner._extract_sentinel", return_value={"sentinel_token": "sentinel"}):
             with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
                 results = run_batch(count=4, proxy=None, mailboxes=mailboxes, paypal_link=True, workers=4)
 
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
         self.assertEqual(seen, ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
 
-    def test_run_batch_does_not_share_sentinel_between_parallel_workers(self):
+    def test_run_batch_shares_pre_extracted_sentinel_across_parallel_workers(self):
+        """Batch mode pre-extracts one sentinel token and shares it across all
+        workers to avoid concurrent requests to sentinel.openai.com that would
+        trigger rate limiting."""
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mailboxes.txt"
             path.write_text(
@@ -286,18 +289,22 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             mailboxes = _parse_chatai_mailbox_file(path)
 
         seen_sentinels = []
+        shared_sentinel = {"sentinel_token": "shared-token", "sentinel_so_token": "shared-so"}
 
         def fake_run_email(**kwargs):
             seen_sentinels.append(kwargs["sentinel_data"])
             return {"success": True, "email": kwargs["mailbox"].email}
 
-        with patch("sms_tool.registration._extract_sentinel") as extract:
+        with patch("sms_tool.batch_runner._extract_sentinel", return_value=shared_sentinel) as extract:
             with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
                 results = run_batch(count=2, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, paypal_link=True, workers=2)
 
-        self.assertEqual(extract.call_count, 0)
+        # Sentinel is extracted exactly once before workers start
+        self.assertEqual(extract.call_count, 1)
+        # Both workers receive the same shared sentinel_data
         self.assertEqual(len(seen_sentinels), 2)
-        self.assertEqual(seen_sentinels, [None, None])
+        self.assertEqual(seen_sentinels[0], shared_sentinel)
+        self.assertEqual(seen_sentinels[1], shared_sentinel)
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
 
     def test_sentinel_device_id_reads_cache_field_first_then_token_id(self):

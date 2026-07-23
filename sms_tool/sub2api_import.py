@@ -5,9 +5,17 @@ import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from pathlib import Path
 
 from curl_cffi import requests as curl_requests
 
+from .agent_identity import (
+    create_agent_identity,
+    is_agent_identity,
+    load_agent_identity,
+    validate_agent_identity,
+    write_agent_identity,
+)
 from .codex_export import build_codex_json
 from .config import CFG
 from .cpa_import import _load_cpa_source, _write_cpa_json
@@ -15,7 +23,6 @@ from .storage import get_account_record, upsert_account
 
 
 DEFAULT_GROUP_NAME = "codex"
-DEFAULT_PROXY_IDS = (1, 2, 3, 4, 5)
 
 
 def import_sub2api_session(
@@ -35,6 +42,8 @@ def import_sub2api_session(
     proxy_id=None,
     priority=None,
     concurrency=None,
+    auth_mode="",
+    verify_after_import=None,
 ):
     cfg = _resolve_sub2api_config(
         api_url=api_url,
@@ -47,38 +56,54 @@ def import_sub2api_session(
         proxy_id=proxy_id,
         priority=priority,
         concurrency=concurrency,
+        auth_mode=auth_mode,
+        verify_after_import=verify_after_import,
     )
     target_email = (email or "").strip().lower()
     if not cfg["origin"]:
         return {"ok": False, "email": target_email, "error": "missing_sub2api_url"}
 
-    source_result = _load_cpa_source(target_email, session_file=session_file, export_dir=export_dir)
-    if not source_result.get("ok"):
+    prepared = _prepare_sub2api_import_data(
+        target_email,
+        session_file=session_file,
+        export_dir=export_dir,
+        auth_mode=cfg.pop("auth_mode"),
+        proxy=proxy,
+        timeout=timeout,
+    )
+    if not prepared.get("ok"):
         return {
             "ok": False,
             "email": target_email,
-            "error": source_result.get("error", "missing_codex_source_json"),
-            "message": source_result.get("message", ""),
-            "source": source_result,
+            "error": prepared.get("error", "missing_codex_source_json"),
+            "message": prepared.get("message", ""),
+            "source": prepared.get("source", {}),
         }
 
-    token_data, warnings = build_codex_json(source_result["data"])
-    if not token_data.get("email"):
-        token_data["email"] = target_email
-
-    path = _write_cpa_json(token_data, export_dir)
+    token_data = prepared["data"]
+    warnings = list(prepared.get("warnings", []))
+    path = prepared.get("path", "")
+    resolved_email = prepared.get("email") or target_email
+    if prepared.get("auth_mode") == "agent_identity" and cfg.get("verify_after_import"):
+        warnings.append("agent_identity_execution_probe_skipped")
     export_result = {
         "ok": True,
-        "email": token_data.get("email", target_email),
+        "email": resolved_email,
         "path": path,
-        "mode": "codex_session_json",
-        "source_path": source_result.get("path", ""),
-        "source_mode": source_result.get("mode", ""),
-        "refresh_token_status": "oauth_present" if str(token_data.get("refresh_token") or "").strip() else "no_rt",
+        "mode": prepared.get("mode", "codex_session_json"),
+        "auth_mode": prepared.get("auth_mode", "oauth"),
+        "source_path": prepared.get("source_path", ""),
+        "source_mode": prepared.get("source_mode", ""),
+        "refresh_token_status": prepared.get("refresh_token_status", "no_rt"),
         "warnings": warnings,
     }
     upload_result = upload_to_sub2api(token_data, **cfg)
-    _record_sub2api_import(export_result.get("email", target_email), path, upload_result)
+    _record_sub2api_import(
+        export_result.get("email", target_email),
+        path,
+        upload_result,
+        auth_mode=export_result.get("auth_mode", ""),
+    )
     return {
         "ok": upload_result.get("ok", False),
         "email": export_result.get("email", target_email),
@@ -107,10 +132,12 @@ def import_sub2api_sessions(
     proxy_id=None,
     priority=None,
     concurrency=None,
+    auth_mode="",
+    verify_after_import=None,
 ):
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
     ordered = [None] * len(emails)
-    max_workers = max(1, min(int(workers or 1), 4, len(emails) or 1))
+    max_workers = max(1, min(int(workers or 1), 10, len(emails) or 1))
 
     def _run(index, item_email):
         return index, import_sub2api_session(
@@ -129,6 +156,8 @@ def import_sub2api_sessions(
             proxy_id=proxy_id,
             priority=priority,
             concurrency=concurrency,
+            auth_mode=auth_mode,
+            verify_after_import=verify_after_import,
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -148,6 +177,122 @@ def import_sub2api_sessions(
     }
 
 
+def _prepare_sub2api_import_data(email, session_file="", export_dir="", auth_mode="auto", proxy=None, timeout=300):
+    mode = _normalize_auth_mode(auth_mode)
+    direct_identity = _load_direct_agent_identity(session_file)
+    if direct_identity.get("ok"):
+        if mode == "oauth":
+            return {"ok": False, "error": "agent_identity_not_allowed_in_oauth_mode"}
+        data = direct_identity["data"]
+        identity = data["agent_identity"]
+        return {
+            "ok": True,
+            "data": data,
+            "email": str(identity.get("email") or email).strip().lower(),
+            "path": direct_identity.get("path", ""),
+            "mode": "agent_identity_json",
+            "auth_mode": "agent_identity",
+            "source_path": direct_identity.get("path", ""),
+            "source_mode": "agent_identity_json",
+            "refresh_token_status": "not_required",
+            "warnings": [],
+        }
+
+    if mode != "oauth" and email:
+        existing = load_agent_identity(email, export_dir=export_dir)
+        if existing.get("ok"):
+            data = existing["data"]
+            identity = data["agent_identity"]
+            return {
+                "ok": True,
+                "data": data,
+                "email": str(identity.get("email") or email).strip().lower(),
+                "path": existing.get("path", ""),
+                "mode": "agent_identity_json",
+                "auth_mode": "agent_identity",
+                "source_path": existing.get("path", ""),
+                "source_mode": "existing_agent_identity",
+                "refresh_token_status": "not_required",
+                "warnings": [],
+            }
+
+    source_result = _load_cpa_source(email, session_file=session_file, export_dir=export_dir)
+    if not source_result.get("ok"):
+        return {
+            "ok": False,
+            "error": source_result.get("error", "missing_codex_source_json"),
+            "message": source_result.get("message", ""),
+            "source": source_result,
+        }
+    token_data, warnings = build_codex_json(source_result["data"])
+    if not token_data.get("email"):
+        token_data["email"] = email
+    plan_type = str(token_data.get("plan_type") or "").strip().lower()
+    use_agent_identity = mode == "agent_identity" or (mode == "auto" and plan_type == "free")
+    if use_agent_identity:
+        if plan_type and plan_type != "free":
+            return {"ok": False, "error": "agent_identity_requires_free_plan", "plan_type": plan_type}
+        created = create_agent_identity(source_result["data"], proxy=proxy, timeout=min(max(int(timeout or 30), 1), 60))
+        if not created.get("ok"):
+            return created
+        persisted = write_agent_identity(created["data"], export_dir=export_dir)
+        if not persisted.get("ok"):
+            return persisted
+        identity = persisted["data"]["agent_identity"]
+        return {
+            "ok": True,
+            "data": persisted["data"],
+            "email": str(identity.get("email") or email).strip().lower(),
+            "path": persisted["path"],
+            "mode": "agent_identity_json",
+            "auth_mode": "agent_identity",
+            "source_path": source_result.get("path", ""),
+            "source_mode": source_result.get("mode", ""),
+            "refresh_token_status": "not_required",
+            "warnings": created.get("warnings", []),
+        }
+
+    if not token_data.get("access_token"):
+        return {"ok": False, "error": "missing_access_token"}
+    path = _write_cpa_json(token_data, export_dir)
+    return {
+        "ok": True,
+        "data": token_data,
+        "email": str(token_data.get("email") or email).strip().lower(),
+        "path": path,
+        "mode": "codex_session_json",
+        "auth_mode": "oauth",
+        "source_path": source_result.get("path", ""),
+        "source_mode": source_result.get("mode", ""),
+        "refresh_token_status": "oauth_present" if str(token_data.get("refresh_token") or "").strip() else "no_rt",
+        "warnings": warnings,
+    }
+
+
+def _load_direct_agent_identity(session_file):
+    path = Path(str(session_file or "").strip()) if str(session_file or "").strip() else None
+    if not path or not path.is_file():
+        return {"ok": False, "error": "agent_identity_not_found"}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return {"ok": False, "error": "invalid_session_json"}
+    if not is_agent_identity(data):
+        return {"ok": False, "error": "not_agent_identity"}
+    result = validate_agent_identity(data)
+    result["path"] = str(path)
+    return result
+
+
+def _normalize_auth_mode(value):
+    text = str(value or "auto").strip().lower().replace("-", "_")
+    if text in {"agentidentity", "agent_identity", "agent"}:
+        return "agent_identity"
+    if text in {"oauth", "token", "session"}:
+        return "oauth"
+    return "auto"
+
+
 def upload_to_sub2api(
     token_data,
     origin="",
@@ -160,9 +305,11 @@ def upload_to_sub2api(
     proxy_id=None,
     priority=None,
     concurrency=None,
+    verify_after_import=True,
 ):
     if not origin:
         return {"ok": False, "error": "missing_sub2api_url"}
+    agent_identity_payload = is_agent_identity(token_data)
 
     token_result = _resolve_sub2api_token(origin, api_token, login_email, login_password)
     if not token_result.get("ok"):
@@ -191,7 +338,29 @@ def upload_to_sub2api(
     failed = _as_int((data or {}).get("failed")) if isinstance(data, dict) else 0
     created = _as_int((data or {}).get("created")) if isinstance(data, dict) else 0
     updated = _as_int((data or {}).get("updated")) if isinstance(data, dict) else 0
-    ok = failed == 0 and (created + updated > 0 or not isinstance(data, dict))
+    import_ok = failed == 0 and (created + updated > 0 or not isinstance(data, dict))
+    ok = import_ok
+    verification = {"ok": False, "skipped": True, "reason": "verification_disabled"}
+    if import_ok and agent_identity_payload:
+        account_ids = _imported_account_ids(data)
+        if not account_ids:
+            verification = {"ok": False, "error": "sub2api_import_missing_account_id"}
+        else:
+            verification = _verify_sub2api_account_config(
+                origin,
+                token,
+                account_ids[0],
+                group_ids=groups_result.get("group_ids", []),
+                proxy_id=resolved_proxy_id,
+            )
+        ok = bool(verification.get("ok"))
+    elif import_ok and _as_bool(verify_after_import, default=True):
+        account_ids = _imported_account_ids(data)
+        if not account_ids:
+            verification = {"ok": False, "error": "sub2api_import_missing_account_id"}
+        else:
+            verification = _probe_sub2api_account(origin, token, account_ids[0])
+        ok = bool(verification.get("ok"))
     return {
         "ok": ok,
         "mode": "codex_session_import",
@@ -203,7 +372,140 @@ def upload_to_sub2api(
         "group_ids": groups_result.get("group_ids", []),
         "proxy_id": resolved_proxy_id,
         "data": data,
-        **({} if ok else {"error": _sub2api_import_error(data)}),
+        "verification": verification,
+        **({} if ok else {"error": verification.get("error") if import_ok else _sub2api_import_error(data)}),
+    }
+
+
+def _verify_sub2api_account_config(origin, token, account_id, group_ids=None, proxy_id=None):
+    account_id = _as_int(account_id)
+    if account_id <= 0:
+        return {"ok": False, "error": "invalid_sub2api_account_id"}
+    response = _request_json(origin, f"/api/v1/admin/accounts/{account_id}", token=token, method="GET", timeout=30)
+    if not response.get("ok"):
+        return {
+            "ok": False,
+            "account_id": account_id,
+            "error": response.get("error", "sub2api_account_read_failed"),
+        }
+    account = response.get("data") if isinstance(response.get("data"), dict) else {}
+    actual_group_ids = _sub2api_account_group_ids(account)
+    expected_group_ids = sorted({_as_int(value) for value in (group_ids or []) if _as_int(value) > 0})
+    actual_proxy_id = _as_int(account.get("proxy_id") or (account.get("proxy") or {}).get("id"))
+    expected_proxy_id = _as_int(proxy_id)
+    mismatches = []
+    if expected_group_ids and not set(expected_group_ids).issubset(set(actual_group_ids)):
+        mismatches.append("group_ids")
+    if expected_proxy_id > 0 and actual_proxy_id != expected_proxy_id:
+        mismatches.append("proxy_id")
+    return {
+        "ok": not mismatches,
+        "structural_only": True,
+        "execution_tested": False,
+        "account_id": account_id,
+        "status": str(account.get("status") or ""),
+        "group_ids": actual_group_ids,
+        "proxy_id": actual_proxy_id or None,
+        **({"error": "sub2api_remote_config_mismatch", "mismatches": mismatches} if mismatches else {}),
+    }
+
+
+def _sub2api_account_group_ids(account):
+    values = account.get("group_ids") or account.get("groups") or []
+    if not isinstance(values, (list, tuple, set)):
+        values = [values]
+    result = []
+    for value in values:
+        group_id = _as_int(value.get("id")) if isinstance(value, dict) else _as_int(value)
+        if group_id > 0 and group_id not in result:
+            result.append(group_id)
+    return sorted(result)
+
+
+def _imported_account_ids(data):
+    if not isinstance(data, dict):
+        return []
+    account_ids = []
+    for item in data.get("items") or []:
+        if not isinstance(item, dict) or str(item.get("action") or "").lower() not in {"created", "updated"}:
+            continue
+        account_id = _as_int(item.get("account_id"))
+        if account_id > 0 and account_id not in account_ids:
+            account_ids.append(account_id)
+    return account_ids
+
+
+def _probe_sub2api_account(origin, token, account_id, timeout=90):
+    account_id = _as_int(account_id)
+    if account_id <= 0:
+        return {"ok": False, "error": "invalid_sub2api_account_id"}
+    account = _request_json(origin, f"/api/v1/admin/accounts/{account_id}", token=token, method="GET", timeout=30)
+    if not account.get("ok"):
+        return {
+            "ok": False,
+            "account_id": account_id,
+            "error": account.get("error", "sub2api_account_lookup_failed"),
+            "status_code": account.get("status_code", 0),
+        }
+    tested = _request_sub2api_test(origin, token, account_id, timeout=timeout)
+    tested["account_id"] = account_id
+    tested["account_found"] = True
+    return tested
+
+
+def _request_sub2api_test(origin, token, account_id, timeout=90):
+    url = _join_url(origin, f"/api/v1/admin/accounts/{int(account_id)}/test")
+    headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
+    if token:
+        if _looks_like_sub2api_admin_key(token):
+            headers["x-api-key"] = token
+        else:
+            headers["Authorization"] = f"Bearer {token}"
+    try:
+        response = curl_requests.request(
+            "POST",
+            url,
+            headers=headers,
+            data=b"{}",
+            timeout=timeout,
+            impersonate="chrome110",
+        )
+    except Exception as exc:
+        return {"ok": False, "error": "sub2api_account_test_request_failed", "message": str(exc)}
+    if response.status_code < 200 or response.status_code >= 300:
+        return {
+            "ok": False,
+            "error": f"sub2api_account_test_http_{response.status_code}",
+            "status_code": response.status_code,
+        }
+
+    final_event = None
+    error_message = ""
+    for raw_line in str(response.text or "").splitlines():
+        line = raw_line.strip()
+        if not line.startswith("data:"):
+            continue
+        encoded = line[5:].strip()
+        if not encoded or encoded == "[DONE]":
+            continue
+        try:
+            event = json.loads(encoded)
+        except Exception:
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_type = str(event.get("type") or "").strip().lower()
+        if event_type == "test_complete":
+            final_event = event
+        elif event_type in {"error", "test_error", "test_failed"}:
+            error_message = str(event.get("message") or event.get("error") or "")[:300]
+    if isinstance(final_event, dict) and final_event.get("success") is True:
+        return {"ok": True, "status_code": response.status_code, "event": "test_complete"}
+    return {
+        "ok": False,
+        "error": "sub2api_account_test_failed",
+        "status_code": response.status_code,
+        **({"message": error_message} if error_message else {}),
     }
 
 
@@ -247,7 +549,8 @@ def fetch_sub2api_auth_files(api_url="", api_token="", login_email="", login_pas
 
 
 def _build_sub2api_payload(token_data, group_ids=None, proxy_id=None, priority=None, concurrency=None):
-    email = str(token_data.get("email") or "").strip()
+    identity = token_data.get("agent_identity") if isinstance(token_data.get("agent_identity"), dict) else {}
+    email = str(token_data.get("email") or identity.get("email") or "").strip()
     payload = {
         "content": json.dumps(token_data, ensure_ascii=False, separators=(",", ":")),
         "group_ids": [int(value) for value in (group_ids or []) if _as_int(value) > 0],
@@ -282,6 +585,8 @@ def _resolve_sub2api_config(
     proxy_id=None,
     priority=None,
     concurrency=None,
+    auth_mode="",
+    verify_after_import=None,
 ):
     section = CFG.get("sub2api") if isinstance(CFG.get("sub2api"), dict) else {}
     legacy = CFG.get("sub2api_mode") if isinstance(CFG.get("sub2api_mode"), dict) else {}
@@ -304,6 +609,11 @@ def _resolve_sub2api_config(
         "proxy_id": proxy_id if proxy_id is not None else source.get("proxy_id"),
         "priority": priority if priority is not None else source.get("priority", 1),
         "concurrency": concurrency if concurrency is not None else source.get("concurrency", 10),
+        "auth_mode": _normalize_auth_mode(auth_mode or source.get("auth_mode") or "auto"),
+        "verify_after_import": _as_bool(
+            verify_after_import if verify_after_import is not None else source.get("verify_after_import"),
+            default=True,
+        ),
     }
 
 
@@ -396,7 +706,7 @@ def _resolve_proxy_id(origin, token, proxy_name="", proxy_id=None):
         return random.choice(parsed_ids)
     name = str(proxy_name or "").strip()
     if not name:
-        return random.choice(DEFAULT_PROXY_IDS)
+        return None
     result = _request_json(origin, "/api/v1/admin/proxies/all?with_count=true", token=token, method="GET")
     if not result.get("ok"):
         return result
@@ -486,7 +796,7 @@ def _sub2api_account_to_auth_file(item):
     }
 
 
-def _record_sub2api_import(email, path, upload_result):
+def _record_sub2api_import(email, path, upload_result, auth_mode=""):
     target_email = str(email or "").strip().lower()
     if not target_email:
         return
@@ -505,10 +815,12 @@ def _record_sub2api_import(email, path, upload_result):
         "ok": bool(upload_result.get("ok")),
         "path": path,
         "mode": upload_result.get("mode", ""),
+        "auth_mode": str(auth_mode or ""),
         "status_code": upload_result.get("status_code", 0),
         "created": upload_result.get("created", 0),
         "updated": upload_result.get("updated", 0),
         "failed": upload_result.get("failed", 0),
+        "verified": bool((upload_result.get("verification") or {}).get("ok")),
         "updated_at": int(time.time()),
     }
     if upload_result.get("error"):
@@ -578,6 +890,14 @@ def _as_int(value):
         return int(value)
     except Exception:
         return 0
+
+
+def _as_bool(value, default=False):
+    if value is None or value == "":
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "enabled"}
 
 
 def _normalize_email(value):

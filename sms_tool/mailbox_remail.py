@@ -2,6 +2,7 @@ import os
 import time
 import uuid
 from copy import deepcopy
+from urllib.parse import quote
 
 import requests as http_requests
 
@@ -13,6 +14,13 @@ from .mailbox_types import MailboxAccount
 DEFAULT_BASE_URL = "https://remail.aishop6.com"
 DEFAULT_PROJECT_ID = 2
 DEFAULT_PRODUCT_ID = 5
+
+
+class ReMailHttpError(RuntimeError):
+    def __init__(self, status_code, body):
+        self.status_code = int(status_code or 0)
+        self.body = body
+        super().__init__(f"ReMail HTTP {self.status_code}: {body}")
 
 
 def _email_cfg():
@@ -93,7 +101,7 @@ def _remail_request(method, path, *, auth=False, headers=None, secrets=(), proxy
     except Exception:
         body = {"raw": response.text[:500]}
     if response.status_code < 200 or response.status_code >= 300:
-        raise RuntimeError(f"ReMail HTTP {response.status_code}: {_redact(body, secrets)}")
+        raise ReMailHttpError(response.status_code, _redact(body, secrets))
     return body
 
 
@@ -216,18 +224,103 @@ def _fetch_remail_message_detail(mailbox, message_id, proxy=None):
     )
 
 
-def _fetch_remail_messages(mailbox, limit=25, proxy=None):
+def _lookup_remail_order(mailbox, proxy=None):
+    email = str(getattr(mailbox, "email", "") or "").strip().lower()
+    order_no = str(getattr(mailbox, "order_no", "") or "").strip()
+    if order_no:
+        order = _remail_request(
+            "GET",
+            "/v1/open/orders/" + quote(order_no, safe=""),
+            auth=True,
+            proxy=proxy,
+        )
+        if isinstance(order, dict) and str(order.get("deliveryEmail") or "").strip().lower() == email:
+            return order
+        raise RuntimeError("ReMail order does not match the selected mailbox")
+
+    response = _remail_request(
+        "GET",
+        "/v1/open/orders",
+        auth=True,
+        params={"search": email, "limit": 100},
+        proxy=proxy,
+    )
+    items = response.get("items") if isinstance(response, dict) else []
+    matches = [
+        item for item in (items or [])
+        if isinstance(item, dict)
+        and str(item.get("deliveryEmail") or "").strip().lower() == email
+    ]
+    if not matches:
+        raise RuntimeError("ReMail API Key cannot find an order for the selected mailbox")
+    matches.sort(
+        key=lambda item: (
+            bool(item.get("serviceToken")),
+            str(item.get("status") or "").lower() == "active",
+            int(item.get("id") or 0),
+        ),
+        reverse=True,
+    )
+    return matches[0]
+
+
+def _recover_remail_service_token(mailbox, proxy=None):
+    if not _remail_api_key():
+        raise RuntimeError(
+            "ReMail Service Token is invalid or expired. Configure the API Key to inspect the order; "
+            "the API Key cannot be used directly as a pickup token."
+        )
+    try:
+        order = _lookup_remail_order(mailbox, proxy=proxy)
+    except Exception as exc:
+        raise RuntimeError(f"ReMail Service Token is invalid or expired, and order lookup failed: {exc}") from None
+
+    current_token = str(order.get("serviceToken") or "").strip()
+    old_token = str(getattr(mailbox, "token", "") or "").strip()
+    if current_token and current_token != old_token:
+        mailbox.token = current_token
+        mailbox.order_no = str(order.get("orderNo") or getattr(mailbox, "order_no", "") or "").strip()
+        mailbox.purchase_id = str(order.get("id") or getattr(mailbox, "purchase_id", "") or "").strip()
+        return
+
+    mode = str(order.get("serviceMode") or "").strip().lower()
+    status = str(order.get("status") or "").strip().lower()
+    receive_until = str(order.get("receiveUntil") or "").strip()
+    if mode == "code" and (not current_token or status in {"completed", "closed", "refunded", "failed"}):
+        deadline = f"（收件截止 {receive_until}）" if receive_until else ""
+        raise RuntimeError(
+            f"ReMail 短效接码订单已失效{deadline}。API Key 只能查询订单，不能代替 Service Token "
+            "读取过期收件箱；请新建订单，需要长期查看请使用 purchase 模式。"
+        )
+    raise RuntimeError(
+        "ReMail Service Token is invalid or expired, and the order API did not return a replacement token."
+    )
+
+
+def _pickup_remail_messages(mailbox, proxy=None):
     email = str(getattr(mailbox, "email", "") or "").strip().lower()
     token = str(getattr(mailbox, "token", "") or "").strip()
-    if not email or not token:
-        raise RuntimeError("ReMail mailbox requires delivery email and service token")
-    response = _remail_request(
+    return _remail_request(
         "GET",
         "/v1/pickup",
         params={"email": email, "token": token},
         secrets=(token,),
         proxy=proxy,
     )
+
+
+def _fetch_remail_messages(mailbox, limit=25, proxy=None, include_body=False):
+    email = str(getattr(mailbox, "email", "") or "").strip().lower()
+    token = str(getattr(mailbox, "token", "") or "").strip()
+    if not email or not token:
+        raise RuntimeError("ReMail mailbox requires delivery email and service token")
+    try:
+        response = _pickup_remail_messages(mailbox, proxy=proxy)
+    except ReMailHttpError as exc:
+        if exc.status_code != 401:
+            raise
+        _recover_remail_service_token(mailbox, proxy=proxy)
+        response = _pickup_remail_messages(mailbox, proxy=proxy)
     items = response.get("items") if isinstance(response, dict) else []
     normalized = []
     for item in list(items or [])[:max(1, int(limit or 25))]:
@@ -235,7 +328,7 @@ def _fetch_remail_messages(mailbox, limit=25, proxy=None):
             str(item.get(key) or "")
             for key in ("subject", "bodyPreview", "verificationCode")
         )
-        if not _extract_otp_from_text(text) and item.get("id") is not None:
+        if (include_body or not _extract_otp_from_text(text)) and item.get("id") is not None:
             try:
                 item = _fetch_remail_message_detail(mailbox, item["id"], proxy=proxy)
             except Exception as exc:

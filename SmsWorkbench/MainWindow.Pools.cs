@@ -387,17 +387,18 @@ namespace SmsWorkbench
                         paypalUrl = "";
                         paypalAmount = "";
                     }
-                    TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
+                    TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxToken, out string mailboxLine);
                     bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
+                    bool isReMailMailbox = mailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase);
                     bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
-                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox);
+                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox && !isReMailMailbox);
                     var dbRow = new PoolRow
                     {
                         Id = "DB" + data["id"],
                         CreatedAt = UnixTimeText(data.TryGetValue("created_at", out string created) ? created : ""),
                         CompletedAt = UnixTimeText(data.TryGetValue("updated_at", out string updated) ? updated : ""),
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
-                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
+                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
                         AccountPlanType = GetAccountPlanType(rawData),
                         QuotaStatus = GetQuotaStatus(rawData),
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
@@ -407,7 +408,7 @@ namespace SmsWorkbench
                         Phone = verifiedPhone,
                         HasAccessToken = !string.IsNullOrWhiteSpace(access),
                         PayPalUrl = paypalUrl,
-                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(isChataiMailbox ? mailboxRefreshToken : access),
+                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
                         Notes = string.IsNullOrWhiteSpace(jsonPath) ? dbPath : jsonPath,
                         SourcePath = dbPath,
@@ -415,7 +416,8 @@ namespace SmsWorkbench
                         ClientId = mailboxClientId,
                         RawRefreshToken = mailboxRefreshToken,
                         MailboxLine = mailboxLine,
-                        MailboxProvider = mailboxProvider
+                        MailboxProvider = mailboxProvider,
+                        MailboxToken = mailboxToken
                     };
                     PopulateQuotaFields(dbRow, rawData);
                     allRows.Add(dbRow);
@@ -452,16 +454,17 @@ namespace SmsWorkbench
                         string refreshTokenStatus = GetString(data, "refresh_token_status");
                         string importedStatus = GetImportedStatus(data);
                         string verifiedPhone = GetVerifiedPhone(data);
-                        TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxLine);
+                        TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxToken, out string mailboxLine);
                         string timing = GetTimingText(data);
                         bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
+                        bool isReMailMailbox = mailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase);
                         var sessionRow = new PoolRow
                         {
                             Id = "S" + (allRows.Count + 1),
                             CreatedAt = SafeTime(File.GetCreationTime(path)),
                             CompletedAt = SafeTime(File.GetLastWriteTime(path)),
                             Identifier = email,
-                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isGmailMailbox ? "Session/Gmail" : "Session",
+                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isReMailMailbox ? "Session/ReMail" : isGmailMailbox ? "Session/Gmail" : "Session",
                             AccountPlanType = GetAccountPlanType(data),
                             QuotaStatus = GetQuotaStatus(data),
                             Status = importedStatus.Length > 0
@@ -473,14 +476,15 @@ namespace SmsWorkbench
                             Phone = verifiedPhone,
                             HasAccessToken = !string.IsNullOrWhiteSpace(access),
                             PayPalUrl = paypalUrl,
-                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(access),
+                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(access),
                             Proxy = timing,
                             Notes = path,
                             SourcePath = path,
                             ClientId = mailboxClientId,
                             RawRefreshToken = mailboxRefreshToken,
                             MailboxLine = mailboxLine,
-                            MailboxProvider = mailboxProvider
+                            MailboxProvider = mailboxProvider,
+                            MailboxToken = mailboxToken
                         };
                         PopulateQuotaFields(sessionRow, data);
                         allRows.Add(sessionRow);

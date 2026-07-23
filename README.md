@@ -31,7 +31,7 @@
 | 层级 | 技术 |
 | --- | --- |
 | 桌面端 | WPF、.NET 10、C# |
-| 业务核心 | Python 3、curl_cffi、requests、httpx |
+| 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
 | 支付协议 | Stripe Checkout、PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT |
@@ -114,20 +114,24 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 - 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱和 SMSBower 手机号注册。
 - 支持单账号与并发批量注册。
+- 批量注册模式下预提取 Sentinel Token 并在所有 worker 间共享，避免并发请求 `sentinel.openai.com` 触发限流；`_extract_sentinel` 内部使用线程锁序列化提取，锁内二次检查缓存。
 - 支持仅注册并保存 AT，或继续生成支付链接。
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
 - 注册、OTP、Session 获取、Codex OAuth 和支付提链分别记录阶段结果，避免把中间状态误报为成功。
 
 ### ReMail 邮箱源
 
-- 一键注册来源中提供 `ReMail（短效接码）`。
+- 一键注册来源中提供 `ReMail（短效接码）` 和 `ReMail（长效邮箱）`。
 - 支持 `code` 短效接码和 `purchase` 长效邮箱。
 - 支持单笔或批量创建邮箱订单。
 - 支持 `private_first`、`public_only` 库存策略。
 - 支持指定项目、产品和邮箱后缀。
 - 使用 `Idempotency-Key` 防止重试导致重复订单。
 - 订单创建使用 API Key；收件使用独立的邮箱地址与 Service Token。
+- Service Token 返回 401 时会用 API Key 查询所属订单；如服务端返回新 Token，会保存到 Session JSON 和 SQLite 后重试一次。
+- `code` 订单只能在 `receiveUntil` 前收件，API Key 不能代替过期的 Service Token；需要后续持续查看收件箱时请选择 `purchase`。
 - 邮件摘要无验证码时自动读取邮件详情，并执行时间、收件人、消息 ID 和已排除验证码过滤。
+- 桌面端可从 ReMail 注册记录打开收件箱；查看模式会读取邮件完整正文和验证码。
 - 日志会脱敏 API Key 和 Service Token。
 
 ### 统一邮箱与 OTP
@@ -153,6 +157,15 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 支持实际测试代理出口 IP、国家及预期地区是否匹配。
 - 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
 
+### Agent Identity 注册
+
+- Free 账号注册成功且 AT 有效时，可立即向 OpenAI 注册 Agent Identity 和 task。
+- 使用 Ed25519 算法生成 PKCS#8 格式私钥，独立保存到 `sessions/agent_identities/`。
+- 支持通过 `--register-and-import` 在注册完成后自动导入 SUB2API。
+- SUB2API 导入支持三种认证模式：`auto`（Free 账号优先使用 Agent Identity）、`oauth`、`agent_identity`。
+- 可通过 `--sub2api-no-verify` 跳过导入后的连通性验证。
+- 配置项 `agent_identity.register_on_free_signup` 控制注册成功后是否自动注册 Agent Identity。
+
 ### 账号与数据管理
 
 - Session JSON 与 SQLite 双层索引。
@@ -160,6 +173,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 支持刷新本地额度并识别 AT 失效。
 - 支持复制 AT、查看邮箱、重新注册和重新生成支付链接。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
+- Agent Identity 私钥独立保存到 `sessions/agent_identities/`，后续 SUB2API 导入会优先复用。
 - 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
 
 ### 手机接码
@@ -219,6 +233,7 @@ services/
 | `sms_tool/gen_pp_link.py` | PayPal/Stripe Checkout 与链接生成 |
 | `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
 | `sms_tool/storage.py` | SQLite、Session 索引和状态持久化 |
+| `sms_tool/agent_identity.py` | Agent Identity 注册、Ed25519 密钥生成与持久化 |
 | `sms_tool/session_converter.py` | 多格式账号与 Session 转换 |
 
 更详细的边界说明参见 [docs/architecture.md](docs/architecture.md)，目录职责参见 [docs/directory-map.md](docs/directory-map.md)。
@@ -273,6 +288,32 @@ services/
 
 支付代理与非支付代理相互独立。桌面端或 CLI 提供的普通 `--proxy` 不应覆盖已经配置的支付阶段代理。
 
+### Agent Identity
+
+```json
+{
+  "agent_identity": {
+    "register_on_free_signup": false,
+    "registration_timeout": 30
+  }
+}
+```
+
+`register_on_free_signup` 为 `true` 时，Free 账号注册成功后会自动注册 Agent Identity。`registration_timeout` 控制注册请求超时秒数。
+
+### SUB2API 导入
+
+```json
+{
+  "sub2api": {
+    "auth_mode": "auto",
+    "verify_after_import": true
+  }
+}
+```
+
+`auth_mode` 可选 `auto`（Free 账号优先 Agent Identity）、`oauth`、`agent_identity`。`verify_after_import` 控制导入后是否执行连通性验证。
+
 ## 常用操作
 
 ### ReMail 短效接码注册
@@ -303,6 +344,12 @@ python chatgpt_phone_reg.py --chatai-mailbox-file hotmail.txt --count 4 --worker
 
 ```powershell
 python chatgpt_phone_reg.py --test-payment-proxies --checkout-proxy-country GB --approve-proxy-country JP --update-proxy-country BR
+```
+
+### 注册并自动导入 SUB2API
+
+```powershell
+python chatgpt_phone_reg.py --buy-remail-mailbox --count 1 --workers 1 --register-and-import --sub2api-auth-mode auto
 ```
 
 ### 查看 CLI 参数
