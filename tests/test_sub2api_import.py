@@ -7,6 +7,94 @@ from sms_tool import import_targets
 
 
 class Sub2ApiImportTests(unittest.TestCase):
+    def test_agent_identity_import_skips_destructive_post_import_probe(self):
+        prepared = {
+            "ok": True,
+            "data": {"auth_mode": "agent_identity", "agent_identity": {"email": "free@example.com"}},
+            "email": "free@example.com",
+            "path": "agent-free.json",
+            "mode": "agent_identity_json",
+            "auth_mode": "agent_identity",
+            "source_path": "agent-free.json",
+            "source_mode": "existing_agent_identity",
+            "refresh_token_status": "not_required",
+            "warnings": [],
+        }
+        upload_result = {"ok": True, "created": 1, "updated": 0, "failed": 0}
+
+        with patch.object(sub2api_import, "_prepare_sub2api_import_data", return_value=prepared), \
+             patch.object(sub2api_import, "upload_to_sub2api", return_value=upload_result) as upload, \
+             patch.object(sub2api_import, "_record_sub2api_import"):
+            result = sub2api_import.import_sub2api_session(
+                email="free@example.com",
+                api_url="https://sub.example",
+                api_token="admin-secret",
+                verify_after_import=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(upload.call_args.kwargs["verify_after_import"])
+        self.assertIn("agent_identity_execution_probe_skipped", result["warnings"])
+
+    def test_direct_agent_identity_upload_never_runs_account_test(self):
+        def fake_request(origin, path, token="", method="GET", body=None, timeout=30):
+            if path == "/api/v1/admin/groups/all":
+                return {"ok": True, "data": [{"id": 7, "name": "codex", "platform": "openai"}]}
+            if path == "/api/v1/admin/accounts/import/codex-session":
+                return {"ok": True, "status_code": 200, "data": {
+                    "created": 1,
+                    "updated": 0,
+                    "failed": 0,
+                    "items": [{"action": "created", "account_id": 42}],
+                }}
+            if path == "/api/v1/admin/accounts/42":
+                return {"ok": True, "data": {"id": 42, "group_ids": [7], "status": "active"}}
+            return {"ok": False, "error": "unexpected"}
+
+        with (
+            patch.object(sub2api_import, "_request_json", side_effect=fake_request),
+            patch.object(sub2api_import, "_request_sub2api_test") as tested,
+        ):
+            result = sub2api_import.upload_to_sub2api(
+                {"auth_mode": "agent_identity", "agent_identity": {"email": "free@example.com"}},
+                origin="https://sub.example",
+                api_token="jwt-token",
+                group_name="codex",
+                verify_after_import=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["verification"]["structural_only"])
+        tested.assert_not_called()
+
+    def test_oauth_upload_can_still_run_account_test(self):
+        def fake_request(origin, path, token="", method="GET", body=None, timeout=30):
+            if path == "/api/v1/admin/groups/all":
+                return {"ok": True, "data": [{"id": 7, "name": "codex", "platform": "openai"}]}
+            if path == "/api/v1/admin/accounts/import/codex-session":
+                return {"ok": True, "status_code": 200, "data": {
+                    "created": 1,
+                    "updated": 0,
+                    "failed": 0,
+                    "items": [{"action": "created", "account_id": 42}],
+                }}
+            return {"ok": False, "error": "unexpected"}
+
+        with (
+            patch.object(sub2api_import, "_request_json", side_effect=fake_request),
+            patch.object(sub2api_import, "_probe_sub2api_account", return_value={"ok": True}) as tested,
+        ):
+            result = sub2api_import.upload_to_sub2api(
+                {"email": "paid@example.com", "access_token": "at"},
+                origin="https://sub.example",
+                api_token="jwt-token",
+                group_name="codex",
+                verify_after_import=True,
+            )
+
+        self.assertTrue(result["ok"])
+        tested.assert_called_once_with("https://sub.example", "jwt-token", 42)
+
     def test_build_sub2api_payload_uses_codex_session_import_shape(self):
         payload = sub2api_import._build_sub2api_payload(
             {
@@ -49,6 +137,7 @@ class Sub2ApiImportTests(unittest.TestCase):
                 origin="https://sub.example",
                 api_token="jwt-token",
                 group_name="codex",
+                verify_after_import=False,
             )
 
         self.assertTrue(result["ok"])
@@ -91,6 +180,7 @@ class Sub2ApiImportTests(unittest.TestCase):
                 login_email="admin@example.com",
                 login_password="password",
                 group_ids="#3",
+                verify_after_import=False,
             )
 
         self.assertTrue(result["ok"])
@@ -134,15 +224,13 @@ class Sub2ApiImportTests(unittest.TestCase):
         self.assertEqual(proxy_id, 4)
         choice.assert_called_once_with([1, 2, 3, 4, 5])
 
-    def test_resolve_proxy_id_uses_default_pool_when_not_configured(self):
-        with patch.object(sub2api_import.random, "choice", return_value=2) as choice:
-            proxy_id = sub2api_import._resolve_proxy_id(
-                "https://sub.example",
-                "admin-secret",
-            )
+    def test_resolve_proxy_id_omits_proxy_when_not_configured(self):
+        proxy_id = sub2api_import._resolve_proxy_id(
+            "https://sub.example",
+            "admin-secret",
+        )
 
-        self.assertEqual(proxy_id, 2)
-        choice.assert_called_once_with(sub2api_import.DEFAULT_PROXY_IDS)
+        self.assertIsNone(proxy_id)
 
     def test_fetch_sub2api_auth_files_normalizes_error_account_for_401_filter(self):
         def fake_request(origin, path, token="", method="GET", body=None, timeout=30):

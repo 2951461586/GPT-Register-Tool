@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .error_classification import classify_error
+from .sentinel_tokens import _extract_sentinel
 
 def _unique_mailboxes(mailboxes):
     if not mailboxes:
@@ -42,7 +43,14 @@ def run_batch_impl(
 
     sentinel_data = None
     if int(count or 1) > 1:
-        print("[*] Batch mode: using a fresh sentinel/auth state per account.")
+        print("[*] Batch mode: pre-extracting shared sentinel token to avoid concurrent rate limiting...")
+        try:
+            sentinel_data = _extract_sentinel(proxy=proxy, force_fresh=True)
+        except Exception as exc:
+            print(f"[!] Shared sentinel pre-extraction failed: {exc}; each worker will extract independently.")
+            sentinel_data = None
+        if sentinel_data:
+            print("[*] Shared sentinel token ready; all workers will reuse it.")
 
     def _run_one(i):
         print(f"\n{'#' * 40}")
@@ -56,7 +64,7 @@ def run_batch_impl(
                 paypal_link=paypal_link,
                 phone_pool=phone_pool,
                 codex_oauth=codex_oauth,
-                sentinel_data=None,
+                sentinel_data=sentinel_data,
                 payment_method=payment_method,
                 paypal_generation_type=paypal_generation_type,
                 registration_mode=registration_mode,
@@ -78,7 +86,7 @@ def run_batch_impl(
                 "dropped": True if failure_class == "account" else False if failure_class == "network" else None,
             }
 
-    workers = max(1, min(int(workers or 1), 5, int(count or 1)))
+    workers = max(1, min(int(workers or 1), 20, int(count or 1)))
     if workers <= 1:
         for i in range(count):
             _, result = _run_one(i)

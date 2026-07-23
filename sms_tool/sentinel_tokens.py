@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 import uuid
 
@@ -20,7 +21,8 @@ def _get_cached_sentinel(force_fresh=False):
             if age < ttl and cache.get("sentinel_token"):
                 print(f"[*] Using cached sentinel token (age: {age:.0f}s)")
                 return cache
-        except: pass
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            print(f"  [!] Sentinel cache read failed: {exc}")
     return None
 
 def _save_sentinel_cache(data):
@@ -303,37 +305,50 @@ def _extract_sentinel_quickjs(proxy=None):
     return result
 
 
+# Serialize sentinel extraction across threads so concurrent workers don't
+# each hit sentinel.openai.com simultaneously (which triggers rate limiting).
+_sentinel_extraction_lock = threading.Lock()
+
+
 def _extract_sentinel(proxy=None, force_fresh=False):
     cached = _get_cached_sentinel(force_fresh=force_fresh)
-    if cached: return cached
+    if cached:
+        return cached
 
-    mode = _sentinel_mode()
-    if mode in {"auto", "quickjs"}:
-        print("[*] Extracting sentinel tokens via QuickJS SDK...")
-        result = _extract_sentinel_quickjs(proxy)
-        if result:
-            return result
-        if mode == "quickjs":
-            print("[!] Sentinel QuickJS mode failed and fallback is disabled by sentinel_mode=quickjs")
-            return None
+    with _sentinel_extraction_lock:
+        # Re-check cache inside the lock — another thread may have just
+        # completed extraction and populated the cache.
+        cached = _get_cached_sentinel(force_fresh=force_fresh)
+        if cached:
+            return cached
 
-    # Try HTTP protocol method first (no browser needed, handles proxy natively)
-    if mode in {"auto", "http"}:
-        print("[*] Extracting sentinel tokens via HTTP protocol...")
-        result = _extract_sentinel_http(proxy)
-        if result:
-            return result
-        if mode == "http":
-            return None
+        mode = _sentinel_mode()
+        if mode in {"auto", "quickjs"}:
+            print("[*] Extracting sentinel tokens via QuickJS SDK...")
+            result = _extract_sentinel_quickjs(proxy)
+            if result:
+                return result
+            if mode == "quickjs":
+                print("[!] Sentinel QuickJS mode failed and fallback is disabled by sentinel_mode=quickjs")
+                return None
 
-    # Fallback to browser-based extraction
-    print("[*] HTTP method failed, falling back to browser extraction...")
-    # For browser: convert socks5h to socks5 (Chromium doesn't support socks5h)
-    if proxy and proxy.startswith("socks5h://"):
-        browser_proxy = proxy.replace("socks5h://", "socks5://")
-    else:
-        browser_proxy = proxy
-    return _extract_sentinel_cloakbrowser(browser_proxy)
+        # Try HTTP protocol method first (no browser needed, handles proxy natively)
+        if mode in {"auto", "http"}:
+            print("[*] Extracting sentinel tokens via HTTP protocol...")
+            result = _extract_sentinel_http(proxy)
+            if result:
+                return result
+            if mode == "http":
+                return None
+
+        # Fallback to browser-based extraction
+        print("[*] HTTP method failed, falling back to browser extraction...")
+        # For browser: convert socks5h to socks5 (Chromium doesn't support socks5h)
+        if proxy and proxy.startswith("socks5h://"):
+            browser_proxy = proxy.replace("socks5h://", "socks5://")
+        else:
+            browser_proxy = proxy
+        return _extract_sentinel_cloakbrowser(browser_proxy)
 
 
 def _extract_sentinel_cloakbrowser(browser_proxy):

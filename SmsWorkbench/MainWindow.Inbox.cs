@@ -76,9 +76,9 @@ namespace SmsWorkbench
 
             async Task LoadEmails()
             {
-                if (IsCfWorkerRow(row))
+                if (IsCfWorkerRow(row) || IsReMailRow(row))
                 {
-                    header.Text = "正在获取 CFWorker 邮件...";
+                    header.Text = IsReMailRow(row) ? "正在获取 ReMail 邮件..." : "正在获取 CFWorker 邮件...";
                     try
                     {
                         mailItems.Clear();
@@ -91,7 +91,7 @@ namespace SmsWorkbench
                     catch (Exception ex)
                     {
                         header.Text = "获取邮件失败：" + ex.Message;
-                        Log("CFWorker收件箱获取失败：" + ex.Message);
+                        Log((IsReMailRow(row) ? "ReMail" : "CFWorker") + "收件箱获取失败：" + ex.Message);
                     }
                     return;
                 }
@@ -193,6 +193,7 @@ namespace SmsWorkbench
             string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
             if (!File.Exists(script)) throw new FileNotFoundException("Backend script not found", script);
             var args = new List<string> { "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString() };
+            string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
             string mailboxLine = FindMailboxLineForRow(row);
             if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
             {
@@ -220,6 +221,10 @@ namespace SmsWorkbench
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8
             };
+            if (remailToken.Length > 0)
+            {
+                psi.Environment["REMAIL_SERVICE_TOKEN"] = remailToken;
+            }
             using var process = new Process { StartInfo = psi };
             process.Start();
             string stdout = await process.StandardOutput.ReadToEndAsync();
@@ -243,7 +248,9 @@ namespace SmsWorkbench
                         ReceivedAt = received,
                         From = JsonString(msg, "from"),
                         Subject = JsonString(msg, "subject"),
-                        BodyPreview = JsonString(msg, "bodyPreview")
+                        BodyPreview = JsonString(msg, "bodyPreview"),
+                        Body = JsonString(msg, "body"),
+                        VerificationCode = JsonString(msg, "verificationCode")
                     });
                 }
             }
@@ -311,6 +318,13 @@ namespace SmsWorkbench
                 || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool IsReMailRow(PoolRow row)
+        {
+            if (row == null) return false;
+            return row.MailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase)
+                || row.AccountType.Contains("ReMail", StringComparison.OrdinalIgnoreCase);
+        }
+
         private string JsonStringAny(JsonElement obj, params string[] properties)
         {
             if (obj.ValueKind != JsonValueKind.Object) return obj.ValueKind == JsonValueKind.String ? obj.GetString() ?? "" : "";
@@ -326,7 +340,8 @@ namespace SmsWorkbench
         private void ShowMailDetailDialog(MailItem item)
         {
             if (item == null) return;
-            string code = ExtractVerificationCode(item.BodyPreview);
+            string content = item.Body.Length > 0 ? item.Body : item.BodyPreview;
+            string code = item.VerificationCode.Length > 0 ? item.VerificationCode : ExtractVerificationCode(content);
             var dialog = new Window
             {
                 Title = item.Subject.Length > 0 ? item.Subject : "邮件详情",
@@ -367,7 +382,7 @@ namespace SmsWorkbench
 
             var body = new TextBox
             {
-                Text = item.BodyPreview,
+                Text = content,
                 IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
@@ -396,7 +411,7 @@ namespace SmsWorkbench
                 Clipboard.SetText(code);
                 Log("验证码已复制：" + code);
             };
-            copyBodyBtn.Click += (_, __) => Clipboard.SetText(item.BodyPreview);
+            copyBodyBtn.Click += (_, __) => Clipboard.SetText(content);
             closeBtn.Click += (_, __) => dialog.Close();
             actions.Children.Add(copyCodeBtn);
             actions.Children.Add(copyBodyBtn);
@@ -420,6 +435,8 @@ namespace SmsWorkbench
             public string From { get; set; } = "";
             public string Subject { get; set; } = "";
             public string BodyPreview { get; set; } = "";
+            public string Body { get; set; } = "";
+            public string VerificationCode { get; set; } = "";
         }
     }
 }

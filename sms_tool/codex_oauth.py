@@ -898,6 +898,12 @@ def _mailbox_from_data(data):
         sender_name=str(mailbox.get("sender_name") or "").strip(),
         source=str(mailbox.get("source") or "").strip(),
         provider=provider,
+        order_no=str(mailbox.get("order_no") or "").strip(),
+        purchase_id=str(mailbox.get("purchase_id") or "").strip(),
+        project_name=str(mailbox.get("project_name") or "").strip(),
+        price=str(mailbox.get("price") or "").strip(),
+        purchase_total_cost=str(mailbox.get("purchase_total_cost") or "").strip(),
+        balance_after=str(mailbox.get("balance_after") or "").strip(),
     )
     if not mailbox_has_inbox_credentials(result):
         if mailbox_gmail.is_gmail_mailbox(result):

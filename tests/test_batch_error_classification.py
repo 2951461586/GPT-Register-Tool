@@ -1,3 +1,4 @@
+import threading
 import unittest
 
 from sms_tool.batch_runner import run_batch_impl
@@ -5,6 +6,22 @@ from sms_tool.storage import _status
 
 
 class BatchErrorClassificationTests(unittest.TestCase):
+    def test_batch_runner_honors_ten_requested_workers(self):
+        barrier = threading.Barrier(10, timeout=3)
+
+        def run_email(**_):
+            barrier.wait()
+            return {"success": True}
+
+        results = run_batch_impl(
+            count=10,
+            workers=10,
+            run_email_func=run_email,
+        )
+
+        self.assertEqual(len(results), 10)
+        self.assertTrue(all(result["success"] for result in results))
+
     def test_network_failure_is_not_marked_dropped(self):
         results = run_batch_impl(
             count=1,

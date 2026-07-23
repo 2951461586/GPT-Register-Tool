@@ -24,6 +24,7 @@ namespace SmsWorkbench
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
             var sub2api = GetSection(config, "sub2api");
+            var agentIdentity = GetSection(config, "agent_identity");
             var codexOauth = GetSection(config, "codex_oauth");
             var phoneReuse = GetSection(config, "phone_reuse");
             var smsBower = GetChildSection(phoneReuse, "smsbower");
@@ -142,6 +143,8 @@ namespace SmsWorkbench
             row = 0;
             AddConfigField(sub2Form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
             AddConfigField(sub2Form, fields, row++, "SUB2API Token", "sub2api_token", GetString(sub2api, "api_token"));
+            AddConfigField(sub2Form, fields, row++, "Register Agent Identity on Free signup", "agent_identity_register_on_free_signup", FirstNonEmpty(GetString(agentIdentity, "register_on_free_signup"), "false"));
+            AddConfigField(sub2Form, fields, row++, "Agent Identity timeout (seconds)", "agent_identity_registration_timeout", FirstNonEmpty(GetString(agentIdentity, "registration_timeout"), "30"));
             AddConfigField(sub2Form, fields, row++, "SUB2API邮箱", "sub2api_email", GetString(sub2api, "email"));
             AddConfigField(sub2Form, fields, row++, "SUB2API密码", "sub2api_password", GetString(sub2api, "password"));
             AddConfigField(sub2Form, fields, row++, "SUB2API分组", "sub2api_group", GetString(sub2api, "group_name"));
@@ -150,6 +153,8 @@ namespace SmsWorkbench
             AddConfigField(sub2Form, fields, row++, "SUB2API代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
             AddConfigField(sub2Form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
             AddConfigField(sub2Form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
+            AddConfigComboField(sub2Form, comboFields, row++, "SUB2API凭据模式", "sub2api_auth_mode", FirstNonEmpty(GetString(sub2api, "auth_mode"), "auto"), new[] { "auto", "oauth", "agent_identity" });
+            AddConfigField(sub2Form, fields, row++, "导入后连通测试", "sub2api_verify_after_import", FirstNonEmpty(GetString(sub2api, "verify_after_import"), "true"));
 
             var networkForm = AddConfigCategory(sidebar, host, categories, "网络代理", "注册、邮箱、接码、额度查询等非支付功能统一使用本地 7897 端口。");
             row = 0;
@@ -250,6 +255,8 @@ namespace SmsWorkbench
                 cpaMode["api_token"] = fields["cpa_api_token"].Text.Trim();
                 sub2api["api_url"] = fields["sub2api_url"].Text.Trim();
                 sub2api["api_token"] = fields["sub2api_token"].Text.Trim();
+                agentIdentity["register_on_free_signup"] = ConfigBoolValue(fields, "agent_identity_register_on_free_signup", GetBool(agentIdentity, "register_on_free_signup", false));
+                agentIdentity["registration_timeout"] = ConfigIntegerValue(fields, "agent_identity_registration_timeout");
                 sub2api["email"] = fields["sub2api_email"].Text.Trim();
                 sub2api["password"] = fields["sub2api_password"].Text.Trim();
                 sub2api["group_name"] = fields["sub2api_group"].Text.Trim();
@@ -258,6 +265,8 @@ namespace SmsWorkbench
                 sub2api["proxy_id"] = fields["sub2api_proxy_id"].Text.Trim();
                 sub2api["priority"] = fields["sub2api_priority"].Text.Trim();
                 sub2api["concurrency"] = fields["sub2api_concurrency"].Text.Trim();
+                sub2api["auth_mode"] = ConfigComboValue(comboFields, "sub2api_auth_mode", "auto");
+                sub2api["verify_after_import"] = fields["sub2api_verify_after_import"].Text.Trim();
                 proxy["default"] = LocalNonPaymentProxy;
                 proxy["pool"] = new List<object> { LocalNonPaymentProxy };
                 config["mailbox_proxy"] = LocalNonPaymentProxy;
@@ -278,6 +287,7 @@ namespace SmsWorkbench
                 config["storage"] = storage;
                 config["cpa_mode"] = cpaMode;
                 config["sub2api"] = sub2api;
+                config["agent_identity"] = agentIdentity;
                 config["codex_oauth"] = codexOauth;
                 config["phone_reuse"] = phoneReuse;
                 SaveConfig(path, config);

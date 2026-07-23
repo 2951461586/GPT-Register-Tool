@@ -207,6 +207,7 @@ def main():
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
     parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
+    parser.add_argument("--register-and-import", action="store_true", help="Register new account(s), then import only the successful registrations into CPA/SUB2API")
     parser.add_argument("--import-target", choices=["cpa", "sub2api", "cliproxyapi"], default="cpa", help="Target for --import-cpa and 401 re-import")
     parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
@@ -229,6 +230,8 @@ def main():
     parser.add_argument("--sub2api-proxy-id", type=int, default=None, help="SUB2API default proxy id")
     parser.add_argument("--sub2api-priority", type=int, default=None, help="SUB2API account priority, defaults to config or 1")
     parser.add_argument("--sub2api-concurrency", type=int, default=None, help="SUB2API account concurrency, defaults to config or 10")
+    parser.add_argument("--sub2api-auth-mode", choices=["auto", "oauth", "agent_identity"], default="", help="SUB2API credential mode; auto prefers Agent Identity for free accounts")
+    parser.add_argument("--sub2api-no-verify", dest="sub2api_verify_after_import", action="store_false", default=None, help="Skip the SUB2API post-import connectivity test")
     parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
     parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
@@ -311,6 +314,8 @@ def main():
     parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
     args = parser.parse_args()
+    if args.register_and_import:
+        args.import_cpa = True
     # Keep whether --proxy came from the operator.  Some commands (notably
     # --generate-ba-link) need an omitted single proxy to mean "use the
     # configured stage proxies", even though the rest of the CLI still wants
@@ -333,7 +338,7 @@ def main():
     if args.mark_paypal_status:
         _mark_paypal_status(args)
         return
-    if args.import_cpa:
+    if args.import_cpa and not args.register_and_import:
         _import_cpa(args)
         return
     if args.refresh_cpa_quota or args.refresh_local_quota:
@@ -628,6 +633,8 @@ def _import_registered_accounts(args, emails):
         sub2api_proxy_id=args.sub2api_proxy_id,
         sub2api_priority=args.sub2api_priority,
         sub2api_concurrency=args.sub2api_concurrency,
+        sub2api_auth_mode=getattr(args, "sub2api_auth_mode", "") or "",
+        sub2api_verify_after_import=getattr(args, "sub2api_verify_after_import", None),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
@@ -707,6 +714,8 @@ def _mark_paypal_status(args):
             sub2api_proxy_id=args.sub2api_proxy_id,
             sub2api_priority=args.sub2api_priority,
             sub2api_concurrency=args.sub2api_concurrency,
+            sub2api_auth_mode=getattr(args, "sub2api_auth_mode", "") or "",
+            sub2api_verify_after_import=getattr(args, "sub2api_verify_after_import", None),
         )
         print(json.dumps(import_result, ensure_ascii=False, indent=2))
         if any(not result.get("ok") for result in results) or not import_result.get("ok"):
@@ -749,14 +758,16 @@ def _view_inbox(args):
     import sys
 
     from .codex_oauth import _mailbox_from_data
-    from .mailbox import _fetch_mailbox_messages
+    from .mailbox import _fetch_mailbox_messages, _mailbox_from_config
     from .session_refresh import _load_seed_session
 
     with contextlib.redirect_stdout(sys.stderr):
-        data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
+        data, json_path = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
         mailbox = _mailbox_from_explicit_args(args)
         if mailbox is None:
             mailbox = _mailbox_from_data(data)
+        if mailbox is None and (getattr(args, "remail_token", None) or os.environ.get("REMAIL_SERVICE_TOKEN")):
+            mailbox = _mailbox_from_config(args)
     if mailbox is None:
         print(json.dumps({
             "ok": False,
@@ -765,12 +776,32 @@ def _view_inbox(args):
         }, ensure_ascii=False, indent=2))
         raise SystemExit(2)
     try:
+        original_mailbox_token = str(getattr(mailbox, "token", "") or "")
         with contextlib.redirect_stdout(sys.stderr):
             messages = _fetch_mailbox_messages(
                 mailbox,
                 limit=max(1, min(int(args.inbox_limit or 20), 100)),
                 proxy=args.proxy,
+                include_body=True,
             )
+            refreshed_mailbox_token = str(getattr(mailbox, "token", "") or "")
+            if (
+                getattr(mailbox, "provider", "") == "remail"
+                and refreshed_mailbox_token
+                and refreshed_mailbox_token != original_mailbox_token
+            ):
+                mailbox_data = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
+                mailbox_data.update({
+                    "email": mailbox.email,
+                    "provider": "remail",
+                    "token": refreshed_mailbox_token,
+                    "order_no": str(getattr(mailbox, "order_no", "") or mailbox_data.get("order_no") or ""),
+                    "purchase_id": str(getattr(mailbox, "purchase_id", "") or mailbox_data.get("purchase_id") or ""),
+                })
+                data["mailbox"] = mailbox_data
+                if json_path:
+                    Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                upsert_account(data, json_path=json_path)
     except Exception as exc:
         print(json.dumps({
             "ok": False,
@@ -922,6 +953,8 @@ def _import_cpa(args):
             sub2api_proxy_id=args.sub2api_proxy_id,
             sub2api_priority=args.sub2api_priority,
             sub2api_concurrency=args.sub2api_concurrency,
+            sub2api_auth_mode=getattr(args, "sub2api_auth_mode", "") or "",
+            sub2api_verify_after_import=getattr(args, "sub2api_verify_after_import", None),
         )
     elif args.session_file:
         result = import_account_session(
@@ -943,6 +976,8 @@ def _import_cpa(args):
             sub2api_proxy_id=args.sub2api_proxy_id,
             sub2api_priority=args.sub2api_priority,
             sub2api_concurrency=args.sub2api_concurrency,
+            sub2api_auth_mode=getattr(args, "sub2api_auth_mode", "") or "",
+            sub2api_verify_after_import=getattr(args, "sub2api_verify_after_import", None),
         )
     else:
         rows = _importable_account_rows()
@@ -967,6 +1002,8 @@ def _import_cpa(args):
             sub2api_proxy_id=args.sub2api_proxy_id,
             sub2api_priority=args.sub2api_priority,
             sub2api_concurrency=args.sub2api_concurrency,
+            sub2api_auth_mode=getattr(args, "sub2api_auth_mode", "") or "",
+            sub2api_verify_after_import=getattr(args, "sub2api_verify_after_import", None),
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
@@ -1117,12 +1154,12 @@ def _generate_ba_link(args):
 
 
 def _generate_upi_qr(args):
-    """??? Access Token ???? UPI hosted ???????"""
+    """Generate UPI hosted payment link and QR code from Access Token."""
     from .gen_pp_link import generate_upi_qr_link
 
     at = (getattr(args, "at", None) or "").strip()
     if not at:
-        print(json.dumps({"ok": False, "error": "??? --at ?? (Access Token)"}))
+        print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
     upi_cfg = CFG.get("upi") if isinstance(CFG.get("upi"), dict) else {}

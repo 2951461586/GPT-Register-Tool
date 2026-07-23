@@ -969,6 +969,7 @@ namespace SmsWorkbench
 
             var combo = new ComboBox { SelectedIndex = 0, Margin = new Thickness(0, 0, 0, 18) };
             combo.Items.Add(new ComboBoxItem { Content = "CPA", Tag = "cpa" });
+            combo.Items.Add(new ComboBoxItem { Content = "SUB2API", Tag = "sub2api" });
             Grid.SetRow(combo, 1);
             root.Children.Add(combo);
 

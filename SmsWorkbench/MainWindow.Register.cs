@@ -682,10 +682,7 @@ namespace SmsWorkbench
             return status.Contains("已注册")
                 || status.Contains("PayPal")
                 || status.Contains("支付完成")
-                || status.Contains("已导入")
-                || status.Contains("宸叉敞鍐")
-                || status.Contains("鏀粯瀹屾垚")
-                || status.Contains("宸插鍏");
+                || status.Contains("已导入");
         }
 
         private string MailboxArgForLine(string line)
@@ -788,11 +785,12 @@ namespace SmsWorkbench
             }
         }
 
-        private bool TryReadMailboxFromRawJson(string rawJson, out string provider, out string clientId, out string refreshToken, out string mailboxLine)
+        private bool TryReadMailboxFromRawJson(string rawJson, out string provider, out string clientId, out string refreshToken, out string token, out string mailboxLine)
         {
             provider = "";
             clientId = "";
             refreshToken = "";
+            token = "";
             mailboxLine = "";
             if (string.IsNullOrWhiteSpace(rawJson)) return false;
             try
@@ -805,6 +803,7 @@ namespace SmsWorkbench
                 string loginPassword = JsonString(mailbox, "login_password");
                 refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
+                token = accessToken;
                 clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
                 string clientSecret = JsonString(mailbox, "client_secret");
                 provider = JsonString(mailbox, "provider");

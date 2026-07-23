@@ -281,9 +281,15 @@
     "group_name": "codex",
     "group_ids": "",
     "proxy_name": "",
-    "proxy_id": "1,2,3,4,5",
+    "proxy_id": "",
     "priority": 1,
-    "concurrency": 10
+    "concurrency": 10,
+    "auth_mode": "auto",
+    "verify_after_import": true
+  },
+  "agent_identity": {
+    "register_on_free_signup": false,
+    "registration_timeout": 30
   },
   "codex_oauth": {
     "allow_passwordless_takeover": false,
