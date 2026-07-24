@@ -133,6 +133,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 邮件摘要无验证码时自动读取邮件详情，并执行时间、收件人、消息 ID 和已排除验证码过滤。
 - 桌面端可从 ReMail 注册记录打开收件箱；查看模式会读取邮件完整正文和验证码。
 - 日志会脱敏 API Key 和 Service Token。
+- 自适应 OTP 轮询：初始延迟 1s，渐进退避（1s → 1.5s → 3s），根据邮件到达状态和服务器限流建议动态调整轮询间隔，减少无效请求。
 
 ### 统一邮箱与 OTP
 
@@ -161,8 +162,11 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 - Free 账号注册成功且 AT 有效时，可立即向 OpenAI 注册 Agent Identity 和 task。
 - 使用 Ed25519 算法生成 PKCS#8 格式私钥，独立保存到 `sessions/agent_identities/`。
+- Agent Identity 403 错误为 Free 账号的正常限制，自动静默处理，不产生噪音日志。
+- 支持 Agent Identity 注册被禁用时自动回退到 OAuth 模式。
 - 支持通过 `--register-and-import` 在注册完成后自动导入 SUB2API。
 - SUB2API 导入支持三种认证模式：`auto`（Free 账号优先使用 Agent Identity）、`oauth`、`agent_identity`。
+- SUB2API 导出格式兼容 Go 后端，`expires_at` 字段使用 Unix 时间戳（int64）。
 - 可通过 `--sub2api-no-verify` 跳过导入后的连通性验证。
 - 配置项 `agent_identity.register_on_free_signup` 控制注册成功后是否自动注册 Agent Identity。
 
@@ -234,7 +238,11 @@ services/
 | `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
 | `sms_tool/storage.py` | SQLite、Session 索引和状态持久化 |
 | `sms_tool/agent_identity.py` | Agent Identity 注册、Ed25519 密钥生成与持久化 |
+| `sms_tool/sub2api_import.py` | SUB2API 导入（多认证模式） |
 | `sms_tool/session_converter.py` | 多格式账号与 Session 转换 |
+| `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
+| `sms_tool/registration_progress.py` | 注册阶段进度跟踪与持久化 |
+| `sms_tool/error_classification.py` | 错误类型分类与重试/报告规范化 |
 
 更详细的边界说明参见 [docs/architecture.md](docs/architecture.md)，目录职责参见 [docs/directory-map.md](docs/directory-map.md)。
 

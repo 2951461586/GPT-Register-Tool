@@ -1,4 +1,4 @@
-﻿# Documentation Index
+﻿﻿# Documentation Index
 
 This directory contains source-owned project documentation. Runtime files, local
 configuration, generated sessions, and debug output stay outside this directory.
@@ -6,12 +6,13 @@ configuration, generated sessions, and debug output stay outside this directory.
 ## Core documents
 
 - [Architecture and Boundaries](architecture.md) - module ownership, command
-  seams, state flow, payment responsibilities, and forbidden cross-module
-  dependencies.
+  seams, state flow, payment responsibilities, Agent Identity/SUB2API boundaries,
+  and forbidden cross-module dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
-- 中文优先说明见根目录 [README](../README.md) 的“中文运行要点（近期改造后）”、
-  “Mailbox Inputs”、“Common Commands”和“K12”相关段落。
+- [PayPal Zero-Due Link](paypal-zero-due-link.md) - promotion-update stage
+  protocol, config keys, and region matrix search.
+- 中文优先说明见根目录 [README](../README.md)。
 
 ## Root-level references
 
@@ -30,4 +31,6 @@ configuration, generated sessions, and debug output stay outside this directory.
   boundary document or add a public seam first.
 - 新增注册、邮箱、K12 逻辑时，优先在 `auth_flow.py`、`account_creation.py`、
   `batch_runner.py`、`mailbox_*`、`k12_*` 等 focused modules 中落实现；
-  `registration.py`、`mailbox.py`、`k12.py` 主要保留编排和兼容 wrapper。
+  `registration.py`、`mailbox.py` 主要保留编排和兼容 wrapper。
+- 新增 Agent Identity、SUB2API、导入导出逻辑时，在 `agent_identity.py`、
+  `sub2api_import.py`、`session_converter.py` 中落实现，不侵入注册或支付模块。

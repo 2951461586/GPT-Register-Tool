@@ -1005,10 +1005,9 @@ def run_email(
             )
             print(f"  Agent Identity file: {agent_identity_registration.get('path', '')}")
         else:
-            print(
-                "  Agent Identity registration failed: "
-                f"{agent_identity_registration.get('error', 'unknown')}"
-            )
+            agent_error = str(agent_identity_registration.get('error', 'unknown'))
+            if agent_error != 'agent_registration_http_403':
+                print(f"  Agent Identity registration failed: {agent_error}")
 
     paypal = {}
     if success and access_token and paypal_link:

@@ -1,6 +1,7 @@
 config.json
 .agents/skills/
 .claude/
+.codex/
 sms_tool/config.json
 services/mail-otp-web/config.json
 outlook_results/
@@ -14,6 +15,7 @@ mailbox_tokens.txt
 hotmail*.txt
 *_tokens.txt
 session.json
+skills-lock.json
 
 __pycache__/
 *.py[cod]

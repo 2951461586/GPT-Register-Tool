@@ -535,16 +535,19 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
                 issued_after_unix=issued_after_unix, proxy=proxy,
             )
 
-    if getattr(mailbox, "provider", "") == "remail":
-        return mailbox_remail._poll_remail_otp(
-            mailbox,
-            subject_keyword=subject_keyword,
-            timeout=timeout,
-            issued_after_unix=issued_after_unix,
-            proxy=_resolve_mailbox_proxy(proxy),
-            excluded_otps=excluded_otps,
-            poll_interval=_otp_poll_interval(),
-        )
+        if getattr(mailbox, "provider", "") == "remail":
+            return mailbox_remail._poll_remail_otp(
+                mailbox,
+                subject_keyword=subject_keyword,
+                timeout=timeout,
+                issued_after_unix=issued_after_unix,
+                proxy=_resolve_mailbox_proxy(proxy),
+                excluded_otps=excluded_otps,
+                # ReMail uses its own faster poll interval (1s default) via
+                # _remail_otp_poll_interval(); pass None to let it use that
+                # instead of the global 2s _otp_poll_interval().
+                poll_interval=None,
+            )
     if getattr(mailbox, "provider", "") == "cfworker":
         return _poll_cfworker_otp(
             mailbox,
