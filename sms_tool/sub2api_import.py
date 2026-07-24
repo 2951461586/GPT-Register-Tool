@@ -855,7 +855,12 @@ def _record_sub2api_import(email, path, upload_result, auth_mode=""):
 
 
 def _extract_expires_at(token_data):
-    value = token_data.get("expires_at") or token_data.get("expiresAt") or token_data.get("expires")
+    value = (
+        token_data.get("expires_at")
+        or token_data.get("expiresAt")
+        or token_data.get("expires")
+        or token_data.get("expired")
+    )
     if isinstance(value, (int, float)):
         return int(value)
     text = str(value or "").strip()

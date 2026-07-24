@@ -110,6 +110,31 @@ def timestamp_from_unix_seconds(value: Any) -> str:
         return ""
 
 
+def to_unix_seconds(value: Any) -> int:
+    """Convert an ISO timestamp string, datetime, or numeric Unix timestamp to
+    integer Unix seconds.  Returns 0 if the value is empty or unparseable.
+
+    Used for sub2api's ``expires_at`` field which the Go server expects as
+    ``*int64`` (Unix seconds), not an ISO string.
+    """
+    if isinstance(value, (int, float)):
+        raw = float(value)
+        return int(raw / 1000 if raw > 1e11 else raw)
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    try:
+        if text.isdigit():
+            raw = int(text)
+            return int(raw / 1000 if raw > 1e11 else raw)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp())
+    except Exception:
+        return 0
+
+
 def to_email_key(email: str) -> str:
     return str(email or "").strip().lower()
 
@@ -284,7 +309,7 @@ def convert_session(record: dict[str, Any], now: Any | None = None, source_name:
         "name": name,
         "platform": "openai",
         "type": "oauth",
-        "expires_at": access_token_expires_at,
+        "expires_at": to_unix_seconds(access_token_expires_at) or None,
         "auto_pause_on_expired": True if access_token_expires_at else None,
         "concurrency": 10,
         "priority": 1,

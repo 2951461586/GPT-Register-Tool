@@ -2,12 +2,13 @@ import os
 import time
 import uuid
 from copy import deepcopy
+from datetime import datetime
 from urllib.parse import quote
 
 import requests as http_requests
 
 from .config import CFG
-from .mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text
+from .mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from .mailbox_types import MailboxAccount
 
 
@@ -358,15 +359,146 @@ def _latest_remail_otp_candidate(mailbox, messages, keyword="", issued_after_uni
     return latest
 
 
-def _poll_remail_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None, poll_interval=2):
+def _remail_otp_poll_interval():
+    """ReMail-specific OTP poll interval (default 1s, faster than global 2s).
+
+    ReMail's /v1/pickup endpoint is lightweight and returns verificationCode
+    directly, so we can poll more aggressively than Graph/IMAP providers.
+    Configurable via remail.otp_poll_interval in config.json.
+    """
+    try:
+        return max(0.5, float(_remail_cfg().get("otp_poll_interval", 1.0)))
+    except Exception:
+        return 1.0
+
+
+def _remail_parse_fetch_next_allowed(response):
+    """Parse fetch.nextFetchAllowedAt from the /v1/pickup response.
+
+    ReMail returns this field to indicate the earliest time the next pickup
+    request is allowed.  Returns seconds-to-wait (float), or 0 if not present.
+    """
+    try:
+        fetch_info = (response or {}).get("fetch") or {}
+        next_allowed = str(fetch_info.get("nextFetchAllowedAt") or "").strip()
+        if not next_allowed:
+            return 0.0
+        dt = datetime.fromisoformat(next_allowed.replace("Z", "+00:00"))
+        wait = dt.timestamp() - time.time()
+        return max(0.0, wait)
+    except Exception:
+        return 0.0
+
+
+def _remail_fetch_state(response):
+    """Parse the fetch state from /v1/pickup response.
+
+    ReMail's /v1/pickup returns a ``fetch`` object describing the server-side
+    mail-fetch job state.  Key fields (per API docs):
+
+    - lastStatus:      "succeeded" / "pending" / "failed" etc.
+    - lastReceivedAt:  ISO timestamp of the most recently received email
+    - nextFetchAllowedAt: earliest time the next pickup is allowed
+    - lastSafeError:   non-fatal error from the last fetch attempt
+
+    Returns a dict with ``last_status``, ``last_received_at``,
+    ``next_allowed_delay`` and ``last_safe_error``.
+    """
+    try:
+        fetch_info = (response or {}).get("fetch") or {}
+        return {
+            "last_status": str(fetch_info.get("lastStatus") or "").strip().lower(),
+            "last_received_at": str(fetch_info.get("lastReceivedAt") or "").strip(),
+            "next_allowed_delay": _remail_parse_fetch_next_allowed(response),
+            "last_safe_error": str(fetch_info.get("lastSafeError") or "").strip(),
+        }
+    except Exception:
+        return {"last_status": "", "last_received_at": "", "next_allowed_delay": 0.0, "last_safe_error": ""}
+
+
+def _remail_item_received_ts(item):
+    """Parse receivedAt timestamp from a raw ReMail message item."""
+    return _message_received_ts({"receivedDateTime": str((item or {}).get("receivedAt") or "")})
+
+
+def _poll_remail_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None, poll_interval=None):
+    """Poll ReMail /v1/pickup for OTP codes with adaptive interval.
+
+    Optimisations:
+    1. Calls /v1/pickup directly, using verificationCode fast path.
+    2. ReMail-specific default poll interval of 1s (vs global 2s).
+    3. Initial settle delay (1s) before first poll to let OTP email arrive,
+       avoiding a wasted early API call.
+    4. Graduated adaptive backoff: 1s (0-5s) -> 1.5s (5-15s) -> 3s (15s+).
+    5. Respects fetch.nextFetchAllowedAt from the response.
+    6. Uses fetch.lastStatus to detect mailbox readiness; backs off when
+       the mailbox hasn't connected yet.
+    7. Tracks fetch.lastReceivedAt to detect stale state and back off
+       when no new email has arrived.
+    """
     deadline = time.time() + timeout
-    interval = max(1.0, float(poll_interval or 2))
+    base_interval = max(0.5, float(poll_interval) if poll_interval is not None else _remail_otp_poll_interval())
     keyword = str(subject_keyword or "").lower()
+    excluded = {str(value or "").strip() for value in (excluded_otps or ())}
+    seen_message_id = str(getattr(mailbox, "seen_message_id", "") or "").strip()
+    start_time = deadline - timeout
+
+    # Initial settle delay: let the OTP email arrive before first poll.
+    # Based on batch data, OTPs typically arrive in 3-10s; a 1s delay
+    # avoids one wasted API call without meaningfully slowing detection.
+    time.sleep(min(base_interval, 1.0))
+
+    prev_last_received_at = ""
+
     while time.time() < deadline:
+        # Graduated adaptive interval
+        elapsed = time.time() - start_time
+        if elapsed < 5:
+            interval = base_interval
+        elif elapsed < 15:
+            interval = min(base_interval * 1.5, 2.0)
+        else:
+            interval = min(base_interval * 3, 3.0)
         try:
+            raw_response = _pickup_remail_messages(mailbox, proxy=proxy)
+            items = (raw_response or {}).get("items") if isinstance(raw_response, dict) else []
+            fetch_state = _remail_fetch_state(raw_response)
+
+            # Fast path: check verificationCode directly from raw items
+            best_code = None
+            best_ts = 0
+            for item in (items or []):
+                msg_id = str(item.get("id") or "").strip()
+                if seen_message_id and msg_id == seen_message_id:
+                    continue
+                vc = str(item.get("verificationCode") or "").strip()
+                if not vc or vc in excluded:
+                    continue
+                # Validate keyword if specified
+                if keyword:
+                    subject_lc = str(item.get("subject") or "").lower()
+                    keywords = [p.strip().lower() for p in str(keyword).split("|") if p.strip()]
+                    if keywords and not any(p in subject_lc for p in keywords):
+                        continue
+                # Validate timestamp
+                recv_ts = _remail_item_received_ts(item)
+                if issued_after_unix > 0 and recv_ts and recv_ts < issued_after_unix:
+                    continue
+                # Track the most recent matching code
+                if recv_ts >= best_ts:
+                    best_code = vc
+                    best_ts = recv_ts
+
+            if best_code:
+                print(f" code:{best_code}!")
+                return best_code
+
+            # Fallback: full normalisation + OTP extraction (without detail
+            # fetches) for messages where verificationCode is absent.
+            normalized = [_normalize_remail_message(item) for item in (items or [])]
             candidate = _latest_remail_otp_candidate(
                 mailbox,
-                _fetch_remail_messages(mailbox, proxy=proxy),
+                normalized,
                 keyword=keyword,
                 issued_after_unix=issued_after_unix,
                 excluded_otps=excluded_otps,
@@ -374,6 +506,24 @@ def _poll_remail_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix
             if candidate:
                 print(f" code:{candidate['otp']}!")
                 return candidate["otp"]
+
+            # Respect server-side rate limit hint
+            server_delay = fetch_state.get("next_allowed_delay", 0.0)
+            if server_delay > 0:
+                interval = max(interval, min(server_delay, 5.0))
+
+            # If mailbox fetch hasn't succeeded yet, wait longer before
+            # next poll — the mailbox may not be connected.
+            last_status = fetch_state.get("last_status", "")
+            if last_status and last_status not in ("succeeded", ""):
+                interval = max(interval, 2.0)
+
+            # If lastReceivedAt is unchanged, no new email has arrived —
+            # gradually back off to reduce unnecessary API calls.
+            current_last_received = fetch_state.get("last_received_at", "")
+            if prev_last_received_at and current_last_received == prev_last_received_at:
+                interval = max(interval, min(base_interval * 1.5, 2.0))
+            prev_last_received_at = current_last_received
         except Exception as exc:
             print(f"[remail poll error: {exc}]")
         print(".", end="", flush=True)

@@ -21,6 +21,9 @@ chatgpt_phone_reg.py        Compatibility entrypoint; delegates to sms_tool.cli.
 config.example.json         Portable config template. Copy to config.json locally.
 README.md                   Setup and operations guide.
 requirements.txt            Only Python dependency manifest.
+start_proxy_pool.py         Standalone SOCKS5 proxy-pool server entrypoint.
+verify_proxy.py             Standalone proxy configuration verification utility.
+ppgateway.exe               Optional payment gateway binary (included in release packages if present).
 
 sms_tool/
   __main__.py               `python -m sms_tool` entrypoint; no import-time side effects.
@@ -29,43 +32,66 @@ sms_tool/
   paths.py                  Project-relative path resolution.
   account_seed.py           Shared account/session seed lookup and access-token extraction.
   mailbox.py                Mailbox provider routing and OTP retrieval compatibility seam.
+  mailbox_types.py          Shared mailbox dataclass and type definitions.
   mailbox_parsers.py        Mailbox import format parsing.
-  mailbox_remail.py         ReMail order, pickup, and OTP polling.
+  mailbox_remail.py         ReMail order, pickup, adaptive OTP polling, and message normalization.
   mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
   mailbox_graph.py          Microsoft OAuth refresh boundary.
   mailbox_gmail.py          Gmail IMAP receive + SMTP send adapter.
+  mailbox_chongzhi.py       Chongzhi mailbox provider adapter.
   outlook_imap.py           Outlook IMAP fallback fetcher.
   mail_otp.py               Shared OTP extraction/candidate filtering.
   providers/                External provider clients.
+    cfworker_mailbox.py     CFWorker mailbox provider implementation.
+  commands/                 CLI subcommand helpers.
+    helpers.py              Shared command-level utilities.
   http_client.py            curl_cffi retry/transport handling.
   registration.py           ChatGPT registration orchestration compatibility seam.
+  registration_progress.py  Registration stage progress tracking and persistence.
   auth_flow.py              OpenAI signin/authorize/continue helpers.
+  auth_headers.py           Auth header construction and normalization.
   account_creation.py       Account creation, auth-session fetch, and payment-link helper calls.
   batch_runner.py           Batch registration concurrency and result ordering.
   sentinel_tokens.py        Sentinel token extraction/cache/browser fallback.
+  sentinel_quickjs.py       QuickJS SDK path and PoW fallback for Sentinel.
   otp_strategy.py           Registration OTP send/resend strategy.
   auth_state.py             client_auth_session_dump diagnostics.
+  error_classification.py   Error type classification and normalization for retry/reporting.
   paypal_protocol.py        Shared PayPal protocol helpers (BA token extraction, Stripe redirect follower).
+  paypal_proxy.py           PayPal stage proxy resolution and region rotation.
+  paypal_reverse.py         PayPal reverse-engineering helpers for link extraction.
   k12_client.py             Workspace request/accept/leave HTTP adapter (used by workspace_scan).
   k12_identity.py           Account/user/token identity extraction (used by workspace_scan).
-  k12_verify.py             Workspace-switch verification.
-  k12_export.py             K12-specific CPA JSON export.
   workspace_scan.py         One-click scan Workspace health check and fallback switch adapter.
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
   payment_link_manager.py   Unified method registry, state machine, adapter routing, and redacted run history.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
+  nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
+  nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
+  captcha_solver.py         CAPTCHA solving abstraction.
   grpcurl_client.py         Shared grpcurl subprocess boundary.
   gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
+  omakse_client.py          Omakase provider client adapter.
+  phone_proxy.py            Phone verification proxy resolution.
+  phone_reuse.py            Phone number reuse and inventory management.
+  smsbower.py               SMSBower SMS provider activation and polling.
+  sms_provider.py           SMS provider abstraction layer.
+  proxy_pool.py             SOCKS5 proxy pool server with health checking.
   session_refresh.py        Refresh auth session after manual login/payment.
+  agent_identity.py         Agent Identity registration, Ed25519 key generation, and persistence.
+  sub2api_import.py         SUB2API import boundary with multi-mode auth.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
   session_converter.py      Multi-format session/account export conversion core.
   codex_oauth.py            Codex OAuth authorization-code + PKCE login orchestration.
   codex_sentinel.py         Sentinel/cache cookie helpers for auth.openai.com requests.
   codex_phone.py            Optional add-phone SMS verification boundary.
   cpa_import.py             CPA API upload boundary; imports AT-only JSON and uploads normalized CPA payloads.
+  import_targets.py         Import target normalization helpers.
+  account_scan.py           Account health/quoter scan adapter.
   storage.py                SQLite and session index persistence.
+  utils.py                  Shared utility helpers.
 
 SmsWorkbench/               WPF desktop UI.
 services/
@@ -91,7 +117,9 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
 | Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init, protocol adapters | PayPal account signup, final payment authorization |
 | Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
-| Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import` | session JSON, account seed, CPA API | Registration or payment execution |
+| Agent Identity registration | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
+| SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
+| Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import`, `sms_tool.sub2api_import` | session JSON, account seed, CPA/SUB2API API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
@@ -343,10 +371,38 @@ must preserve useful existing URLs unless the caller explicitly clears them.
 `services/mail-otp-web` is a standalone operator diagnostic surface for Microsoft Graph inbox/OTP extraction. It accepts the same mailbox account-line formats as `sms_tool.mailbox`, refreshes Microsoft access tokens, displays recent messages, and may return a rotated mailbox refresh token to the operator. It is not the main registration mailbox owner: registration still uses `sms_tool.mailbox`, and this helper service must not edit `hotmail.txt`, session JSON, or SQLite rows directly.
 
 
+### Agent Identity Layer
+
+`sms_tool/agent_identity.py` owns OpenAI Agent Identity registration:
+
+- Generate Ed25519 key pairs in PKCS#8 format.
+- Persist private keys independently under `sessions/agent_identities/`.
+- Register Agent Identity and task with OpenAI after Free account signup.
+- Support automatic registration via `agent_identity.register_on_free_signup`.
+- Handle 403 responses from Free accounts (expected limitation, silently handled).
+- Fall back to OAuth mode when Agent Identity registry is disabled.
+
+Agent Identity keys are reused across SUB2API imports. The private key is never
+logged or exported in full.
+
+### SUB2API Import Layer
+
+`sms_tool/sub2api_import.py` owns the SUB2API import boundary:
+
+- Accept session JSON or account-seed data.
+- Support three auth modes: `auto` (Free accounts prefer Agent Identity), `oauth`, and `agent_identity`.
+- Normalize account data via `session_converter.py` before upload.
+- Optionally verify connectivity after import (`sub2api.verify_after_import`).
+- Export `expires_at` as Unix timestamp (int64) for Go backend compatibility.
+
+It must not perform registration or payment. It reads existing session data and
+agent identity keys, then uploads to the configured SUB2API endpoint.
+
 ### Removed / Deprecated Surfaces
 
 - `browser_extensions/paypal_autofill/` is retired. The maintained PayPal browser path is the project-local Python adapter.
 - `tests/test_paypal_autofill_*.py` are retired with that extension.
+- LuckMail support is retired; ReMail is the maintained API mailbox source.
 - Runtime debug artifacts and `__pycache__` folders are not source surfaces and should be deleted or ignored.
 - Backup binaries such as `*.exe~` and unused duplicate artwork are not source surfaces.
 
@@ -464,4 +520,8 @@ sessions/
 runtime/
 dist/
 .dotnet/
+skills-lock.json
+session.json
+hotmail*.txt
+*_tokens.txt
 ```

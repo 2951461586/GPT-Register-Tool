@@ -16,13 +16,14 @@ def _create_account_sentinel_token(sentinel_data, proxy=None):
     # token.  HAR evidence for passwordless signup shows create_account now uses
     # oauth_create_account, so try one direct protocol refresh before falling
     # back to the legacy token.
+    #
+    # NOTE: Do NOT mutate the caller's sentinel_data dict.  In batch mode the
+    # dict may be shared or reused across threads; updating it with a refreshed
+    # token (which carries a different device_id) would break the device_id
+    # alignment for subsequent requests in the same worker.
     try:
         refreshed = _extract_sentinel_http(proxy=proxy)
         if refreshed and refreshed.get("sentinel_oauth_token"):
-            try:
-                sentinel_data.update(refreshed)
-            except Exception:
-                pass
             return refreshed["sentinel_oauth_token"]
     except Exception as exc:
         print(f"  OAuth create sentinel refresh warning: {exc}")

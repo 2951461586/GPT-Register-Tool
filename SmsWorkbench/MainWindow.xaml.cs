@@ -30,7 +30,7 @@ namespace SmsWorkbench
         private string countText = "1";
         private string pageSizeText = "25";
         private object scopeFilter = "全部";
-        private bool skipPaypalLink;
+        private bool skipPaypalLink = true;
         private string logText = "";
         private string statusText = "就绪";
         private string pageStatusText = "第 0/0 页";

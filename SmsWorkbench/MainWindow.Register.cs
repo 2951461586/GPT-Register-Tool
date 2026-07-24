@@ -386,11 +386,11 @@ namespace SmsWorkbench
         {
             var dialog = new Window
             {
-                Title = "选中邮箱注册+支付链接",
+                Title = "选中邮箱注册",
                 Owner = this,
-                Width = 430,
+                Width = 560,
                 Height = 256,
-                MinWidth = 350,
+                MinWidth = 480,
                 MinHeight = 230,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
@@ -481,11 +481,11 @@ namespace SmsWorkbench
         {
             var dialog = new Window
             {
-                Title = "一键注册+支付链接",
+                Title = "一键注册",
                 Owner = this,
-                Width = 420,
+                Width = 560,
                 Height = 326,
-                MinWidth = 380,
+                MinWidth = 480,
                 MinHeight = 300,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
