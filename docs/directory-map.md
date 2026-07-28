@@ -61,7 +61,7 @@ These directories are runtime state and are ignored by Git:
 | `services/gopay-flow/` | Local GoPay PaymentService and pure-protocol payment/signup implementation. |
 | `services/gopay-app/` | GoPay App gRPC implementation/contract used by WA rebind mode. |
 | `services/gopay-adb/` | ADB/notification sidecar for local emulator integration. |
-| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT protocol extractors. |
+| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo protocol extractors. |
 | `services/mail-otp-web/` | Standalone Microsoft Graph inbox/OTP helper UI; operator diagnostic service, not the main registration mailbox owner. |
 
 ## Placement rules for new work

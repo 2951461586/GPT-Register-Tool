@@ -328,6 +328,20 @@ def provider_country_label() -> str:
 def print_result_url(url: str) -> None:
     if payment_method_type() == "blik" and os.environ.get("IDEAL_BLIK_CODE", "").strip():
         print("BLIK 自动提交完成")
+        # 结构化完成哨兵：BLIK 自动提交模式直接向 Stripe 提交 6 位码完成支付，产物是
+        # “支付已完成”状态而非可分享 URL。payment_link_manager 依赖此行判定成功，
+        # 避免从截断日志里误抓/误判 URL。
+        print("BLIK_RESULT:" + json.dumps(
+            {
+                "ok": True,
+                "payment_method": "blik",
+                "status": "completed",
+                "operation": "execute_payment",
+                "link_type": "blik_protocol_completed",
+                "message": "BLIK 自动提交完成",
+            },
+            ensure_ascii=False,
+        ))
         return
     print(f"{payment_method_label()} 支付页 URL:\n{url}")
 
