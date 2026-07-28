@@ -74,7 +74,12 @@ namespace SmsWorkbench
 
                 if (!process.HasExited)
                 {
-                    try { process.Kill(); } catch { }
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit();
+                    }
+                    catch { }
                     throw new TimeoutException($"Backend execution timed out ({timeoutMs / 1000}s)");
                 }
 

@@ -250,7 +250,9 @@
       "pix",
       "kakao",
       "blik",
-      "twint"
+      "twint",
+      "direct_card",
+      "momo"
     ],
     "reference_root": "services/protocol-payment",
     "state_file": "runtime/payment_link_runs.jsonl",
@@ -259,8 +261,10 @@
       "ideal": { "proxy": "", "timeout_seconds": 900 },
       "pix": { "proxy": "", "timeout_seconds": 900 },
       "kakao": { "proxy": "", "timeout_seconds": 900 },
-      "blik": { "proxy": "", "blik_code": "", "timeout_seconds": 900 },
-      "twint": { "proxy": "", "timeout_seconds": 900 }
+      "blik": { "proxy": "", "timeout_seconds": 900 },
+      "twint": { "proxy": "", "timeout_seconds": 900 },
+      "direct_card": { "proxy": "", "timeout_seconds": 900, "currency": "", "promo_campaign_id": "plus-1-month-free" },
+      "momo": { "proxy": "", "timeout_seconds": 900, "request_timeout_seconds": 25, "pre_proxy": "off", "max_proxies": 1 }
     }
   },
   "runtime": {

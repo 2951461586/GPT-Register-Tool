@@ -34,7 +34,7 @@
 | 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
-| 支付协议 | Stripe Checkout、PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT |
+| 支付协议 | Stripe Checkout、PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
 | 浏览器辅助 | Playwright、Camoufox、CloakBrowser |
 
 ## 安装部署方式
@@ -150,7 +150,9 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 ### 协议支付提链
 
-- 支持 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT。
+- 支持 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
+- 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
+- MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
 - PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
 - 支持 `checkout`、`approve`、`update` 分段代理。
 - 可选择 US、GB、DE、JP、BR、TR、VN 等目标出口。

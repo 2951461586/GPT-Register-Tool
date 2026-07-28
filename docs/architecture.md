@@ -9,7 +9,7 @@ WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
   -> auth session/access token fetch
-  -> unified PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT link extraction
+  -> unified PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo link extraction
   -> session JSON + SQLite index
   -> status display and maintenance actions
 ```
@@ -98,7 +98,7 @@ services/
   gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
   gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
   gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
-  protocol-payment/         Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT protocol extractors.
+  protocol-payment/         Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo protocol extractors.
   mail-otp-web/             Standalone Microsoft Graph inbox/OTP diagnostic UI.
 tests/                      Offline unit tests; see tests/README.md.
 sessions/                   Generated session JSON, ignored by Git.
@@ -335,7 +335,10 @@ normalizes the result, and appends a redacted record to
 1. **Create checkout/link**: `sms_tool.payment_link_manager`,
    `sms_tool.gen_pp_link`, and `sms_tool.paypal_links`.
    They read an access token and return/store a hosted checkout URL or explicit
-   failure details. They do not complete payment.
+   failure details. They do not complete payment. The BLIK adapter is the explicit
+   exception: when a six-digit BLIK code is supplied, its operation is
+   `execute_payment`, it submits the code, and it returns `status=completed`
+   without fabricating a URL. The UI must label this action as payment execution.
 2. **Execute an explicit payment command**: `sms_tool.paypal_auto`.
    It only runs when the user requests `--one-click-pay` or a matching UI action.
    It uses existing account seed data and payment links rather than registering
@@ -349,6 +352,25 @@ Registration, mailbox refresh, CPA import, account scan, SQLite rebuild, and
 session refresh must not implicitly run payment execution. Link regeneration may
 update `paypal_url` only through the payment-link seam, and failed regeneration
 must preserve useful existing URLs unless the caller explicitly clears them.
+
+### MoMo Batch Validation Boundary
+
+MoMo batch extraction is a staged workflow. First probe each local access token
+through the local Codex quota endpoint and retain only HTTP 2xx accounts. Then
+run the MoMo adapter through a verified VN proxy session. An account passing the
+token probe is only authentication-ready; it is not yet MoMo-ready.
+
+The adapter result must preserve these distinct outcomes:
+
+- `account_trial_ineligible`: the account is authenticated but has no usable trial.
+- `card_only_full_price`: checkout is available, but MoMo or a zero-due offer is not.
+- `approve_result_blocked`: the provider flow reached approve but did not yield a usable result.
+- `ready_with_qr`: a `payment.momo.vn` URL or decoded QR file exists; this is the only successful MoMo extraction outcome.
+
+Batch reports must include requested, probed, non-401, attempted, link-ready,
+QR-ready, and failure-category counts separately. Runtime reports, account lists,
+payment URLs, QR images, access tokens, and authenticated proxy URLs remain local
+artifacts under ignored runtime paths and must not be committed or packaged.
 
 ### PayPal Payment Layer
 

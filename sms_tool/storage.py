@@ -250,6 +250,8 @@ def _payment_method(data, paypal):
         return "upi"
     if "gopay" in pm_type_values or currency == "idr":
         return "gopay"
+    if "momo" in pm_type_values or currency == "vnd":
+        return "momo"
     for method in ("ideal", "pix", "kakao", "blik", "twint"):
         if method in pm_type_values:
             return method

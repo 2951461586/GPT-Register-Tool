@@ -1061,7 +1061,7 @@ class PPLinkExtractor:
             raise Exception(f"未提取到 PayPal BA approve URL: {redirect_url[:200]}")
 
         ba_token = extract_ba_token(redirect_url)
-        self._log("done", f"✅ 提取成功! ba_token={ba_token[:30]}...")
+        self._log("done", f"✅ 提取成功! ba_token={ba_token[:6]}...")
         self.proxy_state.record_pair_result(
             self.checkout_proxy,
             self.provider_proxy,

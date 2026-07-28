@@ -70,7 +70,8 @@ namespace SmsWorkbench
                 return;
             }
 
-            var task = new TaskRow { Name = "批次 " + taskSeq++, Task = taskName, Status = "运行中", Info = string.Join(" ", args) };
+            string safeArgs = FormatBackendArgsForDisplay(args);
+            var task = new TaskRow { Name = "批次 " + taskSeq++, Task = taskName, Status = "运行中", Info = safeArgs };
             Tasks.Add(task);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
@@ -115,7 +116,7 @@ namespace SmsWorkbench
 
             try
             {
-                Log("启动：" + psi.FileName + " " + psi.Arguments);
+                Log("启动：" + psi.FileName + " " + Quote(script) + " " + safeArgs);
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
@@ -147,10 +148,10 @@ namespace SmsWorkbench
             }
         }
 
-        private string RunBackendWithResult(string taskName, List<string> args)
+        private string RunBackendWithResult(string taskName, List<string> args, int timeoutMs = 120000)
         {
-            Log("启动：python " + string.Join(" ", args));
-            var (stdout, stderr, exitCode) = CliLauncher.RunSync(rootDir, args, Quote, JoinArgs);
+            Log("启动：python " + FormatBackendArgsForDisplay(args));
+            var (stdout, stderr, exitCode) = CliLauncher.RunSync(rootDir, args, Quote, JoinArgs, timeoutMs);
 
             // 从 stdout 中提取最后一个完整 JSON 块；不能只取最后一个“{”，结果里可能有嵌套对象。
             if (!string.IsNullOrEmpty(stdout))
@@ -174,6 +175,37 @@ namespace SmsWorkbench
                 throw new Exception(stderr);
 
             return stdout;
+        }
+
+        private string FormatBackendArgsForDisplay(List<string> args)
+        {
+            var sensitiveOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "--at", "--access-token", "--refresh-token", "--api-key", "--api-token",
+                "--admin-token", "--client-secret", "--password", "--service-token",
+                "--proxy", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
+                "--promotion-proxy", "--stripe-init-proxy", "--payment-method-proxy",
+                "--confirm-proxy", "--blik-code", "--mailbox-line",
+            };
+            var output = new List<string>();
+            for (int index = 0; index < (args?.Count ?? 0); index++)
+            {
+                string value = args[index] ?? "";
+                int equals = value.IndexOf('=');
+                string option = equals > 0 ? value.Substring(0, equals) : value;
+                if (sensitiveOptions.Contains(option))
+                {
+                    output.Add(equals > 0 ? option + "=***" : option);
+                    if (equals < 0 && index + 1 < args.Count)
+                    {
+                        output.Add("***");
+                        index++;
+                    }
+                    continue;
+                }
+                output.Add(value);
+            }
+            return string.Join(" ", output);
         }
 
         private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();

@@ -167,8 +167,10 @@ namespace SmsWorkbench
             methodCombo.Items.Add(new ComboBoxItem { Content = "iDEAL — 荷兰银行支付", Tag = "ideal|NL" });
             methodCombo.Items.Add(new ComboBoxItem { Content = "PIX — 巴西即时支付", Tag = "pix|BR" });
             methodCombo.Items.Add(new ComboBoxItem { Content = "Kakao Pay — 韩国钱包支付", Tag = "kakao|KR" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "BLIK — 波兰银行码支付", Tag = "blik|PL" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "BLIK — 波兰银行码支付（提交六位码）", Tag = "blik|PL" });
             methodCombo.Items.Add(new ComboBoxItem { Content = "TWINT — 瑞士钱包支付", Tag = "twint|CH" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "直卡 Checkout — 直接刷卡结账链接", Tag = "direct_card|PH" });
+            methodCombo.Items.Add(new ComboBoxItem { Content = "MoMo — 越南钱包扫码支付", Tag = "momo|VN" });
             mainPanel.Children.Add(methodCombo);
 
             // ── AT 输入 ───────────────────────────────────────────────────
@@ -213,6 +215,7 @@ namespace SmsWorkbench
             var countries = new[] {
                 "US - 美国", "ID - 印度尼西亚", "IN - 印度", "NL - 荷兰",
                 "BR - 巴西", "KR - 韩国", "PL - 波兰", "CH - 瑞士",
+                "VN - 越南", "PH - 菲律宾",
                 "DE - 德国", "GB - 英国", "JP - 日本", "FR - 法国",
                 "AU - 澳大利亚", "SG - 新加坡", "CA - 加拿大", "NZ - 新西兰", "IE - 爱尔兰",
             };
@@ -488,8 +491,9 @@ namespace SmsWorkbench
                 }
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
-                stageProxyPanel.Visibility = method == "paypal" || method == "upi" ? Visibility.Visible : Visibility.Collapsed;
-                updateCountryCombo.IsEnabled = method == "paypal";
+                stageProxyPanel.Visibility = method == "paypal" || method == "upi" || method == "direct_card" || method == "momo" ? Visibility.Visible : Visibility.Collapsed;
+                updateCountryCombo.IsEnabled = method == "paypal" || method == "direct_card";
+                extractBtn.Content = method == "blik" ? "执行支付" : "提取";
             };
             for (int index = 0; index < methodCombo.Items.Count; index++)
             {
@@ -568,6 +572,11 @@ namespace SmsWorkbench
                 }
 
                 string method = SelectedMethod();
+                if (method == "blik" && (blikCodeBox.Text.Trim().Length != 6 || !blikCodeBox.Text.Trim().All(char.IsDigit)))
+                {
+                    resultBox.Text = "请输入有效的 6 位 BLIK Code";
+                    return;
+                }
                 string country = "US";
                 if (countryCombo.SelectedItem is ComboBoxItem ci && ci.Content.ToString().Length >= 2)
                     country = ci.Content.ToString().Substring(0, 2);
@@ -581,11 +590,11 @@ namespace SmsWorkbench
                 extractBtn.IsEnabled = false;
                 copyBtn.IsEnabled = false;
                 openQrBtn.IsEnabled = false;
+                var args = new List<string>();
+                string transientSessionFile = "";
 
                 try
                 {
-                    var args = new List<string>();
-
                     args.AddRange(new[] { "--extract-payment-link", "--payment-method", method, "--target-country", country });
                     if (selectedAccount != null)
                     {
@@ -594,7 +603,12 @@ namespace SmsWorkbench
                     }
                     else
                     {
-                        args.AddRange(new[] { "--at", at });
+                        transientSessionFile = Path.Combine(Path.GetTempPath(), "protocol_payment_at_" + Guid.NewGuid().ToString("N") + ".json");
+                        File.WriteAllText(
+                            transientSessionFile,
+                            JsonSerializer.Serialize(new Dictionary<string, string> { ["access_token"] = at }),
+                            new UTF8Encoding(false));
+                        args.AddRange(new[] { "--session-file", transientSessionFile });
                     }
 
                     if (!string.IsNullOrEmpty(proxy))
@@ -610,7 +624,7 @@ namespace SmsWorkbench
                         args.AddRange(new[] { "--blik-code", blikCodeBox.Text.Trim() });
 
                     string taskName = PaymentMethodLabel(method) + " 协议提链";
-                    var result = await Task.Run(() => RunBackendWithResult(taskName, args));
+                    var result = await Task.Run(() => RunBackendWithResult(taskName, args, ProtocolPaymentBackendTimeoutMs(method)));
 
                     // 解析 JSON 结果
                     try
@@ -620,8 +634,13 @@ namespace SmsWorkbench
                         if (root.TryGetProperty("ok", out var ok) && ok.GetBoolean())
                         {
                             var sb = new StringBuilder();
-                            sb.AppendLine("[成功] 提取成功!");
+                            bool paymentCompleted = root.TryGetProperty("status", out var statusEl)
+                                && string.Equals(statusEl.GetString(), "completed", StringComparison.OrdinalIgnoreCase);
+                            sb.AppendLine(paymentCompleted ? "[成功] 支付已完成" : "[成功] 提取成功!");
                             sb.AppendLine();
+
+                            if (root.TryGetProperty("message", out var messageEl) && !string.IsNullOrWhiteSpace(messageEl.GetString()))
+                                sb.AppendLine(messageEl.GetString());
 
                             // URL / UPI URI
                             string url = "";
@@ -630,7 +649,7 @@ namespace SmsWorkbench
                                 url = upiUri.GetString() ?? "";
                                 sb.AppendLine($"UPI URI: {url}"); // UPI URI 为技术字段名，保留
                             }
-                            else if (root.TryGetProperty("url", out var urlEl))
+                            else if (root.TryGetProperty("url", out var urlEl) && !string.IsNullOrEmpty(urlEl.GetString()))
                             {
                                 url = urlEl.GetString() ?? "";
                                 sb.AppendLine($"链接: {url}");
@@ -722,6 +741,12 @@ namespace SmsWorkbench
                 }
                 finally
                 {
+                    try
+                    {
+                        if (transientSessionFile.Length > 0)
+                            File.Delete(transientSessionFile);
+                    }
+                    catch { }
                     extractBtn.IsEnabled = true;
                 }
             };
@@ -777,7 +802,12 @@ namespace SmsWorkbench
                     ProtocolPaymentHistoryFile saved = JsonSerializer.Deserialize<ProtocolPaymentHistoryFile>(
                         File.ReadAllText(path, Encoding.UTF8),
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (saved?.Last != null) return saved.Last;
+                    if (saved?.Last != null)
+                    {
+                        if (RemoveProtocolPaymentSecrets(saved))
+                            File.WriteAllText(path, JsonSerializer.Serialize(saved, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
+                        return saved.Last;
+                    }
                 }
             }
             catch (Exception ex)
@@ -824,6 +854,8 @@ namespace SmsWorkbench
                 }
                 saved ??= new ProtocolPaymentHistoryFile();
                 saved.History ??= new List<ProtocolPaymentHistoryEntry>();
+                preferences.Proxy = "";
+                RemoveProtocolPaymentSecrets(saved);
                 string signature = preferences.Signature();
                 if (saved.History.Count == 0 || !string.Equals(saved.History[0].Signature, signature, StringComparison.Ordinal))
                 {
@@ -849,6 +881,45 @@ namespace SmsWorkbench
             return Path.Combine(rootDir, "runtime", "protocol_payment_history.json");
         }
 
+        private bool RemoveProtocolPaymentSecrets(ProtocolPaymentHistoryFile saved)
+        {
+            bool changed = false;
+            void ClearProxy(ProtocolPaymentPreferences selection)
+            {
+                if (selection == null || string.IsNullOrEmpty(selection.Proxy)) return;
+                selection.Proxy = "";
+                changed = true;
+            }
+
+            ClearProxy(saved?.Last);
+            foreach (ProtocolPaymentHistoryEntry entry in saved?.History ?? new List<ProtocolPaymentHistoryEntry>())
+            {
+                ClearProxy(entry?.Selection);
+                if (entry?.Selection != null)
+                    entry.Signature = entry.Selection.Signature();
+            }
+            return changed;
+        }
+
+        private int ProtocolPaymentBackendTimeoutMs(string paymentMethod)
+        {
+            int seconds = 900;
+            try
+            {
+                Dictionary<string, object> config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                Dictionary<string, object> protocol = GetSection(config, "protocol_payments");
+                if (int.TryParse(GetString(protocol, "timeout_seconds"), out int configured))
+                    seconds = configured;
+                Dictionary<string, object> methods = GetChildSection(protocol, "methods");
+                Dictionary<string, object> method = GetChildSection(methods, NormalizePaymentMethod(paymentMethod));
+                if (int.TryParse(GetString(method, "timeout_seconds"), out int methodConfigured))
+                    seconds = methodConfigured;
+            }
+            catch { }
+            seconds = Math.Max(30, Math.Min(3600, seconds));
+            return (seconds + 30) * 1000;
+        }
+
         private sealed class ProtocolPaymentPreferences
         {
             public string Method { get; set; } = "paypal";
@@ -860,7 +931,7 @@ namespace SmsWorkbench
 
             public string Signature()
             {
-                return string.Join("|", Method, Proxy, TargetCountry, CheckoutCountry, ApproveCountry, UpdateCountry);
+                return string.Join("|", Method, TargetCountry, CheckoutCountry, ApproveCountry, UpdateCountry);
             }
         }
 

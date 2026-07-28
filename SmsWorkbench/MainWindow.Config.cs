@@ -20,6 +20,8 @@ namespace SmsWorkbench
             var kakaoProtocol = GetChildSection(protocolMethods, "kakao");
             var blikProtocol = GetChildSection(protocolMethods, "blik");
             var twintProtocol = GetChildSection(protocolMethods, "twint");
+            var directCardProtocol = GetChildSection(protocolMethods, "direct_card");
+            var momoProtocol = GetChildSection(protocolMethods, "momo");
             var storage = GetSection(config, "storage");
             var output = GetSection(config, "output");
             var cpaMode = GetSection(config, "cpa_mode");
@@ -160,9 +162,9 @@ namespace SmsWorkbench
             row = 0;
             AddConfigField(networkForm, fields, row++, "非支付代理（固定）", "non_payment_proxy", LocalNonPaymentProxy, isReadOnly: true);
 
-            var proxyForm = AddConfigCategory(sidebar, host, categories, "协议支付", "统一管理 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK 和 TWINT 提链。");
+            var proxyForm = AddConfigCategory(sidebar, host, categories, "协议支付", "统一管理 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout 和 MoMo 提链。");
             row = 0;
-            AddConfigField(proxyForm, fields, row++, "启用方式", "protocol_enabled_methods", FirstNonEmpty(FormatConfigList(protocolPayments, "enabled_methods"), "paypal,gopay,upi,ideal,pix,kakao,blik,twint"));
+            AddConfigField(proxyForm, fields, row++, "启用方式", "protocol_enabled_methods", FirstNonEmpty(FormatConfigList(protocolPayments, "enabled_methods"), "paypal,gopay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"));
             AddConfigField(proxyForm, fields, row++, "提链器目录", "protocol_reference_root", FirstNonEmpty(GetString(protocolPayments, "reference_root"), "services/protocol-payment"));
             AddConfigField(proxyForm, fields, row++, "状态文件", "protocol_state_file", FirstNonEmpty(GetString(protocolPayments, "state_file"), "runtime/payment_link_runs.jsonl"));
             AddConfigField(proxyForm, fields, row++, "协议超时秒", "protocol_timeout_seconds", FirstNonEmpty(GetString(protocolPayments, "timeout_seconds"), "900"));
@@ -174,8 +176,9 @@ namespace SmsWorkbench
             AddConfigField(proxyForm, fields, row++, "PIX代理Seed", "protocol_pix_proxy", GetString(pixProtocol, "proxy"));
             AddConfigField(proxyForm, fields, row++, "Kakao Pay代理Seed", "protocol_kakao_proxy", GetString(kakaoProtocol, "proxy"));
             AddConfigField(proxyForm, fields, row++, "BLIK代理Seed", "protocol_blik_proxy", GetString(blikProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "BLIK六位码", "protocol_blik_code", GetString(blikProtocol, "blik_code"));
             AddConfigField(proxyForm, fields, row++, "TWINT代理Seed", "protocol_twint_proxy", GetString(twintProtocol, "proxy"));
+            AddConfigField(proxyForm, fields, row++, "直卡代理Seed", "protocol_direct_card_proxy", GetString(directCardProtocol, "proxy"));
+            AddConfigField(proxyForm, fields, row++, "MoMo代理Seed", "protocol_momo_proxy", GetString(momoProtocol, "proxy"));
 
             var storageForm = AddConfigCategory(sidebar, host, categories, "存储", "Session 输出目录和 SQLite 索引路径。");
             row = 0;
@@ -228,7 +231,6 @@ namespace SmsWorkbench
                 codexOauth["auto_phone_verification"] = ConfigBoolValue(fields, "codex_auto_phone_verification", GetBool(codexOauth, "auto_phone_verification", false));
                 codexOauth["require_registration_refresh_token"] = ConfigBoolValue(fields, "codex_require_registration_refresh_token", GetBool(codexOauth, "require_registration_refresh_token", true));
                 codexOauth["require_registration_phone_verification"] = ConfigBoolValue(fields, "codex_require_registration_phone_verification", GetBool(codexOauth, "require_registration_phone_verification", true));
-                proxy["default"] = fields["default_proxy"].Text.Trim();
                 paypal["proxies"] = new List<object> { fields["paypal_proxy"].Text.Trim() };
                 paypal["billing_regions"] = new List<object> { ConfigComboOptionValue(comboFields, "paypal_billing_region", "DE").Value };
                 paypal["link_generation_type"] = ConfigComboOptionValue(comboFields, "paypal_link_generation_type", "hosted_long_url").Value;
@@ -241,13 +243,17 @@ namespace SmsWorkbench
                 pixProtocol["proxy"] = fields["protocol_pix_proxy"].Text.Trim();
                 kakaoProtocol["proxy"] = fields["protocol_kakao_proxy"].Text.Trim();
                 blikProtocol["proxy"] = fields["protocol_blik_proxy"].Text.Trim();
-                blikProtocol["blik_code"] = fields["protocol_blik_code"].Text.Trim();
+                blikProtocol.Remove("blik_code");
                 twintProtocol["proxy"] = fields["protocol_twint_proxy"].Text.Trim();
+                directCardProtocol["proxy"] = fields["protocol_direct_card_proxy"].Text.Trim();
+                momoProtocol["proxy"] = fields["protocol_momo_proxy"].Text.Trim();
                 protocolMethods["ideal"] = idealProtocol;
                 protocolMethods["pix"] = pixProtocol;
                 protocolMethods["kakao"] = kakaoProtocol;
                 protocolMethods["blik"] = blikProtocol;
                 protocolMethods["twint"] = twintProtocol;
+                protocolMethods["direct_card"] = directCardProtocol;
+                protocolMethods["momo"] = momoProtocol;
                 protocolPayments["methods"] = protocolMethods;
                 output["directory"] = fields["output_directory"].Text.Trim();
                 storage["sqlite_path"] = fields["sqlite_path"].Text.Trim();

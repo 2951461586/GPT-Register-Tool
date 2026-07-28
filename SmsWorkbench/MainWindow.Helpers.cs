@@ -51,6 +51,8 @@ namespace SmsWorkbench
                 "kakao" or "kakao_pay" => "kakao",
                 "blik" => "blik",
                 "twint" => "twint",
+                "direct_card" or "directcard" or "direct" or "zhika" or "card" or "checkout" => "direct_card",
+                "momo" or "momo_qr" or "momoqr" => "momo",
                 _ => "paypal"
             };
         }
@@ -65,6 +67,8 @@ namespace SmsWorkbench
             box.Items.Add(new ComboBoxItem { Content = "Kakao Pay 韩国协议", Tag = "kakao" });
             box.Items.Add(new ComboBoxItem { Content = "BLIK 波兰协议", Tag = "blik" });
             box.Items.Add(new ComboBoxItem { Content = "TWINT 瑞士协议", Tag = "twint" });
+            box.Items.Add(new ComboBoxItem { Content = "直卡 Checkout 直连结账", Tag = "direct_card" });
+            box.Items.Add(new ComboBoxItem { Content = "MoMo 越南扫码", Tag = "momo" });
         }
 
         private int CountValue()
@@ -503,7 +507,7 @@ namespace SmsWorkbench
             string detected = hasSavedMethod ? savedMethod : "";
             if (detected.Length == 0)
             {
-                foreach (string candidate in new[] { "paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint" })
+                foreach (string candidate in new[] { "paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "momo" })
                 {
                     if (PaymentMethodTypesContain(paypal, candidate))
                     {
@@ -522,6 +526,7 @@ namespace SmsWorkbench
                     "krw" => "kakao",
                     "pln" => "blik",
                     "chf" => "twint",
+                    "vnd" => "momo",
                     "eur" when requested == "ideal" => "ideal",
                     "usd" => "paypal",
                     _ => ""
@@ -657,6 +662,8 @@ namespace SmsWorkbench
                 "kakao" => "Kakao Pay",
                 "blik" => "BLIK",
                 "twint" => "TWINT",
+                "direct_card" => "直卡 Checkout",
+                "momo" => "MoMo",
                 _ => "PayPal"
             };
         }
