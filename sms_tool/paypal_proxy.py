@@ -54,8 +54,18 @@ class ProxyProbeResult:
 
 def normalize_proxy_url(proxy: str) -> str:
     value = str(proxy or "").strip()
-    if value and "://" not in value:
-        value = f"http://{value}"
+    if not value:
+        return ""
+    scheme = ""
+    rest = value
+    if "://" in value:
+        scheme, rest = value.split("://", 1)
+    parts = rest.split(":")
+    if "@" not in rest and len(parts) == 4 and "." in parts[0] and parts[1].isdigit():
+        host, port, username, password = parts
+        return f"{scheme or 'http'}://{quote(username, safe='-._~')}:{quote(password, safe='-._~')}@{host}:{port}"
+    if not scheme:
+        value = f"http://{rest}"
     return value
 
 
@@ -76,6 +86,14 @@ def redact_proxy_url(proxy: str) -> str:
         host = f"{host}:{parsed.port}"
     auth = "***:***@" if parsed.username is not None else ""
     return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
+
+
+def _redact_proxy_auth_text(value: Any) -> str:
+    return re.sub(
+        r"(?i)(https?|socks5h?)://[^\s/@]+@",
+        lambda match: f"{match.group(1)}://***:***@",
+        str(value or ""),
+    )
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
@@ -237,13 +255,44 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
                 country=country_name,
             )
         except Exception as exc:
-            errors.append(str(exc)[:160])
+            errors.append(_redact_proxy_auth_text(exc)[:160])
     return ProxyProbeResult(
         ok=False,
         stage=stage,
         expected_country=expected,
         error="proxy_probe_failed:" + " | ".join(errors[-3:]),
     )
+
+
+def select_proxy_from_pool(
+    proxy_pool: Iterable[str],
+    expected_country: str = "",
+    stage: str = "payment",
+) -> tuple[str, list[dict[str, Any]]]:
+    """Return the first healthy country-matched dynamic proxy in pool order."""
+    expected = str(expected_country or "").strip().upper()
+    candidates = list(dict.fromkeys(
+        normalize_proxy_url(item)
+        for item in (proxy_pool or [])
+        if str(item or "").strip()
+    ))
+    attempts: list[dict[str, Any]] = []
+    for base in candidates:
+        candidate = rotate_proxy_session(base, expected)
+        result = probe_proxy(candidate, expected_country=expected, stage=stage)
+        attempts.append({
+            "proxy": redact_proxy_url(candidate),
+            "ok": result.ok,
+            "stage": result.stage,
+            "expected_country": result.expected_country,
+            "ip": result.ip,
+            "country_code": result.country_code,
+            "country": result.country,
+            "error": result.error,
+        })
+        if result.ok:
+            return candidate, attempts
+    return "", attempts
 
 
 def proxy_key(proxy: str) -> str:

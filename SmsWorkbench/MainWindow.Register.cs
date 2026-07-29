@@ -6,7 +6,7 @@ namespace SmsWorkbench
         private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
-            AddNonPaymentProxy(args);
+            AddRegistrationProxy(args);
             AddPaypalOption(args);
             RunBackend("邮箱池注册", args);
         }
@@ -88,7 +88,7 @@ namespace SmsWorkbench
                 if (selectedOptions == null) return;
                 var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(pendingArgs);
-                AddNonPaymentProxy(pendingArgs);
+                AddRegistrationProxy(pendingArgs);
                 AddPaypalOption(pendingArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
                 RunBackend(selectedOptions.SkipPaymentLink ? "选中未注册邮箱注册" : "选中未注册邮箱注册+支付链接", pendingArgs);
                 return;
@@ -105,7 +105,7 @@ namespace SmsWorkbench
                 if (selectedOptions == null) return;
                 var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(selectedArgs);
-                AddNonPaymentProxy(selectedArgs);
+                AddRegistrationProxy(selectedArgs);
                 AddPaypalOption(selectedArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
                 RunBackend(selectedOptions.SkipPaymentLink ? "选中邮箱注册" : "选中邮箱注册+支付链接", selectedArgs);
                 return;
@@ -122,7 +122,7 @@ namespace SmsWorkbench
                     "--count",
                     options.Count.ToString(),
                 };
-                phoneArgs.AddRange(new[] { "--proxy", LocalNonPaymentProxy });
+                AddRegistrationProxy(phoneArgs);
                 AddPaypalOption(phoneArgs, options.PaymentMethod, options.SkipPaymentLink);
                 RunBackend(options.SkipPaymentLink ? "手机号注册 (SMSBower)" : "手机号注册+支付链接 (SMSBower)", phoneArgs);
                 return;
@@ -141,7 +141,7 @@ namespace SmsWorkbench
                     options.Workers.ToString()
                 };
                 AddRegistrationAtOnlyArgs(cfArgs);
-                AddNonPaymentProxy(cfArgs);
+                AddRegistrationProxy(cfArgs);
                 AddPaypalOption(cfArgs, options.PaymentMethod, options.SkipPaymentLink);
                 RunBackend(options.SkipPaymentLink ? "CFWorker邮箱注册" : "CFWorker邮箱注册+支付链接", cfArgs);
                 return;
@@ -159,7 +159,7 @@ namespace SmsWorkbench
                     options.Workers.ToString()
                 };
                 AddRegistrationAtOnlyArgs(remailArgs);
-                AddNonPaymentProxy(remailArgs);
+                AddRegistrationProxy(remailArgs);
                 AddPaypalOption(remailArgs, options.PaymentMethod, options.SkipPaymentLink);
                 RunBackend(options.SkipPaymentLink ? "ReMail邮箱注册" : "ReMail邮箱注册+支付链接", remailArgs);
                 return;
@@ -176,7 +176,7 @@ namespace SmsWorkbench
             }
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddRegistrationAtOnlyArgs(args);
-            AddNonPaymentProxy(args);
+            AddRegistrationProxy(args);
             AddPaypalOption(args, options.PaymentMethod, options.SkipPaymentLink);
             RunBackend(taskName, args);
         }
@@ -216,7 +216,7 @@ namespace SmsWorkbench
                 args.AddRange(new[] { "--email", rows[0].Identifier });
                 AddSessionFileArg(args, rows[0]);
             }
-            AddNonPaymentProxy(args);
+            AddRegistrationProxy(args);
             RunBackend("一键接码(" + rows.Count + ")", args);
         }
 
@@ -257,7 +257,7 @@ namespace SmsWorkbench
                 args.AddRange(new[] { "--email", rows[0].Identifier });
                 AddSessionFileArg(args, rows[0]);
             }
-            AddNonPaymentProxy(args);
+            AddRegistrationProxy(args);
             RunBackend("额度查询(" + rows.Count + ")", args);
         }
 

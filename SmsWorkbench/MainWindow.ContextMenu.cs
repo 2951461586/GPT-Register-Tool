@@ -119,7 +119,7 @@ namespace SmsWorkbench
             {
                 Log($"正在查询额度：{row.Identifier}");
                 var args = new List<string> { "--quota-usage", "--email", row.Identifier, "--refresh-timeout", "45" };
-                AddNonPaymentProxy(args);
+                AddRegistrationProxy(args);
                 string json = await Task.Run(() => RunBackendWithResult("查询额度", args));
 
                 if (string.IsNullOrWhiteSpace(json))

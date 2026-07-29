@@ -60,6 +60,45 @@ def _payment_regenerate_delay_seconds(payment_method: str) -> float:
         return 0.0
 
 
+def _proxy_pool_values(args) -> list[str]:
+    raw = str(getattr(args, "proxy_pool", "") or "").strip()
+    values = [item.strip() for item in re.split(r"[\r\n,;]+", raw) if item.strip()]
+    primary = str(getattr(args, "proxy", "") or "").strip()
+    if primary:
+        values.insert(0, primary)
+    if not values:
+        configured = (CFG.get("proxy") or {}).get("pool") or []
+        if isinstance(configured, str):
+            configured = re.split(r"[\r\n,;]+", configured)
+        values.extend(str(item or "").strip() for item in configured if str(item or "").strip())
+    return list(dict.fromkeys(values))
+
+
+def _protocol_proxy_pool() -> list[str]:
+    protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
+    configured = protocol.get("proxy_pool") or []
+    if isinstance(configured, str):
+        configured = re.split(r"[\r\n,;]+", configured)
+    return list(dict.fromkeys(str(item or "").strip() for item in configured if str(item or "").strip()))
+
+
+def _has_explicit_payment_proxy(args) -> bool:
+    return bool(getattr(args, "proxy_explicit", False) or any(
+        str(getattr(args, name, "") or "").strip()
+        for name in ("checkout_proxy", "provider_proxy", "approve_proxy", "promotion_proxy")
+    ))
+
+
+def _payment_country(payment_method: str, explicit: str = "") -> str:
+    value = str(explicit or "").strip().upper()
+    if value:
+        return value
+    from .payment_link_manager import PAYMENT_METHODS
+
+    spec = PAYMENT_METHODS.get(str(payment_method or "paypal").strip().lower().replace("-", "_"))
+    return spec.country if spec else "US"
+
+
 def _at_payment_stage_args(args, payment_method="paypal"):
     proxy = (getattr(args, "proxy", None) or "").strip() or None
     if not getattr(args, "proxy_explicit", False):
@@ -176,6 +215,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
     parser.add_argument("--proxy", default=None)
+    parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
     parser.add_argument("--count", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration/link regeneration")
     parser.add_argument("--password", default=None, help="Use a specific password")
@@ -247,9 +287,9 @@ def main():
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
     parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
-    parser.add_argument("--checkout-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN"], default=None, help="Rotate checkout proxy credentials to this exit country")
-    parser.add_argument("--approve-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN"], default=None, help="Rotate approve proxy credentials to this exit country")
-    parser.add_argument("--promotion-proxy-country", "--update-proxy-country", dest="promotion_proxy_country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN"], default=None, help="Rotate checkout/update proxy credentials to this exit country")
+    parser.add_argument("--checkout-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate checkout proxy credentials to this exit country")
+    parser.add_argument("--approve-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate approve proxy credentials to this exit country")
+    parser.add_argument("--promotion-proxy-country", "--update-proxy-country", dest="promotion_proxy_country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate checkout/update proxy credentials to this exit country")
     parser.add_argument("--test-payment-proxies", action="store_true", help="Probe checkout/approve/update proxy exits and print JSON")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
@@ -465,13 +505,19 @@ def main():
         from .registration import run_phone_register
         payment_method = _payment_method(args)
         paypal_link = _payment_link_enabled(payment_method, args)
+        proxy_pool = _proxy_pool_values(args)
+        if len(proxy_pool) > 1:
+            from .batch_runner import select_registration_proxy_base
+            selected_proxy = select_registration_proxy_base(proxy_pool, args.proxy)
+            proxy_pool = [selected_proxy] if selected_proxy else []
+        registration_proxy = proxy_pool[0] if proxy_pool else args.proxy
         results = []
         for i in range(effective_count):
             print(f"\n{'='*60}")
             print(f"[*] Phone registration {i+1}/{effective_count}")
             print(f"{'='*60}")
             result = run_phone_register(
-                proxy=args.proxy,
+                proxy=registration_proxy,
                 password=args.password,
                 paypal_link=paypal_link,
                 codex_oauth=not args.registration_at_only,
@@ -494,9 +540,11 @@ def main():
 
     register_started = time.time()
     if effective_count > 1:
+        proxy_pool = _proxy_pool_values(args)
         results = run_batch(
             count=effective_count,
             proxy=args.proxy,
+            proxy_pool=proxy_pool,
             mailboxes=mailboxes,
             paypal_link=paypal_link,
             workers=args.workers,
@@ -508,8 +556,13 @@ def main():
         )
     else:
         mailbox = mailboxes[0] if mailboxes else None
+        proxy_pool = _proxy_pool_values(args)
+        if len(proxy_pool) > 1:
+            from .batch_runner import select_registration_proxy_base
+            selected_proxy = select_registration_proxy_base(proxy_pool, args.proxy)
+            proxy_pool = [selected_proxy] if selected_proxy else []
         results = [run_email(
-            proxy=args.proxy,
+            proxy=(proxy_pool[0] if proxy_pool else args.proxy),
             password=args.password,
             mailbox=mailbox,
             paypal_link=paypal_link,
@@ -1256,12 +1309,14 @@ def _resolve_payment_access_token(args):
 
 
 def _test_payment_proxies(args):
-    from .paypal_proxy import probe_proxy, redact_proxy_url, rotate_proxy_session
+    from .paypal_proxy import probe_proxy, redact_proxy_url, rotate_proxy_session, select_proxy_from_pool
 
     method = _payment_method(args)
     _, checkout_proxy, _, approve_proxy = _at_payment_stage_args(args, method)
     promotion_proxy = _at_promotion_proxy_arg(args, method)
     countries = _payment_stage_country_overrides(args)
+    default_country = _payment_country(method, getattr(args, "target_country", ""))
+    use_pool = not _has_explicit_payment_proxy(args) and bool(_protocol_proxy_pool())
     stage_values = {
         "checkout": checkout_proxy,
         "approve": approve_proxy,
@@ -1270,10 +1325,24 @@ def _test_payment_proxies(args):
     stage_country_keys = {"checkout": "checkout", "approve": "approve", "update": "promotion"}
     stages = {}
     for stage, proxy in stage_values.items():
-        expected = countries.get(stage_country_keys[stage], "")
+        expected = countries.get(stage_country_keys[stage], "") or default_country
         candidate = proxy or ""
         attempts = []
         result = None
+        if use_pool:
+            candidate, attempts = select_proxy_from_pool(_protocol_proxy_pool(), expected, stage)
+            if not candidate:
+                stages[stage] = {
+                    "ok": False,
+                    "stage": stage,
+                    "expected_country": expected,
+                    "error": "payment_proxy_pool_unavailable",
+                    "proxy": "DIRECT",
+                    "attempts": attempts,
+                }
+                continue
+            stages[stage] = {**attempts[-1], "proxy": redact_proxy_url(candidate), "attempts": attempts}
+            continue
         for attempt in range(1, 4):
             if attempt > 1 and candidate:
                 candidate = rotate_proxy_session(candidate, expected)
@@ -1301,16 +1370,37 @@ def _extract_payment_link(args):
         raise SystemExit(1)
     method = _payment_method(args)
     proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
+    stage_countries = _payment_stage_country_overrides(args)
+    target_country = _payment_country(method, getattr(args, "target_country", ""))
+    checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
+    if not _has_explicit_payment_proxy(args):
+        defaults = _protocol_proxy_pool()
+        if defaults:
+            from .paypal_proxy import rotate_proxy_session, select_proxy_from_pool
+            proxy, attempts = select_proxy_from_pool(defaults, target_country, "payment")
+            if not proxy:
+                print(json.dumps({
+                    "ok": False,
+                    "error": "payment_proxy_pool_unavailable",
+                    "target_country": target_country,
+                    "attempts": attempts,
+                }, ensure_ascii=False, indent=2))
+                raise SystemExit(3)
+            checkout_proxy = rotate_proxy_session(proxy, stage_countries.get("checkout") or checkout_country)
+            provider_proxy = rotate_proxy_session(proxy, target_country)
+            approve_proxy = rotate_proxy_session(proxy, stage_countries.get("approve") or target_country)
     kwargs = {
         "checkout_proxy": checkout_proxy,
         "provider_proxy": provider_proxy,
         "approve_proxy": approve_proxy,
-        "promotion_proxy": _at_promotion_proxy_arg(args, method),
-        "stage_proxy_countries": _payment_stage_country_overrides(args),
+        "promotion_proxy": (
+            rotate_proxy_session(proxy, stage_countries.get("promotion") or target_country)
+            if proxy and not _has_explicit_payment_proxy(args) and _protocol_proxy_pool()
+            else _at_promotion_proxy_arg(args, method)
+        ),
+        "stage_proxy_countries": stage_countries,
         "require_zero": not getattr(args, "no_require_zero", False),
     }
-    target_country = (getattr(args, "target_country", None) or "").strip().upper()
-    checkout_country = (getattr(args, "checkout_country", None) or target_country).strip().upper()
     if target_country:
         kwargs["target_country"] = target_country
     if checkout_country:
@@ -1341,8 +1431,21 @@ def _regenerate_paypal_link(args):
 
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
+    payment_method = _payment_method(args)
+    payment_proxy = args.proxy
+    payment_checkout_proxy = getattr(args, "checkout_proxy", None)
+    payment_provider_proxy = getattr(args, "provider_proxy", None)
+    payment_approve_proxy = getattr(args, "approve_proxy", None)
+    if not _has_explicit_payment_proxy(args) and _protocol_proxy_pool():
+        from .paypal_proxy import select_proxy_from_pool
+
+        country = _payment_country(payment_method, getattr(args, "target_country", ""))
+        payment_proxy, attempts = select_proxy_from_pool(_protocol_proxy_pool(), country, "payment")
+        if not payment_proxy:
+            print(json.dumps({"ok": False, "error": "payment_proxy_pool_unavailable", "attempts": attempts}, ensure_ascii=False, indent=2))
+            raise SystemExit(3)
+        payment_checkout_proxy = payment_provider_proxy = payment_approve_proxy = payment_proxy
     if emails:
-        payment_method = _payment_method(args)
         workers = _payment_regenerate_workers(args, payment_method, len(emails))
         delay_seconds = _payment_regenerate_delay_seconds(payment_method)
         print(
@@ -1359,12 +1462,12 @@ def _regenerate_paypal_link(args):
             return index, regenerate_paypal_link(
                 email=item_email,
                 session_file="",
-                proxy=args.proxy,
+                proxy=payment_proxy,
                 payment_method=payment_method,
                 paypal_generation_type=args.paypal_generation_type,
-                checkout_proxy=getattr(args, "checkout_proxy", None),
-                provider_proxy=getattr(args, "provider_proxy", None),
-                approve_proxy=getattr(args, "approve_proxy", None),
+                checkout_proxy=payment_checkout_proxy,
+                provider_proxy=payment_provider_proxy,
+                approve_proxy=payment_approve_proxy,
                 promotion_proxy=getattr(args, "promotion_proxy", None),
                 require_zero=not getattr(args, "no_require_zero", False),
             )
@@ -1388,12 +1491,12 @@ def _regenerate_paypal_link(args):
     result = regenerate_paypal_link(
         email=email,
         session_file=args.session_file or "",
-        proxy=args.proxy,
-        payment_method=_payment_method(args),
+        proxy=payment_proxy,
+        payment_method=payment_method,
         paypal_generation_type=args.paypal_generation_type,
-        checkout_proxy=getattr(args, "checkout_proxy", None),
-        provider_proxy=getattr(args, "provider_proxy", None),
-        approve_proxy=getattr(args, "approve_proxy", None),
+        checkout_proxy=payment_checkout_proxy,
+        provider_proxy=payment_provider_proxy,
+        approve_proxy=payment_approve_proxy,
         promotion_proxy=getattr(args, "promotion_proxy", None),
         require_zero=not getattr(args, "no_require_zero", False),
     )

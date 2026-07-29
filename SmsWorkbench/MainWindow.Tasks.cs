@@ -29,7 +29,7 @@ namespace SmsWorkbench
             File.WriteAllLines(tempFile, lines, new UTF8Encoding(false));
 
             var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(), "--workers", "4" };
-            AddNonPaymentProxy(args);
+            AddRegistrationProxy(args);
             AddPaypalOption(args);
             RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
         }
@@ -183,7 +183,7 @@ namespace SmsWorkbench
             {
                 "--at", "--access-token", "--refresh-token", "--api-key", "--api-token",
                 "--admin-token", "--client-secret", "--password", "--service-token",
-                "--proxy", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
+                "--proxy", "--proxy-pool", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
                 "--promotion-proxy", "--stripe-init-proxy", "--payment-method-proxy",
                 "--confirm-proxy", "--blik-code", "--mailbox-line",
             };

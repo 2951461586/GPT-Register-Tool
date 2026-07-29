@@ -12,8 +12,23 @@ namespace SmsWorkbench
             var remail = GetChildSection(email, "remail");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
-            var gopay = GetSection(config, "gopay");
             var protocolPayments = GetSection(config, "protocol_payments");
+            string registrationProxy = FirstNonEmpty(
+                GetString(proxy, "registration"),
+                GetString(config, "registration_proxy"),
+                FirstListValue(paypal, "proxies"),
+                GetString(proxy, "default"),
+                LocalNonPaymentProxy);
+            string mailboxProxy = FirstNonEmpty(
+                GetString(config, "mailbox_proxy"),
+                GetString(email, "mailbox_proxy"),
+                GetString(proxy, "mailbox"),
+                LocalNonPaymentProxy);
+            string registrationProxyPool = FirstNonEmpty(
+                FormatConfigList(proxy, "pool"),
+                registrationProxy);
+            string protocolProxyPool = FormatConfigList(protocolPayments, "proxy_pool");
+            var gopay = GetSection(config, "gopay");
             var protocolMethods = GetChildSection(protocolPayments, "methods");
             var idealProtocol = GetChildSection(protocolMethods, "ideal");
             var pixProtocol = GetChildSection(protocolMethods, "pix");
@@ -33,7 +48,7 @@ namespace SmsWorkbench
 
             var dialog = new Window
             {
-                Title = "配置",
+                Title = "设置",
                 Owner = this,
                 Width = Math.Min(1100, SystemParameters.WorkArea.Width - 80),
                 Height = Math.Min(780, SystemParameters.WorkArea.Height - 80),
@@ -49,7 +64,7 @@ namespace SmsWorkbench
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var content = new Grid();
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetRow(content, 0);
@@ -58,7 +73,7 @@ namespace SmsWorkbench
             var sidebar = new StackPanel();
             sidebar.Children.Add(new TextBlock
             {
-                Text = "配置分类",
+                Text = "设置分类",
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMuted"),
@@ -99,30 +114,28 @@ namespace SmsWorkbench
             var comboFields = new Dictionary<string, ComboBox>();
             var categories = new List<ConfigCategory>();
 
-            var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱", "邮箱池和 OTP 轮询配置。");
+            var mailForm = AddConfigCategory(sidebar, host, categories, "邮箱与收信", "统一管理邮箱池、ReMail 和 CFWorker 收信来源。");
             int row = 0;
+            AddConfigSectionHeader(mailForm, row++, "邮箱池", "账号来源文件与 OTP 轮询节奏");
             AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
+            AddConfigSectionHeader(mailForm, row++, "ReMail", "短效接码与长效邮箱库存");
+            AddConfigField(mailForm, fields, row++, "启用", "remail_enabled", FirstNonEmpty(GetString(remail, "enabled"), "true"));
+            AddConfigField(mailForm, fields, row++, "API地址", "remail_base_url", FirstNonEmpty(GetString(remail, "base_url"), "https://remail.aishop6.com"));
+            AddConfigField(mailForm, fields, row++, "API Key", "remail_api_key", GetString(remail, "api_key"));
+            AddConfigField(mailForm, fields, row++, "项目ID", "remail_project_id", FirstNonEmpty(GetString(remail, "project_id"), "2"));
+            AddConfigField(mailForm, fields, row++, "产品ID", "remail_product_id", FirstNonEmpty(GetString(remail, "product_id"), "5"));
+            AddConfigField(mailForm, fields, row++, "库存策略", "remail_supply", FirstNonEmpty(GetString(remail, "supply"), "private_first"));
+            AddConfigField(mailForm, fields, row++, "邮箱后缀", "remail_email_suffix", FirstNonEmpty(GetString(remail, "email_suffix"), "outlook.com"));
+            AddConfigSectionHeader(mailForm, row++, "CFWorker", "临时域名邮箱与 Cloudflare Worker 接入");
+            AddConfigField(mailForm, fields, row++, "Worker URL", "cfworker_url", GetString(email, "cfworker_url"));
+            AddConfigField(mailForm, fields, row++, "邮箱域名", "cfworker_domain", GetString(email, "cfworker_domain"));
+            AddConfigField(mailForm, fields, row++, "Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
+            AddConfigField(mailForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
 
-            var remailForm = AddConfigCategory(sidebar, host, categories, "ReMail", "ReMail短效接码与长效邮箱配置。");
+            var phoneForm = AddConfigCategory(sidebar, host, categories, "注册与接码", "集中管理 SMSBower 和 Codex OAuth 验证策略。");
             row = 0;
-            AddConfigField(remailForm, fields, row++, "启用", "remail_enabled", FirstNonEmpty(GetString(remail, "enabled"), "true"));
-            AddConfigField(remailForm, fields, row++, "API地址", "remail_base_url", FirstNonEmpty(GetString(remail, "base_url"), "https://remail.aishop6.com"));
-            AddConfigField(remailForm, fields, row++, "API Key", "remail_api_key", GetString(remail, "api_key"));
-            AddConfigField(remailForm, fields, row++, "项目ID", "remail_project_id", FirstNonEmpty(GetString(remail, "project_id"), "2"));
-            AddConfigField(remailForm, fields, row++, "产品ID", "remail_product_id", FirstNonEmpty(GetString(remail, "product_id"), "5"));
-            AddConfigField(remailForm, fields, row++, "库存策略", "remail_supply", FirstNonEmpty(GetString(remail, "supply"), "private_first"));
-            AddConfigField(remailForm, fields, row++, "邮箱后缀", "remail_email_suffix", FirstNonEmpty(GetString(remail, "email_suffix"), "outlook.com"));
-
-            var cfForm = AddConfigCategory(sidebar, host, categories, "CFWorker", "临时域名邮箱和 Cloudflare Worker 接入配置。");
-            row = 0;
-            AddConfigField(cfForm, fields, row++, "CFWorker URL", "cfworker_url", GetString(email, "cfworker_url"));
-            AddConfigField(cfForm, fields, row++, "CFWorker 域名", "cfworker_domain", GetString(email, "cfworker_domain"));
-            AddConfigField(cfForm, fields, row++, "CFWorker Admin Token", "cfworker_admin_token", GetString(email, "cfworker_admin_token"));
-            AddConfigField(cfForm, fields, row++, "Cloudflare API Token", "cfworker_api_token", GetString(email, "cfworker_api_token"));
-
-            var phoneForm = AddConfigCategory(sidebar, host, categories, "手机接码", "SMSBower 凭据和 Codex OAuth 接码高级设置。");
-            row = 0;
+            AddConfigSectionHeader(phoneForm, row++, "SMSBower", "短信获取、复用和重试策略");
             AddConfigField(phoneForm, fields, row++, "SMSBower API Key", "smsbower_api_key", GetString(smsBower, "api_key"));
             AddConfigField(phoneForm, fields, row++, "短信等待秒", "smsbower_sms_timeout", GetString(smsBower, "sms_timeout"));
             AddConfigField(phoneForm, fields, row++, "短信轮询间隔秒", "smsbower_sms_poll_interval", GetString(smsBower, "sms_poll_interval"));
@@ -131,56 +144,62 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "发码重试次数", "phone_send_retry_attempts", GetString(phoneReuse, "send_retry_attempts"));
             AddConfigField(phoneForm, fields, row++, "发码重试延迟秒", "phone_send_retry_delay_seconds", GetString(phoneReuse, "send_retry_delay_seconds"));
             AddConfigField(phoneForm, fields, row++, "状态文件", "phone_state_file", GetString(phoneReuse, "state_file"));
+            AddConfigSectionHeader(phoneForm, row++, "Codex OAuth", "注册后的令牌和手机验证要求");
             AddConfigField(phoneForm, fields, row++, "OAuth超时秒", "codex_registration_timeout", GetString(codexOauth, "registration_timeout"));
             AddConfigField(phoneForm, fields, row++, "允许邮箱OTP兜底", "codex_allow_passwordless_takeover", GetString(codexOauth, "allow_passwordless_takeover"));
             AddConfigField(phoneForm, fields, row++, "自动手机验证", "codex_auto_phone_verification", GetString(codexOauth, "auto_phone_verification"));
             AddConfigField(phoneForm, fields, row++, "注册要求RT", "codex_require_registration_refresh_token", GetString(codexOauth, "require_registration_refresh_token"));
             AddConfigField(phoneForm, fields, row++, "注册要求手机号", "codex_require_registration_phone_verification", GetString(codexOauth, "require_registration_phone_verification"));
 
-            var cpaForm = AddConfigCategory(sidebar, host, categories, "CPA", "CPA 导入接口配置。");
+            var importForm = AddConfigCategory(sidebar, host, categories, "导入与账号", "CPA、SUB2API 和 Agent Identity 统一配置。");
             row = 0;
-            AddConfigField(cpaForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
-            AddConfigField(cpaForm, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
-            var sub2Form = AddConfigCategory(sidebar, host, categories, "SUB2API", "SUB2API 导入、分组和代理配置。");
-            row = 0;
-            AddConfigField(sub2Form, fields, row++, "SUB2API地址", "sub2api_url", GetString(sub2api, "api_url"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API Token", "sub2api_token", GetString(sub2api, "api_token"));
-            AddConfigField(sub2Form, fields, row++, "Register Agent Identity on Free signup", "agent_identity_register_on_free_signup", FirstNonEmpty(GetString(agentIdentity, "register_on_free_signup"), "false"));
-            AddConfigField(sub2Form, fields, row++, "Agent Identity timeout (seconds)", "agent_identity_registration_timeout", FirstNonEmpty(GetString(agentIdentity, "registration_timeout"), "30"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API邮箱", "sub2api_email", GetString(sub2api, "email"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API密码", "sub2api_password", GetString(sub2api, "password"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API分组", "sub2api_group", GetString(sub2api, "group_name"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API分组ID", "sub2api_group_ids", GetString(sub2api, "group_ids"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API代理", "sub2api_proxy", GetString(sub2api, "proxy_name"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API优先级", "sub2api_priority", GetString(sub2api, "priority"));
-            AddConfigField(sub2Form, fields, row++, "SUB2API并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
-            AddConfigComboField(sub2Form, comboFields, row++, "SUB2API凭据模式", "sub2api_auth_mode", FirstNonEmpty(GetString(sub2api, "auth_mode"), "auto"), new[] { "auto", "oauth", "agent_identity" });
-            AddConfigField(sub2Form, fields, row++, "导入后连通测试", "sub2api_verify_after_import", FirstNonEmpty(GetString(sub2api, "verify_after_import"), "true"));
+            AddConfigSectionHeader(importForm, row++, "CPA", "兼容 CPA 的账号导入接口");
+            AddConfigField(importForm, fields, row++, "CPA地址", "cpa_api_url", GetString(cpaMode, "api_url"));
+            AddConfigField(importForm, fields, row++, "CPA Token", "cpa_api_token", GetString(cpaMode, "api_token"));
+            AddConfigSectionHeader(importForm, row++, "SUB2API", "导入目标、分组和远端代理");
+            AddConfigField(importForm, fields, row++, "API地址", "sub2api_url", GetString(sub2api, "api_url"));
+            AddConfigField(importForm, fields, row++, "API Token", "sub2api_token", GetString(sub2api, "api_token"));
+            AddConfigField(importForm, fields, row++, "登录邮箱", "sub2api_email", GetString(sub2api, "email"));
+            AddConfigField(importForm, fields, row++, "登录密码", "sub2api_password", GetString(sub2api, "password"));
+            AddConfigField(importForm, fields, row++, "目标分组", "sub2api_group", GetString(sub2api, "group_name"));
+            AddConfigField(importForm, fields, row++, "分组ID", "sub2api_group_ids", GetString(sub2api, "group_ids"));
+            AddConfigField(importForm, fields, row++, "远端代理", "sub2api_proxy", GetString(sub2api, "proxy_name"));
+            AddConfigField(importForm, fields, row++, "代理ID", "sub2api_proxy_id", GetString(sub2api, "proxy_id"));
+            AddConfigField(importForm, fields, row++, "优先级", "sub2api_priority", GetString(sub2api, "priority"));
+            AddConfigField(importForm, fields, row++, "账号并发", "sub2api_concurrency", GetString(sub2api, "concurrency"));
+            AddConfigComboField(importForm, comboFields, row++, "凭据模式", "sub2api_auth_mode", FirstNonEmpty(GetString(sub2api, "auth_mode"), "auto"), new[] { "auto", "oauth", "agent_identity" });
+            AddConfigField(importForm, fields, row++, "导入后连通测试", "sub2api_verify_after_import", FirstNonEmpty(GetString(sub2api, "verify_after_import"), "true"));
+            AddConfigSectionHeader(importForm, row++, "Agent Identity", "Free 注册后的 Agent 凭据生成");
+            AddConfigField(importForm, fields, row++, "注册后自动生成", "agent_identity_register_on_free_signup", FirstNonEmpty(GetString(agentIdentity, "register_on_free_signup"), "false"));
+            AddConfigField(importForm, fields, row++, "注册超时秒", "agent_identity_registration_timeout", FirstNonEmpty(GetString(agentIdentity, "registration_timeout"), "30"));
 
-            var networkForm = AddConfigCategory(sidebar, host, categories, "网络代理", "注册、邮箱、接码、额度查询等非支付功能统一使用本地 7897 端口。");
+            var networkForm = AddConfigCategory(sidebar, host, categories, "网络与支付", "集中管理非支付网络、支付代理和协议提链器。");
             row = 0;
-            AddConfigField(networkForm, fields, row++, "非支付代理（固定）", "non_payment_proxy", LocalNonPaymentProxy, isReadOnly: true);
+            AddConfigSectionHeader(networkForm, row++, "基础网络", "注册流量与邮箱收件流量分开配置");
+            AddConfigField(networkForm, fields, row++, "注册代理（主）", "registration_proxy", registrationProxy);
+            AddConfigField(networkForm, fields, row++, "注册代理池", "registration_proxy_pool", registrationProxyPool, multiline: true);
+            AddConfigField(networkForm, fields, row++, "邮箱收件代理", "mailbox_proxy", mailboxProxy);
+            AddConfigSectionHeader(networkForm, row++, "协议管理", "支付方式、提链器和运行状态");
+            AddConfigField(networkForm, fields, row++, "协议支付代理池", "protocol_proxy_pool", protocolProxyPool, multiline: true);
+            AddConfigField(networkForm, fields, row++, "启用方式", "protocol_enabled_methods", FirstNonEmpty(FormatConfigList(protocolPayments, "enabled_methods"), "paypal,gopay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"));
+            AddConfigField(networkForm, fields, row++, "提链器目录", "protocol_reference_root", FirstNonEmpty(GetString(protocolPayments, "reference_root"), "services/protocol-payment"));
+            AddConfigField(networkForm, fields, row++, "状态文件", "protocol_state_file", FirstNonEmpty(GetString(protocolPayments, "state_file"), "runtime/payment_link_runs.jsonl"));
+            AddConfigField(networkForm, fields, row++, "协议超时秒", "protocol_timeout_seconds", FirstNonEmpty(GetString(protocolPayments, "timeout_seconds"), "900"));
+            AddConfigSectionHeader(networkForm, row++, "PayPal 与 GoPay", "订单地区、生成模式和本地服务");
+            AddConfigField(networkForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
+            AddConfigComboField(networkForm, comboFields, row++, "订单生成地区", "paypal_billing_region", GetBillingRegionCode(paypal), BillingRegionOptions, "DE");
+            AddConfigComboField(networkForm, comboFields, row++, "PayPal直链生成模式", "paypal_link_generation_type", GetLinkGenerationType(paypal), LinkGenerationTypeOptions, "hosted_long_url");
+            AddConfigField(networkForm, fields, row++, "GoPay服务地址", "protocol_gopay_service_addr", FirstNonEmpty(GetString(gopay, "payment_service_addr"), "127.0.0.1:50051"));
+            AddConfigSectionHeader(networkForm, row++, "地区支付代理", "每种协议独立的代理 Seed");
+            AddConfigField(networkForm, fields, row++, "iDEAL", "protocol_ideal_proxy", GetString(idealProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "PIX", "protocol_pix_proxy", GetString(pixProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "Kakao Pay", "protocol_kakao_proxy", GetString(kakaoProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "BLIK", "protocol_blik_proxy", GetString(blikProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "TWINT", "protocol_twint_proxy", GetString(twintProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "直卡 Checkout", "protocol_direct_card_proxy", GetString(directCardProtocol, "proxy"));
+            AddConfigField(networkForm, fields, row++, "MoMo", "protocol_momo_proxy", GetString(momoProtocol, "proxy"));
 
-            var proxyForm = AddConfigCategory(sidebar, host, categories, "协议支付", "统一管理 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout 和 MoMo 提链。");
-            row = 0;
-            AddConfigField(proxyForm, fields, row++, "启用方式", "protocol_enabled_methods", FirstNonEmpty(FormatConfigList(protocolPayments, "enabled_methods"), "paypal,gopay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"));
-            AddConfigField(proxyForm, fields, row++, "提链器目录", "protocol_reference_root", FirstNonEmpty(GetString(protocolPayments, "reference_root"), "services/protocol-payment"));
-            AddConfigField(proxyForm, fields, row++, "状态文件", "protocol_state_file", FirstNonEmpty(GetString(protocolPayments, "state_file"), "runtime/payment_link_runs.jsonl"));
-            AddConfigField(proxyForm, fields, row++, "协议超时秒", "protocol_timeout_seconds", FirstNonEmpty(GetString(protocolPayments, "timeout_seconds"), "900"));
-            AddConfigField(proxyForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
-            AddConfigComboField(proxyForm, comboFields, row++, "订单生成地区", "paypal_billing_region", GetBillingRegionCode(paypal), BillingRegionOptions, "DE");
-            AddConfigComboField(proxyForm, comboFields, row++, "PayPal直链生成模式", "paypal_link_generation_type", GetLinkGenerationType(paypal), LinkGenerationTypeOptions, "hosted_long_url");
-            AddConfigField(proxyForm, fields, row++, "GoPay服务地址", "protocol_gopay_service_addr", FirstNonEmpty(GetString(gopay, "payment_service_addr"), "127.0.0.1:50051"));
-            AddConfigField(proxyForm, fields, row++, "iDEAL代理Seed", "protocol_ideal_proxy", GetString(idealProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "PIX代理Seed", "protocol_pix_proxy", GetString(pixProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "Kakao Pay代理Seed", "protocol_kakao_proxy", GetString(kakaoProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "BLIK代理Seed", "protocol_blik_proxy", GetString(blikProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "TWINT代理Seed", "protocol_twint_proxy", GetString(twintProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "直卡代理Seed", "protocol_direct_card_proxy", GetString(directCardProtocol, "proxy"));
-            AddConfigField(proxyForm, fields, row++, "MoMo代理Seed", "protocol_momo_proxy", GetString(momoProtocol, "proxy"));
-
-            var storageForm = AddConfigCategory(sidebar, host, categories, "存储", "Session 输出目录和 SQLite 索引路径。");
+            var storageForm = AddConfigCategory(sidebar, host, categories, "数据与文件", "Session 输出目录、SQLite 索引和原始 JSON。");
             row = 0;
             AddConfigField(storageForm, fields, row++, "Session目录", "output_directory", GetString(output, "directory"));
             AddConfigField(storageForm, fields, row++, "SQLite路径", "sqlite_path", GetString(storage, "sqlite_path"));
@@ -192,7 +211,7 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 12, 0, 0)
             };
-            var openJsonButton = new Button { Content = "打开JSON", Width = 120 };
+            var openJsonButton = new Button { Content = "打开配置文件", Width = 120 };
             openJsonButton.Click += (_, __) => OpenPath(path);
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
@@ -273,17 +292,21 @@ namespace SmsWorkbench
                 sub2api["concurrency"] = fields["sub2api_concurrency"].Text.Trim();
                 sub2api["auth_mode"] = ConfigComboValue(comboFields, "sub2api_auth_mode", "auto");
                 sub2api["verify_after_import"] = fields["sub2api_verify_after_import"].Text.Trim();
-                proxy["default"] = LocalNonPaymentProxy;
-                proxy["pool"] = new List<object> { LocalNonPaymentProxy };
-                config["mailbox_proxy"] = LocalNonPaymentProxy;
-                phoneReuse["proxy"] = LocalNonPaymentProxy;
-                phoneReuse["proxy_match_phone_country"] = false;
-                phoneReuse["proxy_random_sid"] = false;
-                phoneReuse.Remove("proxy_api_url");
-                phoneReuse.Remove("white_api_url");
-                phoneReuse.Remove("api_url");
-                phoneReuse.Remove("proxy_template");
-                phoneReuse.Remove("proxies");
+                string savedRegistrationProxy = fields["registration_proxy"].Text.Trim();
+                string savedMailboxProxy = FirstNonEmpty(fields["mailbox_proxy"].Text.Trim(), LocalNonPaymentProxy);
+                List<object> savedRegistrationPool = ParseStringList(fields["registration_proxy_pool"].Text);
+                if (savedRegistrationProxy.Length > 0)
+                {
+                    savedRegistrationPool.RemoveAll(item => string.Equals(Convert.ToString(item), savedRegistrationProxy, StringComparison.OrdinalIgnoreCase));
+                    savedRegistrationPool.Insert(0, savedRegistrationProxy);
+                }
+                List<object> savedProtocolPool = ParseStringList(fields["protocol_proxy_pool"].Text);
+                proxy["registration"] = savedRegistrationProxy;
+                proxy["default"] = savedRegistrationProxy;
+                proxy["pool"] = savedRegistrationPool;
+                config["mailbox_proxy"] = savedMailboxProxy;
+                protocolPayments["proxy_pool"] = savedProtocolPool;
+                phoneReuse["proxy"] = savedRegistrationProxy;
                 config["email_registration"] = email;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
@@ -345,7 +368,10 @@ namespace SmsWorkbench
             {
                 Content = title,
                 Style = (Style)FindResource("SidebarButton"),
-                Width = double.NaN
+                Width = double.NaN,
+                Height = 38,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold
             };
 
             var panel = new StackPanel
@@ -377,8 +403,49 @@ namespace SmsWorkbench
 
             var category = new ConfigCategory { Button = button, Panel = panel };
             categories.Add(category);
-            button.Click += (_, __) => SelectConfigCategory(categories, category);
+            button.Click += (_, __) =>
+            {
+                SelectConfigCategory(categories, category);
+                panel.BringIntoView();
+            };
             return form;
+        }
+
+        private void AddConfigSectionHeader(Grid form, int row, string title, string description)
+        {
+            form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var header = new Grid { Margin = new Thickness(0, row == 0 ? 0 : 12, 0, 12) };
+            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            header.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 3)
+            });
+            var detail = new TextBlock
+            {
+                Text = description,
+                FontSize = 11.5,
+                Foreground = (Brush)FindResource("TextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            Grid.SetRow(detail, 1);
+            header.Children.Add(detail);
+            var line = new Border
+            {
+                Height = 1,
+                Background = (Brush)FindResource("Line")
+            };
+            Grid.SetRow(line, 2);
+            header.Children.Add(line);
+            Grid.SetRow(header, row);
+            Grid.SetColumnSpan(header, 2);
+            form.Children.Add(header);
         }
 
         private void SelectConfigCategory(List<ConfigCategory> categories, ConfigCategory selected)
@@ -412,6 +479,7 @@ namespace SmsWorkbench
                 LineHeight = 18,
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                FontSize = 12.5,
                 Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
@@ -429,7 +497,8 @@ namespace SmsWorkbench
                 HorizontalScrollBarVisibility = multiline ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
                 MinHeight = multiline ? 124 : 36,
                 VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center,
-                IsReadOnly = isReadOnly
+                IsReadOnly = isReadOnly,
+                FontSize = 12.5
             };
             if (multiline)
             {
@@ -452,6 +521,7 @@ namespace SmsWorkbench
                 LineHeight = 18,
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                FontSize = 12.5,
                 Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
@@ -464,7 +534,8 @@ namespace SmsWorkbench
                 Padding = new Thickness(8, 4, 8, 4),
                 MinHeight = 36,
                 IsEditable = false,
-                VerticalContentAlignment = VerticalAlignment.Center
+                VerticalContentAlignment = VerticalAlignment.Center,
+                FontSize = 12.5
             };
             string selected = FirstNonEmpty(value, "smsbower").Trim();
             bool matched = false;
@@ -498,6 +569,7 @@ namespace SmsWorkbench
                 LineHeight = 18,
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
+                FontSize = 12.5,
                 Margin = new Thickness(0, 8, 14, 12)
             };
             Grid.SetRow(text, row);
@@ -510,7 +582,8 @@ namespace SmsWorkbench
                 Padding = new Thickness(8, 4, 8, 4),
                 MinHeight = 36,
                 IsEditable = false,
-                VerticalContentAlignment = VerticalAlignment.Center
+                VerticalContentAlignment = VerticalAlignment.Center,
+                FontSize = 12.5
             };
             string selected = FirstNonEmpty(value, fallback).Trim();
             bool matched = false;

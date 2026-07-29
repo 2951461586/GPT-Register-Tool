@@ -12,6 +12,7 @@ configuration, generated sessions, and debug output stay outside this directory.
   where new code should be placed.
 - [PayPal Zero-Due Link](paypal-zero-due-link.md) - promotion-update stage
   protocol, config keys, and region matrix search.
+- [v2026.07.29.1 Release Notes](release-v2026.07.29.1.md) - desktop menu alignment, split proxy routing, and ordered dynamic proxy fallback.
 - 中文优先说明见根目录 [README](../README.md)。
 
 ## Root-level references

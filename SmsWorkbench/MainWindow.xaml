@@ -143,6 +143,63 @@
         </DataTrigger>
       </Style.Triggers>
     </Style>
+    <Style x:Key="AccountContextMenuStyle" TargetType="ContextMenu">
+      <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="5"/>
+      <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
+      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+      <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+    </Style>
+    <Style x:Key="AccountContextMenuItemStyle" TargetType="MenuItem">
+      <Setter Property="MinWidth" Value="232"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
+      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+      <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Border x:Name="ItemChrome" Background="Transparent" Padding="10,0,14,0">
+              <Grid Height="38">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="18"/>
+                  <ColumnDefinition Width="10"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Grid.Column="0"
+                                  ContentSource="Icon"
+                                  Width="16" Height="16"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  SnapsToDevicePixels="True"/>
+                <ContentPresenter Grid.Column="2"
+                                  ContentSource="Header"
+                                  RecognizesAccessKey="True"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  SnapsToDevicePixels="True"/>
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="ItemChrome" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </ui:FluentWindow.Resources>
   <materialDesign:DialogHost Identifier="RootDialogHost">
       <Grid Background="{DynamicResource AppBg}">
@@ -655,53 +712,53 @@
                       EnableColumnVirtualization="True"
                       SelectionChanged="AccountGrid_SelectionChanged">
               <DataGrid.ContextMenu>
-                <ContextMenu>
-                  <MenuItem Header="查看详情" Click="CtxViewDetail_Click" FontWeight="Medium">
+                <ContextMenu Style="{StaticResource AccountContextMenuStyle}">
+                  <MenuItem Header="查看账号详情" Click="CtxViewDetail_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="查看收件箱" Click="CtxViewInbox_Click">
+                  <MenuItem Header="查看邮箱收件箱" Click="CtxViewInbox_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="复制邮箱" Click="CtxCopyEmail_Click">
+                  <MenuItem Header="复制邮箱地址" Click="CtxCopyEmail_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="复制支付链接" Click="CtxCopyPayPal_Click">
+                  <MenuItem Header="复制支付链接" Click="CtxCopyPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="打开支付链接" Click="CtxOpenPayPal_Click">
+                  <MenuItem Header="打开支付链接" Click="CtxOpenPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="刷新额度" Click="CtxRefreshQuota_Click" FontWeight="Medium">
+                  <MenuItem Header="刷新账号额度" Click="CtxRefreshQuota_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="打开源文件" Click="CtxOpenSource_Click">
+                  <MenuItem Header="打开 Session 源文件" Click="CtxOpenSource_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="标记支付完成" Click="CtxMarkPayPal_Click" FontWeight="Medium">
+                  <MenuItem Header="标记为支付完成" Click="CtxMarkPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3"/>

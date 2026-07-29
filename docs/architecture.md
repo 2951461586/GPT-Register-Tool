@@ -486,8 +486,12 @@ All paths in `config.example.json` are relative by default:
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
-    "default": "http://127.0.0.1:7897",
-    "pool": ["http://127.0.0.1:7897"]
+    "registration": "http://user:pass-JP-session-5m@gateway:port",
+    "default": "http://user:pass-JP-session-5m@gateway:port",
+    "pool": ["http://user:pass-JP-session-5m@gateway:port"]
+  },
+  "protocol_payments": {
+    "proxy_pool": ["http://user-region-JP-sid-session-t-5:pass@gateway:port"]
   },
   "k12": {
     "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",

@@ -45,7 +45,7 @@
 - Python 3.10 或更高版本。
 - .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
 - 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
-- 非支付功能默认使用本地代理 `http://127.0.0.1:7897`。
+- 注册代理、邮箱收件代理和协议支付代理彼此独立；邮箱收件默认使用本地 `http://127.0.0.1:7897`。
 
 ### 方式一：安装包
 
@@ -95,9 +95,9 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 打开桌面端的 **设置** 页面，至少完成以下配置：
 
-1. 配置非支付代理，本项目默认固定为 `http://127.0.0.1:7897`。
-2. 在 **ReMail** 分类中配置 API Key、项目 ID、产品 ID、库存策略和邮箱后缀；或者配置其他邮箱源。
-3. 按需配置 SMSBower、CPA、SUB2API 和协议支付代理。
+1. 在 **网络与支付** 中分别配置注册代理池、邮箱收件代理和协议支付代理池。
+2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
+3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
 4. 保存后重新打开对应功能即可使用新配置。
 
 ReMail API Key 也可以通过环境变量提供：
@@ -155,10 +155,13 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
 - PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
 - 支持 `checkout`、`approve`、`update` 分段代理。
-- 可选择 US、GB、DE、JP、BR、TR、VN 等目标出口。
+- 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
+- 协议支付代理池按顺序探测，当前代理不可用或出口国家不匹配时自动切换下一条。
 - 地区和代理选择保存为历史记录。
 - 支持实际测试代理出口 IP、国家及预期地区是否匹配。
 - 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
+- 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
+- MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
 
 ### Agent Identity 注册
 
@@ -269,34 +272,35 @@ services/
 }
 ```
 
-### 非支付代理
+### 注册与收件代理
 
 ```json
 {
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
-    "default": "http://127.0.0.1:7897",
-    "pool": ["http://127.0.0.1:7897"]
+    "registration": "http://user:pass-JP-session-5m@gateway:port",
+    "default": "http://user:pass-JP-session-5m@gateway:port",
+    "pool": ["http://user:pass-JP-session-5m@gateway:port"]
   }
 }
 ```
 
-### 支付分段代理
+注册 worker 会刷新动态 Session；邮箱 OTP 收取仍固定走 `mailbox_proxy`，不会继承注册代理。
+
+### 协议支付代理池
 
 ```json
 {
-  "paypal": {
-    "stage_proxies": {
-      "checkout": "http://user:pass@gateway:port",
-      "provider": "http://user:pass@gateway:port",
-      "approve": "http://user:pass@gateway:port",
-      "promotion": "http://user:pass@gateway:port"
-    }
+  "protocol_payments": {
+    "proxy_pool": [
+      "http://user-region-JP-sid-session-t-5:pass@gateway-a:port",
+      "http://user-region-JP-sid-session-t-10:pass@gateway-b:port"
+    ]
   }
 }
 ```
 
-支付代理与非支付代理相互独立。桌面端或 CLI 提供的普通 `--proxy` 不应覆盖已经配置的支付阶段代理。
+协议支付池与注册代理池相互独立。提链时会按支付地区改写 `region-XX` 或密码中的国家和动态 Session；显式传入 `--proxy` 或分段代理时才覆盖协议池。
 
 ### Agent Identity
 

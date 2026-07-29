@@ -9,6 +9,43 @@ from sms_tool import paypal_proxy
 
 
 class PayPalProxyTests(unittest.TestCase):
+    def test_proxy_probe_error_redacts_authenticated_proxy(self):
+        class FailingSession:
+            trust_env = True
+            proxies = {}
+
+            def get(self, *_args, **_kwargs):
+                raise RuntimeError("failed via http://private-user:private-pass@proxy.example:443")
+
+        with patch.object(paypal_proxy.requests, "Session", return_value=FailingSession()):
+            result = paypal_proxy.probe_proxy("http://user:pass@proxy.example:443", "JP")
+
+        self.assertNotIn("private-user", result.error)
+        self.assertNotIn("private-pass", result.error)
+        self.assertIn("http://***:***@proxy.example:443", result.error)
+
+    def test_payment_pool_falls_back_and_rotates_to_target_country(self):
+        pool = [
+            "http://first-region-JP-sid-Ab12Cd34-t-5:secret@sg.cliproxy.io:443",
+            "http://second-region-JP-sid-Ef56Gh78-t-10:secret@as.zooproxy.com:443",
+        ]
+
+        def fake_probe(proxy, expected_country="", stage="proxy", timeout=12):
+            return paypal_proxy.ProxyProbeResult(
+                ok="as.zooproxy.com" in proxy,
+                stage=stage,
+                expected_country=expected_country,
+                country_code=expected_country if "as.zooproxy.com" in proxy else "",
+                error="timeout" if "sg.cliproxy.io" in proxy else "",
+            )
+
+        with patch.object(paypal_proxy, "probe_proxy", side_effect=fake_probe):
+            selected, attempts = paypal_proxy.select_proxy_from_pool(pool, "VN", "momo")
+
+        self.assertIn("as.zooproxy.com", selected)
+        self.assertIn("region-VN", selected)
+        self.assertEqual([item["ok"] for item in attempts], [False, True])
+
     def test_rotates_cliproxy_country_and_session(self):
         original = "socks5://user-region-US-sid-Ab12Cd34-t-5:secret@us.cliproxy.io:443"
 

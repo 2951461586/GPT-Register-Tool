@@ -99,6 +99,24 @@ class PhoneProxyTests(unittest.TestCase):
         self.assertEqual(result['proxy'], 'http://127.0.0.1:7897')
         self.assertEqual(probe.call_args.args[1], '')
 
+    def test_explicit_dynamic_proxy_refreshes_sid_even_when_legacy_flag_is_false(self):
+        source = 'http://user-region-US-sid-ABCDEFGH-t-5:pass@proxy.example:8080'
+        with patch.object(phone_proxy, 'phone_proxy_cfg', return_value={
+            'proxy_match_phone_country': False,
+            'proxy_random_sid': False,
+        }), patch.object(phone_proxy, 'probe_proxy_with_scheme_detection') as probe:
+            probe.side_effect = lambda proxy, expected_country='', use_cache=True: {
+                'ok': True,
+                'proxy': proxy,
+                'ip': '1.2.3.4',
+                'country_code': '',
+            }
+            result = phone_proxy.select_phone_proxy(source, country='12')
+
+        self.assertTrue(result['ok'])
+        self.assertNotIn('sid-ABCDEFGH', result['proxy'])
+        self.assertIn('user-region-US-sid-', result['proxy'])
+
 
 class PhoneReuseProxyGateTests(unittest.TestCase):
     def test_provider_proxy_failure_stops_before_buying_number(self):

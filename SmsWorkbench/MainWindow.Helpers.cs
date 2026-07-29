@@ -3,10 +3,110 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Path/config helpers, status formatting, external open/copy/log helpers
-        private void AddNonPaymentProxy(List<string> args)
+        private void AddRegistrationProxy(List<string> args)
         {
+            List<string> pool = GetRegistrationProxyPool();
+            AddConfiguredProxy(args, pool.FirstOrDefault() ?? GetRegistrationProxy());
+            if (pool.Count > 1)
+            {
+                args.Add("--proxy-pool");
+                args.Add(string.Join(Environment.NewLine, pool));
+            }
+        }
+
+        private void AddMailboxProxy(List<string> args)
+        {
+            AddConfiguredProxy(args, GetMailboxProxy());
+        }
+
+        private static void AddConfiguredProxy(List<string> args, string proxy)
+        {
+            if (string.IsNullOrWhiteSpace(proxy)) return;
             args.Add("--proxy");
-            args.Add(LocalNonPaymentProxy);
+            args.Add(proxy.Trim());
+        }
+
+        private string GetRegistrationProxy()
+        {
+            try
+            {
+                var config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                var proxy = GetSection(config, "proxy");
+                var paypal = GetSection(config, "paypal");
+                string configured = FirstNonEmpty(
+                    GetString(proxy, "registration"),
+                    GetString(config, "registration_proxy"),
+                    FirstListValue(paypal, "proxies"),
+                    GetString(proxy, "default"));
+                if (configured.Length > 0) return configured;
+            }
+            catch
+            {
+            }
+            return LocalNonPaymentProxy;
+        }
+
+        private List<string> GetRegistrationProxyPool()
+        {
+            try
+            {
+                var config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                var proxy = GetSection(config, "proxy");
+                var values = new List<string>();
+                string primary = GetRegistrationProxy();
+                if (primary.Length > 0) values.Add(primary);
+                if (proxy.TryGetValue("pool", out object raw) && raw is List<object> list)
+                {
+                    values.AddRange(list.Select(item => Convert.ToString(item) ?? ""));
+                }
+                return values
+                    .Select(item => item.Trim())
+                    .Where(item => item.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            catch
+            {
+                return new List<string> { GetRegistrationProxy() };
+            }
+        }
+
+        private string GetProtocolPaymentProxy()
+        {
+            try
+            {
+                var config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                var protocol = GetSection(config, "protocol_payments");
+                if (protocol.TryGetValue("proxy_pool", out object raw) && raw is List<object> list)
+                {
+                    string first = list.Select(item => Convert.ToString(item) ?? "")
+                        .FirstOrDefault(item => !string.IsNullOrWhiteSpace(item));
+                    if (!string.IsNullOrWhiteSpace(first)) return first.Trim();
+                }
+            }
+            catch
+            {
+            }
+            return "";
+        }
+
+        private string GetMailboxProxy()
+        {
+            try
+            {
+                var config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
+                var email = GetSection(config, "email_registration");
+                var proxy = GetSection(config, "proxy");
+                string configured = FirstNonEmpty(
+                    GetString(config, "mailbox_proxy"),
+                    GetString(email, "mailbox_proxy"),
+                    GetString(proxy, "mailbox"));
+                if (configured.Length > 0) return configured;
+            }
+            catch
+            {
+            }
+            return LocalNonPaymentProxy;
         }
 
         private string GetConfiguredCfWorkerDomain()

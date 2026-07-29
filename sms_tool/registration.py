@@ -1470,6 +1470,7 @@ def _oauth_result_summary(result):
 def run_batch(
     count=1,
     proxy=None,
+    proxy_pool=None,
     mailboxes=None,
     paypal_link=True,
     workers=4,
@@ -1481,7 +1482,7 @@ def run_batch(
 ):
     from .batch_runner import run_batch_impl
     return run_batch_impl(
-        count=count, proxy=proxy, mailboxes=mailboxes, paypal_link=paypal_link,
+        count=count, proxy=proxy, proxy_pool=proxy_pool, mailboxes=mailboxes, paypal_link=paypal_link,
         workers=workers, phone_pool=phone_pool, codex_oauth=codex_oauth,
         payment_method=payment_method, paypal_generation_type=paypal_generation_type,
         registration_mode=registration_mode, run_email_func=run_email,

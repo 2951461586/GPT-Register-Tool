@@ -438,7 +438,11 @@ def select_phone_proxy(
     if not base:
         return {"ok": True, "proxy": "", "base_proxy": "", "country_iso": country_iso, "attempts": [], "direct": True}
     match_region = bool(pcfg.get("proxy_match_phone_country", True))
-    random_sid = bool(pcfg.get("proxy_random_sid", True)) and refresh_sid
+    dynamic_session = bool(
+        re.search(r"-sid-[A-Za-z0-9]+(?=-t-|-|:|@|$)", base)
+        or re.search(r"-[A-Za-z]{2}-[A-Za-z0-9]+-(?:\d+m|\d+h)(?=[:@/]|$)", base)
+    )
+    random_sid = refresh_sid and (bool(pcfg.get("proxy_random_sid", True)) or dynamic_session)
     attempts = []
     for region in _region_candidates(country_iso, base):
         candidate = build_phone_proxy(base, region, refresh_sid=random_sid, match_region=match_region)
