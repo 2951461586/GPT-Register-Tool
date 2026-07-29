@@ -2,7 +2,25 @@ import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .error_classification import classify_error
+from .paypal_proxy import infer_proxy_country
+from .phone_proxy import probe_proxy_with_scheme_detection, refresh_proxy_sid
 from .sentinel_tokens import _extract_sentinel, _sentinel_device_id
+
+
+def select_registration_proxy_base(proxy_pool, fallback=None):
+    candidates = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
+    fallback = str(fallback or "").strip()
+    if fallback and fallback not in candidates:
+        candidates.insert(0, fallback)
+    if len(candidates) <= 1:
+        return candidates[0] if candidates else fallback
+    for base in candidates:
+        candidate = refresh_proxy_sid(base)
+        expected = infer_proxy_country(candidate)
+        checked = probe_proxy_with_scheme_detection(candidate, expected, use_cache=True)
+        if checked.get("ok"):
+            return base
+    return candidates[0]
 
 def _unique_mailboxes(mailboxes):
     if not mailboxes:
@@ -21,6 +39,7 @@ def _unique_mailboxes(mailboxes):
 def run_batch_impl(
     count=1,
     proxy=None,
+    proxy_pool=None,
     mailboxes=None,
     paypal_link=True,
     workers=4,
@@ -34,6 +53,14 @@ def run_batch_impl(
     if run_email_func is None:
         raise ValueError("run_email_func is required")
     mailboxes = _unique_mailboxes(mailboxes)
+    proxy_pool = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
+    if proxy and str(proxy).strip() not in proxy_pool:
+        proxy_pool.insert(0, str(proxy).strip())
+    if not proxy_pool and proxy:
+        proxy_pool = [str(proxy).strip()]
+    selected_proxy = select_registration_proxy_base(proxy_pool, proxy)
+    proxy_pool = [selected_proxy] if selected_proxy else []
+    proxy = selected_proxy or proxy
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
         count = len(mailboxes)
@@ -60,16 +87,18 @@ def run_batch_impl(
         sentinel_pool = queue.Queue()
         print(f"[*] Batch mode: pre-extracting {pool_size} unique sentinel tokens (one per worker)...")
         for idx in range(pool_size):
+            base_proxy = proxy_pool[idx % len(proxy_pool)] if proxy_pool else proxy
+            worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
             try:
-                token = _extract_sentinel(proxy=proxy, force_fresh=True)
+                token = _extract_sentinel(proxy=worker_proxy, force_fresh=True)
             except Exception as exc:
                 print(f"[!] Sentinel pre-extraction {idx + 1}/{pool_size} failed: {exc}")
                 token = None
             did_preview = _sentinel_device_id(token)[:8] if token else "N/A"
             status = "ready" if token else "empty (worker will self-extract)"
             print(f"[*] Sentinel token {idx + 1}/{pool_size}: {status} (did={did_preview}...)")
-            sentinel_pool.put(token)
-        ready = sum(1 for t in list(sentinel_pool.queue) if t)
+            sentinel_pool.put((token, worker_proxy))
+        ready = sum(1 for token, _ in list(sentinel_pool.queue) if token)
         print(f"[*] {ready}/{pool_size} unique sentinel token(s) ready; each worker gets its own device_id.")
 
     def _run_one(i):
@@ -79,16 +108,18 @@ def run_batch_impl(
         # Borrow a unique sentinel token from the pool (blocks until one
         # is available — another worker must finish and return theirs).
         worker_sentinel = None
+        base_proxy = proxy_pool[i % len(proxy_pool)] if proxy_pool else proxy
+        worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
         if sentinel_pool is not None:
             try:
-                worker_sentinel = sentinel_pool.get(timeout=600)
+                worker_sentinel, worker_proxy = sentinel_pool.get(timeout=600)
             except Exception:
                 print(f"  [!] Sentinel pool timeout; worker will self-extract.")
                 worker_sentinel = None
         try:
             mailbox = mailboxes[i] if mailboxes else None
             result = run_email_func(
-                proxy=proxy,
+                proxy=worker_proxy,
                 mailbox=mailbox,
                 paypal_link=paypal_link,
                 phone_pool=phone_pool,
@@ -116,8 +147,8 @@ def run_batch_impl(
             }
         finally:
             # Return the sentinel token to the pool so the next worker can reuse it.
-            if sentinel_pool is not None and worker_sentinel:
-                sentinel_pool.put(worker_sentinel)
+            if sentinel_pool is not None:
+                sentinel_pool.put((worker_sentinel, worker_proxy))
 
     if workers <= 1:
         for i in range(count):

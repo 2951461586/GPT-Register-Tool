@@ -226,7 +226,7 @@ namespace SmsWorkbench
             // ── 代理配置 ──────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "代理 (可选，留空使用配置文件默认值)",
+                Text = "单代理覆盖（留空使用设置中的协议支付代理池）",
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
@@ -250,7 +250,9 @@ namespace SmsWorkbench
                 foreach (var item in new[] {
                     ("US", "美国 US"), ("GB", "英国 GB"), ("DE", "德国 DE"),
                     ("JP", "日本 JP"), ("BR", "巴西 BR"), ("TR", "土耳其 TR"),
-                    ("VN", "越南 VN"),
+                    ("VN", "越南 VN"), ("ID", "印度尼西亚 ID"), ("IN", "印度 IN"),
+                    ("NL", "荷兰 NL"), ("KR", "韩国 KR"), ("PL", "波兰 PL"),
+                    ("CH", "瑞士 CH"), ("PH", "菲律宾 PH"),
                 })
                 {
                     combo.Items.Add(new ComboBoxItem { Content = item.Item2, Tag = item.Item1 });
@@ -449,6 +451,19 @@ namespace SmsWorkbench
                     : "";
             }
 
+            void SelectComboCode(ComboBox combo, string country)
+            {
+                for (int index = 0; index < combo.Items.Count; index++)
+                {
+                    if (combo.Items[index] is ComboBoxItem item
+                        && string.Equals(Convert.ToString(item.Tag), country, StringComparison.OrdinalIgnoreCase))
+                    {
+                        combo.SelectedIndex = index;
+                        return;
+                    }
+                }
+            }
+
             void AddStageCountryArgs(List<string> args)
             {
                 string checkoutStage = ComboCode(checkoutCountryCombo);
@@ -488,6 +503,12 @@ namespace SmsWorkbench
                         countryCombo.SelectedIndex = index;
                         break;
                     }
+                }
+                if (method != "paypal")
+                {
+                    SelectComboCode(checkoutCountryCombo, defaultCountry);
+                    SelectComboCode(approveCountryCombo, defaultCountry);
+                    SelectComboCode(updateCountryCombo, defaultCountry);
                 }
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;

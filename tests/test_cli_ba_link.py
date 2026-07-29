@@ -9,6 +9,45 @@ from sms_tool import cli
 
 
 class GenerateBaLinkCliProxyTests(unittest.TestCase):
+    def test_extract_payment_link_uses_payment_pool_fallback_for_momo(self):
+        seen = {}
+        cfg = {
+            "protocol_payments": {
+                "proxy_pool": [
+                    "http://first-region-JP-sid-Ab12Cd34-t-5:secret@sg.cliproxy.io:443",
+                    "http://second-region-JP-sid-Ef56Gh78-t-10:secret@as.zooproxy.com:443",
+                ]
+            },
+            "output": {"directory": "sessions"},
+        }
+
+        def fake_generate_payment_link(**kwargs):
+            seen.update(kwargs)
+            return {"ok": True, "url": "https://payment.momo.vn/test"}
+
+        def fake_probe(proxy, expected_country="", stage="proxy", timeout=12):
+            from sms_tool.paypal_proxy import ProxyProbeResult
+            ok = "as.zooproxy.com" in proxy
+            return ProxyProbeResult(ok, stage, expected_country, country_code=expected_country if ok else "", error="timeout" if not ok else "")
+
+        argv = [
+            "chatgpt_phone_reg.py",
+            "--extract-payment-link",
+            "--at",
+            "at-test",
+            "--payment-method",
+            "momo",
+        ]
+        with patch.object(cli, "CFG", cfg):
+            with patch("sys.argv", argv):
+                with patch("sms_tool.paypal_proxy.probe_proxy", side_effect=fake_probe):
+                    with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                        cli.main()
+
+        self.assertIn("as.zooproxy.com", seen["proxy"])
+        self.assertIn("region-VN", seen["proxy"])
+        self.assertEqual(seen["target_country"], "VN")
+
     def test_extract_payment_link_uses_selected_account_access_token(self):
         seen = {}
         cfg = {"paypal": {}, "output": {"directory": "sessions"}}

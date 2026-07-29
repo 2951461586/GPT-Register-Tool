@@ -6,10 +6,9 @@
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
-    "default": "http://127.0.0.1:7897",
-    "pool": [
-      "http://127.0.0.1:7897"
-    ]
+    "registration": "",
+    "default": "",
+    "pool": []
   },
   "k12": {
     "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
@@ -242,6 +241,7 @@
     }
   },
   "protocol_payments": {
+    "proxy_pool": [],
     "enabled_methods": [
       "paypal",
       "gopay",

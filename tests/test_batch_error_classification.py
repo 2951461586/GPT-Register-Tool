@@ -1,11 +1,62 @@
 import threading
 import unittest
+from unittest.mock import patch
 
-from sms_tool.batch_runner import run_batch_impl
+from sms_tool.batch_runner import run_batch_impl, select_registration_proxy_base
 from sms_tool.storage import _status
 
 
 class BatchErrorClassificationTests(unittest.TestCase):
+    def test_registration_proxy_falls_back_from_kookeey_to_cliproxy(self):
+        pool = [
+            "http://user:base-JP-12345678-5m@gate.kookeey.info:1000",
+            "http://user-region-JP-sid-ABCDEFGH-t-5:pass@sg.cliproxy.io:443",
+            "http://user-region-JP-sid-ABCDEFGH-t-10:pass@as.zooproxy.com:443",
+        ]
+
+        def fake_probe(proxy, *_args, **_kwargs):
+            return {"ok": "sg.cliproxy.io" in proxy}
+
+        with patch("sms_tool.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
+            selected = select_registration_proxy_base(pool)
+
+        self.assertEqual(selected, pool[1])
+
+    def test_registration_proxy_falls_back_from_cliproxy_to_zoorproxy(self):
+        pool = [
+            "http://user-region-JP-sid-ABCDEFGH-t-5:pass@sg.cliproxy.io:443",
+            "http://user-region-JP-sid-ABCDEFGH-t-10:pass@as.zooproxy.com:443",
+        ]
+
+        def fake_probe(proxy, *_args, **_kwargs):
+            return {"ok": "as.zooproxy.com" in proxy}
+
+        with patch("sms_tool.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
+            selected = select_registration_proxy_base(pool)
+
+        self.assertEqual(selected, pool[1])
+
+    def test_dynamic_registration_proxy_refreshes_sid_per_account(self):
+        proxies = []
+
+        def run_email(**kwargs):
+            proxies.append(kwargs.get("proxy"))
+            return {"success": True}
+
+        source = "http://user-region-US-sid-ABCDEFGH-t-5:pass@proxy.example:8080"
+        results = run_batch_impl(
+            count=2,
+            proxy=source,
+            workers=1,
+            run_email_func=run_email,
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(len(proxies), 2)
+        self.assertTrue(all(proxy.startswith("http://user-region-US-sid-") for proxy in proxies))
+        self.assertTrue(all("sid-ABCDEFGH" not in proxy for proxy in proxies))
+        self.assertNotEqual(proxies[0], proxies[1])
+
     def test_batch_runner_honors_ten_requested_workers(self):
         barrier = threading.Barrier(10, timeout=3)
 
