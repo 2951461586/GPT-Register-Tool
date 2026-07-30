@@ -10,6 +10,9 @@ from .paths import project_path, runtime_file
 
 
 EXTRA_COLUMNS = {
+    "batch_id": "TEXT DEFAULT ''",
+    "registration_state": "TEXT DEFAULT ''",
+    "registration_country": "TEXT DEFAULT ''",
     "payment_method": "TEXT DEFAULT 'paypal'",
     "paypal_status": "TEXT DEFAULT ''",
     "paypal_updated_at": "INTEGER DEFAULT 0",
@@ -95,8 +98,29 @@ def init_database(path=None):
             )
         """)
         _ensure_extra_columns(conn)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS registration_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id TEXT DEFAULT '',
+                email TEXT DEFAULT '',
+                state TEXT NOT NULL,
+                error TEXT DEFAULT '',
+                failure_class TEXT DEFAULT '',
+                at_status_code INTEGER DEFAULT 0,
+                token_hash TEXT DEFAULT '',
+                token_iat INTEGER DEFAULT 0,
+                token_exp INTEGER DEFAULT 0,
+                token_age_seconds INTEGER DEFAULT 0,
+                registration_country TEXT DEFAULT '',
+                fingerprint_profile TEXT DEFAULT '',
+                sentinel_version TEXT DEFAULT '',
+                created_at INTEGER NOT NULL,
+                detail_json TEXT DEFAULT ''
+            )
+        """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_accounts_updated_at ON accounts(updated_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_accounts_success ON accounts(success)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_registration_audit_batch ON registration_audit(batch_id, state)")
         conn.commit()
     finally:
         conn.close()
@@ -295,9 +319,15 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "account_deactivated"
     if explicit in {"at_invalid", "access_token_invalid", "token_invalidated"}:
         return "at_invalid"
+    if _looks_account_deactivated(data, paypal):
+        return "account_deactivated"
     failure_class = str(_get(data, "failure_class")).strip().lower()
     if failure_class == "network" and data.get("success") is False:
         return "network_failed"
+    if failure_class == "mailbox" and data.get("success") is False:
+        return "mailbox_failed"
+    if failure_class == "auth_state" and data.get("success") is False:
+        return "auth_state_failed"
     if explicit in {"k12_joined", "k12_requested", "k12_left", "k12_verify_failed"}:
         return explicit
     if _looks_at_invalid(data, paypal):
@@ -344,6 +374,25 @@ def _looks_at_invalid(data, paypal):
     return any(marker in text for marker in markers)
 
 
+def _looks_account_deactivated(data, paypal):
+    text = " ".join(
+        str(value or "")
+        for value in (
+            _get(data, "error"),
+            _get(data, "status"),
+            _get(data, "account_scan_status"),
+            _get(paypal, "error"),
+        )
+    ).lower()
+    return any(marker in text for marker in (
+        "account_deactivated",
+        "account_deatived",
+        "deleted or deactivated",
+        "account has been deleted",
+        "account has been deactivated",
+    ))
+
+
 def _success_value(data, access_token):
     if isinstance(data, dict) and "success" in data:
         return bool(data.get("success"))
@@ -380,7 +429,7 @@ def upsert_account(data, json_path=""):
         data["refresh_token"] = oauth_refresh_token or str(_get(data, "refresh_token")).strip()
         if oauth_refresh_token:
             data["oauth_refresh_token"] = oauth_refresh_token
-    if has_refresh_token and status != "at_invalid" and _get(data, "error"):
+    if has_refresh_token and status not in {"at_invalid", "account_deactivated"} and _get(data, "error"):
         data = dict(data)
         data.pop("error", None)
     raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
@@ -390,7 +439,7 @@ def upsert_account(data, json_path=""):
         "password": str(_get(data, "password")),
         "success": _as_bool(_success_value(data, access_token)),
         "status": status,
-        "error": "" if has_refresh_token else str(_get(data, "error")),
+        "error": "" if has_refresh_token and status != "account_deactivated" else str(_get(data, "error")),
         "session_token": str(_get(data, "session_token")),
         "access_token": access_token,
         "refresh_token": oauth_refresh_token or str(_get(data, "refresh_token")),
@@ -416,6 +465,9 @@ def upsert_account(data, json_path=""):
         "workspace_updated_at": _as_int(_get(data, "workspace_updated_at")) or _as_int(_get(workspace, "updated_at")),
         "account_type": str(_get(data, "account_type") or _get(workspace, "account_type_after")),
         "quota_status": str(_get(data, "quota_status") or (quota.get("status", "") if isinstance(quota, dict) else "")),
+        "batch_id": str(_get(data, "batch_id")),
+        "registration_state": str(_get(data, "registration_state") or ("active" if _get(data, "success") else "failed")),
+        "registration_country": str(_get(data, "registration_country")),
         "mailbox_provider": str(_get(mailbox, "provider") or _get(purchase, "provider")),
         "mailbox_source": str(_get(mailbox, "source") or _get(purchase, "source")),
         "mailbox_token": str(_get(mailbox, "token")),
@@ -451,7 +503,59 @@ def upsert_account(data, json_path=""):
         conn.commit()
     finally:
         conn.close()
+    if status == "account_deactivated" and row["mailbox_provider"].strip().lower() == "remail":
+        try:
+            from .mailbox_remail import record_dead_remail_account
+
+            record_dead_remail_account(data, reason="account_deactivated")
+        except Exception as exc:
+            print(f"[!] Failed to update ReMail dead-account history: {exc}")
     return True
+
+
+def record_registration_audit(data, *, batch_id="", state=""):
+    """Persist a token-free registration candidate/failure audit event."""
+    if not isinstance(data, dict):
+        return False
+    response = data.get("response") if isinstance(data.get("response"), dict) else {}
+    probe = response.get("access_token_probe") if isinstance(response.get("access_token_probe"), dict) else {}
+    telemetry = data.get("access_token_telemetry") if isinstance(data.get("access_token_telemetry"), dict) else {}
+    registration_state = str(state or data.get("registration_state") or ("active" if data.get("success") else "failed"))
+    email = _normalize_account_email(data.get("email") or "")
+    error = str(data.get("error") or "")[:800]
+    detail = {
+        "registration_warning": str(data.get("registration_warning") or "")[:500],
+        "probe_error": str(probe.get("error") or "")[:500],
+        "probe_status": str(probe.get("status") or "")[:80],
+        "registration_attempts": _as_int(data.get("registration_attempts")),
+        "terminal": "account_deactivated" in error.lower(),
+    }
+    init_database()
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT INTO registration_audit (
+                batch_id,email,state,error,failure_class,at_status_code,token_hash,
+                token_iat,token_exp,token_age_seconds,registration_country,
+                fingerprint_profile,sentinel_version,created_at,detail_json
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                str(batch_id or data.get("batch_id") or "")[:100], email, registration_state,
+                error, str(data.get("failure_class") or "")[:80], _as_int(probe.get("status_code")),
+                str(telemetry.get("token_hash") or "")[:32], _as_int(telemetry.get("iat")),
+                _as_int(telemetry.get("exp")), _as_int(telemetry.get("age_seconds")),
+                str(data.get("registration_country") or "")[:8],
+                str(data.get("auth_fingerprint_profile") or "")[:80],
+                str(data.get("sentinel_version") or "")[:80], int(time.time()),
+                json.dumps(detail, ensure_ascii=False, separators=(",", ":")),
+            ),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
 
 def list_paypal_accounts(email=""):
@@ -495,6 +599,39 @@ def get_account_record(email):
     finally:
         conn.close()
     return dict(row) if row else {}
+
+
+def list_terminal_remail_accounts():
+    init_database()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT email,purchase_id,raw_json
+            FROM accounts
+            WHERE lower(mailbox_provider)='remail'
+              AND (
+                lower(status) IN ('account_deactivated','account_deatived')
+                OR lower(error) LIKE '%account_deactivated%'
+                OR lower(error) LIKE '%account_deatived%'
+                OR lower(raw_json) LIKE '%account_deactivated%'
+                OR lower(raw_json) LIKE '%account_deatived%'
+              )
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+    results = []
+    for row in rows:
+        item = {"email": row["email"], "purchase_id": row["purchase_id"]}
+        try:
+            raw = json.loads(row["raw_json"] or "{}")
+            mailbox = raw.get("mailbox") if isinstance(raw, dict) and isinstance(raw.get("mailbox"), dict) else {}
+            item["order_no"] = str(mailbox.get("order_no") or "")
+        except Exception:
+            item["order_no"] = ""
+        results.append(item)
+    return results
 
 
 # ── Status Update Operations ─────────────────────────────────────────────────

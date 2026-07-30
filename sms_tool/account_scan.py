@@ -14,6 +14,7 @@ from pathlib import Path
 from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 from .codex_oauth import collect_codex_oauth_tokens
 from .cpa_import import (
+    _account_is_permanently_deactivated,
     probe_local_codex_quota,
     refresh_local_quota_statuses,
     relogin_codex_account,
@@ -155,6 +156,22 @@ def _scan_one(
     data, json_path = _load_seed_session(email=email, session_file=session_file)
     data.setdefault("email", email)
 
+    if _account_is_permanently_deactivated(data):
+        result = _result(
+            index,
+            email,
+            "account_deactivated",
+            False,
+            bool(_openai_refresh_token(data, data.get("auth_session") or {})),
+            _has_verified_phone(data),
+            started=started,
+        )
+        result["terminal"] = True
+        result["skipped_relogin"] = True
+        _persist_scan(data, json_path, result)
+        print(f"[DEACTIVATED] {email}; terminal account skipped")
+        return result
+
     token_probe = _probe_existing_access_token(data, proxy=proxy, timeout=timeout)
     auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
     refresh_token = _openai_refresh_token(data, auth_session)
@@ -163,7 +180,8 @@ def _scan_one(
     refresh_result = {"ok": False, "mode": "none", "error": "missing_refresh_token"}
     relogin_result = {}
 
-    if refresh_token:
+    recovering_401 = quota_relogin_on_401 and _token_probe_is_invalid(token_probe)
+    if refresh_token and not recovering_401:
         refresh_result = _refresh_with_openai_oauth(data, refresh_token, proxy=proxy)
         if refresh_result.get("ok"):
             data.update(refresh_result.get("data") or {})
@@ -188,7 +206,7 @@ def _scan_one(
         else:
             print(f"[!] {email} RT refresh failed: {refresh_result.get('error', 'unknown')}")
 
-    if quota_relogin_on_401 and not refresh_result.get("ok") and _token_probe_is_invalid(token_probe):
+    if recovering_401:
         relogin_result, data, json_path, token_probe = _attempt_scan_relogin(
             email=email,
             data=data,
@@ -761,8 +779,8 @@ def _attempt_scan_relogin(email, data, json_path="", proxy=None, timeout=120, fa
     account["email"] = email
     if json_path:
         account["json_path"] = json_path
-    relogin_mode = _normalize_relogin_mode(relogin_mode)
-    print(f"[*] {email} AT invalid; trying {relogin_mode} relogin to refresh AT...")
+    relogin_mode = "codex_oauth"
+    print(f"[*] {email} AT invalid; trying email-OTP OAuth to refresh AT...")
     relogin = relogin_codex_account(
         account,
         proxy=proxy,
@@ -774,7 +792,7 @@ def _attempt_scan_relogin(email, data, json_path="", proxy=None, timeout=120, fa
         refreshed = dict(refreshed or {})
         refreshed.setdefault("email", email)
         if str(refreshed.get("access_token") or "").strip():
-            refreshed_probe = _probe_existing_access_token(refreshed, proxy=proxy, timeout=timeout)
+            refreshed_probe = dict(relogin.get("probe") or {})
             return relogin, refreshed, (refreshed_json_path or json_path), refreshed_probe
         relogin = dict(relogin)
         relogin["ok"] = False

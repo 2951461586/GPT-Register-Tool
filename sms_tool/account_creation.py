@@ -3,7 +3,7 @@ import re
 import time
 
 from .codex_sentinel import load_cached_sentinel, with_sentinel
-from .auth_headers import openai_auth_headers
+from .auth_headers import auth_impersonate, openai_auth_headers
 from .config import CFG
 from .http_client import request_with_retry
 from .sentinel_tokens import _extract_sentinel_http
@@ -18,12 +18,16 @@ def _create_account_sentinel_token(sentinel_data, proxy=None):
     # oauth_create_account, so try one direct protocol refresh before falling
     # back to the legacy token.
     #
-    # NOTE: Do NOT mutate the caller's sentinel_data dict.  In batch mode the
-    # dict may be shared or reused across threads; updating it with a refreshed
-    # token (which carries a different device_id) would break the device_id
-    # alignment for subsequent requests in the same worker.
+    # Refresh with the same device ID. A valid token from a different Sentinel
+    # transaction would invalidate the auth state at create_account.
+    did = str((sentinel_data or {}).get("oai_did") or "").strip()
+    if not did:
+        try:
+            did = str(json.loads(str((sentinel_data or {}).get("sentinel_token") or "{}")).get("id") or "").strip()
+        except Exception:
+            did = ""
     try:
-        refreshed = _extract_sentinel_http(proxy=proxy)
+        refreshed = _extract_sentinel_http(proxy=proxy, persist=False, device_id=did or None)
         if refreshed and refreshed.get("sentinel_oauth_token"):
             return refreshed["sentinel_oauth_token"]
     except Exception as exc:
@@ -39,7 +43,7 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     if referer:
         headers["Referer"] = referer
     r = request_with_retry(session, "get", full_url, label=label,
-        headers=headers, impersonate="chrome")
+        headers=headers, impersonate=auth_impersonate())
     print(f"  {label}: {r.status_code} {r.url}")
     return r
 
@@ -95,7 +99,7 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
     # Try primary endpoint first with {"code": payload (matches codex_oauth)
     url = _absolute_url(auth_base, primary_endpoint)
     r = request_with_retry(session, "post", url, label=f"Email OTP validate {primary_endpoint}",
-        json={"code": code}, headers=validate_headers, impersonate="chrome")
+        json={"code": code}, headers=validate_headers, impersonate=auth_impersonate())
     body = _json_or_raw(r)
     if r.status_code == 200:
         print(f"  Email OTP validate: {primary_endpoint} {r.status_code}")
@@ -108,7 +112,7 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
             url = _absolute_url(auth_base, endpoint)
             for payload in ({"code": code}, {"otp": code}):
                 r = request_with_retry(session, "post", url, label=f"Email OTP validate {endpoint}",
-                    json=payload, headers=validate_headers, impersonate="chrome")
+                    json=payload, headers=validate_headers, impersonate=auth_impersonate())
                 body = _json_or_raw(r)
                 if r.status_code == 200:
                     print(f"  Email OTP validate: {endpoint} {r.status_code}")
@@ -184,7 +188,7 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=6, delay=2.0)
     for attempt in range(1, max(1, int(attempts or 1)) + 1):
         r = request_with_retry(session, "get", f"{chat_base}/api/auth/session", label="Auth session",
             headers={**base_headers, "Accept": "application/json", "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate="chrome")
+            impersonate=auth_impersonate())
         body = _json_or_raw(r, limit=1000)
         last = {
             "status_code": r.status_code,

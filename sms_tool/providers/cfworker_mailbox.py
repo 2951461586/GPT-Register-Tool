@@ -175,10 +175,10 @@ class CFWorkerMailboxClient:
                     data=json.dumps(json_body or {}),
                     proxies=proxies,
                     timeout=self.timeout,
-                    impersonate="chrome",
+                    impersonate="chrome124",
                 )
             else:
-                response = curl_requests.get(url, headers=headers, proxies=proxies, timeout=self.timeout, impersonate="chrome")
+                response = curl_requests.get(url, headers=headers, proxies=proxies, timeout=self.timeout, impersonate="chrome124")
             if allow_404 and response.status_code == 404:
                 return {"ok": False, "error": "not_found"}
             try:

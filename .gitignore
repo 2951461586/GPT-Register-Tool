@@ -27,6 +27,8 @@ runtime/**/*.log
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/
+tests/**/bin/
+tests/**/obj/
 
 .vs/
 .idea/
@@ -34,3 +36,6 @@ SmsWorkbench/obj/
 scripts/installer/bin/
 scripts/installer/obj/
 scripts/installer/payload.zip
+
+/.retention.*.log
+/nul

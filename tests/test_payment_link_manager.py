@@ -182,6 +182,28 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(result["link_type"], "momo_protocol_qr")
         self.assertEqual(result["manager_state"], "completed")
 
+    def test_kakao_nonzero_json_contract_survives_nonzero_exit(self):
+        failed = subprocess.CompletedProcess(
+            args=[],
+            returncode=3,
+            stdout=(
+                '{"ok":false,"payment_method":"kakao","decision":"nonzero_offer",'
+                '"stage":"stripe_init","amount_due":29000,"currency":"KRW",'
+                '"has_kakao":true,"url":"","attempts":1,"error":"nonzero"}\n'
+            ),
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=failed):
+                    result = manager.generate_payment_link(
+                        "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
+                    )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["decision"], "nonzero_offer")
+        self.assertEqual(result["amount_due"], 29000)
+        self.assertEqual(result["manager_state"], "failed")
+
     def test_completed_status_does_not_bypass_artifact_validation_for_other_methods(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):

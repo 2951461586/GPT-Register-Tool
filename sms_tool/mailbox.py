@@ -106,6 +106,19 @@ def _resolve_mailbox_proxy(proxy=None):
     return _configured_mailbox_proxy() or _normalize_mailbox_proxy(proxy)
 
 
+def _provider_otp_issued_after(mailbox, issued_after_unix):
+    issued_after_unix = int(issued_after_unix or 0)
+    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
+    defaults = {"remail": 90, "cfworker": 10}
+    if provider not in defaults:
+        return issued_after_unix
+    try:
+        grace = int(_email_cfg().get(f"{provider}_otp_issued_after_grace_seconds", defaults[provider]))
+    except (TypeError, ValueError):
+        grace = defaults[provider]
+    return max(0, issued_after_unix - min(max(0, grace), 300))
+
+
 def _snapshot_mailbox_message(mailbox, proxy=None):
     provider = getattr(mailbox, "provider", "")
     if provider in {"cfworker", "remail"}:
@@ -270,23 +283,23 @@ def _load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
     if getattr(args, "buy_remail_mailbox", False):
         mode = getattr(args, "remail_service_mode", None) or "purchase"
-        return mailbox_remail._create_remail_mailboxes(args, service_mode=mode)
-    if getattr(args, "remail_service_mode", None):
-        return mailbox_remail._create_remail_mailboxes(args, service_mode=args.remail_service_mode)
-    if getattr(args, "buy_cfworker_mailbox", False):
-        return _create_cfworker_mailboxes(args)
-    chatai_file = getattr(args, "chatai_mailbox_file", None)
-    if chatai_file:
-        return _parse_chatai_mailbox_file(chatai_file)
-    mailbox_file = getattr(args, "mailbox_file", None)
-    if mailbox_file:
-        return _parse_mailbox_token_file(mailbox_file)
-    direct = _mailbox_from_config(args)
-    if direct:
-        return [direct]
-    configured = _email_cfg().get("token_file")
-    token_file = configured or _default_nb_register_token_file()
-    return _parse_mailbox_token_file(token_file)
+        pool = mailbox_remail._create_remail_mailboxes(args, service_mode=mode)
+    elif getattr(args, "remail_service_mode", None):
+        pool = mailbox_remail._create_remail_mailboxes(args, service_mode=args.remail_service_mode)
+    elif getattr(args, "buy_cfworker_mailbox", False):
+        pool = _create_cfworker_mailboxes(args)
+    elif getattr(args, "chatai_mailbox_file", None):
+        pool = _parse_chatai_mailbox_file(args.chatai_mailbox_file)
+    elif getattr(args, "mailbox_file", None):
+        pool = _parse_mailbox_token_file(args.mailbox_file)
+    else:
+        direct = _mailbox_from_config(args)
+        if direct:
+            pool = [direct]
+        else:
+            configured = _email_cfg().get("token_file")
+            pool = _parse_mailbox_token_file(configured or _default_nb_register_token_file())
+    return mailbox_remail.filter_dead_remail_mailboxes(pool)
 
 
 def _pick_mailbox(index=0, args=None):
@@ -298,7 +311,8 @@ def _pick_mailbox(index=0, args=None):
 
 def _ensure_mailbox_account(mailbox=None):
     if mailbox:
-        return mailbox
+        filtered = mailbox_remail.filter_dead_remail_mailboxes([mailbox])
+        return filtered[0] if filtered else None
     if _remail_enabled():
         return mailbox_remail._create_remail_order(service_mode="code")
     return None
@@ -473,11 +487,11 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None, include_body=False):
             "Prefer": 'outlook.body-content-type="text"',
         }
         proxies = {"http": proxy, "https": proxy} if proxy else None
-        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
         if r.status_code in (401, 403):
             token = _ms_oauth_refresh(mailbox, proxy=proxy)
             headers["Authorization"] = "Bearer " + token
-            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
         try:
             body = r.json()
         except Exception:
@@ -523,6 +537,17 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None, include_body=False):
 def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None, excluded_otps=None):
     provider = str(getattr(mailbox, "provider", "") or "")
 
+    if provider == "remail":
+        return mailbox_remail._poll_remail_otp(
+            mailbox,
+            subject_keyword=subject_keyword,
+            timeout=timeout,
+            issued_after_unix=_provider_otp_issued_after(mailbox, issued_after_unix),
+            proxy=_resolve_mailbox_proxy(proxy),
+            excluded_otps=excluded_otps,
+            poll_interval=None,
+        )
+
     # ── chongzhi.art OTP polling ──
     # If the mailbox has a password and chongzhi is enabled, poll via API first.
     if provider == "chongzhi" or (mailbox_chongzhi.chongzhi_enabled(_email_cfg()) and getattr(mailbox, "password", "")):
@@ -535,25 +560,12 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
                 issued_after_unix=issued_after_unix, proxy=proxy,
             )
 
-        if getattr(mailbox, "provider", "") == "remail":
-            return mailbox_remail._poll_remail_otp(
-                mailbox,
-                subject_keyword=subject_keyword,
-                timeout=timeout,
-                issued_after_unix=issued_after_unix,
-                proxy=_resolve_mailbox_proxy(proxy),
-                excluded_otps=excluded_otps,
-                # ReMail uses its own faster poll interval (1s default) via
-                # _remail_otp_poll_interval(); pass None to let it use that
-                # instead of the global 2s _otp_poll_interval().
-                poll_interval=None,
-            )
-    if getattr(mailbox, "provider", "") == "cfworker":
+    if provider == "cfworker":
         return _poll_cfworker_otp(
             mailbox,
             subject_keyword=subject_keyword,
             timeout=timeout,
-            issued_after_unix=issued_after_unix,
+            issued_after_unix=_provider_otp_issued_after(mailbox, issued_after_unix),
             proxy=proxy,
             excluded_otps=excluded_otps,
         )
@@ -743,11 +755,11 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
             "Prefer": 'outlook.body-content-type="text"',
         }
         proxies = {"http": proxy, "https": proxy} if proxy else None
-        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
         if r.status_code in (401, 403):
             token = _ms_oauth_refresh(mailbox, proxy=proxy)
             headers["Authorization"] = "Bearer " + token
-            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome", timeout=30)
+            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
         try:
             body = r.json()
         except Exception:

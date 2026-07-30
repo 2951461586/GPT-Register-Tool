@@ -114,7 +114,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 - 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱和 SMSBower 手机号注册。
 - 支持单账号与并发批量注册。
-- 批量注册模式下预提取 Sentinel Token 并在所有 worker 间共享，避免并发请求 `sentinel.openai.com` 触发限流；`_extract_sentinel` 内部使用线程锁序列化提取，锁内二次检查缓存。
+- 每个注册账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；`_extract_sentinel` 默认允许 2 路并发提取（`sentinel_max_concurrency`，上限 4），兼顾批次速度与 Sentinel 限流风险。
 - 支持仅注册并保存 AT，或继续生成支付链接。
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
 - 注册、OTP、Session 获取、Codex OAuth 和支付提链分别记录阶段结果，避免把中间状态误报为成功。
@@ -124,6 +124,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 一键注册来源中提供 `ReMail（短效接码）` 和 `ReMail（长效邮箱）`。
 - 支持 `code` 短效接码和 `purchase` 长效邮箱。
 - 支持单笔或批量创建邮箱订单。
+- 百账号批量下单默认按每个邮箱 2 秒扩展 HTTP 等待时间（至少 30 秒），可通过 `email_registration.remail.batch_timeout` 覆盖。
 - 支持 `private_first`、`public_only` 库存策略。
 - 支持指定项目、产品和邮箱后缀。
 - 使用 `Idempotency-Key` 防止重试导致重复订单。
@@ -134,6 +135,10 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 桌面端可从 ReMail 注册记录打开收件箱；查看模式会读取邮件完整正文和验证码。
 - 日志会脱敏 API Key 和 Service Token。
 - 自适应 OTP 轮询：初始延迟 1s，渐进退避（1s → 1.5s → 3s），根据邮件到达状态和服务器限流建议动态调整轮询间隔，减少无效请求。
+- ReMail 收件时间允许默认 90s 的服务端时钟偏差；消息 ID 快照仍会阻止旧验证码被重复使用。
+- ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
+- 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
+- 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
 
 ### 统一邮箱与 OTP
 
@@ -266,8 +271,13 @@ services/
       "product_id": 5,
       "service_mode": "code",
       "supply": "private_first",
-      "email_suffix": "outlook.com"
-    }
+      "email_suffix": "outlook.com",
+      "otp_poll_interval": 1,
+      "batch_timeout": 200
+    },
+    "sentinel_max_concurrency": 2,
+    "remail_otp_issued_after_grace_seconds": 90,
+    "remail_otp_resend_after_seconds": 30
   }
 }
 ```
@@ -285,7 +295,7 @@ services/
 }
 ```
 
-注册 worker 会刷新动态 Session；邮箱 OTP 收取仍固定走 `mailbox_proxy`，不会继承注册代理。
+注册流量走 JP 动态代理（`proxy.registration` / `proxy.pool`），worker 会刷新动态 Session 使各并发出口 IP 不同；邮箱 OTP 收取固定走 `mailbox_proxy`（默认 `http://127.0.0.1:7897`），不会继承注册代理；支付流量走独立的 `paypal.stage_proxies` / `protocol_payments.proxy_pool`。三者互不覆盖，详情可在桌面端 **设置 → 网络与支付** 的网络代理配置中查看和修改。
 
 ### 协议支付代理池
 

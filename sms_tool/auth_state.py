@@ -7,6 +7,7 @@ sensitive or how the nested auth-state payload is shaped.
 
 import json
 
+from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
 
 
@@ -92,7 +93,7 @@ def fetch_client_auth_session_dump(session, auth_base, base_headers, stage=""):
             f"{auth_base}/api/accounts/client_auth_session_dump",
             label=f"client_auth_session_dump {stage or 'default'}",
             headers={**base_headers, "Accept": "application/json", "Referer": f"{auth_base}/email-verification"},
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
     except Exception as exc:
         print(f"  client_auth_session_dump[{stage or 'default'}] warning: {exc}")

@@ -465,7 +465,7 @@ def _try_oauth_refresh_token(email, json_path, proxy=None, stale_access_token=""
                 "Content-Type": "application/x-www-form-urlencoded",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
             },
-            impersonate="chrome",
+            impersonate="chrome124",
             timeout=30,
         )
         body = response.json() if response.text else {}

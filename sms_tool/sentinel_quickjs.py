@@ -41,8 +41,22 @@ logger = logging.getLogger(__name__)
 
 
 SENTINEL_VERSION = "20260219f9f6"
-SENTINEL_SDK_URL = f"https://sentinel.openai.com/sentinel/{SENTINEL_VERSION}/sdk.js"
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
+
+
+def sentinel_version() -> str:
+    configured = str(os.getenv("OPENAI_SENTINEL_VERSION", "") or "").strip()
+    if not configured:
+        try:
+            from .config import CFG
+
+            email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+            configured = str(email_cfg.get("sentinel_version") or CFG.get("sentinel_version") or "").strip()
+        except Exception:
+            configured = ""
+    if configured and all(char.isalnum() or char in {"-", "_"} for char in configured):
+        return configured
+    return SENTINEL_VERSION
 
 
 def _resolve_node_binary() -> str:
@@ -55,14 +69,15 @@ def _quickjs_script_path() -> Path:
 
 def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
     """Download OpenAI's actual sdk.js to /tmp cache (one-shot per version)."""
-    cache_dir = Path(tempfile.gettempdir()) / "openai-sentinel-demo" / SENTINEL_VERSION
+    version = sentinel_version()
+    cache_dir = Path(tempfile.gettempdir()) / "openai-sentinel-demo" / version
     cache_dir.mkdir(parents=True, exist_ok=True)
     sdk_file = cache_dir / "sdk.js"
     if sdk_file.exists() and sdk_file.stat().st_size > 0:
         return sdk_file
 
     resp = session.get(
-        SENTINEL_SDK_URL,
+        f"https://sentinel.openai.com/sentinel/{version}/sdk.js",
         headers={
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9",
@@ -172,7 +187,7 @@ def _fetch_sentinel_challenge(
         data=json.dumps(body, separators=(",", ":")),
         headers={
             "origin": "https://sentinel.openai.com",
-            "referer": f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={SENTINEL_VERSION}",
+            "referer": f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={sentinel_version()}",
             "content-type": "text/plain;charset=UTF-8",
             "accept": "*/*",
             "accept-encoding": "gzip, deflate, br, zstd",

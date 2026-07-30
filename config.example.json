@@ -19,12 +19,22 @@
   "registration": {
     "password_random_length": 12,
     "password_suffix": "!A1",
-    "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "retry_attempts": 2,
+    "retry_delay_seconds": 1,
+    "at_stability_probe_count": 2,
+    "at_stability_probe_delay_seconds": 10,
+    "at_probe_timeout_seconds": 30,
+    "stage_concurrency": { "network": 4, "at_probe": 4, "payment": 2 }
   },
   "email_registration": {
     "registration_mode": "passwordless",
     "use_as_username": false,
     "token_file": "mailbox_tokens.txt",
+    "auth_fingerprint": {
+      "mode": "rotate",
+      "profiles": ["chrome124", "chrome131", "chrome136", "chrome142"]
+    },
     "remail": {
       "enabled": false,
       "base_url": "https://remail.aishop6.com",
@@ -33,9 +43,21 @@
       "product_id": 5,
       "service_mode": "code",
       "supply": "private_first",
-      "email_suffix": "outlook.com"
+        "email_suffix": "outlook.com",
+        "otp_poll_interval": 1,
+        "batch_timeout": 200,
+        "exclude_dead_history": true,
+        "dead_registry_file": "runtime/remail_dead_accounts.json",
+        "supplier_dead_rate_stop_threshold": 0.25
     },
     "otp_poll_interval": 2,
+    "sentinel_version": "20260219f9f6",
+    "sentinel_max_concurrency": 2,
+    "sentinel_prewarm_window": 4,
+    "sentinel_circuit_failures": 3,
+    "sentinel_circuit_cooldown_seconds": 60,
+    "remail_otp_issued_after_grace_seconds": 90,
+    "remail_otp_resend_after_seconds": 30,
     "cfworker_otp_settle_seconds": 3,
     "cfworker_timeout_seconds": 30,
     "cfworker_otp_issued_after_grace_seconds": 10,
@@ -257,6 +279,17 @@
     "reference_root": "services/protocol-payment",
     "state_file": "runtime/payment_link_runs.jsonl",
     "timeout_seconds": 900,
+    "batch": {
+      "method_workers": { "momo": 2, "kakao": 2, "paypal": 4 },
+      "pause_on_canary_failure": true,
+      "canary_pause_seconds": 21600
+    },
+    "matrix": {
+      "cells": [
+          { "name": "vn_sticky", "payment_method": "momo", "registration_country": "VN", "checkout_country": "VN", "promotion_country": "VN", "provider_country": "VN", "approve_country": "VN", "redirect_country": "VN", "strategy": "custom_promo", "sample_size": 5 },
+          { "name": "kr_kakao", "payment_method": "kakao", "registration_country": "KR", "checkout_country": "KR", "promotion_country": "VN", "provider_country": "KR", "approve_country": "KR", "redirect_country": "KR", "sample_size": 5 }
+      ]
+    },
     "methods": {
       "ideal": { "proxy": "", "timeout_seconds": 900 },
       "pix": { "proxy": "", "timeout_seconds": 900 },
@@ -264,7 +297,20 @@
       "blik": { "proxy": "", "timeout_seconds": 900 },
       "twint": { "proxy": "", "timeout_seconds": 900 },
       "direct_card": { "proxy": "", "timeout_seconds": 900, "currency": "", "promo_campaign_id": "plus-1-month-free" },
-      "momo": { "proxy": "", "timeout_seconds": 900, "request_timeout_seconds": 25, "pre_proxy": "off", "max_proxies": 1 }
+      "momo": {
+        "proxy": "",
+        "timeout_seconds": 900,
+        "request_timeout_seconds": 25,
+        "pre_proxy": "off",
+        "max_proxies": 1,
+        "strategy": "custom_promo",
+        "stripe_profile": {
+          "api_version": "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1",
+          "runtime_version": "fed52f3bc6",
+          "client_betas": ["custom_checkout_server_updates_1", "custom_checkout_manual_approval_1"],
+          "confirm_fields": {}
+        }
+      }
     }
   },
   "runtime": {

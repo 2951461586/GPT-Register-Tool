@@ -459,18 +459,27 @@ def refresh_local_quota_statuses(
 
     def _run(index, account):
         email = str(account.get("email") or "").strip()
-        probe = probe_local_codex_quota(account, proxy=proxy, timeout=timeout)
+        if _account_is_permanently_deactivated(account):
+            probe = {
+                "ok": False,
+                "mode": "local",
+                "status": "account_deactivated",
+                "quota_status": "account_deactivated",
+                "error": "account_deactivated",
+                "terminal": True,
+            }
+        else:
+            probe = probe_local_codex_quota(account, proxy=proxy, timeout=timeout)
         relogin = {}
         if relogin_on_401 and str(probe.get("status") or "") == "token_invalid" and email:
             relogin = relogin_codex_account(
                 account,
                 proxy=proxy,
                 timeout=max(int(relogin_timeout or timeout or 180), int(timeout or 30)),
-                mode=relogin_mode,
+                mode="codex_oauth",
             )
             if relogin.get("ok"):
-                refreshed_account = _local_account_data(get_account_record(email))
-                probe = probe_local_codex_quota(refreshed_account, proxy=proxy, timeout=timeout)
+                probe = dict(relogin.get("probe") or {})
         status = str(probe.get("quota_status") or probe.get("status") or "未知")
         if relogin and not relogin.get("ok"):
             status = _relogin_failure_quota_status(relogin)
@@ -529,29 +538,38 @@ def relogin_web_session_account(account, proxy=None, timeout=180):
 
 
 def relogin_codex_account(account, proxy=None, timeout=180, mode="auto"):
-    """Refresh AT using web session first by default, with Codex OAuth fallback."""
+    """Refresh AT with email-OTP OAuth; web-session mode remains manual-only."""
+    if _account_is_permanently_deactivated(account):
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "account_deactivated",
+            "terminal": True,
+            "skipped": True,
+        }
     mode = _normalize_relogin_mode(mode)
-    web_attempt = {}
-    if mode in {"auto", "web_session"}:
-        web_attempt = relogin_web_session_account(account, proxy=proxy, timeout=timeout)
-        if web_attempt.get("ok") or mode == "web_session":
-            return web_attempt
-    oauth_attempt = relogin_local_codex_account(account, proxy=proxy, timeout=timeout)
-    if web_attempt:
-        oauth_attempt = dict(oauth_attempt or {})
-        oauth_attempt["web_session_attempt"] = web_attempt
-    return oauth_attempt
+    if mode == "web_session":
+        return relogin_web_session_account(account, proxy=proxy, timeout=timeout)
+    return relogin_local_codex_account(account, proxy=proxy, timeout=timeout)
 
 
 def relogin_local_codex_account(account, proxy=None, timeout=180):
-    """Run the existing passwordless/email-OTP OAuth login and persist fresh tokens."""
+    """Acquire an AT by email OTP, probe it, then persist only an HTTP-200 AT."""
     if not isinstance(account, dict):
         return {"ok": False, "error": "invalid_account"}
     email = str(account.get("email") or "").strip().lower()
     if not email:
         return {"ok": False, "error": "missing_email"}
+    if _account_is_permanently_deactivated(account):
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "account_deactivated",
+            "terminal": True,
+            "skipped": True,
+        }
     try:
-        from .codex_oauth import refresh_codex_oauth_session
+        from .codex_oauth import _save_oauth_tokens, refresh_codex_oauth_session
 
         data = dict(account)
         data["email"] = email
@@ -563,12 +581,119 @@ def relogin_local_codex_account(account, proxy=None, timeout=180):
             force_email_otp_login=True,
             phone_pool=None,
             phone_probe_only=True,
+            persist=False,
         )
-        safe = {key: value for key, value in result.items() if key not in {"tokens", "access_token", "id_token", "refresh_token"}}
-        safe["ok"] = bool(result.get("ok"))
+        if not result.get("ok"):
+            if _looks_account_deactivated(result):
+                _persist_permanent_deactivation(data, result)
+            safe = _safe_relogin_result(result)
+            safe["ok"] = False
+            return safe
+
+        tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+        candidate_at = str(tokens.get("access_token") or "").strip()
+        if not candidate_at:
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": "oauth_missing_access_token",
+                "persisted": False,
+            }
+        candidate = dict(data)
+        candidate["access_token"] = candidate_at
+        candidate["id_token"] = str(tokens.get("id_token") or "").strip()
+        probe = probe_local_codex_quota(candidate, proxy=proxy, timeout=min(max(10, int(timeout or 30)), 60))
+        if int(probe.get("status_code") or 0) != 200:
+            safe = _safe_relogin_result(result)
+            safe.update({
+                "ok": False,
+                "error": f"oauth_access_token_probe_failed:{probe.get('status_code') or 'unknown'}",
+                "probe": probe,
+                "persisted": False,
+            })
+            return safe
+
+        saved = _save_oauth_tokens(
+            data,
+            str(account.get("json_path") or ""),
+            tokens,
+            email,
+            "codex_oauth_pkce",
+            result=result,
+        )
+        safe = _safe_relogin_result(saved)
+        safe.update({"ok": True, "probe": probe, "persisted": True})
         return safe
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _safe_relogin_result(result):
+    return {
+        key: value
+        for key, value in dict(result or {}).items()
+        if key not in {"tokens", "access_token", "id_token", "refresh_token"}
+    }
+
+
+def _looks_account_deactivated(value):
+    text = json.dumps(value or {}, ensure_ascii=False).lower()
+    return any(marker in text for marker in (
+        "account_deactivated",
+        "account_deatived",
+        "deleted or deactivated",
+        "account has been deleted",
+        "account has been deactivated",
+    ))
+
+
+def _account_is_permanently_deactivated(account):
+    if not isinstance(account, dict):
+        return False
+    values = [
+        account.get("status"),
+        account.get("error"),
+        account.get("account_scan_status"),
+    ]
+    terminal = account.get("terminal_failure")
+    if isinstance(terminal, dict):
+        values.extend((terminal.get("code"), terminal.get("reason")))
+    raw_json = str(account.get("raw_json") or "").strip()
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+            if isinstance(parsed, dict):
+                values.extend((parsed.get("status"), parsed.get("error"), parsed.get("account_scan_status")))
+        except Exception:
+            pass
+    return _looks_account_deactivated(values)
+
+
+def _persist_permanent_deactivation(account, result=None):
+    data = _local_account_data(account)
+    email = str(data.get("email") or "").strip().lower()
+    if not email:
+        return False
+    now = int(time.time())
+    data.update({
+        "email": email,
+        "success": False,
+        "status": "account_deactivated",
+        "error": "account_deactivated",
+        "account_scan_status": "account_deactivated",
+        "terminal_failure": {
+            "code": "account_deactivated",
+            "reason": "account_deactivated",
+            "updated_at": now,
+        },
+    })
+    json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
+    if json_path:
+        try:
+            Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+    return upsert_account(data, json_path=json_path)
 
 
 def _normalize_relogin_mode(value):

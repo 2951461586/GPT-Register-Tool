@@ -6,31 +6,51 @@ import uuid
 from curl_cffi import requests as curl_requests
 
 from .codex_sentinel import import_cookie_header
+from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
 from .paths import runtime_file
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
+# Guards reads/writes of the shared sentinel cache file. Batch workers can reach
+# _save_sentinel_cache concurrently (e.g. a mid-flow oauth-token refresh), so
+# serialize file access to avoid interleaved writes and torn reads.
+_sentinel_cache_lock = threading.Lock()
+_sentinel_metrics_lock = threading.Lock()
+_sentinel_metrics = {
+    "requests": 0,
+    "success": 0,
+    "failure": 0,
+    "fallbacks": 0,
+    "queue_wait_ms": 0.0,
+    "duration_ms": 0.0,
+    "providers": {},
+}
+_sentinel_provider_health: dict[str, dict[str, float]] = {}
+
 def _get_cached_sentinel(force_fresh=False):
     if force_fresh: return None
-    if SENTINEL_CACHE_FILE.exists():
-        try:
-            with open(SENTINEL_CACHE_FILE) as f: cache = json.load(f)
-            age = time.time() - cache.get("ts", 0)
-            ttl = int((CFG.get("timeouts") or {}).get("token_cache_ttl", 600) or 600)
-            if age < ttl and cache.get("sentinel_token"):
-                print(f"[*] Using cached sentinel token (age: {age:.0f}s)")
-                return cache
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-            print(f"  [!] Sentinel cache read failed: {exc}")
+    with _sentinel_cache_lock:
+        if SENTINEL_CACHE_FILE.exists():
+            try:
+                with open(SENTINEL_CACHE_FILE) as f: cache = json.load(f)
+                age = time.time() - cache.get("ts", 0)
+                ttl = int((CFG.get("timeouts") or {}).get("token_cache_ttl", 600) or 600)
+                if age < ttl and cache.get("sentinel_token"):
+                    print(f"[*] Using cached sentinel token (age: {age:.0f}s)")
+                    return cache
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                print(f"  [!] Sentinel cache read failed: {exc}")
     return None
 
 def _save_sentinel_cache(data):
-    data["ts"] = time.time()
-    tmp_path = SENTINEL_CACHE_FILE.with_name(f"{SENTINEL_CACHE_FILE.name}.{uuid.uuid4().hex}.tmp")
-    with open(tmp_path, "w") as f:
-        json.dump(data, f, ensure_ascii=False)
-    tmp_path.replace(SENTINEL_CACHE_FILE)
+    payload = dict(data or {})
+    payload["ts"] = time.time()
+    with _sentinel_cache_lock:
+        tmp_path = SENTINEL_CACHE_FILE.with_name(f"{SENTINEL_CACHE_FILE.name}.{uuid.uuid4().hex}.tmp")
+        with open(tmp_path, "w") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        tmp_path.replace(SENTINEL_CACHE_FILE)
     print(f"[*] Sentinel token cached")
 
 
@@ -105,6 +125,15 @@ def _solve_pow(seed, difficulty_hex):
     return ""
 
 
+def _sentinel_frame_version():
+    try:
+        from .sentinel_quickjs import sentinel_version
+
+        return sentinel_version()
+    except Exception:
+        return "20260219f9f6"
+
+
 def _build_sentinel_pow_token(flow_data, did, flow):
     if not flow_data or not flow_data.get("token"):
         return ""
@@ -124,13 +153,18 @@ def _build_sentinel_pow_token(flow_data, did, flow):
     })
 
 
-def _extract_sentinel_http(proxy=None):
+def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     """Extract sentinel tokens via direct HTTP POST (no browser needed).
 
     Mirrors fetchSentinelViaProtocol from standalone-phone-protocol.
     Uses curl_cffi which handles socks5h:// properly with remote DNS.
+
+    ``persist`` controls whether the freshly-extracted token is written to the
+    shared cache. Mid-flow per-account refreshes must pass ``persist=False`` so a
+    token carrying a new device_id does not clobber the cache another concurrent
+    worker is relying on.
     """
-    did = str(uuid.uuid4())
+    did = str(device_id or uuid.uuid4())
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
@@ -147,11 +181,11 @@ def _extract_sentinel_http(proxy=None):
                     "Content-Type": "text/plain;charset=UTF-8",
                     "Accept": "*/*",
                     "Origin": "https://sentinel.openai.com",
-                    "Referer": "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=20260219f9f6",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+                    "Referer": f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={_sentinel_frame_version()}",
+                    "User-Agent": auth_user_agent(),
                 },
                 timeout=30,
-                impersonate="chrome",
+                impersonate=auth_impersonate(),
             )
             data = resp.json()
             results[flow] = data
@@ -186,11 +220,11 @@ def _extract_sentinel_http(proxy=None):
         prime_resp = session.get(
             f"{auth_base}/create-account",
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+                "User-Agent": auth_user_agent(),
                 "Accept": "text/html,application/xhtml+xml",
             },
             timeout=30,
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
         # Extract cookies from the session
         cookie_str = _cookie_jar_header(session.cookies)
@@ -208,7 +242,8 @@ def _extract_sentinel_http(proxy=None):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
-    _save_sentinel_cache(result)
+    if persist:
+        _save_sentinel_cache(result)
     return result
 
 
@@ -233,7 +268,74 @@ def _quickjs_enabled():
     return _sentinel_mode() in {"auto", "quickjs"}
 
 
-def _extract_sentinel_quickjs(proxy=None):
+def _sentinel_max_concurrency():
+    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    try:
+        value = int(cfg.get("sentinel_max_concurrency", 2) or 2)
+    except (TypeError, ValueError):
+        value = 2
+    return max(1, min(value, 4))
+
+
+def _sentinel_circuit_config() -> tuple[int, int]:
+    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    try:
+        failures = max(1, min(int(cfg.get("sentinel_circuit_failures") or 3), 20))
+    except (TypeError, ValueError):
+        failures = 3
+    try:
+        cooldown = max(5, min(int(cfg.get("sentinel_circuit_cooldown_seconds") or 60), 900))
+    except (TypeError, ValueError):
+        cooldown = 60
+    return failures, cooldown
+
+
+def _provider_available(provider: str, *, explicit: bool = False) -> bool:
+    if explicit:
+        return True
+    with _sentinel_metrics_lock:
+        state = _sentinel_provider_health.get(provider) or {}
+        return float(state.get("cooldown_until") or 0.0) <= time.time()
+
+
+def _record_provider(provider: str, ok: bool, duration_ms: float) -> None:
+    failure_limit, cooldown = _sentinel_circuit_config()
+    with _sentinel_metrics_lock:
+        providers = _sentinel_metrics.setdefault("providers", {})
+        metrics = providers.setdefault(provider, {"attempts": 0, "success": 0, "failure": 0, "duration_ms": 0.0})
+        metrics["attempts"] += 1
+        metrics["success" if ok else "failure"] += 1
+        metrics["duration_ms"] += round(duration_ms, 3)
+        health = _sentinel_provider_health.setdefault(provider, {"consecutive_failures": 0.0, "cooldown_until": 0.0})
+        if ok:
+            health["consecutive_failures"] = 0.0
+            health["cooldown_until"] = 0.0
+        else:
+            health["consecutive_failures"] = float(health.get("consecutive_failures") or 0.0) + 1.0
+            if health["consecutive_failures"] >= failure_limit:
+                health["cooldown_until"] = time.time() + cooldown
+
+
+def sentinel_metrics_snapshot(reset: bool = False) -> dict:
+    """Return aggregate, token-free extraction performance metrics."""
+    with _sentinel_metrics_lock:
+        snapshot = json.loads(json.dumps(_sentinel_metrics))
+        snapshot["circuits"] = {
+            provider: {
+                "consecutive_failures": int(state.get("consecutive_failures") or 0),
+                "cooldown_remaining_seconds": max(0, int(float(state.get("cooldown_until") or 0) - time.time())),
+            }
+            for provider, state in _sentinel_provider_health.items()
+        }
+        if reset:
+            _sentinel_metrics.update({
+                "requests": 0, "success": 0, "failure": 0, "fallbacks": 0,
+                "queue_wait_ms": 0.0, "duration_ms": 0.0, "providers": {},
+            })
+        return snapshot
+
+
+def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
     """Extract Sentinel tokens by running the real Sentinel SDK through Node.
 
     This is intentionally an optional enhancement: if Node/SDK execution fails,
@@ -242,7 +344,7 @@ def _extract_sentinel_quickjs(proxy=None):
     """
     if not _quickjs_enabled():
         return None
-    did = str(uuid.uuid4())
+    did = str(device_id or uuid.uuid4())
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
@@ -281,11 +383,11 @@ def _extract_sentinel_quickjs(proxy=None):
         session.get(
             f"{auth_base}/create-account",
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+                "User-Agent": auth_user_agent(),
                 "Accept": "text/html,application/xhtml+xml",
             },
             timeout=30,
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
         cookie_str = _cookie_jar_header(session.cookies)
         cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
@@ -301,57 +403,81 @@ def _extract_sentinel_quickjs(proxy=None):
         "oai_did": did,
         "sentinel_source": "quickjs",
     }
-    _save_sentinel_cache(result)
+    if persist:
+        _save_sentinel_cache(result)
     return result
 
 
-# Serialize sentinel extraction across threads so concurrent workers don't
-# each hit sentinel.openai.com simultaneously (which triggers rate limiting).
-_sentinel_extraction_lock = threading.Lock()
+# Fresh account registrations may extract Sentinel data concurrently, but the
+# gate remains deliberately small to avoid overwhelming sentinel.openai.com.
+_sentinel_extraction_gate = threading.BoundedSemaphore(_sentinel_max_concurrency())
+_sentinel_cache_fill_lock = threading.Lock()
 
 
-def _extract_sentinel(proxy=None, force_fresh=False):
+def _extract_sentinel_uncached(proxy=None, persist=True):
+    mode = _sentinel_mode()
+    providers = [mode] if mode != "auto" else ["quickjs", "http", "browser"]
+    attempted = 0
+    for provider in providers:
+        if not _provider_available(provider, explicit=mode != "auto"):
+            continue
+        if attempted:
+            with _sentinel_metrics_lock:
+                _sentinel_metrics["fallbacks"] += 1
+        attempted += 1
+        started = time.perf_counter()
+        if provider == "quickjs":
+            print("[*] Extracting sentinel tokens via QuickJS SDK...")
+            result = _extract_sentinel_quickjs(proxy, persist=persist)
+        elif provider == "http":
+            print("[*] Extracting sentinel tokens via HTTP protocol...")
+            result = _extract_sentinel_http(proxy, persist=persist)
+        else:
+            print("[*] Falling back to browser Sentinel extraction...")
+            browser_proxy = proxy.replace("socks5h://", "socks5://") if proxy and proxy.startswith("socks5h://") else proxy
+            result = _extract_sentinel_cloakbrowser(browser_proxy, persist=persist)
+        duration_ms = (time.perf_counter() - started) * 1000
+        _record_provider(provider, bool(result), duration_ms)
+        if result:
+            result.setdefault("sentinel_source", provider)
+            return result
+    if mode != "auto":
+        print(f"[!] Sentinel {mode} mode failed and fallback is disabled")
+    return None
+
+
+def _extract_sentinel(proxy=None, force_fresh=False, persist=True):
     cached = _get_cached_sentinel(force_fresh=force_fresh)
     if cached:
         return cached
 
-    with _sentinel_extraction_lock:
-        # Re-check cache inside the lock — another thread may have just
-        # completed extraction and populated the cache.
+    if force_fresh:
+        queued = time.perf_counter()
+        _sentinel_extraction_gate.acquire()
+        queue_ms = (time.perf_counter() - queued) * 1000
+        started = time.perf_counter()
+        try:
+            result = _extract_sentinel_uncached(proxy, persist=persist)
+        finally:
+            _sentinel_extraction_gate.release()
+        duration_ms = (time.perf_counter() - started) * 1000
+        with _sentinel_metrics_lock:
+            _sentinel_metrics["requests"] += 1
+            _sentinel_metrics["success" if result else "failure"] += 1
+            _sentinel_metrics["queue_wait_ms"] += round(queue_ms, 3)
+            _sentinel_metrics["duration_ms"] += round(duration_ms, 3)
+        return result
+
+    # Preserve single-flight cache population for callers that allow reuse.
+    with _sentinel_cache_fill_lock:
         cached = _get_cached_sentinel(force_fresh=force_fresh)
         if cached:
             return cached
-
-        mode = _sentinel_mode()
-        if mode in {"auto", "quickjs"}:
-            print("[*] Extracting sentinel tokens via QuickJS SDK...")
-            result = _extract_sentinel_quickjs(proxy)
-            if result:
-                return result
-            if mode == "quickjs":
-                print("[!] Sentinel QuickJS mode failed and fallback is disabled by sentinel_mode=quickjs")
-                return None
-
-        # Try HTTP protocol method first (no browser needed, handles proxy natively)
-        if mode in {"auto", "http"}:
-            print("[*] Extracting sentinel tokens via HTTP protocol...")
-            result = _extract_sentinel_http(proxy)
-            if result:
-                return result
-            if mode == "http":
-                return None
-
-        # Fallback to browser-based extraction
-        print("[*] HTTP method failed, falling back to browser extraction...")
-        # For browser: convert socks5h to socks5 (Chromium doesn't support socks5h)
-        if proxy and proxy.startswith("socks5h://"):
-            browser_proxy = proxy.replace("socks5h://", "socks5://")
-        else:
-            browser_proxy = proxy
-        return _extract_sentinel_cloakbrowser(browser_proxy)
+        with _sentinel_extraction_gate:
+            return _extract_sentinel_uncached(proxy, persist=persist)
 
 
-def _extract_sentinel_cloakbrowser(browser_proxy):
+def _extract_sentinel_cloakbrowser(browser_proxy, persist=True):
     """Extract sentinel tokens using CloakBrowser."""
     try:
         from cloakbrowser import launch
@@ -361,7 +487,7 @@ def _extract_sentinel_cloakbrowser(browser_proxy):
 
     browser = launch(headless=True, humanize=True, proxy=browser_proxy)
     ctx = browser.new_context(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+        user_agent=auth_user_agent(),
         viewport={"width": 1280, "height": 800}, locale="en-US", timezone_id="America/New_York")
     page = ctx.new_page()
 
@@ -421,12 +547,12 @@ def _extract_sentinel_cloakbrowser(browser_proxy):
         browser.close(); return None
     print("  SentinelSDK loaded")
 
-    result = _collect_sentinel_tokens(page, ctx)
+    result = _collect_sentinel_tokens(page, ctx, persist=persist)
     browser.close()
     return result
 
 
-def _collect_sentinel_tokens(page, ctx):
+def _collect_sentinel_tokens(page, ctx, persist=True):
     """Call SentinelSDK.init() and extract tokens from the loaded page."""
     page.evaluate("() => SentinelSDK.init()"); time.sleep(0.5)
     did = page.evaluate("() => document.cookie.match(/oai-did=([^;]+)/)?.[1] || ''")
@@ -457,5 +583,6 @@ def _collect_sentinel_tokens(page, ctx):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
-    _save_sentinel_cache(result)
+    if persist:
+        _save_sentinel_cache(result)
     return result

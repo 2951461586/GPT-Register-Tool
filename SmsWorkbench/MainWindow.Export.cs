@@ -405,7 +405,7 @@ namespace SmsWorkbench
         {
             if (!TryExtractScanSummary(backendOutput, out Dictionary<string, object> summary))
             {
-                ShowThemedInfoDialog("额度查询", "额度查询已结束，但未解析到结果汇总。请查看下方日志确认详情。");
+                ShowThemedInfoDialog("账号测活", "账号测活已结束，但未解析到结果汇总。请查看下方日志确认详情。");
                 return;
             }
 
@@ -421,13 +421,13 @@ namespace SmsWorkbench
                 }
             }
 
-            bool directQuota = results.Any(r => TryGetMap(r, "probe", out Dictionary<string, object> _));
-            var rtRows = directQuota ? new List<Dictionary<string, object>>() : results.Where(r => BoolValue(r, "has_rt")).ToList();
-            var noRtRows = directQuota ? results : results.Where(r => !BoolValue(r, "has_rt")).ToList();
+            bool directProbe = results.Any(r => TryGetMap(r, "probe", out Dictionary<string, object> _));
+            var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BoolValue(r, "has_rt")).ToList();
+            var noRtRows = directProbe ? results : results.Where(r => !BoolValue(r, "has_rt")).ToList();
 
             var dialog = new Window
             {
-                Title = "额度查询结果",
+                Title = "账号测活结果",
                 Owner = this,
                 Width = 600,
                 MinWidth = 560,
@@ -446,18 +446,18 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             header.Children.Add(new TextBlock
             {
-                Text = "查询完成",
+                Text = "测活完成",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
-            int directOk = results.Count(QuotaProbeSucceeded);
-            int direct401 = results.Count(QuotaProbeReturned401);
+            int directOk = results.Count(AccountLivenessProbeSucceeded);
+            int direct401 = results.Count(AccountLivenessProbeReturned401);
             int directFailed = Math.Max(0, results.Count - directOk - direct401);
             header.Children.Add(new TextBlock
             {
-                Text = directQuota
-                    ? "总数：" + results.Count + "    正常：" + directOk + "    401/AT失效：" + direct401 + "    其他失败：" + directFailed
+                Text = directProbe
+                    ? "总数：" + results.Count + "    AT有效：" + directOk + "    AT失效：" + direct401 + "    其他失败：" + directFailed
                     : "总数：" + GetString(summary, "total")
                         + "    正常：" + GetString(summary, "alive")
                         + "    掉号：" + GetString(summary, "account_deactivated")
@@ -473,7 +473,7 @@ namespace SmsWorkbench
             var body = new StackPanel();
             if (noRtRows.Count > 0)
             {
-                AddScanResultSection(body, directQuota ? "额度接口结果" : "未接码号结果", noRtRows);
+                AddScanResultSection(body, directProbe ? "AT 测活结果" : "未接码号结果", noRtRows);
             }
             if (rtRows.Count > 0)
             {
@@ -483,7 +483,7 @@ namespace SmsWorkbench
             {
                 body.Children.Add(new TextBlock
                 {
-                    Text = "没有可展示的查询明细。",
+                    Text = "没有可展示的测活明细。",
                     Foreground = (Brush)FindResource("TextSub")
                 });
             }
@@ -541,7 +541,7 @@ namespace SmsWorkbench
                 string error;
                 if (TryGetMap(row, "probe", out Dictionary<string, object> probe))
                 {
-                    status = QuotaProbeStatusLabel(probe);
+                    status = AccountLivenessProbeStatusLabel(probe);
                     error = GetString(probe, "error");
                 }
                 else
@@ -578,29 +578,31 @@ namespace SmsWorkbench
             };
         }
 
-        private bool QuotaProbeSucceeded(Dictionary<string, object> row)
+        private bool AccountLivenessProbeSucceeded(Dictionary<string, object> row)
         {
             return TryGetMap(row, "probe", out Dictionary<string, object> probe) && BoolValue(probe, "ok");
         }
 
-        private bool QuotaProbeReturned401(Dictionary<string, object> row)
+        private bool AccountLivenessProbeReturned401(Dictionary<string, object> row)
         {
             if (!TryGetMap(row, "probe", out Dictionary<string, object> probe)) return false;
             string status = GetString(probe, "status").Trim().ToLowerInvariant();
             return GetString(probe, "status_code") == "401" || status == "token_invalid";
         }
 
-        private string QuotaProbeStatusLabel(Dictionary<string, object> probe)
+        private string AccountLivenessProbeStatusLabel(Dictionary<string, object> probe)
         {
             if (GetString(probe, "status_code") == "401" || GetString(probe, "status").Equals("token_invalid", StringComparison.OrdinalIgnoreCase))
             {
-                return "401 / AT失效";
+                return "AT失效 / HTTP 401";
             }
             if (BoolValue(probe, "ok"))
             {
-                return FirstNonEmpty(GetString(probe, "quota_status"), "额度正常");
+                string statusCode = GetString(probe, "status_code");
+                return statusCode.Length > 0 ? "AT有效 / HTTP " + statusCode : "AT有效";
             }
-            return FirstNonEmpty(GetString(probe, "quota_status"), GetString(probe, "status"), "查询失败");
+            string failedCode = GetString(probe, "status_code");
+            return failedCode.Length > 0 ? "测活失败 / HTTP " + failedCode : "测活失败";
         }
 
         private string ScanResultError(Dictionary<string, object> row)

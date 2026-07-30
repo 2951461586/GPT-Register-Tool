@@ -64,7 +64,26 @@ DEFAULT_STRIPE_PK = (
     "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1"
     "XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
-STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
+STRIPE_VERSION_FULL = os.environ.get(
+    "MOMO_STRIPE_API_VERSION",
+    "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1",
+).strip()
+
+
+def stripe_client_betas() -> list[str]:
+    raw = str(os.environ.get("MOMO_STRIPE_CLIENT_BETAS") or "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                values = [str(value).strip() for value in parsed if str(value).strip()]
+                if values:
+                    return values[:8]
+        except (TypeError, ValueError):
+            values = [value.strip() for value in raw.split(",") if value.strip()]
+            if values:
+                return values[:8]
+    return ["custom_checkout_server_updates_1", "custom_checkout_manual_approval_1"]
 
 
 class PaylinkError(RuntimeError):
@@ -429,8 +448,6 @@ def stripe_init_payment_page(
     form = {
         "browser_locale": "en-US",
         "browser_timezone": "America/Los_Angeles",
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_session_client[elements_init_source]": "custom_checkout",
         "elements_session_client[referrer_host]": "chatgpt.com",
         "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
@@ -441,6 +458,8 @@ def stripe_init_payment_page(
         "key": pk,
         "_stripe_version": STRIPE_VERSION_FULL,
     }
+    for index, beta in enumerate(stripe_client_betas()):
+        form[f"elements_session_client[client_betas][{index}]"] = beta
     url = f"https://api.stripe.com/v1/payment_pages/{cs}/init"
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",

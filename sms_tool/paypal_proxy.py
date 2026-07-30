@@ -158,6 +158,30 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
     return _rebuild_proxy_url(parsed, username, password) if changed else value
 
 
+def retarget_proxy_country(proxy: str, country: str = "") -> str:
+    """Change only the exit country while preserving the existing sticky ID."""
+    value = normalize_proxy_url(proxy)
+    country = str(country or "").strip().upper()
+    if not value or not country:
+        return value
+    try:
+        parsed = urlsplit(value)
+    except Exception:
+        return value
+    username = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
+    if not username:
+        return value
+    changed = False
+    username, count = re.subn(r"region-[A-Za-z]{2}", f"region-{country}", username, count=1)
+    changed = changed or bool(count)
+    match = re.match(r"^(?P<base>.+?)-(?P<country>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$", password)
+    if match:
+        password = f"{match.group('base')}-{country}-{match.group('sid')}-{match.group('ttl')}"
+        changed = True
+    return _rebuild_proxy_url(parsed, username, password) if changed else value
+
+
 def infer_proxy_country(proxy: str) -> str:
     value = normalize_proxy_url(proxy)
     if not value:

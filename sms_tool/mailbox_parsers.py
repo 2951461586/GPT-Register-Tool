@@ -60,6 +60,10 @@ def _is_gmail_line(line):
     return line.lower().startswith("gmail://")
 
 
+def _is_remail_line(line):
+    return line.lower().startswith("remail://")
+
+
 def _is_chongzhi_line(line):
     """Detect chongzhi.art credential format: email--------password----..."""
     return "--------" in line and "@" in line.split("--------", 1)[0]
@@ -90,6 +94,26 @@ def _parse_cfworker_line(line, source_path, line_no):
         print(f"[!] Skip malformed CFWorker email {source_path}:{line_no}")
         return None
     return MailboxAccount(email=email.lower(), source=str(source_path), provider="cfworker")
+
+
+def _parse_remail_line(line, source_path, line_no):
+    payload = line.split("://", 1)[1].strip() if "://" in line else line.strip()
+    parts = [part.strip() for part in payload.split("---", 3)]
+    email = _normalize_mailbox_email(parts[0] if parts else "")
+    service_token = parts[1] if len(parts) >= 2 else ""
+    order_no = parts[2] if len(parts) >= 3 else ""
+    purchase_id = parts[3] if len(parts) >= 4 else ""
+    if not email or not service_token or not order_no:
+        print(f"[!] Skip malformed ReMail mailbox line {source_path}:{line_no}")
+        return None
+    return MailboxAccount(
+        email=email.lower(),
+        source=str(source_path),
+        provider="remail",
+        token=service_token,
+        order_no=order_no,
+        purchase_id=purchase_id,
+    )
 
 
 def _parse_gmail_line(line, source_path, line_no):
@@ -177,6 +201,11 @@ def _parse_mailbox_token_file(path):
         line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
+        if _is_remail_line(line):
+            account = _parse_remail_line(line, token_path, line_no)
+            if account:
+                records.append(account)
+            continue
         if _is_cfworker_line(line):
             account = _parse_cfworker_line(line, token_path, line_no)
             if account:
@@ -246,6 +275,11 @@ def _parse_chatai_mailbox_file(path):
     for line_no, raw in enumerate(chatai_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
         line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
+            continue
+        if _is_remail_line(line):
+            account = _parse_remail_line(line, chatai_path, line_no)
+            if account:
+                records.append(account)
             continue
         if _is_cfworker_line(line):
             account = _parse_cfworker_line(line, chatai_path, line_no)

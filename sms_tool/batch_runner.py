@@ -1,10 +1,10 @@
-import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 from .error_classification import classify_error
+from .config import CFG
 from .paypal_proxy import infer_proxy_country
 from .phone_proxy import probe_proxy_with_scheme_detection, refresh_proxy_sid
-from .sentinel_tokens import _extract_sentinel, _sentinel_device_id
 
 
 def select_registration_proxy_base(proxy_pool, fallback=None):
@@ -48,6 +48,8 @@ def run_batch_impl(
     payment_method="paypal",
     paypal_generation_type=None,
     registration_mode=None,
+    max_attempts=2,
+    retry_delay_seconds=1.0,
     run_email_func=None,
 ):
     if run_email_func is None:
@@ -70,90 +72,99 @@ def run_batch_impl(
     print(f"{'=' * 60}\n")
 
     workers = max(1, min(int(workers or 1), 20, int(count or 1)))
+    max_attempts = max(1, min(int(max_attempts or 1), 3))
+    retry_delay_seconds = max(0.0, float(retry_delay_seconds or 0.0))
 
-    # ── Sentinel token pool ──────────────────────────────────────────
-    # CRITICAL: Each concurrent worker MUST have its own sentinel token
-    # (and thus its own oai-did / device_id).  Sharing a single sentinel
-    # token across workers causes all of them to reuse the same device_id,
-    # which makes OpenAI rate-limit concurrent signups with HTTP 429 on
-    # the email-otp/send endpoint — the entire batch fails.
-    #
-    # We pre-extract one unique token per concurrent worker slot and lend
-    # them via a thread-safe queue.  When a worker finishes it returns
-    # its token so the next queued worker can reuse it.
-    sentinel_pool = None
-    pool_size = min(workers, int(count or 1))
-    if pool_size > 1:
-        sentinel_pool = queue.Queue()
-        print(f"[*] Batch mode: pre-extracting {pool_size} unique sentinel tokens (one per worker)...")
-        for idx in range(pool_size):
-            base_proxy = proxy_pool[idx % len(proxy_pool)] if proxy_pool else proxy
+    email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    try:
+        prewarm_window = max(0, min(int(email_cfg.get("sentinel_prewarm_window") or 0), workers, count))
+    except (TypeError, ValueError):
+        prewarm_window = 0
+    prewarm_executor = None
+    prewarmed = {}
+    first_attempt_proxies = {}
+    if prewarm_window:
+        from .sentinel_tokens import _extract_sentinel, _sentinel_max_concurrency
+
+        prewarm_executor = ThreadPoolExecutor(max_workers=min(prewarm_window, _sentinel_max_concurrency()))
+        for index in range(prewarm_window):
+            base_proxy = proxy_pool[index % len(proxy_pool)] if proxy_pool else proxy
             worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
-            try:
-                token = _extract_sentinel(proxy=worker_proxy, force_fresh=True)
-            except Exception as exc:
-                print(f"[!] Sentinel pre-extraction {idx + 1}/{pool_size} failed: {exc}")
-                token = None
-            did_preview = _sentinel_device_id(token)[:8] if token else "N/A"
-            status = "ready" if token else "empty (worker will self-extract)"
-            print(f"[*] Sentinel token {idx + 1}/{pool_size}: {status} (did={did_preview}...)")
-            sentinel_pool.put((token, worker_proxy))
-        ready = sum(1 for token, _ in list(sentinel_pool.queue) if token)
-        print(f"[*] {ready}/{pool_size} unique sentinel token(s) ready; each worker gets its own device_id.")
+            first_attempt_proxies[index] = worker_proxy
+            prewarmed[index] = prewarm_executor.submit(
+                _extract_sentinel, proxy=worker_proxy, force_fresh=True, persist=False,
+            )
+
+    def _prewarmed_sentinel(index):
+        future = prewarmed.get(index)
+        if future is None:
+            return None
+        try:
+            return future.result()
+        except Exception:
+            return None
 
     def _run_one(i):
         print(f"\n{'#' * 40}")
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
-        # Borrow a unique sentinel token from the pool (blocks until one
-        # is available — another worker must finish and return theirs).
-        worker_sentinel = None
         base_proxy = proxy_pool[i % len(proxy_pool)] if proxy_pool else proxy
-        worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
-        if sentinel_pool is not None:
-            try:
-                worker_sentinel, worker_proxy = sentinel_pool.get(timeout=600)
-            except Exception:
-                print(f"  [!] Sentinel pool timeout; worker will self-extract.")
-                worker_sentinel = None
-        try:
-            mailbox = mailboxes[i] if mailboxes else None
-            result = run_email_func(
-                proxy=worker_proxy,
-                mailbox=mailbox,
-                paypal_link=paypal_link,
-                phone_pool=phone_pool,
-                codex_oauth=codex_oauth,
-                sentinel_data=worker_sentinel,
-                payment_method=payment_method,
-                paypal_generation_type=paypal_generation_type,
-                registration_mode=registration_mode,
+        mailbox = mailboxes[i] if mailboxes else None
+        for attempt in range(1, max_attempts + 1):
+            worker_proxy = (
+                first_attempt_proxies[i]
+                if attempt == 1 and i in first_attempt_proxies
+                else (refresh_proxy_sid(base_proxy) if base_proxy else base_proxy)
             )
-            if isinstance(result, dict) and not result.get("success", False):
-                result.setdefault("failure_class", classify_error(result))
-                if result["failure_class"] == "network":
-                    result.setdefault("dropped", False)
-                elif result["failure_class"] == "account":
-                    result.setdefault("dropped", True)
-            return i, result
-        except Exception as e:
-            import traceback; traceback.print_exc()
-            failure_class = classify_error(str(e))
-            return i, {
-                "success": False,
-                "error": str(e),
-                "failure_class": failure_class,
-                "dropped": True if failure_class == "account" else False if failure_class == "network" else None,
-            }
-        finally:
-            # Return the sentinel token to the pool so the next worker can reuse it.
-            if sentinel_pool is not None:
-                sentinel_pool.put((worker_sentinel, worker_proxy))
+            sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
+            try:
+                result = run_email_func(
+                    proxy=worker_proxy,
+                    mailbox=mailbox,
+                    paypal_link=paypal_link,
+                    phone_pool=phone_pool,
+                    codex_oauth=codex_oauth,
+                    sentinel_data=sentinel_data,
+                    payment_method=payment_method,
+                    paypal_generation_type=paypal_generation_type,
+                    registration_mode=registration_mode,
+                )
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                failure_class = classify_error(str(e))
+                result = {
+                    "success": False,
+                    "error": str(e),
+                    "failure_class": failure_class,
+                    "dropped": True if failure_class == "account" else False if failure_class in {"network", "mailbox", "auth_state"} else None,
+                }
+            if not isinstance(result, dict):
+                result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
+            result["registration_attempts"] = attempt
+            if result.get("success", False):
+                return i, result
+            result.setdefault("failure_class", classify_error(result))
+            if result["failure_class"] in {"network", "mailbox", "auth_state"}:
+                result.setdefault("dropped", False)
+            elif result["failure_class"] == "account":
+                result.setdefault("dropped", True)
+            if result["failure_class"] not in {"network", "auth_state"} or attempt >= max_attempts:
+                return i, result
+            print(
+                f"[!] Retryable {result['failure_class']} failure; "
+                f"retrying account {i + 1} with a fresh proxy session "
+                f"({attempt + 1}/{max_attempts})"
+            )
+            if retry_delay_seconds:
+                time.sleep(retry_delay_seconds)
+        return i, result
 
     if workers <= 1:
         for i in range(count):
             _, result = _run_one(i)
             results.append(result)
+        if prewarm_executor is not None:
+            prewarm_executor.shutdown(wait=True)
         return results
 
     ordered = [None] * count
@@ -163,4 +174,6 @@ def run_batch_impl(
             i, result = future.result()
             ordered[i] = result
     results.extend(result for result in ordered if result is not None)
+    if prewarm_executor is not None:
+        prewarm_executor.shutdown(wait=True)
     return results

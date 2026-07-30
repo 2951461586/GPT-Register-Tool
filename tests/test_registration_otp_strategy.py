@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool import registration
+from sms_tool import otp_strategy, registration
+from sms_tool.auth_headers import AUTH_IMPERSONATE
 
 
 class FakeResponse:
@@ -24,8 +25,8 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
             calls.append(args[2])
             return FakeResponse(400, {"error": {"code": "bad_request"}})
 
-        with patch.object(registration, "CFG", {"email_registration": {}}), \
-             patch.object(registration, "request_with_retry", side_effect=fake_request):
+        with patch.object(otp_strategy, "CFG", {"email_registration": {}}), \
+             patch.object(otp_strategy, "request_with_retry", side_effect=fake_request):
             response = registration._send_registration_email_otp(
                 session=object(),
                 auth_base="https://auth.openai.com",
@@ -38,6 +39,24 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("/email-otp/resend", calls[0])
         self.assertTrue(response.json()["assumed_pre_sent"])
+
+    def test_otp_request_uses_shared_browser_impersonation(self):
+        seen = {}
+
+        def fake_request(*args, **kwargs):
+            seen.update(kwargs)
+            return FakeResponse(200)
+
+        with patch.object(otp_strategy, "request_with_retry", side_effect=fake_request):
+            otp_strategy.send_registration_email_otp(
+                session=object(),
+                auth_base="https://auth.openai.com",
+                base_headers={"User-Agent": "test"},
+                current_url="https://auth.openai.com/email-verification",
+                mode="passwordless",
+            )
+
+        self.assertEqual(seen["impersonate"], AUTH_IMPERSONATE)
 
 
 if __name__ == "__main__":

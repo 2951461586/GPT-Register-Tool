@@ -7,6 +7,50 @@ from sms_tool import storage
 
 
 class StorageDedupTests(unittest.TestCase):
+    def test_registration_failure_is_audited_without_entering_accounts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.record_registration_audit({
+                    "email": "failed@example.com",
+                    "success": False,
+                    "error": "access_token_probe_http_401",
+                    "response": {"access_token_probe": {"status_code": 401}},
+                    "access_token_telemetry": {"token_hash": "hash", "iat": 1, "exp": 2},
+                }, batch_id="batch-1", state="failed"))
+                conn = storage._connect()
+                try:
+                    accounts = conn.execute("SELECT count(*) FROM accounts").fetchone()[0]
+                    audit = conn.execute("SELECT state,at_status_code,token_hash FROM registration_audit").fetchone()
+                finally:
+                    conn.close()
+        self.assertEqual(accounts, 0)
+        self.assertEqual(audit["state"], "failed")
+        self.assertEqual(audit["at_status_code"], 401)
+        self.assertEqual(audit["token_hash"], "hash")
+
+    def test_deactivated_remail_account_is_added_to_dead_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path), \
+                 patch("sms_tool.mailbox_remail.record_dead_remail_account") as record:
+                self.assertTrue(storage.upsert_account({
+                    "email": "dead@example.com",
+                    "success": False,
+                    "error": "account_deactivated",
+                    "oauth_refresh_token": "rt_TEST",
+                    "mailbox": {"provider": "remail", "email": "dead@example.com", "order_no": "R-DEAD"},
+                }))
+                conn = storage._connect()
+                try:
+                    row = conn.execute("SELECT status,error FROM accounts WHERE email=?", ("dead@example.com",)).fetchone()
+                finally:
+                    conn.close()
+
+        record.assert_called_once()
+        self.assertEqual(row["status"], "account_deactivated")
+        self.assertEqual(row["error"], "account_deactivated")
+
     def test_upsert_reuses_existing_email_case_insensitively(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"

@@ -255,6 +255,9 @@ namespace SmsWorkbench
         public string Identifier { get; set; } = "";
         public string AccountType { get; set; } = "";
         public string AccountPlanType { get; set; } = "";
+        public string RegistrationCountry { get; set; } = "";
+        public string RegistrationBatchId { get; set; } = "";
+        public string RegistrationState { get; set; } = "";
         public string QuotaStatus { get; set; } = "";
         public string Quota5hUsed { get; set; } = "";
         public string Quota5hLimit { get; set; } = "";
@@ -270,6 +273,8 @@ namespace SmsWorkbench
         public string RefreshTokenStatus { get; set; } = "";
         public string Phone { get; set; } = "";
         public bool HasAccessToken { get; set; }
+        public string AccessTokenProbeStatusCode { get; set; } = "";
+        public string AccessTokenStatus => AccessTokenState.Display(HasAccessToken, AccessTokenProbeStatusCode);
         public string PayPalUrl { get; set; } = "";
         public string RefreshToken { get; set; } = "";
         public string Proxy { get; set; } = "";
@@ -290,6 +295,9 @@ namespace SmsWorkbench
         public int Workers { get; set; } = 4;
         public string PaymentMethod { get; set; } = "paypal";
         public bool SkipPaymentLink { get; set; } = false;
+        public int MaxMailboxPurchases { get; set; } = 0;
+        public decimal MaxReMailCost { get; set; } = 0;
+        public string RegistrationBatchId { get; set; } = "";
     }
 
     public sealed class ScanOptions

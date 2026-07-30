@@ -138,7 +138,7 @@ class AccountScanTests(unittest.TestCase):
                  {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
                  {"ok": True, "status": "active", "quota_status": "3/5"},
              ]), \
-             patch("sms_tool.account_scan.relogin_codex_account", return_value={"ok": True, "mode": "web_session"}) as relogin, \
+             patch("sms_tool.account_scan.relogin_codex_account", return_value={"ok": True, "mode": "codex_oauth_pkce", "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "3/5"}}) as relogin, \
              patch("sms_tool.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
              patch("sms_tool.account_scan._openai_refresh_token", return_value=""), \
              patch("sms_tool.account_scan.collect_codex_oauth_tokens") as collect, \
@@ -150,7 +150,7 @@ class AccountScanTests(unittest.TestCase):
         self.assertTrue(result["relogin"]["ok"])
         self.assertEqual(result["token_probe"]["status"], "active")
         relogin.assert_called_once()
-        self.assertEqual(relogin.call_args.kwargs["mode"], "auto")
+        self.assertEqual(relogin.call_args.kwargs["mode"], "codex_oauth")
         collect.assert_not_called()
 
     def test_scan_one_keeps_alive_when_existing_at_is_valid_but_auth_probe_transport_fails(self):
@@ -217,6 +217,21 @@ class AccountScanTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(relogin.call_args.kwargs["mode"], "codex_oauth")
+        collect.assert_not_called()
+
+    def test_scan_one_skips_all_network_relogin_for_terminal_account(self):
+        data = {"email": "a@example.com", "status": "account_deactivated", "access_token": "old_at"}
+        with patch("sms_tool.account_scan._load_seed_session", return_value=(data, "session.json")), \
+             patch("sms_tool.account_scan.probe_local_codex_quota") as probe, \
+             patch("sms_tool.account_scan.relogin_codex_account") as relogin, \
+             patch("sms_tool.account_scan.collect_codex_oauth_tokens") as collect, \
+             patch("sms_tool.account_scan._persist_scan"):
+            result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
+
+        self.assertEqual(result["scan_status"], "account_deactivated")
+        self.assertTrue(result["terminal"])
+        probe.assert_not_called()
+        relogin.assert_not_called()
         collect.assert_not_called()
 
 

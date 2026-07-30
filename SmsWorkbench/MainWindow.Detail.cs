@@ -211,13 +211,13 @@ namespace SmsWorkbench
             };
             leftActions.Children.Add(copyAtButton);
 
-            var refreshQuotaButton = new Button { Content = "刷新额度", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
-            refreshQuotaButton.Click += async (_, __) =>
+            var checkAliveButton = new Button { Content = "账号测活", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+            checkAliveButton.Click += async (_, __) =>
             {
                 dialog.Close();
-                await RefreshQuotaForRowAsync(row);
+                await CheckAccountAliveAsync(row);
             };
-            leftActions.Children.Add(refreshQuotaButton);
+            leftActions.Children.Add(checkAliveButton);
 
             // Right: primary actions
             var rightActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };

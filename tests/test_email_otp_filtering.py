@@ -1,12 +1,16 @@
 import unittest
 from sms_tool import codex_oauth
 from sms_tool import mailbox as mailbox_module
-from sms_tool.mailbox import MailboxAccount, _email_otp_candidate, _extract_otp_from_text
+from sms_tool.mailbox import (
+    MailboxAccount,
+    _email_otp_candidate,
+    _extract_otp_from_text,
+    _provider_otp_issued_after,
+)
 from sms_tool.registration import (
     LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
     REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
     REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
-    _registration_otp_issued_after,
 )
 
 
@@ -54,9 +58,15 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
     def test_cfworker_registration_otp_issued_after_has_small_grace(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
-        adjusted = _registration_otp_issued_after(mailbox, 1779934004)
+        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
 
         self.assertEqual(adjusted, 1779933994)
+
+    def test_remail_registration_otp_issued_after_covers_observed_clock_skew(self):
+        mailbox = MailboxAccount(email="target@outlook.com", provider="remail")
+        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
+
+        self.assertEqual(adjusted, 1779933914)
 
     def test_login_keyword_is_separate_from_registration_keyword(self):
         self.assertEqual(codex_oauth.LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, LOGIN_EMAIL_OTP_SUBJECT_KEYWORD)

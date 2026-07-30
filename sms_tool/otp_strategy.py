@@ -8,7 +8,8 @@ request shape so registration code does not duplicate state-sensitive details.
 import json
 
 from .config import CFG
-from .auth_headers import openai_auth_headers
+from .auth_headers import auth_impersonate, openai_auth_headers
+from .auth_flow import _absolute_url, _invalid_state_auth_response, _json_or_raw
 from .http_client import request_with_retry
 
 
@@ -22,30 +23,6 @@ class SyntheticResponse:
 
     def json(self):
         return self._body
-
-
-def _json_or_raw(response, limit=500):
-    try:
-        return response.json()
-    except Exception:
-        return {"_raw": getattr(response, "text", "")[:limit]}
-
-
-def _absolute_url(base_url, url):
-    if not url:
-        return ""
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return base_url.rstrip("/") + "/" + url.lstrip("/")
-
-
-def _invalid_state_auth_response(data):
-    if not isinstance(data, dict):
-        return False
-    error = data.get("error") if isinstance(data.get("error"), dict) else {}
-    code = str(error.get("code") or "").strip().lower()
-    message = str(error.get("message") or "").strip().lower()
-    return code == "invalid_state" or "session is no longer valid" in message
 
 
 def otp_fallback_send_enabled():
@@ -82,7 +59,7 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
     for endpoint, payload in endpoints:
         kwargs = {
             "headers": headers,
-            "impersonate": "chrome",
+            "impersonate": auth_impersonate(),
         }
         if payload is not None:
             kwargs["json"] = payload

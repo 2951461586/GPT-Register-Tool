@@ -6,6 +6,30 @@ from sms_tool import codex_oauth
 
 
 class CodexOauthTests(unittest.TestCase):
+    def test_refresh_skips_terminal_account_without_network(self):
+        with patch("sms_tool.codex_oauth.collect_codex_oauth_tokens") as collect:
+            result = codex_oauth.refresh_codex_oauth_session({
+                "email": "user@example.com",
+                "status": "account_deactivated",
+            })
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["terminal"])
+        collect.assert_not_called()
+
+    def test_refresh_can_collect_without_persisting(self):
+        collected = {"ok": True, "tokens": {"access_token": "at_new", "refresh_token": "rt_new"}}
+        with patch("sms_tool.codex_oauth.collect_codex_oauth_tokens", return_value=collected), \
+             patch("sms_tool.codex_oauth._save_oauth_tokens") as save:
+            result = codex_oauth.refresh_codex_oauth_session(
+                {"email": "user@example.com"},
+                persist=False,
+                force_email_otp_login=True,
+            )
+
+        self.assertIs(result, collected)
+        save.assert_not_called()
+
     def test_mailbox_from_data_falls_back_to_config_for_gmail(self):
         fallback = codex_oauth.MailboxAccount(
             email="liziaicloudxm@gmail.com",

@@ -25,7 +25,11 @@ import ac_paylink_core as paylink
 
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_PROXY_FILE = ROOT / "upi" / "proxy_seeds_vn_200_http.txt"
+# Optional operator-supplied VN proxy list (one seed per line, `#` comments).
+# The unified manager always passes an explicit `--proxy`/`--direct`, so this
+# default only matters for standalone CLI runs; a missing file no longer points
+# at a stale vendored `upi/` path and load_proxies() raises an actionable error.
+DEFAULT_PROXY_FILE = ROOT / "proxy_seeds_vn.txt"
 CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
 DEFAULT_STRIPE_PK = paylink.DEFAULT_STRIPE_PK
 COUNTRY_CURRENCY = dict(paylink.COUNTRY_CURRENCY)
@@ -33,7 +37,6 @@ COUNTRY_CURRENCY.setdefault("VN", "VND")
 
 DECISION_TEXT = {
     "ready": "支持 MoMo 且已 0 元",
-    "momo_supported": "支持 MoMo 且已 0 元（可出码）",
     "ready_with_qr": "0 元 + 已抽出可扫 MoMo 付款码",
     "momo_qr_failed": "0 元且支持 MoMo，但未拿到 payment.momo.vn/真QR（Stripe中间页不算）",
     "promo_nonzero": "有 MoMo 但未刷到 0 元，正价盘强制失败",
@@ -62,6 +65,73 @@ MOMO_BILLING = {
     "postal_code": "700000",
     "state": "Ho Chi Minh",
 }
+
+# Bare tokens that must never be accepted as a QR / pay artifact.
+_QR_JUNK_TOKENS = frozenset(
+    {"momo", "card", "paypal", "link", "qr", "code", "data", "null", "none", "undefined", "true", "false"}
+)
+# Substrings identifying Stripe/payment-method brand icons (NOT scannable QR codes).
+_PM_ICON_MARKERS = (
+    "icon-pm-",
+    "/payment-methods/",
+    "fingerprinted/img/payment-methods",
+    "brand-icon",
+    "pm-icon",
+)
+
+
+def _is_pm_icon(text: str) -> bool:
+    """True when ``text`` looks like a Stripe payment-method brand icon, not a QR."""
+    low = str(text or "").lower()
+    return any(marker in low for marker in _PM_ICON_MARKERS)
+
+
+def _usable_pay_text(text: str) -> bool:
+    """True when ``text`` is a real pay artifact (URL, data:image, or long QR payload)."""
+    t = str(text or "").strip()
+    if not t:
+        return False
+    low = t.lower()
+    if low in _QR_JUNK_TOKENS or _is_pm_icon(t):
+        return False
+    if t.startswith(("http://", "https://", "data:image")):
+        return True
+    if "payment.momo.vn" in low or "momo.vn" in low or "vietqr" in low:
+        return len(t) >= 16
+    # raw QR payloads are usually long
+    if low.startswith("2|99|") or low.startswith("000201"):
+        return len(t) >= 24
+    return len(t) >= 32 and any(x in low for x in ("momo", "qr", "pay", "iban", "http"))
+
+
+def _usable_qr_image(text: str) -> bool:
+    """True when ``text`` is a scannable QR image (data:image or a real QR image URL)."""
+    t = str(text or "").strip()
+    if not t or _is_pm_icon(t):
+        return False
+    if t.startswith("data:image"):
+        return True
+    low = t.lower()
+    # Real QR image URLs usually say qr / voucher / code; reject bare brand assets.
+    if t.startswith(("http://", "https://")):
+        return any(x in low for x in ("qr", "voucher", "barcode", "display")) and "payment-methods" not in low
+    return False
+
+
+def _prefer_artifact(old: str, new: str) -> str:
+    """Pick the stronger of two artifacts: URLs/images beat plain text; longer otherwise."""
+    if not new:
+        return old
+    if not old:
+        return new
+    url_prefixes = ("http://", "https://", "data:image")
+    if old.startswith(url_prefixes) and not new.startswith(url_prefixes):
+        return old
+    if new.startswith(url_prefixes) and not old.startswith(url_prefixes):
+        return new
+    return new if len(new) > len(old) else old
+
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -118,20 +188,9 @@ def parse_args() -> argparse.Namespace:
         help="只验证凭证格式和有效期，不发送任何网络请求。",
     )
     parser.add_argument(
-        "--check-methods-anyway",
-        action="store_true",
-        help="即使账号试用资格为 false，也继续调用一次 Stripe init 检查支付方式。",
-    )
-    parser.add_argument(
-        "--emit-qr",
-        action="store_true",
-        default=True,
-        help="Session 支持 MoMo 时继续 create PM + confirm，抽出二维码（默认开）。",
-    )
-    parser.add_argument(
         "--no-emit-qr",
         action="store_true",
-        help="只探测资格/支付方式，不创建 PM、不 confirm、不出码。",
+        help="只探测资格/支付方式，不创建 PM、不 confirm、不出码（默认会出码）。",
     )
     parser.add_argument(
         "--json",
@@ -304,14 +363,17 @@ def load_proxies(path: Path, direct: bool) -> list[str]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
-        raise RuntimeError("代理文件无法读取") from exc
+        raise RuntimeError(
+            f"越南代理列表无法读取：{path}。"
+            "请用 --proxy 传入单条 VN 代理、用 --proxy-file 指定列表文件，或用 --direct 走直连。"
+        ) from exc
     proxies = [
         normalize_proxy_url(line.strip())
         for line in lines
         if line.strip() and not line.lstrip().startswith("#")
     ]
     if not proxies:
-        raise RuntimeError("代理文件中没有可用条目")
+        raise RuntimeError(f"越南代理列表为空：{path}（每行一条 VN 代理，# 开头为注释）")
     return proxies
 
 
@@ -502,6 +564,15 @@ def create_checkout(
     timeout: int,
     strategy: str = "hosted_promo",
 ) -> tuple[dict[str, Any] | None, str, str, str, int, int]:
+    """Create a VN/VND ChatGPT checkout, rotating sticky proxies on soft blocks.
+
+    Returns a 6-tuple ``(data, checkout_id, stripe_key, slot3, attempts, next_index)``.
+    ``data is None`` marks failure; **slot 3 is overloaded by that flag**: on
+    success it is the working VN proxy string, on failure it is the classified
+    error string (``already_paid`` / ``credential_invalid`` / ``cloudflare`` /
+    ``rate_limited`` / ``http_*`` / ``network_*``). Callers must branch on
+    ``data`` before reading slot 3.
+    """
     last_error = "no_attempt"
     attempts = 0
     for offset in range(min(max_proxies, len(proxies) or 1)):
@@ -687,10 +758,8 @@ def amount_due(payload: dict[str, Any]) -> int | None:
     amount = stripe_field(payload, "amount")
     if amount is not None:
         return int(amount or 0)
-    invoice = payload.get("invoice")
-    if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-        return int(invoice.get("amount_due") or 0)
-    return None
+    # invoice.amount_due branch is shared with the core resolver; delegate to it.
+    return paylink.extract_amount_due_cents(payload)
 
 
 def trial_marker(
@@ -764,17 +833,6 @@ def choose_decision(
     return "momo_not_enabled"
 
 
-def _iter_values(value: Any):
-    if isinstance(value, dict):
-        for item in value.values():
-            yield from _iter_values(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _iter_values(item)
-    else:
-        yield value
-
-
 def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
     """Pull MoMo QR / pay-url fields from Stripe confirm tree.
 
@@ -795,74 +853,7 @@ def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return out
 
-    junk = {
-        "momo",
-        "card",
-        "paypal",
-        "link",
-        "qr",
-        "code",
-        "data",
-        "null",
-        "none",
-        "undefined",
-        "true",
-        "false",
-    }
-
-    def _is_pm_icon(text: str) -> bool:
-        # Stripe/payment-method brand icons are NOT QR codes.
-        low = str(text or "").lower()
-        return any(
-            x in low
-            for x in (
-                "icon-pm-",
-                "/payment-methods/",
-                "fingerprinted/img/payment-methods",
-                "brand-icon",
-                "pm-icon",
-            )
-        )
-
-    def _usable_pay_text(text: str) -> bool:
-        t = str(text or "").strip()
-        if not t:
-            return False
-        low = t.lower()
-        if low in junk or _is_pm_icon(t):
-            return False
-        if t.startswith(("http://", "https://", "data:image")):
-            return True
-        if "payment.momo.vn" in low or "momo.vn" in low or "vietqr" in low:
-            return len(t) >= 16
-        # raw QR payloads are usually long
-        if low.startswith("2|99|") or low.startswith("000201"):
-            return len(t) >= 24
-        return len(t) >= 32 and any(x in low for x in ("momo", "qr", "pay", "iban", "http"))
-
-    def _usable_qr_image(text: str) -> bool:
-        t = str(text or "").strip()
-        if not t or _is_pm_icon(t):
-            return False
-        if t.startswith("data:image"):
-            return True
-        low = t.lower()
-        # Real QR image URLs usually say qr / voucher / code; reject bare brand assets.
-        if t.startswith(("http://", "https://")):
-            return any(x in low for x in ("qr", "voucher", "barcode", "display")) and "payment-methods" not in low
-        return False
-
-    def _prefer(old: str, new: str) -> str:
-        if not new:
-            return old
-        if not old:
-            return new
-        # prefer URLs / images over plain text; longer otherwise
-        if old.startswith(("http://", "https://", "data:image")) and not new.startswith(("http://", "https://", "data:image")):
-            return old
-        if new.startswith(("http://", "https://", "data:image")) and not old.startswith(("http://", "https://", "data:image")):
-            return new
-        return new if len(new) > len(old) else old
+    _prefer = _prefer_artifact
 
     def _walk(node: Any, path: str = "") -> None:
         if isinstance(node, dict):
@@ -974,7 +965,7 @@ def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
         val = str(out.get(k) or "").strip()
         bad = (
             not val
-            or val.lower() in junk
+            or val.lower() in _QR_JUNK_TOKENS
             or _is_pm_icon(val)
             or (k in {"qr_image_url", "qr_png_url"} and not _usable_qr_image(val))
             or (k == "qr_data" and not _usable_pay_text(val) and not val.startswith(("http://", "https://", "data:image")))
@@ -1102,8 +1093,6 @@ def confirm_momo_payment_page(
         "elements_session_client[is_aggregation_expected]": "false",
         "elements_session_client[elements_init_source]": "custom_checkout",
         "elements_session_client[stripe_js_id]": stripe_js_id,
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_options_client[saved_payment_method][enable_save]": "never",
         "elements_options_client[saved_payment_method][enable_redisplay]": "never",
         "client_attribution_metadata[client_session_id]": stripe_js_id,
@@ -1119,6 +1108,21 @@ def confirm_momo_payment_page(
         "key": stripe_key or DEFAULT_STRIPE_PK,
         "_stripe_version": paylink.STRIPE_VERSION_FULL,
     }
+    for index, beta in enumerate(paylink.stripe_client_betas()):
+        form[f"elements_session_client[client_betas][{index}]"] = beta
+    raw_overrides = str(os.environ.get("MOMO_STRIPE_CONFIRM_FIELDS") or "").strip()
+    if raw_overrides:
+        try:
+            overrides = json.loads(raw_overrides)
+        except (TypeError, ValueError):
+            overrides = {}
+        if isinstance(overrides, dict):
+            allowed_prefixes = ("elements_session_client[", "elements_options_client[", "client_attribution_metadata[")
+            allowed_keys = {"version", "expected_amount", "expected_payment_method_type", "return_url", "consent[terms_of_service]"}
+            for key, value in overrides.items():
+                name = str(key or "")
+                if name in allowed_keys or name.startswith(allowed_prefixes):
+                    form[name] = str(value)
     # billing already on pm_ — do not re-send top-level billing_details (400)
     _ = billing  # kept for API compat
     try:
@@ -1146,7 +1150,7 @@ def is_scannable_momo_artifact(text: str) -> bool:
     if not t:
         return False
     low = t.lower()
-    if any(x in low for x in ("icon-pm-", "/payment-methods/", "fingerprinted/img/payment-methods")):
+    if _is_pm_icon(t):
         return False
     # Stripe hosted checkout form is NOT scannable MoMo QR.
     if "checkout.stripe.com" in low or "pay.openai.com" in low:
@@ -1311,6 +1315,9 @@ def emit_momo_qr(
     init_payload: dict[str, Any],
     *,
     proxy: str = "",
+    provider_proxy: str = "",
+    approve_proxy: str = "",
+    redirect_proxy: str = "",
     timeout: int = 25,
     access_token: str = "",
     session_token: str = "",
@@ -1342,8 +1349,11 @@ def emit_momo_qr(
         info["qr_error"] = "invalid_checkout_id"
         return info
 
+    provider_proxy = str(provider_proxy or proxy or "").strip()
+    approve_proxy = str(approve_proxy or provider_proxy or proxy or "").strip()
+    redirect_proxy = str(redirect_proxy or provider_proxy or proxy or "").strip()
     pm_id, pm_status = create_momo_payment_method(
-        checkout_id, stripe_key, proxy=proxy, timeout=timeout
+        checkout_id, stripe_key, proxy=provider_proxy, timeout=timeout
     )
     info["pm_status"] = pm_status
     if not pm_id:
@@ -1356,7 +1366,7 @@ def emit_momo_qr(
         stripe_key,
         pm_id,
         init_payload,
-        proxy=proxy,
+        proxy=provider_proxy,
         timeout=timeout,
     )
     info["confirm_status"] = confirm_status
@@ -1401,7 +1411,7 @@ def emit_momo_qr(
         session_token,
         checkout_id,
         processor_entity,
-        proxy=proxy,
+        proxy=approve_proxy,
         timeout=max(timeout, 25),
     )
     info["approve_status"] = ap_status
@@ -1415,7 +1425,7 @@ def emit_momo_qr(
     last_state = ""
     for _ in range(8):
         time.sleep(1.0)
-        re_payload, re_st, _ = stripe_init(checkout_id, stripe_key, proxy, timeout=timeout)
+        re_payload, re_st, _ = stripe_init(checkout_id, stripe_key, provider_proxy, timeout=timeout)
         if not re_payload:
             continue
         sa = re_payload.get("submission_attempt") or {}
@@ -1450,7 +1460,7 @@ def emit_momo_qr(
         info["qr_error"] = f"approved but no setup_intent redirect state={last_state}"
         return info
 
-    followed = follow_momo_redirect(redirect, proxy=proxy, timeout=max(timeout, 35))
+    followed = follow_momo_redirect(redirect, proxy=redirect_proxy, timeout=max(timeout, 35))
     if followed.get("error") and not (
         followed.get("qr_image_url") or followed.get("hosted_instructions_url")
     ):
@@ -1489,6 +1499,146 @@ def emit_momo_qr(
     return info
 
 
+def _candidate_score(row: dict[str, Any]) -> tuple:
+    """Rank a probe candidate: ZERO amount first, then momo, trial, ready decision."""
+    return (
+        1 if row.get("amount_due") == 0 else 0,
+        1 if row.get("has_momo") else 0,
+        1 if row.get("actual_trial") or row.get("one_click_trial_eligible") is True else 0,
+        1 if row.get("decision") == "ready" else 0,
+    )
+
+
+def _finalize_qr_decision(
+    result: dict[str, Any],
+    best: dict[str, Any],
+    *,
+    emit_qr: bool,
+    access_token: str,
+    session_token: str,
+    proxies: list[str],
+    next_index: int,
+    max_proxies: int,
+    trial_days: int,
+    timeout: int,
+    stage_proxies: dict[str, str] | None = None,
+) -> int:
+    """Apply the HARD zero+momo gate and emit a scannable QR when eligible.
+
+    Mutates ``result`` in place; returns the (possibly advanced) proxy index. Only a
+    momo session forced to ₫0 may emit a QR — non-zero momo is a forced failure.
+    """
+    due_final = best.get("amount_due")
+    if best.get("has_momo") is True and due_final not in (0,):
+        result["decision"] = "promo_nonzero"
+        result["decision_text"] = DECISION_TEXT["promo_nonzero"]
+        result["supported"] = False
+        result["conclusive"] = True
+        result["has_qr"] = False
+        result["qr_status"] = "blocked_nonzero"
+        result["qr_error"] = f"amount_due={due_final}"
+        return next_index
+    if not (emit_qr and best.get("has_momo") is True and due_final == 0):
+        return next_index
+
+    # If best was hosted, try one custom_promo session for real next_action QR.
+    stage_proxies = dict(stage_proxies or {})
+    emit_checkout = str(best.get("_checkout_id") or "")
+    emit_key = str(best.get("_stripe_key") or "")
+    emit_proxy = str(best.get("_proxy") or "")
+    emit_init = best.get("_init_payload") or {}
+    emit_strategy = str(best.get("checkout_strategy") or "")
+    if emit_strategy.startswith("hosted") or "custom" not in emit_strategy:
+        checkout_proxies = [stage_proxies.get("checkout")] if stage_proxies.get("checkout") else proxies
+        data2, cs2, key2, proxy2, attempts2, next_index = create_checkout(
+            access_token,
+            session_token,
+            checkout_proxies,
+            next_index,
+            max_proxies,
+            trial_days,
+            timeout,
+            strategy="custom_promo",
+        )
+        result["checkout_proxy_attempts"] = int(result.get("checkout_proxy_attempts") or 0) + attempts2
+        if data2 and cs2:
+            # rezero custom session
+            entity2 = processor_entity_of(data2)
+            provider2 = stage_proxies.get("provider") or proxy2
+            promotion2 = stage_proxies.get("promotion") or proxy2
+            init2, st2, _ = stripe_init(cs2, key2, provider2, timeout=timeout)
+            if init2 is not None and amount_due(init2) not in (0,):
+                apply_promo_update(
+                    access_token, session_token, cs2, entity2, promotion2, timeout=timeout
+                )
+                init2, st2, _ = stripe_init(cs2, key2, provider2, timeout=timeout)
+            methods2, _ = extract_methods(init2 or {})
+            due2 = amount_due(init2) if init2 else None
+            if init2 and methods2 and "momo" in methods2 and due2 == 0:
+                emit_checkout, emit_key, emit_proxy, emit_init = cs2, key2, provider2, init2
+                result["amount_due"] = 0
+                result["checkout_strategy"] = "custom_promo"
+                result["methods"] = methods2
+                result["promo_update_status"] = (
+                    str(result.get("promo_update_status") or "") + "+custom_emit"
+                )
+
+    qr_info = emit_momo_qr(
+        emit_checkout,
+        emit_key,
+        emit_init,
+        proxy=emit_proxy,
+        provider_proxy=stage_proxies.get("provider") or emit_proxy,
+        approve_proxy=stage_proxies.get("approve") or emit_proxy,
+        redirect_proxy=stage_proxies.get("redirect") or emit_proxy,
+        timeout=max(timeout, 25),
+        access_token=access_token,
+        session_token=session_token or "",
+        processor_entity=str(result.get("processor_entity") or best.get("processor_entity") or "openai_llc"),
+    )
+    result.update(
+        {
+            "qr_status": qr_info.get("qr_status") or "",
+            "qr_error": qr_info.get("qr_error") or "",
+            "has_qr": bool(qr_info.get("has_qr")),
+            "qr_data": qr_info.get("qr_data") or "",
+            "qr_image_url": qr_info.get("qr_image_url") or "",
+            "qr_png_url": qr_info.get("qr_png_url") or "",
+            "hosted_instructions_url": qr_info.get("hosted_instructions_url") or "",
+            "next_action_type": qr_info.get("next_action_type") or "",
+            "qr_expires_at": qr_info.get("qr_expires_at"),
+            "pm_status": qr_info.get("pm_status") or "",
+            "confirm_status": qr_info.get("confirm_status") or "",
+            "approve_status": qr_info.get("approve_status") or "",
+            "middle_checkout_url": qr_info.get("middle_checkout_url") or "",
+            "redirect_url": (qr_info.get("redirect_url") or "")[:120],
+        }
+    )
+    # Only scannable momo gateway / real QR image counts.
+    if result.get("has_qr") and result.get("amount_due") == 0:
+        result["decision"] = "ready_with_qr"
+        result["decision_text"] = DECISION_TEXT["ready_with_qr"]
+        result["supported"] = True
+        result["conclusive"] = True
+    else:
+        # demote stripe middle page
+        if result.get("middle_checkout_url") and not result.get("has_qr"):
+            result["decision"] = "momo_qr_failed"
+            result["decision_text"] = "0元有MoMo，但只拿到Stripe中间页，未出可扫码"
+            result["qr_status"] = result.get("qr_status") or "stripe_middle_only"
+        elif result.get("amount_due") not in (0,):
+            result["decision"] = "promo_nonzero"
+            result["decision_text"] = DECISION_TEXT["promo_nonzero"]
+            result["has_qr"] = False
+        else:
+            result["decision"] = "momo_qr_failed"
+            result["decision_text"] = DECISION_TEXT["momo_qr_failed"]
+        result["supported"] = False
+        result["conclusive"] = True
+        result["has_qr"] = False
+    return next_index
+
+
 def probe_account(
     label: str,
     path: Path | None,
@@ -1500,9 +1650,10 @@ def probe_account(
     max_proxies: int = 3,
     timeout: int = 20,
     parse_only: bool = False,
-    check_methods_anyway: bool = True,
     emit_qr: bool = True,
     max_attempts: int = 3,
+    stage_proxies: dict[str, str] | None = None,
+    strategy: str = "custom_promo",
 ) -> tuple[dict[str, Any], int]:
     if path is not None:
         access_token, session_token, credential = load_credential(path)
@@ -1524,6 +1675,13 @@ def probe_account(
         )
         return result, start_index
 
+    stage_proxies = {
+        str(key): normalize_proxy_url(value) if value else ""
+        for key, value in dict(stage_proxies or {}).items()
+    }
+    checkout_stage_proxy = stage_proxies.get("checkout") or ""
+    if checkout_stage_proxy:
+        proxies = [checkout_stage_proxy]
     if not proxies:
         proxies = [""]
     # Speed first: QR expires ~10 min. Cap attempts, keep proxy rotates small.
@@ -1538,10 +1696,10 @@ def probe_account(
 
     # Prefer custom first for Payment Element confirm → next_action/momo gateway.
     # hosted often only yields checkout.stripe.com middle form (not scannable).
-    speed_strategies = ("custom_promo", "hosted_promo", "custom_trial")
+    speed_strategies = tuple(dict.fromkeys((strategy, "custom_promo", "hosted_promo", "custom_trial")))
 
     for attempt_no in range(1, max_attempts + 1):
-        strategy = speed_strategies[(attempt_no - 1) % len(speed_strategies)]
+        attempt_strategy = speed_strategies[(attempt_no - 1) % len(speed_strategies)]
         data, checkout_id, stripe_key, proxy, attempts, next_index = create_checkout(
             access_token,
             session_token,
@@ -1550,12 +1708,12 @@ def probe_account(
             max_proxies,
             trial_days,
             timeout,
-            strategy=strategy,
+            strategy=attempt_strategy,
         )
         total_attempts += attempts
         attempt_info: dict[str, Any] = {
             "attempt": attempt_no,
-            "strategy": strategy,
+            "strategy": attempt_strategy,
             "proxy_attempts": attempts,
         }
         if data is None:
@@ -1588,10 +1746,12 @@ def probe_account(
             }
         )
 
+        provider_proxy = stage_proxies.get("provider") or proxy
+        promotion_proxy = stage_proxies.get("promotion") or proxy
         init_payload, init_status, init_attempts = stripe_init(
             checkout_id,
             stripe_key,
-            proxy,
+            provider_proxy,
             timeout=timeout,
         )
         attempt_info["stripe_init_status"] = init_status
@@ -1613,7 +1773,7 @@ def probe_account(
                 "decision_text": DECISION_TEXT["stripe_init_failed"],
                 "conclusive": False,
                 "supported": None,
-                "checkout_strategy": strategy,
+                "checkout_strategy": attempt_strategy,
                 "has_momo": None,
                 "has_qr": False,
             }
@@ -1631,14 +1791,14 @@ def probe_account(
                 session_token,
                 checkout_id,
                 entity,
-                proxy,
+                promotion_proxy,
                 timeout=timeout,
             )
             if ok_upd:
                 re_payload, re_status, re_attempts = stripe_init(
                     checkout_id,
                     stripe_key,
-                    proxy,
+                    provider_proxy,
                     timeout=timeout,
                 )
                 init_attempts += re_attempts
@@ -1694,14 +1854,14 @@ def probe_account(
             "decision_text": DECISION_TEXT.get(decision, decision),
             "conclusive": decision not in {"payment_methods_unknown", "stripe_init_failed"},
             # only zero+momo counts as supported
-            "supported": decision in {"ready", "momo_supported", "ready_with_qr"},
+            "supported": decision in {"ready", "ready_with_qr"},
             "has_qr": False,
             "qr_status": "skipped",
-            "checkout_strategy": strategy,
+            "checkout_strategy": attempt_strategy,
             "checkout_session_tail": str(checkout_id)[-10:],
             "_checkout_id": checkout_id,
             "_stripe_key": stripe_key,
-            "_proxy": proxy,
+            "_proxy": provider_proxy,
             "_init_payload": init_payload,
         }
         attempt_info.update(
@@ -1716,15 +1876,7 @@ def probe_account(
         attempt_logs.append(attempt_info)
 
         # rank: ZERO first, then momo (non-zero momo is not success)
-        def _score(row: dict[str, Any]) -> tuple:
-            return (
-                1 if row.get("amount_due") == 0 else 0,
-                1 if row.get("has_momo") else 0,
-                1 if row.get("actual_trial") or row.get("one_click_trial_eligible") is True else 0,
-                1 if row.get("decision") in {"ready", "momo_supported"} else 0,
-            )
-
-        if best is None or _score(cand) > _score(best):
+        if best is None or _candidate_score(cand) > _candidate_score(best):
             best = cand
 
         # only stop early on forced-zero + momo
@@ -1758,104 +1910,26 @@ def probe_account(
             result[k] = v
 
     # HARD: emit QR only when momo + amount_due==0
-    due_final = best.get("amount_due")
-    if best.get("has_momo") is True and due_final not in (0,):
-        result["decision"] = "promo_nonzero"
-        result["decision_text"] = DECISION_TEXT["promo_nonzero"]
-        result["supported"] = False
-        result["conclusive"] = True
-        result["has_qr"] = False
-        result["qr_status"] = "blocked_nonzero"
-        result["qr_error"] = f"amount_due={due_final}"
-    elif emit_qr and best.get("has_momo") is True and due_final == 0:
-        # If best was hosted, try one custom_promo session for real next_action QR.
-        emit_checkout = str(best.get("_checkout_id") or "")
-        emit_key = str(best.get("_stripe_key") or "")
-        emit_proxy = str(best.get("_proxy") or "")
-        emit_init = best.get("_init_payload") or {}
-        emit_strategy = str(best.get("checkout_strategy") or "")
-        if emit_strategy.startswith("hosted") or "custom" not in emit_strategy:
-            data2, cs2, key2, proxy2, attempts2, next_index = create_checkout(
-                access_token,
-                session_token,
-                proxies,
-                next_index,
-                max_proxies,
-                trial_days,
-                timeout,
-                strategy="custom_promo",
-            )
-            result["checkout_proxy_attempts"] = int(result.get("checkout_proxy_attempts") or 0) + attempts2
-            if data2 and cs2:
-                # rezero custom session
-                entity2 = processor_entity_of(data2)
-                init2, st2, _ = stripe_init(cs2, key2, proxy2, timeout=timeout)
-                if init2 is not None and amount_due(init2) not in (0,):
-                    apply_promo_update(
-                        access_token, session_token, cs2, entity2, proxy2, timeout=timeout
-                    )
-                    init2, st2, _ = stripe_init(cs2, key2, proxy2, timeout=timeout)
-                methods2, _ = extract_methods(init2 or {})
-                due2 = amount_due(init2) if init2 else None
-                if init2 and methods2 and "momo" in methods2 and due2 == 0:
-                    emit_checkout, emit_key, emit_proxy, emit_init = cs2, key2, proxy2, init2
-                    result["amount_due"] = 0
-                    result["checkout_strategy"] = "custom_promo"
-                    result["methods"] = methods2
-                    result["promo_update_status"] = (
-                        str(result.get("promo_update_status") or "") + "+custom_emit"
-                    )
-
-        qr_info = emit_momo_qr(
-            emit_checkout,
-            emit_key,
-            emit_init,
-            proxy=emit_proxy,
-            timeout=max(timeout, 25),
-            access_token=access_token,
-            session_token=session_token or "",
-            processor_entity=str(result.get("processor_entity") or best.get("processor_entity") or "openai_llc"),
-        )
-        result.update(
-            {
-                "qr_status": qr_info.get("qr_status") or "",
-                "qr_error": qr_info.get("qr_error") or "",
-                "has_qr": bool(qr_info.get("has_qr")),
-                "qr_data": qr_info.get("qr_data") or "",
-                "qr_image_url": qr_info.get("qr_image_url") or "",
-                "qr_png_url": qr_info.get("qr_png_url") or "",
-                "hosted_instructions_url": qr_info.get("hosted_instructions_url") or "",
-                "next_action_type": qr_info.get("next_action_type") or "",
-                "qr_expires_at": qr_info.get("qr_expires_at"),
-                "pm_status": qr_info.get("pm_status") or "",
-                "confirm_status": qr_info.get("confirm_status") or "",
-                "approve_status": qr_info.get("approve_status") or "",
-                "middle_checkout_url": qr_info.get("middle_checkout_url") or "",
-                "redirect_url": (qr_info.get("redirect_url") or "")[:120],
-            }
-        )
-        # Only scannable momo gateway / real QR image counts.
-        if result.get("has_qr") and result.get("amount_due") == 0:
-            result["decision"] = "ready_with_qr"
-            result["decision_text"] = DECISION_TEXT["ready_with_qr"]
-            result["supported"] = True
-            result["conclusive"] = True
-        else:
-            # demote stripe middle page
-            if result.get("middle_checkout_url") and not result.get("has_qr"):
-                result["decision"] = "momo_qr_failed"
-                result["decision_text"] = "0元有MoMo，但只拿到Stripe中间页，未出可扫码"
-                result["qr_status"] = result.get("qr_status") or "stripe_middle_only"
-            elif result.get("amount_due") not in (0,):
-                result["decision"] = "promo_nonzero"
-                result["decision_text"] = DECISION_TEXT["promo_nonzero"]
-                result["has_qr"] = False
-            else:
-                result["decision"] = "momo_qr_failed"
-                result["decision_text"] = DECISION_TEXT["momo_qr_failed"]
-            result["supported"] = False
-            result["conclusive"] = True
-            result["has_qr"] = False
+    next_index = _finalize_qr_decision(
+        result,
+        best,
+        emit_qr=emit_qr,
+        access_token=access_token,
+        session_token=session_token,
+        proxies=proxies,
+        next_index=next_index,
+        max_proxies=max_proxies,
+        trial_days=trial_days,
+        timeout=timeout,
+        stage_proxies=stage_proxies,
+    )
+    result["stage_status"] = {
+        "checkout": "completed" if result.get("checkout_status") == "created" else str(result.get("checkout_status") or ""),
+        "promotion": str(result.get("promo_update_status") or ""),
+        "provider": str(result.get("stripe_init_status") or ""),
+        "approve": str(result.get("approve_status") or ""),
+        "redirect": str(result.get("qr_status") or ""),
+    }
 
     # cleanup internals if any leaked
     for k in list(result.keys()):
@@ -1874,10 +1948,12 @@ def probe_token_blob(
     max_proxies: int = 1,
     timeout: int = 20,
     parse_only: bool = False,
-    check_methods_anyway: bool = False,
     emit_qr: bool = True,
     pre_proxy: str = "auto",
     label: str = "A",
+    stage_proxies: dict[str, str] | None = None,
+    strategy: str = "custom_promo",
+    max_attempts: int = 3,
 ) -> dict[str, Any]:
     configure_pre_proxy(pre_proxy)
     if parse_only:
@@ -1898,8 +1974,10 @@ def probe_token_blob(
         max_proxies=max_proxies,
         timeout=timeout,
         parse_only=parse_only,
-        check_methods_anyway=check_methods_anyway,
         emit_qr=emit_qr,
+        stage_proxies=stage_proxies,
+        strategy=strategy,
+        max_attempts=max_attempts,
     )
     return result
 
@@ -1956,8 +2034,7 @@ def main() -> int:
             max_proxies=args.max_proxies,
             timeout=args.timeout,
             parse_only=args.parse_only,
-            check_methods_anyway=args.check_methods_anyway,
-            emit_qr=(not args.no_emit_qr) and bool(args.emit_qr),
+            emit_qr=not args.no_emit_qr,
         )
         results.append(result)
         print_result(result, args.json)

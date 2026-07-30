@@ -294,6 +294,45 @@ def _generate_gopay_link(access_token: str, proxy: Any = None, **kwargs: Any) ->
     }
 
 
+def _run_extractor_subprocess(
+    spec: PaymentMethodSpec,
+    command: list[str],
+    *,
+    env: dict[str, str],
+    cwd: str,
+    timeout: int,
+    cleanup_paths: tuple[str, ...] = (),
+) -> tuple[subprocess.CompletedProcess[str] | None, str, dict[str, Any] | None]:
+    """Run an extractor CLI, returning ``(proc, combined_output, timeout_error)``.
+
+    Centralizes the run + ``TimeoutExpired`` handling + temp-file cleanup shared by
+    the script/direct_card/momo adapters. On timeout returns ``(None, "", err_dict)``;
+    otherwise ``(proc, stdout+stderr, None)``. ``cleanup_paths`` are always removed.
+    """
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        return proc, output, None
+    except subprocess.TimeoutExpired:
+        return None, "", {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
+    finally:
+        for path in cleanup_paths:
+            if path:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+
 def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
     root = _reference_root()
     script = root / spec.script
@@ -323,78 +362,77 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     env["PYTHONUTF8"] = "1"
     command = [sys.executable, str(script)]
     proxy_file = ""
-    try:
-        if spec.key == "pix":
-            env["OPENAI_ACCESS_TOKEN"] = access_token
-            command.extend(["--quiet", "--proxy", seed_proxy])
-            provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
-            promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
-            if provider_proxy:
-                command.extend(["--br-proxy", provider_proxy])
-            if promotion_proxy:
-                command.extend(["--vn-proxy", promotion_proxy])
-        else:
-            handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
-            with handle:
-                handle.write(seed_proxy + "\n")
-            proxy_file = handle.name
-            if spec.key == "ideal":
-                env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
-            elif spec.key == "kakao":
-                env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": proxy_file})
-            elif spec.key == "blik":
-                env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single", "IDEAL_BLIK_CODE": blik_code})
-            elif spec.key == "twint":
-                env.update({"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"})
+    if spec.key == "pix":
+        env["OPENAI_ACCESS_TOKEN"] = access_token
+        command.extend(["--quiet", "--proxy", seed_proxy])
+        provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
+        promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
+        if provider_proxy:
+            command.extend(["--br-proxy", provider_proxy])
+        if promotion_proxy:
+            command.extend(["--vn-proxy", promotion_proxy])
+    else:
+        handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
+        with handle:
+            handle.write(seed_proxy + "\n")
+        proxy_file = handle.name
+        if spec.key == "ideal":
+            env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
+        elif spec.key == "kakao":
+            env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": proxy_file})
+            countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
+            checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
+            promotion_country = str(countries.get("promotion") or "VN").strip().upper()
+            provider_country = str(countries.get("provider") or kwargs.get("target_country") or "KR").strip().upper()
+            env.update({
+                "KAKAO_BOOTSTRAP_COUNTRY": checkout_country,
+                "KAKAO_PROMOTION_COUNTRY": promotion_country,
+                "KAKAO_PROVIDER_COUNTRY": provider_country,
+            })
+        elif spec.key == "blik":
+            env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single", "IDEAL_BLIK_CODE": blik_code})
+        elif spec.key == "twint":
+            env.update({"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"})
 
-        proc = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-        if proc.returncode != 0:
+    proc, output, timeout_err = _run_extractor_subprocess(
+        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(proxy_file,),
+    )
+    if timeout_err:
+        return timeout_err
+    parsed = _last_json_object(proc.stdout or "") if spec.key in {"pix", "kakao"} else {}
+    if parsed and spec.key == "kakao":
+        parsed.setdefault("payment_method", "kakao")
+        parsed.setdefault("url", parsed.get("provider_redirect_url") or "")
+        return parsed
+    if proc.returncode != 0:
+        return {
+            "ok": False,
+            "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
+            "exit_code": proc.returncode,
+        }
+    parsed = _last_json_object(proc.stdout or "") if spec.key == "pix" else {}
+    if parsed:
+        parsed["ok"] = bool(parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_qr_code"))
+        parsed["url"] = parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_hosted_instructions_url") or ""
+        parsed["qr_data"] = parsed.get("pix_qr_code") or ""
+        return parsed
+    if spec.key == "blik":
+        # BLIK 自动提交模式完成支付后没有可分享 URL，成功信号是提取器打印的
+        # ``BLIK_RESULT:{...}`` 完成哨兵（status=completed）。不要再从截断日志抓 URL。
+        completion = _blik_completion(proc.stdout or "")
+        if completion:
             return {
-                "ok": False,
-                "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
-                "exit_code": proc.returncode,
+                "ok": True,
+                "url": "",
+                "status": "completed",
+                "operation": "execute_payment",
+                "link_type": "blik_protocol_completed",
+                "message": completion.get("message") or "BLIK 自动提交完成",
             }
-        parsed = _last_json_object(proc.stdout or "") if spec.key == "pix" else {}
-        if parsed:
-            parsed["ok"] = bool(parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_qr_code"))
-            parsed["url"] = parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_hosted_instructions_url") or ""
-            parsed["qr_data"] = parsed.get("pix_qr_code") or ""
-            return parsed
-        if spec.key == "blik":
-            # BLIK 自动提交模式完成支付后没有可分享 URL，成功信号是提取器打印的
-            # ``BLIK_RESULT:{...}`` 完成哨兵（status=completed）。不要再从截断日志抓 URL。
-            completion = _blik_completion(proc.stdout or "")
-            if completion:
-                return {
-                    "ok": True,
-                    "url": "",
-                    "status": "completed",
-                    "operation": "execute_payment",
-                    "link_type": "blik_protocol_completed",
-                    "message": completion.get("message") or "BLIK 自动提交完成",
-                }
-        url = _last_payment_url(output)
-        if not url:
-            return {"ok": False, "error": _redact_sensitive_text(_tail(output)) or "extractor returned no payment URL"}
-        return {"ok": True, "url": url, "link_type": f"{spec.key}_protocol"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
-    finally:
-        if proxy_file:
-            try:
-                Path(proxy_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+    url = _last_payment_url(output)
+    if not url:
+        return {"ok": False, "error": _redact_sensitive_text(_tail(output)) or "extractor returned no payment URL"}
+    return {"ok": True, "url": url, "link_type": f"{spec.key}_protocol"}
 
 
 _DIRECT_CARD_CURRENCY = {
@@ -449,75 +487,59 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
-    token_file = ""
-    try:
-        token_file = _write_token_file(access_token)
-        command = [
-            sys.executable, str(script),
-            "--credential-file", token_file,
-            "--billing-country", country,
-            "--currency", currency,
-            "--checkout-proxy", checkout_proxy,
-            "--update-proxy", update_proxy,
-            "--skip-proxy-check",
-        ]
-        checkout_cc = str(countries.get("checkout") or "").strip().upper()
-        update_cc = str(countries.get("promotion") or countries.get("update") or "").strip().upper()
-        if checkout_cc:
-            command.extend(["--checkout-proxy-country", checkout_cc])
-        if update_cc:
-            command.extend(["--update-proxy-country", update_cc])
-        promo = str(method_cfg.get("promo_campaign_id") or "").strip()
-        if promo:
-            command.extend(["--promo-campaign-id", promo])
+    token_file = _write_token_file(access_token)
+    command = [
+        sys.executable, str(script),
+        "--credential-file", token_file,
+        "--billing-country", country,
+        "--currency", currency,
+        "--checkout-proxy", checkout_proxy,
+        "--update-proxy", update_proxy,
+        "--skip-proxy-check",
+    ]
+    checkout_cc = str(countries.get("checkout") or "").strip().upper()
+    update_cc = str(countries.get("promotion") or countries.get("update") or "").strip().upper()
+    if checkout_cc:
+        command.extend(["--checkout-proxy-country", checkout_cc])
+    if update_cc:
+        command.extend(["--update-proxy-country", update_cc])
+    promo = str(method_cfg.get("promo_campaign_id") or "").strip()
+    if promo:
+        command.extend(["--promo-campaign-id", promo])
 
-        proc = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-        parsed = _last_json_object(proc.stdout or "")
-        if not parsed:
-            return {
-                "ok": False,
-                "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
-                "exit_code": proc.returncode,
-            }
-        if not parsed.get("ok"):
-            return {
-                "ok": False,
-                "error": _redact_sensitive_text(str(parsed.get("error") or "direct_card extraction failed")),
-                "error_code": parsed.get("error_type") or "direct_card_failed",
-            }
-        long_url = str(parsed.get("long_url") or "").strip()
-        if not long_url:
-            return {"ok": False, "error": "direct_card extractor returned no checkout URL"}
+    proc, output, timeout_err = _run_extractor_subprocess(
+        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
+    )
+    if timeout_err:
+        return timeout_err
+    parsed = _last_json_object(proc.stdout or "")
+    if not parsed:
         return {
-            "ok": True,
-            "url": long_url,
-            "long_url": long_url,
-            "cs_id": parsed.get("cs_id") or "",
-            "processor_entity": parsed.get("processor_entity") or "",
-            "amount": parsed.get("amount_minor"),
-            "amount_verification": parsed.get("amount_verification") or "",
-            "currency": parsed.get("amount_currency") or currency,
-            "target_country": parsed.get("billing_country") or country,
-            "link_type": "direct_card_protocol",
+            "ok": False,
+            "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
+            "exit_code": proc.returncode,
         }
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
-    finally:
-        if token_file:
-            try:
-                Path(token_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+    if not parsed.get("ok"):
+        return {
+            "ok": False,
+            "error": _redact_sensitive_text(str(parsed.get("error") or "direct_card extraction failed")),
+            "error_code": parsed.get("error_type") or "direct_card_failed",
+        }
+    long_url = str(parsed.get("long_url") or "").strip()
+    if not long_url:
+        return {"ok": False, "error": "direct_card extractor returned no checkout URL"}
+    return {
+        "ok": True,
+        "url": long_url,
+        "long_url": long_url,
+        "cs_id": parsed.get("cs_id") or "",
+        "processor_entity": parsed.get("processor_entity") or "",
+        "amount": parsed.get("amount_minor"),
+        "amount_verification": parsed.get("amount_verification") or "",
+        "currency": parsed.get("amount_currency") or currency,
+        "target_country": parsed.get("billing_country") or country,
+        "link_type": "direct_card_protocol",
+    }
 
 
 def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
@@ -539,59 +561,70 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         method_cfg = {}
     timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
     request_timeout = int(method_cfg.get("request_timeout_seconds") or 25)
-    vn_proxy = str(
+    fallback_proxy = str(
         kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or method_cfg.get("proxy") or ""
     ).strip()
+    stage_proxies = {
+        "checkout": str(kwargs.get("checkout_proxy") or fallback_proxy).strip(),
+        "promotion": str(kwargs.get("promotion_proxy") or fallback_proxy).strip(),
+        "provider": str(
+            kwargs.get("provider_proxy") or kwargs.get("stripe_init_proxy") or fallback_proxy
+        ).strip(),
+        "approve": str(kwargs.get("approve_proxy") or fallback_proxy).strip(),
+        "redirect": str(kwargs.get("redirect_proxy") or fallback_proxy).strip(),
+    }
     pre_proxy = str(method_cfg.get("pre_proxy") or "off").strip() or "off"
     qr_dir = runtime_file(CFG, "momo_qr")
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
-    token_file = ""
-    try:
-        token_file = _write_token_file(access_token)
-        command = [
-            sys.executable, str(script),
-            "--token-file", token_file,
-            "--pre-proxy", pre_proxy,
-            "--timeout", str(max(8, request_timeout)),
-            "--qr-out-dir", str(qr_dir),
-        ]
-        if vn_proxy:
-            command.extend(["--proxy", vn_proxy])
-        max_proxies = int(method_cfg.get("max_proxies") or 1)
-        if max_proxies > 1:
-            command.extend(["--max-proxies", str(max_proxies)])
+    token_file = _write_token_file(access_token)
+    command = [
+        sys.executable, str(script),
+        "--token-file", token_file,
+        "--pre-proxy", pre_proxy,
+        "--timeout", str(max(8, request_timeout)),
+        "--qr-out-dir", str(qr_dir),
+    ]
+    if fallback_proxy:
+        env["MOMO_PROXY"] = fallback_proxy
+    for stage, value in stage_proxies.items():
+        if value:
+            env[f"MOMO_{stage.upper()}_PROXY"] = value
+    strategy = str(kwargs.get("strategy") or method_cfg.get("strategy") or "custom_promo").strip()
+    if strategy:
+        command.extend(["--strategy", strategy])
+    if kwargs.get("probe_only"):
+        command.append("--probe-only")
+    stripe_profile = method_cfg.get("stripe_profile") if isinstance(method_cfg.get("stripe_profile"), dict) else {}
+    for env_key, config_key in {
+        "MOMO_STRIPE_RUNTIME_VERSION": "runtime_version",
+        "MOMO_STRIPE_API_VERSION": "api_version",
+        "MOMO_STRIPE_CLIENT_BETAS": "client_betas",
+        "MOMO_STRIPE_CONFIRM_FIELDS": "confirm_fields",
+    }.items():
+        value = stripe_profile.get(config_key)
+        if value not in (None, ""):
+            env[env_key] = json.dumps(value, ensure_ascii=False) if isinstance(value, (list, dict)) else str(value)
+    max_proxies = int(method_cfg.get("max_proxies") or 1)
+    if max_proxies > 1:
+        command.extend(["--max-proxies", str(max_proxies)])
 
-        proc = subprocess.run(
-            command,
-            cwd=str(script.parent),
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-        parsed = _last_json_object(proc.stdout or "")
-        if not parsed:
-            return {
-                "ok": False,
-                "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
-                "exit_code": proc.returncode,
-            }
-        if not parsed.get("ok") and not parsed.get("error"):
-            parsed["error"] = parsed.get("qr_error") or parsed.get("decision_text") or "momo QR extraction failed"
-        return parsed
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
-    finally:
-        if token_file:
-            try:
-                Path(token_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+    proc, output, timeout_err = _run_extractor_subprocess(
+        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
+    )
+    if timeout_err:
+        return timeout_err
+    parsed = _last_json_object(proc.stdout or "")
+    if not parsed:
+        return {
+            "ok": False,
+            "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
+            "exit_code": proc.returncode,
+        }
+    if not parsed.get("ok") and not parsed.get("error"):
+        parsed["error"] = parsed.get("qr_error") or parsed.get("decision_text") or "momo QR extraction failed"
+    return parsed
 
 
 def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:

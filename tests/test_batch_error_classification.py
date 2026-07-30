@@ -7,6 +7,29 @@ from sms_tool.storage import _status
 
 
 class BatchErrorClassificationTests(unittest.TestCase):
+    def test_retryable_network_failure_gets_fresh_proxy_and_second_attempt(self):
+        calls = []
+
+        def fake_run_email(**kwargs):
+            calls.append(kwargs["proxy"])
+            if len(calls) == 1:
+                return {"success": False, "error": "sentinel_extract_failed", "failure_class": "network"}
+            return {"success": True, "email": "retry@example.com"}
+
+        with patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=["proxy-attempt-1", "proxy-attempt-2"]):
+            results = run_batch_impl(
+                count=1,
+                proxy="proxy-base",
+                workers=1,
+                max_attempts=2,
+                retry_delay_seconds=0,
+                run_email_func=fake_run_email,
+            )
+
+        self.assertEqual(calls, ["proxy-attempt-1", "proxy-attempt-2"])
+        self.assertTrue(results[0]["success"])
+        self.assertEqual(results[0]["registration_attempts"], 2)
+
     def test_registration_proxy_falls_back_from_kookeey_to_cliproxy(self):
         pool = [
             "http://user:base-JP-12345678-5m@gate.kookeey.info:1000",
@@ -99,6 +122,32 @@ class BatchErrorClassificationTests(unittest.TestCase):
         self.assertEqual(results[0]["failure_class"], "account")
         self.assertTrue(results[0]["dropped"])
 
+    def test_mailbox_timeout_is_not_marked_dropped(self):
+        results = run_batch_impl(
+            count=1,
+            workers=1,
+            run_email_func=lambda **_: {
+                "success": False,
+                "error": "email_otp_poll_timeout",
+            },
+        )
+
+        self.assertEqual(results[0]["failure_class"], "mailbox")
+        self.assertFalse(results[0]["dropped"])
+
+    def test_invalid_auth_state_is_not_marked_dropped(self):
+        results = run_batch_impl(
+            count=1,
+            workers=1,
+            run_email_func=lambda **_: {
+                "success": False,
+                "error": "create_account_failed:invalid_auth_step",
+            },
+        )
+
+        self.assertEqual(results[0]["failure_class"], "auth_state")
+        self.assertFalse(results[0]["dropped"])
+
     def test_storage_keeps_network_failures_separate_from_dead_accounts(self):
         status = _status(
             {"success": False, "failure_class": "network", "error": "proxy timeout"},
@@ -108,6 +157,26 @@ class BatchErrorClassificationTests(unittest.TestCase):
         )
 
         self.assertEqual(status, "network_failed")
+
+    def test_storage_keeps_mailbox_failures_separate_from_dead_accounts(self):
+        status = _status(
+            {"success": False, "failure_class": "mailbox", "error": "email_otp_poll_timeout"},
+            {},
+            "",
+            has_refresh_token=False,
+        )
+
+        self.assertEqual(status, "mailbox_failed")
+
+    def test_storage_keeps_auth_state_failures_separate_from_dead_accounts(self):
+        status = _status(
+            {"success": False, "failure_class": "auth_state", "error": "invalid_auth_step"},
+            {},
+            "",
+            has_refresh_token=False,
+        )
+
+        self.assertEqual(status, "auth_state_failed")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from curl_cffi import requests as curl_requests
 from .config import CFG
 from .codex_phone import complete_phone_verification
 from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
-from .auth_headers import openai_auth_headers_lower
+from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
 from .http_client import request_with_retry
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
 from . import mailbox_gmail
@@ -36,7 +36,16 @@ def refresh_codex_oauth_session(
     force_email_otp_login=False,
     phone_pool=None,
     phone_probe_only=False,
+    persist=True,
 ):
+    if _is_terminal_account_data(data):
+        return {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "account_deactivated",
+            "terminal": True,
+            "skipped": True,
+        }
     result = collect_codex_oauth_tokens(
         data=data,
         proxy=proxy,
@@ -46,6 +55,8 @@ def refresh_codex_oauth_session(
         phone_probe_only=phone_probe_only,
     )
     if not result.get("ok"):
+        return result
+    if not persist:
         return result
     return _save_oauth_tokens(
         data,
@@ -66,6 +77,7 @@ def collect_codex_oauth_tokens(
     phone_pool=None,
     phone_probe_only=False,
 ):
+    select_auth_fingerprint(rotate=True)
     email = str(data.get("email") or "").strip().lower()
     if not email:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": "missing_email"}
@@ -132,7 +144,7 @@ def _login_and_exchange(
             headers=headers,
             json={"username": {"value": email, "kind": "email"}},
             timeout=30,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
             allow_redirects=False,
         )
         if start_resp.status_code != 200:
@@ -366,7 +378,7 @@ def _passwordless_login_and_exchange(
             ),
             json={"code": code},
             timeout=30,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
         )
         if validate.status_code != 200:
             last_error = f"email_otp_validate_failed:{validate.status_code}"
@@ -447,7 +459,7 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
         ),
         json={"password": password},
         timeout=30,
-        impersonate="chrome110",
+        impersonate=auth_impersonate(),
     )
     if response.status_code != 200:
         return {
@@ -499,7 +511,7 @@ def _send_passwordless_otp(session, did, current_url):
                 ),
                 json={},
                 timeout=30,
-                impersonate="chrome110",
+                impersonate=auth_impersonate(),
             )
             if response.status_code == 200:
                 print(f"[*] Passwordless OTP send accepted: {endpoint.rsplit('/', 1)[-1]}")
@@ -531,7 +543,7 @@ def _resend_email_otp(session, did, current_url):
             ),
             json={},
             timeout=20,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
         )
         print(f"[*] Email OTP resend: {response.status_code}")
         return {"ok": response.status_code in (200, 409), "status_code": response.status_code}
@@ -630,7 +642,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
             headers=_oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
             json={},
             timeout=30,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
         )
     except Exception:
         pass
@@ -651,7 +663,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
         ),
         json={"code": code},
         timeout=30,
-        impersonate="chrome110",
+        impersonate=auth_impersonate(),
     )
     if validate.status_code != 200:
         return {
@@ -700,7 +712,7 @@ def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=3
         headers=headers,
         json={"workspace_id": workspace_id},
         timeout=timeout,
-        impersonate="chrome110",
+        impersonate=auth_impersonate(),
     )
     if response.status_code != 200:
         return {
@@ -787,7 +799,7 @@ def _exchange_callback(callback_url, oauth, proxy=None):
         },
         headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
         proxies={"http": proxy, "https": proxy} if proxy else None,
-        impersonate="chrome110",
+        impersonate=auth_impersonate(),
     )
     if response.status_code != 200:
         raise RuntimeError(f"oauth_token_exchange_failed:{response.status_code}:{response.text[:300]}")
@@ -865,7 +877,7 @@ def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
             attempts=5,
             retry_delay=5,
             allow_redirects=False,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
         )
         if response.status_code not in (301, 302, 303, 307, 308):
             return response, current_url
@@ -914,6 +926,26 @@ def _mailbox_from_data(data):
                 return fallback
         return None
     return result
+
+
+def _is_terminal_account_data(data):
+    if not isinstance(data, dict):
+        return False
+    terminal = data.get("terminal_failure") if isinstance(data.get("terminal_failure"), dict) else {}
+    text = " ".join(str(value or "") for value in (
+        data.get("status"),
+        data.get("error"),
+        data.get("account_scan_status"),
+        terminal.get("code"),
+        terminal.get("reason"),
+    )).lower()
+    return any(marker in text for marker in (
+        "account_deactivated",
+        "account_deatived",
+        "deleted or deactivated",
+        "account has been deleted",
+        "account has been deactivated",
+    ))
 
 
 def _oai_headers(did, extra=None):

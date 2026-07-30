@@ -399,7 +399,7 @@
                       <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Data="M3 3v18h18 M7 14l4-4 4 4 5-5"/>
                     </Border>
-                    <TextBlock Grid.Column="1" Text="额度查询" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                    <TextBlock Grid.Column="1" Text="账号测活" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
 
@@ -432,6 +432,16 @@
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71 M5 3v4 M3 5h4"/>
                     </Border>
                     <TextBlock Grid.Column="1" Text="协议支付提链" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
+                  </Grid>
+                </Button>
+                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="BatchProtocolPayment_Click">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="32" Height="32" CornerRadius="6" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="批量协议支付" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="RegeneratePayPalLink_Click">
@@ -744,8 +754,14 @@
                             Data="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
                     </MenuItem.Icon>
                   </MenuItem>
+                  <MenuItem Header="批量协议支付" Click="CtxBatchProtocolPayment_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
                   <Separator/>
-                  <MenuItem Header="刷新账号额度" Click="CtxRefreshQuota_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="测活当前账号" Click="CtxCheckAccountAlive_Click" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
@@ -773,21 +789,24 @@
                 <DataGridTextColumn Header="更新时间" Binding="{Binding CompletedAt}" Width="155" IsReadOnly="True"/>
                 <DataGridTextColumn Header="邮箱" Binding="{Binding Identifier}" Width="260" IsReadOnly="True"/>
                 <DataGridTextColumn Header="账号类型" Binding="{Binding AccountPlanType}" Width="92" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="额度情况" Width="200" IsReadOnly="True">
-                  <DataGridTemplateColumn.CellTemplate>
-                    <DataTemplate>
-                      <TextBlock FontSize="11" VerticalAlignment="Center" Margin="4,0" TextTrimming="CharacterEllipsis">
-                        <Run Text="{Binding QuotaStatus}"/>
-                      </TextBlock>
-                    </DataTemplate>
-                  </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="注册区" Binding="{Binding RegistrationCountry}" Width="64" IsReadOnly="True"/>
+                <DataGridTextColumn Header="注册批次" Binding="{Binding RegistrationBatchId}" Width="150" IsReadOnly="True"/>
+                <DataGridTextColumn Header="入库" Binding="{Binding RegistrationState}" Width="72" IsReadOnly="True"/>
                 <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
                 <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="AT" Width="86" IsReadOnly="True" SortMemberPath="AccessTokenStatus" CanUserSort="True">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding AccessTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
+                        <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding AccessTokenStatus}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>

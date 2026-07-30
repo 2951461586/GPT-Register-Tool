@@ -91,17 +91,22 @@ namespace SmsWorkbench
                 MarkPayPalComplete(row);
         }
 
-        private async void CtxRefreshQuota_Click(object sender, RoutedEventArgs e)
+        private async void CtxCheckAccountAlive_Click(object sender, RoutedEventArgs e)
         {
             if (AccountGrid?.SelectedItem is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
             {
                 NotifyWarning("请先选择一个账号。");
                 return;
             }
-            await RefreshQuotaForRowAsync(row);
+            await CheckAccountAliveAsync(row);
         }
 
-        private async Task RefreshQuotaForRowAsync(PoolRow row)
+        private void CtxBatchProtocolPayment_Click(object sender, RoutedEventArgs e)
+        {
+            BatchProtocolPayment_Click(sender, e);
+        }
+
+        private async Task CheckAccountAliveAsync(PoolRow row)
         {
             if (row == null || string.IsNullOrWhiteSpace(row.Identifier))
             {
@@ -111,20 +116,20 @@ namespace SmsWorkbench
 
             if (!row.HasAccessToken)
             {
-                await DialogFactory.ShowInfoAsync(this, "刷新额度", "该账号没有 Access Token，无法查询额度。请先登录获取 AT。");
+                await DialogFactory.ShowInfoAsync(this, "账号测活", "该账号未获取 Access Token，无法测活。请先登录获取 AT。");
                 return;
             }
 
             try
             {
-                Log($"正在查询额度：{row.Identifier}");
+                Log($"正在进行账号测活：{row.Identifier}");
                 var args = new List<string> { "--quota-usage", "--email", row.Identifier, "--refresh-timeout", "45" };
                 AddRegistrationProxy(args);
-                string json = await Task.Run(() => RunBackendWithResult("查询额度", args));
+                string json = await Task.Run(() => RunBackendWithResult("账号测活", args));
 
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    await DialogFactory.ShowInfoAsync(this, "刷新额度", "查询额度失败：未收到有效响应。");
+                    await DialogFactory.ShowInfoAsync(this, "账号测活", "账号测活失败：未收到有效响应。");
                     return;
                 }
 
@@ -133,71 +138,36 @@ namespace SmsWorkbench
 
                 if (root.TryGetProperty("ok", out var okEl) && okEl.GetBoolean())
                 {
-                    string quotaStatus = root.TryGetProperty("quota_status", out var qsEl) ? qsEl.GetString() ?? "" : "";
-                    string detail = FormatQuotaDetail(root);
-                    await DialogFactory.ShowInfoAsync(this, $"额度查询：{row.Identifier}", detail);
-                    Log($"额度查询成功：{row.Identifier} → {quotaStatus}");
+                    string detail = FormatAccountLivenessDetail(root);
+                    await DialogFactory.ShowInfoAsync(this, $"账号测活：{row.Identifier}", detail);
+                    Log($"账号测活成功：{row.Identifier} → AT 有效");
                     RefreshPools();
                 }
                 else
                 {
                     string error = root.TryGetProperty("error", out var errEl) ? errEl.GetString() ?? "未知错误" : "未知错误";
                     string status = root.TryGetProperty("status", out var stEl) ? stEl.GetString() ?? "" : "";
-                    string msg = $"查询失败：{error}";
+                    string msg = $"测活失败：{error}";
                     if (status == "token_invalid")
-                        msg += "\n\n额度接口返回 401，当前 Access Token 已失效。";
-                    await DialogFactory.ShowInfoAsync(this, $"额度查询：{row.Identifier}", msg);
-                    Log($"额度查询失败：{row.Identifier} → {error}");
+                        msg += "\n\n接口返回 HTTP 401，当前 Access Token 已失效。";
+                    await DialogFactory.ShowInfoAsync(this, $"账号测活：{row.Identifier}", msg);
+                    Log($"账号测活失败：{row.Identifier} → {error}");
                 }
             }
             catch (Exception ex)
             {
-                Log($"额度查询异常：{ex.Message}");
-                await DialogFactory.ShowInfoAsync(this, "刷新额度", $"查询异常：{ex.Message}");
+                Log($"账号测活异常：{ex.Message}");
+                await DialogFactory.ShowInfoAsync(this, "账号测活", $"测活异常：{ex.Message}");
             }
         }
 
-        private static string FormatQuotaDetail(JsonElement root)
+        private static string FormatAccountLivenessDetail(JsonElement root)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Codex 额度使用情况");
-            sb.AppendLine();
-
-            if (root.TryGetProperty("wham_usage", out var whamEl) && whamEl.ValueKind == JsonValueKind.Object)
-            {
-                foreach (string windowKey in new[] { "5h", "7d" })
-                {
-                    if (whamEl.TryGetProperty(windowKey, out var windowEl) && windowEl.ValueKind == JsonValueKind.Object)
-                    {
-                        long used = windowEl.TryGetProperty("used", out var u) && u.TryGetInt64(out long uv) ? uv : 0;
-                        long limit = windowEl.TryGetProperty("limit", out var l) && l.TryGetInt64(out long lv) ? lv : 0;
-                        long remaining = windowEl.TryGetProperty("remaining", out var r) && r.TryGetInt64(out long rv) ? rv : 0;
-                        double percent = windowEl.TryGetProperty("percent", out var p) && p.TryGetDouble(out double pv) ? pv : 0;
-
-                        string label = windowKey == "5h" ? "5 小时窗口" : "7 天窗口";
-                        sb.AppendLine($"■ {label}");
-                        sb.AppendLine($"  已用：{FmtToken(used)} / {FmtToken(limit)} ({percent:F1}%)");
-                        sb.AppendLine($"  剩余：{FmtToken(remaining)}");
-                        if (windowEl.TryGetProperty("reset_at", out var resetEl))
-                            sb.AppendLine($"  重置时间：{resetEl.GetString() ?? ""}");
-                        sb.AppendLine();
-                    }
-                }
-            }
-            else
-            {
-                string quotaStatus = root.TryGetProperty("quota_status", out var qsEl) ? qsEl.GetString() ?? "" : "未知";
-                sb.AppendLine($"状态：{quotaStatus}");
-            }
-
+            string statusCode = root.TryGetProperty("status_code", out var codeEl) ? codeEl.ToString() : "";
+            sb.AppendLine("状态：AT 有效");
+            sb.AppendLine("接口：HTTP " + (string.IsNullOrWhiteSpace(statusCode) ? "200" : statusCode));
             return sb.ToString().TrimEnd();
-        }
-
-        private static string FmtToken(long n)
-        {
-            if (n >= 1_000_000) return $"{n / 1_000_000.0:F1}M";
-            if (n >= 1_000) return $"{n / 1_000.0:F1}K";
-            return n.ToString();
         }
     }
 }
