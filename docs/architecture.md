@@ -127,18 +127,29 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 
 ### Proxy Routing Boundary
 
-Non-payment traffic has one owner and one fixed route: `http://127.0.0.1:7897`.
-The desktop `AddNonPaymentProxy` seam applies it to registration, mailbox,
-SMS verification, quota refresh, workspace/account scans, and session refresh.
-`proxy.default`, `proxy.pool`, `mailbox_proxy`, and the phone-verification proxy
-are normalized to the same value when desktop settings are saved.
+Registration, mailbox receiving, and payment each have their own proxy owner.
+The desktop **设置 → 网络与支付 / 网络代理** page exposes them as three separate
+fields (`注册代理（主）` + `注册代理池`, `邮箱收件代理`, `协议支付代理池`); that page
+holds the authoritative per-machine values, so consult it for the live routing.
 
-Payment traffic is deliberately outside this rule. PayPal and protocol-payment
-modules resolve `stage_proxies` from their payment configuration. A default
-non-payment proxy supplied by the desktop is not considered an explicit payment
-override, so configured checkout/provider/confirm/approve/promotion routes keep
-their existing behavior. Only an operator-provided payment proxy may explicitly
-override those stages where the payment module permits it.
+- **Registration traffic → JP dynamic proxy.** Registration workers use
+  `proxy.registration` (desktop field `注册代理（主）`) plus the `proxy.pool`
+  rotation list (`注册代理池`) — a JP dynamic-session upstream whose sticky-session
+  id is refreshed per worker (`phone_proxy.refresh_proxy_sid`) so each concurrent
+  worker gets a distinct exit IP. `proxy.default` and the phone-verification
+  proxy (`phone_reuse.proxy`) are saved to this same registration value.
+- **Mailbox receiving → fixed local route.** OTP polling always resolves through
+  `mailbox_proxy` (desktop field `邮箱收件代理`), which defaults to
+  `http://127.0.0.1:7897` and never inherits the rotating registration proxy
+  (`mailbox._resolve_mailbox_proxy`). This keeps inbox fetches on a stable local
+  egress independent of the registration session.
+- **Payment traffic → independent stage proxies.** PayPal and protocol-payment
+  modules resolve `paypal.stage_proxies` / `protocol_payments.proxy_pool` from
+  their own payment configuration. A registration or mailbox proxy is never
+  treated as a payment override, so configured checkout/provider/confirm/approve/
+  promotion routes keep their existing behavior. Only an operator-provided
+  payment proxy may explicitly override those stages where the payment module
+  permits it.
 
 ### PayPal Generation Type
 
@@ -200,7 +211,7 @@ The desktop settings page exposes SMSBower credentials and advanced timing/retry
 `SmsWorkbench/MainWindow.xaml.cs` may:
 
 - Read `config.json`.
-- Apply the fixed local non-payment proxy when launching non-payment commands.
+- Apply the configured registration proxy (with local `127.0.0.1:7897` fallback) and the fixed `mailbox_proxy` route when launching non-payment commands.
 - Create temporary mailbox selection files.
 - Start `chatgpt_phone_reg.py`.
 - Display SQLite/session/mailbox state.
@@ -255,10 +266,21 @@ provider/parsing modules own the implementation:
 Registration OTP polling accepts a pipe-separated subject keyword string. The
 registration flow uses both `verification code` and `login code`, because the
 passwordless signup path can receive either subject even when the auth state is
-still a signup transaction. CFWorker mailboxes also use a small
-`cfworker_otp_issued_after_grace_seconds` timestamp grace window to avoid
-dropping a fresh message whose provider timestamp is a few seconds earlier than
-the local resend-return time.
+still a signup transaction. Provider clock-skew normalization belongs to the
+mailbox router rather than registration orchestration. CFWorker uses the small
+`cfworker_otp_issued_after_grace_seconds` window, while ReMail defaults to
+`remail_otp_issued_after_grace_seconds=90` because its observed `receivedAt`
+timestamps can trail the local send clock by more than one minute. The pre-send
+message ID snapshot still prevents an older OTP from being reused.
+ReMail registration also performs one bounded resend after 30 seconds without
+resetting the original accepted-message window; this recovers provider delivery
+misses without extending the configured total OTP timeout.
+ReMail batch creation scales its HTTP timeout with the requested quantity, and
+the token-file parser accepts `remail://email---serviceToken---orderNo---purchaseId`
+so a completed server-side batch can be recovered after a client timeout without
+buying the same mailbox quantity again. Ambiguous timeout/retryable-5xx responses
+also trigger a strict recent-order lookup by request window, project, product,
+mode, and exact quantity before any failure is returned to the caller.
 
 Gmail is a first-class mailbox provider. The preferred import shapes are
 `gmail://email---app_password` for app-password mode and
@@ -275,12 +297,15 @@ implementation:
 
 - `auth_flow.py`: signin URL construction, authorize navigation, continue calls, and auth-state URL classification.
 - `account_creation.py`: OTP validation, create-account continuation, `/api/auth/session` fetch, and payment-link helper calls.
-- `batch_runner.py`: concurrent registration worker scheduling, result ordering, and mailbox-count capping.
+- `batch_runner.py`: concurrent registration worker scheduling, result ordering, mailbox-count capping, and bounded retry of network/auth-state failures with a fresh proxy session.
 - `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel extraction, QuickJS SDK path, PoW/browser fallback, and cache.
 - `auth_state.py`: `client_auth_session_dump` capture and redacted diagnostic summaries.
 - `otp_strategy.py`: OTP send/resend endpoint selection.
 
 Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
+Each account owns a fresh Sentinel transaction and `oai-did`; batch workers do not return tokens to a shared pool. Fresh per-account and mid-flow refresh tokens are not written into the shared cache, and an OAuth-create refresh retains the account's existing device ID. Fresh extraction is guarded by a configurable bounded semaphore (`sentinel_max_concurrency`, default 2, capped at 4); cache-eligible callers retain single-flight population.
+`registration.py` re-exports focused helpers directly; it must not shadow them
+with local copies or mutate another module's `CFG`/request globals at runtime.
 
 If OTP validation succeeds but create-account returns
 `registration_disallowed`, the failure is treated as a provider/server-side
@@ -371,6 +396,66 @@ Batch reports must include requested, probed, non-401, attempted, link-ready,
 QR-ready, and failure-category counts separately. Runtime reports, account lists,
 payment URLs, QR images, access tokens, and authenticated proxy URLs remain local
 artifacts under ignored runtime paths and must not be committed or packaged.
+
+### JIT Payment Authentication and Batch Execution
+
+`sms_tool.payment_auth` is the only payment-boundary AT gate. A saved account is
+probed immediately before checkout. HTTP 401 goes directly to email-OTP OAuth;
+the candidate AT is re-probed and persisted only on HTTP 200. Permanent
+`account_deactivated` rows never enter a relogin loop. Public diagnostics contain
+only status codes, JWT timing, and a short SHA-256 correlation value.
+
+`sms_tool.payment_batch` owns protocol-payment cohorts. It consumes an explicit
+email list, applies bounded method-specific concurrency, runs the JIT gate per
+worker, assigns configured eligibility-matrix cells by payment method and
+registration country, retries only classified transient failures, and writes an
+atomic token-free checkpoint after every completed account under
+`runtime/payment_batches/`. `--payment-batch-id` makes the cohort stable;
+`--payment-canary` limits the cohort and `--payment-probe-only` stops the MoMo
+flow before payment-method creation.
+
+Registration failures no longer enter `accounts` through CLI orchestration.
+They are written to `registration_audit`; a successful initial AT probe is a
+candidate and only the configured stability-window HTTP-200 result becomes an
+active account/session. `accounts.batch_id` and `accounts.registration_state`
+allow payment batches to select a registration cohort without inferring it from
+timestamps.
+
+Registration stage scheduling is implemented by `registration_progress`: a
+worker releases its network slot when it enters mailbox OTP polling, then
+reacquires the bounded network gate for resend/validation/account creation.
+AT probing and payment have independent caps. This permits more mailboxes to
+wait concurrently without multiplying auth/provider request concurrency.
+`--target-at200` uses stable-probe successes as its target and respects mailbox
+purchase/cost caps plus the ReMail supplier dead-rate circuit breaker.
+
+### Payment Eligibility Matrix
+
+`protocol_payments.matrix.cells` defines small canary cohorts. Each cell records
+registration country, checkout/promotion/provider/approve/redirect countries,
+strategy, and sample size. The executor reports authentication, eligibility,
+offer shape, link-ready, and QR-ready counts per cell. Account/offer conclusions
+are not retried with another proxy.
+
+MoMo carries Checkout, Promotion, Stripe provider, Approve, and Redirect proxies
+as distinct stage values end to end. A common seed may still be rotated to the
+cell's stage countries, preserving one sticky chain identity. Its Stripe API
+version, runtime version, client betas, and confirm style are configuration data
+under `protocol_payments.methods.momo.stripe_profile`, so a one-account canary can
+detect protocol drift before a large batch.
+
+Kakao emits one structured JSON contract on success and failure. Conclusive
+credential or checkout-offer results stop immediately; only network/proxy errors
+rotate a seed. A successful result requires a Kakao/Nicepay redirect host.
+
+Sentinel account transactions remain independent. Performance optimization is
+limited to bounded extraction concurrency, SDK file reuse, token-free queue and
+provider timing metrics, and short provider circuit breakers. Sentinel tokens,
+device IDs, UA profiles, and TLS profiles are never pooled across accounts.
+An optional `sentinel_prewarm_window` starts a bounded set of one-to-one futures
+for the first registration workers. Each future is bound to that account's
+first-attempt proxy and is consumed once; a retry always creates a fresh
+transaction.
 
 ### PayPal Payment Layer
 

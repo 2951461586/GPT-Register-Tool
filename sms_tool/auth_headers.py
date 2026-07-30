@@ -3,11 +3,88 @@
 from __future__ import annotations
 
 import random
+import threading
 from urllib.parse import urlparse
 
 
-DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36"
-DEFAULT_SEC_CH_UA = '"Google Chrome";v="110", "Chromium";v="110", "Not_A Brand";v="24"'
+AUTH_IMPERSONATE = "chrome124"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+DEFAULT_SEC_CH_UA = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"'
+AUTH_FINGERPRINT_PROFILES = {
+    f"chrome{version}": {
+        "name": f"chrome{version}",
+        "impersonate": f"chrome{version}",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not-A.Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    }
+    for version in (124, 131, 136, 142)
+}
+_AUTH_FINGERPRINT_LOCAL = threading.local()
+
+
+def _auth_fingerprint_config():
+    try:
+        from .config import CFG
+
+        email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+        value = email_cfg.get("auth_fingerprint") or CFG.get("auth_fingerprint") or {}
+        return value if isinstance(value, dict) else {"profile": value}
+    except Exception:
+        return {}
+
+
+def _configured_auth_profiles():
+    cfg = _auth_fingerprint_config()
+    configured = cfg.get("profiles")
+    if isinstance(configured, str):
+        configured = [item.strip() for item in configured.replace(";", ",").split(",") if item.strip()]
+    if not isinstance(configured, (list, tuple)):
+        configured = []
+    names = [str(item or "").strip().lower() for item in configured]
+    try:
+        from curl_cffi.requests.impersonate import BrowserType
+
+        supported = {item.value for item in BrowserType}
+    except Exception:
+        supported = {AUTH_IMPERSONATE}
+    names = [name for name in names if name in AUTH_FINGERPRINT_PROFILES and name in supported]
+    defaults = [name for name in AUTH_FINGERPRINT_PROFILES if name in supported]
+    return names or defaults or [AUTH_IMPERSONATE]
+
+
+def select_auth_fingerprint(rotate=False):
+    cfg = _auth_fingerprint_config()
+    mode = str(cfg.get("mode") or "fixed").strip().lower()
+    names = _configured_auth_profiles()
+    configured = str(cfg.get("profile") or AUTH_IMPERSONATE).strip().lower()
+    if rotate and mode in {"rotate", "random", "per_account"}:
+        previous = getattr(_AUTH_FINGERPRINT_LOCAL, "profile_name", "")
+        choices = [name for name in names if name != previous] or names
+        name = random.SystemRandom().choice(choices)
+    else:
+        name = configured if configured in names else names[0]
+    _AUTH_FINGERPRINT_LOCAL.profile_name = name
+    return dict(AUTH_FINGERPRINT_PROFILES[name])
+
+
+def current_auth_fingerprint():
+    name = getattr(_AUTH_FINGERPRINT_LOCAL, "profile_name", "")
+    if name not in AUTH_FINGERPRINT_PROFILES:
+        return select_auth_fingerprint(rotate=True)
+    return dict(AUTH_FINGERPRINT_PROFILES[name])
+
+
+def auth_impersonate():
+    return current_auth_fingerprint()["impersonate"]
+
+
+def auth_user_agent():
+    return current_auth_fingerprint()["user_agent"]
 
 
 def datadog_trace_headers() -> dict[str, str]:
@@ -59,13 +136,14 @@ def openai_auth_headers(
 ) -> dict[str, str]:
     referer = str(referer or "").strip() or _extra_header_value(extra, "referer")
     origin = str(origin or "").strip() or _extra_header_value(extra, "origin")
+    fingerprint = current_auth_fingerprint()
     headers = {
         "Accept": accept,
         "Accept-Language": "en-US,en;q=0.9",
-        "User-Agent": DEFAULT_USER_AGENT,
-        "sec-ch-ua": DEFAULT_SEC_CH_UA,
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
+        "User-Agent": fingerprint["user_agent"],
+        "sec-ch-ua": fingerprint["sec_ch_ua"],
+        "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
+        "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
     }
     if referer:
         headers["Referer"] = str(referer)

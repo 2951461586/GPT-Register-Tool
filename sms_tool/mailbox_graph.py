@@ -19,7 +19,7 @@ def ms_oauth_refresh(mailbox, cfg, proxy=None, scope_override=None):
         "scope": scope,
     }
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    r = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome", timeout=30)
+    r = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome124", timeout=30)
     try:
         body = r.json()
     except Exception:

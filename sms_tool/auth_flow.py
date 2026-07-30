@@ -2,7 +2,7 @@ import json
 from urllib.parse import quote, urlencode, urlparse
 
 from .config import CFG
-from .auth_headers import openai_auth_headers
+from .auth_headers import auth_impersonate, openai_auth_headers
 from .http_client import request_with_retry
 
 def _json_or_raw(response, limit=500):
@@ -125,7 +125,7 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
         full_url,
         label=label,
         headers=headers,
-        impersonate="chrome",
+        impersonate=auth_impersonate(),
     )
     print(f"  {label}: {response.status_code} {response.url}")
     return response
@@ -161,7 +161,7 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
         label="Signup username continue",
         json={"username": {"value": username, "kind": "email"}},
         headers=headers,
-        impersonate="chrome",
+        impersonate=auth_impersonate(),
     )
     body = _json_or_raw(response, limit=1000)
     next_url = _response_next_url(response, auth_base)
@@ -209,7 +209,7 @@ def _prime_email_verification_page(session, auth_base, base_headers, current_url
                 "Referer": url,
             },
             allow_redirects=False,
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
         next_url = _response_next_url(response, auth_base)
         if response.status_code in (200, 204, 304) or _is_email_verification_step(next_url):
@@ -260,7 +260,7 @@ def _prepare_signup_auth_state(
             data=urlencode(signin_payload),
             headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded",
                      "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
         signin_body = _json_or_raw(signin_resp, limit=1000)
         auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
@@ -276,7 +276,7 @@ def _prepare_signup_auth_state(
             label=f"Auth authorize {name}",
             headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Referer": f"{chat_base}/"},
             allow_redirects=False,
-            impersonate="chrome",
+            impersonate=auth_impersonate(),
         )
         location = (
             getattr(authorize_resp, "headers", {}).get("location")

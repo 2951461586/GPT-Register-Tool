@@ -432,6 +432,16 @@ namespace SmsWorkbench
             return "未知";
         }
 
+        private string GetAccessTokenProbeStatusCode(Dictionary<string, object> data)
+        {
+            if (data == null) return "";
+            return FirstNonEmpty(
+                NestedString(data, "quota", "last_result", "status_code"),
+                NestedString(data, "token_probe", "status_code"),
+                NestedString(data, "scan", "token_probe", "status_code")
+            ).Trim();
+        }
+
         /// <summary>
         /// Extract wham_usage 5h/7d structured data from session JSON.
         /// Looks under quota.last_result.wham_usage (stored by probe_local_codex_quota -> mark_quota_status).

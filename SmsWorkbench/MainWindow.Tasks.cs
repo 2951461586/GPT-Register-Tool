@@ -131,7 +131,7 @@ namespace SmsWorkbench
                 StatusText = taskName + " 已结束";
                 RefreshPools();
                 ScrollTaskGridToBottom();
-                if (taskName.StartsWith("额度查询", StringComparison.OrdinalIgnoreCase))
+                if (taskName.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase))
                 {
                     string output;
                     lock (backendOutputLock)
@@ -185,7 +185,7 @@ namespace SmsWorkbench
                 "--admin-token", "--client-secret", "--password", "--service-token",
                 "--proxy", "--proxy-pool", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
                 "--promotion-proxy", "--stripe-init-proxy", "--payment-method-proxy",
-                "--confirm-proxy", "--blik-code", "--mailbox-line",
+                "--confirm-proxy", "--redirect-proxy", "--blik-code", "--mailbox-line",
             };
             var output = new List<string>();
             for (int index = 0; index < (args?.Count ?? 0); index++)
@@ -226,8 +226,15 @@ namespace SmsWorkbench
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
-            foreach (PoolRow row in selected) DeleteRow(row);
+            int failed = selected.Count(row => !DeleteRow(row));
             RefreshPools();
+            if (failed > 0)
+            {
+                await DialogFactory.ShowInfoAsync(
+                    this,
+                    "删除未完成",
+                    failed + " 条记录未能完整删除。请查看运行日志。");
+            }
         }
 
         private async Task<bool> ShowDeleteConfirmDialog(int count)
@@ -235,12 +242,12 @@ namespace SmsWorkbench
             return await DialogFactory.ShowConfirmAsync(
                 this,
                 "删除选中的 " + count + " 条记录？",
-                "将同步清理邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
+                "将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
                 "删除",
                 isDanger: true);
         }
 
-        private void DeleteRow(PoolRow row)
+        private bool DeleteRow(PoolRow row)
         {
             try
             {
@@ -261,10 +268,12 @@ namespace SmsWorkbench
                     + "，邮箱池 " + removedPoolLines
                     + " 条，SQLite " + removedSqliteRows
                     + " 条，session " + removedSessionFiles + " 个");
+                return true;
             }
             catch (Exception ex)
             {
                 Log("删除失败：" + row.Identifier + " " + ex.Message);
+                return false;
             }
         }
 
@@ -278,24 +287,17 @@ namespace SmsWorkbench
         private int DeleteMailboxLines(PoolRow row, string emailKey)
         {
             int removed = 0;
-            var paths = new List<string> { row.SourcePath, GetChataiMailboxFilePath(), GetMailboxTokenFile() };
+            var paths = GetKnownMailboxPoolFiles().ToList();
+            if (!string.IsNullOrWhiteSpace(row.SourcePath)
+                && row.SourcePath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+                && File.Exists(row.SourcePath))
+            {
+                paths.Insert(0, row.SourcePath);
+            }
+            var exactLines = new[] { row.RawLine, row.MailboxLine };
             foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                if (!File.Exists(path) || !path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) continue;
-                string rawLine = (row.RawLine ?? "").Trim();
-                var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
-                int before = lines.Count;
-                lines.RemoveAll(line =>
-                {
-                    string value = line.Trim().TrimStart('\ufeff');
-                    if (rawLine.Length > 0 && value.Equals(rawLine, StringComparison.OrdinalIgnoreCase)) return true;
-                    string lineEmail = MailboxEmailForLine(value);
-                    return emailKey.Length > 0 && NormalizeEmailKey(lineEmail) == emailKey;
-                });
-                int delta = before - lines.Count;
-                if (delta <= 0) continue;
-                File.WriteAllLines(path, lines, new UTF8Encoding(false));
-                removed += delta;
+                removed += MailboxPoolFileStore.DeleteMatchingLines(path, emailKey, exactLines);
             }
             return removed;
         }
@@ -366,18 +368,6 @@ namespace SmsWorkbench
             {
                 return false;
             }
-        }
-
-        private string MailboxEmailForLine(string line)
-        {
-            string value = (line ?? "").Trim().TrimStart('\ufeff');
-            if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
-                value = value.Substring("gmail://".Length);
-            else if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase))
-                value = value.Substring("cfworker://".Length);
-            if (value.Contains("----")) return value.Split(new[] { "----" }, StringSplitOptions.None).FirstOrDefault() ?? "";
-            if (value.Contains("---")) return value.Split(new[] { "---" }, StringSplitOptions.None).FirstOrDefault() ?? "";
-            return "";
         }
 
         private bool TryDeleteFile(string path)

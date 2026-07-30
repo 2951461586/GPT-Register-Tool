@@ -184,7 +184,7 @@ def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", tim
         headers.update(extra_headers)
     proxies = {"http": proxy, "https": proxy} if proxy else None
     if curl_requests is not None:
-        return curl_requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout, impersonate="chrome")
+        return curl_requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout, impersonate="chrome124")
     return requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout)
 
 

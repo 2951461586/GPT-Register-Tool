@@ -29,6 +29,7 @@ NETWORK_ERROR_MARKERS = (
     "max retries exceeded",
     "/sentinel/req",
     "sentinel quickjs",
+    "sentinel_extract_failed",
     "cloudflare",
     "just a moment",
 )
@@ -43,13 +44,24 @@ ACCOUNT_ERROR_MARKERS = (
     "authenticationfailed",
     "invalid credentials",
     "wrong_email_otp_code",
-    "outlook otp timeout",
-    "email_otp_poll_timeout",
     "password_verify_failed",
     "phone_recently_used",
     "unsupported_phone_number",
     "fraud_guard",
     "token_invalidated",
+)
+
+MAILBOX_ERROR_MARKERS = (
+    "outlook otp timeout",
+    "email_otp_poll_timeout",
+    "mailbox otp timeout",
+)
+
+AUTH_STATE_ERROR_MARKERS = (
+    "invalid_auth_step",
+    "invalid_state",
+    "sign-in session is no longer valid",
+    "signup_auth_state",
 )
 
 
@@ -77,8 +89,12 @@ def classify_error(value) -> str:
     text = error_text(value)
     if any(marker in text for marker in ACCOUNT_ERROR_MARKERS):
         return "account"
+    if any(marker in text for marker in MAILBOX_ERROR_MARKERS):
+        return "mailbox"
     if any(marker in text for marker in NETWORK_ERROR_MARKERS):
         return "network"
+    if any(marker in text for marker in AUTH_STATE_ERROR_MARKERS):
+        return "auth_state"
     return "unknown"
 
 

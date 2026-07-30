@@ -56,6 +56,13 @@ def main() -> int:
     parser.add_argument("--token", default=os.environ.get("MOMO_TOKEN", ""), help="ChatGPT access token or session JSON")
     parser.add_argument("--token-file", default="", help="file containing access token or session JSON")
     parser.add_argument("--proxy", default=os.environ.get("MOMO_PROXY", ""), help="VN exit proxy seed (empty = direct)")
+    parser.add_argument("--checkout-proxy", default=os.environ.get("MOMO_CHECKOUT_PROXY", ""), help="ChatGPT checkout proxy")
+    parser.add_argument("--promotion-proxy", default=os.environ.get("MOMO_PROMOTION_PROXY", ""), help="ChatGPT checkout/update proxy")
+    parser.add_argument("--provider-proxy", default=os.environ.get("MOMO_PROVIDER_PROXY", ""), help="Stripe init/payment-method proxy")
+    parser.add_argument("--approve-proxy", default=os.environ.get("MOMO_APPROVE_PROXY", ""), help="ChatGPT approve proxy")
+    parser.add_argument("--redirect-proxy", default=os.environ.get("MOMO_REDIRECT_PROXY", ""), help="MoMo/Nicepay redirect proxy")
+    parser.add_argument("--strategy", default="custom_promo", choices=["custom_promo", "hosted_promo", "custom_trial"])
+    parser.add_argument("--probe-only", action="store_true", help="Stop after checkout eligibility/payment-method probing")
     parser.add_argument("--pre-proxy", default=os.environ.get("MOMO_PRE_PROXY", "off"), help="upstream SOCKS/HTTP proxy; off = disabled")
     parser.add_argument("--timeout", type=int, default=25)
     parser.add_argument("--max-proxies", type=int, default=1)
@@ -73,7 +80,14 @@ def main() -> int:
         print(json.dumps({"ok": False, "error": "missing access token", "payment_method": "momo"}, ensure_ascii=False))
         return 2
 
-    proxy = (args.proxy or "").strip()
+    proxy = (args.proxy or args.checkout_proxy or "").strip()
+    stage_proxies = {
+        "checkout": (args.checkout_proxy or proxy).strip(),
+        "promotion": (args.promotion_proxy or proxy).strip(),
+        "provider": (args.provider_proxy or proxy).strip(),
+        "approve": (args.approve_proxy or proxy).strip(),
+        "redirect": (args.redirect_proxy or proxy).strip(),
+    }
     result = momo.probe_token_blob(
         token,
         proxies=[proxy] if proxy else None,
@@ -81,9 +95,12 @@ def main() -> int:
         trial_days=max(1, args.trial_days),
         max_proxies=max(1, args.max_proxies),
         timeout=max(8, args.timeout),
-        emit_qr=True,
+        emit_qr=not args.probe_only,
         pre_proxy=args.pre_proxy,
         label="A",
+        stage_proxies=stage_proxies,
+        strategy=args.strategy,
+        max_attempts=1,
     )
 
     decision = str(result.get("decision") or "")
@@ -99,7 +116,10 @@ def main() -> int:
     display_qr = "" if qr_data.startswith("data:image") else qr_data
 
     summary = {
-        "ok": bool(has_qr and (hosted or qr_path)),
+        "ok": bool(
+            (has_qr and (hosted or qr_path))
+            or (args.probe_only and result.get("credential_valid") is not False and result.get("checkout_status") == "created")
+        ),
         "payment_method": "momo",
         "url": display_url,
         "hosted_instructions_url": hosted,
@@ -117,6 +137,7 @@ def main() -> int:
         "approve_status": result.get("approve_status"),
         "confirm_status": result.get("confirm_status"),
         "checkout_strategy": result.get("checkout_strategy"),
+        "stage_status": result.get("stage_status"),
         "link_type": "momo_protocol_qr",
     }
     if not summary["ok"]:

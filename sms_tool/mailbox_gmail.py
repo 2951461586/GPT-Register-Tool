@@ -85,7 +85,7 @@ def refresh_gmail_access_token(mailbox, cfg, proxy=None, scope_override=None):
     if scope_override:
         data["scope"] = scope_override
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    response = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome", timeout=30)
+    response = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome124", timeout=30)
     try:
         body = response.json()
     except Exception:

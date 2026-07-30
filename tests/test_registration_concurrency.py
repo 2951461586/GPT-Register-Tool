@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from sms_tool import account_creation, auth_flow, batch_runner, otp_strategy, registration
 from sms_tool.mailbox import _parse_chatai_mailbox_file
 from sms_tool.registration import (
     _create_account_continue_url,
@@ -17,6 +18,9 @@ from sms_tool.registration import (
     _normalize_registration_mode,
     _openai_signin_url,
     _passwordless_signin_attempts,
+    _poll_registration_email_otp,
+    _probe_registration_access_token,
+    _registration_outcome,
     _create_account_sentinel_token,
     _sentinel_device_id,
     _send_registration_email_otp,
@@ -28,6 +32,56 @@ from sms_tool.registration import (
 
 
 class RegistrationConcurrencyTests(unittest.TestCase):
+    def test_stability_probe_uses_registration_proxy_and_releases_gate_while_waiting(self):
+        stages = []
+        with patch.object(registration, "CFG", {"registration": {
+                 "at_stability_probe_count": 2,
+                 "at_stability_probe_delay_seconds": 10,
+             }}), \
+             patch("sms_tool.cpa_import.probe_local_codex_quota", return_value={"status_code": 200}) as probe, \
+             patch.object(registration, "registration_stage", side_effect=stages.append), \
+             patch.object(registration.time, "sleep") as sleep:
+            result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
+
+        self.assertEqual(result["stability_status_codes"], [200, 200])
+        self.assertEqual(probe.call_count, 2)
+        self.assertTrue(all(call.kwargs["proxy"] == "http://proxy.example:8080" for call in probe.call_args_list))
+        self.assertEqual(stages, ["access_token_stability_wait", "access_token_probe"])
+        sleep.assert_called_once_with(10.0)
+
+    def test_http_200_access_token_is_registration_success_even_when_create_step_warned(self):
+        success, error, warning = _registration_outcome(
+            False,
+            {"error": {"code": "invalid_auth_step", "message": "Invalid authorization step."}},
+            "header.payload.signature",
+            {"status_code": 200, "status": "active"},
+        )
+
+        self.assertTrue(success)
+        self.assertEqual(error, "")
+        self.assertIn("invalid_auth_step", warning)
+
+    def test_access_token_401_is_not_registration_success(self):
+        success, error, warning = _registration_outcome(
+            True,
+            {},
+            "header.payload.signature",
+            {"status_code": 401, "status": "token_invalid"},
+        )
+
+        self.assertFalse(success)
+        self.assertEqual(error, "access_token_probe_http_401")
+        self.assertEqual(warning, "")
+
+    def test_registration_reexports_focused_module_implementations(self):
+        self.assertIs(registration._response_next_url, auth_flow._response_next_url)
+        self.assertIs(registration._openai_signin_url, auth_flow._openai_signin_url)
+        self.assertIs(registration._signup_signin_attempts, auth_flow._signup_signin_attempts)
+        self.assertIs(registration._passwordless_signin_attempts, auth_flow._passwordless_signin_attempts)
+        self.assertIs(registration._invalid_state_auth_response, auth_flow._invalid_state_auth_response)
+        self.assertIs(registration._validate_email_otp, account_creation._validate_email_otp)
+        self.assertIs(registration._send_registration_email_otp, otp_strategy.send_registration_email_otp)
+
     def test_prompt_login_query_is_not_existing_login_redirect(self):
         self.assertFalse(_is_existing_login_redirect(
             "https://chatgpt.com/api/auth/signin/openai?prompt=login&screen_hint=signup"
@@ -84,6 +138,21 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "oauth-create-token",
         )
 
+    def test_create_account_refresh_keeps_device_id_and_does_not_persist(self):
+        refreshed = {"sentinel_oauth_token": '{"id":"did-1","flow":"oauth_create_account"}'}
+        with patch("sms_tool.account_creation._extract_sentinel_http", return_value=refreshed) as extract:
+            token = _create_account_sentinel_token({
+                "sentinel_token": '{"id":"did-1","flow":"username_password_create"}',
+                "oai_did": "did-1",
+            }, proxy="http://proxy.example:8080")
+
+        self.assertEqual(token, refreshed["sentinel_oauth_token"])
+        extract.assert_called_once_with(
+            proxy="http://proxy.example:8080",
+            persist=False,
+            device_id="did-1",
+        )
+
     def test_invalid_state_auth_response_detection(self):
         self.assertTrue(_invalid_state_auth_response({
             "error": {
@@ -115,8 +184,8 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             calls.append(url)
             return resend if url.endswith("/resend") else send
 
-        with patch("sms_tool.registration.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}), \
-             patch("sms_tool.registration.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.otp_strategy.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}), \
+             patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request):
             result = _send_registration_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -138,7 +207,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.registration.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request):
             result = _send_registration_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -160,7 +229,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.registration.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.account_creation.request_with_retry", side_effect=fake_request):
             ok, _ = _validate_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -173,6 +242,27 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertNotIn("openai-sentinel-token", seen["headers"])
         self.assertNotIn("openai-sentinel-so-token", seen["headers"])
+
+    def test_remail_otp_poll_resends_once_and_preserves_original_time_window(self):
+        mailbox = Mock(provider="remail")
+        resend_response = Mock(status_code=200)
+        with patch.object(registration, "CFG", {"email_registration": {}}), \
+             patch("sms_tool.registration._poll_email_otp", side_effect=[None, "654321"]) as poll:
+            code = _poll_registration_email_otp(
+                mailbox,
+                subject_keyword="verification code|login code",
+                timeout=300,
+                issued_after_unix=1_000,
+                proxy="proxy",
+                resend_callback=lambda: resend_response,
+            )
+
+        self.assertEqual(code, "654321")
+        self.assertEqual(poll.call_count, 2)
+        self.assertEqual(poll.call_args_list[0].kwargs["timeout"], 30)
+        self.assertEqual(poll.call_args_list[1].kwargs["timeout"], 270)
+        self.assertEqual(poll.call_args_list[0].kwargs["issued_after_unix"], 1_000)
+        self.assertEqual(poll.call_args_list[1].kwargs["issued_after_unix"], 1_000)
 
     def test_create_account_continue_url_uses_existing_account_redirect(self):
         redirect = "https://chatgpt.com/auth/login_with?callback_path=/"
@@ -268,47 +358,58 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.append(mailbox.email)
             return {"success": False, "email": mailbox.email, "error": "stub"}
 
-        with patch("sms_tool.batch_runner._extract_sentinel", return_value={"sentinel_token": "sentinel"}):
-            with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-                results = run_batch(count=4, proxy=None, mailboxes=mailboxes, paypal_link=True, workers=4)
+        with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
+            results = run_batch(count=4, proxy=None, mailboxes=mailboxes, paypal_link=True, workers=4)
 
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
         self.assertEqual(seen, ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
 
-    def test_run_batch_pre_extracts_unique_sentinel_per_worker(self):
-        """Batch mode pre-extracts one unique sentinel token per concurrent
-        worker slot so that each worker uses its own device_id.  Sharing a
-        single sentinel token across workers causes all of them to reuse the
-        same oai-did, which triggers OpenAI HTTP 429 rate limiting on
-        concurrent email-otp/send requests."""
+    def test_run_batch_never_shares_sentinel_data_between_accounts(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mailboxes.txt"
             path.write_text(
                 "a+oai01@hotmail.com----pw----client----refresh-a\n"
-                "b+oai01@hotmail.com----pw----client----refresh-b\n",
+                "b+oai01@hotmail.com----pw----client----refresh-b\n"
+                "c+oai01@hotmail.com----pw----client----refresh-c\n",
                 encoding="utf-8",
             )
             mailboxes = _parse_chatai_mailbox_file(path)
 
             seen_sentinels = []
-            token_a = {"sentinel_token": "token-a", "sentinel_so_token": "so-a", "oai_did": "did-a"}
-            token_b = {"sentinel_token": "token-b", "sentinel_so_token": "so-b", "oai_did": "did-b"}
-
             def fake_run_email(**kwargs):
                 seen_sentinels.append(kwargs["sentinel_data"])
                 return {"success": True, "email": kwargs["mailbox"].email}
 
-            with patch("sms_tool.batch_runner._extract_sentinel", side_effect=[token_a, token_b]) as extract:
-                with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-                    results = run_batch(count=2, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, paypal_link=True, workers=2)
+            with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
+                results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, paypal_link=True, workers=2)
 
-            # Sentinel is extracted once per worker slot (pool_size = min(workers, count) = 2)
-            self.assertEqual(extract.call_count, 2)
-            # Each worker receives a non-None sentinel_data
-            self.assertEqual(len(seen_sentinels), 2)
-            self.assertIsNotNone(seen_sentinels[0])
-            self.assertIsNotNone(seen_sentinels[1])
-            self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
+            self.assertEqual(seen_sentinels, [None, None, None])
+            self.assertEqual([r["email"] for r in results], [
+                "a+oai01@hotmail.com", "b+oai01@hotmail.com", "c+oai01@hotmail.com",
+            ])
+
+    def test_opt_in_sentinel_prewarm_is_one_to_one(self):
+        mailboxes = [Mock(email=f"account-{index}@example.com") for index in range(3)]
+        seen = []
+        sequence = iter(range(10))
+
+        def extract(**_kwargs):
+            index = next(sequence)
+            return {"sentinel_token": f"token-{index}", "oai_did": f"did-{index}"}
+
+        def run_email_func(**kwargs):
+            seen.append(kwargs.get("sentinel_data"))
+            return {"success": True, "email": kwargs["mailbox"].email}
+
+        with patch.object(batch_runner, "CFG", {"email_registration": {"sentinel_prewarm_window": 2}}), \
+             patch("sms_tool.sentinel_tokens._extract_sentinel", side_effect=extract):
+            results = batch_runner.run_batch_impl(
+                count=3, mailboxes=mailboxes, workers=3, run_email_func=run_email_func,
+            )
+        warmed = [item for item in seen if item]
+        self.assertEqual(len(results), 3)
+        self.assertEqual(len(warmed), 2)
+        self.assertEqual(len({item["oai_did"] for item in warmed}), 2)
 
     def test_sentinel_device_id_reads_cache_field_first_then_token_id(self):
         self.assertEqual(_sentinel_device_id({"oai_did": "did-cache"}), "did-cache")

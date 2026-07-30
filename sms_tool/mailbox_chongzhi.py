@@ -171,7 +171,7 @@ def fetch_chongzhi_messages(email, password, folder="all", proxy=None, timeout=N
             headers={"Content-Type": "application/json"},
             proxies=proxies,
             timeout=timeout,
-            impersonate="chrome",
+            impersonate="chrome124",
         )
         _last_fetch_ts[email_key] = time.time()
 

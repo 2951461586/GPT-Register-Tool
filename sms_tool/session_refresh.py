@@ -178,7 +178,7 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None):
             response = session.get(
                 f"{chat_base}/api/auth/session",
                 headers=headers,
-                impersonate="chrome",
+                impersonate="chrome124",
                 timeout=30,
             )
             last_status = str(response.status_code)

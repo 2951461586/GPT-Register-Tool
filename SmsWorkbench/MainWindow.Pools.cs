@@ -147,39 +147,23 @@ namespace SmsWorkbench
 
         private string NormalizeEmailKey(string email)
         {
-            string value = (email ?? "").Trim().TrimStart('\ufeff').ToLowerInvariant();
-            if (value.Contains("@+"))
-            {
-                string[] parts = value.Split(new[] { "@+" }, StringSplitOptions.None);
-                if (parts.Length == 2)
-                {
-                    string[] domains = { "hotmail.com", "outlook.com", "live.com", "msn.com", "gmail.com" };
-                    foreach (string domain in domains)
-                    {
-                        if (parts[1].EndsWith(domain, StringComparison.OrdinalIgnoreCase) && parts[1].Length > domain.Length)
-                        {
-                            string alias = parts[1].Substring(0, parts[1].Length - domain.Length);
-                            return parts[0] + "+" + alias + "@" + domain;
-                        }
-                    }
-                }
-            }
-            return value;
+            return MailboxPoolFileStore.NormalizeEmailKey(email);
         }
 
         private void LoadMailboxPool()
         {
-            string tokenFile = GetMailboxTokenFile();
-            LoadMailboxTokenFile(tokenFile);
-            LoadChataiMailboxFile();
+            foreach (string path in GetKnownMailboxPoolFiles())
+            {
+                LoadMailboxTokenFile(path);
+            }
         }
 
-        private void LoadChataiMailboxFile()
+        private IReadOnlyList<string> GetKnownMailboxPoolFiles()
         {
-            string path = GetChataiMailboxFilePath();
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-            if (string.Equals(path, GetMailboxTokenFile(), StringComparison.OrdinalIgnoreCase)) return;
-            LoadMailboxTokenFile(path);
+            return MailboxPoolFileStore.DiscoverKnownFiles(
+                rootDir,
+                GetMailboxTokenFile(),
+                chataiMailboxFilePath);
         }
 
         private string GetChataiMailboxFilePath()
@@ -352,7 +336,7 @@ namespace SmsWorkbench
             try
             {
                 EnsureAccountExtraColumns(dbPath);
-                string sql = "SELECT id,email,access_token,status,error,paypal_ok,payment_method,paypal_url,paypal_status,refresh_token_status,json_path,raw_json,pipeline_total_seconds,timing_total_seconds,created_at,updated_at FROM accounts ORDER BY updated_at DESC";
+                string sql = "SELECT id,email,access_token,status,error,paypal_ok,payment_method,paypal_url,paypal_status,refresh_token_status,batch_id,registration_state,registration_country,json_path,raw_json,pipeline_total_seconds,timing_total_seconds,created_at,updated_at FROM accounts ORDER BY updated_at DESC";
                 var rows = SqliteNative.Query(dbPath, sql);
                 if (rows.Count == 0) return false;
                 foreach (Dictionary<string, string> data in rows)
@@ -400,6 +384,9 @@ namespace SmsWorkbench
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
                         AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
                         AccountPlanType = GetAccountPlanType(rawData),
+                        RegistrationCountry = data.TryGetValue("registration_country", out string registrationCountry) ? registrationCountry : "",
+                        RegistrationBatchId = data.TryGetValue("batch_id", out string batchId) ? batchId : "",
+                        RegistrationState = data.TryGetValue("registration_state", out string registrationState) ? registrationState : "",
                         QuotaStatus = GetQuotaStatus(rawData),
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
@@ -407,6 +394,7 @@ namespace SmsWorkbench
                         RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                         Phone = verifiedPhone,
                         HasAccessToken = !string.IsNullOrWhiteSpace(access),
+                        AccessTokenProbeStatusCode = GetAccessTokenProbeStatusCode(rawData),
                         PayPalUrl = paypalUrl,
                         RefreshToken = isCfWorkerMailbox ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
@@ -466,6 +454,9 @@ namespace SmsWorkbench
                             Identifier = email,
                             AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isReMailMailbox ? "Session/ReMail" : isGmailMailbox ? "Session/Gmail" : "Session",
                             AccountPlanType = GetAccountPlanType(data),
+                            RegistrationCountry = GetString(data, "registration_country"),
+                            RegistrationBatchId = GetString(data, "batch_id"),
+                            RegistrationState = GetString(data, "registration_state"),
                             QuotaStatus = GetQuotaStatus(data),
                             Status = importedStatus.Length > 0
                                 ? importedStatus
@@ -475,6 +466,7 @@ namespace SmsWorkbench
                             RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
                             Phone = verifiedPhone,
                             HasAccessToken = !string.IsNullOrWhiteSpace(access),
+                            AccessTokenProbeStatusCode = GetAccessTokenProbeStatusCode(data),
                             PayPalUrl = paypalUrl,
                             RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(access),
                             Proxy = timing,
@@ -513,7 +505,10 @@ namespace SmsWorkbench
                 "ALTER TABLE accounts ADD COLUMN workspace_switch_result TEXT DEFAULT ''",
                 "ALTER TABLE accounts ADD COLUMN workspace_updated_at INTEGER DEFAULT 0",
                 "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN quota_status TEXT DEFAULT ''"
+                "ALTER TABLE accounts ADD COLUMN quota_status TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN batch_id TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN registration_state TEXT DEFAULT ''",
+                "ALTER TABLE accounts ADD COLUMN registration_country TEXT DEFAULT ''"
             };
             foreach (string sql in migrations)
             {

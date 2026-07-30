@@ -1370,6 +1370,72 @@ def checkout_retry_error(reason: str) -> bool:
     return "checkout failed" in text and not is_account_error(reason)
 
 
+def kakao_result_contract(
+    *,
+    ok: bool,
+    attempts: int,
+    error: str = "",
+    result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the stable, token-free manager contract for every Kakao run."""
+    result = dict(result or {})
+    text = str(error or "")
+    low = text.lower()
+    amount_match = re.search(r"amount=(\d+|none)", low)
+    currency_match = re.search(r"currency=([a-z]{3}|none)", low)
+    methods_match = re.search(r"methods=(\[[^\]]*\]|[^\s]+)", text, re.IGNORECASE)
+    amount = None if not amount_match or amount_match.group(1) == "none" else int(amount_match.group(1))
+    currency = currency_match.group(1).upper() if currency_match else "KRW"
+    methods_text = methods_match.group(1).lower() if methods_match else ""
+    has_kakao = True if ok else (
+        False if "kakao_pay" not in methods_text and "checkout_not_kakao_trial" in low else None
+    )
+    if ok:
+        decision, stage = "ready", "redirect"
+    elif is_account_error(text):
+        decision = "account_deactivated" if "deactivat" in low else "credential_invalid"
+        stage = "credential"
+    elif is_checkout_shape_error(text):
+        if amount not in (None, 0):
+            decision = "nonzero_offer"
+        elif currency != "KRW":
+            decision = "wrong_currency"
+        else:
+            decision = "kakao_not_enabled"
+        stage = "stripe_init"
+    elif is_proxy_health_error(text) or is_direct_proxy_error(text) or any(x in low for x in ("tls", "timeout", "407")):
+        decision, stage = "proxy_or_network_failed", "proxy"
+    elif "approve" in low:
+        decision, stage = "approve_result_blocked", "approve"
+    elif "redirect" in low:
+        decision, stage = "redirect_missing", "redirect"
+    elif "confirm" in low:
+        decision, stage = "confirm_failed", "confirm"
+    else:
+        decision, stage = "provider_failed", "provider"
+    final_url = str(result.get("provider_redirect_url") or "")
+    return {
+        "ok": bool(ok),
+        "payment_method": "kakao",
+        "decision": decision,
+        "stage": stage,
+        "credential_valid": decision not in {"credential_invalid", "account_deactivated"},
+        "amount_due": 0 if ok else amount,
+        "currency": currency,
+        "methods": ["kakao_pay"] if ok else [],
+        "has_kakao": has_kakao,
+        "url": final_url,
+        "provider_redirect_url": final_url,
+        "link_type": "kakao_protocol_redirect" if ok else "kakao_protocol",
+        "attempts": max(0, int(attempts or 0)),
+        "error": "" if ok else text[:600],
+    }
+
+
+def print_kakao_result(contract: dict[str, Any]) -> None:
+    print(json.dumps(contract, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
 def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
     seeds_per_round = env_int(
         "KAKAO_SEEDS_PER_ROUND",
@@ -1428,16 +1494,22 @@ def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
             log("Kakao/Nicepay 跳转链接已获取")
             print("\nKakao/Nicepay 最终跳转 URL:", flush=True)
             print(final_url, flush=True)
+            print_kakao_result(kakao_result_contract(ok=True, attempts=attempt, result=result))
             return 0
         except TaskStopped:
             log("任务已停止", "[WARN] ")
+            print_kakao_result(kakao_result_contract(ok=False, attempts=attempt, error="task_stopped"))
             return 1
         except Exception as exc:
             error = str(exc)
             last_error = error
             if is_account_error(error):
                 log(f"账号不可继续：{error[:240]}", "[ERROR] ")
+                print_kakao_result(kakao_result_contract(ok=False, attempts=attempt, error=error))
                 return 1
+            if is_checkout_shape_error(error):
+                print_kakao_result(kakao_result_contract(ok=False, attempts=attempt, error=error))
+                return 3
             state = record_seed_failure(proxy_seed, error)
             state_text = "已移除" if state == "removed" else ("进入冷却" if state == "cooling" else "保留")
             if is_checkout_shape_error(error):
@@ -1455,6 +1527,11 @@ def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
                 )
 
     log(f"全部失败: {last_error or '未获取 Kakao/Nicepay 跳转链接'}", "[ERROR] ")
+    print_kakao_result(kakao_result_contract(
+        ok=False,
+        attempts=attempt,
+        error=last_error or "kakao_nicepay_redirect_missing",
+    ))
     return 1
 
 
@@ -1462,12 +1539,14 @@ def main() -> int:
     token = load_token()
     if not token:
         log("access_token 为空", "[ERROR] ")
+        print_kakao_result(kakao_result_contract(ok=False, attempts=0, error="missing_access_token"))
         return 1
     log(f"使用 {token_account(token)}")
     try:
         proxy_seeds = load_proxy_seeds()
     except Exception as exc:
         log(str(exc), "[ERROR] ")
+        print_kakao_result(kakao_result_contract(ok=False, attempts=0, error=str(exc)))
         return 1
     return run_single_seed_mode(token, proxy_seeds)
 

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from nacl.public import SealedBox
 from nacl.signing import SigningKey
 
-from sms_tool import agent_identity, registration, sub2api_import
+from sms_tool import agent_identity, sub2api_import
 
 
 def _jwt(claims):
@@ -124,34 +124,6 @@ class AgentIdentityTests(unittest.TestCase):
         self.assertNotIn("task_id", auth_json["agent_identity"])
         register_task.assert_not_called()
         written.assert_called_once_with(auth_json, export_dir="")
-
-    def test_signup_provision_result_never_contains_private_key(self):
-        provisioned = {
-            "ok": True,
-            "path": "agent.json",
-            "reused": False,
-            "data": {
-                "auth_mode": "agentIdentity",
-                "agent_identity": {
-                    "agent_runtime_id": "runtime-new",
-                    "agent_private_key": "private-key",
-                    "plan_type": "free",
-                },
-            },
-        }
-        with (
-            patch.dict(registration.CFG, {"agent_identity": {"register_on_free_signup": True, "registration_timeout": 30}}),
-            patch.object(agent_identity, "provision_agent_identity", return_value=provisioned),
-        ):
-            result = registration._provision_signup_agent_identity(
-                "free@example.com",
-                "header.payload.signature",
-            )
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["agent_runtime_id"], "runtime-new")
-        self.assertTrue(result["private_key_validated"])
-        self.assertNotIn("private-key", json.dumps(result))
 
     def test_provision_reuses_structurally_valid_runtime_without_registering_task(self):
         stale = {

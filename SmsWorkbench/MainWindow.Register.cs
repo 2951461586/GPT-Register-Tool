@@ -165,6 +165,24 @@ namespace SmsWorkbench
                 return;
             }
 
+            if (options.Source == "remail_target")
+            {
+                var targetArgs = new List<string>
+                {
+                    "--target-at200", options.Count.ToString(),
+                    "--max-mailbox-purchases", Math.Max(options.Count, options.MaxMailboxPurchases).ToString(),
+                    "--buy-remail-mailbox", "--remail-service-mode", "purchase",
+                    "--registration-batch-id", options.RegistrationBatchId,
+                    "--workers", options.Workers.ToString(),
+                    "--registration-at-only", "--no-phone-reuse", "--skip-paypal-link"
+                };
+                if (options.MaxReMailCost > 0)
+                    targetArgs.AddRange(new[] { "--max-remail-cost", options.MaxReMailCost.ToString(CultureInfo.InvariantCulture) });
+                AddRegistrationProxy(targetArgs);
+                RunBackend("ReMail AT 200 目标批次 (" + options.Count + ")", targetArgs);
+                return;
+            }
+
             string mailboxArg = "--chatai-mailbox-file";
             string mailboxFile = GetChataiMailboxFilePath();
             int count = options.Count;
@@ -238,7 +256,7 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                ShowThemedInfoDialog("额度查询", "没有找到可查询的账号。请先勾选账号，或切换到包含账号的筛选范围。");
+                ShowThemedInfoDialog("账号测活", "没有找到可测活的账号。请先勾选账号，或切换到包含账号的筛选范围。");
                 return;
             }
 
@@ -258,14 +276,14 @@ namespace SmsWorkbench
                 AddSessionFileArg(args, rows[0]);
             }
             AddRegistrationProxy(args);
-            RunBackend("额度查询(" + rows.Count + ")", args);
+            RunBackend("账号测活(" + rows.Count + ")", args);
         }
 
         private ScanOptions ShowScanOptionsDialog(int accountCount)
         {
             var dialog = new Window
             {
-                Title = "额度查询设置",
+                Title = "账号测活设置",
                 Owner = this,
                 Width = 600,
                 MinWidth = 560,
@@ -285,7 +303,7 @@ namespace SmsWorkbench
 
             var title = new TextBlock
             {
-                Text = "查询 " + Math.Max(1, accountCount).ToString() + " 个账号的额度状态。仅调用额度查询接口，不自动重登；接口返回 401 时原样显示。",
+                Text = "测活 " + Math.Max(1, accountCount).ToString() + " 个账号。HTTP 200 表示 AT 有效，HTTP 401 表示 AT 已失效；不会自动重登。",
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("TextSub"),
@@ -311,7 +329,7 @@ namespace SmsWorkbench
                 Margin = new Thickness(0, 8, 0, 0)
             };
             var cancel = new Button { Content = "取消", Width = 82, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("SecondaryButton") };
-            var ok = new Button { Content = "开始查询", Width = 98, Style = (Style)FindResource("PrimaryButton") };
+            var ok = new Button { Content = "开始测活", Width = 98, Style = (Style)FindResource("PrimaryButton") };
             actions.Children.Add(cancel);
             actions.Children.Add(ok);
             Grid.SetRow(actions, 2);
@@ -484,14 +502,17 @@ namespace SmsWorkbench
                 Title = "一键注册",
                 Owner = this,
                 Width = 560,
-                Height = 326,
+                Height = 470,
                 MinWidth = 480,
-                MinHeight = 300,
+                MinHeight = 430,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -505,6 +526,7 @@ namespace SmsWorkbench
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail（短效接码）", Tag = "remail" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail（稳定 AT 200 目标）", Tag = "remail_target" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "liziai.cloud (CFWorker)", Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
@@ -558,12 +580,53 @@ namespace SmsWorkbench
             skipPaymentBox.Unchecked += (_, __) => paymentBox.IsEnabled = true;
             paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
 
+            var purchaseLabel = new TextBlock { Text = "邮箱采购上限", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
+            var purchaseBox = new TextBox { Text = Math.Max(2, CountValue() * 2).ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(purchaseLabel, 5); Grid.SetColumn(purchaseLabel, 0);
+            Grid.SetRow(purchaseBox, 5); Grid.SetColumn(purchaseBox, 1);
+            root.Children.Add(purchaseLabel); root.Children.Add(purchaseBox);
+
+            var costLabel = new TextBlock { Text = "最大采购成本", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
+            var costBox = new TextBox { Text = "0", Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(costLabel, 6); Grid.SetColumn(costLabel, 0);
+            Grid.SetRow(costBox, 6); Grid.SetColumn(costBox, 1);
+            root.Children.Add(costLabel); root.Children.Add(costBox);
+
+            var batchLabel = new TextBlock { Text = "注册批次 ID", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
+            var batchBox = new TextBox { Text = "target_at200_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"), Margin = new Thickness(0, 0, 0, 10) };
+            Grid.SetRow(batchLabel, 7); Grid.SetColumn(batchLabel, 0);
+            Grid.SetRow(batchBox, 7); Grid.SetColumn(batchBox, 1);
+            root.Children.Add(batchLabel); root.Children.Add(batchBox);
+
+            void UpdateTargetControls()
+            {
+                bool targetMode = string.Equals((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string, "remail_target", StringComparison.OrdinalIgnoreCase);
+                Visibility visibility = targetMode ? Visibility.Visible : Visibility.Collapsed;
+                purchaseLabel.Visibility = visibility; purchaseBox.Visibility = visibility;
+                costLabel.Visibility = visibility; costBox.Visibility = visibility;
+                batchLabel.Visibility = visibility; batchBox.Visibility = visibility;
+                countLabel.Text = targetMode ? "AT 200 目标" : "数量";
+                if (targetMode)
+                {
+                    skipPaymentBox.IsChecked = true;
+                    skipPaymentBox.IsEnabled = false;
+                    paymentBox.IsEnabled = false;
+                }
+                else
+                {
+                    skipPaymentBox.IsEnabled = true;
+                    paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
+                }
+            }
+            sourceBox.SelectionChanged += (_, __) => UpdateTargetControls();
+            UpdateTargetControls();
+
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 5);
+            Grid.SetRow(actions, 8);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -572,14 +635,25 @@ namespace SmsWorkbench
             {
                 int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
                 int workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount());
+                string selectedSource = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool";
+                decimal maxCost = decimal.TryParse(costBox.Text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal parsedCost)
+                    ? Math.Max(0, parsedCost)
+                    : 0;
                 selected = new RegisterOptions
                 {
-                    Source = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool",
+                    Source = selectedSource,
                     Count = count,
                     Workers = workers,
                     PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal"),
-                    SkipPaymentLink = skipPaymentBox.IsChecked == true
+                    SkipPaymentLink = skipPaymentBox.IsChecked == true,
+                    MaxMailboxPurchases = ParsePositiveInt(purchaseBox.Text, count, 1000, count * 2),
+                    MaxReMailCost = maxCost,
+                    RegistrationBatchId = Regex.Replace(batchBox.Text.Trim(), @"[^A-Za-z0-9_.-]+", "_")
                 };
+                if (selected.Source == "remail_target" && selected.RegistrationBatchId.Length == 0)
+                {
+                    selected.RegistrationBatchId = "target_at200_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                }
                 CountText = count.ToString();
                 dialog.DialogResult = true;
                 dialog.Close();

@@ -19,4 +19,4 @@
 
 - Local account availability and payment eligibility are reported as separate stages. A successful non-401 token probe is not considered proof of MoMo availability.
 - Live MoMo validation confirmed the VN proxy route and a complete `ready_with_qr` result with a `payment.momo.vn` URL and decoded PNG. Runtime account lists, URLs, reports, and QR files were removed before release.
-- Full automated test suite, Python compilation, desktop publish, installer build, and diff checks are required before publishing this release.
+- Validation completed with `426 passed, 1 skipped, 7 subtests passed`, Python compilation, desktop publish, installer build, diff checks, and release-archive inspection.

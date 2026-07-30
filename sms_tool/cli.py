@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .config import CFG
 from .mailbox import _load_mailbox_pool, _remail_enabled
-from .paths import output_dir
+from .paths import output_dir, runtime_file
 from .registration import _build_session_file, _mailbox_snapshot, run_batch, run_email
 from .storage import database_path, get_paypal_url, list_paypal_accounts, mark_paypal_status, rebuild_from_session_dir, upsert_account
 from .commands.helpers import (
@@ -218,6 +218,9 @@ def main():
     parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
     parser.add_argument("--count", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration/link regeneration")
+    parser.add_argument("--target-at200", type=int, default=0, help="Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved")
+    parser.add_argument("--max-mailbox-purchases", type=int, default=0, help="Hard mailbox purchase cap for --target-at200 (default: target x 2)")
+    parser.add_argument("--max-remail-cost", type=float, default=0.0, help="Optional total ReMail purchase-cost cap for --target-at200")
     parser.add_argument("--password", default=None, help="Use a specific password")
     parser.add_argument("--email", default=None, help="Mailbox email address")
     parser.add_argument("--email-password", default=None, help="Mailbox password")
@@ -238,6 +241,7 @@ def main():
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
+    parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
     parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
@@ -277,6 +281,12 @@ def main():
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
     parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
     parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
+    parser.add_argument("--payment-batch-id", default=None, help="Stable cohort ID for a resumable protocol-payment batch")
+    parser.add_argument("--no-jit-at-refresh", action="store_true", help="Probe the saved AT but do not run email OTP OAuth on HTTP 401")
+    parser.add_argument("--payment-probe-only", action="store_true", help="Run the JIT AT/eligibility gate without creating a payment method")
+    parser.add_argument("--payment-matrix", default=None, help="Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix")
+    parser.add_argument("--payment-canary", type=int, default=0, help="Limit a payment batch to the first N unique accounts")
+    parser.add_argument("--payment-retries", type=int, default=1, help="Retries for classified transient payment failures")
     parser.add_argument("--list-payment-methods", action="store_true", help="List protocol payment methods and adapter availability")
     parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link/--generate-upi-qr")
     parser.add_argument("--qr-path", default=None, help="Output PNG path for --generate-upi-qr")
@@ -285,7 +295,11 @@ def main():
     parser.add_argument("--payment-country", default=None, help="UPI local payment-method country, e.g. IN")
     parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
+    parser.add_argument("--stripe-init-proxy", default=None, help="Explicit Stripe init proxy (falls back to provider proxy)")
+    parser.add_argument("--payment-method-proxy", default=None, help="Explicit payment-method creation proxy")
+    parser.add_argument("--confirm-proxy", default=None, help="Explicit Stripe confirm proxy")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
+    parser.add_argument("--redirect-proxy", default=None, help="Explicit final provider redirect proxy")
     parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
     parser.add_argument("--checkout-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate checkout proxy credentials to this exit country")
     parser.add_argument("--approve-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate approve proxy credentials to this exit country")
@@ -440,6 +454,10 @@ def main():
         _convert_session_json(args)
         return
 
+    if getattr(args, "target_at200", 0):
+        _run_target_at200(args, base_dir)
+        return
+
     pipeline_started = time.time()
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)
@@ -465,6 +483,8 @@ def main():
     paypal_link = _payment_link_enabled(payment_method, args)
 
     requested_count = max(1, int(args.count or 1))
+    if not getattr(args, "registration_batch_id", None):
+        args.registration_batch_id = f"registration_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
     effective_count = requested_count
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         effective_count = len(mailboxes)
@@ -598,6 +618,9 @@ def _save_registration_results(
     paypal_link,
     payment_method,
 ):
+    from .storage import record_registration_audit
+
+    batch_id = str(getattr(args, "registration_batch_id", "") or "")
     pipeline_seconds = time.time() - pipeline_started
     pipeline_timing = {
         "mailbox_load_seconds": round(mailbox_seconds, 2),
@@ -614,15 +637,27 @@ def _save_registration_results(
     db_saved_count = 0
     import_emails = []
     for data in filter(None, results):
+        data["batch_id"] = batch_id
         if not data.get("success", False):
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             print(f"[!] Registration failed for {failed_email}: {failed_error[:500]}")
+            record_registration_audit(
+                data,
+                batch_id=batch_id,
+                state="terminal" if "account_deactivated" in failed_error.lower() else "failed",
+            )
+            if "account_deactivated" in failed_error.lower():
+                try:
+                    from .mailbox_remail import record_dead_remail_account
+                    record_dead_remail_account(data, reason="account_deactivated")
+                except Exception:
+                    pass
             if failed_error in ("phone_already_registered_or_login_redirect",):
                 print(f"    Skipped: phone number already registered, not saving to database")
-            elif upsert_account(data):
-                db_saved_count += 1
             continue
+        data["registration_state"] = "pending"
+        record_registration_audit(data, batch_id=batch_id, state="pending")
         session_data = _build_session_file(data)
         if not session_data.get("access_token"):
             print("[!] Successful registration has no access_token; session file was not saved")
@@ -633,8 +668,11 @@ def _save_registration_results(
         out_path = os.path.join(base_dir, fname)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(session_data, f, ensure_ascii=False, indent=2)
+        session_data["batch_id"] = batch_id
+        session_data["registration_state"] = "active"
         if upsert_account(session_data, json_path=out_path):
             db_saved_count += 1
+        record_registration_audit(data, batch_id=batch_id, state="active")
         saved_count += 1
         if session_data.get("email"):
             import_emails.append(session_data["email"])
@@ -643,6 +681,14 @@ def _save_registration_results(
     success_count = sum(1 for r in results if r and r.get("success"))
     print(f"[*] SQLite index: {database_path()} ({db_saved_count} record(s) upserted)")
     print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
+    quality = None
+    if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
+        from .mailbox_remail import record_remail_batch_quality
+        quality = record_remail_batch_quality(batch_id, results, requested=effective_count)
+        print(
+            f"[*] ReMail quality: deactivated={quality['account_deactivated']}/"
+            f"{quality['requested']} halt={quality['halt_replenishment']}"
+        )
 
     paypal_failures = [
         r for r in results
@@ -657,6 +703,106 @@ def _save_registration_results(
 
     if getattr(args, "import_cpa", False):
         _import_registered_accounts(args, import_emails)
+    return {
+        "batch_id": batch_id,
+        "success": success_count,
+        "session_saved": saved_count,
+        "db_saved": db_saved_count,
+        "quality": quality,
+    }
+
+
+def _run_target_at200(args, base_dir):
+    """Bounded ReMail replenishment mode for a stable AT-200 target."""
+    if not (getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None)):
+        print("[Error] --target-at200 requires --buy-remail-mailbox or --remail-service-mode")
+        raise SystemExit(2)
+    target = max(1, int(args.target_at200 or 1))
+    max_purchases = max(target, int(args.max_mailbox_purchases or target * 2))
+    max_cost = max(0.0, float(args.max_remail_cost or 0.0))
+    if not getattr(args, "registration_batch_id", None):
+        args.registration_batch_id = f"target_at200_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
+    original_count = args.count
+    purchased = 0
+    active = 0
+    spent = 0.0
+    rounds = []
+    halted = False
+    started = time.time()
+    try:
+        while active < target and purchased < max_purchases and not halted:
+            quantity = min(target - active, max_purchases - purchased)
+            args.count = quantity
+            mailboxes = _load_mailbox_pool(args)
+            if not mailboxes:
+                break
+            purchased += len(mailboxes)
+            for mailbox in mailboxes:
+                try:
+                    spent += float(getattr(mailbox, "price", 0) or 0)
+                except (TypeError, ValueError):
+                    pass
+            if max_cost and spent > max_cost:
+                halted = True
+                break
+            round_started = time.time()
+            results = run_batch(
+                count=len(mailboxes),
+                proxy=args.proxy,
+                proxy_pool=_proxy_pool_values(args),
+                mailboxes=mailboxes,
+                paypal_link=False,
+                workers=args.workers,
+                phone_pool=None,
+                codex_oauth=not args.registration_at_only,
+                payment_method=_payment_method(args),
+                paypal_generation_type=args.paypal_generation_type,
+                registration_mode=args.registration_mode,
+            )
+            saved = _save_registration_results(
+                args,
+                results,
+                effective_count=len(mailboxes),
+                base_dir=base_dir,
+                pipeline_started=round_started,
+                mailbox_seconds=0,
+                register_seconds=time.time() - round_started,
+                paypal_link=False,
+                payment_method=_payment_method(args),
+            ) or {}
+            gained = int(saved.get("success") or 0)
+            active += gained
+            quality = saved.get("quality") if isinstance(saved.get("quality"), dict) else {}
+            halted = bool(quality.get("halt_replenishment"))
+            rounds.append({
+                "requested": quantity,
+                "mailboxes": len(mailboxes),
+                "active": gained,
+                "deactivated": int(quality.get("account_deactivated") or 0),
+                "halted": halted,
+            })
+    finally:
+        args.count = original_count
+    report = {
+        "ok": active >= target,
+        "batch_id": args.registration_batch_id,
+        "target_at200": target,
+        "active": active,
+        "purchased": purchased,
+        "max_purchases": max_purchases,
+        "estimated_cost": round(spent, 4),
+        "max_cost": max_cost,
+        "supplier_halted": halted,
+        "elapsed_seconds": round(time.time() - started, 2),
+        "rounds": rounds,
+    }
+    report_path = runtime_file(CFG, f"registration_target_{args.registration_batch_id}.json")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    report["report_path"] = str(report_path)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if not report["ok"]:
+        raise SystemExit(3)
 
 
 def _import_registered_accounts(args, emails):
@@ -1361,14 +1507,97 @@ def _extract_payment_link(args):
     """Extract any supported protocol payment link from an AT or saved account."""
     from .payment_link_manager import generate_payment_link
 
-    at, auth_context = _resolve_payment_access_token(args)
+    method = _payment_method(args)
+    email_file = str(getattr(args, "email_file", None) or "").strip()
+    if email_file:
+        from .payment_batch import run_payment_batch
+
+        emails = _read_email_file(email_file)
+        if getattr(args, "email", None):
+            emails.insert(0, str(args.email).strip())
+        if not emails:
+            print(json.dumps({"ok": False, "error": "email file contains no accounts"}, ensure_ascii=False))
+            raise SystemExit(1)
+        proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
+        stage_countries = _payment_stage_country_overrides(args)
+        target_country = _payment_country(method, getattr(args, "target_country", ""))
+        payment_kwargs = {
+            "checkout_proxy": checkout_proxy,
+            "provider_proxy": provider_proxy,
+            "stripe_init_proxy": getattr(args, "stripe_init_proxy", None),
+            "payment_method_proxy": getattr(args, "payment_method_proxy", None),
+            "confirm_proxy": getattr(args, "confirm_proxy", None),
+            "approve_proxy": approve_proxy,
+            "redirect_proxy": getattr(args, "redirect_proxy", None),
+            "promotion_proxy": _at_promotion_proxy_arg(args, method),
+            "stage_proxy_countries": stage_countries,
+            "target_country": target_country,
+            "checkout_country": str(getattr(args, "checkout_country", "") or target_country).strip().upper(),
+            "require_zero": not getattr(args, "no_require_zero", False),
+        }
+        try:
+            report = run_payment_batch(
+                emails,
+                payment_method=method,
+                workers=getattr(args, "workers", 1),
+                batch_id=getattr(args, "payment_batch_id", "") or "",
+                proxy=proxy,
+                payment_kwargs=payment_kwargs,
+                jit_refresh=not getattr(args, "no_jit_at_refresh", False),
+                probe_only=bool(getattr(args, "payment_probe_only", False)),
+                matrix=getattr(args, "payment_matrix", None),
+                canary=getattr(args, "payment_canary", 0),
+                retries=getattr(args, "payment_retries", 1),
+                timeout=getattr(args, "refresh_timeout", 30),
+            )
+        except RuntimeError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            raise SystemExit(3)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        counts = report.get("counts", {})
+        if (
+            getattr(args, "payment_probe_only", False) and not counts.get("authenticated")
+        ) or (
+            not getattr(args, "payment_probe_only", False) and not counts.get("completed")
+        ):
+            raise SystemExit(3)
+        return
+
+    at = ""
+    auth_context = None
+    if not str(getattr(args, "at", None) or "").strip() and (
+        getattr(args, "email", None) or getattr(args, "session_file", None)
+    ):
+        from .payment_auth import ensure_payment_access_token, public_payment_auth_result
+
+        legacy_at, legacy_context = _resolve_payment_access_token(args)
+        auth = ensure_payment_access_token(
+            email=str(getattr(args, "email", None) or ""),
+            session_file=str(getattr(args, "session_file", None) or ""),
+            proxy=getattr(args, "proxy", None),
+            timeout=min(max(10, int(getattr(args, "refresh_timeout", 30) or 30)), 300),
+            relogin_on_401=not getattr(args, "no_jit_at_refresh", False),
+        )
+        if not auth.get("ok"):
+            if auth.get("error") == "missing_access_token" and legacy_at:
+                at, auth_context = legacy_at, legacy_context
+            else:
+                print(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
+                raise SystemExit(3)
+        else:
+            at = str(auth.get("access_token") or "")
+            auth_context = auth.get("auth_context")
+        if auth.get("ok") and getattr(args, "payment_probe_only", False):
+            print(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
+            return
+    else:
+        at, auth_context = _resolve_payment_access_token(args)
     if not at:
         print(json.dumps({
             "ok": False,
             "error": "selected account has no Access Token" if (getattr(args, "email", None) or getattr(args, "session_file", None)) else "missing --at (Access Token)",
         }, ensure_ascii=False))
         raise SystemExit(1)
-    method = _payment_method(args)
     proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
     stage_countries = _payment_stage_country_overrides(args)
     target_country = _payment_country(method, getattr(args, "target_country", ""))
@@ -1392,7 +1621,11 @@ def _extract_payment_link(args):
     kwargs = {
         "checkout_proxy": checkout_proxy,
         "provider_proxy": provider_proxy,
+        "stripe_init_proxy": getattr(args, "stripe_init_proxy", None),
+        "payment_method_proxy": getattr(args, "payment_method_proxy", None),
+        "confirm_proxy": getattr(args, "confirm_proxy", None),
         "approve_proxy": approve_proxy,
+        "redirect_proxy": getattr(args, "redirect_proxy", None),
         "promotion_proxy": (
             rotate_proxy_session(proxy, stage_countries.get("promotion") or target_country)
             if proxy and not _has_explicit_payment_proxy(args) and _protocol_proxy_pool()

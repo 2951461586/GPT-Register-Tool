@@ -37,7 +37,7 @@ def _refresh_access_token_from_cookie(account, proxy=None, timeout=30):
             label="session refresh",
             headers=headers,
             timeout=timeout,
-            impersonate="chrome",
+            impersonate="chrome124",
         )
     except Exception as exc:
         if is_transient_transport_error(exc):
@@ -82,7 +82,7 @@ def _fetch_auth_session_from_cookie(account, proxy=None, timeout=30):
             label="auth session",
             headers=headers,
             timeout=timeout,
-            impersonate="chrome",
+            impersonate="chrome124",
         )
     except Exception as exc:
         if is_transient_transport_error(exc):
@@ -180,7 +180,7 @@ def _delete_workspace_user(account, workspace_id="", proxy=None, timeout=30, max
                 url,
                 headers=headers,
                 timeout=timeout,
-                impersonate="chrome",
+                impersonate="chrome124",
             )
             text = response.text or ""
             ok = 200 <= int(response.status_code) < 300
@@ -259,7 +259,7 @@ def _post_workspace_invite(account, workspace_id, route="request", proxy=None, t
                 headers=headers,
                 data="",
                 timeout=timeout,
-                impersonate="chrome",
+                impersonate="chrome124",
             )
             text = response.text or ""
             ok = 200 <= int(response.status_code) < 300

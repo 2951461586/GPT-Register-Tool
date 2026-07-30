@@ -1,6 +1,9 @@
+import json
 import os
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime
 from urllib.parse import quote
@@ -10,11 +13,13 @@ import requests as http_requests
 from .config import CFG
 from .mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from .mailbox_types import MailboxAccount
+from .paths import project_path, runtime_file
 
 
 DEFAULT_BASE_URL = "https://remail.aishop6.com"
 DEFAULT_PROJECT_ID = 2
 DEFAULT_PRODUCT_ID = 5
+_DEAD_REMAIL_LOCK = threading.Lock()
 
 
 class ReMailHttpError(RuntimeError):
@@ -48,6 +53,153 @@ def _remail_enabled():
 
 def _remail_base_url():
     return str(_remail_cfg().get("base_url") or DEFAULT_BASE_URL).strip().rstrip("/")
+
+
+def _dead_remail_registry_path():
+    configured = str(_remail_cfg().get("dead_registry_file") or "").strip()
+    return project_path(configured) if configured else runtime_file(CFG, "remail_dead_accounts.json")
+
+
+def _remail_dead_history_enabled():
+    value = _remail_cfg().get("exclude_dead_history", True)
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def _remail_identity(value):
+    if isinstance(value, dict):
+        mailbox = value.get("mailbox") if isinstance(value.get("mailbox"), dict) else {}
+        purchase = value.get("purchase") if isinstance(value.get("purchase"), dict) else {}
+        email = value.get("email") or mailbox.get("email") or purchase.get("email")
+        order_no = value.get("order_no") or mailbox.get("order_no") or purchase.get("order_no")
+        purchase_id = value.get("purchase_id") or mailbox.get("purchase_id") or purchase.get("purchase_id")
+    else:
+        email = getattr(value, "email", "")
+        order_no = getattr(value, "order_no", "")
+        purchase_id = getattr(value, "purchase_id", "")
+    return {
+        "email": str(email or "").strip().lower(),
+        "order_no": str(order_no or "").strip(),
+        "purchase_id": str(purchase_id or "").strip(),
+    }
+
+
+def _remail_identity_keys(value):
+    identity = _remail_identity(value)
+    return {
+        f"{key}:{item.lower() if key == 'email' else item}"
+        for key, item in identity.items()
+        if item
+    }
+
+
+def _read_dead_remail_registry():
+    path = _dead_remail_registry_path()
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    records = payload.get("accounts") if isinstance(payload, dict) else payload
+    return [item for item in (records or []) if isinstance(item, dict)]
+
+
+def record_dead_remail_account(value, reason="account_deactivated"):
+    identity = _remail_identity(value)
+    if not identity["email"]:
+        return False
+    now = int(time.time())
+    path = _dead_remail_registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _DEAD_REMAIL_LOCK:
+        records = _read_dead_remail_registry()
+        target_keys = _remail_identity_keys(identity)
+        existing = next((item for item in records if target_keys & _remail_identity_keys(item)), None)
+        if existing is None:
+            existing = {**identity, "first_seen_at": now}
+            records.append(existing)
+        else:
+            for key, item in identity.items():
+                if item:
+                    existing[key] = item
+        existing["reason"] = str(reason or "account_deactivated")[:120]
+        existing["last_seen_at"] = now
+        payload = {"version": 1, "accounts": records}
+        temp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.replace(path)
+    return True
+
+
+def _historically_dead_remail_keys():
+    keys = set()
+    for item in _read_dead_remail_registry():
+        keys.update(_remail_identity_keys(item))
+    try:
+        from .storage import list_terminal_remail_accounts
+
+        for item in list_terminal_remail_accounts():
+            keys.update(_remail_identity_keys(item))
+    except Exception:
+        pass
+    return keys
+
+
+def filter_dead_remail_mailboxes(mailboxes):
+    accounts = list(mailboxes or [])
+    if not _remail_dead_history_enabled():
+        return accounts
+    dead_keys = _historically_dead_remail_keys()
+    if not dead_keys:
+        return accounts
+    kept = []
+    skipped = 0
+    for mailbox in accounts:
+        if str(getattr(mailbox, "provider", "") or "").strip().lower() == "remail" and (
+            _remail_identity_keys(mailbox) & dead_keys
+        ):
+            skipped += 1
+            continue
+        kept.append(mailbox)
+    if skipped:
+        print(f"[!] Skipped {skipped} historically deactivated ReMail mailbox(es)")
+    return kept
+
+
+def record_remail_batch_quality(batch_id, results, *, requested=0):
+    """Append token-free supplier quality metrics and return the stop decision."""
+    rows = [row for row in (results or []) if isinstance(row, dict)]
+    total = max(int(requested or 0), len(rows))
+    deactivated = sum("account_deactivated" in str(row.get("error") or "").lower() for row in rows)
+    otp_timeout = sum(
+        "otp" in str(row.get("error") or "").lower()
+        and "timeout" in str(row.get("error") or "").lower()
+        for row in rows
+    )
+    dead_rate = (deactivated / total) if total else 0.0
+    try:
+        threshold = float(_remail_cfg().get("supplier_dead_rate_stop_threshold") or 0.25)
+    except (TypeError, ValueError):
+        threshold = 0.25
+    payload = {
+        "batch_id": str(batch_id or "")[:100],
+        "requested": total,
+        "completed": len(rows),
+        "account_deactivated": deactivated,
+        "otp_timeout": otp_timeout,
+        "dead_rate": round(dead_rate, 6),
+        "stop_threshold": threshold,
+        "halt_replenishment": bool(total and dead_rate >= threshold),
+        "created_at": int(time.time()),
+    }
+    path = runtime_file(CFG, "remail_quality.jsonl")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _DEAD_REMAIL_LOCK:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+    return payload
 
 
 def _redact(value, secrets=()):
@@ -106,6 +258,66 @@ def _remail_request(method, path, *, auth=False, headers=None, secrets=(), proxy
     return body
 
 
+_REMAIL_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def _remail_order_retry_attempts():
+    try:
+        return max(0, min(int(_remail_cfg().get("order_retry_attempts", 3)), 8))
+    except (TypeError, ValueError):
+        return 3
+
+
+def _remail_order_retry_backoff(attempt):
+    try:
+        base = float(_remail_cfg().get("order_retry_backoff_seconds", 5))
+    except (TypeError, ValueError):
+        base = 5.0
+    return max(1.0, min(base * (attempt + 1), 30.0))
+
+
+def _post_remail_order(path, *, params, payload, idempotency_key=None, timeout=30):
+    """POST a ReMail order with a STABLE idempotency key and bounded retries.
+
+    ReMail rides behind Cloudflare; a single transient 5xx/429 gateway blip or
+    network hiccup otherwise aborts a whole batch acquisition (observed as a
+    502 killing a 100-mailbox run at the acquisition step).  The idempotency
+    key is generated once and reused across retries so a retried order never
+    double-charges the account.
+    """
+    key = str(idempotency_key or uuid.uuid4())
+    attempts = _remail_order_retry_attempts()
+    last_exc = None
+    for attempt in range(attempts + 1):
+        try:
+            return _remail_request(
+                "POST",
+                path,
+                auth=True,
+                headers={"Idempotency-Key": key},
+                params=params,
+                json=payload,
+                timeout=timeout,
+            )
+        except ReMailHttpError as exc:
+            last_exc = exc
+            if exc.status_code not in _REMAIL_RETRYABLE_STATUS or attempt >= attempts:
+                raise
+        except RuntimeError as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                raise
+        wait = _remail_order_retry_backoff(attempt)
+        print(
+            f"[!] ReMail order {path} attempt {attempt + 1}/{attempts + 1} failed "
+            f"({last_exc}); retrying in {wait:.0f}s"
+        )
+        time.sleep(wait)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("ReMail order failed without a specific error")
+
+
 def _arg_or_config(args, arg_name, config_name, default=None):
     value = getattr(args, arg_name, None) if args is not None else None
     if value is None or value == "":
@@ -153,15 +365,99 @@ def _mailbox_from_order(order, service_mode=None):
 
 def _create_remail_order(args=None, service_mode=None):
     mode, supply, payload = _order_options(args, service_mode=service_mode)
-    order = _remail_request(
-        "POST",
+    # Route the single-order POST through the idempotent-retry helper so a
+    # transient Cloudflare 5xx/429 no longer aborts a one-off acquisition, and
+    # a retry reuses the same Idempotency-Key rather than double-charging.
+    order = _post_remail_order(
         "/v1/open/orders",
-        auth=True,
-        headers={"Idempotency-Key": str(uuid.uuid4())},
         params={"serviceMode": mode, "supply": supply},
-        json=payload,
+        payload=payload,
     )
-    return _mailbox_from_order(order, service_mode=mode)
+    mailbox = _mailbox_from_order(order, service_mode=mode)
+    filtered = filter_dead_remail_mailboxes([mailbox])
+    if not filtered:
+        raise RuntimeError("remail_historically_deactivated_mailbox")
+    return filtered[0]
+
+
+def _recoverable_batch_error(exc):
+    if isinstance(exc, ReMailHttpError):
+        return exc.status_code in {408, 425, 429} or exc.status_code >= 500
+    return "ReMail request failed:" in str(exc)
+
+
+def _order_created_timestamp(order):
+    raw = str((order or {}).get("createdAt") or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _fetch_remail_order_detail(order):
+    order_no = str((order or {}).get("orderNo") or "").strip()
+    if not order_no:
+        raise RuntimeError("ReMail recovery candidate has no order number")
+    last_error = None
+    for attempt in range(3):
+        try:
+            return _remail_request(
+                "GET",
+                "/v1/open/orders/" + quote(order_no, safe=""),
+                auth=True,
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise last_error
+
+
+def _recover_recent_remail_batch(*, started_at, quantity, mode, payload):
+    try:
+        response = _remail_request(
+            "GET",
+            "/v1/open/orders",
+            auth=True,
+            params={"limit": max(100, min(500, quantity * 2))},
+        )
+    except Exception as exc:
+        print(f"[!] ReMail ambiguous-batch recovery lookup failed: {_redact(str(exc))}")
+        return []
+
+    now = time.time()
+    candidates = []
+    for item in response.get("items", []) if isinstance(response, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        created_at = _order_created_timestamp(item)
+        if created_at < started_at - 5 or created_at > now + 10:
+            continue
+        if str(item.get("serviceMode") or "").strip().lower() != mode:
+            continue
+        if int(item.get("projectId") or 0) != int(payload.get("projectId") or 0):
+            continue
+        if int(item.get("projectProductId") or 0) != int(payload.get("productId") or 0):
+            continue
+        candidates.append(item)
+
+    if len(candidates) != quantity:
+        print(
+            "[!] ReMail ambiguous-batch recovery refused: "
+            f"expected exactly {quantity} matching recent orders, found {len(candidates)}"
+        )
+        return []
+
+    candidates.sort(key=lambda item: int(item.get("id") or 0))
+    try:
+        with ThreadPoolExecutor(max_workers=min(8, quantity)) as executor:
+            details = list(executor.map(_fetch_remail_order_detail, candidates))
+        return filter_dead_remail_mailboxes([_mailbox_from_order(item, service_mode=mode) for item in details])
+    except Exception as exc:
+        print(f"[!] ReMail ambiguous-batch detail recovery failed: {_redact(str(exc))}")
+        return []
 
 
 def _create_remail_mailboxes(args=None, service_mode="purchase"):
@@ -170,14 +466,30 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
         return [_create_remail_order(args, service_mode=service_mode)]
     mode, supply, payload = _order_options(args, service_mode=service_mode)
     payload["quantity"] = quantity
-    results = _remail_request(
-        "POST",
-        "/v1/open/orders/batch",
-        auth=True,
-        headers={"Idempotency-Key": str(uuid.uuid4())},
-        params={"serviceMode": mode, "supply": supply},
-        json=payload,
-    )
+    started_at = time.time()
+    try:
+        results = _remail_request(
+            "POST",
+            "/v1/open/orders/batch",
+            auth=True,
+            headers={"Idempotency-Key": str(uuid.uuid4())},
+            params={"serviceMode": mode, "supply": supply},
+            json=payload,
+            timeout=max(30, int(_remail_cfg().get("batch_timeout") or quantity * 2)),
+        )
+    except Exception as exc:
+        if not _recoverable_batch_error(exc):
+            raise
+        accounts = _recover_recent_remail_batch(
+            started_at=started_at,
+            quantity=quantity,
+            mode=mode,
+            payload=payload,
+        )
+        if accounts:
+            print(f"[*] Recovered {len(accounts)} ReMail order(s) after an ambiguous batch response")
+            return accounts
+        raise
     accounts = []
     failures = []
     for item in results if isinstance(results, list) else []:
@@ -187,6 +499,7 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
             failures.append(_redact(item.get("error") or {"index": item.get("index")}))
     if failures:
         print(f"[!] ReMail batch returned {len(failures)} failed item(s): {failures}")
+    accounts = filter_dead_remail_mailboxes(accounts)
     if not accounts:
         raise RuntimeError("ReMail batch returned no usable mailboxes")
     return accounts
