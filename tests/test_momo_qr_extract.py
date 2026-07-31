@@ -203,5 +203,128 @@ class ProbeAccountTests(unittest.TestCase):
         self.assertEqual(result["decision"], "ready_with_qr")
 
 
+class ChooseDecisionTests(unittest.TestCase):
+    """Lock the 0-dong + momo decision matrix (momo_qr_extract.choose_decision)."""
+
+    def test_momo_zero_is_ready(self):
+        self.assertEqual(momo.choose_decision(True, True, "subscription", True, amount_due_cents=0), "ready")
+
+    def test_momo_nonzero_is_promo_nonzero(self):
+        self.assertEqual(momo.choose_decision(True, True, "subscription", True, amount_due_cents=128000), "promo_nonzero")
+
+    def test_unknown_methods(self):
+        self.assertEqual(momo.choose_decision(True, True, "subscription", None, amount_due_cents=0), "payment_methods_unknown")
+
+    def test_unexpected_mode_wins_before_momo(self):
+        # a non-subscription mode is terminal even when momo+zero would otherwise be ready
+        self.assertEqual(momo.choose_decision(True, True, "payment", True, amount_due_cents=0), "unexpected_mode")
+
+    def test_none_mode_is_allowed(self):
+        self.assertEqual(momo.choose_decision(True, True, None, True, amount_due_cents=0), "ready")
+
+    def test_no_momo_nonzero_full_price_is_card_only(self):
+        self.assertEqual(momo.choose_decision(False, False, "subscription", False, amount_due_cents=99000), "card_only_full_price")
+
+    def test_no_momo_zero_ineligible_is_trial_ineligible(self):
+        self.assertEqual(momo.choose_decision(False, False, "subscription", False, amount_due_cents=0), "account_trial_ineligible")
+
+    def test_no_momo_zero_unknown_eligibility_is_trial_not_applied(self):
+        self.assertEqual(momo.choose_decision(None, False, "subscription", False, amount_due_cents=0), "trial_not_applied")
+
+    def test_no_momo_with_trial_is_momo_not_enabled(self):
+        self.assertEqual(momo.choose_decision(True, True, "subscription", False, amount_due_cents=0), "momo_not_enabled")
+
+
+class UsablePayTextTests(unittest.TestCase):
+    def test_empty_and_junk_rejected(self):
+        self.assertFalse(momo._usable_pay_text(""))
+        self.assertFalse(momo._usable_pay_text("momo"))
+        self.assertFalse(momo._usable_pay_text("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png"))
+
+    def test_urls_and_data_image_accepted(self):
+        self.assertTrue(momo._usable_pay_text("https://payment.momo.vn/x"))
+        self.assertTrue(momo._usable_pay_text(_PNG_DATA_URI))
+
+    def test_momo_host_needs_min_length(self):
+        self.assertTrue(momo._usable_pay_text("http://payment.momo.vn/abcdefghij"))
+        self.assertFalse(momo._usable_pay_text("momo.vn/a"))  # < 16 chars
+
+    def test_vietqr_prefix_needs_min_length(self):
+        self.assertTrue(momo._usable_pay_text(_VIETQR))
+        self.assertFalse(momo._usable_pay_text("000201"))  # < 24 chars
+
+    def test_long_generic_needs_keyword(self):
+        self.assertTrue(momo._usable_pay_text("qr" + "a" * 40))
+        self.assertFalse(momo._usable_pay_text("a" * 40))  # >= 32 but no momo/qr/pay/iban/http
+
+
+class UsableQrImageTests(unittest.TestCase):
+    def test_data_image_accepted(self):
+        self.assertTrue(momo._usable_qr_image(_PNG_DATA_URI))
+
+    def test_brand_icon_rejected(self):
+        self.assertFalse(momo._usable_qr_image("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png"))
+
+    def test_qr_keyword_url_accepted(self):
+        self.assertTrue(momo._usable_qr_image("https://cdn.example.com/qrcode.png"))
+
+    def test_plain_image_url_rejected(self):
+        self.assertFalse(momo._usable_qr_image("https://cdn.example.com/logo.png"))
+
+    def test_non_url_rejected(self):
+        self.assertFalse(momo._usable_qr_image("randomstring"))
+
+
+class _FakeResp:
+    def __init__(self, url, text):
+        self.url = url
+        self.text = text
+
+
+try:  # patch whichever HTTP client follow_momo_redirect actually uses
+    import curl_cffi  # noqa: F401
+
+    _HTTP_GET_TARGET = "curl_cffi.requests.get"
+except Exception:  # pragma: no cover - depends on environment
+    _HTTP_GET_TARGET = "requests.get"
+
+
+class FollowMomoRedirectTests(unittest.TestCase):
+    def test_bad_redirect_short_circuits(self):
+        out = momo.follow_momo_redirect("not-a-url")
+        self.assertEqual(out["error"], "bad_redirect")
+
+    def test_data_image_qr_extracted_from_body(self):
+        html = '<html><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg"></html>'
+        fake = _FakeResp("https://payment.momo.vn/v2/gateway/pay?t=1", html)
+        with patch(_HTTP_GET_TARGET, return_value=fake):
+            out = momo.follow_momo_redirect("https://pm-redirects.stripe.com/x", timeout=5)
+        self.assertTrue(out["qr_image_url"].startswith("data:image/png"))
+        self.assertEqual(out["qr_data"], out["qr_image_url"])  # image preferred over gateway url
+        self.assertIn("payment.momo.vn", out["hosted_instructions_url"])
+
+    def test_momo_gateway_url_pulled_from_body(self):
+        gateway = "https://payment.momo.vn/v2/gateway/pay?t=9&s=zzz"
+        html = f'<a href="{gateway}">pay</a>'
+        fake = _FakeResp("https://cdn.example.com/landing", html)  # final not momo
+        with patch(_HTTP_GET_TARGET, return_value=fake):
+            out = momo.follow_momo_redirect("https://pm-redirects.stripe.com/x", timeout=5)
+        self.assertEqual(out["hosted_instructions_url"], gateway)
+        self.assertEqual(out["qr_data"], gateway)
+
+    def test_no_qr_in_body_reports_error(self):
+        fake = _FakeResp("https://cdn.example.com/landing", "<html>nothing here</html>")
+        with patch(_HTTP_GET_TARGET, return_value=fake):
+            out = momo.follow_momo_redirect("https://pm-redirects.stripe.com/x", timeout=5)
+        self.assertFalse(out["qr_image_url"])
+        self.assertFalse(out["hosted_instructions_url"])
+        self.assertTrue(out["error"].startswith("no_qr_in_redirect"))
+
+    def test_network_error_is_captured(self):
+        with patch(_HTTP_GET_TARGET, side_effect=RuntimeError("boom")):
+            out = momo.follow_momo_redirect("https://pm-redirects.stripe.com/x", timeout=5)
+        self.assertTrue(out["error"].startswith("follow_network_"))
+
+
 if __name__ == "__main__":
     unittest.main()

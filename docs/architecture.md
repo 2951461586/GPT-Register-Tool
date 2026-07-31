@@ -8,7 +8,8 @@ This document defines the responsibilities of each module so a fresh clone can b
 WPF or CLI
   -> mailbox source selection
   -> ChatGPT email registration
-  -> auth session/access token fetch
+  -> auth session/access token fetch and stable HTTP-200 AT persistence boundary
+  -> JIT AT probe/OAuth refresh when payment starts
   -> unified PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo link extraction
   -> session JSON + SQLite index
   -> status display and maintenance actions
@@ -80,7 +81,9 @@ sms_tool/
   sms_provider.py           SMS provider abstraction layer.
   proxy_pool.py             SOCKS5 proxy pool server with health checking.
   session_refresh.py        Refresh auth session after manual login/payment.
-  agent_identity.py         Agent Identity registration, Ed25519 key generation, and persistence.
+  payment_auth.py           JIT payment AT probe, HTTP-401 mailbox OTP OAuth refresh, and token telemetry.
+  payment_batch.py          Resumable batch payment executor, eligibility matrix, canary, retries, and atomic reports.
+  agent_identity.py         Explicit Agent Identity/SUB2API credential conversion; not part of registration.
   sub2api_import.py         SUB2API import boundary with multi-mode auth.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
   session_converter.py      Multi-format session/account export conversion core.
@@ -115,9 +118,11 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower` | SMS provider APIs | ChatGPT account state, payment state |
 | ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
+| JIT payment authentication | `sms_tool.payment_auth` | account seed, mailbox OTP OAuth, quota probe | Registration success classification, payment-method creation |
 | Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init, protocol adapters | PayPal account signup, final payment authorization |
+| Batch payment execution | `sms_tool.payment_batch` | JIT auth, payment manager, eligibility matrix, proxy stages, atomic reports | Registration/mailbox procurement, token-free public reports |
 | Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
-| Agent Identity registration | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
+| Explicit Agent Identity conversion | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
 | SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import`, `sms_tool.sub2api_import` | session JSON, account seed, CPA/SUB2API API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
@@ -478,19 +483,21 @@ transaction.
 `services/mail-otp-web` is a standalone operator diagnostic surface for Microsoft Graph inbox/OTP extraction. It accepts the same mailbox account-line formats as `sms_tool.mailbox`, refreshes Microsoft access tokens, displays recent messages, and may return a rotated mailbox refresh token to the operator. It is not the main registration mailbox owner: registration still uses `sms_tool.mailbox`, and this helper service must not edit `hotmail.txt`, session JSON, or SQLite rows directly.
 
 
-### Agent Identity Layer
+### Agent Identity Layer (Explicit Import Only)
 
-`sms_tool/agent_identity.py` owns OpenAI Agent Identity registration:
+`sms_tool/agent_identity.py` is an explicit credential-conversion boundary used by
+SUB2API import. The registration pipeline no longer calls it:
 
 - Generate Ed25519 key pairs in PKCS#8 format.
 - Persist private keys independently under `sessions/agent_identities/`.
-- Register Agent Identity and task with OpenAI after Free account signup.
-- Support automatic registration via `agent_identity.register_on_free_signup`.
+- Register Agent Identity and task only when the operator explicitly requests the
+  SUB2API Agent Identity import mode.
 - Handle 403 responses from Free accounts (expected limitation, silently handled).
 - Fall back to OAuth mode when Agent Identity registry is disabled.
 
 Agent Identity keys are reused across SUB2API imports. The private key is never
-logged or exported in full.
+logged or exported in full. A failed Agent Identity conversion must not change the
+registration result or invalidate an HTTP-200 AT account.
 
 ### SUB2API Import Layer
 

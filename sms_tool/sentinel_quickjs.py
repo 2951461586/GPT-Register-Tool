@@ -88,8 +88,15 @@ def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
         },
         timeout=max(10, int(timeout_ms / 1000)),
     )
-    if getattr(resp, "status_code", 0) != 200:
-        raise RuntimeError(f"下载 sdk.js 失败: HTTP {resp.status_code}")
+    status = getattr(resp, "status_code", 0)
+    if status != 200:
+        hint = ""
+        if status in (403, 404):
+            hint = (
+                f"（Sentinel 版本 {version} 可能已被 OpenAI 轮换失效，"
+                "请更新环境变量 OPENAI_SENTINEL_VERSION 或 config 的 sentinel_version）"
+            )
+        raise RuntimeError(f"下载 sdk.js 失败: HTTP {status}{hint}")
     content = getattr(resp, "content", b"") or (resp.text or "").encode()
     if not content:
         raise RuntimeError("下载 sdk.js 失败: 响应为空")

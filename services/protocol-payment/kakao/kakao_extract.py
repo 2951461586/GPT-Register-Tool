@@ -306,7 +306,6 @@ def load_proxy_state() -> dict[str, Any]:
             payload = {}
         _proxy_state = payload if isinstance(payload, dict) else {}
         _proxy_state.setdefault("seed", {})
-        _proxy_state.setdefault("role", {})
         return _proxy_state
 
 
@@ -333,37 +332,11 @@ def seed_record(proxy_seed: str) -> dict[str, Any]:
     return record
 
 
-def role_seed_record(proxy_seed: str, role: str) -> dict[str, Any]:
-    key = proxy_chain_key(proxy_seed)
-    if not key:
-        return {}
-    normalized_role = "checkout" if role == "checkout" else "provider"
-    state = load_proxy_state()
-    roles = state.setdefault("role", {})
-    records = roles.setdefault(normalized_role, {})
-    record = records.setdefault(key, {})
-    if not isinstance(record, dict):
-        records[key] = {}
-        return records[key]
-    return record
-
-
 def record_in_cooldown(record: dict[str, Any], now: int) -> bool:
     fail = int(record.get("fail") or 0)
     last_fail = int(record.get("last_fail") or 0)
     cooldown = env_int("KAKAO_PROXY_FAIL_COOLDOWN", 180, minimum=0, maximum=86_400)
     return fail > 0 and (cooldown == 0 or not last_fail or now - last_fail <= cooldown)
-
-
-def role_seed_usable(proxy_seed: str, role: str, now: int) -> bool:
-    seed = seed_record(proxy_seed)
-    role_record = role_seed_record(proxy_seed, role)
-    return not (
-        seed.get("removed")
-        or role_record.get("removed")
-        or record_in_cooldown(seed, now)
-        or record_in_cooldown(role_record, now)
-    )
 
 
 def remove_seed(proxy_seed: str, reason: str) -> bool:
@@ -494,53 +467,6 @@ def record_seed_failure(proxy_seed: str, reason: str) -> str:
         record["removed"] = True
         save_proxy_state()
         return "removed" if remove_seed(proxy_seed, reason) else "kept"
-    save_proxy_state()
-    return "cooling"
-
-
-def remove_seed_when_all_roles_removed(proxy_seed: str, reason: str) -> bool:
-    checkout = role_seed_record(proxy_seed, "checkout")
-    provider = role_seed_record(proxy_seed, "provider")
-    if not checkout.get("removed") or not provider.get("removed"):
-        return False
-    record = seed_record(proxy_seed)
-    record["removed"] = True
-    record["last_reason"] = redact_log_text(str(reason or "failed"))[:240]
-    save_proxy_state()
-    return remove_seed(proxy_seed, reason)
-
-
-def record_role_success(proxy_seed: str, role: str) -> None:
-    if not proxy_chain_key(proxy_seed):
-        return
-    record = role_seed_record(proxy_seed, role)
-    record["success"] = int(record.get("success") or 0) + 1
-    record["fail"] = 0
-    record["last_success"] = int(time.time())
-    record["last_reason"] = "success"
-    save_proxy_state()
-
-
-def record_role_failure(proxy_seed: str, role: str, reason: str) -> str:
-    """Legacy role-state helper retained for existing persisted state compatibility."""
-    is_provider_no_method = role == "provider" and no_kakao_method_error(reason)
-    if not proxy_chain_key(proxy_seed) or is_account_error(reason) or (
-        is_checkout_shape_error(reason) and not is_provider_no_method
-    ):
-        return "kept"
-    record = role_seed_record(proxy_seed, role)
-    record["fail"] = int(record.get("fail") or 0) + 1
-    record["last_fail"] = int(time.time())
-    record["last_reason"] = redact_log_text(str(reason or "failed"))[:240]
-    should_remove = is_direct_proxy_error(reason) or "出口国家" in reason
-    remove_after = env_int("KAKAO_PROXY_REMOVE_AFTER_FAILS", 3, minimum=1, maximum=100)
-    if (is_proxy_health_error(reason) or is_provider_no_method) and int(record.get("fail") or 0) >= remove_after:
-        should_remove = True
-    if should_remove:
-        record["removed"] = True
-        save_proxy_state()
-        remove_seed_when_all_roles_removed(proxy_seed, reason)
-        return "removed"
     save_proxy_state()
     return "cooling"
 
@@ -705,54 +631,6 @@ def preflight_proxy(proxy: str, role: str) -> tuple[bool, str]:
     if country != expected:
         return False, f"出口国家 {country or 'UNKNOWN'}，要求 {expected}"
     return True, country
-
-
-def select_verified_proxy(
-    role: str,
-    proxy_seeds: list[str],
-    attempted_keys: set[str],
-) -> tuple[str, str] | None:
-    """Return one verified role proxy; this role never reuses a failed Seed in one task."""
-    now = int(time.time())
-    while True:
-        candidates = [
-            seed
-            for seed in proxy_seeds
-            if proxy_chain_key(seed) not in attempted_keys and role_seed_usable(seed, role, now)
-        ]
-        if not candidates:
-            return None
-        candidates.sort(
-            key=lambda seed: (
-                int(role_seed_record(seed, role).get("success") or 0),
-                int(role_seed_record(seed, role).get("last_success") or 0),
-            ),
-            reverse=True,
-        )
-        proxy_seed = candidates[0]
-        key = proxy_chain_key(proxy_seed)
-        attempted_keys.add(key)
-        try:
-            proxy = proxy_for_country(proxy_seed, role_country(role))
-        except Exception as exc:
-            reason = str(exc)
-            state = record_seed_failure(proxy_seed, reason)
-            log(
-                f"{role_label(role)} {proxy_label(proxy_seed)} 无法派生，"
-                f"{'已移除' if state == 'removed' else '进入冷却'}: {reason[:180]}",
-                "[WARN] ",
-            )
-            continue
-        ok, detail = preflight_proxy(proxy, role)
-        if ok:
-            log(f"{role_label(role)} {proxy_label(proxy)} 出口预检通过：{detail}")
-            return proxy_seed, proxy
-        state = record_role_failure(proxy_seed, role, detail)
-        state_text = "已移除" if state == "removed" else ("进入冷却" if state == "cooling" else "保留")
-        log(
-            f"{role_label(role)} {proxy_label(proxy)} 出口预检失败，{state_text}: {detail[:180]}",
-            "[WARN] ",
-        )
 
 
 def select_verified_seed(

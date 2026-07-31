@@ -11,9 +11,9 @@
 ```text
 邮箱源
   -> ChatGPT 邮箱 OTP 注册
-  -> 获取 Access Token / Session
+  -> 获取 Access Token / Session，并以稳定 HTTP 200 AT 作为入库边界
   -> 可选手机验证与 Codex OAuth
-  -> 可选协议支付链接提取
+  -> JIT AT 探测/刷新与可选协议支付链接提取
   -> Session JSON + SQLite 索引
   -> WPF 桌面端统一管理
 ```
@@ -44,8 +44,16 @@
 - Windows 10/11 x64。
 - Python 3.10 或更高版本。
 - .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
+- **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
+- **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
 - 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
 - 注册代理、邮箱收件代理和协议支付代理彼此独立；邮箱收件默认使用本地 `http://127.0.0.1:7897`。
+
+安装依赖后，可运行环境预检确认 Node.js、Playwright Chromium 和关键 Python 包就绪：
+
+```powershell
+python scripts/preflight_env.py
+```
 
 ### 方式一：安装包
 
@@ -116,6 +124,8 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 支持单账号与并发批量注册。
 - 每个注册账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；`_extract_sentinel` 默认允许 2 路并发提取（`sentinel_max_concurrency`，上限 4），兼顾批次速度与 Sentinel 限流风险。
 - 支持仅注册并保存 AT，或继续生成支付链接。
+- 注册成功判定以 AT 探测 HTTP 200 为准；稳定探测窗口内未持续返回 200 的候选不会进入 active 账号库。
+- 注册流程不再执行 Agent Identity 阶段；需要 Agent Identity 时必须通过显式 SUB2API 导入路径处理。
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
 - 注册、OTP、Session 获取、Codex OAuth 和支付提链分别记录阶段结果，避免把中间状态误报为成功。
 
@@ -139,6 +149,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
 - 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
 - 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
+- `ReMail（稳定 AT 200 目标）` 会按 `--target-at200` 补足稳定 HTTP 200 AT，受 `--max-mailbox-purchases`、`--max-remail-cost` 和供应商死号比例熔断约束。
 
 ### 统一邮箱与 OTP
 
@@ -167,28 +178,36 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
 - 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
 - MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
+- 批量支付执行器支持 JIT AT、HTTP 401 邮箱 OTP OAuth 新 AT、资格探测、Canary 暂停、方法级并发、瞬态重试、原子断点和同批次续跑。
+- MoMo 按 Checkout、Promotion、Stripe Provider、Approve、Redirect 分阶段使用代理；Kakao 输出结构化结果，只有明确的 Kakao/Nicepay Redirect 才算链接成功。
 
-### Agent Identity 注册
+### Agent Identity 与 SUB2API 导入边界
 
-- Free 账号注册成功且 AT 有效时，可立即向 OpenAI 注册 Agent Identity 和 task。
-- 使用 Ed25519 算法生成 PKCS#8 格式私钥，独立保存到 `sessions/agent_identities/`。
-- Agent Identity 403 错误为 Free 账号的正常限制，自动静默处理，不产生噪音日志。
-- 支持 Agent Identity 注册被禁用时自动回退到 OAuth 模式。
+- 注册主流程已移除 Agent Identity/task 阶段，不会因为 Agent Identity 失败改变 AT 200 注册结果。
+- 已存在的 Agent Identity JSON 仍可由显式 SUB2API 导入路径读取；新建/重建也只能通过该导入流程触发。
+- Agent Identity 使用 Ed25519 PKCS#8 私钥，独立保存到 `sessions/agent_identities/`，私钥不写入日志。
 - 支持通过 `--register-and-import` 在注册完成后自动导入 SUB2API。
-- SUB2API 导入支持三种认证模式：`auto`（Free 账号优先使用 Agent Identity）、`oauth`、`agent_identity`。
+- SUB2API 导入支持 `auto`、`oauth`、`agent_identity` 三种凭据模式；它们只影响导入边界，不会重新插入注册阶段。
 - SUB2API 导出格式兼容 Go 后端，`expires_at` 字段使用 Unix 时间戳（int64）。
 - 可通过 `--sub2api-no-verify` 跳过导入后的连通性验证。
-- 配置项 `agent_identity.register_on_free_signup` 控制注册成功后是否自动注册 Agent Identity。
 
 ### 账号与数据管理
 
 - Session JSON 与 SQLite 双层索引。
-- 账号状态、额度、支付链接和手机号验证结果集中展示。
-- 支持刷新本地额度并识别 AT 失效。
+- 账号状态、AT（已获取/未获取/401失效）、RT、支付链接和手机号验证结果集中展示。
+- 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在支付 JIT 流程中尝试邮箱 OTP OAuth 刷新。
 - 支持复制 AT、查看邮箱、重新注册和重新生成支付链接。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
-- Agent Identity 私钥独立保存到 `sessions/agent_identities/`，后续 SUB2API 导入会优先复用。
+- 账号列表保留注册地区、注册批次和入库状态，便于按 cohort 选择批量支付账号。
 - 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
+
+### 桌面端批量支付操作
+
+1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
+2. 选择 MoMo/Kakao 等支付方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
+3. 默认开启“401 时邮箱 OTP OAuth 新 AT”；需要只验证账号时勾选“仅探测资格”。
+4. 通过“账号地区 / 支付资格矩阵”确认注册区、Checkout、Promotion、Provider、Approve 和 Redirect 的地区组合。
+5. 重复使用同一批次 ID 可读取 `runtime/payment_batches/` 的原子断点并继续执行；报告会分开显示 AT 200、JIT 刷新、资格、链接、二维码和失败计数。
 
 ### 手机接码
 
@@ -213,6 +232,10 @@ sms_tool/cli.py
 sms_tool/registration.py
   注册主流程
   -> 邮箱 OTP、账号创建、Session、Codex OAuth
+
+sms_tool/payment_auth.py / payment_batch.py
+  JIT AT 门禁与批量协议支付
+  -> 401 OAuth 刷新、资格矩阵、Canary、重试、断点报告
 
 sms_tool/mailbox.py
   邮箱统一路由
@@ -247,10 +270,11 @@ services/
 | `sms_tool/gen_pp_link.py` | PayPal/Stripe Checkout 与链接生成 |
 | `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
 | `sms_tool/storage.py` | SQLite、Session 索引和状态持久化 |
-| `sms_tool/agent_identity.py` | Agent Identity 注册、Ed25519 密钥生成与持久化 |
+| `sms_tool/agent_identity.py` | 显式 SUB2API Agent Identity 凭据转换、Ed25519 密钥生成与持久化 |
 | `sms_tool/sub2api_import.py` | SUB2API 导入（多认证模式） |
 | `sms_tool/session_converter.py` | 多格式账号与 Session 转换 |
-| `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
+| `sms_tool/payment_auth.py` | 支付前 AT 探测、401 邮箱 OTP OAuth 刷新与安全遥测 |
+| `sms_tool/payment_batch.py` | 批量协议支付、资格矩阵、Canary、重试与原子断点 |
 | `sms_tool/registration_progress.py` | 注册阶段进度跟踪与持久化 |
 | `sms_tool/error_classification.py` | 错误类型分类与重试/报告规范化 |
 
@@ -312,18 +336,32 @@ services/
 
 协议支付池与注册代理池相互独立。提链时会按支付地区改写 `region-XX` 或密码中的国家和动态 Session；显式传入 `--proxy` 或分段代理时才覆盖协议池。
 
-### Agent Identity
+### JIT AT 与批量支付
 
 ```json
 {
-  "agent_identity": {
-    "register_on_free_signup": false,
-    "registration_timeout": 30
+  "registration": {
+    "at_stability_probe_count": 2,
+    "at_stability_probe_delay_seconds": 10,
+    "at_probe_timeout_seconds": 30,
+    "stage_concurrency": { "network": 4, "at_probe": 4, "payment": 2 }
+  },
+  "protocol_payments": {
+    "batch": {
+      "method_workers": { "momo": 2, "kakao": 2 },
+      "pause_on_canary_failure": true,
+      "canary_pause_seconds": 21600
+    },
+    "matrix": {
+      "cells": [
+        { "name": "vn_sticky", "payment_method": "momo", "registration_country": "VN", "checkout_country": "VN", "promotion_country": "VN", "provider_country": "VN", "approve_country": "VN", "redirect_country": "VN", "strategy": "custom_promo", "sample_size": 5 }
+      ]
+    }
   }
 }
 ```
 
-`register_on_free_signup` 为 `true` 时，Free 账号注册成功后会自动注册 Agent Identity。`registration_timeout` 控制注册请求超时秒数。
+HTTP 401 的支付账号默认直接进入邮箱 OTP OAuth 新 AT 流程，候选 AT 只有再次探测为 HTTP 200 才会持久化。`account_deactivated` 归类为永久失败，不会反复重登。
 
 ### SUB2API 导入
 
@@ -336,7 +374,16 @@ services/
 }
 ```
 
-`auth_mode` 可选 `auto`（Free 账号优先 Agent Identity）、`oauth`、`agent_identity`。`verify_after_import` 控制导入后是否执行连通性验证。
+`auth_mode` 可选 `auto`、`oauth`、`agent_identity`；Agent Identity 仅在显式 SUB2API 导入边界使用。`verify_after_import` 控制导入后是否执行连通性验证。
+
+### 应急环境变量覆盖
+
+当 OpenAI 轮换 Stripe publishable key 或 Sentinel SDK 版本、导致支付提链或注册 OTP 失败时，可用环境变量临时覆盖，无需改代码：
+
+- `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key（`sms_tool/gen_pp_link.py` 与 `services/protocol-payment/momo/ac_paylink_core.py` 两处共用）。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。
+- `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel_quickjs.py`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
+
+启动前可运行 `python scripts/preflight_env.py` 检出 Node.js、Playwright Chromium 与关键 Python 包是否就绪。
 
 ## 常用操作
 
@@ -350,6 +397,12 @@ python chatgpt_phone_reg.py --remail-service-mode code --count 1 --workers 1 --r
 
 ```powershell
 python chatgpt_phone_reg.py --buy-remail-mailbox --count 1 --workers 1
+```
+
+### 以稳定 AT 200 为目标注册
+
+```powershell
+python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --registration-at-only --skip-paypal-link --target-at200 40 --max-mailbox-purchases 80 --workers 10
 ```
 
 ### CFWorker 邮箱注册
@@ -368,6 +421,18 @@ python chatgpt_phone_reg.py --chatai-mailbox-file hotmail.txt --count 4 --worker
 
 ```powershell
 python chatgpt_phone_reg.py --test-payment-proxies --checkout-proxy-country GB --approve-proxy-country JP --update-proxy-country BR
+```
+
+### 批量协议支付（可断点续跑）
+
+```powershell
+python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --workers 2 --payment-batch-id momo_vn_20260731 --payment-canary 5 --payment-retries 1
+```
+
+只执行 JIT AT 与资格探测，不创建支付方式：
+
+```powershell
+python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --payment-probe-only --payment-batch-id momo_probe_20260731 --workers 2
 ```
 
 ### 注册并自动导入 SUB2API
@@ -428,6 +493,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 4. 构建安装器、便携包和校验文件。
 5. 创建版本标签并上传 Release 资产。
 
+当前发布使用 `vYYYY.MM.DD`；同日文档或构建修订使用 `vYYYY.MM.DD.1` 等补丁标签。安装器、便携 ZIP 和 SHA-256 文件必须来自同一次 `scripts/build_installer.ps1` 构建，并在上传前校验摘要。
+
 ## 数据与安全
 
 - `config.json`、`sessions/`、`runtime/`、邮箱池和 Token 文件默认被 Git 忽略。
@@ -441,6 +508,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
+- [最新发布说明](docs/release-v2026.07.31.1.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

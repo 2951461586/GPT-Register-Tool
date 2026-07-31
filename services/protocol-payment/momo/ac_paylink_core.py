@@ -60,7 +60,10 @@ DEFAULT_USER_AGENT = (
 JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 OPENAI_PAY_PREFIX = "https://pay.openai.com/c/pay/"
 STRIPE_PAY_PREFIX = "https://checkout.stripe.com/c/pay/"
-DEFAULT_STRIPE_PK = (
+# PK 由 OpenAI 下发，checkout 响应通常带 publishable_key；下面的硬编码仅为兜底。
+# 用环境变量 PP_STRIPE_PUBLISHABLE_KEY 统一覆盖两处副本（本文件与
+# sms_tool/gen_pp_link.py），避免 OpenAI 轮换 PK 时改代码。
+DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
     "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1"
     "XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
