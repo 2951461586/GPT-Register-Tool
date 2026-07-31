@@ -41,7 +41,7 @@
       "api_key": "",
       "project_id": 2,
       "product_id": 5,
-      "service_mode": "code",
+      "service_mode": "purchase",
       "supply": "private_first",
         "email_suffix": "outlook.com",
         "otp_poll_interval": 1,

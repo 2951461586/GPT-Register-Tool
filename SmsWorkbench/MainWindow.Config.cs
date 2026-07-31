@@ -10,9 +10,16 @@ namespace SmsWorkbench
             var config = ReadJsonObject(path);
             var email = GetSection(config, "email_registration");
             var remail = GetChildSection(email, "remail");
+            var registration = GetSection(config, "registration");
+            var stageConcurrency = GetChildSection(registration, "stage_concurrency");
             var proxy = GetSection(config, "proxy");
             var paypal = GetSection(config, "paypal");
             var protocolPayments = GetSection(config, "protocol_payments");
+            var protocolBatch = GetChildSection(protocolPayments, "batch");
+            var protocolMethodWorkers = GetChildSection(protocolBatch, "method_workers");
+            string protocolMatrixJson = protocolPayments.TryGetValue("matrix", out object matrixValue)
+                ? JsonSerializer.Serialize(matrixValue, new JsonSerializerOptions { WriteIndented = true })
+                : "{\n  \"cells\": []\n}";
             string registrationProxy = FirstNonEmpty(
                 GetString(proxy, "registration"),
                 GetString(config, "registration_proxy"),
@@ -119,7 +126,7 @@ namespace SmsWorkbench
             AddConfigSectionHeader(mailForm, row++, "邮箱池", "账号来源文件与 OTP 轮询节奏");
             AddConfigField(mailForm, fields, row++, "OTP轮询间隔秒", "otp_poll_interval", GetString(email, "otp_poll_interval"));
             AddConfigField(mailForm, fields, row++, "邮箱池文件", "token_file", GetString(email, "token_file"));
-            AddConfigSectionHeader(mailForm, row++, "ReMail", "短效接码与长效邮箱库存");
+            AddConfigSectionHeader(mailForm, row++, "ReMail", "长效邮箱采购与收信配置");
             AddConfigField(mailForm, fields, row++, "启用", "remail_enabled", FirstNonEmpty(GetString(remail, "enabled"), "true"));
             AddConfigField(mailForm, fields, row++, "API地址", "remail_base_url", FirstNonEmpty(GetString(remail, "base_url"), "https://remail.aishop6.com"));
             AddConfigField(mailForm, fields, row++, "API Key", "remail_api_key", GetString(remail, "api_key"));
@@ -150,6 +157,20 @@ namespace SmsWorkbench
             AddConfigField(phoneForm, fields, row++, "自动手机验证", "codex_auto_phone_verification", GetString(codexOauth, "auto_phone_verification"));
             AddConfigField(phoneForm, fields, row++, "注册要求RT", "codex_require_registration_refresh_token", GetString(codexOauth, "require_registration_refresh_token"));
             AddConfigField(phoneForm, fields, row++, "注册要求手机号", "codex_require_registration_phone_verification", GetString(codexOauth, "require_registration_phone_verification"));
+            AddConfigSectionHeader(phoneForm, row++, "AT 稳定入库", "只有稳定窗口内持续返回 HTTP 200 才正式入库");
+            AddConfigField(phoneForm, fields, row++, "AT探测次数", "registration_at_stability_probe_count", FirstNonEmpty(GetString(registration, "at_stability_probe_count"), "2"));
+            AddConfigField(phoneForm, fields, row++, "探测间隔秒", "registration_at_stability_probe_delay", FirstNonEmpty(GetString(registration, "at_stability_probe_delay_seconds"), "10"));
+            AddConfigField(phoneForm, fields, row++, "单次探测超时秒", "registration_at_probe_timeout", FirstNonEmpty(GetString(registration, "at_probe_timeout_seconds"), "30"));
+            AddConfigSectionHeader(phoneForm, row++, "阶段并发", "OTP 等待释放网络槽，AT 与支付使用独立闸门");
+            AddConfigField(phoneForm, fields, row++, "注册网络并发", "registration_network_concurrency", FirstNonEmpty(GetString(stageConcurrency, "network"), "4"));
+            AddConfigField(phoneForm, fields, row++, "AT探测并发", "registration_at_probe_concurrency", FirstNonEmpty(GetString(stageConcurrency, "at_probe"), "4"));
+            AddConfigField(phoneForm, fields, row++, "支付并发", "registration_payment_concurrency", FirstNonEmpty(GetString(stageConcurrency, "payment"), "2"));
+            AddConfigSectionHeader(phoneForm, row++, "Sentinel", "独立事务预热、并发闸门和短期熔断");
+            AddConfigField(phoneForm, fields, row++, "Sentinel版本", "sentinel_version", GetString(email, "sentinel_version"));
+            AddConfigField(phoneForm, fields, row++, "提取并发", "sentinel_max_concurrency", FirstNonEmpty(GetString(email, "sentinel_max_concurrency"), "2"));
+            AddConfigField(phoneForm, fields, row++, "一对一预热窗口", "sentinel_prewarm_window", FirstNonEmpty(GetString(email, "sentinel_prewarm_window"), "4"));
+            AddConfigField(phoneForm, fields, row++, "熔断失败次数", "sentinel_circuit_failures", FirstNonEmpty(GetString(email, "sentinel_circuit_failures"), "3"));
+            AddConfigField(phoneForm, fields, row++, "熔断冷却秒", "sentinel_circuit_cooldown", FirstNonEmpty(GetString(email, "sentinel_circuit_cooldown_seconds"), "60"));
 
             var importForm = AddConfigCategory(sidebar, host, categories, "导入与账号", "CPA、SUB2API 和 Agent Identity 统一配置。");
             row = 0;
@@ -185,6 +206,12 @@ namespace SmsWorkbench
             AddConfigField(networkForm, fields, row++, "提链器目录", "protocol_reference_root", FirstNonEmpty(GetString(protocolPayments, "reference_root"), "services/protocol-payment"));
             AddConfigField(networkForm, fields, row++, "状态文件", "protocol_state_file", FirstNonEmpty(GetString(protocolPayments, "state_file"), "runtime/payment_link_runs.jsonl"));
             AddConfigField(networkForm, fields, row++, "协议超时秒", "protocol_timeout_seconds", FirstNonEmpty(GetString(protocolPayments, "timeout_seconds"), "900"));
+            AddConfigSectionHeader(networkForm, row++, "正式批量支付", "方法级并发、Canary 暂停和地区资格矩阵");
+            AddConfigField(networkForm, fields, row++, "MoMo并发", "protocol_batch_momo_workers", FirstNonEmpty(GetString(protocolMethodWorkers, "momo"), "2"));
+            AddConfigField(networkForm, fields, row++, "Kakao并发", "protocol_batch_kakao_workers", FirstNonEmpty(GetString(protocolMethodWorkers, "kakao"), "2"));
+            AddConfigField(networkForm, fields, row++, "Canary失败暂停", "protocol_batch_pause_on_canary_failure", FirstNonEmpty(GetString(protocolBatch, "pause_on_canary_failure"), "true"));
+            AddConfigField(networkForm, fields, row++, "暂停秒数", "protocol_batch_canary_pause_seconds", FirstNonEmpty(GetString(protocolBatch, "canary_pause_seconds"), "21600"));
+            AddConfigField(networkForm, fields, row++, "地区资格矩阵 JSON", "protocol_payment_matrix", protocolMatrixJson, multiline: true);
             AddConfigSectionHeader(networkForm, row++, "PayPal 与 GoPay", "订单地区、生成模式和本地服务");
             AddConfigField(networkForm, fields, row++, "PayPal代理", "paypal_proxy", FirstListValue(paypal, "proxies"));
             AddConfigComboField(networkForm, comboFields, row++, "订单生成地区", "paypal_billing_region", GetBillingRegionCode(paypal), BillingRegionOptions, "DE");
@@ -216,6 +243,19 @@ namespace SmsWorkbench
             var saveButton = new Button { Content = "保存", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             saveButton.Click += (_, __) =>
             {
+                object parsedMatrix;
+                try
+                {
+                    using JsonDocument matrixDocument = JsonDocument.Parse(fields["protocol_payment_matrix"].Text);
+                    if (matrixDocument.RootElement.ValueKind != JsonValueKind.Object)
+                        throw new JsonException("矩阵根节点必须是 JSON 对象");
+                    parsedMatrix = JsonValueToObject(matrixDocument.RootElement);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("地区资格矩阵 JSON 无效：" + ex.Message, "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 email["otp_poll_interval"] = fields["otp_poll_interval"].Text.Trim();
                 email["token_file"] = fields["token_file"].Text.Trim();
                 remail["enabled"] = ConfigBoolValue(fields, "remail_enabled", true);
@@ -223,7 +263,7 @@ namespace SmsWorkbench
                 remail["api_key"] = fields["remail_api_key"].Text.Trim();
                 remail["project_id"] = ConfigIntegerValue(fields, "remail_project_id");
                 remail["product_id"] = ConfigIntegerValue(fields, "remail_product_id");
-                remail["service_mode"] = "code";
+                remail["service_mode"] = "purchase";
                 remail["supply"] = fields["remail_supply"].Text.Trim();
                 remail["email_suffix"] = fields["remail_email_suffix"].Text.Trim();
                 email["remail"] = remail;
@@ -231,6 +271,18 @@ namespace SmsWorkbench
                 email["cfworker_domain"] = fields["cfworker_domain"].Text.Trim();
                 email["cfworker_admin_token"] = fields["cfworker_admin_token"].Text.Trim();
                 email["cfworker_api_token"] = fields["cfworker_api_token"].Text.Trim();
+                email["sentinel_version"] = fields["sentinel_version"].Text.Trim();
+                email["sentinel_max_concurrency"] = ConfigIntegerValue(fields, "sentinel_max_concurrency");
+                email["sentinel_prewarm_window"] = ConfigIntegerValue(fields, "sentinel_prewarm_window");
+                email["sentinel_circuit_failures"] = ConfigIntegerValue(fields, "sentinel_circuit_failures");
+                email["sentinel_circuit_cooldown_seconds"] = ConfigIntegerValue(fields, "sentinel_circuit_cooldown");
+                registration["at_stability_probe_count"] = ConfigIntegerValue(fields, "registration_at_stability_probe_count");
+                registration["at_stability_probe_delay_seconds"] = ConfigIntegerValue(fields, "registration_at_stability_probe_delay");
+                registration["at_probe_timeout_seconds"] = ConfigIntegerValue(fields, "registration_at_probe_timeout");
+                stageConcurrency["network"] = ConfigIntegerValue(fields, "registration_network_concurrency");
+                stageConcurrency["at_probe"] = ConfigIntegerValue(fields, "registration_at_probe_concurrency");
+                stageConcurrency["payment"] = ConfigIntegerValue(fields, "registration_payment_concurrency");
+                registration["stage_concurrency"] = stageConcurrency;
                 smsBower["api_key"] = fields["smsbower_api_key"].Text.Trim();
                 smsBower["service"] = "dr";
                 smsBower["service_name"] = "OpenAI (ChatGPT)";
@@ -257,6 +309,13 @@ namespace SmsWorkbench
                 protocolPayments["reference_root"] = fields["protocol_reference_root"].Text.Trim();
                 protocolPayments["state_file"] = fields["protocol_state_file"].Text.Trim();
                 protocolPayments["timeout_seconds"] = ConfigIntegerValue(fields, "protocol_timeout_seconds");
+                protocolMethodWorkers["momo"] = ConfigIntegerValue(fields, "protocol_batch_momo_workers");
+                protocolMethodWorkers["kakao"] = ConfigIntegerValue(fields, "protocol_batch_kakao_workers");
+                protocolBatch["method_workers"] = protocolMethodWorkers;
+                protocolBatch["pause_on_canary_failure"] = ConfigBoolValue(fields, "protocol_batch_pause_on_canary_failure", true);
+                protocolBatch["canary_pause_seconds"] = ConfigIntegerValue(fields, "protocol_batch_canary_pause_seconds");
+                protocolPayments["batch"] = protocolBatch;
+                protocolPayments["matrix"] = parsedMatrix;
                 gopay["payment_service_addr"] = fields["protocol_gopay_service_addr"].Text.Trim();
                 idealProtocol["proxy"] = fields["protocol_ideal_proxy"].Text.Trim();
                 pixProtocol["proxy"] = fields["protocol_pix_proxy"].Text.Trim();
@@ -308,6 +367,7 @@ namespace SmsWorkbench
                 protocolPayments["proxy_pool"] = savedProtocolPool;
                 phoneReuse["proxy"] = savedRegistrationProxy;
                 config["email_registration"] = email;
+                config["registration"] = registration;
                 config["proxy"] = proxy;
                 config["paypal"] = paypal;
                 config["gopay"] = gopay;

@@ -147,24 +147,6 @@ namespace SmsWorkbench
                 return;
             }
 
-            if (options.Source == "remail")
-            {
-                var remailArgs = new List<string>
-                {
-                    "--remail-service-mode",
-                    "code",
-                    "--count",
-                    options.Count.ToString(),
-                    "--workers",
-                    options.Workers.ToString()
-                };
-                AddRegistrationAtOnlyArgs(remailArgs);
-                AddRegistrationProxy(remailArgs);
-                AddPaypalOption(remailArgs, options.PaymentMethod, options.SkipPaymentLink);
-                RunBackend(options.SkipPaymentLink ? "ReMail邮箱注册" : "ReMail邮箱注册+支付链接", remailArgs);
-                return;
-            }
-
             if (options.Source == "remail_target")
             {
                 var targetArgs = new List<string>
@@ -174,12 +156,12 @@ namespace SmsWorkbench
                     "--buy-remail-mailbox", "--remail-service-mode", "purchase",
                     "--registration-batch-id", options.RegistrationBatchId,
                     "--workers", options.Workers.ToString(),
-                    "--registration-at-only", "--no-phone-reuse", "--skip-paypal-link"
+                    "--phone-reuse", "--phone-source", "smsbower", "--skip-paypal-link"
                 };
                 if (options.MaxReMailCost > 0)
                     targetArgs.AddRange(new[] { "--max-remail-cost", options.MaxReMailCost.ToString(CultureInfo.InvariantCulture) });
                 AddRegistrationProxy(targetArgs);
-                RunBackend("ReMail AT 200 目标批次 (" + options.Count + ")", targetArgs);
+                RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
                 return;
             }
 
@@ -525,8 +507,7 @@ namespace SmsWorkbench
             var sourceLabel = new TextBlock { Text = "注册方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail（短效接码）", Tag = "remail" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail（稳定 AT 200 目标）", Tag = "remail_target" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail 长效邮箱", Tag = "remail_target" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "liziai.cloud (CFWorker)", Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
@@ -605,7 +586,7 @@ namespace SmsWorkbench
                 purchaseLabel.Visibility = visibility; purchaseBox.Visibility = visibility;
                 costLabel.Visibility = visibility; costBox.Visibility = visibility;
                 batchLabel.Visibility = visibility; batchBox.Visibility = visibility;
-                countLabel.Text = targetMode ? "AT 200 目标" : "数量";
+                countLabel.Text = targetMode ? "注册数量" : "数量";
                 if (targetMode)
                 {
                     skipPaymentBox.IsChecked = true;
@@ -766,6 +747,7 @@ namespace SmsWorkbench
             if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
+            if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
@@ -823,10 +805,17 @@ namespace SmsWorkbench
                 string clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
                 string clientSecret = JsonString(mailbox, "client_secret");
                 string provider = JsonString(mailbox, "provider");
+                string serviceToken = JsonString(mailbox, "token");
+                string orderNo = JsonString(mailbox, "order_no");
+                string purchaseId = JsonString(mailbox, "purchase_id");
                 if (email.Length == 0) return "";
                 if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
                 {
                     return "cfworker://" + email;
+                }
+                if (provider.Equals("remail", StringComparison.OrdinalIgnoreCase))
+                {
+                    return MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
                 }
                 if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
                 {
@@ -877,16 +866,27 @@ namespace SmsWorkbench
                 string loginPassword = JsonString(mailbox, "login_password");
                 refreshToken = JsonString(mailbox, "refresh_token");
                 string accessToken = JsonString(mailbox, "access_token");
+                string serviceToken = JsonString(mailbox, "token");
                 token = accessToken;
                 clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
                 string clientSecret = JsonString(mailbox, "client_secret");
                 provider = JsonString(mailbox, "provider");
+                string orderNo = JsonString(mailbox, "order_no");
+                string purchaseId = JsonString(mailbox, "purchase_id");
                 if (email.Length == 0) return false;
 
                 if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
                 {
                     mailboxLine = "cfworker://" + email;
                     return true;
+                }
+
+                if (provider.Equals("remail", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = serviceToken;
+                    clientId = "";
+                    mailboxLine = MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
+                    return mailboxLine.Length > 0;
                 }
 
                 if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))

@@ -67,6 +67,10 @@ IP_CHECK_SOURCES = (
 _PROXY_COUNTRY_SELECTOR_RE = re.compile(
     r"(?i)(?P<name>country|region)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
 )
+# Sticky 代理（如 cliproxy）由 sid 会话标识决定出口 IP：同一 sid 在 TTL 内粘同一个
+# IP，会把不同 region 的派生粘在同一个出口上。为让 checkout/provider(KR) 与
+# promotion(VN) 各自拿到本地区出口，Kakao 给每个地区派生独立 sid（追加国家后缀）。
+_PROXY_SID_RE = re.compile(r"(?i)(?P<name>sid)(?P<separator>[-_=])(?P<value>[A-Za-z0-9]+)")
 _state_lock = RLock()
 _file_lock = RLock()
 _proxy_redaction_lock = RLock()
@@ -217,6 +221,15 @@ def proxy_chain_key(proxy: str) -> str:
     without_country = _PROXY_COUNTRY_SELECTOR_RE.sub(
         lambda match: f"{match.group('name')}{match.group('separator')}*", normalized
     )
+    # 只去掉 sid 尾部的地区后缀（proxy_for_country 追加的 2 位大写国家码），保留
+    # base sid。这样同一 Seed 的三地区派生（base+KR/base+VN）归一化到同一 base →
+    # 同 chain_key（sticky 校验通过）；而多条只有 base sid 不同的冗余 Seed 仍是不同
+    # chain_key，不会被 load_proxy_seeds 去重。假设 base sid 不以 2 位连续大写结尾。
+    def _normalize_sid_base(match: re.Match[str]) -> str:
+        base = re.sub(r"[A-Z]{2}$", "", match.group("value"))
+        return f"{match.group('name')}{match.group('separator')}{base}"
+
+    without_country = _PROXY_SID_RE.sub(_normalize_sid_base, without_country)
     return hashlib.sha256(without_country.encode()).hexdigest()[:16] if without_country else ""
 
 
@@ -242,6 +255,15 @@ def proxy_for_country(proxy: str, country: str) -> str:
     password = _PROXY_COUNTRY_SELECTOR_RE.sub(replace_country, password)
     if not replacements:
         raise RuntimeError(f"代理未包含可改写的 country/region 选择器: {proxy_label(proxy)}")
+    # 给 sid 追加地区后缀，使 sticky 代理为每个地区分配独立出口 IP。始终从原始 Seed
+    # 调用（kakao_proxy_chain 即如此），避免后缀累积。不含 sid 的代理不受影响。
+    country_tag = target_country.upper()
+
+    def tag_sid(match: re.Match[str]) -> str:
+        return f"{match.group('name')}{match.group('separator')}{match.group('value')}{country_tag}"
+
+    username = _PROXY_SID_RE.sub(tag_sid, username)
+    password = _PROXY_SID_RE.sub(tag_sid, password)
     host = parsed.hostname or ""
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"

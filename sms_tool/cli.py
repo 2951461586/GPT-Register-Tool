@@ -89,6 +89,37 @@ def _has_explicit_payment_proxy(args) -> bool:
     ))
 
 
+def _registration_phone_pool(args):
+    """Create the configured phone pool for registration flows that require SMS."""
+    if getattr(args, "no_phone_reuse", False) or getattr(args, "registration_at_only", False):
+        return None
+
+    from .phone_reuse import create_phone_pool, has_phone_reuse_config, print_phone_pool_status
+
+    explicit = bool(getattr(args, "phone_reuse", False))
+    auto_enable = has_phone_reuse_config()
+    if not explicit and not auto_enable:
+        return None
+
+    phone_pool = create_phone_pool(
+        max_reuse_count=getattr(args, "max_reuse_count", 0),
+        send_cooldown_seconds=getattr(args, "phone_send_cooldown", None),
+        source_override=getattr(args, "phone_source", None),
+    )
+    if not phone_pool.phones:
+        if explicit:
+            print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
+            raise SystemExit(2)
+        return None
+
+    if auto_enable and not explicit:
+        first = phone_pool.phones[0] if phone_pool.phones else None
+        source = first.provider if first else "configured"
+        print(f"[*] Auto-enabled phone verification ({source} mode)")
+    print_phone_pool_status(phone_pool)
+    return phone_pool
+
+
 def _payment_country(payment_method: str, explicit: str = "") -> str:
     value = str(explicit or "").strip().upper()
     if value:
@@ -499,26 +530,7 @@ def main():
         print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
 
     # Phone reuse pool (auto-enable when smsbower or paypal_auto phone is configured)
-    phone_pool = None
-    if not args.no_phone_reuse and not args.registration_at_only:
-        from .phone_reuse import create_phone_pool, has_phone_reuse_config, print_phone_pool_status
-        auto_enable = has_phone_reuse_config()
-        if args.phone_reuse or auto_enable:
-            phone_pool = create_phone_pool(
-                max_reuse_count=args.max_reuse_count,
-                send_cooldown_seconds=args.phone_send_cooldown,
-                source_override=args.phone_source,
-            )
-            if not phone_pool.phones:
-                if args.phone_reuse:
-                    print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
-                    raise SystemExit(2)
-            else:
-                if auto_enable and not args.phone_reuse:
-                    first = phone_pool.phones[0] if phone_pool.phones else None
-                    source = first.provider if first else "configured"
-                    print(f"[*] Auto-enabled phone verification ({source} mode)")
-                print_phone_pool_status(phone_pool)
+    phone_pool = _registration_phone_pool(args)
 
     # Phone registration mode (via SMSBower)
     if getattr(args, "phone_register", False):
@@ -729,6 +741,7 @@ def _run_target_at200(args, base_dir):
     rounds = []
     halted = False
     started = time.time()
+    phone_pool = _registration_phone_pool(args)
     try:
         while active < target and purchased < max_purchases and not halted:
             quantity = min(target - active, max_purchases - purchased)
@@ -753,7 +766,7 @@ def _run_target_at200(args, base_dir):
                 mailboxes=mailboxes,
                 paypal_link=False,
                 workers=args.workers,
-                phone_pool=None,
+                phone_pool=phone_pool,
                 codex_oauth=not args.registration_at_only,
                 payment_method=_payment_method(args),
                 paypal_generation_type=args.paypal_generation_type,

@@ -379,7 +379,17 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
         if spec.key == "ideal":
             env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
         elif spec.key == "kakao":
-            env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": proxy_file})
+            # 优先用 Kakao 专用多 Seed 文件(proxy_seeds.txt)获得冗余与失败轮换；
+            # 一条 seed 出口/ TLS 抖动进冷却时还能切换下一条。缺失时回退到 manager
+            # 传入的单条 stage 代理。
+            kakao_seed_pool = script.parent / "proxy_seeds.txt"
+            kakao_seed_file = (
+                str(kakao_seed_pool)
+                if kakao_seed_pool.is_file()
+                and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
+                else proxy_file
+            )
+            env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file})
             countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
             checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
             promotion_country = str(countries.get("promotion") or "VN").strip().upper()
