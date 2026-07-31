@@ -204,14 +204,6 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $publishPackageDir) -Forc
 Copy-Item -LiteralPath $publishDir -Destination (Split-Path -Parent $publishPackageDir) -Recurse -Force
 Remove-PackagePath -RelativePath "dist\net10\runtime"
 
-$optionalBinaries = @("ppgateway.exe")
-foreach ($binary in $optionalBinaries) {
-    $binaryPath = Join-Path $repoRoot $binary
-    if (Test-Path -LiteralPath $binaryPath -PathType Leaf) {
-        Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $packageDir $binary) -Force
-    }
-}
-
 @"
 GPT-Register-Tool Windows package
 

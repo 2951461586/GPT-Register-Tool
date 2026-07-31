@@ -6,6 +6,7 @@ import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_router
@@ -23,6 +24,64 @@ class FakeResponse:
 
     def json(self):
         return self._body
+
+
+class RegistrationPhonePoolTests(unittest.TestCase):
+    def test_explicit_sms_registration_builds_smsbower_pool(self):
+        phone_pool = SimpleNamespace(phones=[SimpleNamespace(provider="smsbower")])
+        args = argparse.Namespace(
+            no_phone_reuse=False,
+            registration_at_only=False,
+            phone_reuse=True,
+            max_reuse_count=1,
+            phone_send_cooldown=45,
+            phone_source="smsbower",
+        )
+
+        with patch("sms_tool.phone_reuse.has_phone_reuse_config", return_value=True), \
+             patch("sms_tool.phone_reuse.create_phone_pool", return_value=phone_pool) as create, \
+             patch("sms_tool.phone_reuse.print_phone_pool_status") as print_status:
+            result = cli._registration_phone_pool(args)
+
+        self.assertIs(result, phone_pool)
+        create.assert_called_once_with(
+            max_reuse_count=1,
+            send_cooldown_seconds=45,
+            source_override="smsbower",
+        )
+        print_status.assert_called_once_with(phone_pool)
+
+    def test_target_at200_forwards_phone_pool_to_registration_batch(self):
+        phone_pool = SimpleNamespace(phones=[SimpleNamespace(provider="smsbower")])
+        mailbox = MailboxAccount(email="user@example.com", provider="remail", token="service-token")
+        args = argparse.Namespace(
+            buy_remail_mailbox=True,
+            remail_service_mode="purchase",
+            target_at200=1,
+            max_mailbox_purchases=1,
+            max_remail_cost=0,
+            registration_batch_id="remail_long_term_test",
+            count=1,
+            proxy="",
+            workers=1,
+            registration_at_only=False,
+            paypal_generation_type="hosted_long_url",
+            registration_mode="passwordless",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(cli, "_registration_phone_pool", return_value=phone_pool), \
+             patch.object(cli, "_load_mailbox_pool", return_value=[mailbox]), \
+             patch.object(cli, "_proxy_pool_values", return_value=[]), \
+             patch.object(cli, "_payment_method", return_value="paypal"), \
+             patch.object(cli, "run_batch", return_value=[{"success": True}]) as run_batch, \
+             patch.object(cli, "_save_registration_results", return_value={"success": 1, "quality": {}}), \
+             patch.object(cli, "runtime_file", return_value=Path(tmp) / "report.json"), \
+             redirect_stdout(io.StringIO()):
+            cli._run_target_at200(args, Path(tmp))
+
+        self.assertIs(run_batch.call_args.kwargs["phone_pool"], phone_pool)
+        self.assertTrue(run_batch.call_args.kwargs["codex_oauth"])
 
 
 def order_payload(index=1, mode="code"):

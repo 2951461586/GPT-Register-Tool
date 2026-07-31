@@ -24,8 +24,6 @@ README.md                   Setup and operations guide.
 requirements.txt            Only Python dependency manifest.
 start_proxy_pool.py         Standalone SOCKS5 proxy-pool server entrypoint.
 verify_proxy.py             Standalone proxy configuration verification utility.
-ppgateway.exe               Optional payment gateway binary (included in release packages if present).
-
 sms_tool/
   __main__.py               `python -m sms_tool` entrypoint; no import-time side effects.
   cli.py                    CLI parsing, high-level orchestration, process exit codes.

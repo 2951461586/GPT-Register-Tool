@@ -72,6 +72,18 @@ namespace SmsWorkbench
             return value;
         }
 
+        internal static string BuildReMailLine(string email, string serviceToken, string orderNo, string purchaseId)
+        {
+            string normalizedEmail = (email ?? "").Trim();
+            string normalizedToken = (serviceToken ?? "").Trim();
+            string normalizedOrderNo = (orderNo ?? "").Trim();
+            if (normalizedEmail.Length == 0 || normalizedToken.Length == 0 || normalizedOrderNo.Length == 0) return "";
+
+            string line = "remail://" + normalizedEmail + "---" + normalizedToken + "---" + normalizedOrderNo;
+            string normalizedPurchaseId = (purchaseId ?? "").Trim();
+            return normalizedPurchaseId.Length > 0 ? line + "---" + normalizedPurchaseId : line;
+        }
+
         private static void AddExistingTextFile(List<string> paths, string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
@@ -87,6 +99,8 @@ namespace SmsWorkbench
                 value = value.Substring("gmail://".Length);
             else if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase))
                 value = value.Substring("cfworker://".Length);
+            else if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase))
+                value = value.Substring("remail://".Length);
             if (value.Contains("----")) return value.Split(new[] { "----" }, StringSplitOptions.None)[0];
             if (value.Contains("---")) return value.Split(new[] { "---" }, StringSplitOptions.None)[0];
             if (value.Contains('@') && !value.Contains(' ')) return value;

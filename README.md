@@ -131,8 +131,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 ### ReMail 邮箱源
 
-- 一键注册来源中提供 `ReMail（短效接码）` 和 `ReMail（长效邮箱）`。
-- 支持 `code` 短效接码和 `purchase` 长效邮箱。
+- 一键注册来源中提供 `ReMail 长效邮箱`，统一使用 `purchase` 长效邮箱模式。
 - 支持单笔或批量创建邮箱订单。
 - 百账号批量下单默认按每个邮箱 2 秒扩展 HTTP 等待时间（至少 30 秒），可通过 `email_registration.remail.batch_timeout` 覆盖。
 - 支持 `private_first`、`public_only` 库存策略。
@@ -149,7 +148,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
 - 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
 - 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
-- `ReMail（稳定 AT 200 目标）` 会按 `--target-at200` 补足稳定 HTTP 200 AT，受 `--max-mailbox-purchases`、`--max-remail-cost` 和供应商死号比例熔断约束。
+- `ReMail 长效邮箱` 会按注册数量补足稳定 HTTP 200 AT，受 `--max-mailbox-purchases`、`--max-remail-cost` 和供应商死号比例熔断约束；注册批次默认启用 SMSBower 手机验证。
 
 ### 统一邮箱与 OTP
 
@@ -293,7 +292,7 @@ services/
       "api_key": "",
       "project_id": 2,
       "product_id": 5,
-      "service_mode": "code",
+      "service_mode": "purchase",
       "supply": "private_first",
       "email_suffix": "outlook.com",
       "otp_poll_interval": 1,
@@ -387,22 +386,16 @@ HTTP 401 的支付账号默认直接进入邮箱 OTP OAuth 新 AT 流程，候�
 
 ## 常用操作
 
-### ReMail 短效接码注册
+### ReMail 短效接码注册（仅 CLI）
 
 ```powershell
 python chatgpt_phone_reg.py --remail-service-mode code --count 1 --workers 1 --registration-at-only --no-phone-reuse
 ```
 
-### 购买 ReMail 长效邮箱并注册
+### ReMail 长效邮箱注册并进行 SMSBower 手机验证
 
 ```powershell
-python chatgpt_phone_reg.py --buy-remail-mailbox --count 1 --workers 1
-```
-
-### 以稳定 AT 200 为目标注册
-
-```powershell
-python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --registration-at-only --skip-paypal-link --target-at200 40 --max-mailbox-purchases 80 --workers 10
+python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --target-at200 40 --max-mailbox-purchases 80 --workers 10 --phone-reuse --phone-source smsbower --skip-paypal-link
 ```
 
 ### CFWorker 邮箱注册

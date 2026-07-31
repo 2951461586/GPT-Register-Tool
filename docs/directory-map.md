@@ -26,8 +26,6 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | `pytest.ini` | Test discovery compatibility | Keep even though the supported command is `python -m unittest`. |
 | `start_proxy_pool.py` | Operator utility | Standalone SOCKS5 proxy-pool server entrypoint. |
 | `verify_proxy.py` | Operator utility | Proxy configuration verification; reads `config.json`. |
-| `ppgateway.exe` | Optional binary | Payment gateway helper; included in release packages if present. |
-
 ## Runtime and generated directories
 
 These directories are runtime state and are ignored by Git:

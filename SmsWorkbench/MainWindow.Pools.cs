@@ -220,6 +220,29 @@ namespace SmsWorkbench
                     continue;
                 }
 
+                if (line.StartsWith("remail://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] remailParts = line.Substring("remail://".Length).Split(new[] { "---" }, 4, StringSplitOptions.None);
+                    if (remailParts.Length < 3 || string.IsNullOrWhiteSpace(remailParts[0]) || string.IsNullOrWhiteSpace(remailParts[1]) || string.IsNullOrWhiteSpace(remailParts[2])) continue;
+                    allRows.Add(new PoolRow
+                    {
+                        Id = "M" + (i + 1),
+                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
+                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
+                        Identifier = remailParts[0].Trim(),
+                        AccountType = "ReMail邮箱池",
+                        Status = "可收信",
+                        RefreshToken = "ReMail",
+                        Notes = path,
+                        SourcePath = path,
+                        RawLine = line,
+                        MailboxLine = line,
+                        MailboxProvider = "remail",
+                        MailboxToken = remailParts[1].Trim()
+                    });
+                    continue;
+                }
+
                 if (line.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
                 {
                     string payload = line.Substring("gmail://".Length).Trim();

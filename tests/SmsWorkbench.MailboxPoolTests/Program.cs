@@ -5,6 +5,18 @@ Assert(AccessTokenState.Display(true, "200") == "已获取", "HTTP 200 AT should
 Assert(AccessTokenState.Display(true, "401") == "401失效", "HTTP 401 AT should display as invalid");
 Assert(AccessTokenState.Display(false, "401") == "未获取", "missing AT must not display as a retained invalid token");
 
+string remailLine = MailboxPoolFileStore.BuildReMailLine(
+    "user@example.com",
+    "service-token",
+    "order-123",
+    "purchase-456");
+Assert(
+    remailLine == "remail://user@example.com---service-token---order-123---purchase-456",
+    "ReMail credentials should be serialized in the mailbox parser format");
+Assert(
+    MailboxPoolFileStore.BuildReMailLine("user@example.com", "service-token", "", "purchase-456") == "",
+    "ReMail credentials without an order number must not be treated as complete");
+
 string root = Path.Combine(Path.GetTempPath(), "smsworkbench-mailbox-delete-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
@@ -32,6 +44,7 @@ try
         "# retained comment",
         targetLine,
         "gmail://" + target.ToUpperInvariant() + "---app-password",
+        "remail://" + target.ToUpperInvariant() + "---service-token---order-123---purchase-456",
         other + "---password---refresh",
         targetLine
     }, new UTF8Encoding(true));
@@ -41,7 +54,7 @@ try
         MailboxPoolFileStore.NormalizeEmailKey(target),
         new[] { targetLine });
 
-    Assert(removed == 3, "all duplicate target mailbox lines must be removed");
+    Assert(removed == 4, "all duplicate target mailbox lines must be removed");
     string[] remaining = File.ReadAllLines(selected, Encoding.UTF8);
     Assert(remaining.SequenceEqual(new[] { "# retained comment", other + "---password---refresh" }), "unrelated lines changed");
     Assert(File.ReadAllBytes(selected).Take(3).SequenceEqual(new byte[] { 0x23, 0x20, 0x72 }), "rewritten pool should not contain a UTF-8 BOM");
