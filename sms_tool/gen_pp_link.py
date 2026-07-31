@@ -70,7 +70,10 @@ _CurlCffiSession = None  # Session API disabled — use functional API instead
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
-DEFAULT_STRIPE_PK = (
+# PK 由 OpenAI 下发，checkout 响应通常带 publishable_key；下面的硬编码仅为兜底。
+# 用环境变量 PP_STRIPE_PUBLISHABLE_KEY 统一覆盖两处副本（本文件与
+# services/protocol-payment/momo/ac_paylink_core.py），避免 OpenAI 轮换 PK 时改代码。
+DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
     "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRac"
     "ViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
@@ -612,6 +615,8 @@ class PPLinkExtractor:
                 pk = data.get("publishable_key") or ""
                 if pk.startswith("pk_"):
                     self.stripe_pk = pk
+                else:
+                    self._log("checkout", "checkout 未返回 publishable_key，回退到默认 PK（若失效请设置 PP_STRIPE_PUBLISHABLE_KEY）")
                 self.checkout_proxy = attempt_proxy
                 self._record_stage_result("checkout", attempt_proxy, True)
                 self._log("checkout", f"checkout 成功: cs_id={cs_id}")
