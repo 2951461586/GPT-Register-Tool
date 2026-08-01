@@ -190,9 +190,7 @@ namespace SmsWorkbench
 
         private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit)
         {
-            string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
-            if (!File.Exists(script)) throw new FileNotFoundException("Backend script not found", script);
-            var args = new List<string> { "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString() };
+            var args = new List<string> { "--desktop-ipc", "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString(CultureInfo.InvariantCulture) };
             string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
             string mailboxLine = FindMailboxLineForRow(row);
             if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
@@ -203,109 +201,64 @@ namespace SmsWorkbench
             string tempMailboxFile = "";
             if (mailboxArg.Length > 0)
             {
-                tempMailboxFile = Path.Combine(Path.GetTempPath(), "view_inbox_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".txt");
+                tempMailboxFile = Path.Combine(Path.GetTempPath(), "view_inbox_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture) + ".txt");
                 File.WriteAllText(tempMailboxFile, mailboxLine.Trim() + Environment.NewLine, new UTF8Encoding(false));
                 args.AddRange(new[] { mailboxArg, tempMailboxFile });
             }
             AddSessionFileArg(args, row);
             AddMailboxProxy(args);
-            var psi = new ProcessStartInfo
-            {
-                FileName = "python",
-                Arguments = Quote(script) + " " + JoinArgs(args),
-                WorkingDirectory = rootDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
+            var environment = new Dictionary<string, string>();
             if (remailToken.Length > 0)
+                environment["REMAIL_SERVICE_TOKEN"] = remailToken;
+            try
             {
-                psi.Environment["REMAIL_SERVICE_TOKEN"] = remailToken;
-            }
-            using var process = new Process { StartInfo = psi };
-            process.Start();
-            string stdout = await process.StandardOutput.ReadToEndAsync();
-            string stderr = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            using JsonDocument doc = ParseInboxBackendJson(stdout, stderr, process.ExitCode);
-            if (!doc.RootElement.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
-            {
-                string error = JsonString(doc.RootElement, "error");
-                throw new InvalidOperationException(error.Length > 0 ? error : stdout.Trim());
-            }
-            var items = new List<MailItem>();
-            if (doc.RootElement.TryGetProperty("messages", out JsonElement messages) && messages.ValueKind == JsonValueKind.Array)
-            {
-                foreach (JsonElement msg in messages.EnumerateArray())
+                BackendCommandResult result = await backendClient.RunAsync(
+                    BackendCommand.Create("查看收件箱", args, 120000, environment));
+                if (!result.Payload.HasValue)
+                    throw new InvalidOperationException(BackendFailureMessage(result));
+                JsonElement payload = result.Payload.Value;
+                if (!payload.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
                 {
-                    string received = JsonString(msg, "receivedDateTime");
-                    if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
-                    items.Add(new MailItem
-                    {
-                        ReceivedAt = received,
-                        From = JsonString(msg, "from"),
-                        Subject = JsonString(msg, "subject"),
-                        BodyPreview = JsonString(msg, "bodyPreview"),
-                        Body = JsonString(msg, "body"),
-                        VerificationCode = JsonString(msg, "verificationCode")
-                    });
+                    string error = JsonString(payload, "error");
+                    throw new InvalidOperationException(error.Length > 0 ? error : BackendFailureMessage(result));
                 }
-            }
-            return items;
-        }
-
-        private JsonDocument ParseInboxBackendJson(string stdout, string stderr, int exitCode)
-        {
-            string text = stdout ?? "";
-            if (TryExtractInboxBackendJson(text, out JsonDocument parsed))
-            {
-                return parsed;
-            }
-
-            string errorText = ((stdout ?? "").Trim() + "\n" + (stderr ?? "").Trim()).Trim();
-            if (errorText.Length > 800)
-            {
-                errorText = errorText.Substring(0, 800) + "...";
-            }
-            if (errorText.Length == 0)
-            {
-                errorText = $"backend exited with code {exitCode}, but produced no JSON output";
-            }
-            throw new InvalidOperationException("后端收件箱输出不是纯 JSON，且未找到可解析的结果对象：" + errorText);
-        }
-
-        private bool TryExtractInboxBackendJson(string output, out JsonDocument doc)
-        {
-            doc = null;
-            string text = output ?? "";
-            for (int end = text.LastIndexOf('}'); end >= 0; end = end > 0 ? text.LastIndexOf('}', end - 1) : -1)
-            {
-                for (int start = text.LastIndexOf('{', end); start >= 0; start = start > 0 ? text.LastIndexOf('{', start - 1) : -1)
+                var items = new List<MailItem>();
+                if (payload.TryGetProperty("messages", out JsonElement messages) && messages.ValueKind == JsonValueKind.Array)
                 {
-                    string candidate = text.Substring(start, end - start + 1);
-                    try
+                    foreach (JsonElement msg in messages.EnumerateArray())
                     {
-                        JsonDocument parsed = JsonDocument.Parse(candidate);
-                        if (parsed.RootElement.ValueKind == JsonValueKind.Object
-                            && parsed.RootElement.TryGetProperty("ok", out _)
-                            && (parsed.RootElement.TryGetProperty("messages", out _)
-                                || parsed.RootElement.TryGetProperty("error", out _)
-                                || parsed.RootElement.TryGetProperty("provider", out _)))
+                        string received = JsonString(msg, "receivedDateTime");
+                        if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
+                        items.Add(new MailItem
                         {
-                            doc = parsed;
-                            return true;
-                        }
-                        parsed.Dispose();
-                    }
-                    catch (JsonException)
-                    {
+                            ReceivedAt = received,
+                            From = JsonString(msg, "from"),
+                            Subject = JsonString(msg, "subject"),
+                            BodyPreview = JsonString(msg, "bodyPreview"),
+                            Body = JsonString(msg, "body"),
+                            VerificationCode = JsonString(msg, "verificationCode")
+                        });
                     }
                 }
+                return items;
             }
-            return false;
+            finally
+            {
+                if (tempMailboxFile.Length > 0)
+                    TryDeleteFile(tempMailboxFile);
+            }
+        }
+
+        private static string BackendFailureMessage(BackendCommandResult result)
+        {
+            string message = string.IsNullOrWhiteSpace(result.StandardError)
+                ? result.StandardOutput
+                : result.StandardError;
+            message = (message ?? "").Trim();
+            if (message.Length > 800) message = string.Concat(message.AsSpan(0, 800), "...");
+            return message.Length > 0
+                ? message
+                : $"backend exited with code {result.ExitCode}, but produced no IPC result";
         }
 
         private bool IsCfWorkerRow(PoolRow row)

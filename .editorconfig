@@ -1,0 +1,41 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+csharp_new_line_before_open_brace = all
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+
+[*.{json,jsonl,yml,yaml,xml,csproj,props,slnx}]
+indent_style = space
+indent_size = 2
+
+# Baseline the pre-MVVM code-behind. New services and view models keep the full analyzer set.
+[**/MainWindow*.cs]
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1310.severity = none
+dotnet_diagnostic.CA1805.severity = none
+dotnet_diagnostic.CA1806.severity = none
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA1845.severity = none
+dotnet_diagnostic.CA1847.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1866.severity = none
+dotnet_diagnostic.CA1869.severity = none
+
+[**/DialogFactory.cs]
+dotnet_diagnostic.CA1859.severity = none
+
+[**/MailboxPoolFileStore.cs]
+dotnet_diagnostic.CA1861.severity = none
+
+[**/SmsBowerCatalogClient.cs]
+dotnet_diagnostic.CA1859.severity = none
+dotnet_diagnostic.CA1865.severity = none

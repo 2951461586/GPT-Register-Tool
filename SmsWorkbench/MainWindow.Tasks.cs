@@ -6,7 +6,7 @@ namespace SmsWorkbench
         private void RerunFailed_Click(object sender, RoutedEventArgs e)
         {
             var failedRows = allRows.Where(r =>
-                (r.Status.Contains("失败") || r.Status.Contains("待处理") || r.Status.Contains("缺"))
+                (r.Status.Contains("失败") || r.Status.Contains("待处理") || r.Status.Contains('缺'))
                 && IsMailboxPoolLikeRow(r)
                 && !string.IsNullOrWhiteSpace(r.RawLine)).ToList();
 
@@ -19,7 +19,7 @@ namespace SmsWorkbench
             if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取access token→生成支付链接→存session入库",
                 "确认重注册", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
-            string tempFile = Path.Combine(Path.GetTempPath(), "rerun_failed_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            string tempFile = Path.Combine(Path.GetTempPath(), "rerun_failed_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".txt");
             var lines = new List<string>();
             foreach (PoolRow row in failedRows)
             {
@@ -28,7 +28,7 @@ namespace SmsWorkbench
             }
             File.WriteAllLines(tempFile, lines, new UTF8Encoding(false));
 
-            var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(), "--workers", "4" };
+            var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
             AddRegistrationProxy(args);
             AddPaypalOption(args);
             RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
@@ -58,15 +58,9 @@ namespace SmsWorkbench
 
         private async void RunBackend(string taskName, List<string> args)
         {
-            if (runningProcess != null && !runningProcess.HasExited)
+            if (runningBackendCancellation != null)
             {
                 MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            string script = Path.Combine(rootDir, "chatgpt_phone_reg.py");
-            if (!File.Exists(script))
-            {
-                MessageBox.Show("找不到后端脚本：" + script, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
@@ -75,19 +69,6 @@ namespace SmsWorkbench
             Tasks.Add(task);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "python",
-                Arguments = Quote(script) + " " + JoinArgs(args),
-                WorkingDirectory = rootDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
 
             var backendOutput = new StringBuilder();
             object backendOutputLock = new object();
@@ -99,34 +80,25 @@ namespace SmsWorkbench
                 }
             }
 
-            var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            runningProcess = process;
-            process.OutputDataReceived += (_, ev) =>
+            var progress = new Progress<BackendOutputLine>(line =>
             {
-                if (ev.Data == null) return;
-                CaptureBackendLine(ev.Data);
-                UiLog(ev.Data);
-            };
-            process.ErrorDataReceived += (_, ev) =>
-            {
-                if (ev.Data == null) return;
-                CaptureBackendLine(ev.Data);
-                UiLog(ev.Data);
-            };
+                CaptureBackendLine(line.Text);
+                UiLog(line.Text);
+            });
+            using var cancellation = new CancellationTokenSource();
+            runningBackendCancellation = cancellation;
 
             try
             {
-                Log("启动：" + psi.FileName + " " + Quote(script) + " " + safeArgs);
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
+                Log("启动：python " + safeArgs);
                 StatusText = taskName + " 运行中";
+                BackendCommandResult result = await backendClient.RunAsync(
+                    BackendCommand.Create(taskName, args, 12 * 60 * 60 * 1000),
+                    progress,
+                    cancellation.Token);
 
-                // async/await — no Dispatcher.BeginInvoke needed, returns to UI thread automatically
-                await process.WaitForExitAsync();
-
-                task.Status = process.ExitCode == 0 ? "完成" : "失败";
-                task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString();
+                task.Status = result.ExitCode == 0 ? "完成" : "失败";
+                task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusText = taskName + " 已结束";
                 RefreshPools();
@@ -141,43 +113,39 @@ namespace SmsWorkbench
                     ShowAccountScanResultDialog(output);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                task.Status = "已取消";
+                task.DoneAt = SafeTime(DateTime.Now);
+                StatusText = taskName + " 已取消";
+            }
             catch (Exception ex)
             {
                 task.Status = "启动失败";
                 Log("启动失败：" + ex.Message);
+            }
+            finally
+            {
+                if (ReferenceEquals(runningBackendCancellation, cancellation))
+                    runningBackendCancellation = null;
             }
         }
 
         private string RunBackendWithResult(string taskName, List<string> args, int timeoutMs = 120000)
         {
             Log("启动：python " + FormatBackendArgsForDisplay(args));
-            var (stdout, stderr, exitCode) = CliLauncher.RunSync(rootDir, args, Quote, JoinArgs, timeoutMs);
-
-            // 从 stdout 中提取最后一个完整 JSON 块；不能只取最后一个“{”，结果里可能有嵌套对象。
-            if (!string.IsNullOrEmpty(stdout))
-            {
-                for (int start = stdout.LastIndexOf('{'); start >= 0; start = stdout.LastIndexOf('{', start - 1))
-                {
-                    string candidate = stdout.Substring(start).Trim();
-                    try
-                    {
-                        using JsonDocument _ = JsonDocument.Parse(candidate);
-                        return candidate;
-                    }
-                    catch (JsonException)
-                    {
-                    }
-                }
-                return stdout;
-            }
-
-            if (!string.IsNullOrEmpty(stderr))
-                throw new Exception(stderr);
-
-            return stdout;
+            BackendCommandResult result = backendClient.RunAsync(
+                BackendCommand.Create(taskName, args, timeoutMs)).GetAwaiter().GetResult();
+            if (result.Payload.HasValue)
+                return result.Payload.Value.GetRawText();
+            if (result.TimedOut)
+                throw new TimeoutException($"Backend execution timed out ({timeoutMs / 1000}s)");
+            if (!string.IsNullOrEmpty(result.StandardError))
+                throw new InvalidOperationException(result.StandardError);
+            return result.StandardOutput;
         }
 
-        private string FormatBackendArgsForDisplay(List<string> args)
+        private static string FormatBackendArgsForDisplay(List<string> args)
         {
             var sensitiveOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -387,14 +355,14 @@ namespace SmsWorkbench
 
         private void CancelBatch_Click(object sender, RoutedEventArgs e)
         {
-            if (runningProcess == null || runningProcess.HasExited)
+            if (runningBackendCancellation == null)
             {
                 Log("当前没有运行中的批次。");
                 return;
             }
             try
             {
-                runningProcess.Kill(true);
+                runningBackendCancellation.Cancel();
                 Log("已取消当前批次。");
             }
             catch (Exception ex)

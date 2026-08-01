@@ -5,6 +5,11 @@ namespace SmsWorkbench
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
         private static readonly HttpClient httpClient = new HttpClient();
         private const string LocalNonPaymentProxy = "http://127.0.0.1:7897";
+        private readonly IBackendClient backendClient;
+        private readonly Serilog.ILogger logger;
+        private readonly IPaymentBatchDialogService paymentBatchDialogs;
+        private readonly Wpf.Ui.ISnackbarService snackbarService;
+        private readonly ISettingsDialogService settingsDialogs;
         private static readonly ConfigComboOption[] BillingRegionOptions = new[]
         {
             new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
@@ -24,7 +29,7 @@ namespace SmsWorkbench
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
-        private Process runningProcess;
+        private CancellationTokenSource runningBackendCancellation;
         private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
@@ -200,26 +205,28 @@ namespace SmsWorkbench
             set { attentionCountText = value ?? "0"; OnPropertyChanged(nameof(AttentionCountText)); }
         }
 
-        public MainWindow()
+        public MainWindow(
+            IApplicationPaths paths,
+            IBackendClient backendClient,
+            IPaymentBatchDialogService paymentBatchDialogs,
+            Wpf.Ui.ISnackbarService snackbarService,
+            ISettingsDialogService settingsDialogs,
+            Serilog.ILogger logger)
         {
+            this.backendClient = backendClient;
+            this.paymentBatchDialogs = paymentBatchDialogs;
+            this.snackbarService = snackbarService;
+            this.settingsDialogs = settingsDialogs;
+            this.logger = logger;
+            rootDir = paths.RootDirectory;
             InitializeComponent();
+            snackbarService.SetSnackbarPresenter(SnackbarPresenter);
             DataContext = this;
 
             // Initialize theme colors on startup
             _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
             ApplyCustomThemeColors(_currentTheme);
-            SyncMaterialDesignTheme(_currentTheme);
             ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
-
-            rootDir = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName ?? AppDomain.CurrentDomain.BaseDirectory;
-            if (Path.GetFileName(rootDir).Equals("net10", StringComparison.OrdinalIgnoreCase))
-            {
-                rootDir = Directory.GetParent(Directory.GetParent(rootDir)?.FullName ?? rootDir)?.FullName ?? rootDir;
-            }
-            if (Path.GetFileName(rootDir).Equals("dist", StringComparison.OrdinalIgnoreCase))
-            {
-                rootDir = Directory.GetParent(rootDir)?.FullName ?? rootDir;
-            }
 
             ScopeFilter = "全部";
             RefreshPools();

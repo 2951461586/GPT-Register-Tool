@@ -3,6 +3,8 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -11,26 +13,28 @@ namespace SmsWorkbench
 {
     public partial class App : Application
     {
+        private IHost _host;
+        private Serilog.ILogger _logger;
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            base.OnStartup(e);
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
-            // Configure Serilog + DI container
-            AppServices.Configure(AppDomain.CurrentDomain.BaseDirectory);
+            _host = AppHost.Build(AppDomain.CurrentDomain.BaseDirectory);
+            _host.Start();
+            _logger = _host.Services.GetRequiredService<Serilog.ILogger>();
 
             var systemTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetSystemTheme();
             var startTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
                 ? Wpf.Ui.Appearance.ApplicationTheme.Dark
                 : Wpf.Ui.Appearance.ApplicationTheme.Light;
             Wpf.Ui.Appearance.ApplicationThemeManager.Apply(startTheme, WindowBackdropType.Mica, true);
-            base.OnStartup(e);
-        }
 
-        private void App_OnStartup(object sender, StartupEventArgs e)
-        {
-            var mainWindow = AppServices.Resolve<MainWindow>() ?? new MainWindow();
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            MainWindow = mainWindow;
             mainWindow.Show();
         }
 
@@ -55,17 +59,17 @@ namespace SmsWorkbench
             e.SetObserved();
         }
 
-        private static void LogCrash(Exception ex)
+        private void LogCrash(Exception ex)
         {
             try
             {
-                AppServices.Logger?.Error(ex, "Unhandled exception");
+                _logger?.Error(ex, "Unhandled exception");
                 // Also write to legacy crash log for backward compatibility
                 string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime");
                 Directory.CreateDirectory(dir);
                 string path = Path.Combine(dir, "ui_errors.log");
                 File.AppendAllText(path,
-                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + ex + Environment.NewLine + Environment.NewLine,
+                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "] " + ex + Environment.NewLine + Environment.NewLine,
                     new UTF8Encoding(false));
             }
             catch
@@ -76,8 +80,16 @@ namespace SmsWorkbench
 
         protected override void OnExit(ExitEventArgs e)
         {
-            Log.CloseAndFlush();
-            base.OnExit(e);
+            try
+            {
+                _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+                _host?.Dispose();
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+                base.OnExit(e);
+            }
         }
     }
 }
