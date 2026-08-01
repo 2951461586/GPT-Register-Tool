@@ -97,15 +97,6 @@ namespace SmsWorkbench
                 }
 
                 header.Text = "正在刷新令牌...";
-                string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-                var tokenBody = new Dictionary<string, string>
-                {
-                    ["grant_type"] = "refresh_token",
-                    ["client_id"] = row.ClientId,
-                    ["refresh_token"] = row.RawRefreshToken,
-                    ["scope"] = "https://graph.microsoft.com/.default offline_access"
-                };
-
                 try
                 {
                     mailItems.Clear();
@@ -114,58 +105,6 @@ namespace SmsWorkbench
                         mailItems.Add(item);
                     }
                     header.Text = row.Identifier + " - " + mailItems.Count + " messages";
-
-                    if (mailItems.Count < 0)
-                    {
-                    var tokenResp = await httpClient.PostAsync(tokenUrl, new FormUrlEncodedContent(tokenBody));
-                    string tokenJson = await tokenResp.Content.ReadAsStringAsync();
-                    if (!tokenResp.IsSuccessStatusCode)
-                    {
-                        header.Text = "令牌刷新失败 (" + (int)tokenResp.StatusCode + ")";
-                        Log("收件箱令牌刷新失败：" + tokenJson);
-                        return;
-                    }
-
-                    using var tokenDoc = JsonDocument.Parse(tokenJson);
-                    string accessToken = tokenDoc.RootElement.GetProperty("access_token").GetString() ?? "";
-
-                    header.Text = "正在获取邮件...";
-                    string mailUrl = "https://graph.microsoft.com/v1.0/me/messages?$top=20&$orderby=receivedDateTime desc&$select=receivedDateTime,from,subject,bodyPreview";
-                    var request = new HttpRequestMessage(HttpMethod.Get, mailUrl);
-                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-                    var mailResp = await httpClient.SendAsync(request);
-                    string mailJson = await mailResp.Content.ReadAsStringAsync();
-
-                    if (!mailResp.IsSuccessStatusCode)
-                    {
-                        header.Text = "获取邮件失败 (" + (int)mailResp.StatusCode + ")";
-                        Log("收件箱获取失败：" + mailJson);
-                        return;
-                    }
-
-                    mailItems.Clear();
-                    using var mailDoc = JsonDocument.Parse(mailJson);
-                    if (mailDoc.RootElement.TryGetProperty("value", out JsonElement values))
-                    {
-                        foreach (JsonElement msg in values.EnumerateArray())
-                        {
-                            string received = msg.TryGetProperty("receivedDateTime", out JsonElement dt) ? dt.GetString() ?? "" : "";
-                            string from = "";
-                            if (msg.TryGetProperty("from", out JsonElement fromObj) &&
-                                fromObj.TryGetProperty("emailAddress", out JsonElement addr) &&
-                                addr.TryGetProperty("address", out JsonElement addrStr))
-                            {
-                                from = addrStr.GetString() ?? "";
-                            }
-                            string subject = msg.TryGetProperty("subject", out JsonElement subj) ? subj.GetString() ?? "" : "";
-                            string preview = msg.TryGetProperty("bodyPreview", out JsonElement bp) ? bp.GetString() ?? "" : "";
-
-                            if (received.Length > 19) received = received.Substring(0, 19).Replace("T", " ");
-                            mailItems.Add(new MailItem { ReceivedAt = received, From = from, Subject = subject, BodyPreview = preview });
-                        }
-                    }
-                    header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -293,7 +232,8 @@ namespace SmsWorkbench
         private void ShowMailDetailDialog(MailItem item)
         {
             if (item == null) return;
-            string content = item.Body.Length > 0 ? item.Body : item.BodyPreview;
+            string content = MailBodyFormatter.ToDisplayText(item.Body, item.BodyPreview);
+            if (content.Length == 0) content = "（邮件正文为空）";
             string code = item.VerificationCode.Length > 0 ? item.VerificationCode : ExtractVerificationCode(content);
             var dialog = new Window
             {

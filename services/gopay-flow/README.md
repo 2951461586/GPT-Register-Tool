@@ -1,6 +1,6 @@
 # gopay-flow
 
-`gopay-flow` is the project-local gRPC service wrapper for the GoPay protocol payment flow. It is used by `sms_tool.gopay_payment` when `gopay.one_click_mode=provider` or `wa_rebind`.
+`gopay-flow` is the project-local gRPC service wrapper for the GoPay protocol payment flow. It is used by the payment-link manager when `gopay.one_click_mode=provider` or `wa_rebind`.
 
 ## Service API
 
@@ -32,7 +32,9 @@ Flow:
 4. If configured, successful completion triggers GoPay unlink.
 5. `CancelGoPay` closes a pending flow.
 
-WA rebind mode uses the same payment service with `otp_channel=wa`. After the payment completes, `sms_tool.gopay_wa_rebind` calls the separate GoPay App service contract in `services/gopay-app/proto/gopay_app.proto` for app auth and `ChangePhoneStart/ChangePhoneComplete`.
+WA mode uses the same payment service with `otp_channel=wa`. GoPay app auth and
+`ChangePhoneStart`/`ChangePhoneComplete` calls are owned by this module and use
+the contract in `services/gopay-app/proto/gopay_app.proto`.
 
 ## Run
 
@@ -45,7 +47,7 @@ powershell -ExecutionPolicy Bypass -File ..\..\scripts\start_gopay_provider.ps1
 For the current LDPlayer setup, start the host-side sidecar from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File adb\start_ldplayer_sidecar.ps1
+python services/gopay-adb/gopay_adb_server.py
 ```
 
 Config points OTP and unlink to:

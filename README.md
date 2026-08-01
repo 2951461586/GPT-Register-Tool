@@ -349,7 +349,7 @@ services/
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
-    "stage_concurrency": { "network": 4, "at_probe": 4, "payment": 2 }
+    "stage_concurrency": { "network": 4, "at_probe": 4 }
   },
   "protocol_payments": {
     "batch": {
@@ -401,7 +401,7 @@ python chatgpt_phone_reg.py --remail-service-mode code --count 1 --workers 1 --r
 ### ReMail 长效邮箱注册并进行 SMSBower 手机验证
 
 ```powershell
-python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --target-at200 40 --max-mailbox-purchases 80 --workers 10 --phone-reuse --phone-source smsbower --skip-paypal-link
+python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --target-at200 40 --max-mailbox-purchases 80 --workers 10 --phone-reuse --phone-source smsbower
 ```
 
 ### CFWorker 邮箱注册
@@ -511,7 +511,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.07.31.1.md)
+- [最新发布说明](docs/release-v2026.08.01.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

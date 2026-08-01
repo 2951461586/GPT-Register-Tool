@@ -10,12 +10,6 @@
     "default": "",
     "pool": []
   },
-  "k12": {
-    "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
-    "retries": 2,
-    "retry_backoff_seconds": 5,
-    "invite_timeout_seconds": 240
-  },
   "registration": {
     "password_random_length": 12,
     "password_suffix": "!A1",
@@ -25,7 +19,7 @@
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
-    "stage_concurrency": { "network": 4, "at_probe": 4, "payment": 2 }
+    "stage_concurrency": { "network": 4, "at_probe": 4 }
   },
   "email_registration": {
     "registration_mode": "passwordless",
@@ -131,6 +125,7 @@
     "redirect_poll_timeout_seconds": 30,
     "redirect_poll_interval_seconds": 1,
     "resolve_ba_redirect": false,
+    "redirect_impersonate": "chrome136",
     "require_ba_token": false,
     "explicit_proxy_overrides_stage_proxies": false,
     "disable_promo_on_confirm_decline": false,
@@ -428,25 +423,6 @@
       }
     ],
     "phone_index_file": "runtime/paypal_browser_phone_index.txt"
-  },
-  "paypal_nocard": {
-    "enabled": false,
-    "locale_country": "US",
-    "locale_lang": "en",
-    "otp_timeout": 180,
-    "impersonate": "chrome136",
-    "reuse_saved_url": false,
-    "reuse_saved_ready_url": true,
-    "saved_url_max_age_seconds": 1800,
-    "fallback_to_saved_url": false,
-    "phone_pool": [
-      {
-        "phone": "+10000000000",
-        "sms_api_url": "https://sms.example.com/poll"
-      }
-    ],
-    "card_index_file": "runtime/nocard_card_index.txt",
-    "phone_index_file": "runtime/nocard_phone_index.txt"
   },
   "upi": {
     "billing_regions": [

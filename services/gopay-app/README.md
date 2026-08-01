@@ -1,12 +1,13 @@
 # gopay-app
 
-This directory holds the GoPay App gRPC contract used by WA rebind mode.
+This directory holds the GoPay App gRPC contract used by GoPay registration and
+phone-change flows.
 
 The upstream byte-v-forge implementation runs app auth, signup, PIN setup, and
 change-phone flows as a separate provider service. This project does not embed
-the upstream Temporal/orchestrator stack. Instead, `sms_tool.gopay_wa_rebind`
-calls the compatible app service through `grpcurl` and persists the returned
-`state_json` in the local session/SQLite record.
+the upstream Temporal/orchestrator stack. Instead, `services/gopay-flow/gopay.py`
+calls the compatible app service through `grpcurl` and returns the structured
+state to the CLI payment seam.
 
 Required RPCs for the adapted WA rebind path:
 
