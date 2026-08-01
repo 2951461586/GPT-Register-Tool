@@ -30,7 +30,7 @@
 
 | 层级 | 技术 |
 | --- | --- |
-| 桌面端 | WPF、.NET 10、C# |
+| 桌面端 | WPF、.NET 10、C#、Generic Host、CommunityToolkit.Mvvm、WPF-UI |
 | 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
@@ -223,7 +223,12 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 ```text
 SmsWorkbench/
   WPF 桌面端
-  -> 配置、弹窗、列表、任务启动、状态展示
+  -> Generic Host / DI 组合根
+  -> 渐进式 MVVM 页面、配置、列表、任务启动、状态展示
+
+IBackendClient
+  -> ArgumentList + 取消/超时/进程树终止
+  -> @@SMSWORKBENCH_IPC_V1@@ 单行版本化结果信封
 
 sms_tool/cli.py
   CLI 与任务编排
@@ -447,7 +452,11 @@ python chatgpt_phone_reg.py --help
 
 ```powershell
 python -m pytest -q
+python -m compileall -q sms_tool
+.\.dotnet\dotnet.exe test .\GPTRegisterTool.slnx -c Release
 ```
+
+`global.json` 固定仓库 SDK，`Directory.Packages.props` 集中管理 NuGet 版本，标准 xUnit 工程位于 `tests/SmsWorkbench.Tests`。CI 同时执行 Python、C# 测试和规范桌面发布。
 
 ### 编译桌面端
 

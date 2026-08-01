@@ -203,7 +203,25 @@ step, and `sms_tool.gen_pp_link` owns strict zero-due PayPal direct generation.
 
 ### WPF UI
 
-The desktop has three explicit seams for the SMS and account-selection surface:
+`SmsWorkbench/AppHost.cs` is the desktop composition root. It builds a Generic Host and registers paths, logging, the Python backend client, settings, batch payment, dialogs, file launching, and `MainWindow`. Constructors receive these services directly; desktop code must not add a static service locator.
+
+The C#/Python process boundary is `IBackendClient`. `PythonBackendClient` uses `ProcessStartInfo.ArgumentList`, supports per-command environment values for secrets, pumps stdout/stderr, observes cancellation and timeout, and terminates the whole child process tree. Structured desktop results use one versioned line:
+
+```text
+@@SMSWORKBENCH_IPC_V1@@{"version":1,"type":"result","payload":{...}}
+```
+
+New desktop commands should emit this envelope through `sms_tool.desktop_ipc.emit_result`. `BackendJsonProtocol` keeps legacy trailing-JSON parsing only while old commands are migrated.
+
+MVVM migration is incremental rather than a rewrite:
+
+- `PaymentBatchWindow` + `PaymentBatchViewModel` + `PaymentBatchService` are the first complete vertical slice. The view binds commands and state; the service owns matrix serialization and backend invocation.
+- `SettingsWindow` + `SettingsViewModel` + `SettingsService` replace the dynamic code-built settings form. The catalog is data-driven, unknown JSON fields survive round trips, validation happens before persistence, and the replacement file is written in the configuration directory.
+- Existing `MainWindow.*.cs` handlers remain operational and move behind injected services one workflow at a time.
+
+WPF-UI is the sole desktop component library. HandyControl and MaterialDesign resources are not part of the application dependency graph.
+
+The desktop also has three explicit seams for the SMS and account-selection surface:
 
 - `MainWindow.Navigation.cs` owns selected-email lookup, normalization, and the themed `未选择邮箱` notice. Sidebar handlers call this seam rather than creating their own WPF message boxes.
 - `DialogFactory.cs` owns application-themed information and confirmation windows.
@@ -211,7 +229,7 @@ The desktop has three explicit seams for the SMS and account-selection surface:
 
 The desktop settings page exposes SMSBower credentials and advanced timing/retry controls only. OpenAI service, country, and price-tier selection belong to the `一键接码` workflow. Static phone-pool editing is intentionally absent from the desktop surface.
 
-`SmsWorkbench/MainWindow.xaml.cs` may:
+Legacy `SmsWorkbench/MainWindow.xaml.cs` code may:
 
 - Read `config.json`.
 - Apply the configured registration proxy (with local `127.0.0.1:7897` fallback) and the fixed `mailbox_proxy` route when launching non-payment commands.
@@ -229,6 +247,8 @@ Payment and CPA operations stay separated in the UI: marking payment complete on
 `SmsWorkbench/App.xaml` owns the fixed white-first minimalist visual system for the desktop app, with black and gray used for text, borders, navigation, and log surfaces. App icon assets live under `SmsWorkbench/Assets/`.
 
 `SmsWorkbench/build_dotnet.ps1` is the **only** supported build entrypoint. It uses `dotnet publish` (not `dotnet build`) to emit the single canonical runnable desktop artifact to `dist/net10/SmsWorkbench.exe`, then calls `SmsWorkbench/clean_dotnet_workspaces.ps1` to remove intermediate `SmsWorkbench/bin/Debug/net10.0-windows`, `SmsWorkbench/bin/Release/net10.0-windows`, and nested runtime folders such as `win-x64` so they are never treated as second distribution directories.
+
+`GPTRegisterTool.slnx` and `tests/SmsWorkbench.Tests` are the standard .NET solution and xUnit test project. `global.json` pins the SDK and `Directory.Packages.props` centralizes package versions. The analyzer baseline is limited to named legacy code-behind files; new services and view models keep the full configured analyzer set.
 
 > **⚠ 禁止直接运行 `dotnet build`**。直接 `dotnet build` 只会输出中间产物到 `SmsWorkbench/bin/Release/net10.0-windows/`，该路径不是分发目录，且不会自动清理。所有编译必须通过 `SmsWorkbench/build_dotnet.ps1` 完成。
 
