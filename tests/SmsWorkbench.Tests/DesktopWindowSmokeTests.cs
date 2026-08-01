@@ -51,6 +51,70 @@ public sealed class DesktopWindowSmokeTests
         host.Close();
     }
 
+    private static void VerifyScrollableEditorsAndTables()
+    {
+        var proxyEditor = new TextBox
+        {
+            Width = 260,
+            Height = 90,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Text = string.Join(Environment.NewLine, Enumerable.Repeat(new string('x', 90), 12))
+        };
+        var editorHost = new Window { Width = 360, Height = 180, Content = proxyEditor };
+        editorHost.Show();
+        editorHost.UpdateLayout();
+        FlushDispatcher();
+
+        Assert.True(proxyEditor.Focusable);
+        Assert.NotNull(proxyEditor.Template.FindName("PART_ContentHost", proxyEditor));
+        AssertStableScrollBars(proxyEditor, expectVertical: true, expectHorizontal: true);
+        editorHost.Close();
+
+        var dataGrid = new DataGrid
+        {
+            Width = 360,
+            Height = 150,
+            AutoGenerateColumns = false,
+            ItemsSource = new[] { new { Value = "mailbox@example.com" } }
+        };
+        dataGrid.Columns.Add(new DataGridTextColumn { Header = "One", Binding = new System.Windows.Data.Binding("Value"), Width = 240 });
+        dataGrid.Columns.Add(new DataGridTextColumn { Header = "Two", Binding = new System.Windows.Data.Binding("Value"), Width = 240 });
+        dataGrid.Columns.Add(new DataGridTextColumn { Header = "Three", Binding = new System.Windows.Data.Binding("Value"), Width = 240 });
+        var gridHost = new Window { Width = 460, Height = 240, Content = dataGrid };
+        gridHost.Show();
+        gridHost.UpdateLayout();
+        FlushDispatcher();
+
+        AssertStableScrollBars(dataGrid, expectVertical: false, expectHorizontal: true);
+        gridHost.Close();
+    }
+
+    private static void AssertStableScrollBars(
+        DependencyObject owner,
+        bool expectVertical,
+        bool expectHorizontal)
+    {
+        ScrollBar verticalBar = FindVisualChildren<ScrollBar>(owner)
+            .Single(scrollBar => scrollBar.Orientation == Orientation.Vertical);
+        ScrollBar horizontalBar = FindVisualChildren<ScrollBar>(owner)
+            .Single(scrollBar => scrollBar.Orientation == Orientation.Horizontal);
+        Assert.Equal(expectVertical ? Visibility.Visible : Visibility.Collapsed, verticalBar.Visibility);
+        Assert.Equal(expectHorizontal ? Visibility.Visible : Visibility.Collapsed, horizontalBar.Visibility);
+        if (expectVertical)
+        {
+            Assert.True(verticalBar.ActualWidth > 0);
+            Assert.NotNull(verticalBar.Template.FindName("PART_Track", verticalBar));
+        }
+        if (expectHorizontal)
+        {
+            Assert.True(horizontalBar.ActualHeight > 0);
+            Assert.NotNull(horizontalBar.Template.FindName("PART_Track", horizontalBar));
+        }
+    }
+
     [Fact]
     public void SettingsPaymentAndSharedControlsLoadOnStaThread()
     {
@@ -64,6 +128,7 @@ public sealed class DesktopWindowSmokeTests
             var launcher = new StubFileLauncher();
 
             VerifyComboBoxPopup();
+            VerifyScrollableEditorsAndTables();
 
             var settings = new SettingsWindow(new SettingsViewModel(
                 new SettingsService(new TestApplicationPaths(fixture.Path)),
@@ -75,6 +140,9 @@ public sealed class DesktopWindowSmokeTests
             var secretBox = FindVisualChildren<PasswordBox>(settings).First();
             var secretField = Assert.IsType<SettingFieldViewModel>(secretBox.DataContext);
             Assert.Equal(SettingFieldKind.Secret, secretField.Kind);
+            Assert.True(secretBox.Focusable);
+            Assert.True(secretBox.IsHitTestVisible);
+            Assert.NotNull(secretBox.Template.FindName("PART_ContentHost", secretBox));
             secretBox.Password = "first-edit";
             Assert.Equal("first-edit", secretField.Value);
             secretBox.Password = "second-edit";

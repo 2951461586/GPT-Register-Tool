@@ -12,6 +12,11 @@ public sealed class SettingsServiceTests
         "http://secondary",
         "http://third"
     };
+    private static readonly string[] ExpectedPaymentProxyOrder =
+    {
+        "http://pay-primary",
+        "http://pay-secondary"
+    };
 
     [Fact]
     public void SavePreservesUnknownFieldsOrdersProxyPoolAndReplacesAtomically()
@@ -32,6 +37,7 @@ public sealed class SettingsServiceTests
         IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
         Field(categories, "registration_proxy").Value = "http://primary";
         Field(categories, "registration_proxy_pool").Value = "http://secondary\nhttp://primary\nHTTP://SECONDARY\nhttp://third";
+        Field(categories, "protocol_proxy_pool").Value = "http://pay-primary\nhttp://pay-secondary";
         Field(categories, "protocol_payment_matrix").Value = "{\"cells\":[{\"name\":\"vn\"}]}";
 
         SettingsSaveResult result = service.Save(categories);
@@ -43,10 +49,40 @@ public sealed class SettingsServiceTests
         Assert.Equal("http://primary", root["proxy"]!["default"]!.GetValue<string>());
         string[] proxyPool = root["proxy"]!["pool"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
         Assert.Equal(ExpectedProxyOrder, proxyPool, StringComparer.OrdinalIgnoreCase);
+        string[] paymentProxyPool = root["protocol_payments"]!["proxy_pool"]!.AsArray()
+            .Select(node => node!.GetValue<string>())
+            .ToArray();
+        Assert.Equal(ExpectedPaymentProxyOrder, paymentProxyPool);
         Assert.Null(root["protocol_payments"]!["methods"]!["blik"]!["blik_code"]);
         Assert.Empty(Directory.GetFiles(fixture.Path, "config.json.tmp.*"));
         byte[] bytes = File.ReadAllBytes(configPath);
         Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+    }
+
+    [Fact]
+    public void LoadFormatsProxyPoolsAsOneEntryPerLine()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        File.WriteAllText(configPath, """
+            {
+              "proxy": { "pool": ["http://registration-one", "http://registration-two"] },
+              "protocol_payments": {
+                "proxy_pool": ["http://payment-one", "http://payment-two"],
+                "matrix": { "cells": [] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+
+        Assert.Equal(
+            string.Join(Environment.NewLine, "http://registration-one", "http://registration-two"),
+            Field(categories, "registration_proxy_pool").Value);
+        Assert.Equal(
+            string.Join(Environment.NewLine, "http://payment-one", "http://payment-two"),
+            Field(categories, "protocol_proxy_pool").Value);
     }
 
     [Fact]

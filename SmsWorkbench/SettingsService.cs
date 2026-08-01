@@ -114,13 +114,13 @@ namespace SmsWorkbench
                     FirstArray(root, "paypal.proxies"),
                     Text(root, "proxy.default"),
                     LocalProxy),
-                "registration_proxy_pool" => First(ArrayText(root, "proxy.pool"), Text(root, "proxy.registration")),
+                "registration_proxy_pool" => First(ListText(root, "proxy.pool"), Text(root, "proxy.registration")),
                 "mailbox_proxy" => First(
                     Text(root, "mailbox_proxy"),
                     Text(root, "email_registration.mailbox_proxy"),
                     Text(root, "proxy.mailbox"),
                     LocalProxy),
-                "protocol_proxy_pool" => ArrayText(root, "protocol_payments.proxy_pool"),
+                "protocol_proxy_pool" => ListText(root, "protocol_payments.proxy_pool"),
                 "protocol_enabled_methods" => ArrayText(root, "protocol_payments.enabled_methods"),
                 "protocol_payment_matrix" => GetPath(root, "protocol_payments.matrix")?.ToJsonString(IndentedJson)
                     ?? "{\n  \"cells\": []\n}",
@@ -203,6 +203,15 @@ namespace SmsWorkbench
             if (value is JsonArray array)
                 return string.Join(",", array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0));
             return value?.ToString() ?? "";
+        }
+
+        private static string ListText(JsonObject root, string path)
+        {
+            JsonNode value = GetPath(root, path);
+            IEnumerable<string> entries = value is JsonArray array
+                ? array.Select(item => item?.ToString() ?? "")
+                : ParseList(value?.ToString() ?? "");
+            return string.Join(Environment.NewLine, entries.Where(item => item.Length > 0));
         }
 
         private static string FirstArray(JsonObject root, string path)
