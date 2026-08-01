@@ -16,3 +16,6 @@ cloakbrowser>=0.5.3,<0.6
 playwright>=1.40.0
 qrcode[pil]>=7.4.2
 
+# Test runner used by CI and the documented validation command
+pytest>=8.0
+

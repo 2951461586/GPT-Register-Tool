@@ -511,7 +511,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.01.1.md)
+- [最新发布说明](docs/release-v2026.08.01.2.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任
