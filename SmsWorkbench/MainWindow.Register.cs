@@ -152,14 +152,10 @@ namespace SmsWorkbench
                 var targetArgs = new List<string>
                 {
                     "--target-at200", options.Count.ToString(),
-                    "--max-mailbox-purchases", Math.Max(options.Count, options.MaxMailboxPurchases).ToString(),
                     "--buy-remail-mailbox", "--remail-service-mode", "purchase",
-                    "--registration-batch-id", options.RegistrationBatchId,
                     "--workers", options.Workers.ToString(),
                     "--phone-reuse", "--phone-source", "smsbower", "--skip-paypal-link"
                 };
-                if (options.MaxReMailCost > 0)
-                    targetArgs.AddRange(new[] { "--max-remail-cost", options.MaxReMailCost.ToString(CultureInfo.InvariantCulture) });
                 AddRegistrationProxy(targetArgs);
                 RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
                 return;
@@ -484,17 +480,14 @@ namespace SmsWorkbench
                 Title = "一键注册",
                 Owner = this,
                 Width = 560,
-                Height = 470,
+                Height = 320,
                 MinWidth = 480,
-                MinHeight = 430,
+                MinHeight = 300,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -508,7 +501,7 @@ namespace SmsWorkbench
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail 长效邮箱", Tag = "remail_target" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "liziai.cloud (CFWorker)", Tag = "cfworker" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "CF Woker Mail", Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
             Grid.SetRow(sourceLabel, 0);
@@ -561,31 +554,9 @@ namespace SmsWorkbench
             skipPaymentBox.Unchecked += (_, __) => paymentBox.IsEnabled = true;
             paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
 
-            var purchaseLabel = new TextBlock { Text = "邮箱采购上限", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
-            var purchaseBox = new TextBox { Text = Math.Max(2, CountValue() * 2).ToString(), Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(purchaseLabel, 5); Grid.SetColumn(purchaseLabel, 0);
-            Grid.SetRow(purchaseBox, 5); Grid.SetColumn(purchaseBox, 1);
-            root.Children.Add(purchaseLabel); root.Children.Add(purchaseBox);
-
-            var costLabel = new TextBlock { Text = "最大采购成本", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
-            var costBox = new TextBox { Text = "0", Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(costLabel, 6); Grid.SetColumn(costLabel, 0);
-            Grid.SetRow(costBox, 6); Grid.SetColumn(costBox, 1);
-            root.Children.Add(costLabel); root.Children.Add(costBox);
-
-            var batchLabel = new TextBlock { Text = "注册批次 ID", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (Brush)FindResource("TextSub") };
-            var batchBox = new TextBox { Text = "target_at200_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"), Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(batchLabel, 7); Grid.SetColumn(batchLabel, 0);
-            Grid.SetRow(batchBox, 7); Grid.SetColumn(batchBox, 1);
-            root.Children.Add(batchLabel); root.Children.Add(batchBox);
-
             void UpdateTargetControls()
             {
                 bool targetMode = string.Equals((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string, "remail_target", StringComparison.OrdinalIgnoreCase);
-                Visibility visibility = targetMode ? Visibility.Visible : Visibility.Collapsed;
-                purchaseLabel.Visibility = visibility; purchaseBox.Visibility = visibility;
-                costLabel.Visibility = visibility; costBox.Visibility = visibility;
-                batchLabel.Visibility = visibility; batchBox.Visibility = visibility;
                 countLabel.Text = targetMode ? "注册数量" : "数量";
                 if (targetMode)
                 {
@@ -607,7 +578,7 @@ namespace SmsWorkbench
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 8);
+            Grid.SetRow(actions, 5);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -617,24 +588,14 @@ namespace SmsWorkbench
                 int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
                 int workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount());
                 string selectedSource = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool";
-                decimal maxCost = decimal.TryParse(costBox.Text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal parsedCost)
-                    ? Math.Max(0, parsedCost)
-                    : 0;
                 selected = new RegisterOptions
                 {
                     Source = selectedSource,
                     Count = count,
                     Workers = workers,
                     PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal"),
-                    SkipPaymentLink = skipPaymentBox.IsChecked == true,
-                    MaxMailboxPurchases = ParsePositiveInt(purchaseBox.Text, count, 1000, count * 2),
-                    MaxReMailCost = maxCost,
-                    RegistrationBatchId = Regex.Replace(batchBox.Text.Trim(), @"[^A-Za-z0-9_.-]+", "_")
+                    SkipPaymentLink = skipPaymentBox.IsChecked == true
                 };
-                if (selected.Source == "remail_target" && selected.RegistrationBatchId.Length == 0)
-                {
-                    selected.RegistrationBatchId = "target_at200_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                }
                 CountText = count.ToString();
                 dialog.DialogResult = true;
                 dialog.Close();

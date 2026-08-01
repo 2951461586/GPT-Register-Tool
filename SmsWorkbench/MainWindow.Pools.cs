@@ -408,8 +408,6 @@ namespace SmsWorkbench
                         AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
                         AccountPlanType = GetAccountPlanType(rawData),
                         RegistrationCountry = data.TryGetValue("registration_country", out string registrationCountry) ? registrationCountry : "",
-                        RegistrationBatchId = data.TryGetValue("batch_id", out string batchId) ? batchId : "",
-                        RegistrationState = data.TryGetValue("registration_state", out string registrationState) ? registrationState : "",
                         QuotaStatus = GetQuotaStatus(rawData),
                         Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
                         PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
@@ -478,8 +476,6 @@ namespace SmsWorkbench
                             AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isReMailMailbox ? "Session/ReMail" : isGmailMailbox ? "Session/Gmail" : "Session",
                             AccountPlanType = GetAccountPlanType(data),
                             RegistrationCountry = GetString(data, "registration_country"),
-                            RegistrationBatchId = GetString(data, "batch_id"),
-                            RegistrationState = GetString(data, "registration_state"),
                             QuotaStatus = GetQuotaStatus(data),
                             Status = importedStatus.Length > 0
                                 ? importedStatus

@@ -188,6 +188,102 @@ public sealed class DesktopWindowSmokeTests
         return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
     }
 
+    private static void VerifyMainWindowRegistrationAndContextMenu(string rootDirectory)
+    {
+        using var logger = new Serilog.LoggerConfiguration().CreateLogger();
+        var main = new MainWindow(
+            new TestApplicationPaths(rootDirectory),
+            new StubBackendClient(),
+            new WindowPaymentBatchDialogService(),
+            new Wpf.Ui.SnackbarService(),
+            new WindowSettingsDialogService(),
+            logger);
+        try
+        {
+            main.Show();
+            main.UpdateLayout();
+            FlushDispatcher();
+
+            var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
+            string[] headers = accountGrid.Columns.Select(column => column.Header?.ToString() ?? "").ToArray();
+            Assert.DoesNotContain("注册批次", headers);
+            Assert.DoesNotContain("入库", headers);
+
+            var contextMenu = Assert.IsType<ContextMenu>(accountGrid.ContextMenu);
+            contextMenu.PlacementTarget = accountGrid;
+            contextMenu.Placement = PlacementMode.Center;
+            contextMenu.IsOpen = true;
+            FlushDispatcher();
+
+            Assert.NotNull(contextMenu.Template.FindName("MenuChrome", contextMenu));
+            MenuItem[] menuItems = contextMenu.Items.OfType<MenuItem>().ToArray();
+            Assert.True(menuItems.Length >= 8);
+            var headerLeftEdges = new List<double>();
+            foreach (MenuItem menuItem in menuItems)
+            {
+                menuItem.ApplyTemplate();
+                var icon = Assert.IsType<ContentPresenter>(menuItem.Template.FindName("IconPresenter", menuItem));
+                var header = Assert.IsType<TextBlock>(menuItem.Template.FindName("HeaderText", menuItem));
+                Rect iconBounds = BoundsRelativeTo(icon, menuItem);
+                Rect headerBounds = BoundsRelativeTo(header, menuItem);
+                Assert.True(Math.Abs(iconBounds.Top + iconBounds.Height / 2 - (headerBounds.Top + headerBounds.Height / 2)) <= 0.5);
+                headerLeftEdges.Add(headerBounds.Left);
+            }
+            Assert.True(headerLeftEdges.Max() - headerLeftEdges.Min() <= 0.5);
+            contextMenu.IsOpen = false;
+
+            string[] sourceOptions = Array.Empty<string>();
+            string[] fieldLabels = Array.Empty<string>();
+            Exception? captureFailure = null;
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            {
+                try
+                {
+                    Window dialog = Application.Current.Windows
+                        .Cast<Window>()
+                        .Single(window => window.Title == "一键注册");
+                    dialog.UpdateLayout();
+                    ComboBox sourceBox = FindVisualChildren<ComboBox>(dialog).First();
+                    sourceBox.SelectedIndex = 1;
+                    dialog.UpdateLayout();
+                    sourceOptions = sourceBox.Items
+                        .OfType<ComboBoxItem>()
+                        .Select(item => item.Content?.ToString() ?? "")
+                        .ToArray();
+                    fieldLabels = FindVisualChildren<TextBlock>(dialog)
+                        .Select(label => label.Text)
+                        .Where(text => !string.IsNullOrWhiteSpace(text))
+                        .ToArray();
+                    dialog.Close();
+                }
+                catch (Exception exception)
+                {
+                    captureFailure = exception;
+                    Application.Current.Windows
+                        .Cast<Window>()
+                        .FirstOrDefault(window => window.Title == "一键注册")
+                        ?.Close();
+                }
+            }));
+
+            var method = typeof(MainWindow).GetMethod(
+                "ShowRegisterOptionsDialog",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            Assert.Null(method.Invoke(main, null));
+            Assert.Null(captureFailure);
+            Assert.Contains("CF Woker Mail", sourceOptions);
+            Assert.DoesNotContain("liziai.cloud (CFWorker)", sourceOptions);
+            Assert.DoesNotContain("邮箱采购上限", fieldLabels);
+            Assert.DoesNotContain("最大采购成本", fieldLabels);
+            Assert.DoesNotContain("注册批次 ID", fieldLabels);
+        }
+        finally
+        {
+            main.Close();
+        }
+    }
+
     [Fact]
     public void SettingsPaymentAndSharedControlsLoadOnStaThread()
     {
@@ -241,6 +337,7 @@ public sealed class DesktopWindowSmokeTests
                 ((PaymentBatchViewModel)payment.DataContext).PaymentMethodOptions,
                 option => option.Id == "blik");
             payment.Close();
+            VerifyMainWindowRegistrationAndContextMenu(fixture.Path);
             application.Shutdown();
         });
     }
@@ -302,5 +399,15 @@ public sealed class DesktopWindowSmokeTests
 
         public Task<JsonElement> RunAsync(PaymentBatchRequest request, CancellationToken cancellationToken)
             => throw new NotSupportedException();
+    }
+
+    private sealed class WindowPaymentBatchDialogService : IPaymentBatchDialogService
+    {
+        public bool ShowDialog(Window owner, IEnumerable<PaymentBatchAccount> accounts) => false;
+    }
+
+    private sealed class WindowSettingsDialogService : ISettingsDialogService
+    {
+        public bool ShowDialog(Window owner) => false;
     }
 }
