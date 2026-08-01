@@ -17,6 +17,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -r requirements.txt
+      - shell: powershell
+        run: Copy-Item config.example.json config.json
       - run: python -m pytest -q
       - run: dotnet test GPTRegisterTool.slnx -c Release
       - shell: powershell
