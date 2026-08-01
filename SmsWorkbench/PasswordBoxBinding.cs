@@ -29,8 +29,15 @@ namespace SmsWorkbench
         {
             var box = (PasswordBox)sender;
             box.SetValue(UpdatingProperty, true);
-            SetBoundPassword(box, box.Password);
-            box.SetValue(UpdatingProperty, false);
+            try
+            {
+                box.SetCurrentValue(BoundPasswordProperty, box.Password);
+                box.GetBindingExpression(BoundPasswordProperty)?.UpdateSource();
+            }
+            finally
+            {
+                box.SetValue(UpdatingProperty, false);
+            }
         }
     }
 }

@@ -196,7 +196,7 @@
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="28"/>
+              <ColumnDefinition Width="36"/>
             </Grid.ColumnDefinitions>
             <Path x:Name="ArrowGlyph"
                   Grid.Column="1"
@@ -229,9 +229,106 @@
         </ControlTemplate.Triggers>
       </ControlTemplate>
 
+      <Style x:Key="ComboBoxToggleButtonStyle" TargetType="ToggleButton">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Template" Value="{StaticResource ComboBoxToggleButton}"/>
+      </Style>
+
+      <!-- Popup-local scroll bars avoid WPF-UI brush animations on dynamic theme brushes. -->
+      <Style x:Key="ComboBoxScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="MinWidth" Value="6"/>
+        <Setter Property="MinHeight" Value="18"/>
+        <Setter Property="Background" Value="{DynamicResource LineStrong}"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Thumb">
+              <Border x:Name="ThumbChrome"
+                      Margin="2"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="3"/>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource TextMuted}"/>
+                </Trigger>
+                <Trigger Property="IsDragging" Value="True">
+                  <Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource TextSub}"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+          <DataTrigger Binding="{Binding Orientation, RelativeSource={RelativeSource AncestorType={x:Type ScrollBar}}}"
+                       Value="Horizontal">
+            <Setter Property="MinWidth" Value="18"/>
+            <Setter Property="MinHeight" Value="6"/>
+          </DataTrigger>
+        </Style.Triggers>
+      </Style>
+
+      <Style x:Key="ComboBoxScrollBarPageButtonStyle" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Opacity" Value="0"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="RepeatButton">
+              <Border Background="Transparent"/>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="ComboBoxScrollBarStyle" TargetType="ScrollBar">
+        <Setter Property="Width" Value="10"/>
+        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Border Background="{TemplateBinding Background}">
+                <Track x:Name="PART_Track"
+                       IsDirectionReversed="True"
+                       Orientation="{TemplateBinding Orientation}">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton x:Name="DecreasePageButton"
+                                  Command="{x:Static ScrollBar.PageUpCommand}"
+                                  Style="{StaticResource ComboBoxScrollBarPageButtonStyle}"/>
+                  </Track.DecreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb Style="{StaticResource ComboBoxScrollBarThumbStyle}"/>
+                  </Track.Thumb>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton x:Name="IncreasePageButton"
+                                  Command="{x:Static ScrollBar.PageDownCommand}"
+                                  Style="{StaticResource ComboBoxScrollBarPageButtonStyle}"/>
+                  </Track.IncreaseRepeatButton>
+                </Track>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                  <Setter Property="Width" Value="Auto"/>
+                  <Setter Property="Height" Value="10"/>
+                  <Setter Property="MinWidth" Value="24"/>
+                  <Setter Property="MinHeight" Value="0"/>
+                  <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False"/>
+                  <Setter TargetName="DecreasePageButton" Property="Command" Value="{x:Static ScrollBar.PageLeftCommand}"/>
+                  <Setter TargetName="IncreasePageButton" Property="Command" Value="{x:Static ScrollBar.PageRightCommand}"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <Style TargetType="ComboBox">
         <Setter Property="Height" Value="34"/>
-        <Setter Property="Padding" Value="10,0,28,0"/>
+        <Setter Property="MinWidth" Value="120"/>
+        <Setter Property="Padding" Value="10,0,8,0"/>
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
@@ -245,17 +342,16 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="ComboBox">
-              <Grid>
+              <Grid x:Name="TemplateRoot">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/>
-                  <ColumnDefinition Width="32"/>
+                  <ColumnDefinition Width="36"/>
                 </Grid.ColumnDefinitions>
                 <ToggleButton x:Name="ToggleButton"
                               Grid.ColumnSpan="2"
-                              Focusable="False"
                               IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                               ClickMode="Press"
-                              Template="{StaticResource ComboBoxToggleButton}"/>
+                              Style="{StaticResource ComboBoxToggleButtonStyle}"/>
                 <ContentPresenter x:Name="ContentSite"
                                   Grid.Column="0"
                                   ClipToBounds="True"
@@ -263,14 +359,14 @@
                                   Content="{TemplateBinding SelectionBoxItem}"
                                   ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                   ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                  Margin="10,0,4,0"
+                                  Margin="{TemplateBinding Padding}"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                   TextBlock.Foreground="{TemplateBinding Foreground}"
                                   TextBlock.FontSize="{TemplateBinding FontSize}"/>
                 <TextBox x:Name="PART_EditableTextBox"
                          Grid.Column="0"
-                         Margin="10,0,4,0"
+                         Margin="{TemplateBinding Padding}"
                          HorizontalAlignment="Stretch"
                          VerticalAlignment="Center"
                          Background="Transparent"
@@ -286,6 +382,7 @@
                        IsOpen="{TemplateBinding IsDropDownOpen}"
                        AllowsTransparency="True"
                        Focusable="False"
+                       PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
                        PopupAnimation="Slide"
                        VerticalOffset="4">
                   <Border x:Name="DropDownBorder"
@@ -293,13 +390,19 @@
                           BorderBrush="{DynamicResource LineStrong}"
                           BorderThickness="1"
                           CornerRadius="6"
-                          MinWidth="{Binding ActualWidth, ElementName=ToggleButton}"
+                          Width="{Binding ActualWidth, ElementName=TemplateRoot}"
                           MaxHeight="{TemplateBinding MaxDropDownHeight}"
                           Padding="0,4">
                     <Border.Effect>
                       <DropShadowEffect Color="#22000000" BlurRadius="14" ShadowDepth="3" Opacity="0.45" Direction="270"/>
                     </Border.Effect>
-                    <ScrollViewer SnapsToDevicePixels="True">
+                    <ScrollViewer SnapsToDevicePixels="True"
+                                  CanContentScroll="True"
+                                  HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                  VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                      <ScrollViewer.Resources>
+                        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ComboBoxScrollBarStyle}"/>
+                      </ScrollViewer.Resources>
                       <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
                     </ScrollViewer>
                   </Border>

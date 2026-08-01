@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:local="clr-namespace:SmsWorkbench"
+                 xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                  Title="GPT Register Tool"
                  Width="1360" Height="860" MinWidth="1220" MinHeight="720"
                  WindowStartupLocation="CenterScreen"
@@ -655,11 +656,13 @@
                     </Button.Template>
                   </Button>
                 </Grid>
-                <ComboBox Grid.Column="1" Margin="8,0,0,0" SelectedItem="{Binding ScopeFilter}" ToolTip="筛选范围">
-                  <ComboBoxItem Content="全部"/>
-                  <ComboBoxItem Content="邮箱池"/>
-                  <ComboBoxItem Content="已注册"/>
-                  <ComboBoxItem Content="待处理"/>
+                <ComboBox Grid.Column="1" Margin="8,0,0,0"
+                          SelectedItem="{Binding ScopeFilter, Mode=TwoWay}"
+                          ToolTip="筛选范围">
+                  <sys:String>全部</sys:String>
+                  <sys:String>邮箱池</sys:String>
+                  <sys:String>已注册</sys:String>
+                  <sys:String>待处理</sys:String>
                 </ComboBox>
                 <TextBox Grid.Column="2" Margin="8,0,0,0" Text="{Binding PageSizeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="每页条数"/>
                 <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding PageStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>
