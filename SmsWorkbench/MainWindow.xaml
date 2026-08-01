@@ -152,6 +152,21 @@
       <Setter Property="FontSize" Value="13.5"/>
       <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
       <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ContextMenu">
+            <Border x:Name="MenuChrome"
+                    Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6"
+                    SnapsToDevicePixels="True">
+              <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style x:Key="AccountContextMenuItemStyle" TargetType="MenuItem">
       <Setter Property="MinWidth" Value="232"/>
@@ -166,25 +181,35 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="MenuItem">
-            <Border x:Name="ItemChrome" Background="Transparent" Padding="10,0,14,0">
-              <Grid Height="38">
+            <Border x:Name="ItemChrome"
+                    Height="{TemplateBinding Height}"
+                    Background="Transparent"
+                    Padding="8,0,12,0"
+                    SnapsToDevicePixels="True">
+              <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="18"/>
+                  <ColumnDefinition Width="20"/>
                   <ColumnDefinition Width="10"/>
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <ContentPresenter Grid.Column="0"
+                <ContentPresenter x:Name="IconPresenter"
+                                  Grid.Column="0"
                                   ContentSource="Icon"
                                   Width="16" Height="16"
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center"
                                   SnapsToDevicePixels="True"/>
-                <ContentPresenter Grid.Column="2"
-                                  ContentSource="Header"
-                                  RecognizesAccessKey="True"
-                                  HorizontalAlignment="Left"
-                                  VerticalAlignment="Center"
-                                  SnapsToDevicePixels="True"/>
+                <TextBlock x:Name="HeaderText"
+                           Grid.Column="2"
+                           Text="{TemplateBinding Header}"
+                           FontFamily="{TemplateBinding FontFamily}"
+                           FontSize="{TemplateBinding FontSize}"
+                           FontWeight="{TemplateBinding FontWeight}"
+                           Foreground="{TemplateBinding Foreground}"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           SnapsToDevicePixels="True"/>
               </Grid>
             </Border>
             <ControlTemplate.Triggers>
@@ -790,8 +815,6 @@
                 <DataGridTextColumn Header="邮箱" Binding="{Binding Identifier}" Width="260" IsReadOnly="True"/>
                 <DataGridTextColumn Header="账号类型" Binding="{Binding AccountPlanType}" Width="92" IsReadOnly="True"/>
                 <DataGridTextColumn Header="注册区" Binding="{Binding RegistrationCountry}" Width="64" IsReadOnly="True"/>
-                <DataGridTextColumn Header="注册批次" Binding="{Binding RegistrationBatchId}" Width="150" IsReadOnly="True"/>
-                <DataGridTextColumn Header="入库" Binding="{Binding RegistrationState}" Width="72" IsReadOnly="True"/>
                 <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
                 <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>

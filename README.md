@@ -148,7 +148,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
 - 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
 - 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
-- `ReMail 长效邮箱` 会按注册数量补足稳定 HTTP 200 AT，受 `--max-mailbox-purchases`、`--max-remail-cost` 和供应商死号比例熔断约束；注册批次默认启用 SMSBower 手机验证。
+- `ReMail 长效邮箱` 会按注册数量补足稳定 HTTP 200 AT，桌面端使用默认采购上限并自动管理注册批次；该模式默认启用 SMSBower 手机验证。CLI 仍可通过 `--max-mailbox-purchases` 和 `--max-remail-cost` 设置额外限制。
 
 ### 统一邮箱与 OTP
 
