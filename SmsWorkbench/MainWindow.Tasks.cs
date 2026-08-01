@@ -16,7 +16,7 @@ namespace SmsWorkbench
                 return;
             }
 
-            if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取access token→生成支付链接→存session入库",
+            if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取 access token→存 session 入库",
                 "确认重注册", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             string tempFile = Path.Combine(Path.GetTempPath(), "rerun_failed_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".txt");
@@ -30,7 +30,7 @@ namespace SmsWorkbench
 
             var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
             AddRegistrationProxy(args);
-            AddPaypalOption(args);
+            AddRegistrationOnlyOption(args);
             RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
         }
 

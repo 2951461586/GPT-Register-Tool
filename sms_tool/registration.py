@@ -43,8 +43,6 @@ from .account_creation import (
     _email_otp_send_url,
     _fetch_auth_session,
     _follow_continue_url,
-    _generate_payment_link,
-    _generate_paypal_link,
     _is_user_already_exists,
     _is_wrong_email_otp_code,
     _minimal_chatgpt_cookie_header,
@@ -439,27 +437,6 @@ def _normalize_registration_mode(value=None):
     return "passwordless"
 
 
-# Payment generation helpers moved to sms_tool.account_creation.
-def _pipeline_payment_link(access_token, proxy, payment_method, paypal_generation_type):
-    """Pipeline Step 9: Generate a protocol payment link."""
-    from .payment_link_manager import normalize_payment_method, payment_method_label
-
-    method = normalize_payment_method(payment_method) or "paypal"
-    label = payment_method_label(method)
-    _tick(f"9-Generate {label} link")
-    paypal = _generate_payment_link(
-        access_token,
-        proxy=proxy,
-        payment_method=method,
-        paypal_generation_type=paypal_generation_type,
-    )
-    paypal.setdefault("payment_method", method)
-    paypal.setdefault("method", method)
-    print(f"  {label} link: {'ok' if paypal.get('ok') else paypal.get('error', 'failed')}")
-    _tock()
-    return paypal
-
-
 def _poll_registration_email_otp(
     mailbox,
     *,
@@ -533,14 +510,11 @@ def run_email(
     password=None,
     sentinel_data=None,
     mailbox=None,
-    paypal_link=True,
     phone_pool=None,
     codex_oauth=True,
-    payment_method="paypal",
-    paypal_generation_type=None,
     registration_mode=None,
 ):
-    """Register a ChatGPT account via mailbox OTP, then create a payment link.
+    """Register a ChatGPT account via mailbox OTP and persist its auth session.
 
     Pipeline steps (each timed via _tick/_tock):
       0. Extract sentinel tokens
@@ -554,7 +528,6 @@ def run_email(
       8. Fetch auth session access token
       8b. Fetch existing account auth session (if create returns already_exists)
       8c. Codex OAuth PKCE (optional refresh token acquisition)
-      9. Generate protocol payment link
     """
     _tl().clear()
     select_auth_fingerprint(rotate=True)
@@ -1008,13 +981,6 @@ def run_email(
     fingerprint = current_auth_fingerprint()
     token_telemetry = access_token_telemetry(access_token)
 
-    paypal = {}
-    if success and access_token and paypal_link:
-        registration_stage("payment_link")
-        paypal = _pipeline_payment_link(
-            access_token, proxy, payment_method, paypal_generation_type
-        )
-
     result = {
         "success": success,
         "error": error,
@@ -1052,8 +1018,6 @@ def run_email(
         "registration_warning": registration_warning,
         "post_registration_ready": post_registration_ready,
         "cookie_header": auth_session.get("cookie_header", ""),
-        "paypal": paypal,
-        "payment_method": (paypal.get("payment_method") or payment_method or "paypal") if paypal else (payment_method or "paypal"),
         "registration_mode": registration_mode_used,
         "device_id": did,
         "timing": _timing_summary(),
@@ -1089,11 +1053,8 @@ def run_phone(*args, **kwargs):
         password=kwargs.get("password"),
         sentinel_data=kwargs.get("sentinel_data"),
         mailbox=kwargs.get("mailbox"),
-        paypal_link=kwargs.get("paypal_link", True),
         phone_pool=kwargs.get("phone_pool"),
         codex_oauth=kwargs.get("codex_oauth", True),
-        payment_method=kwargs.get("payment_method", "paypal"),
-        paypal_generation_type=kwargs.get("paypal_generation_type"),
         registration_mode=kwargs.get("registration_mode"),
     )
 
@@ -1102,10 +1063,7 @@ def run_phone_register(
     proxy=None,
     password=None,
     sentinel_data=None,
-    paypal_link=True,
     codex_oauth=True,
-    payment_method="paypal",
-    paypal_generation_type=None,
     smsbower_country=None,
     smsbower_api_key=None,
     bind_email=None,
@@ -1378,21 +1336,6 @@ def run_phone_register(
             print(f"  Codex OAuth error: {e}")
         _tock()
 
-    # Step 9: (Optional) Generate payment link
-    paypal_result = {}
-    if paypal_link and access_token:
-        _tick("9-Payment link")
-        try:
-            paypal_result = _generate_payment_link(
-                access_token,
-                proxy=proxy,
-                payment_method=payment_method,
-                paypal_generation_type=paypal_generation_type,
-            ) or {}
-        except Exception as e:
-            paypal_result = {"ok": False, "error": str(e)}
-        _tock()
-
     _print_timings()
 
     return {
@@ -1405,7 +1348,6 @@ def run_phone_register(
         "access_token": access_token,
         "id_token": id_token,
         "refresh_token": refresh_token,
-        "paypal": paypal_result,
         "activation_id": activation.activation_id,
         "source": "phone_register",
         "timing": _timing_summary(),
@@ -1441,20 +1383,16 @@ def run_batch(
     proxy=None,
     proxy_pool=None,
     mailboxes=None,
-    paypal_link=True,
     workers=4,
     phone_pool=None,
     codex_oauth=True,
-    payment_method="paypal",
-    paypal_generation_type=None,
     registration_mode=None,
 ):
     from .batch_runner import run_batch_impl
     registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
     return run_batch_impl(
-        count=count, proxy=proxy, proxy_pool=proxy_pool, mailboxes=mailboxes, paypal_link=paypal_link,
+        count=count, proxy=proxy, proxy_pool=proxy_pool, mailboxes=mailboxes,
         workers=workers, phone_pool=phone_pool, codex_oauth=codex_oauth,
-        payment_method=payment_method, paypal_generation_type=paypal_generation_type,
         registration_mode=registration_mode, run_email_func=run_email,
         max_attempts=registration_cfg.get("retry_attempts", 2),
         retry_delay_seconds=registration_cfg.get("retry_delay_seconds", 1.0),

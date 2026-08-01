@@ -234,6 +234,8 @@ public sealed class DesktopWindowSmokeTests
 
             string[] sourceOptions = Array.Empty<string>();
             string[] fieldLabels = Array.Empty<string>();
+            string[] checkBoxLabels = Array.Empty<string>();
+            int comboBoxCount = 0;
             Exception? captureFailure = null;
             Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
             {
@@ -243,7 +245,9 @@ public sealed class DesktopWindowSmokeTests
                         .Cast<Window>()
                         .Single(window => window.Title == "一键注册");
                     dialog.UpdateLayout();
-                    ComboBox sourceBox = FindVisualChildren<ComboBox>(dialog).First();
+                    ComboBox[] comboBoxes = FindVisualChildren<ComboBox>(dialog).ToArray();
+                    comboBoxCount = comboBoxes.Length;
+                    ComboBox sourceBox = comboBoxes.First();
                     sourceBox.SelectedIndex = 1;
                     dialog.UpdateLayout();
                     sourceOptions = sourceBox.Items
@@ -252,6 +256,10 @@ public sealed class DesktopWindowSmokeTests
                         .ToArray();
                     fieldLabels = FindVisualChildren<TextBlock>(dialog)
                         .Select(label => label.Text)
+                        .Where(text => !string.IsNullOrWhiteSpace(text))
+                        .ToArray();
+                    checkBoxLabels = FindVisualChildren<CheckBox>(dialog)
+                        .Select(checkBox => checkBox.Content?.ToString() ?? "")
                         .Where(text => !string.IsNullOrWhiteSpace(text))
                         .ToArray();
                     dialog.Close();
@@ -277,6 +285,43 @@ public sealed class DesktopWindowSmokeTests
             Assert.DoesNotContain("邮箱采购上限", fieldLabels);
             Assert.DoesNotContain("最大采购成本", fieldLabels);
             Assert.DoesNotContain("注册批次 ID", fieldLabels);
+            Assert.DoesNotContain("生链方式", fieldLabels);
+            Assert.DoesNotContain("只注册，不生成支付链接", checkBoxLabels);
+            Assert.Equal(1, comboBoxCount);
+
+            int selectedComboBoxCount = -1;
+            int selectedCheckBoxCount = -1;
+            captureFailure = null;
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            {
+                try
+                {
+                    Window dialog = Application.Current.Windows
+                        .Cast<Window>()
+                        .Single(window => window.Title == "选中邮箱注册");
+                    dialog.UpdateLayout();
+                    selectedComboBoxCount = FindVisualChildren<ComboBox>(dialog).Count();
+                    selectedCheckBoxCount = FindVisualChildren<CheckBox>(dialog).Count();
+                    dialog.Close();
+                }
+                catch (Exception exception)
+                {
+                    captureFailure = exception;
+                    Application.Current.Windows
+                        .Cast<Window>()
+                        .FirstOrDefault(window => window.Title == "选中邮箱注册")
+                        ?.Close();
+                }
+            }));
+
+            method = typeof(MainWindow).GetMethod(
+                "ShowSelectedRegisterOptionsDialog",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            Assert.Null(method.Invoke(main, new object[] { 1 }));
+            Assert.Null(captureFailure);
+            Assert.Equal(0, selectedComboBoxCount);
+            Assert.Equal(0, selectedCheckBoxCount);
         }
         finally
         {

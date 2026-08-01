@@ -35,7 +35,6 @@ namespace SmsWorkbench
         private string countText = "1";
         private string pageSizeText = "25";
         private object scopeFilter = "全部";
-        private bool skipPaypalLink = true;
         private string logText = "";
         private string statusText = "就绪";
         private string pageStatusText = "第 0/0 页";
@@ -143,12 +142,6 @@ namespace SmsWorkbench
         {
             get => scopeFilter;
             set { scopeFilter = value; OnPropertyChanged(nameof(ScopeFilter)); currentPage = 1; RefreshPagedRows(); }
-        }
-
-        public bool SkipPaypalLink
-        {
-            get => skipPaypalLink;
-            set { skipPaypalLink = value; OnPropertyChanged(nameof(SkipPaypalLink)); }
         }
 
         public string ChataiMailboxFilePath
@@ -298,8 +291,6 @@ namespace SmsWorkbench
         public string Source { get; set; } = "pool";
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
-        public string PaymentMethod { get; set; } = "paypal";
-        public bool SkipPaymentLink { get; set; } = false;
     }
 
     public sealed class ScanOptions

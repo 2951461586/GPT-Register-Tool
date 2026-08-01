@@ -184,22 +184,15 @@ flow without duplicating decision logic in the desktop layer.
 
 ### One-click Registration Modes
 
-The desktop `【一键注册+支付链接】` action is only a launcher; mode selection is
+The desktop `【一键注册】` action is only a launcher; source selection is
 translated into CLI flags and the protocol remains in `sms_tool.registration`.
 
-- `邮箱注册（跳过手机）` is the compatibility/default path. It emits
-  `--registration-at-only --no-phone-reuse`, registers by mailbox email OTP,
-  stores the ChatGPT access token, and then generates the selected payment link.
-- `手机接码注册+绑定邮箱+PP直链0元` keeps the mailbox as the account email, does not
-  use AT-only mode, forces the phone inventory source to SMSBower with
-  `--phone-reuse --phone-source smsbower --max-reuse-count 1`, requires the
-  Codex OAuth phone verification step to succeed, and forces
-  `--paypal-generation-type paypal_direct_zero_due --payment-method paypal`.
-
-This mode does not move SMSBower purchasing logic into the UI. The UI owns only
-the selection and command construction; `sms_tool.phone_reuse` owns SMSBower
-activation/state, `sms_tool.codex_oauth` owns the add-phone/login verification
-step, and `sms_tool.gen_pp_link` owns strict zero-due PayPal direct generation.
+- Mailbox registration emits `--registration-at-only --no-phone-reuse`,
+  registers by mailbox email OTP, and stores the ChatGPT access token/session.
+- Phone registration uses SMSBower and stores the resulting auth session.
+- Registration never invokes a payment adapter. Protocol link extraction and
+  payment execution are explicit follow-up workflows owned by the standalone
+  payment commands and the desktop batch-payment slice.
 
 ### WPF UI
 

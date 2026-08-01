@@ -123,11 +123,11 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱和 SMSBower 手机号注册。
 - 支持单账号与并发批量注册。
 - 每个注册账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；`_extract_sentinel` 默认允许 2 路并发提取（`sentinel_max_concurrency`，上限 4），兼顾批次速度与 Sentinel 限流风险。
-- 支持仅注册并保存 AT，或继续生成支付链接。
+- 注册流程只负责账号认证并保存 AT/Session，不再生成支付链接。
 - 注册成功判定以 AT 探测 HTTP 200 为准；稳定探测窗口内未持续返回 200 的候选不会进入 active 账号库。
 - 注册流程不再执行 Agent Identity 阶段；需要 Agent Identity 时必须通过显式 SUB2API 导入路径处理。
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
-- 注册、OTP、Session 获取、Codex OAuth 和支付提链分别记录阶段结果，避免把中间状态误报为成功。
+- 注册、OTP、Session 获取和 Codex OAuth 分别记录阶段结果，避免把中间状态误报为成功；支付提链只由独立支付操作触发。
 
 ### ReMail 邮箱源
 

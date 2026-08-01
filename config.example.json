@@ -113,7 +113,6 @@
     "token_cache_ttl": 300
   },
   "paypal": {
-    "auto_generate": true,
     "require_zero_due": true,
     "target_country": "US",
     "checkout_country": "JP",
@@ -194,7 +193,6 @@
   "gopay": {
     "one_click_mode": "protocol",
     "open_link": true,
-    "auto_generate": true,
     "provider_api": "byte-v-forge",
     "payment_service_addr": "127.0.0.1:50051",
     "grpcurl_path": "grpcurl",
@@ -451,7 +449,6 @@
     "phone_index_file": "runtime/nocard_phone_index.txt"
   },
   "upi": {
-    "auto_generate": true,
     "billing_regions": [
       "JP"
     ],

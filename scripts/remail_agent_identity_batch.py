@@ -240,7 +240,6 @@ def main():
         count=len(registration_mailboxes),
         proxy=args.registration_proxy,
         mailboxes=registration_mailboxes,
-        paypal_link=False,
         workers=args.workers,
         phone_pool=None,
         codex_oauth=False,
