@@ -128,14 +128,6 @@ namespace SmsWorkbench
             return "liziai.cloud";
         }
 
-        private static void AddRegistrationOnlyOption(List<string> args)
-        {
-            if (!args.Contains("--skip-paypal-link", StringComparer.Ordinal))
-            {
-                args.Add("--skip-paypal-link");
-            }
-        }
-
         private string NormalizePaymentMethod(string paymentMethod)
         {
             string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");

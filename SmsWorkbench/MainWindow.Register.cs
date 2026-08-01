@@ -7,7 +7,6 @@ namespace SmsWorkbench
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
             AddRegistrationProxy(args);
-            AddRegistrationOnlyOption(args);
             RunBackend("邮箱池注册", args);
         }
 
@@ -89,7 +88,6 @@ namespace SmsWorkbench
                 var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(pendingArgs);
                 AddRegistrationProxy(pendingArgs);
-                AddRegistrationOnlyOption(pendingArgs);
                 RunBackend("选中未注册邮箱注册", pendingArgs);
                 return;
             }
@@ -106,7 +104,6 @@ namespace SmsWorkbench
                 var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(selectedArgs);
                 AddRegistrationProxy(selectedArgs);
-                AddRegistrationOnlyOption(selectedArgs);
                 RunBackend("选中邮箱注册", selectedArgs);
                 return;
             }
@@ -123,7 +120,6 @@ namespace SmsWorkbench
                     options.Count.ToString(),
                 };
                 AddRegistrationProxy(phoneArgs);
-                AddRegistrationOnlyOption(phoneArgs);
                 RunBackend("手机号注册 (SMSBower)", phoneArgs);
                 return;
             }
@@ -142,7 +138,6 @@ namespace SmsWorkbench
                 };
                 AddRegistrationAtOnlyArgs(cfArgs);
                 AddRegistrationProxy(cfArgs);
-                AddRegistrationOnlyOption(cfArgs);
                 RunBackend("CFWorker邮箱注册", cfArgs);
                 return;
             }
@@ -157,7 +152,6 @@ namespace SmsWorkbench
                     "--phone-reuse", "--phone-source", "smsbower"
                 };
                 AddRegistrationProxy(targetArgs);
-                AddRegistrationOnlyOption(targetArgs);
                 RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
                 return;
             }
@@ -173,7 +167,6 @@ namespace SmsWorkbench
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddRegistrationAtOnlyArgs(args);
             AddRegistrationProxy(args);
-            AddRegistrationOnlyOption(args);
             RunBackend("一键注册", args);
         }
 

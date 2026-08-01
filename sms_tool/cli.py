@@ -261,7 +261,7 @@ def main():
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
-    parser.add_argument("--skip-paypal-link", action="store_true", help="Deprecated compatibility flag; registration never generates payment links")
+    parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
     parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")

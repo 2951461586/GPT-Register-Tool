@@ -1,8 +1,4 @@
-"""Shared PayPal protocol helpers used by paypal_links and paypal_nocard.
-
-Extracted from paypal_nocard.py to break the circular dependency when
-paypal_nocard.py is not importable.
-"""
+"""PayPal redirect parsing and transport helpers used by ``paypal_links``."""
 
 from __future__ import annotations
 
@@ -54,10 +50,10 @@ def _load_config() -> dict[str, Any]:
 
 # ── HTTP Session ───────────────────────────────────────────────────────────────
 
-def _paypal_impersonate() -> str:
+def _paypal_redirect_impersonate() -> str:
     try:
         cfg = _load_config()
-        value = str((cfg.get("paypal_nocard") or {}).get("impersonate") or "").strip()
+        value = str((cfg.get("paypal") or {}).get("redirect_impersonate") or "").strip()
         return value or "chrome136"
     except Exception:
         return "chrome136"
@@ -65,7 +61,7 @@ def _paypal_impersonate() -> str:
 
 def _make_session(proxy: Optional[str] = None) -> Any:
     if _HAS_CFFI:
-        s = _CffiSession(impersonate=_paypal_impersonate())
+        s = _CffiSession(impersonate=_paypal_redirect_impersonate())
         s.trust_env = False
         if proxy:
             p = proxy

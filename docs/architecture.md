@@ -49,7 +49,7 @@ sms_tool/
   registration_progress.py  Registration stage progress tracking and persistence.
   auth_flow.py              OpenAI signin/authorize/continue helpers.
   auth_headers.py           Auth header construction and normalization.
-  account_creation.py       Account creation, auth-session fetch, and payment-link helper calls.
+  account_creation.py       Account creation and auth-session fetch.
   batch_runner.py           Batch registration concurrency and result ordering.
   sentinel_tokens.py        Sentinel token extraction/cache/browser fallback.
   sentinel_quickjs.py       QuickJS SDK path and PoW fallback for Sentinel.
@@ -59,19 +59,17 @@ sms_tool/
   paypal_protocol.py        Shared PayPal protocol helpers (BA token extraction, Stripe redirect follower).
   paypal_proxy.py           PayPal stage proxy resolution and region rotation.
   paypal_reverse.py         PayPal reverse-engineering helpers for link extraction.
-  k12_client.py             Workspace request/accept/leave HTTP adapter (used by workspace_scan).
-  k12_identity.py           Account/user/token identity extraction (used by workspace_scan).
-  workspace_scan.py         One-click scan Workspace health check and fallback switch adapter.
+  k12_client.py             Legacy Workspace request/accept/leave adapter (explicit Python use only).
+  k12_identity.py           Legacy Workspace identity extraction helper.
+  workspace_scan.py         Legacy Workspace health check adapter; CLI scanning keeps it disabled.
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
   payment_link_manager.py   Unified method registry, state machine, adapter routing, and redacted run history.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_auto.py            Project-local PayPal browser page automation helper.
-  paypal_nocard.py          Legacy explicit PayPal no-card agreement flow.
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
   nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
   captcha_solver.py         CAPTCHA solving abstraction.
   grpcurl_client.py         Shared grpcurl subprocess boundary.
-  gopay_wa_rebind.py        WA-channel GoPay app auth and change-phone orchestration.
   omakse_client.py          Omakase provider client adapter.
   phone_proxy.py            Phone verification proxy resolution.
   phone_reuse.py            Phone number reuse and inventory management.
@@ -312,7 +310,7 @@ It must not write registration results or modify mailbox pool files during regis
 implementation:
 
 - `auth_flow.py`: signin URL construction, authorize navigation, continue calls, and auth-state URL classification.
-- `account_creation.py`: OTP validation, create-account continuation, `/api/auth/session` fetch, and payment-link helper calls.
+- `account_creation.py`: OTP validation, create-account continuation, and `/api/auth/session` fetch.
 - `batch_runner.py`: concurrent registration worker scheduling, result ordering, mailbox-count capping, and bounded retry of network/auth-state failures with a fresh proxy session.
 - `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel extraction, QuickJS SDK path, PoW/browser fallback, and cache.
 - `auth_state.py`: `client_auth_session_dump` capture and redacted diagnostic summaries.
@@ -480,17 +478,24 @@ transaction.
 
 `sms_tool/paypal_auto.py` owns browser page mechanics: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
 
-`sms_tool/paypal_nocard.py` remains available as the older explicit no-card agreement implementation. `sms_tool/paypal_protocol.py` extracts shared protocol helpers (BA token extraction, Stripe redirect follower) used by both `paypal_nocard.py` and `paypal_links.py`.
+`sms_tool/paypal_links.py` owns link regeneration and persistence. `sms_tool/paypal_protocol.py`
+is the narrow redirect-parsing and transport module used by that flow; the removed
+no-card signup implementation is not part of the supported payment surface.
 
 ### GoPay WA Rebind Layer
 
-`sms_tool.gopay_wa_rebind` adapts the byte-v-forge WA flow to this project. `sms_tool.grpcurl_client` owns grpcurl process execution and proto path resolution only.
+`services/gopay-flow/gopay.py` owns GoPay payment and app RPC orchestration. The
+`sms_tool.grpcurl_client` adapter remains available for payment-link manager calls;
+there is no second Python WA post-payment wrapper.
 
 ### Local Provider Services
 
 `services/gopay-flow` is the project-local PaymentService. It owns the ChatGPT checkout, Stripe/Midtrans GoPay linking, OTP handoff, PIN charge, ChatGPT verify, optional unlink trigger, and SMSBower GoPay signup/bootstrap. Its SMSBower bootstrap path imports `gopay_pure_protocol.py` directly and must not call `GopayAppService` or import `opai.core.gojek_client`.
 
-`services/gopay-app/proto` stores the GoPay App service contract used by WA rebind mode. The app-service implementation is a provider boundary: it may be supplied by a local project service or compatible binary, but callers inside `sms_tool` only depend on the proto-level RPC surface.
+`services/gopay-app/proto` stores the GoPay App service contract used by GoPay
+registration and phone-change flows. The app-service implementation is a provider
+boundary: it may be supplied by a local project service or compatible binary, but
+callers only depend on the proto-level RPC surface.
 
 `services/gopay-adb` owns emulator/ADB HTTP endpoints such as `/health`, `/otp`, `/otp/clear`, and `/gopay/unlink`. It must not know about ChatGPT accounts, SQLite rows, or CPA import.
 
@@ -599,12 +604,6 @@ All paths in `config.example.json` are relative by default:
   "protocol_payments": {
     "proxy_pool": ["http://user-region-JP-sid-session-t-5:pass@gateway:port"]
   },
-  "k12": {
-    "workspace_ids": "631e1603-06cf-4f0b-b79b-d09fbfcfe98d",
-    "retries": 2,
-    "retry_backoff_seconds": 5,
-    "invite_timeout_seconds": 240
-  },
   "runtime": {
     "directory": "runtime"
   },
@@ -638,7 +637,7 @@ Rows are deduplicated by normalized email for display. SQLite/session rows have 
 ```text
 0  command completed normally
 2  explicit mailbox source was empty or malformed
-3  registration succeeded but PayPal link generation failed
+3  command completed with a provider or import failure
 ```
 
 ## Local Files That Must Stay Out of Git
