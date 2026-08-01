@@ -256,6 +256,7 @@ def main():
             stream.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
+    parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--proxy", default=None)
     parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
     parser.add_argument("--count", type=int, default=1)
@@ -984,8 +985,12 @@ def _view_inbox(args):
     import sys
 
     from .codex_oauth import _mailbox_from_data
+    from .desktop_ipc import emit_result
     from .mailbox import _fetch_mailbox_messages, _mailbox_from_config
     from .session_refresh import _load_seed_session
+
+    def output(payload):
+        emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
 
     with contextlib.redirect_stdout(sys.stderr):
         data, json_path = _load_seed_session(email=args.email or "", session_file=args.session_file or "")
@@ -995,11 +1000,11 @@ def _view_inbox(args):
         if mailbox is None and (getattr(args, "remail_token", None) or os.environ.get("REMAIL_SERVICE_TOKEN")):
             mailbox = _mailbox_from_config(args)
     if mailbox is None:
-        print(json.dumps({
+        output({
             "ok": False,
             "email": args.email or data.get("email", ""),
             "error": "missing_mailbox_credentials",
-        }, ensure_ascii=False, indent=2))
+        })
         raise SystemExit(2)
     try:
         original_mailbox_token = str(getattr(mailbox, "token", "") or "")
@@ -1029,19 +1034,19 @@ def _view_inbox(args):
                     Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 upsert_account(data, json_path=json_path)
     except Exception as exc:
-        print(json.dumps({
+        output({
             "ok": False,
             "email": mailbox.email,
             "provider": mailbox.provider,
             "error": str(exc),
-        }, ensure_ascii=False, indent=2))
+        })
         raise SystemExit(3)
-    print(json.dumps({
+    output({
         "ok": True,
         "email": mailbox.email,
         "provider": mailbox.provider,
         "messages": [_public_mail_message(item) for item in messages],
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _gmail_send(args):
@@ -1532,16 +1537,20 @@ def _test_payment_proxies(args):
 
 def _extract_payment_link(args):
     """Extract any supported protocol payment link from an AT or saved account."""
+    from .desktop_ipc import emit_result
     from .payment_link_manager import generate_payment_link
+
+    def output(payload):
+        emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
 
     method = _payment_method(args)
     email_file = str(getattr(args, "email_file", None) or "").strip()
     if email_file:
         if method == "blik" and not getattr(args, "payment_probe_only", False):
-            print(json.dumps({
+            output({
                 "ok": False,
                 "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
-            }, ensure_ascii=False))
+            })
             raise SystemExit(2)
         from .payment_batch import run_payment_batch
 
@@ -1549,7 +1558,7 @@ def _extract_payment_link(args):
         if getattr(args, "email", None):
             emails.insert(0, str(args.email).strip())
         if not emails:
-            print(json.dumps({"ok": False, "error": "email file contains no accounts"}, ensure_ascii=False))
+            output({"ok": False, "error": "email file contains no accounts"})
             raise SystemExit(1)
         proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
         stage_countries = _payment_stage_country_overrides(args)
@@ -1584,9 +1593,9 @@ def _extract_payment_link(args):
                 timeout=getattr(args, "refresh_timeout", 30),
             )
         except RuntimeError as exc:
-            print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            output({"ok": False, "error": str(exc)})
             raise SystemExit(3)
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        output(report)
         counts = report.get("counts", {})
         if (
             getattr(args, "payment_probe_only", False) and not counts.get("authenticated")

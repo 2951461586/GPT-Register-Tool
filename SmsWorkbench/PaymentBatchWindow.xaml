@@ -1,0 +1,148 @@
+<Window x:Class="SmsWorkbench.PaymentBatchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="批量协议支付"
+        Width="1120"
+        Height="820"
+        MinWidth="920"
+        MinHeight="680"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="220"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Grid Margin="0,0,0,14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="批量协议支付" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1" Text="{Binding AccountSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>
+    </Grid>
+
+    <Grid Grid.Row="1" Margin="0,0,0,14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <StackPanel Margin="0,0,7,10">
+        <TextBlock Text="支付方式" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding PaymentMethodOptions}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedMethod}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Margin="7,0,7,10">
+        <TextBlock Text="并发" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding WorkerOptions}" SelectedItem="{Binding Workers}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Margin="7,0,7,10">
+        <TextBlock Text="瞬态重试" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding RetryOptions}" SelectedItem="{Binding Retries}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="3" Margin="7,0,0,10">
+        <TextBlock Text="Canary 数量（0=全部）" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding CanaryText, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,7,10">
+        <TextBlock Text="批次 ID" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding BatchId, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+      <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
+        <TextBlock Text="代理 Seed" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding Proxy, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2">
+        <CheckBox Content="401 时邮箱 OTP OAuth 新 AT" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
+        <CheckBox Content="仅探测资格" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
+        <CheckBox Content="要求 0 元金额" IsChecked="{Binding RequireZero}" IsEnabled="{Binding RequireZeroEnabled}"/>
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="2" Margin="0,0,0,14">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Grid Margin="0,0,0,6">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="账号地区 / 支付资格矩阵" FontSize="13" FontWeight="SemiBold"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button Content="添加单元" Command="{Binding AddMatrixRowCommand}" MinWidth="82" Height="28" Margin="0,0,6,0"/>
+          <Button Content="删除单元" Command="{Binding DeleteMatrixRowCommand}" MinWidth="82" Height="28"/>
+        </StackPanel>
+      </Grid>
+      <DataGrid Grid.Row="1"
+                ItemsSource="{Binding MatrixRows}"
+                SelectedItem="{Binding SelectedMatrixRow}"
+                AutoGenerateColumns="False"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                HeadersVisibility="Column"
+                GridLinesVisibility="Horizontal"
+                RowHeight="34">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="120"/>
+          <DataGridTextColumn Header="注册区" Binding="{Binding RegistrationCountry}" Width="62"/>
+          <DataGridTextColumn Header="Checkout" Binding="{Binding CheckoutCountry}" Width="78"/>
+          <DataGridTextColumn Header="Promotion" Binding="{Binding PromotionCountry}" Width="82"/>
+          <DataGridTextColumn Header="Provider" Binding="{Binding ProviderCountry}" Width="76"/>
+          <DataGridTextColumn Header="Approve" Binding="{Binding ApproveCountry}" Width="72"/>
+          <DataGridTextColumn Header="Redirect" Binding="{Binding RedirectCountry}" Width="72"/>
+          <DataGridTextColumn Header="策略" Binding="{Binding Strategy}" Width="*"/>
+          <DataGridTextColumn Header="样本" Binding="{Binding SampleSize}" Width="56"/>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
+
+    <DataGrid Grid.Row="3"
+              ItemsSource="{Binding Results}"
+              IsReadOnly="True"
+              AutoGenerateColumns="False"
+              HeadersVisibility="Column"
+              GridLinesVisibility="Horizontal"
+              RowHeight="32"
+              Margin="0,0,0,12">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="账号" Binding="{Binding AccountRef}" Width="135"/>
+        <DataGridTextColumn Header="矩阵" Binding="{Binding MatrixCell}" Width="115"/>
+        <DataGridTextColumn Header="AT" Binding="{Binding AuthStatus}" Width="68"/>
+        <DataGridTextColumn Header="JIT" Binding="{Binding RefreshStatus}" Width="66"/>
+        <DataGridTextColumn Header="资格" Binding="{Binding Eligibility}" Width="66"/>
+        <DataGridTextColumn Header="结果" Binding="{Binding Decision}" Width="*"/>
+        <DataGridTextColumn Header="次数" Binding="{Binding Attempts}" Width="56"/>
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <Grid Grid.Row="4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="{Binding Status}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0"/>
+      <StackPanel Grid.Column="1" Orientation="Horizontal">
+        <Button Content="打开报告" Command="{Binding OpenReportCommand}" MinWidth="84" Margin="0,0,8,0"/>
+        <Button Content="取消" Command="{Binding RunCancelCommand}" MinWidth="72" Margin="0,0,8,0"/>
+        <Button Content="开始执行" Command="{Binding RunCommand}" MinWidth="96" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+        <Button Content="关闭" MinWidth="72" IsCancel="True"/>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

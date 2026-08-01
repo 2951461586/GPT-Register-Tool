@@ -892,14 +892,6 @@ namespace SmsWorkbench
             return Convert.ToString(value) ?? "";
         }
 
-        private string JoinArgs(List<string> args) => string.Join(" ", args.Select(Quote));
-
-        private string Quote(string value)
-        {
-            value ??= "";
-            return value.IndexOfAny(new[] { ' ', '\t', '"', '&', '|' }) < 0 ? value : "\"" + value.Replace("\"", "\\\"") + "\"";
-        }
-
         private string Mask(string value)
         {
             value = (value ?? "").Trim();
@@ -1057,34 +1049,29 @@ namespace SmsWorkbench
 
         private void Log(string text)
         {
-            AppServices.Logger?.Information(text);
+            logger?.Information(text);
             LogText += "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text + Environment.NewLine;
         }
 
         private void UiLog(string text)
         {
-            AppServices.Logger?.Debug("[backend] {Line}", text);
+            logger?.Debug("[backend] {Line}", text);
             Dispatcher.BeginInvoke(new Action(() => Log(text)), DispatcherPriority.Background);
         }
 
-        // ── HandyControl Growl notification helpers (P5) ──
-
-        private static void NotifySuccess(string message)
+        private void NotifySuccess(string message)
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                HandyControl.Controls.Growl.Success(message)), DispatcherPriority.Normal);
+            snackbarService.Show("完成", message, Wpf.Ui.Controls.ControlAppearance.Success, null, TimeSpan.FromSeconds(4));
         }
 
-        private static void NotifyWarning(string message)
+        private void NotifyWarning(string message)
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                HandyControl.Controls.Growl.Warning(message)), DispatcherPriority.Normal);
+            snackbarService.Show("注意", message, Wpf.Ui.Controls.ControlAppearance.Caution, null, TimeSpan.FromSeconds(5));
         }
 
-        private static void NotifyInfo(string message)
+        private void NotifyInfo(string message)
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
-                HandyControl.Controls.Growl.Info(message)), DispatcherPriority.Normal);
+            snackbarService.Show("提示", message, Wpf.Ui.Controls.ControlAppearance.Info, null, TimeSpan.FromSeconds(4));
         }
 
         private void OnPropertyChanged(string name)

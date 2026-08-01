@@ -1,16 +1,11 @@
 <Application x:Class="SmsWorkbench.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-             xmlns:hc="https://handyorg.github.io/handycontrol"
-             Startup="App_OnStartup">
+             >
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Wpf.Ui.xaml"/>
-        <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="Grey" SecondaryColor="Blue"/>
-        <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml"/>
-        <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml"/>
       </ResourceDictionary.MergedDictionaries>
 
       <!-- Semantic Color Palette (Warm Premium Light Theme) -->
@@ -50,6 +45,12 @@
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Margin" Value="6,14,0,7"/>
+      </Style>
+
+      <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
       </Style>
 
       <!-- Modernized Button Style -->

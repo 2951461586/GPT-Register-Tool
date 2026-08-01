@@ -1,0 +1,115 @@
+using Serilog;
+using System.Diagnostics;
+using System.Text;
+
+namespace SmsWorkbench
+{
+    public sealed class PythonBackendClient : IBackendClient
+    {
+        private readonly IApplicationPaths _paths;
+        private readonly Serilog.ILogger _logger;
+
+        public PythonBackendClient(IApplicationPaths paths, Serilog.ILogger logger)
+        {
+            _paths = paths;
+            _logger = logger;
+        }
+
+        public async Task<BackendCommandResult> RunAsync(
+            BackendCommand command,
+            IProgress<BackendOutputLine> progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (!File.Exists(_paths.BackendScriptPath))
+                throw new FileNotFoundException("Backend script not found", _paths.BackendScriptPath);
+
+            using var timeout = new CancellationTokenSource(command.Timeout);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+            using var process = new Process { StartInfo = CreateStartInfo(command), EnableRaisingEvents = true };
+            var stdout = new StringBuilder();
+            var stderr = new StringBuilder();
+
+            _logger.Information("Starting backend command {CommandName}", command.Name);
+            if (!process.Start())
+                throw new InvalidOperationException("Python backend process did not start.");
+
+            Task stdoutTask = PumpAsync(process.StandardOutput, stdout, BackendOutputChannel.StandardOutput, progress);
+            Task stderrTask = PumpAsync(process.StandardError, stderr, BackendOutputChannel.StandardError, progress);
+            bool timedOut = false;
+
+            try
+            {
+                await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                timedOut = true;
+                KillProcessTree(process);
+            }
+            catch (OperationCanceledException)
+            {
+                KillProcessTree(process);
+                throw;
+            }
+
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            int exitCode = process.HasExited ? process.ExitCode : -1;
+            string output = stdout.ToString().Trim();
+            string error = stderr.ToString().Trim();
+            JsonElement? payload = BackendJsonProtocol.ExtractPayload(output);
+            _logger.Information(
+                "Backend command {CommandName} exited with code {ExitCode}; payload={HasPayload}; timedOut={TimedOut}",
+                command.Name,
+                exitCode,
+                payload.HasValue,
+                timedOut);
+            return new BackendCommandResult(exitCode, output, error, payload, timedOut);
+        }
+
+        private ProcessStartInfo CreateStartInfo(BackendCommand command)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "python",
+                WorkingDirectory = _paths.RootDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            };
+            startInfo.ArgumentList.Add(_paths.BackendScriptPath);
+            foreach (string argument in command.Arguments)
+                startInfo.ArgumentList.Add(argument ?? "");
+            foreach (KeyValuePair<string, string> variable in command.EnvironmentVariables)
+                startInfo.Environment[variable.Key] = variable.Value ?? "";
+            return startInfo;
+        }
+
+        private static async Task PumpAsync(
+            StreamReader reader,
+            StringBuilder target,
+            BackendOutputChannel channel,
+            IProgress<BackendOutputLine> progress)
+        {
+            while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
+            {
+                target.AppendLine(line);
+                progress?.Report(new BackendOutputLine(channel, line));
+            }
+        }
+
+        private static void KillProcessTree(Process process)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+}

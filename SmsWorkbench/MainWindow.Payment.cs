@@ -89,10 +89,17 @@ namespace SmsWorkbench
 
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow selectedAccount = SelectedRowsOrCurrent()
+            var selected = SelectedRowsOrCurrent()
                 .Where(row => !string.IsNullOrWhiteSpace(row.Identifier))
-                .FirstOrDefault();
-            ShowProtocolPaymentDialog(selectedAccount);
+                .GroupBy(row => row.Identifier.Trim().ToLowerInvariant())
+                .Select(group => group.First())
+                .ToList();
+            if (selected.Count > 1)
+            {
+                ShowPaymentBatchDialog(selected);
+                return;
+            }
+            ShowProtocolPaymentDialog(selected.FirstOrDefault());
         }
 
         /// <summary>
@@ -346,6 +353,24 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 0),
             };
+            var jitRefreshCheck = new CheckBox
+            {
+                Content = "AT 401 时邮箱 OTP OAuth 刷新",
+                IsChecked = true,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 6),
+                Visibility = selectedAccount == null ? Visibility.Collapsed : Visibility.Visible,
+            };
+            var probeOnlyCheck = new CheckBox
+            {
+                Content = "仅执行 JIT AT / 资格探测",
+                IsChecked = false,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 6),
+                Visibility = selectedAccount == null ? Visibility.Collapsed : Visibility.Visible,
+            };
+            optionPanel.Children.Add(jitRefreshCheck);
+            optionPanel.Children.Add(probeOnlyCheck);
             optionPanel.Children.Add(zeroCheck);
             optionPanel.Children.Add(requireBaCheck);
             mainPanel.Children.Add(optionPanel);
@@ -516,6 +541,18 @@ namespace SmsWorkbench
                 updateCountryCombo.IsEnabled = method == "paypal" || method == "direct_card";
                 extractBtn.Content = method == "blik" ? "执行支付" : "提取";
             };
+            probeOnlyCheck.Checked += (_, __) =>
+            {
+                zeroCheck.IsEnabled = false;
+                requireBaCheck.IsEnabled = false;
+                extractBtn.Content = "开始探测";
+            };
+            probeOnlyCheck.Unchecked += (_, __) =>
+            {
+                zeroCheck.IsEnabled = true;
+                requireBaCheck.IsEnabled = SelectedMethod() == "paypal";
+                extractBtn.Content = SelectedMethod() == "blik" ? "执行支付" : "提取";
+            };
             for (int index = 0; index < methodCombo.Items.Count; index++)
             {
                 if (methodCombo.Items[index] is ComboBoxItem item
@@ -635,6 +672,11 @@ namespace SmsWorkbench
                     if (!string.IsNullOrEmpty(proxy))
                         args.AddRange(new[] { "--proxy", proxy });
 
+                    if (selectedAccount != null && jitRefreshCheck.IsChecked != true)
+                        args.Add("--no-jit-at-refresh");
+                    if (selectedAccount != null && probeOnlyCheck.IsChecked == true)
+                        args.Add("--payment-probe-only");
+
                     AddStageCountryArgs(args);
 
                     if (!requireZero)
@@ -662,6 +704,19 @@ namespace SmsWorkbench
 
                             if (root.TryGetProperty("message", out var messageEl) && !string.IsNullOrWhiteSpace(messageEl.GetString()))
                                 sb.AppendLine(messageEl.GetString());
+
+                            if (root.TryGetProperty("probe", out var probeEl) && probeEl.ValueKind == JsonValueKind.Object)
+                            {
+                                string probeStatus = probeEl.TryGetProperty("status_code", out var probeCodeEl) ? probeCodeEl.ToString() : "";
+                                if (probeStatus.Length > 0) sb.AppendLine($"AT 探测: HTTP {probeStatus}");
+                            }
+                            if (root.TryGetProperty("refreshed", out var refreshedEl) && refreshedEl.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                                sb.AppendLine($"JIT 刷新: {(refreshedEl.GetBoolean() ? "已获取新 AT" : "未刷新")}");
+                            if (root.TryGetProperty("token_telemetry", out var telemetryEl) && telemetryEl.ValueKind == JsonValueKind.Object)
+                            {
+                                if (telemetryEl.TryGetProperty("age_seconds", out var ageEl)) sb.AppendLine($"AT 年龄: {ageEl} 秒");
+                                if (telemetryEl.TryGetProperty("expires_in_seconds", out var expiresEl)) sb.AppendLine($"AT 剩余: {expiresEl} 秒");
+                            }
 
                             // URL / UPI URI
                             string url = "";

@@ -29,12 +29,12 @@ namespace SmsWorkbench
                 }
                 catch (Exception balanceError)
                 {
-                    AppServices.Logger?.Warning(balanceError, "Failed to load SMSBower balance");
+                    logger?.Warning(balanceError, "Failed to load SMSBower balance");
                 }
             }
             catch (Exception exc)
             {
-                AppServices.Logger?.Error(exc, "Failed to load SMSBower OpenAI catalog");
+                logger?.Error(exc, "Failed to load SMSBower OpenAI catalog");
                 ShowThemedInfoDialog("SMSBower 加载失败", "无法读取 OpenAI 号码地区和价格档位：" + exc.Message);
                 return false;
             }

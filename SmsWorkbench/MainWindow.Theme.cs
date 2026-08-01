@@ -15,33 +15,12 @@ namespace SmsWorkbench
             {
                 Wpf.Ui.Appearance.ApplicationThemeManager.Apply(_currentTheme, Wpf.Ui.Controls.WindowBackdropType.Mica, true);
                 ApplyCustomThemeColors(_currentTheme);
-                SyncMaterialDesignTheme(_currentTheme);
                 ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
                 Log("主题更新应用成功。");
             }
             catch (Exception ex)
             {
                 Log($"应用主题异常: {ex.Message}");
-            }
-        }
-
-        private void SyncMaterialDesignTheme(Wpf.Ui.Appearance.ApplicationTheme theme)
-        {
-            try
-            {
-                var mdTheme = Application.Current.Resources.MergedDictionaries
-                    .OfType<MaterialDesignThemes.Wpf.BundledTheme>()
-                    .FirstOrDefault();
-                if (mdTheme != null)
-                {
-                    mdTheme.BaseTheme = theme == Wpf.Ui.Appearance.ApplicationTheme.Dark
-                        ? MaterialDesignThemes.Wpf.BaseTheme.Dark
-                        : MaterialDesignThemes.Wpf.BaseTheme.Light;
-                }
-            }
-            catch
-            {
-                // MaterialDesign theme sync is best-effort
             }
         }
 
