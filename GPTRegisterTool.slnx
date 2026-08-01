@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SmsWorkbench/SmsWorkbench.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/SmsWorkbench.Tests/SmsWorkbench.Tests.csproj" />
+  </Folder>
+</Solution>
