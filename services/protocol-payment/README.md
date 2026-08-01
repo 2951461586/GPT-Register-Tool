@@ -38,10 +38,11 @@ For a resumable production cohort, add a stable ID and bounded retries:
 python -m sms_tool --extract-payment-link --payment-method momo --email-file runtime/eligible.txt --payment-batch-id momo_vn_20260731 --workers 2 --payment-retries 1
 ```
 
-Use `--payment-probe-only` for a no-payment qualification pass. Reusing the
-same `--payment-batch-id` resumes the atomic checkpoint in
-`runtime/payment_batches/`; reports never include access tokens or authenticated
-proxy URLs.
+Use `--payment-probe-only` for a no-payment JIT-authentication and
+registration-country-matrix pass; it never invokes a payment adapter. Reusing
+the same `--payment-batch-id` resumes the atomic checkpoint only when the hashed
+execution mode, matrix, proxy, retry, and JIT settings still match. Reports never
+include access tokens or authenticated proxy URLs.
 
 Each worker runs the JIT AT gate immediately before checkout. HTTP 401 goes
 directly to mailbox OTP OAuth, and a replacement AT is persisted only after a

@@ -36,6 +36,17 @@ def _payment_link_enabled(payment_method, args):
     return bool(paypal_cfg.get("auto_generate", True))
 
 
+def _payment_result_has_artifact(result) -> bool:
+    if not isinstance(result, dict) or not result.get("ok"):
+        return False
+    if (
+        str(result.get("operation") or "").lower() == "execute_payment"
+        and str(result.get("status") or "").lower() == "completed"
+    ):
+        return True
+    return bool(result.get("url") or result.get("qr_path") or result.get("qr_data"))
+
+
 def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
     requested = max(1, int(getattr(args, "workers", 1) or 1))
     cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
@@ -489,6 +500,12 @@ def main():
         _run_target_at200(args, base_dir)
         return
 
+    payment_method = _payment_method(args)
+    paypal_link = _payment_link_enabled(payment_method, args)
+    if payment_method == "blik" and paypal_link:
+        print("[Error] BLIK payment execution requires a fresh six-digit code and is only supported by the single-account payment command; use --skip-paypal-link for registration")
+        raise SystemExit(2)
+
     pipeline_started = time.time()
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)
@@ -510,9 +527,6 @@ def main():
     if not mailboxes and not _remail_enabled():
         print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure ReMail")
         raise SystemExit(2)
-    payment_method = _payment_method(args)
-    paypal_link = _payment_link_enabled(payment_method, args)
-
     requested_count = max(1, int(args.count or 1))
     if not getattr(args, "registration_batch_id", None):
         args.registration_batch_id = f"registration_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
@@ -704,13 +718,13 @@ def _save_registration_results(
 
     paypal_failures = [
         r for r in results
-        if r and r.get("success") and paypal_link and not ((r.get("paypal") or {}).get("ok") and (r.get("paypal") or {}).get("url"))
+        if r and r.get("success") and paypal_link and not _payment_result_has_artifact(r.get("paypal") or {})
     ]
     if paypal_failures:
         for data in paypal_failures:
             paypal = data.get("paypal") or {}
             label = _payment_method_label(payment_method)
-            print(f"[Error] {label} link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing payment URL')}")
+            print(f"[Error] {label} link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing payment artifact')}")
         raise SystemExit(3)
 
     if getattr(args, "import_cpa", False):
@@ -1523,6 +1537,12 @@ def _extract_payment_link(args):
     method = _payment_method(args)
     email_file = str(getattr(args, "email_file", None) or "").strip()
     if email_file:
+        if method == "blik" and not getattr(args, "payment_probe_only", False):
+            print(json.dumps({
+                "ok": False,
+                "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
+            }, ensure_ascii=False))
+            raise SystemExit(2)
         from .payment_batch import run_payment_batch
 
         emails = _read_email_file(email_file)

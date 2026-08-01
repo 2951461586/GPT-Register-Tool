@@ -166,6 +166,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 ### 协议支付提链
 
 - 支持 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
+- BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
 - PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
@@ -204,9 +205,9 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
 2. 选择 MoMo/Kakao 等支付方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
-3. 默认开启“401 时邮箱 OTP OAuth 新 AT”；需要只验证账号时勾选“仅探测资格”。
+3. 默认开启“401 时邮箱 OTP OAuth 新 AT”；需要只验证 AT 和注册地区矩阵时勾选“仅探测资格”，该模式不会调用任何支付适配器。
 4. 通过“账号地区 / 支付资格矩阵”确认注册区、Checkout、Promotion、Provider、Approve 和 Redirect 的地区组合。
-5. 重复使用同一批次 ID 可读取 `runtime/payment_batches/` 的原子断点并继续执行；报告会分开显示 AT 200、JIT 刷新、资格、链接、二维码和失败计数。
+5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。报告会分开显示 AT 200、JIT 刷新、资格、链接、二维码和失败计数。
 
 ### 手机接码
 
@@ -422,7 +423,7 @@ python chatgpt_phone_reg.py --test-payment-proxies --checkout-proxy-country GB -
 python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --workers 2 --payment-batch-id momo_vn_20260731 --payment-canary 5 --payment-retries 1
 ```
 
-只执行 JIT AT 与资格探测，不创建支付方式：
+只执行 JIT AT 与注册地区矩阵校验，不调用支付适配器或创建支付方式：
 
 ```powershell
 python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --payment-probe-only --payment-batch-id momo_probe_20260731 --workers 2

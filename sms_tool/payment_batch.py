@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
@@ -77,7 +78,7 @@ def run_payment_batch(
     cells = load_payment_matrix(matrix)
     protocol_cfg = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
     batch_cfg = protocol_cfg.get("batch") if isinstance(protocol_cfg.get("batch"), dict) else {}
-    if not canary:
+    if not canary and not probe_only:
         paused = _active_canary_pause(batch_cfg, method)
         if paused:
             raise RuntimeError(f"payment_batch_paused_by_canary:{paused.get('reason') or 'protocol_profile_failed'}")
@@ -87,9 +88,18 @@ def run_payment_batch(
     max_workers = max(1, min(int(workers or 1), cap, len(selected) or 1))
     retry_count = max(0, min(int(retries or 0), 2))
     base_kwargs = dict(payment_kwargs or {})
+    run_signature = _batch_run_signature(
+        method=method,
+        probe_only=probe_only,
+        jit_refresh=jit_refresh,
+        matrix=cells,
+        payment_kwargs=base_kwargs,
+        proxy=proxy,
+        retries=retry_count,
+    )
     report_path = _report_path(batch_id)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    existing = _load_checkpoint(report_path, method)
+    existing = _load_checkpoint(report_path, method, run_signature)
     existing_by_ref = {
         str(row.get("account_ref") or ""): row
         for row in (existing.get("results") or [])
@@ -137,9 +147,11 @@ def run_payment_batch(
             row["decision"] = "matrix_registration_country_mismatch"
             row["error"] = row["decision"]
             return index, row
-        kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy)
         if probe_only:
-            kwargs["probe_only"] = True
+            row["ok"] = True
+            row["decision"] = "probe_authenticated"
+            return index, row
+        kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy)
         last: dict[str, Any] = {}
         for attempt in range(1, retry_count + 2):
             row["attempted"] = True
@@ -163,8 +175,6 @@ def run_payment_batch(
             "decision": decision,
             "attempts": attempt,
         })
-        if probe_only:
-            row["ok"] = bool(row.get("authenticated") and row.get("decision") not in {"credential_invalid", "account_deactivated", "checkout_failed"})
         return index, row
 
     def checkpoint(status: str) -> dict[str, Any]:
@@ -181,6 +191,7 @@ def run_payment_batch(
             report_path=report_path,
             status=status,
             resumed=len(selected) - len(pending),
+            run_signature=run_signature,
         )
         with checkpoint_lock:
             _write_checkpoint(report_path, report)
@@ -210,7 +221,7 @@ def run_payment_batch(
             ordered[index] = row
             checkpoint("running")
     report = checkpoint("finished")
-    if canary:
+    if canary and not probe_only:
         report["canary_state"] = _record_canary_state(method, report)
         _write_checkpoint(report_path, report)
     return report
@@ -219,7 +230,7 @@ def run_payment_batch(
 def _build_report(*, batch_id: str, method: str, started: float, workers: int,
                   probe_only: bool, selected_count: int, results: list[dict[str, Any]],
                   cells: list[dict[str, Any]], report_path: Path, status: str,
-                  resumed: int) -> dict[str, Any]:
+                  resumed: int, run_signature: str) -> dict[str, Any]:
     now = time.time()
     return {
         "ok": status == "finished" and bool(results) and all(bool(row.get("ok")) for row in results),
@@ -232,6 +243,7 @@ def _build_report(*, batch_id: str, method: str, started: float, workers: int,
         "elapsed_seconds": round(now - started, 3),
         "workers": workers,
         "probe_only": bool(probe_only),
+        "run_signature": run_signature,
         "resumed": resumed,
         "counts": _batch_counts(results, selected_count),
         "matrix": _matrix_summary(results, cells),
@@ -249,7 +261,7 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
         "authenticated": sum(bool(row.get("authenticated")) for row in results),
         "eligible": sum(row.get("eligible") is True for row in results),
         "attempted": sum(bool(row.get("attempted")) for row in results),
-        "completed": sum(bool(row.get("ok")) for row in results),
+        "completed": sum(bool(row.get("ok") and row.get("attempted")) for row in results),
         "trial_ineligible": sum("trial_ineligible" in value for value in decisions),
         "card_only": sum("card_only" in value or "promo_nonzero" in value for value in decisions),
         "approve_blocked": sum("approve" in value and "ready" not in value for value in decisions),
@@ -409,16 +421,44 @@ def _report_path(batch_id: str) -> Path:
     return runtime_file(CFG, "payment_batches") / f"{batch_id}.json"
 
 
-def _load_checkpoint(path: Path, method: str) -> dict[str, Any]:
+def _load_checkpoint(path: Path, method: str, run_signature: str) -> dict[str, Any]:
     if not path.is_file():
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         return {}
-    if not isinstance(value, dict) or value.get("payment_method") != method:
+    if (
+        not isinstance(value, dict)
+        or value.get("payment_method") != method
+        or value.get("run_signature") != run_signature
+    ):
         return {}
     return value
+
+
+def _batch_run_signature(
+    *,
+    method: str,
+    probe_only: bool,
+    jit_refresh: bool,
+    matrix: list[dict[str, Any]],
+    payment_kwargs: dict[str, Any],
+    proxy: Any,
+    retries: int,
+) -> str:
+    payload = {
+        "version": 1,
+        "payment_method": method,
+        "probe_only": bool(probe_only),
+        "jit_refresh": bool(jit_refresh),
+        "matrix": matrix,
+        "payment_kwargs": payment_kwargs,
+        "proxy": proxy or "",
+        "retries": int(retries),
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _write_checkpoint(path: Path, report: dict[str, Any]) -> None:

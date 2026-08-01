@@ -91,7 +91,7 @@ namespace SmsWorkbench
 
             var methodCombo = new ComboBox();
             AddPaymentMethodItems(methodCombo);
-            methodCombo.SelectedIndex = 9;
+            methodCombo.SelectedIndex = 8;
             Field("支付方式", methodCombo, 0, 0);
 
             var workersCombo = new ComboBox { ItemsSource = Enumerable.Range(1, 10).ToList(), SelectedItem = 2 };

@@ -108,6 +108,57 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertEqual(report["status"], "finished")
         self.assertEqual(report["resumed"], 1)
 
+    def test_probe_only_stops_after_jit_authentication(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link") as generate, \
+             patch.object(payment_batch, "_active_canary_pause") as active_pause, \
+             patch.object(payment_batch, "_record_canary_state") as record_canary, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", probe_only=True,
+            )
+        generate.assert_not_called()
+        active_pause.assert_not_called()
+        record_canary.assert_not_called()
+        self.assertEqual(report["counts"]["authenticated"], 1)
+        self.assertEqual(report["counts"]["attempted"], 0)
+        self.assertEqual(report["counts"]["completed"], 0)
+        self.assertEqual(report["results"][0]["decision"], "probe_authenticated")
+
+    def test_probe_only_canary_does_not_change_payment_canary_state(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link") as generate, \
+             patch.object(payment_batch, "_record_canary_state") as record_canary, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-canary.json"):
+            payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", probe_only=True, canary=1,
+            )
+        generate.assert_not_called()
+        record_canary.assert_not_called()
+
+    def test_probe_checkpoint_is_not_reused_for_payment_execution(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        payment = {"ok": True, "url": "https://example.test/pay"}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "same-id.json"):
+            payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="same-id", probe_only=True,
+            )
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="same-id", probe_only=False,
+            )
+        self.assertEqual(ensure.call_count, 2)
+        self.assertEqual(generate.call_count, 1)
+        self.assertEqual(report["resumed"], 0)
+        self.assertFalse(report["probe_only"])
+        self.assertEqual(report["counts"]["link_ready"], 1)
+
     def test_report_recursively_redacts_proxy_credentials(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {
