@@ -7,6 +7,11 @@ from sms_tool import payment_batch
 
 
 class PaymentBatchTests(unittest.TestCase):
+    def setUp(self):
+        config = patch.object(payment_batch, "CFG", {})
+        config.start()
+        self.addCleanup(config.stop)
+
     def test_batch_runs_jit_gate_and_reports_matrix_counts(self):
         auth = {
             "ok": True,
