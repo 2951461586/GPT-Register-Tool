@@ -337,10 +337,6 @@
     "auth_mode": "auto",
     "verify_after_import": true
   },
-  "agent_identity": {
-    "register_on_free_signup": false,
-    "registration_timeout": 30
-  },
   "codex_oauth": {
     "allow_passwordless_takeover": false,
     "auto_phone_verification": false,
