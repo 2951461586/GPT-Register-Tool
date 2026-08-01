@@ -167,7 +167,9 @@
                        CornerRadius="6">
                 <ScrollViewer x:Name="PART_ContentHost"
                                Margin="{TemplateBinding Padding}"
-                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                               HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                               VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"/>
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -239,8 +241,8 @@
         <Setter Property="Template" Value="{StaticResource ComboBoxToggleButton}"/>
       </Style>
 
-      <!-- Popup-local scroll bars avoid WPF-UI brush animations on dynamic theme brushes. -->
-      <Style x:Key="ComboBoxScrollBarThumbStyle" TargetType="Thumb">
+      <!-- App-owned scroll bars avoid WPF-UI brush animations on dynamic theme brushes. -->
+      <Style x:Key="StableScrollBarThumbStyle" TargetType="Thumb">
         <Setter Property="MinWidth" Value="6"/>
         <Setter Property="MinHeight" Value="18"/>
         <Setter Property="Background" Value="{DynamicResource LineStrong}"/>
@@ -271,7 +273,7 @@
         </Style.Triggers>
       </Style>
 
-      <Style x:Key="ComboBoxScrollBarPageButtonStyle" TargetType="RepeatButton">
+      <Style x:Key="StableScrollBarPageButtonStyle" TargetType="RepeatButton">
         <Setter Property="Focusable" Value="False"/>
         <Setter Property="Opacity" Value="0"/>
         <Setter Property="Template">
@@ -283,7 +285,41 @@
         </Setter>
       </Style>
 
-      <Style x:Key="ComboBoxScrollBarStyle" TargetType="ScrollBar">
+      <Style TargetType="PasswordBox">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="PasswordBox">
+              <Border x:Name="PasswordChrome"
+                      Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}"
+                      CornerRadius="6">
+                <ScrollViewer x:Name="PART_ContentHost"
+                              Margin="{TemplateBinding Padding}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                  <Setter TargetName="PasswordChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <Style x:Key="StableScrollBarStyle" TargetType="ScrollBar">
         <Setter Property="Width" Value="10"/>
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Background" Value="Transparent"/>
@@ -297,15 +333,15 @@
                   <Track.DecreaseRepeatButton>
                     <RepeatButton x:Name="DecreasePageButton"
                                   Command="{x:Static ScrollBar.PageUpCommand}"
-                                  Style="{StaticResource ComboBoxScrollBarPageButtonStyle}"/>
+                                  Style="{StaticResource StableScrollBarPageButtonStyle}"/>
                   </Track.DecreaseRepeatButton>
                   <Track.Thumb>
-                    <Thumb Style="{StaticResource ComboBoxScrollBarThumbStyle}"/>
+                    <Thumb Style="{StaticResource StableScrollBarThumbStyle}"/>
                   </Track.Thumb>
                   <Track.IncreaseRepeatButton>
                     <RepeatButton x:Name="IncreasePageButton"
                                   Command="{x:Static ScrollBar.PageDownCommand}"
-                                  Style="{StaticResource ComboBoxScrollBarPageButtonStyle}"/>
+                                  Style="{StaticResource StableScrollBarPageButtonStyle}"/>
                   </Track.IncreaseRepeatButton>
                 </Track>
               </Border>
@@ -324,6 +360,8 @@
           </Setter.Value>
         </Setter>
       </Style>
+
+      <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource StableScrollBarStyle}"/>
 
       <Style TargetType="ComboBox">
         <Setter Property="Height" Value="34"/>
@@ -401,7 +439,7 @@
                                   HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
                                   VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
                       <ScrollViewer.Resources>
-                        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource ComboBoxScrollBarStyle}"/>
+                        <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource StableScrollBarStyle}"/>
                       </ScrollViewer.Resources>
                       <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
                     </ScrollViewer>
