@@ -11,17 +11,104 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}">
   <Window.Resources>
+    <Style x:Key="SettingsScrollViewerStyle" TargetType="{x:Type ScrollViewer}">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type ScrollViewer}">
+            <Grid SnapsToDevicePixels="True">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                      Grid.Row="0"
+                                      Grid.Column="0"
+                                      Margin="{TemplateBinding Padding}"
+                                      CanContentScroll="{TemplateBinding CanContentScroll}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+              <ScrollBar x:Name="PART_VerticalScrollBar"
+                         Grid.Row="0"
+                         Grid.Column="1"
+                         Width="10"
+                         Maximum="{TemplateBinding ScrollableHeight}"
+                         ViewportSize="{TemplateBinding ViewportHeight}"
+                         Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                         Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                         Orientation="Vertical"
+                         Style="{StaticResource StableScrollBarStyle}"/>
+              <ScrollBar x:Name="PART_HorizontalScrollBar"
+                         Grid.Row="1"
+                         Grid.Column="0"
+                         Height="10"
+                         Maximum="{TemplateBinding ScrollableWidth}"
+                         ViewportSize="{TemplateBinding ViewportWidth}"
+                         Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                         Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                         Orientation="Horizontal"
+                         Style="{StaticResource StableScrollBarStyle}"/>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SettingsTextEditorStyle"
+           TargetType="TextBox"
+           BasedOn="{StaticResource {x:Type TextBox}}">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="SettingsMultilineEditorStyle"
+           TargetType="TextBox"
+           BasedOn="{StaticResource SettingsTextEditorStyle}">
+      <Setter Property="Height" Value="148"/>
+      <Setter Property="MinHeight" Value="148"/>
+      <Setter Property="Padding" Value="10,8,4,8"/>
+      <Setter Property="VerticalAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    </Style>
+    <Style x:Key="SettingsSecretEditorStyle"
+           TargetType="PasswordBox"
+           BasedOn="{StaticResource {x:Type PasswordBox}}">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="SettingsOptionsEditorStyle"
+           TargetType="ComboBox"
+           BasedOn="{StaticResource {x:Type ComboBox}}">
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
     <DataTemplate x:Key="TextFieldTemplate">
-      <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" MinHeight="34"/>
+      <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+               Style="{StaticResource SettingsTextEditorStyle}"/>
     </DataTemplate>
     <DataTemplate x:Key="SecretFieldTemplate">
-      <PasswordBox local:PasswordBoxBinding.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MinHeight="34" Padding="8,5"/>
+      <PasswordBox local:PasswordBoxBinding.BoundPassword="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   Style="{StaticResource SettingsSecretEditorStyle}"/>
     </DataTemplate>
     <DataTemplate x:Key="BooleanFieldTemplate">
       <CheckBox IsChecked="{Binding BooleanValue, Mode=TwoWay}" VerticalAlignment="Center"/>
     </DataTemplate>
     <DataTemplate x:Key="OptionsFieldTemplate">
-      <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Value, Mode=TwoWay}" MinHeight="34"/>
+      <ComboBox ItemsSource="{Binding Options}"
+                SelectedItem="{Binding Value, Mode=TwoWay}"
+                Style="{StaticResource SettingsOptionsEditorStyle}"/>
     </DataTemplate>
     <DataTemplate x:Key="MultilineFieldTemplate">
       <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
@@ -30,18 +117,39 @@
                VerticalScrollBarVisibility="Auto"
                HorizontalScrollBarVisibility="Auto"
                FontFamily="Consolas"
-               MinHeight="124"/>
+               Style="{StaticResource SettingsMultilineEditorStyle}">
+        <TextBox.Resources>
+          <Style TargetType="{x:Type ScrollViewer}" BasedOn="{StaticResource SettingsScrollViewerStyle}"/>
+        </TextBox.Resources>
+      </TextBox>
     </DataTemplate>
     <DataTemplate x:Key="SettingFieldTemplate">
-      <Grid Margin="0,0,0,12">
+      <Grid Margin="0,0,0,12" HorizontalAlignment="Stretch">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="220"/>
-          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="196"/>
+          <ColumnDefinition Width="*" MinWidth="0"/>
         </Grid.ColumnDefinitions>
-        <TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextSub}" Margin="0,8,14,0" TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding Label}" TextWrapping="Wrap">
+          <TextBlock.Style>
+            <Style TargetType="TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+              <Setter Property="Margin" Value="0,0,16,0"/>
+              <Setter Property="VerticalAlignment" Value="Center"/>
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Multiline">
+                  <Setter Property="Margin" Value="0,8,16,0"/>
+                  <Setter Property="VerticalAlignment" Value="Top"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </TextBlock.Style>
+        </TextBlock>
         <ContentControl Grid.Column="1" Content="{Binding}">
           <ContentControl.Style>
             <Style TargetType="ContentControl">
+              <Setter Property="HorizontalAlignment" Value="Stretch"/>
+              <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+              <Setter Property="VerticalContentAlignment" Value="Stretch"/>
               <Setter Property="ContentTemplate" Value="{StaticResource TextFieldTemplate}"/>
               <Style.Triggers>
                 <DataTrigger Binding="{Binding Kind}" Value="Secret">
@@ -101,14 +209,23 @@
       </Border>
 
       <Border Grid.Column="2" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="6" Padding="22">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <ItemsControl ItemsSource="{Binding SelectedCategory.Sections}">
+        <ScrollViewer x:Name="SettingsContentScrollViewer"
+                      Style="{StaticResource SettingsScrollViewerStyle}"
+                      Padding="0,0,12,0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding SelectedCategory.Sections}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Margin="0,0,0,18">
                   <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
                   <Border Height="1" Background="{DynamicResource Line}" Margin="0,0,0,12"/>
-                  <ItemsControl ItemsSource="{Binding Fields}" ItemTemplate="{StaticResource SettingFieldTemplate}"/>
+                  <ItemsControl ItemsSource="{Binding Fields}"
+                                ItemTemplate="{StaticResource SettingFieldTemplate}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"/>
                 </StackPanel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

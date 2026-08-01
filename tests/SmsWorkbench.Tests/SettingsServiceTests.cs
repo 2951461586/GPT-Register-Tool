@@ -30,6 +30,11 @@ public sealed class SettingsServiceTests
               "protocol_payments": {
                 "matrix": { "cells": [] },
                 "methods": { "blik": { "blik_code": "123456" } }
+              },
+              "agent_identity": {
+                "register_on_free_signup": true,
+                "registration_timeout": 30,
+                "import_note": "preserve"
               }
             }
             """, new UTF8Encoding(false));
@@ -54,9 +59,26 @@ public sealed class SettingsServiceTests
             .ToArray();
         Assert.Equal(ExpectedPaymentProxyOrder, paymentProxyPool);
         Assert.Null(root["protocol_payments"]!["methods"]!["blik"]!["blik_code"]);
+        Assert.Null(root["agent_identity"]!["register_on_free_signup"]);
+        Assert.Null(root["agent_identity"]!["registration_timeout"]);
+        Assert.Equal("preserve", root["agent_identity"]!["import_note"]!.GetValue<string>());
         Assert.Empty(Directory.GetFiles(fixture.Path, "config.json.tmp.*"));
         byte[] bytes = File.ReadAllBytes(configPath);
         Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+    }
+
+    [Fact]
+    public void CatalogOmitsRegistrationAgentIdentitySettingsButKeepsExplicitImportMode()
+    {
+        Assert.DoesNotContain(
+            SettingsCatalog.Categories.SelectMany(category => category.Sections),
+            section => string.Equals(section.Title, "Agent Identity", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            SettingsCatalog.AllFields,
+            field => field.Key.StartsWith("agent_identity_", StringComparison.Ordinal));
+
+        SettingDefinition importMode = SettingsCatalog.AllFields.Single(field => field.Key == "sub2api_auth_mode");
+        Assert.Contains("agent_identity", importMode.Options);
     }
 
     [Fact]

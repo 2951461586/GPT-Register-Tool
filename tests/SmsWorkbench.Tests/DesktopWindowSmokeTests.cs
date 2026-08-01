@@ -115,6 +115,79 @@ public sealed class DesktopWindowSmokeTests
         }
     }
 
+    private static void VerifySettingsLayout(
+        SettingsWindow settings,
+        SettingsViewModel viewModel)
+    {
+        SettingsCategoryViewModel networkCategory = viewModel.Categories.Single(category => category.Title == "网络与支付");
+        string proxyLines = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, 12).Select(index => $"http://proxy-{index:D2}-{new string('x', 90)}.example:8080"));
+        foreach (SettingFieldViewModel field in networkCategory.Sections
+                     .SelectMany(section => section.Fields)
+                     .Where(field => field.Key is "registration_proxy_pool" or "protocol_proxy_pool"))
+        {
+            field.Value = proxyLines;
+        }
+
+        viewModel.SelectedCategory = networkCategory;
+        FlushDispatcher();
+        settings.UpdateLayout();
+        FlushDispatcher();
+
+        FrameworkElement[] editors = FindVisualChildren<FrameworkElement>(settings)
+            .Where(element => element.IsVisible
+                && element.ActualWidth > 0
+                && element.DataContext is SettingFieldViewModel
+                && element is TextBox or PasswordBox or ComboBox)
+            .ToArray();
+        Assert.True(editors.Length >= 10);
+
+        Rect[] editorBounds = editors.Select(editor => BoundsRelativeTo(editor, settings)).ToArray();
+        Assert.True(editorBounds.Max(bounds => bounds.Left) - editorBounds.Min(bounds => bounds.Left) <= 0.5);
+        Assert.True(editorBounds.Max(bounds => bounds.Right) - editorBounds.Min(bounds => bounds.Right) <= 0.5);
+
+        var contentScrollViewer = Assert.IsType<ScrollViewer>(settings.FindName("SettingsContentScrollViewer"));
+        var outerVerticalBar = Assert.IsType<ScrollBar>(
+            contentScrollViewer.Template.FindName("PART_VerticalScrollBar", contentScrollViewer));
+        Assert.Equal(Visibility.Visible, outerVerticalBar.Visibility);
+        Rect outerBarBounds = BoundsRelativeTo(outerVerticalBar, settings);
+        Assert.All(editorBounds, bounds => Assert.True(bounds.Right <= outerBarBounds.Left - 8));
+
+        TextBox[] proxyEditors = editors
+            .OfType<TextBox>()
+            .Where(editor => editor.DataContext is SettingFieldViewModel field
+                && field.Key is "registration_proxy_pool" or "protocol_proxy_pool")
+            .ToArray();
+        Assert.Equal(2, proxyEditors.Length);
+        foreach (TextBox proxyEditor in proxyEditors)
+        {
+            Assert.Equal(148, proxyEditor.ActualHeight, precision: 3);
+            var innerScrollViewer = Assert.IsType<ScrollViewer>(
+                proxyEditor.Template.FindName("PART_ContentHost", proxyEditor));
+            var scrollContent = Assert.IsType<ScrollContentPresenter>(
+                innerScrollViewer.Template.FindName("PART_ScrollContentPresenter", innerScrollViewer));
+            var horizontalBar = Assert.IsType<ScrollBar>(
+                innerScrollViewer.Template.FindName("PART_HorizontalScrollBar", innerScrollViewer));
+            var verticalBar = Assert.IsType<ScrollBar>(
+                innerScrollViewer.Template.FindName("PART_VerticalScrollBar", innerScrollViewer));
+
+            Assert.Equal(Visibility.Visible, horizontalBar.Visibility);
+            Assert.Equal(Visibility.Visible, verticalBar.Visibility);
+            Rect contentBounds = BoundsRelativeTo(scrollContent, proxyEditor);
+            Rect horizontalBounds = BoundsRelativeTo(horizontalBar, proxyEditor);
+            Rect verticalBounds = BoundsRelativeTo(verticalBar, proxyEditor);
+            Assert.True(contentBounds.Bottom <= horizontalBounds.Top + 0.5);
+            Assert.True(contentBounds.Right <= verticalBounds.Left + 0.5);
+        }
+    }
+
+    private static Rect BoundsRelativeTo(FrameworkElement element, Visual ancestor)
+    {
+        Point topLeft = element.TransformToAncestor(ancestor).Transform(new Point());
+        return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
+    }
+
     [Fact]
     public void SettingsPaymentAndSharedControlsLoadOnStaThread()
     {
@@ -130,9 +203,14 @@ public sealed class DesktopWindowSmokeTests
             VerifyComboBoxPopup();
             VerifyScrollableEditorsAndTables();
 
-            var settings = new SettingsWindow(new SettingsViewModel(
+            var settingsViewModel = new SettingsViewModel(
                 new SettingsService(new TestApplicationPaths(fixture.Path)),
-                launcher));
+                launcher);
+            var settings = new SettingsWindow(settingsViewModel)
+            {
+                Width = 920,
+                Height = 660
+            };
             settings.Show();
             settings.UpdateLayout();
             Assert.True(settings.ActualWidth >= settings.MinWidth);
@@ -148,6 +226,7 @@ public sealed class DesktopWindowSmokeTests
             secretBox.Password = "second-edit";
             Assert.Equal("second-edit", secretField.Value);
             Assert.NotNull(secretBox.GetBindingExpression(PasswordBoxBinding.BoundPasswordProperty));
+            VerifySettingsLayout(settings, settingsViewModel);
             settings.Close();
 
             var payment = new PaymentBatchWindow(new PaymentBatchViewModel(

@@ -87,10 +87,7 @@ namespace SmsWorkbench
                     Integer("sub2api_priority", "优先级", "sub2api.priority"),
                     Integer("sub2api_concurrency", "账号并发", "sub2api.concurrency"),
                     Options("sub2api_auth_mode", "凭据模式", "sub2api.auth_mode", "auto", "auto", "oauth", "agent_identity"),
-                    Boolean("sub2api_verify_after_import", "导入后连通测试", "sub2api.verify_after_import", true)),
-                Section("Agent Identity",
-                    Boolean("agent_identity_register_on_free_signup", "注册后自动生成", "agent_identity.register_on_free_signup", false),
-                    Integer("agent_identity_registration_timeout", "注册超时秒", "agent_identity.registration_timeout", "30"))),
+                    Boolean("sub2api_verify_after_import", "导入后连通测试", "sub2api.verify_after_import", true))),
 
             Category("网络与支付",
                 Section("基础网络",

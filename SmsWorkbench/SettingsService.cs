@@ -94,6 +94,9 @@ namespace SmsWorkbench
                 RemovePath(root, "phone_reuse.smsbower.pool_size");
                 RemovePath(root, "phone_reuse.phone_pool");
                 RemovePath(root, "protocol_payments.methods.blik.blik_code");
+                RemovePath(root, "agent_identity.register_on_free_signup");
+                RemovePath(root, "agent_identity.registration_timeout");
+                RemoveEmptyObject(root, "agent_identity");
 
                 WriteAtomic(root);
                 return new SettingsSaveResult(true);
@@ -258,6 +261,12 @@ namespace SmsWorkbench
                 current = child;
             }
             current.Remove(segments[^1]);
+        }
+
+        private static void RemoveEmptyObject(JsonObject root, string propertyName)
+        {
+            if (root[propertyName] is JsonObject value && value.Count == 0)
+                root.Remove(propertyName);
         }
     }
 }
