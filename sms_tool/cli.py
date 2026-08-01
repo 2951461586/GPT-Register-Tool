@@ -26,27 +26,6 @@ from .commands.helpers import (
 )
 
 
-def _payment_link_enabled(payment_method, args):
-    if args.skip_paypal_link:
-        return False
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    if payment_method != "paypal":
-        method_cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-        return bool(method_cfg.get("auto_generate", paypal_cfg.get("auto_generate", True)))
-    return bool(paypal_cfg.get("auto_generate", True))
-
-
-def _payment_result_has_artifact(result) -> bool:
-    if not isinstance(result, dict) or not result.get("ok"):
-        return False
-    if (
-        str(result.get("operation") or "").lower() == "execute_payment"
-        and str(result.get("status") or "").lower() == "completed"
-    ):
-        return True
-    return bool(result.get("url") or result.get("qr_path") or result.get("qr_data"))
-
-
 def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
     requested = max(1, int(getattr(args, "workers", 1) or 1))
     cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
@@ -282,7 +261,7 @@ def main():
     parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
-    parser.add_argument("--skip-paypal-link", action="store_true", help="Do not generate PayPal payment link after registration")
+    parser.add_argument("--skip-paypal-link", action="store_true", help="Deprecated compatibility flag; registration never generates payment links")
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
     parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
@@ -501,12 +480,6 @@ def main():
         _run_target_at200(args, base_dir)
         return
 
-    payment_method = _payment_method(args)
-    paypal_link = _payment_link_enabled(payment_method, args)
-    if payment_method == "blik" and paypal_link:
-        print("[Error] BLIK payment execution requires a fresh six-digit code and is only supported by the single-account payment command; use --skip-paypal-link for registration")
-        raise SystemExit(2)
-
     pipeline_started = time.time()
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)
@@ -550,8 +523,6 @@ def main():
     # Phone registration mode (via SMSBower)
     if getattr(args, "phone_register", False):
         from .registration import run_phone_register
-        payment_method = _payment_method(args)
-        paypal_link = _payment_link_enabled(payment_method, args)
         proxy_pool = _proxy_pool_values(args)
         if len(proxy_pool) > 1:
             from .batch_runner import select_registration_proxy_base
@@ -566,10 +537,7 @@ def main():
             result = run_phone_register(
                 proxy=registration_proxy,
                 password=args.password,
-                paypal_link=paypal_link,
                 codex_oauth=not args.registration_at_only,
-                payment_method=payment_method,
-                paypal_generation_type=args.paypal_generation_type,
                 smsbower_country=args.smsbower_country,
             )
             results.append(result)
@@ -581,7 +549,6 @@ def main():
             args, results, effective_count=effective_count, base_dir=base_dir,
             pipeline_started=pipeline_started, mailbox_seconds=0,
             register_seconds=time.time() - pipeline_started,
-            paypal_link=paypal_link, payment_method=payment_method,
         )
         return
 
@@ -593,12 +560,9 @@ def main():
             proxy=args.proxy,
             proxy_pool=proxy_pool,
             mailboxes=mailboxes,
-            paypal_link=paypal_link,
             workers=args.workers,
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
-            payment_method=payment_method,
-            paypal_generation_type=args.paypal_generation_type,
             registration_mode=args.registration_mode,
         )
     else:
@@ -612,11 +576,8 @@ def main():
             proxy=(proxy_pool[0] if proxy_pool else args.proxy),
             password=args.password,
             mailbox=mailbox,
-            paypal_link=paypal_link,
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
-            payment_method=payment_method,
-            paypal_generation_type=args.paypal_generation_type,
             registration_mode=args.registration_mode,
         )]
     register_seconds = time.time() - register_started
@@ -629,8 +590,6 @@ def main():
         pipeline_started=pipeline_started,
         mailbox_seconds=mailbox_seconds,
         register_seconds=register_seconds,
-        paypal_link=paypal_link,
-        payment_method=payment_method,
     )
 
 
@@ -642,8 +601,6 @@ def _save_registration_results(
     pipeline_started,
     mailbox_seconds,
     register_seconds,
-    paypal_link,
-    payment_method,
 ):
     from .storage import record_registration_audit
 
@@ -717,17 +674,6 @@ def _save_registration_results(
             f"{quality['requested']} halt={quality['halt_replenishment']}"
         )
 
-    paypal_failures = [
-        r for r in results
-        if r and r.get("success") and paypal_link and not _payment_result_has_artifact(r.get("paypal") or {})
-    ]
-    if paypal_failures:
-        for data in paypal_failures:
-            paypal = data.get("paypal") or {}
-            label = _payment_method_label(payment_method)
-            print(f"[Error] {label} link generation failed for {data.get('email', '')}: {paypal.get('error', 'missing payment artifact')}")
-        raise SystemExit(3)
-
     if getattr(args, "import_cpa", False):
         _import_registered_accounts(args, import_emails)
     return {
@@ -779,12 +725,9 @@ def _run_target_at200(args, base_dir):
                 proxy=args.proxy,
                 proxy_pool=_proxy_pool_values(args),
                 mailboxes=mailboxes,
-                paypal_link=False,
                 workers=args.workers,
                 phone_pool=phone_pool,
                 codex_oauth=not args.registration_at_only,
-                payment_method=_payment_method(args),
-                paypal_generation_type=args.paypal_generation_type,
                 registration_mode=args.registration_mode,
             )
             saved = _save_registration_results(
@@ -795,8 +738,6 @@ def _run_target_at200(args, base_dir):
                 pipeline_started=round_started,
                 mailbox_seconds=0,
                 register_seconds=time.time() - round_started,
-                paypal_link=False,
-                payment_method=_payment_method(args),
             ) or {}
             gained = int(saved.get("success") or 0)
             active += gained

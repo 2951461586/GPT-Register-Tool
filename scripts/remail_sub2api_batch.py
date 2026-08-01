@@ -246,7 +246,6 @@ def main():
             result = run_email(
                 proxy=proxy,
                 mailbox=mailbox,
-                paypal_link=False,
                 codex_oauth=True,
                 phone_pool=phone_pool,
             )

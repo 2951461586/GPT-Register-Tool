@@ -41,12 +41,9 @@ def run_batch_impl(
     proxy=None,
     proxy_pool=None,
     mailboxes=None,
-    paypal_link=True,
     workers=4,
     phone_pool=None,
     codex_oauth=True,
-    payment_method="paypal",
-    paypal_generation_type=None,
     registration_mode=None,
     max_attempts=2,
     retry_delay_seconds=1.0,
@@ -121,12 +118,9 @@ def run_batch_impl(
                 result = run_email_func(
                     proxy=worker_proxy,
                     mailbox=mailbox,
-                    paypal_link=paypal_link,
                     phone_pool=phone_pool,
                     codex_oauth=codex_oauth,
                     sentinel_data=sentinel_data,
-                    payment_method=payment_method,
-                    paypal_generation_type=paypal_generation_type,
                     registration_mode=registration_mode,
                 )
             except Exception as e:

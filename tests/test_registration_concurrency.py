@@ -1,3 +1,4 @@
+import inspect
 import tempfile
 import unittest
 from pathlib import Path
@@ -359,10 +360,10 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             return {"success": False, "email": mailbox.email, "error": "stub"}
 
         with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-            results = run_batch(count=4, proxy=None, mailboxes=mailboxes, paypal_link=True, workers=4)
+            results = run_batch(count=4, proxy=None, mailboxes=mailboxes, workers=4)
 
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
-        self.assertEqual(seen, ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
+        self.assertCountEqual(seen, ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
 
     def test_run_batch_never_shares_sentinel_data_between_accounts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -381,7 +382,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                 return {"success": True, "email": kwargs["mailbox"].email}
 
             with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-                results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, paypal_link=True, workers=2)
+                results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, workers=2)
 
             self.assertEqual(seen_sentinels, [None, None, None])
             self.assertEqual([r["email"] for r in results], [
@@ -426,29 +427,12 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         self.assertEqual(_cookie_jar_header(CookieJar()), "a=1; b=2")
 
-    def test_run_batch_passes_paypal_generation_type_to_workers(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "mailboxes.txt"
-            path.write_text("a+oai01@hotmail.com----pw----client----refresh-a\n", encoding="utf-8")
-            mailboxes = _parse_chatai_mailbox_file(path)
+    def test_run_batch_has_no_payment_arguments(self):
+        parameters = inspect.signature(run_batch).parameters
 
-        seen = []
-
-        def fake_run_email(**kwargs):
-            seen.append(kwargs.get("paypal_generation_type"))
-            return {"success": True, "email": kwargs["mailbox"].email}
-
-        with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
-            run_batch(
-                count=1,
-                proxy=None,
-                mailboxes=mailboxes,
-                paypal_link=True,
-                workers=1,
-                paypal_generation_type="paypal_direct_zero_due",
-            )
-
-        self.assertEqual(seen, ["paypal_direct_zero_due"])
+        self.assertNotIn("paypal_link", parameters)
+        self.assertNotIn("payment_method", parameters)
+        self.assertNotIn("paypal_generation_type", parameters)
 
     def test_stored_registration_password_reuses_non_terminal_failed_password(self):
         with patch("sms_tool.storage.get_account_record", return_value={

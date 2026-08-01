@@ -15,7 +15,7 @@ class RegistrationProgressTests(unittest.TestCase):
             @registration_progress.track_registration
             def run(**kwargs):
                 registration_progress.registration_stage("auth_flow")
-                registration_progress.registration_stage("payment_link")
+                registration_progress.registration_stage("access_token_probe")
                 return {"success": True, "email": "user@example.com"}
 
             with patch.object(registration_progress, "runtime_file", return_value=path):
@@ -24,7 +24,7 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertEqual(result["registration_progress"]["last_stage"], "completed")
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertTrue(stored["success"])
-            self.assertEqual([item["stage"] for item in stored["events"]][-3:], ["auth_flow", "payment_link", "completed"])
+            self.assertEqual([item["stage"] for item in stored["events"]][-3:], ["auth_flow", "access_token_probe", "completed"])
 
 
 if __name__ == "__main__":

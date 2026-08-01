@@ -7,7 +7,7 @@ namespace SmsWorkbench
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
             AddRegistrationProxy(args);
-            AddPaypalOption(args);
+            AddRegistrationOnlyOption(args);
             RunBackend("邮箱池注册", args);
         }
 
@@ -89,8 +89,8 @@ namespace SmsWorkbench
                 var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(pendingArgs);
                 AddRegistrationProxy(pendingArgs);
-                AddPaypalOption(pendingArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
-                RunBackend(selectedOptions.SkipPaymentLink ? "选中未注册邮箱注册" : "选中未注册邮箱注册+支付链接", pendingArgs);
+                AddRegistrationOnlyOption(pendingArgs);
+                RunBackend("选中未注册邮箱注册", pendingArgs);
                 return;
             }
             if (pendingRowCount > 0)
@@ -106,8 +106,8 @@ namespace SmsWorkbench
                 var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
                 AddRegistrationAtOnlyArgs(selectedArgs);
                 AddRegistrationProxy(selectedArgs);
-                AddPaypalOption(selectedArgs, selectedOptions.PaymentMethod, selectedOptions.SkipPaymentLink);
-                RunBackend(selectedOptions.SkipPaymentLink ? "选中邮箱注册" : "选中邮箱注册+支付链接", selectedArgs);
+                AddRegistrationOnlyOption(selectedArgs);
+                RunBackend("选中邮箱注册", selectedArgs);
                 return;
             }
 
@@ -123,8 +123,8 @@ namespace SmsWorkbench
                     options.Count.ToString(),
                 };
                 AddRegistrationProxy(phoneArgs);
-                AddPaypalOption(phoneArgs, options.PaymentMethod, options.SkipPaymentLink);
-                RunBackend(options.SkipPaymentLink ? "手机号注册 (SMSBower)" : "手机号注册+支付链接 (SMSBower)", phoneArgs);
+                AddRegistrationOnlyOption(phoneArgs);
+                RunBackend("手机号注册 (SMSBower)", phoneArgs);
                 return;
             }
 
@@ -142,8 +142,8 @@ namespace SmsWorkbench
                 };
                 AddRegistrationAtOnlyArgs(cfArgs);
                 AddRegistrationProxy(cfArgs);
-                AddPaypalOption(cfArgs, options.PaymentMethod, options.SkipPaymentLink);
-                RunBackend(options.SkipPaymentLink ? "CFWorker邮箱注册" : "CFWorker邮箱注册+支付链接", cfArgs);
+                AddRegistrationOnlyOption(cfArgs);
+                RunBackend("CFWorker邮箱注册", cfArgs);
                 return;
             }
 
@@ -154,9 +154,10 @@ namespace SmsWorkbench
                     "--target-at200", options.Count.ToString(),
                     "--buy-remail-mailbox", "--remail-service-mode", "purchase",
                     "--workers", options.Workers.ToString(),
-                    "--phone-reuse", "--phone-source", "smsbower", "--skip-paypal-link"
+                    "--phone-reuse", "--phone-source", "smsbower"
                 };
                 AddRegistrationProxy(targetArgs);
+                AddRegistrationOnlyOption(targetArgs);
                 RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
                 return;
             }
@@ -164,7 +165,6 @@ namespace SmsWorkbench
             string mailboxArg = "--chatai-mailbox-file";
             string mailboxFile = GetChataiMailboxFilePath();
             int count = options.Count;
-            string taskName = options.SkipPaymentLink ? "一键注册" : "一键注册+支付链接";
             if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
             {
                 ShowThemedInfoDialog("缺少邮箱文件", "未选择邮箱，且未找到 Chatai 邮箱文件。请先导入邮箱，或勾选要注册的邮箱记录。");
@@ -173,8 +173,8 @@ namespace SmsWorkbench
             var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
             AddRegistrationAtOnlyArgs(args);
             AddRegistrationProxy(args);
-            AddPaypalOption(args, options.PaymentMethod, options.SkipPaymentLink);
-            RunBackend(taskName, args);
+            AddRegistrationOnlyOption(args);
+            RunBackend("一键注册", args);
         }
 
         private void AddRegistrationAtOnlyArgs(List<string> args)
@@ -385,16 +385,14 @@ namespace SmsWorkbench
                 Title = "选中邮箱注册",
                 Owner = this,
                 Width = 560,
-                Height = 256,
+                Height = 196,
                 MinWidth = 480,
-                MinHeight = 230,
+                MinHeight = 180,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -420,37 +418,12 @@ namespace SmsWorkbench
             root.Children.Add(workerLabel);
             root.Children.Add(workerBox);
 
-            var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            AddPaymentMethodItems(paymentBox);
-            paymentBox.SelectedIndex = 0;
-            Grid.SetRow(paymentLabel, 2);
-            Grid.SetColumn(paymentLabel, 0);
-            Grid.SetRow(paymentBox, 2);
-            Grid.SetColumn(paymentBox, 1);
-            root.Children.Add(paymentLabel);
-            root.Children.Add(paymentBox);
-
-            var skipPaymentBox = new CheckBox
-            {
-                Content = "只注册，不生成支付链接",
-                IsChecked = SkipPaypalLink,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(skipPaymentBox, 3);
-            Grid.SetColumn(skipPaymentBox, 1);
-            root.Children.Add(skipPaymentBox);
-            skipPaymentBox.Checked += (_, __) => paymentBox.IsEnabled = false;
-            skipPaymentBox.Unchecked += (_, __) => paymentBox.IsEnabled = true;
-            paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
-
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 4);
+            Grid.SetRow(actions, 2);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -461,9 +434,7 @@ namespace SmsWorkbench
                 {
                     Source = "pool",
                     Count = Math.Max(1, selectedCount),
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount()),
-                    PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal"),
-                    SkipPaymentLink = skipPaymentBox.IsChecked == true
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount())
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
@@ -480,16 +451,14 @@ namespace SmsWorkbench
                 Title = "一键注册",
                 Owner = this,
                 Width = 560,
-                Height = 320,
+                Height = 250,
                 MinWidth = 480,
-                MinHeight = 300,
+                MinHeight = 230,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -529,46 +498,10 @@ namespace SmsWorkbench
             root.Children.Add(workerLabel);
             root.Children.Add(workerBox);
 
-            var paymentLabel = new TextBlock { Text = "生链方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var paymentBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            AddPaymentMethodItems(paymentBox);
-            paymentBox.SelectedIndex = 0;
-            Grid.SetRow(paymentLabel, 3);
-            Grid.SetColumn(paymentLabel, 0);
-            Grid.SetRow(paymentBox, 3);
-            Grid.SetColumn(paymentBox, 1);
-            root.Children.Add(paymentLabel);
-            root.Children.Add(paymentBox);
-
-            var skipPaymentBox = new CheckBox
-            {
-                Content = "只注册，不生成支付链接",
-                IsChecked = SkipPaypalLink,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(skipPaymentBox, 4);
-            Grid.SetColumn(skipPaymentBox, 1);
-            root.Children.Add(skipPaymentBox);
-            skipPaymentBox.Checked += (_, __) => paymentBox.IsEnabled = false;
-            skipPaymentBox.Unchecked += (_, __) => paymentBox.IsEnabled = true;
-            paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
-
             void UpdateTargetControls()
             {
                 bool targetMode = string.Equals((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string, "remail_target", StringComparison.OrdinalIgnoreCase);
                 countLabel.Text = targetMode ? "注册数量" : "数量";
-                if (targetMode)
-                {
-                    skipPaymentBox.IsChecked = true;
-                    skipPaymentBox.IsEnabled = false;
-                    paymentBox.IsEnabled = false;
-                }
-                else
-                {
-                    skipPaymentBox.IsEnabled = true;
-                    paymentBox.IsEnabled = skipPaymentBox.IsChecked != true;
-                }
             }
             sourceBox.SelectionChanged += (_, __) => UpdateTargetControls();
             UpdateTargetControls();
@@ -578,7 +511,7 @@ namespace SmsWorkbench
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 5);
+            Grid.SetRow(actions, 3);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -592,9 +525,7 @@ namespace SmsWorkbench
                 {
                     Source = selectedSource,
                     Count = count,
-                    Workers = workers,
-                    PaymentMethod = NormalizePaymentMethod(((paymentBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal"),
-                    SkipPaymentLink = skipPaymentBox.IsChecked == true
+                    Workers = workers
                 };
                 CountText = count.ToString();
                 dialog.DialogResult = true;

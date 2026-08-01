@@ -1,5 +1,4 @@
 import json
-import re
 import time
 
 from .codex_sentinel import load_cached_sentinel, with_sentinel
@@ -201,63 +200,6 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=6, delay=2.0)
         if attempt < attempts:
             time.sleep(delay)
     return last
-
-
-
-def _generate_paypal_link(access_token, proxy=None, paypal_generation_type=None):
-    return _generate_payment_link(
-        access_token,
-        proxy=proxy,
-        payment_method="paypal",
-        paypal_generation_type=paypal_generation_type,
-    )
-
-
-def _generate_payment_link(access_token, proxy=None, payment_method="paypal", paypal_generation_type=None):
-    try:
-        from .payment_link_manager import generate_payment_link
-    except Exception as e:
-        return {"ok": False, "error": f"load_gen_pp_link_failed: {e}"}
-    try:
-        protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
-        pool = protocol.get("proxy_pool") or []
-        if isinstance(pool, str):
-            pool = [item.strip() for item in re.split(r"[\r\n,;]+", pool) if item.strip()]
-        payment_kwargs = {}
-        if pool:
-            from .paypal_proxy import select_proxy_from_pool
-            from .payment_link_manager import PAYMENT_METHODS, normalize_payment_method
-
-            method = normalize_payment_method(payment_method) or "paypal"
-            spec = PAYMENT_METHODS.get(method)
-            country = spec.country if spec else "US"
-            selected, attempts = select_proxy_from_pool(pool, country, "payment")
-            if not selected:
-                return {
-                    "ok": False,
-                    "error": "payment_proxy_pool_unavailable",
-                    "target_country": country,
-                    "attempts": attempts,
-                }
-            proxy = selected
-            payment_kwargs = {
-                "checkout_proxy": selected,
-                "provider_proxy": selected,
-                "approve_proxy": selected,
-                "target_country": country,
-                "checkout_country": country,
-            }
-        return generate_payment_link(
-            access_token,
-            proxy=proxy,
-            payment_method=payment_method,
-            paypal_generation_type=paypal_generation_type,
-            **payment_kwargs,
-        )
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
 # ==========================================
 # Core Email Registration Flow
 # ==========================================
