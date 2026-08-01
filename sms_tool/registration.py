@@ -1515,6 +1515,7 @@ def _build_session_file(data):
     paypal_status = (
         data.get("paypal_status")
         or paypal.get("paypal_status")
+        or ("qr_ready" if paypal.get("ok") and (paypal.get("qr_path") or paypal.get("qr_data")) else "")
         or paypal.get("status")
         or ("pm_created" if paypal.get("ok") and str(paypal.get("pm_id") or "").startswith("pm_") else "")
         or ("link_ready" if paypal.get("url") else "")

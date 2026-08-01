@@ -165,7 +165,6 @@ namespace SmsWorkbench
             box.Items.Add(new ComboBoxItem { Content = "iDEAL 荷兰协议", Tag = "ideal" });
             box.Items.Add(new ComboBoxItem { Content = "PIX 巴西协议", Tag = "pix" });
             box.Items.Add(new ComboBoxItem { Content = "Kakao Pay 韩国协议", Tag = "kakao" });
-            box.Items.Add(new ComboBoxItem { Content = "BLIK 波兰协议", Tag = "blik" });
             box.Items.Add(new ComboBoxItem { Content = "TWINT 瑞士协议", Tag = "twint" });
             box.Items.Add(new ComboBoxItem { Content = "直卡 Checkout 直连结账", Tag = "direct_card" });
             box.Items.Add(new ComboBoxItem { Content = "MoMo 越南扫码", Tag = "momo" });

@@ -413,9 +413,12 @@ email list, applies bounded method-specific concurrency, runs the JIT gate per
 worker, assigns configured eligibility-matrix cells by payment method and
 registration country, retries only classified transient failures, and writes an
 atomic token-free checkpoint after every completed account under
-`runtime/payment_batches/`. `--payment-batch-id` makes the cohort stable;
-`--payment-canary` limits the cohort and `--payment-probe-only` stops the MoMo
-flow before payment-method creation.
+`runtime/payment_batches/`. `--payment-batch-id` makes the cohort stable only
+while the execution mode, matrix, proxy, retry, and JIT settings retain the same
+hashed run signature; a signature mismatch starts a fresh run instead of reusing
+incompatible rows. `--payment-canary` limits the cohort and
+`--payment-probe-only` stops after JIT authentication and registration-country
+matrix validation without invoking any payment adapter.
 
 Registration failures no longer enter `accounts` through CLI orchestration.
 They are written to `registration_audit`; a successful initial AT probe is a
