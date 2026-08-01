@@ -10,7 +10,7 @@ configuration, generated sessions, and debug output stay outside this directory.
   and forbidden cross-module dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
-- [v2026.08.01 Release Notes](release-v2026.08.01.md) - account-pool cleanup,
+- [v2026.08.01.1 Release Notes](release-v2026.08.01.1.md) - account-pool cleanup,
   retired module removal, and inbox plain-text rendering.
 - [PayPal Zero-Due Link](paypal-zero-due-link.md) - promotion-update stage
   protocol, config keys, and region matrix search.

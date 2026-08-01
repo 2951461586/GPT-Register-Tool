@@ -109,7 +109,7 @@ internal static class Program
                 throw new InvalidOperationException($"Refusing to extract unsafe entry: {entry.FullName}");
             }
 
-            if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal))
+            if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
             {
                 Directory.CreateDirectory(targetPath);
                 continue;
