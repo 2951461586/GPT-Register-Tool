@@ -14,7 +14,7 @@
 
 ## Tooling
 
-- Added `scripts/probe_account_liveness.py`: a lightweight account-liveness probe that checks `/backend-api/me` per account without doing an email-OTP relogin, and reports the 200 / 401 / deactivated ratio.
+- Added `scripts/probe_account_liveness.py`: a lightweight account-liveness probe that reuses the canonical `/backend-api/wham/usage` contract per account without doing an email-OTP relogin, and reports the 2xx / 401 / inconclusive ratio.
 
 ## Chores
 

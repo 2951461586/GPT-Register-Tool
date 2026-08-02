@@ -13,9 +13,9 @@ from pathlib import Path
 
 from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 from .codex_oauth import collect_codex_oauth_tokens
-from .cpa_import import (
-    _account_is_permanently_deactivated,
-    probe_local_codex_quota,
+from .account_liveness import probe_account_liveness
+from .account_recovery import (
+    is_permanently_deactivated,
     refresh_local_quota_statuses,
     relogin_codex_account,
 )
@@ -156,7 +156,7 @@ def _scan_one(
     data, json_path = _load_seed_session(email=email, session_file=session_file)
     data.setdefault("email", email)
 
-    if _account_is_permanently_deactivated(data):
+    if is_permanently_deactivated(data):
         result = _result(
             index,
             email,
@@ -751,7 +751,7 @@ def _probe_existing_access_token(data, proxy=None, timeout=120):
     if not str((data or {}).get("access_token") or "").strip():
         return {}
     try:
-        return probe_local_codex_quota(
+        return probe_account_liveness(
             data,
             proxy=proxy,
             timeout=min(max(int(timeout or 30), 5), 45),

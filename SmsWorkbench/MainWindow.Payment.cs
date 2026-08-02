@@ -168,16 +168,14 @@ namespace SmsWorkbench
                 SelectedIndex = 0,
                 Margin = new Thickness(0, 0, 0, 12),
             };
-            methodCombo.Items.Add(new ComboBoxItem { Content = "PayPal — 美国/全球 BA 授权链接", Tag = "paypal|US" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "GoPay — 印尼协议支付", Tag = "gopay|ID" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "UPI — 印度统一支付接口", Tag = "upi|IN" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "iDEAL — 荷兰银行支付", Tag = "ideal|NL" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "PIX — 巴西即时支付", Tag = "pix|BR" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "Kakao Pay — 韩国钱包支付", Tag = "kakao|KR" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "BLIK — 波兰银行码支付（提交六位码）", Tag = "blik|PL" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "TWINT — 瑞士钱包支付", Tag = "twint|CH" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "直卡 Checkout — 直接刷卡结账链接", Tag = "direct_card|PH" });
-            methodCombo.Items.Add(new ComboBoxItem { Content = "MoMo — 越南钱包扫码支付", Tag = "momo|VN" });
+            foreach (PaymentMethodDefinition method in PaymentMethods.All)
+            {
+                methodCombo.Items.Add(new ComboBoxItem
+                {
+                    Content = method.SingleAccountDescription,
+                    Tag = method.Id + "|" + method.DefaultCountry
+                });
+            }
             mainPanel.Children.Add(methodCombo);
 
             // ── AT 输入 ───────────────────────────────────────────────────

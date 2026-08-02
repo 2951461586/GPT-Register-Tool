@@ -18,6 +18,7 @@ import json
 import os
 import random
 import re
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -34,6 +35,13 @@ except ImportError:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from sms_tool.account_liveness import probe_account_liveness
+
+
 LOG_DIR = SCRIPT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -442,6 +450,8 @@ def is_account_error(reason: str) -> bool:
             "token_invalidated",
             "authentication token has been invalidated",
             "chatgpt /me failed 401",
+            "wham/usage failed 401",
+            "wham/usage token_invalid",
             "checkout failed 401",
             "checkout/update failed 401",
             "checkout/taxes failed 401",
@@ -941,12 +951,20 @@ def stripe_init(
     return payload, stripe_js_id
 
 
-def inspect_kakao_init(payload: dict[str, Any], stage: str, *, require_zero: bool) -> str:
+def inspect_kakao_init(
+    payload: dict[str, Any],
+    stage: str,
+    *,
+    require_zero: bool,
+    require_kakao: bool = True,
+) -> str:
     amount = expected_amount(payload)
     currency = str(payload.get("currency") or "").lower()
     methods = [str(item).lower() for item in (payload.get("payment_method_types") or [])]
     log(f"{stage} Stripe init: amount={amount}; currency={currency}; methods={','.join(methods) or 'none'}")
-    if "kakao_pay" not in methods or (require_zero and (amount != "0" or currency != "krw")):
+    if (require_kakao and "kakao_pay" not in methods) or (
+        require_zero and (amount != "0" or currency != "krw")
+    ):
         raise RuntimeError(
             f"checkout_not_kakao_trial: stage={stage} amount={amount} currency={currency} methods={methods}"
         )
@@ -1003,6 +1021,29 @@ def ensure_running(stop_event: Event | None) -> None:
         raise TaskStopped("任务已停止")
 
 
+def probe_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:
+    return probe_account_liveness(
+        {"access_token": token},
+        proxy=proxy,
+        timeout=TIMEOUT,
+    )
+
+
+def validate_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:
+    probe = probe_kakao_access_token(token, proxy)
+    probe_status = int(probe.get("status_code") or 0)
+    detail = str(probe.get("error") or probe.get("quota_status") or "unknown")
+    if probe_status == 401:
+        raise RuntimeError(f"wham/usage failed 401: {detail}")
+    if str(probe.get("status") or "") == "token_invalid":
+        raise RuntimeError(f"wham/usage token_invalid: {detail}")
+    if not 200 <= probe_status < 300:
+        # 403, rate limits, and network failures are inconclusive. Let the real
+        # checkout operation decide whether the account/payment path can proceed.
+        log(f"[WARN] wham/usage probe inconclusive ({probe_status or 'network'}): {detail}; continuing checkout")
+    return probe
+
+
 def kakao_link(
     token: str,
     checkout_proxy: str,
@@ -1018,13 +1059,7 @@ def kakao_link(
     provider_session = new_session(provider_proxy)
 
     log("校验 ChatGPT Token")
-    me = checkout_session.get(
-        "https://chatgpt.com/backend-api/me",
-        headers={"Authorization": f"Bearer {token}", "User-Agent": USER_AGENT},
-        timeout=TIMEOUT,
-    )
-    if me.status_code != 200:
-        raise RuntimeError(f"ChatGPT /me failed {me.status_code}: {response_error(me, 500)}")
+    validate_kakao_access_token(token, checkout_proxy)
 
     ensure_running(stop_event)
     log(f"{CHECKOUT_COUNTRY} 创建 KRW Kakao trial checkout")
@@ -1033,7 +1068,12 @@ def kakao_link(
 
     log(f"{CHECKOUT_COUNTRY} Bootstrap Stripe init")
     bootstrap_payload, _ = stripe_init(checkout_session, checkout_id, publishable_key, checkout_page)
-    inspect_kakao_init(bootstrap_payload, f"{CHECKOUT_COUNTRY} Bootstrap", require_zero=False)
+    inspect_kakao_init(
+        bootstrap_payload,
+        f"{CHECKOUT_COUNTRY} Bootstrap",
+        require_zero=False,
+        require_kakao=CHECKOUT_COUNTRY == PROVIDER_COUNTRY,
+    )
 
     ensure_running(stop_event)
     log(f"{PROMOTION_COUNTRY} checkout/update")

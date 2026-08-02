@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services" / "protocol-payment" / "kakao"))
@@ -79,6 +80,68 @@ class RemovedHelpersAreGoneTests(unittest.TestCase):
             "role_seed_record",
         ):
             self.assertFalse(hasattr(kakao, name), f"{name} should have been removed")
+
+
+class AccountLivenessTests(unittest.TestCase):
+    def test_kakao_liveness_delegates_to_canonical_quota_probe(self):
+        expected = {"ok": True, "status": "active", "status_code": 200}
+        with patch.object(kakao, "probe_account_liveness", return_value=expected) as probe:
+            result = kakao.probe_kakao_access_token("at_123", "http://proxy.example:8080")
+
+        self.assertEqual(result, expected)
+        probe.assert_called_once_with(
+            {"access_token": "at_123"},
+            proxy="http://proxy.example:8080",
+            timeout=kakao.TIMEOUT,
+        )
+
+    def test_kakao_liveness_rejects_401(self):
+        with patch.object(
+            kakao,
+            "probe_kakao_access_token",
+            return_value={"ok": False, "status": "token_invalid", "status_code": 401, "error": "unauthorized"},
+        ):
+            with self.assertRaisesRegex(RuntimeError, r"wham/usage failed 401"):
+                kakao.validate_kakao_access_token("at_123", "http://proxy.example:8080")
+
+    def test_kakao_liveness_allows_inconclusive_403(self):
+        result = {"ok": False, "status": "active", "status_code": 403, "error": "cloudflare"}
+        with (
+            patch.object(kakao, "probe_kakao_access_token", return_value=result),
+            patch.object(kakao, "log") as log,
+        ):
+            actual = kakao.validate_kakao_access_token("at_123", "http://proxy.example:8080")
+
+        self.assertEqual(actual, result)
+        self.assertIn("continuing checkout", log.call_args.args[0])
+
+
+class CheckoutStageTests(unittest.TestCase):
+    def test_foreign_bootstrap_does_not_require_kakao_before_provider_refresh(self):
+        payload = {
+            "currency": "krw",
+            "elements_options": {"amount": 26364},
+            "payment_method_types": ["card"],
+        }
+
+        amount = kakao.inspect_kakao_init(
+            payload,
+            "US Bootstrap",
+            require_zero=False,
+            require_kakao=False,
+        )
+
+        self.assertEqual(amount, "26364")
+
+    def test_provider_refresh_still_requires_zero_krw_kakao(self):
+        payload = {
+            "currency": "krw",
+            "elements_options": {"amount": 26364},
+            "payment_method_types": ["card", "kakao_pay"],
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "checkout_not_kakao_trial"):
+            kakao.inspect_kakao_init(payload, "KR Provider", require_zero=True)
 
 
 # --- tiny stdlib-only helpers (avoid extra deps) -----------------------------

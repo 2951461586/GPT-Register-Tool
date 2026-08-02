@@ -1,8 +1,8 @@
 """Unified state machine for protocol payment-link extraction.
 
-Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`.  GoPay uses the
-project-local PaymentService, while iDEAL/PIX/Kakao Pay/BLIK/TWINT run the
-vendored protocol extractors under ``services/protocol-payment``.
+Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`, while
+iDEAL/PIX/Kakao Pay/BLIK/TWINT run the vendored protocol extractors under
+``services/protocol-payment``.
 """
 
 from __future__ import annotations
@@ -36,7 +36,6 @@ class PaymentMethodSpec:
 
 PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
     "paypal": PaymentMethodSpec("paypal", "PayPal", "US", "USD", "native"),
-    "gopay": PaymentMethodSpec("gopay", "GoPay", "ID", "IDR", "gopay"),
     "upi": PaymentMethodSpec("upi", "UPI", "IN", "INR", "native"),
     "ideal": PaymentMethodSpec("ideal", "iDEAL", "NL", "EUR", "script", "ideal/ideal_qr_extract.py"),
     "pix": PaymentMethodSpec("pix", "PIX", "BR", "BRL", "pix", "pix/run_pix.py"),
@@ -48,8 +47,6 @@ PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
 }
 
 _ALIASES = {
-    "go_pay": "gopay",
-    "go-pay": "gopay",
     "upiqr": "upi",
     "upi_qr": "upi",
     "upi-qr": "upi",
@@ -133,7 +130,7 @@ def supported_payment_methods() -> list[dict[str, Any]]:
     root = _reference_root()
     output = []
     for spec in PAYMENT_METHODS.values():
-        available = spec.adapter in {"native", "gopay"} or (root / spec.script).is_file()
+        available = spec.adapter == "native" or (root / spec.script).is_file()
         output.append({
             "key": spec.key,
             "label": spec.label,
@@ -201,8 +198,6 @@ def generate_payment_link(
                 auth_context=auth_context,
                 **native_kwargs,
             )
-        elif method == "gopay":
-            result = _generate_gopay_link(access_token, proxy=proxy, **kwargs)
         elif method == "direct_card":
             result = _run_direct_card(spec, access_token, proxy=proxy, **kwargs)
         elif method == "momo":
@@ -248,50 +243,6 @@ def generate_payment_link(
         }
         _safe_persist_run(failed)
         return failed
-
-
-def _generate_gopay_link(access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
-    from .grpcurl_client import call_grpcurl
-
-    cfg = CFG.get("gopay") if isinstance(CFG.get("gopay"), dict) else {}
-    phone = str(kwargs.get("phone") or cfg.get("phone") or cfg.get("phone_number") or "").strip()
-    country_code = str(kwargs.get("country_code") or cfg.get("country_code") or "+62").strip()
-    otp_channel = str(kwargs.get("otp_channel") or cfg.get("otp_channel") or "sms").strip()
-    body: dict[str, Any] = {
-        "credential": {"accessToken": access_token},
-        "useAccountToken": True,
-        "tokenization": str(kwargs.get("tokenization") or cfg.get("tokenization") or "one_time").strip(),
-        "gopayPhone": phone,
-        "otpChannel": otp_channel,
-        "gopayCountryCode": country_code,
-        "proxyUrl": str(kwargs.get("provider_proxy") or kwargs.get("checkout_proxy") or proxy or "").strip(),
-    }
-    rpc = "StartGoPay" if phone else "CreateCheckoutLink"
-    if rpc == "CreateCheckoutLink":
-        body = {"credential": body["credential"]}
-    response = call_grpcurl(
-        rpc,
-        body,
-        addr=str(cfg.get("payment_service_addr") or "127.0.0.1:50051"),
-        service=str(cfg.get("payment_service") or "payment.PaymentService"),
-        grpcurl=str(cfg.get("grpcurl_path") or "grpcurl"),
-        proto_path=str(cfg.get("proto_path") or "services/gopay-flow/proto/payment.proto"),
-        proto_import_path=str(cfg.get("proto_import_path") or "services/gopay-flow/proto"),
-        timeout_seconds=int(cfg.get("provider_timeout_seconds") or 600),
-    )
-    if not bool(response.get("success")):
-        return {"ok": False, "error": response.get("errorMessage") or response.get("error_message") or "GoPay provider failed"}
-    url = str(response.get("checkoutUrl") or response.get("checkout_url") or "").strip()
-    return {
-        "ok": bool(url),
-        "url": url,
-        "checkout_url": url,
-        "cs_id": response.get("checkoutSessionId") or response.get("checkout_session_id") or "",
-        "flow_id": response.get("flowId") or response.get("flow_id") or "",
-        "otp_required": bool(response.get("otpRequired") or response.get("otp_required")),
-        "link_type": "gopay_protocol_checkout",
-        "warning": "未配置 GoPay 手机号，仅生成 checkout 链接" if not phone else "",
-    }
 
 
 def _run_extractor_subprocess(

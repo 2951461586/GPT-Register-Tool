@@ -4,7 +4,7 @@
 
 - Probed the active account pool and isolated 33 invalid or deactivated sessions (3 HTTP 401/token-invalid and 30 explicitly disabled). The active SQLite/session pool now contains 290 healthy accounts; network-unknown results were not deleted.
 - Removed the retired PayPal no-card implementation, its configuration, and its one-off batch entry points. PayPal redirect parsing now has a single focused protocol module and regression coverage.
-- Removed the unreachable GoPay WA post-payment wrapper and stale ReMail Agent Identity batch scripts. GoPay app RPC ownership is documented in `services/gopay-flow`.
+- Removed stale ReMail Agent Identity batch scripts.
 - Removed registration payment-stage settings and the desktop's unconditional compatibility flag injection. The hidden CLI flag remains accepted for one compatibility release.
 - Marked generated backup files as ignored and refreshed the architecture and directory ownership documents.
 

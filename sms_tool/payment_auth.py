@@ -53,9 +53,9 @@ def ensure_payment_access_token(
     ``access_token`` is intentionally present for the in-process payment caller.
     Use :func:`public_payment_auth_result` before reporting or persistence.
     """
-    from .cpa_import import (
-        _account_is_permanently_deactivated,
-        probe_local_codex_quota,
+    from .account_liveness import probe_account_liveness
+    from .account_recovery import (
+        is_permanently_deactivated,
         relogin_codex_account,
     )
 
@@ -63,7 +63,7 @@ def ensure_payment_access_token(
     account_email = str(data.get("email") or email or "").strip().lower()
     if json_path:
         data["json_path"] = json_path
-    if _account_is_permanently_deactivated(data):
+    if is_permanently_deactivated(data):
         return _auth_failure("account_deactivated", email=account_email, terminal=True)
 
     access_token = extract_access_token(data)
@@ -77,7 +77,7 @@ def ensure_payment_access_token(
     original_hash = access_token_telemetry(access_token).get("token_hash", "")
 
     for index in range(probe_count):
-        probe = probe_local_codex_quota(data, proxy=proxy, timeout=max(5, int(timeout or 30)))
+        probe = probe_account_liveness(data, proxy=proxy, timeout=max(5, int(timeout or 30)))
         probes.append(_public_probe(probe))
         status_code = _as_int(probe.get("status_code"))
         if status_code == 200:

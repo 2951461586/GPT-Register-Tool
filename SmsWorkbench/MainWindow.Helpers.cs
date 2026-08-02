@@ -129,34 +129,12 @@ namespace SmsWorkbench
         }
 
         private string NormalizePaymentMethod(string paymentMethod)
-        {
-            string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-            return value switch
-            {
-                "gopay" or "go_pay" => "gopay",
-                "upi" or "upiqr" or "upi_qr" => "upi",
-                "ideal" => "ideal",
-                "pix" => "pix",
-                "kakao" or "kakao_pay" => "kakao",
-                "blik" => "blik",
-                "twint" => "twint",
-                "direct_card" or "directcard" or "direct" or "zhika" or "card" or "checkout" => "direct_card",
-                "momo" or "momo_qr" or "momoqr" => "momo",
-                _ => "paypal"
-            };
-        }
+            => PaymentMethods.Normalize(paymentMethod);
 
         private void AddPaymentMethodItems(ComboBox box)
         {
-            box.Items.Add(new ComboBoxItem { Content = "PayPal 支付链接", Tag = "paypal" });
-            box.Items.Add(new ComboBoxItem { Content = "GoPay 印尼协议", Tag = "gopay" });
-            box.Items.Add(new ComboBoxItem { Content = "UPI 印度协议", Tag = "upi" });
-            box.Items.Add(new ComboBoxItem { Content = "iDEAL 荷兰协议", Tag = "ideal" });
-            box.Items.Add(new ComboBoxItem { Content = "PIX 巴西协议", Tag = "pix" });
-            box.Items.Add(new ComboBoxItem { Content = "Kakao Pay 韩国协议", Tag = "kakao" });
-            box.Items.Add(new ComboBoxItem { Content = "TWINT 瑞士协议", Tag = "twint" });
-            box.Items.Add(new ComboBoxItem { Content = "直卡 Checkout 直连结账", Tag = "direct_card" });
-            box.Items.Add(new ComboBoxItem { Content = "MoMo 越南扫码", Tag = "momo" });
+            foreach (PaymentMethodOption method in PaymentMethods.RegistrationOptions)
+                box.Items.Add(new ComboBoxItem { Content = method.DisplayName, Tag = method.Id });
         }
 
         private int CountValue()
@@ -432,7 +410,7 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Extract wham_usage 5h/7d structured data from session JSON.
-        /// Looks under quota.last_result.wham_usage (stored by probe_local_codex_quota -> mark_quota_status).
+        /// Looks under quota.last_result.wham_usage (stored by account_liveness -> mark_quota_status).
         /// </summary>
         private Dictionary<string, object> ExtractWhamUsage(Dictionary<string, object> data)
         {
@@ -605,7 +583,7 @@ namespace SmsWorkbench
             string detected = hasSavedMethod ? savedMethod : "";
             if (detected.Length == 0)
             {
-                foreach (string candidate in new[] { "paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "momo" })
+                foreach (string candidate in new[] { "paypal", "upi", "ideal", "pix", "kakao", "blik", "twint", "momo" })
                 {
                     if (PaymentMethodTypesContain(paypal, candidate))
                     {
@@ -618,7 +596,6 @@ namespace SmsWorkbench
             {
                 detected = currency switch
                 {
-                    "idr" => "gopay",
                     "inr" => "upi",
                     "brl" => "pix",
                     "krw" => "kakao",
@@ -750,21 +727,7 @@ namespace SmsWorkbench
         }
 
         private string PaymentMethodLabel(string paymentMethod)
-        {
-            return NormalizePaymentMethod(paymentMethod) switch
-            {
-                "gopay" => "GoPay",
-                "upi" => "UPI",
-                "ideal" => "iDEAL",
-                "pix" => "PIX",
-                "kakao" => "Kakao Pay",
-                "blik" => "BLIK",
-                "twint" => "TWINT",
-                "direct_card" => "直卡 Checkout",
-                "momo" => "MoMo",
-                _ => "PayPal"
-            };
-        }
+            => PaymentMethods.DisplayName(paymentMethod);
 
         private string DisplayRtStatus(string refreshTokenStatus)
         {

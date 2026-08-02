@@ -8,9 +8,9 @@ class PaymentAuthTests(unittest.TestCase):
     def test_live_token_passes_without_relogin(self):
         account = {"email": "a@example.com", "access_token": "token-a"}
         with patch.object(payment_auth, "load_account_seed", return_value=(account, "session.json")), \
-             patch("sms_tool.cpa_import._account_is_permanently_deactivated", return_value=False), \
-             patch("sms_tool.cpa_import.probe_local_codex_quota", return_value={"ok": True, "status_code": 200}), \
-             patch("sms_tool.cpa_import.relogin_codex_account") as relogin:
+             patch("sms_tool.account_recovery.is_permanently_deactivated", return_value=False), \
+             patch("sms_tool.account_liveness.probe_account_liveness", return_value={"ok": True, "status_code": 200}), \
+             patch("sms_tool.account_recovery.relogin_codex_account") as relogin:
             result = payment_auth.ensure_payment_access_token(email="a@example.com")
         self.assertTrue(result["ok"])
         self.assertFalse(result["refreshed"])
@@ -21,9 +21,9 @@ class PaymentAuthTests(unittest.TestCase):
         before = {"email": "a@example.com", "access_token": "old"}
         after = {"email": "a@example.com", "access_token": "new"}
         with patch.object(payment_auth, "load_account_seed", side_effect=[(before, "session.json"), (after, "session.json")]), \
-             patch("sms_tool.cpa_import._account_is_permanently_deactivated", return_value=False), \
-             patch("sms_tool.cpa_import.probe_local_codex_quota", return_value={"ok": False, "status_code": 401}), \
-             patch("sms_tool.cpa_import.relogin_codex_account", return_value={
+             patch("sms_tool.account_recovery.is_permanently_deactivated", return_value=False), \
+             patch("sms_tool.account_liveness.probe_account_liveness", return_value={"ok": False, "status_code": 401}), \
+             patch("sms_tool.account_recovery.relogin_codex_account", return_value={
                  "ok": True, "persisted": True, "probe": {"ok": True, "status_code": 200}
              }):
             result = payment_auth.ensure_payment_access_token(email="a@example.com")

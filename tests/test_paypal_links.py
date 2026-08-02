@@ -386,52 +386,7 @@ class PayPalLinksTests(unittest.TestCase):
         self.assertEqual(saved["status"], "at_invalid")
         self.assertIn("add_phone_required", saved["error"])
 
-    def test_regenerate_gopay_failure_does_not_reuse_old_paypal_link(self):
-        old_url = "https://www.paypal.com/agreements/approve?ba_token=BA-OLD123456789"
-        seed = {
-            "email": "paid@example.com",
-            "access_token": "at_test",
-            "success": True,
-            "payment_method": "gopay",
-            "paypal_status": "link_ready",
-            "paypal": {
-                "ok": True,
-                "url": old_url,
-                "currency": "usd",
-                "payment_method_types": ["card", "paypal"],
-            },
-        }
-        saved = {}
-
-        def fake_upsert(data, json_path=""):
-            saved.update(data)
-            return True
-
-        with patch.object(paypal_links, "_load_seed", return_value=(seed, "")):
-            with patch.object(
-                paypal_links,
-                "_generate_link",
-                return_value={
-                    "ok": False,
-                    "payment_method": "gopay",
-                    "method": "gopay",
-                    "error": "You cannot combine currencies on a single customer.",
-                    "error_code": "checkout_failed",
-                },
-            ):
-                with patch.object(paypal_links, "upsert_account", side_effect=fake_upsert):
-                    result = paypal_links.regenerate_paypal_link(email="paid@example.com", payment_method="gopay")
-
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["payment_method"], "gopay")
-        self.assertEqual(result["paypal_status"], "failed")
-        self.assertEqual(result["paypal_url"], "")
-        self.assertEqual(saved["payment_method"], "gopay")
-        self.assertEqual(saved["paypal_status"], "failed")
-        self.assertEqual(saved["paypal"].get("url", ""), "")
-        self.assertEqual(saved["previous_paypal"]["url"], old_url)
-
-    def test_saved_upi_link_matches_upi_but_not_paypal_or_gopay(self):
+    def test_saved_upi_link_matches_upi_but_not_paypal(self):
         upi_link = {
             "ok": True,
             "url": "https://pay.openai.com/c/pay/cs_live_UPI",
@@ -441,7 +396,6 @@ class PayPalLinksTests(unittest.TestCase):
 
         self.assertTrue(paypal_links._saved_link_matches_payment_method(upi_link, "upi", {}))
         self.assertFalse(paypal_links._saved_link_matches_payment_method(upi_link, "paypal", {"link_mode": "chatgpt_checkout"}))
-        self.assertFalse(paypal_links._saved_link_matches_payment_method(upi_link, "gopay", {}))
 
     def test_sqlite_smoke_reads_existing_paypal_url_when_enabled(self):
         if os.environ.get("PAYPAL_LINKS_SQLITE_SMOKE") != "1":
