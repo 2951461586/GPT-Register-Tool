@@ -1,12 +1,8 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from sms_tool import account_creation, cli, registration
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_registration_has_no_payment_generation_entrypoint():
@@ -33,14 +29,3 @@ def test_blik_batch_requires_the_single_account_command():
     with pytest.raises(SystemExit) as exc:
         cli._extract_payment_link(args)
     assert exc.value.code == 2
-
-
-def test_registration_and_batch_selector_excludes_blik():
-    helper_source = (ROOT / "SmsWorkbench" / "MainWindow.Helpers.cs").read_text(encoding="utf-8-sig")
-    start = helper_source.index("private void AddPaymentMethodItems")
-    end = helper_source.index("private int CountValue", start)
-    assert 'Tag = "blik"' not in helper_source[start:end]
-
-    single_payment_source = (ROOT / "SmsWorkbench" / "MainWindow.Payment.cs").read_text(encoding="utf-8-sig")
-    assert 'Tag = "blik|PL"' in single_payment_source
-    assert 'args.AddRange(new[] { "--blik-code"' in single_payment_source

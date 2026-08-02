@@ -9,7 +9,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | --- | --- | --- | --- |
 | `sms_tool/` | Python application core | CLI orchestration, mailbox handling, registration, payment links, payment adapters, storage, account scans | Keep command-specific imports lazy in `sms_tool.cli`. |
 | `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, account liveness, batch protocol-payment dialog, fixed non-payment proxy launcher, read-only SMSBower catalog adapter, local command execution, desktop publish scripts | UI starts CLI commands; payment stage routing and other business logic stay in `sms_tool`. |
-| `services/` | Local provider services | Optional GoPay, ADB, and mailbox helper services used by CLI/UI | Services expose explicit process/API boundaries and should not write account SQLite directly. |
+| `services/` | Local provider services | Optional mailbox and payment-protocol helpers used by CLI/UI | Services expose explicit process/API boundaries and should not write account SQLite directly. |
 | `tests/` | Offline verification | Unit tests for module seams and persistence semantics | Live vendor/browser tests must be opt-in. |
 | `docs/` | Source-owned documentation | Architecture, boundaries, directory map, and operating notes | Do not place runtime logs or screenshots here unless deliberately curated. |
 | `scripts/` | Operator scripts | Small launch/setup helpers that call source modules or local services | Keep scripts idempotent and repository-relative. |
@@ -44,23 +44,20 @@ These directories are runtime state and are ignored by Git:
 | --- | --- | --- |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config.py`, `paths.py`, `commands/` | Parse commands and resolve config/paths; no vendor protocol implementation. |
 | Mailbox and phone inventory | `mailbox.py`, `mailbox_types.py`, `mailbox_parsers.py`, `mailbox_remail.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `mailbox_gmail.py`, `mailbox_chongzhi.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `phone_reuse.py`, `phone_proxy.py`, `sms_provider.py` | Acquire/poll mailboxes or phone activations; ReMail uses API-key-authenticated ordering and service-token pickup with adaptive OTP polling; Gmail receive/send stays inside the mailbox seam and uses exact mailbox addresses without alias expansion; no account persistence except through explicit callers. |
-| Registration/auth | `registration.py`, `registration_progress.py`, `auth_flow.py`, `auth_headers.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `error_classification.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification, error classification. |
+| Registration/auth | `registration.py`, `registration_progress.py`, `registration_concurrency.py`, `auth_flow.py`, `auth_headers.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `error_classification.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification, progress persistence, and independent stage resource gates. |
 | Agent Identity / explicit import | `agent_identity.py`, `sub2api_import.py` | Ed25519 credential conversion for explicit SUB2API import; not called by the registration pipeline. Keys are persisted under `sessions/agent_identities/`. |
 | Workspace compatibility | `k12_client.py`, `k12_identity.py`, `workspace_scan.py` | Legacy explicit Workspace helpers retained for Python callers; the CLI account scan no longer enables this path. |
-| Account scan | `account_scan.py` | OAuth/account health and quota scan; does not switch Workspace state. |
+| Account liveness and recovery | `account_liveness.py`, `account_recovery.py`, `account_scan.py` | Canonical side-effect-free quota probe, explicit OAuth recovery/persistence, and batch account scan; does not switch Workspace state. |
 | Payment links | `payment_link_manager.py`, `payment_auth.py`, `gen_pp_link.py`, `paypal_links.py`, `paypal_proxy.py`, `paypal_reverse.py` | JIT AT gate plus unified state machine and adapters, native link generation/reuse, stage proxy resolution, and reverse-engineering helpers. Optional promotion-update stage (`/checkout/update`) for 0元+PayPal — see [`paypal-zero-due-link.md`](paypal-zero-due-link.md). |
 | Payment batch execution | `payment_batch.py` | Stable email cohorts, JIT refresh, eligibility matrix, method concurrency, canary pause, transient retry, and atomic token-free checkpoints under `runtime/payment_batches/`. |
-| Payment execution | `paypal_auto.py`, `paypal_protocol.py`, `nodriver_paypal.py`, `grpcurl_client.py`, `omakse_client.py` | Execute explicit payment commands only; use account seed and storage seams. GoPay app RPCs are owned by `services/gopay-flow`. |
-| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `session_converter.py`, `import_targets.py` | Normalize account/session state, convert between formats, and upload to external import targets (CPA, SUB2API). |
+| Payment execution | `paypal_auto.py`, `paypal_protocol.py`, `nodriver_paypal.py`, `omakse_client.py` | Execute explicit payment commands only; use account seed and storage seams. |
+| Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `session_converter.py`, `import_targets.py` | Normalize account/session state, convert between formats, and upload to external import targets (CPA, SUB2API); CPA import does not own local liveness or recovery. |
 | Shared utilities | `http_client.py`, `captcha_solver.py`, `nodriver_captcha.py`, `proxy_pool.py`, `utils.py` | Reusable transport/browser/helper logic with minimal state ownership. |
 
 ## `services/` module groups
 
 | Path | Boundary |
 | --- | --- |
-| `services/gopay-flow/` | Local GoPay PaymentService and pure-protocol payment/signup implementation. |
-| `services/gopay-app/` | GoPay App gRPC implementation/contract used by GoPay registration and phone-change flows. |
-| `services/gopay-adb/` | ADB/notification sidecar for local emulator integration. |
 | `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo protocol extractors. |
 | `services/mail-otp-web/` | Standalone Microsoft Graph inbox/OTP helper UI; operator diagnostic service, not the main registration mailbox owner. |
 

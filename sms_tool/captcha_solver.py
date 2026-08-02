@@ -4,7 +4,7 @@ Solves invisible hCaptcha challenges by loading the vendor's iframe in a
 controlled browser context, injecting fraud signals (mouse, pointer, keyboard),
 and extracting the response token via a local HTTP bridge server.
 
-Reference: byte-v-forge/register gopay-payment/gopay-flow/gopay.py
+Adapted from the project's original payment-flow CAPTCHA helper.
 """
 
 from __future__ import annotations

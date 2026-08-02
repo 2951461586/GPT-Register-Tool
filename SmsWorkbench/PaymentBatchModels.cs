@@ -4,42 +4,6 @@ namespace SmsWorkbench
 {
     public sealed record PaymentBatchAccount(string Email, bool HasAccessToken);
 
-    public sealed record PaymentMethodOption(string Id, string DisplayName);
-
-    public static class PaymentMethods
-    {
-        public static IReadOnlyList<PaymentMethodOption> BatchOptions { get; } = new[]
-        {
-            new PaymentMethodOption("paypal", "PayPal 支付链接"),
-            new PaymentMethodOption("gopay", "GoPay 印尼协议"),
-            new PaymentMethodOption("upi", "UPI 印度协议"),
-            new PaymentMethodOption("ideal", "iDEAL 荷兰协议"),
-            new PaymentMethodOption("pix", "PIX 巴西协议"),
-            new PaymentMethodOption("kakao", "Kakao Pay 韩国协议"),
-            new PaymentMethodOption("twint", "TWINT 瑞士协议"),
-            new PaymentMethodOption("direct_card", "直卡 Checkout 直连结账"),
-            new PaymentMethodOption("momo", "MoMo 越南扫码")
-        };
-
-        public static string Normalize(string paymentMethod)
-        {
-            string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-            return value switch
-            {
-                "gopay" or "go_pay" => "gopay",
-                "upi" or "upiqr" or "upi_qr" => "upi",
-                "ideal" => "ideal",
-                "pix" => "pix",
-                "kakao" or "kakao_pay" => "kakao",
-                "blik" => "blik",
-                "twint" => "twint",
-                "direct_card" or "directcard" or "direct" or "zhika" or "card" or "checkout" => "direct_card",
-                "momo" or "momo_qr" or "momoqr" => "momo",
-                _ => "paypal"
-            };
-        }
-    }
-
     public sealed partial class PaymentMatrixRow : ObservableObject
     {
         [ObservableProperty] private string name = "default";

@@ -10,7 +10,7 @@ WPF or CLI
   -> ChatGPT email registration
   -> auth session/access token fetch and stable HTTP-200 AT persistence boundary
   -> JIT AT probe/OAuth refresh when payment starts
-  -> unified PayPal/GoPay/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo link extraction
+  -> unified PayPal/UPI/iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo link extraction
   -> session JSON + SQLite index
   -> status display and maintenance actions
 ```
@@ -47,6 +47,7 @@ sms_tool/
   http_client.py            curl_cffi retry/transport handling.
   registration.py           ChatGPT registration orchestration compatibility seam.
   registration_progress.py  Registration stage progress tracking and persistence.
+  registration_concurrency.py Registration stage resource gates and wait metrics.
   auth_flow.py              OpenAI signin/authorize/continue helpers.
   auth_headers.py           Auth header construction and normalization.
   account_creation.py       Account creation and auth-session fetch.
@@ -62,14 +63,13 @@ sms_tool/
   k12_client.py             Legacy Workspace request/accept/leave adapter (explicit Python use only).
   k12_identity.py           Legacy Workspace identity extraction helper.
   workspace_scan.py         Legacy Workspace health check adapter; CLI scanning keeps it disabled.
-  gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; GoPay/UPI use hosted link variants.
+  gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; UPI uses a hosted link variant.
   payment_link_manager.py   Unified method registry, state machine, adapter routing, and redacted run history.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
   nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
   captcha_solver.py         CAPTCHA solving abstraction.
-  grpcurl_client.py         Shared grpcurl subprocess boundary.
   omakse_client.py          Omakase provider client adapter.
   phone_proxy.py            Phone verification proxy resolution.
   phone_reuse.py            Phone number reuse and inventory management.
@@ -79,6 +79,8 @@ sms_tool/
   session_refresh.py        Refresh auth session after manual login/payment.
   payment_auth.py           JIT payment AT probe, HTTP-401 mailbox OTP OAuth refresh, and token telemetry.
   payment_batch.py          Resumable batch payment executor, eligibility matrix, canary, retries, and atomic reports.
+  account_liveness.py       Side-effect-free account liveness classification and quota parsing.
+  account_recovery.py       Explicit OAuth recovery, quota-status persistence, and account deactivation handling.
   agent_identity.py         Explicit Agent Identity/SUB2API credential conversion; not part of registration.
   sub2api_import.py         SUB2API import boundary with multi-mode auth.
   codex_export.py           Build Codex/CPA-compatible token JSON from session data.
@@ -94,9 +96,6 @@ sms_tool/
 
 SmsWorkbench/               WPF desktop UI.
 services/
-  gopay-flow/               Project-local GoPay PaymentService wrapper and protocol.
-  gopay-app/proto/          GoPay App gRPC contract used by WA rebind mode.
-  gopay-adb/                ADB HTTP sidecar for OTP notification polling and unlink.
   protocol-payment/         Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo protocol extractors.
   mail-otp-web/             Standalone Microsoft Graph inbox/OTP diagnostic UI.
 tests/                      Offline unit tests; see tests/README.md.
@@ -112,9 +111,11 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | CLI command routing | `sms_tool.cli` | Focused command modules | Provider protocol internals or long-lived state mutation outside handlers |
 | Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, Gmail IMAP/SMTP, mailbox provider clients | Registration success persistence, payment state |
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower` | SMS provider APIs | ChatGPT account state, payment state |
-| ChatGPT registration | `sms_tool.registration` | mailbox/phone seams, storage through result writers | Payment execution, CPA upload |
+| ChatGPT registration | `sms_tool.registration`, `sms_tool.registration_concurrency` | mailbox/phone seams, stage resource gates, storage through result writers | Payment execution, CPA upload |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
-| JIT payment authentication | `sms_tool.payment_auth` | account seed, mailbox OTP OAuth, quota probe | Registration success classification, payment-method creation |
+| Account liveness | `sms_tool.account_liveness` | account seed data, `/backend-api/wham/usage` | Persistence, OAuth relogin, payment creation |
+| Account recovery | `sms_tool.account_recovery` | account liveness, Codex OAuth/session refresh, storage | CPA API calls, payment creation |
+| JIT payment authentication | `sms_tool.payment_auth` | account seed, account liveness/recovery | Registration success classification, payment-method creation |
 | Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.paypal_links` | account seed, ChatGPT checkout, Stripe init, protocol adapters | PayPal account signup, final payment authorization |
 | Batch payment execution | `sms_tool.payment_batch` | JIT auth, payment manager, eligibility matrix, proxy stages, atomic reports | Registration/mailbox procurement, token-free public reports |
 | Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
@@ -125,6 +126,36 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
 ## Boundary Rules
+
+### Account Liveness Contract
+
+Account liveness has one canonical backend contract. The owning implementation is
+`sms_tool.account_liveness.probe_account_liveness`, and its endpoint is
+`https://chatgpt.com/backend-api/wham/usage` (`CODEX_USAGE_URL`). The desktop
+`--refresh-local-quota` action, maintenance scripts, batch selection, and future
+API surfaces must reuse this implementation instead of issuing their own probe.
+
+- Any HTTP 2xx result is an active AT for the liveness workflow.
+- HTTP 401 / `token_invalid` is an invalid AT.
+- HTTP 403, rate limiting, and transport failures are inconclusive probe failures;
+  they must not be relabeled as an invalid AT.
+- Registration, payment JIT authentication, and protocol payment adapters must
+  not define their own `/backend-api/me` liveness probes.
+- The liveness operation never performs mailbox OTP relogin unless a separate,
+  explicitly named recovery workflow requests it.
+
+`sms_tool.account_recovery` owns all side effects around that contract: local
+quota-status persistence, explicit 401 OAuth recovery, and permanent-deactivation
+records. `sms_tool.cpa_import` owns only CPA-side listing, remote quota proxying,
+payload conversion, and upload; it must not become the local liveness owner again.
+
+### Registration Progress and Concurrency
+
+`sms_tool.registration_progress` records stage events and persists run history.
+`sms_tool.registration_concurrency` independently maps expensive stages to
+resource groups, enforces bounded admission, and exposes aggregate wait metrics.
+Progress reporting may call the concurrency module when a stage changes, but the
+concurrency module must not write progress files or classify registration results.
 
 ### Proxy Routing Boundary
 
@@ -262,7 +293,7 @@ dotnet build SmsWorkbench\SmsWorkbench.csproj
 
 It must not silently replace an explicit empty mailbox file with a new provider purchase. If the user passed a mailbox file and no mailbox was parsed, it exits with code `2`.
 
-Optional command modules are lazy seams. Codex export, CPA import, PayPal/GoPay payment, PayPal/GoPay/UPI link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
+Optional command modules are lazy seams. Codex export, CPA import, PayPal payment, PayPal/UPI link regeneration, and session refresh modules are imported only inside the command handler that needs them. Importing `sms_tool.cli` or `sms_tool.__main__` must not start a command or import optional payment/browser dependencies as a side effect.
 
 ### Mailbox Layer
 
@@ -341,7 +372,7 @@ Payment adapters may call this seam, but must not duplicate SQLite/session mergi
 
 ### PayPal Link Layer
 
-`sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal/GoPay/UPI URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, wallet authorization, or final payment authorization.
+`sms_tool/gen_pp_link.py` only generates the hosted Stripe/PayPal/UPI URL from an access token. It does not perform PayPal account signup, card entry, SMS verification, wallet authorization, or final payment authorization.
 
 `paypal.billing_regions` controls checkout billing country/currency, and `paypal.stage_proxies` can route stages independently:
 
@@ -482,22 +513,7 @@ transaction.
 is the narrow redirect-parsing and transport module used by that flow; the removed
 no-card signup implementation is not part of the supported payment surface.
 
-### GoPay WA Rebind Layer
-
-`services/gopay-flow/gopay.py` owns GoPay payment and app RPC orchestration. The
-`sms_tool.grpcurl_client` adapter remains available for payment-link manager calls;
-there is no second Python WA post-payment wrapper.
-
 ### Local Provider Services
-
-`services/gopay-flow` is the project-local PaymentService. It owns the ChatGPT checkout, Stripe/Midtrans GoPay linking, OTP handoff, PIN charge, ChatGPT verify, optional unlink trigger, and SMSBower GoPay signup/bootstrap. Its SMSBower bootstrap path imports `gopay_pure_protocol.py` directly and must not call `GopayAppService` or import `opai.core.gojek_client`.
-
-`services/gopay-app/proto` stores the GoPay App service contract used by GoPay
-registration and phone-change flows. The app-service implementation is a provider
-boundary: it may be supplied by a local project service or compatible binary, but
-callers only depend on the proto-level RPC surface.
-
-`services/gopay-adb` owns emulator/ADB HTTP endpoints such as `/health`, `/otp`, `/otp/clear`, and `/gopay/unlink`. It must not know about ChatGPT accounts, SQLite rows, or CPA import.
 
 `services/mail-otp-web` is a standalone operator diagnostic surface for Microsoft Graph inbox/OTP extraction. It accepts the same mailbox account-line formats as `sms_tool.mailbox`, refreshes Microsoft access tokens, displays recent messages, and may return a rotated mailbox refresh token to the operator. It is not the main registration mailbox owner: registration still uses `sms_tool.mailbox`, and this helper service must not edit `hotmail.txt`, session JSON, or SQLite rows directly.
 
@@ -557,7 +573,7 @@ python -m unittest discover -s tests
 - Case-insensitive account deduplication.
 - Email normalization before upsert.
 - PayPal status and refresh-token status persistence.
-- Payment method persistence for GoPay/UPI/PayPal compatibility.
+- Payment method persistence for UPI/PayPal compatibility.
 - Rebuilding SQLite from `sessions/session_*.json`.
 
 `accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same complete email address instead of creating a new row with different casing.

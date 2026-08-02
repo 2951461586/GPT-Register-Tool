@@ -34,7 +34,7 @@
 | 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
-| 支付协议 | Stripe Checkout、PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
+| 支付协议 | Stripe Checkout、PayPal、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
 | 浏览器辅助 | Playwright、Camoufox、CloakBrowser |
 
 ## 安装部署方式
@@ -165,7 +165,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 ### 协议支付提链
 
-- 支持 PayPal、GoPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
+- 支持 PayPal、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
 - BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
@@ -238,6 +238,14 @@ sms_tool/registration.py
   注册主流程
   -> 邮箱 OTP、账号创建、Session、Codex OAuth
 
+sms_tool/registration_concurrency.py
+  注册阶段资源门控
+  -> 网络、AT 探测和支付阶段并发上限与等待指标
+
+sms_tool/account_liveness.py / account_recovery.py
+  账号存活与恢复
+  -> 无副作用额度探测、显式 OAuth 恢复和状态持久化
+
 sms_tool/payment_auth.py / payment_batch.py
   JIT AT 门禁与批量协议支付
   -> 401 OAuth 刷新、资格矩阵、Canary、重试、断点报告
@@ -256,7 +264,7 @@ sms_tool/storage.py
 
 services/
   可选本地协议服务
-  -> GoPay、ADB、邮件诊断、其他支付提取器
+  -> 邮件诊断、其他支付提取器
 ```
 
 ### 核心模块
@@ -266,6 +274,9 @@ services/
 | `SmsWorkbench/` | WPF 桌面界面、设置页、任务入口和本地状态展示 |
 | `sms_tool/cli.py` | CLI 参数与高层任务编排 |
 | `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
+| `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
+| `sms_tool/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
+| `sms_tool/account_recovery.py` | 本地额度刷新、401 OAuth 恢复与停用账号持久化 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
 | `sms_tool/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |

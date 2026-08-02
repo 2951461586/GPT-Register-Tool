@@ -272,8 +272,6 @@ def _payment_method(data, paypal):
     currency = str(_get(paypal, "currency")).strip().lower()
     if "upi" in pm_type_values or currency == "inr":
         return "upi"
-    if "gopay" in pm_type_values or currency == "idr":
-        return "gopay"
     if "momo" in pm_type_values or currency == "vnd":
         return "momo"
     for method in ("ideal", "pix", "kakao", "blik", "twint"):

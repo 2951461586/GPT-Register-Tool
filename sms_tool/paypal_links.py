@@ -341,16 +341,13 @@ def _saved_link_matches_payment_method(paypal, payment_method, payment_cfg=None)
         pm_type_values = {str(item or "").strip().lower() for item in pm_types}
     else:
         pm_type_values = {str(pm_types or "").strip().lower()} if pm_types else set()
-    has_gopay = "gopay" in pm_type_values
     has_paypal = "paypal" in pm_type_values
     has_upi = "upi" in pm_type_values
-    if target == "gopay":
-        return method == "gopay" or has_gopay or currency == "idr"
     if target == "upi":
         return method == "upi" or has_upi or currency == "inr"
-    if target not in {"paypal", "gopay", "upi"}:
+    if target not in {"paypal", "upi"}:
         return method == target or target in pm_type_values
-    if method == "gopay" or has_gopay or currency == "idr" or method == "upi" or has_upi or currency == "inr":
+    if method == "upi" or has_upi or currency == "inr":
         return False
     return method == "paypal" or has_paypal or currency == "usd" or not (raw_method or pm_type_values or currency)
 

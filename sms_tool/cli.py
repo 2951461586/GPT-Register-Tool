@@ -264,7 +264,7 @@ def main():
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
@@ -1200,7 +1200,8 @@ def _import_cpa(args):
 
 
 def _refresh_cpa_quota(args):
-    from .cpa_import import refresh_cpa_quota_statuses, refresh_local_quota_statuses
+    from .account_recovery import refresh_local_quota_statuses
+    from .cpa_import import refresh_cpa_quota_statuses
     from .storage import list_paypal_accounts
 
     emails = _read_email_file(args.email_file)
@@ -1244,7 +1245,7 @@ def _refresh_cpa_quota(args):
 
 def _quota_usage(args):
     """Fetch wham/usage 5h/7d quota for a single account and return structured JSON."""
-    from .cpa_import import probe_local_codex_quota, _format_wham_usage_label
+    from .account_liveness import probe_account_liveness
     from .storage import get_account_record
 
     email = (getattr(args, "email", None) or "").strip()
@@ -1259,7 +1260,7 @@ def _quota_usage(args):
 
     proxy = getattr(args, "proxy", None) or None
     timeout = max(5, int(getattr(args, "refresh_timeout", None) or 30))
-    probe = probe_local_codex_quota(account, proxy=proxy, timeout=timeout)
+    probe = probe_account_liveness(account, proxy=proxy, timeout=timeout)
     result = {
         "ok": probe.get("ok", False),
         "email": email,

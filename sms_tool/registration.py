@@ -161,7 +161,7 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe):
 
 
 def _probe_registration_access_token(access_token, auth_session, proxy=None):
-    from .cpa_import import probe_local_codex_quota
+    from .account_liveness import probe_account_liveness
 
     registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
     try:
@@ -178,7 +178,7 @@ def _probe_registration_access_token(access_token, auth_session, proxy=None):
         delay = 10.0
     probes = []
     for index in range(count):
-        probe = probe_local_codex_quota(
+        probe = probe_account_liveness(
             {"access_token": access_token, "auth_session": auth_session or {}},
             proxy=proxy,
             timeout=timeout,

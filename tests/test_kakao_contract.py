@@ -39,7 +39,7 @@ class KakaoContractTests(unittest.TestCase):
         self.assertEqual(result["decision"], "nonzero_offer")
 
     def test_401_is_credential_failure(self):
-        result = kakao.kakao_result_contract(ok=False, attempts=1, error="chatgpt /me failed 401")
+        result = kakao.kakao_result_contract(ok=False, attempts=1, error="wham/usage failed 401")
         self.assertEqual(result["decision"], "credential_invalid")
 
 

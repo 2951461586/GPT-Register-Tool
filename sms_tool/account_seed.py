@@ -41,6 +41,8 @@ def load_account_seed(email: str = "", session_file: str = "") -> tuple[dict[str
         data.setdefault("cookie_header", record.get("cookie_header", ""))
         data.setdefault("oauth_refresh_token", record.get("oauth_refresh_token", ""))
         data.setdefault("refresh_token", record.get("refresh_token", ""))
+        data.setdefault("registration_country", record.get("registration_country", ""))
+        data.setdefault("batch_id", record.get("batch_id", ""))
     return data, json_path
 
 

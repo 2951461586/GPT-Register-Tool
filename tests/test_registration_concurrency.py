@@ -39,7 +39,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                  "at_stability_probe_count": 2,
                  "at_stability_probe_delay_seconds": 10,
              }}), \
-             patch("sms_tool.cpa_import.probe_local_codex_quota", return_value={"status_code": 200}) as probe, \
+             patch("sms_tool.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
              patch.object(registration, "registration_stage", side_effect=stages.append), \
              patch.object(registration.time, "sleep") as sleep:
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")

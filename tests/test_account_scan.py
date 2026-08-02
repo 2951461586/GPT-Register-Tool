@@ -134,7 +134,7 @@ class AccountScanTests(unittest.TestCase):
                 ({"email": "a@example.com", "access_token": "new_at", "oauth_refresh_token": "new_rt"}, "session.json"),
             ],
         ), \
-             patch("sms_tool.account_scan.probe_local_codex_quota", side_effect=[
+             patch("sms_tool.account_scan.probe_account_liveness", side_effect=[
                  {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
                  {"ok": True, "status": "active", "quota_status": "3/5"},
              ]), \
@@ -155,7 +155,7 @@ class AccountScanTests(unittest.TestCase):
 
     def test_scan_one_keeps_alive_when_existing_at_is_valid_but_auth_probe_transport_fails(self):
         with patch("sms_tool.account_scan._load_seed_session", return_value=({"email": "a@example.com", "access_token": "at_123"}, "")), \
-             patch("sms_tool.account_scan.probe_local_codex_quota", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
+             patch("sms_tool.account_scan.probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
              patch("sms_tool.account_scan._workspace_probe", return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"}), \
              patch("sms_tool.account_scan._openai_refresh_token", return_value=""), \
              patch(
@@ -174,7 +174,7 @@ class AccountScanTests(unittest.TestCase):
             "sms_tool.account_scan._load_seed_session",
             return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
         ), \
-             patch("sms_tool.account_scan.probe_local_codex_quota", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
+             patch("sms_tool.account_scan.probe_account_liveness", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
              patch(
                 "sms_tool.account_scan.relogin_codex_account",
                 return_value={"ok": False, "error": "passwordless_missing_mailbox"},
@@ -198,7 +198,7 @@ class AccountScanTests(unittest.TestCase):
                 ({"email": "a@example.com", "access_token": "new_at"}, "session.json"),
             ],
         ), \
-             patch("sms_tool.account_scan.probe_local_codex_quota", side_effect=[
+             patch("sms_tool.account_scan.probe_account_liveness", side_effect=[
                  {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
                  {"ok": True, "status": "active", "quota_status": "1/5"},
              ]), \
@@ -222,7 +222,7 @@ class AccountScanTests(unittest.TestCase):
     def test_scan_one_skips_all_network_relogin_for_terminal_account(self):
         data = {"email": "a@example.com", "status": "account_deactivated", "access_token": "old_at"}
         with patch("sms_tool.account_scan._load_seed_session", return_value=(data, "session.json")), \
-             patch("sms_tool.account_scan.probe_local_codex_quota") as probe, \
+             patch("sms_tool.account_scan.probe_account_liveness") as probe, \
              patch("sms_tool.account_scan.relogin_codex_account") as relogin, \
              patch("sms_tool.account_scan.collect_codex_oauth_tokens") as collect, \
              patch("sms_tool.account_scan._persist_scan"):

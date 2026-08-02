@@ -10,6 +10,11 @@ from typing import Any, Callable
 
 from .config import CFG
 from .paths import runtime_file
+from .registration_concurrency import (
+    enter_registration_stage,
+    registration_stage_metrics,
+    release_registration_stage,
+)
 
 
 _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.ContextVar(
@@ -70,8 +75,11 @@ class RegistrationProgress:
 
 def registration_stage(name: str, status: str = "running", detail: str = "") -> None:
     progress = _current.get()
-    if progress is not None:
-        progress.stage(name, status, detail)
+    if progress is None:
+        return
+    waited_ms = enter_registration_stage(name)
+    wait_detail = f"stage_queue_wait_ms={waited_ms:.1f}" if waited_ms >= 1 else ""
+    progress.stage(name, status, detail or wait_detail)
 
 
 def _mailbox_email(kwargs: dict[str, Any]) -> str:
@@ -97,7 +105,9 @@ def track_registration(func: Callable[..., dict[str, Any]]) -> Callable[..., dic
                 progress.persist(result, error)
                 if isinstance(result, dict):
                     result["registration_progress"] = progress.snapshot()
+                    result["registration_stage_metrics"] = registration_stage_metrics()
             finally:
+                release_registration_stage()
                 _current.reset(token)
 
     return wrapper
