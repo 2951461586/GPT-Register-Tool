@@ -59,17 +59,26 @@ namespace SmsWorkbench
         public PaymentMatrixRow CreateDefaultMatrixRow(string paymentMethod)
         {
             string normalized = PaymentMethods.Normalize(paymentMethod);
-            string country = normalized == "momo" ? "VN" : normalized == "kakao" ? "KR" : "";
+            string country = normalized switch
+            {
+                "gopay" => "ID",
+                "gcash" or "grabpay" => "PH",
+                "momo" => "VN",
+                "kakao" => "KR",
+                _ => ""
+            };
+            bool wallet = normalized is "gopay" or "gcash" or "grabpay";
             return new PaymentMatrixRow
             {
-                Name = country.Length > 0 ? country.ToLowerInvariant() + "_sticky" : "default",
+                Name = country.Length > 0 ? country.ToLowerInvariant() + "_" + normalized : "default",
+                RegistrationCountry = country,
                 CheckoutCountry = country,
                 PromotionCountry = normalized == "kakao" ? "VN" : country,
                 ProviderCountry = country,
                 ApproveCountry = country,
                 RedirectCountry = country,
                 Strategy = normalized == "momo" ? "custom_promo" : "",
-                SampleSize = 5
+                SampleSize = wallet ? 1 : 5
             };
         }
 

@@ -110,9 +110,9 @@ namespace SmsWorkbench
             ProtocolPaymentPreferences preferences = LoadProtocolPaymentPreferences();
             var win = new Window
             {
-                Title = "协议支付提链",
+                Title = "协议支付",
                 Width = 620,
-                Height = 760,
+                Height = 820,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
                 ResizeMode = ResizeMode.CanResize,
@@ -129,7 +129,7 @@ namespace SmsWorkbench
             // ── 标题 ──────────────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
             {
-                Text = "协议支付链接提取",
+                Text = "协议支付",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
@@ -353,7 +353,7 @@ namespace SmsWorkbench
             };
             var jitRefreshCheck = new CheckBox
             {
-                Content = "AT 401 时邮箱 OTP OAuth 刷新",
+                Content = "AT 401 自动恢复（RT/Cookie/浏览器/OAuth）",
                 IsChecked = true,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 6),
@@ -361,7 +361,7 @@ namespace SmsWorkbench
             };
             var probeOnlyCheck = new CheckBox
             {
-                Content = "仅执行 JIT AT / 资格探测",
+                Content = "仅能力探测（Checkout + Stripe init）",
                 IsChecked = false,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 6),
@@ -438,6 +438,17 @@ namespace SmsWorkbench
                 BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
                 Margin = new Thickness(0, 0, 8, 0),
             };
+            var cancelBtn = new Button
+            {
+                Content = "取消",
+                Height = 32,
+                MinWidth = 60,
+                IsEnabled = false,
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
             var closeBtn = new Button
             {
                 Content = "关闭",
@@ -451,6 +462,7 @@ namespace SmsWorkbench
             btnPanel.Children.Add(extractBtn);
             btnPanel.Children.Add(copyBtn);
             btnPanel.Children.Add(openQrBtn);
+            btnPanel.Children.Add(cancelBtn);
             btnPanel.Children.Add(closeBtn);
             mainPanel.Children.Add(btnPanel);
 
@@ -459,12 +471,30 @@ namespace SmsWorkbench
 
             string lastUrl = "";
             string lastQrPath = "";
+            CancellationTokenSource executionCancellation = null;
+            bool closeAfterCancellation = false;
 
             string SelectedMethod()
             {
                 if (methodCombo.SelectedItem is not ComboBoxItem item) return "paypal";
                 string tag = Convert.ToString(item.Tag) ?? "paypal|US";
                 return tag.Split('|')[0];
+            }
+
+            void UpdateActionButton()
+            {
+                if (probeOnlyCheck.IsChecked == true)
+                {
+                    extractBtn.Content = "开始探测";
+                    return;
+                }
+                string method = SelectedMethod();
+                if (method == "blik")
+                {
+                    extractBtn.Content = "执行支付";
+                    return;
+                }
+                extractBtn.Content = "提取";
             }
 
             string ComboCode(ComboBox combo)
@@ -485,16 +515,6 @@ namespace SmsWorkbench
                         return;
                     }
                 }
-            }
-
-            void AddStageCountryArgs(List<string> args)
-            {
-                string checkoutStage = ComboCode(checkoutCountryCombo);
-                string approveStage = ComboCode(approveCountryCombo);
-                string updateStage = ComboCode(updateCountryCombo);
-                if (checkoutStage.Length > 0) args.AddRange(new[] { "--checkout-proxy-country", checkoutStage });
-                if (approveStage.Length > 0) args.AddRange(new[] { "--approve-proxy-country", approveStage });
-                if (updateStage.Length > 0) args.AddRange(new[] { "--update-proxy-country", updateStage });
             }
 
             void SaveSelection()
@@ -535,21 +555,23 @@ namespace SmsWorkbench
                 }
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
-                stageProxyPanel.Visibility = method == "paypal" || method == "upi" || method == "direct_card" || method == "momo" ? Visibility.Visible : Visibility.Collapsed;
+                stageProxyPanel.Visibility = method == "paypal" || method == "gopay" || method == "gcash" || method == "grabpay" || method == "upi" || method == "direct_card" || method == "momo" ? Visibility.Visible : Visibility.Collapsed;
                 updateCountryCombo.IsEnabled = method == "paypal" || method == "direct_card";
-                extractBtn.Content = method == "blik" ? "执行支付" : "提取";
+                zeroCheck.IsChecked = true;
+                zeroCheck.IsEnabled = probeOnlyCheck.IsChecked != true;
+                UpdateActionButton();
             };
             probeOnlyCheck.Checked += (_, __) =>
             {
                 zeroCheck.IsEnabled = false;
                 requireBaCheck.IsEnabled = false;
-                extractBtn.Content = "开始探测";
+                UpdateActionButton();
             };
             probeOnlyCheck.Unchecked += (_, __) =>
             {
                 zeroCheck.IsEnabled = true;
                 requireBaCheck.IsEnabled = SelectedMethod() == "paypal";
-                extractBtn.Content = SelectedMethod() == "blik" ? "执行支付" : "提取";
+                UpdateActionButton();
             };
             for (int index = 0; index < methodCombo.Items.Count; index++)
             {
@@ -576,10 +598,12 @@ namespace SmsWorkbench
             testProxyBtn.Click += async (_, __) =>
             {
                 SaveSelection();
-                var args = new List<string> { "--test-payment-proxies", "--payment-method", SelectedMethod() };
-                string proxy = proxyBox.Text.Trim();
-                if (proxy.Length > 0) args.AddRange(new[] { "--proxy", proxy });
-                AddStageCountryArgs(args);
+                var args = ProtocolPaymentExecutionPlanner.CreateProxyTestArguments(
+                    SelectedMethod(),
+                    proxyBox.Text,
+                    ComboCode(checkoutCountryCombo),
+                    ComboCode(approveCountryCombo),
+                    ComboCode(updateCountryCombo)).ToList();
 
                 resultBox.Text = "正在测试 checkout / approve / update 代理出口...";
                 testProxyBtn.IsEnabled = false;
@@ -628,7 +652,9 @@ namespace SmsWorkbench
                 }
 
                 string method = SelectedMethod();
-                if (method == "blik" && (blikCodeBox.Text.Trim().Length != 6 || !blikCodeBox.Text.Trim().All(char.IsDigit)))
+                if (probeOnlyCheck.IsChecked != true
+                    && method == "blik"
+                    && (blikCodeBox.Text.Trim().Length != 6 || !blikCodeBox.Text.Trim().All(char.IsDigit)))
                 {
                     resultBox.Text = "请输入有效的 6 位 BLIK Code";
                     return;
@@ -642,172 +668,97 @@ namespace SmsWorkbench
                 bool requireBaToken = requireBaCheck.IsChecked == true;
                 SaveSelection();
 
-                resultBox.Text = "正在执行 " + PaymentMethodLabel(method) + " 协议提链...";
                 extractBtn.IsEnabled = false;
+                testProxyBtn.IsEnabled = false;
+                cancelBtn.IsEnabled = true;
                 copyBtn.IsEnabled = false;
                 openQrBtn.IsEnabled = false;
-                var args = new List<string>();
                 string transientSessionFile = "";
+                using var cancellation = new CancellationTokenSource();
+                executionCancellation = cancellation;
+                ProtocolPaymentExecutionPlan plan = null;
 
                 try
                 {
-                    args.AddRange(new[] { "--extract-payment-link", "--payment-method", method, "--target-country", country });
-                    if (selectedAccount != null)
-                    {
-                        args.AddRange(new[] { "--email", selectedAccount.Identifier });
-                        AddSessionFileArg(args, selectedAccount);
-                    }
-                    else
+                    string sessionFile;
+                    if (selectedAccount == null)
                     {
                         transientSessionFile = Path.Combine(Path.GetTempPath(), "protocol_payment_at_" + Guid.NewGuid().ToString("N") + ".json");
                         File.WriteAllText(
                             transientSessionFile,
                             JsonSerializer.Serialize(new Dictionary<string, string> { ["access_token"] = at }),
                             new UTF8Encoding(false));
-                        args.AddRange(new[] { "--session-file", transientSessionFile });
+                        sessionFile = transientSessionFile;
                     }
-
-                    if (!string.IsNullOrEmpty(proxy))
-                        args.AddRange(new[] { "--proxy", proxy });
-
-                    if (selectedAccount != null && jitRefreshCheck.IsChecked != true)
-                        args.Add("--no-jit-at-refresh");
-                    if (selectedAccount != null && probeOnlyCheck.IsChecked == true)
-                        args.Add("--payment-probe-only");
-
-                    AddStageCountryArgs(args);
-
-                    if (!requireZero)
-                        args.Add("--no-require-zero");
-                    if (method == "paypal" && requireBaToken)
-                        args.Add("--require-ba-token");
-                    if (method == "blik" && !string.IsNullOrWhiteSpace(blikCodeBox.Text))
-                        args.AddRange(new[] { "--blik-code", blikCodeBox.Text.Trim() });
-
-                    string taskName = PaymentMethodLabel(method) + " 协议提链";
-                    var result = await Task.Run(() => RunBackendWithResult(taskName, args, ProtocolPaymentBackendTimeoutMs(method)));
-
-                    // 解析 JSON 结果
-                    try
+                    else
                     {
-                        var json = System.Text.Json.JsonDocument.Parse(result);
-                        var root = json.RootElement;
-                        if (root.TryGetProperty("ok", out var ok) && ok.GetBoolean())
-                        {
-                            var sb = new StringBuilder();
-                            bool paymentCompleted = root.TryGetProperty("status", out var statusEl)
-                                && string.Equals(statusEl.GetString(), "completed", StringComparison.OrdinalIgnoreCase);
-                            sb.AppendLine(paymentCompleted ? "[成功] 支付已完成" : "[成功] 提取成功!");
-                            sb.AppendLine();
-
-                            if (root.TryGetProperty("message", out var messageEl) && !string.IsNullOrWhiteSpace(messageEl.GetString()))
-                                sb.AppendLine(messageEl.GetString());
-
-                            if (root.TryGetProperty("probe", out var probeEl) && probeEl.ValueKind == JsonValueKind.Object)
-                            {
-                                string probeStatus = probeEl.TryGetProperty("status_code", out var probeCodeEl) ? probeCodeEl.ToString() : "";
-                                if (probeStatus.Length > 0) sb.AppendLine($"AT 探测: HTTP {probeStatus}");
-                            }
-                            if (root.TryGetProperty("refreshed", out var refreshedEl) && refreshedEl.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                                sb.AppendLine($"JIT 刷新: {(refreshedEl.GetBoolean() ? "已获取新 AT" : "未刷新")}");
-                            if (root.TryGetProperty("token_telemetry", out var telemetryEl) && telemetryEl.ValueKind == JsonValueKind.Object)
-                            {
-                                if (telemetryEl.TryGetProperty("age_seconds", out var ageEl)) sb.AppendLine($"AT 年龄: {ageEl} 秒");
-                                if (telemetryEl.TryGetProperty("expires_in_seconds", out var expiresEl)) sb.AppendLine($"AT 剩余: {expiresEl} 秒");
-                            }
-
-                            // URL / UPI URI
-                            string url = "";
-                            if (root.TryGetProperty("upi_uri", out var upiUri) && !string.IsNullOrEmpty(upiUri.GetString()))
-                            {
-                                url = upiUri.GetString() ?? "";
-                                sb.AppendLine($"UPI URI: {url}"); // UPI URI 为技术字段名，保留
-                            }
-                            else if (root.TryGetProperty("url", out var urlEl) && !string.IsNullOrEmpty(urlEl.GetString()))
-                            {
-                                url = urlEl.GetString() ?? "";
-                                sb.AppendLine($"链接: {url}");
-                            }
-
-                            if (root.TryGetProperty("hosted_url", out var hostedEl))
-                                sb.AppendLine($"托管 URL: {hostedEl.GetString()}");
-
-                            if (root.TryGetProperty("link_type", out var ltEl))
-                                sb.AppendLine($"链接类型: {ltEl.GetString()}");
-
-                            if (root.TryGetProperty("run_id", out var runIdEl))
-                                sb.AppendLine($"任务 ID: {runIdEl.GetString()}");
-
-                            if (root.TryGetProperty("manager_state", out var stateEl))
-                                sb.AppendLine($"状态机: {stateEl.GetString()}");
-
-                            if (root.TryGetProperty("qr_path", out var qrPathEl))
-                            {
-                                lastQrPath = qrPathEl.GetString() ?? "";
-                                if (!string.IsNullOrEmpty(lastQrPath))
-                                    sb.AppendLine($"QR 图片: {lastQrPath}");
-                            }
-
-                            if (root.TryGetProperty("cs_id", out var csIdEl))
-                                sb.AppendLine($"CS ID: {csIdEl.GetString()}"); // CS ID 为 Stripe 字段名，保留
-
-                            if (root.TryGetProperty("amount", out var amtEl))
-                                sb.AppendLine($"金额: {amtEl}");
-
-                            if (root.TryGetProperty("currency", out var curEl))
-                                sb.AppendLine($"货币: {curEl.GetString()}");
-
-                            if (root.TryGetProperty("coupon_name", out var couponEl))
-                            {
-                                var couponStr = couponEl.GetString();
-                                if (!string.IsNullOrEmpty(couponStr))
-                                    sb.AppendLine($"优惠券: {couponStr}");
-                            }
-
-                            if (root.TryGetProperty("approval_ok", out var apprEl))
-                                sb.AppendLine($"审批状态: {(apprEl.GetBoolean() ? "已批准" : "待处理/失败")}");
-
-                            if (root.TryGetProperty("expires_at", out var expEl))
-                            {
-                                try
-                                {
-                                    var expires = expEl.GetInt64();
-                                    if (expires > 0)
-                                    {
-                                        var dt = DateTimeOffset.FromUnixTimeSeconds(expires).LocalDateTime;
-                                        sb.AppendLine($"过期时间: {dt:yyyy-MM-dd HH:mm:ss}");
-                                    }
-                                }
-                                catch { }
-                            }
-
-                            if (root.TryGetProperty("target_country", out var tcEl))
-                                sb.AppendLine($"国家: {tcEl.GetString()}");
-
-                            if (root.TryGetProperty("warning", out var warnEl))
-                                sb.AppendLine($"警告: {warnEl.GetString()}");
-
-                            resultBox.Text = sb.ToString().TrimEnd();
-                            lastUrl = url;
-                            copyBtn.IsEnabled = !string.IsNullOrEmpty(lastUrl);
-                            openQrBtn.IsEnabled = !string.IsNullOrEmpty(lastQrPath) && File.Exists(lastQrPath);
-                        }
-                        else
-                        {
-                            string error = "";
-                            if (root.TryGetProperty("error", out var err))
-                                error = err.GetString() ?? "";
-                            string errorCode = "";
-                            if (root.TryGetProperty("error_code", out var ec))
-                                errorCode = ec.GetString() ?? "";
-                            resultBox.Text = $"[失败] {error}" + (string.IsNullOrEmpty(errorCode) ? "" : $"\n错误代码: {errorCode}");
-                        }
+                        sessionFile = SessionFileFor(selectedAccount);
                     }
-                    catch
+
+                    plan = ProtocolPaymentExecutionPlanner.Create(
+                        new ProtocolPaymentExecutionRequest(
+                            method,
+                            country,
+                            proxy,
+                            jitRefreshCheck.IsChecked == true,
+                            probeOnlyCheck.IsChecked == true,
+                            requireZero,
+                            requireBaToken,
+                            blikCodeBox.Text,
+                            ComboCode(checkoutCountryCombo),
+                            ComboCode(approveCountryCombo),
+                            ComboCode(updateCountryCombo),
+                            selectedAccount?.Identifier ?? "",
+                            sessionFile));
+                    var args = plan.Arguments.ToList();
+                    resultBox.Text = plan.StatusText;
+                    int timeoutMs = ProtocolPaymentBackendTimeoutMs(method);
+                    Log("启动：python " + FormatBackendArgsForDisplay(args));
+                    BackendCommandResult backendResult = await backendClient.RunAsync(
+                        BackendCommand.Create(plan.TaskName, args, timeoutMs),
+                        cancellationToken: cancellation.Token);
+                    string result;
+                    if (backendResult.Payload.HasValue)
+                        result = backendResult.Payload.Value.GetRawText();
+                    else if (backendResult.TimedOut)
                     {
-                        // 非 JSON 结果，直接显示
-                        resultBox.Text = result;
+                        ProtocolPaymentResultPresentation timedOut = ProtocolPaymentResultPresenter.Aborted(plan, "timed_out");
+                        resultBox.Text = timedOut.Text;
+                        lastUrl = timedOut.Url;
+                        lastQrPath = timedOut.QrPath;
+                        copyBtn.IsEnabled = false;
+                        openQrBtn.IsEnabled = false;
+                        return;
                     }
+                    else if (!string.IsNullOrWhiteSpace(backendResult.StandardError))
+                        throw new InvalidOperationException(backendResult.StandardError);
+                    else
+                        result = backendResult.StandardOutput;
+
+                    ProtocolPaymentResultPresentation presentation = ProtocolPaymentResultPresenter.Parse(result);
+                    resultBox.Text = presentation.Text;
+                    lastUrl = presentation.Url;
+                    lastQrPath = presentation.QrPath;
+                    copyBtn.IsEnabled = lastUrl.Length > 0;
+                    openQrBtn.IsEnabled = lastQrPath.Length > 0 && File.Exists(lastQrPath);
+                }
+                catch (OperationCanceledException)
+                {
+                    ProtocolPaymentResultPresentation cancelled = ProtocolPaymentResultPresenter.Aborted(plan, "cancelled");
+                    resultBox.Text = cancelled.Text;
+                    lastUrl = cancelled.Url;
+                    lastQrPath = cancelled.QrPath;
+                    copyBtn.IsEnabled = false;
+                    openQrBtn.IsEnabled = false;
+                }
+                catch (TimeoutException)
+                {
+                    ProtocolPaymentResultPresentation timedOut = ProtocolPaymentResultPresenter.Aborted(plan, "timed_out");
+                    resultBox.Text = timedOut.Text;
+                    lastUrl = timedOut.Url;
+                    lastQrPath = timedOut.QrPath;
+                    copyBtn.IsEnabled = false;
+                    openQrBtn.IsEnabled = false;
                 }
                 catch (Exception ex)
                 {
@@ -821,7 +772,13 @@ namespace SmsWorkbench
                             File.Delete(transientSessionFile);
                     }
                     catch { }
+                    if (ReferenceEquals(executionCancellation, cancellation))
+                        executionCancellation = null;
                     extractBtn.IsEnabled = true;
+                    testProxyBtn.IsEnabled = true;
+                    cancelBtn.IsEnabled = false;
+                    if (closeAfterCancellation)
+                        win.Close();
                 }
             };
 
@@ -856,10 +813,27 @@ namespace SmsWorkbench
                 }
             };
 
+            cancelBtn.Click += (_, __) =>
+            {
+                if (executionCancellation == null) return;
+                resultBox.Text = "正在取消协议支付任务...";
+                cancelBtn.IsEnabled = false;
+                executionCancellation.Cancel();
+            };
+
             closeBtn.Click += (_, __) =>
             {
                 SaveSelection();
                 win.Close();
+            };
+            win.Closing += (_, args) =>
+            {
+                if (executionCancellation == null) return;
+                args.Cancel = true;
+                closeAfterCancellation = true;
+                resultBox.Text = "正在取消协议支付任务...";
+                cancelBtn.IsEnabled = false;
+                executionCancellation.Cancel();
             };
             win.Closed += (_, __) => SaveSelection();
 

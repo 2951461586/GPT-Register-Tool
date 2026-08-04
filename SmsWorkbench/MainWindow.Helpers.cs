@@ -583,7 +583,7 @@ namespace SmsWorkbench
             string detected = hasSavedMethod ? savedMethod : "";
             if (detected.Length == 0)
             {
-                foreach (string candidate in new[] { "paypal", "upi", "ideal", "pix", "kakao", "blik", "twint", "momo" })
+                foreach (string candidate in new[] { "paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao", "blik", "twint", "momo" })
                 {
                     if (PaymentMethodTypesContain(paypal, candidate))
                     {
@@ -596,6 +596,8 @@ namespace SmsWorkbench
             {
                 detected = currency switch
                 {
+                    "idr" => "gopay",
+                    "php" when requested is "gcash" or "grabpay" or "direct_card" => requested,
                     "inr" => "upi",
                     "brl" => "pix",
                     "krw" => "kakao",

@@ -189,6 +189,9 @@
     "proxy_pool": [],
     "enabled_methods": [
       "paypal",
+      "gopay",
+      "gcash",
+      "grabpay",
       "upi",
       "ideal",
       "pix",
@@ -202,12 +205,15 @@
     "state_file": "runtime/payment_link_runs.jsonl",
     "timeout_seconds": 900,
     "batch": {
-      "method_workers": { "momo": 2, "kakao": 2, "paypal": 4 },
+      "method_workers": { "momo": 2, "kakao": 2, "gopay": 2, "gcash": 2, "grabpay": 2, "paypal": 4 },
       "pause_on_canary_failure": true,
       "canary_pause_seconds": 21600
     },
     "matrix": {
       "cells": [
+        { "name": "id_gopay", "payment_method": "gopay", "registration_country": "ID", "checkout_country": "ID", "provider_country": "ID", "approve_country": "ID", "redirect_country": "ID", "sample_size": 1 },
+        { "name": "ph_gcash", "payment_method": "gcash", "registration_country": "PH", "checkout_country": "PH", "provider_country": "PH", "approve_country": "PH", "redirect_country": "PH", "sample_size": 1 },
+        { "name": "ph_grabpay", "payment_method": "grabpay", "registration_country": "PH", "checkout_country": "PH", "provider_country": "PH", "approve_country": "PH", "redirect_country": "PH", "sample_size": 1 },
           { "name": "vn_sticky", "payment_method": "momo", "registration_country": "VN", "checkout_country": "VN", "promotion_country": "VN", "provider_country": "VN", "approve_country": "VN", "redirect_country": "VN", "strategy": "custom_promo", "sample_size": 5 },
           { "name": "kr_kakao", "payment_method": "kakao", "registration_country": "KR", "checkout_country": "KR", "promotion_country": "VN", "provider_country": "KR", "approve_country": "KR", "redirect_country": "KR", "sample_size": 5 }
       ]
@@ -215,6 +221,9 @@
     "methods": {
       "ideal": { "proxy": "", "timeout_seconds": 900 },
       "pix": { "proxy": "", "timeout_seconds": 900 },
+      "gopay": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
+      "gcash": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
+      "grabpay": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
       "kakao": { "proxy": "", "timeout_seconds": 900 },
       "blik": { "proxy": "", "timeout_seconds": 900 },
       "twint": { "proxy": "", "timeout_seconds": 900 },

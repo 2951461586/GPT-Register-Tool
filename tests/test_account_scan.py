@@ -150,7 +150,7 @@ class AccountScanTests(unittest.TestCase):
         self.assertTrue(result["relogin"]["ok"])
         self.assertEqual(result["token_probe"]["status"], "active")
         relogin.assert_called_once()
-        self.assertEqual(relogin.call_args.kwargs["mode"], "codex_oauth")
+        self.assertEqual(relogin.call_args.kwargs["mode"], "auto")
         collect.assert_not_called()
 
     def test_scan_one_keeps_alive_when_existing_at_is_valid_but_auth_probe_transport_fails(self):

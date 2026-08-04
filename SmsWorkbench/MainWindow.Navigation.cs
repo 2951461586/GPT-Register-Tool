@@ -14,14 +14,23 @@ namespace SmsWorkbench
 
         private void AddSessionFileArg(List<string> args, PoolRow row)
         {
-            string jsonPath = File.Exists(row.Notes) && row.Notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                ? row.Notes
-                : row.SourcePath;
-            if (File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            string jsonPath = SessionFileFor(row);
+            if (jsonPath.Length > 0)
             {
                 args.Add("--session-file");
                 args.Add(jsonPath);
             }
+        }
+
+        private static string SessionFileFor(PoolRow row)
+        {
+            if (row == null) return "";
+            string jsonPath = File.Exists(row.Notes) && row.Notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? row.Notes
+                : row.SourcePath;
+            return File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? jsonPath
+                : "";
         }
 
         private PoolRow SelectedEmailRowOrNotify(string action)

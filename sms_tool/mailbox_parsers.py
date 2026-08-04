@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 from .mailbox_types import MailboxAccount
+from . import mailbox_icloud_url
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MS_CLIENT_ID_RE = re.compile(
@@ -64,6 +65,10 @@ def _is_remail_line(line):
     return line.lower().startswith("remail://")
 
 
+def _is_icloud_url_line(line):
+    return mailbox_icloud_url.is_icloud_url_line(line)
+
+
 def _is_chongzhi_line(line):
     """Detect chongzhi.art credential format: email--------password----..."""
     return "--------" in line and "@" in line.split("--------", 1)[0]
@@ -113,6 +118,21 @@ def _parse_remail_line(line, source_path, line_no):
         token=service_token,
         order_no=order_no,
         purchase_id=purchase_id,
+    )
+
+
+def _parse_icloud_url_line(line, source_path, line_no):
+    email, url = mailbox_icloud_url.split_icloud_url_line(line)
+    email = _normalize_mailbox_email(email)
+    if not email or not url:
+        print(f"[!] Skip malformed iCloud OTP URL line {source_path}:{line_no}")
+        return None
+    return MailboxAccount(
+        email=email,
+        source=str(source_path),
+        provider=mailbox_icloud_url.PROVIDER,
+        token=url,
+        auth_mode="otp_url",
     )
 
 
@@ -203,6 +223,11 @@ def _parse_mailbox_token_file(path):
             continue
         if _is_remail_line(line):
             account = _parse_remail_line(line, token_path, line_no)
+            if account:
+                records.append(account)
+            continue
+        if _is_icloud_url_line(line):
+            account = _parse_icloud_url_line(line, token_path, line_no)
             if account:
                 records.append(account)
             continue

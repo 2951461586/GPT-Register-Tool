@@ -43,6 +43,11 @@ from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
 import requests
 
 try:
+    from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+except ImportError:  # pragma: no cover - direct script execution
+    from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
+
+try:
     from .paypal_proxy import (
         PayPalProxyState,
         infer_proxy_country,
@@ -1996,13 +2001,11 @@ def generate_chatgpt_checkout_link(
         _cookie = ""
         if isinstance(auth_context, dict):
             _cookie = str(auth_context.get("cookie_header") or "")
-        checkout_body = {
-            "entry_point": "all_plans_pricing_modal",
-            "plan_name": "chatgptplusplan",
-            "billing_details": {"country": checkout_country, "currency": currency},
-            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
-            "checkout_ui_mode": "custom",
-        }
+        contract = CheckoutRequestContract.for_payment_method(
+            "paypal", billing_country=checkout_country, currency=currency,
+            payment_locale="en", browser_locale="en-US", browser_timezone="Asia/Shanghai",
+        )
+        checkout_body = contract.checkout_payload()
         r = _checkout_post(
             "https://chatgpt.com/backend-api/payments/checkout",
             checkout_body, access_token, _cookie, checkout_proxy, CHATGPT_TIMEOUT,
@@ -2012,10 +2015,11 @@ def generate_chatgpt_checkout_link(
         if r.status_code >= 400:
             return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "link_type": "chatgpt_checkout_link"}
         checkout_data = r.json() or {}
-        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("session_id") or checkout_data.get("id") or ""
-        if not str(cs_id).startswith("cs_"):
-            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "link_type": "chatgpt_checkout_link"}
-        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        checkout = CheckoutSessionContract.from_payload(
+            checkout_data, billing_country=checkout_country, fallback_publishable_key=DEFAULT_STRIPE_PK,
+        )
+        cs_id = checkout.checkout_session_id
+        processor_entity = checkout.processor_entity
         url = _chatgpt_checkout_url(processor_entity, cs_id)
         emit("checkout", f"checkout success: cs_id={cs_id} entity={processor_entity} country={checkout_country} currency={currency}")
         return {
@@ -2099,13 +2103,11 @@ def generate_hosted_long_url(
         _cookie = ""
         if isinstance(auth_context, dict):
             _cookie = str(auth_context.get("cookie_header") or "")
-        checkout_body = {
-            "entry_point": "all_plans_pricing_modal",
-            "plan_name": "chatgptplusplan",
-            "billing_details": {"country": checkout_country, "currency": currency},
-            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
-            "checkout_ui_mode": "custom",
-        }
+        contract = CheckoutRequestContract.for_payment_method(
+            "paypal", billing_country=checkout_country, currency=currency,
+            payment_locale="en", browser_locale="en-US", browser_timezone="Asia/Shanghai",
+        )
+        checkout_body = contract.checkout_payload()
         r = _checkout_post(
             "https://chatgpt.com/backend-api/payments/checkout",
             checkout_body, access_token, _cookie, checkout_proxy, CHATGPT_TIMEOUT,
@@ -2115,11 +2117,12 @@ def generate_hosted_long_url(
         if r.status_code >= 400:
             return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "link_type": "chatgpt_checkout_hosted_long_url"}
         checkout_data = r.json() or {}
-        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("session_id") or checkout_data.get("id") or ""
-        if not str(cs_id).startswith("cs_"):
-            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "link_type": "chatgpt_checkout_hosted_long_url"}
-        stripe_pk = checkout_data.get("publishable_key") or DEFAULT_STRIPE_PK
-        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        checkout = CheckoutSessionContract.from_payload(
+            checkout_data, billing_country=checkout_country, fallback_publishable_key=DEFAULT_STRIPE_PK,
+        )
+        cs_id = checkout.checkout_session_id
+        stripe_pk = checkout.publishable_key
+        processor_entity = checkout.processor_entity
         emit("checkout", f"checkout success: cs_id={cs_id} country={checkout_country} currency={currency}")
 
         stripe_init_proxy, stripe_exit = _prepare_configured_stage_proxy(
@@ -2132,21 +2135,7 @@ def generate_hosted_long_url(
         )
         emit("stripe_init", f"Stage 2: proxy={redact_proxy_url(stripe_init_proxy)} for Stripe init")
         stripe = _new_session(stripe_init_proxy)
-        init_body = {
-            "browser_locale": "en-US",
-            "browser_timezone": "Asia/Shanghai",
-            "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-            "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-            "elements_session_client[elements_init_source]": "custom_checkout",
-            "elements_session_client[referrer_host]": "chatgpt.com",
-            "elements_session_client[stripe_js_id]": str(uuid.uuid4()),
-            "elements_session_client[locale]": "en",
-            "elements_session_client[is_aggregation_expected]": "false",
-            "elements_options_client[saved_payment_method][enable_save]": "never",
-            "elements_options_client[saved_payment_method][enable_redisplay]": "never",
-            "key": stripe_pk,
-            "_stripe_version": STRIPE_VERSION,
-        }
+        init_body = contract.stripe_init_payload(stripe_pk, stripe_version=STRIPE_VERSION)
         init_resp = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=init_body, timeout=DEFAULT_TIMEOUT)
         if init_resp.status_code >= 400:
             return {"ok": False, "error": f"stripe init failed: {init_resp.status_code} {init_resp.text[:300]}", "error_code": "stripe_init_failed", "link_type": "chatgpt_checkout_hosted_long_url", "cs_id": cs_id, "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country}

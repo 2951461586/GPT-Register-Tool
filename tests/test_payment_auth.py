@@ -25,12 +25,13 @@ class PaymentAuthTests(unittest.TestCase):
              patch("sms_tool.account_liveness.probe_account_liveness", return_value={"ok": False, "status_code": 401}), \
              patch("sms_tool.account_recovery.relogin_codex_account", return_value={
                  "ok": True, "persisted": True, "probe": {"ok": True, "status_code": 200}
-             }):
+             }) as relogin:
             result = payment_auth.ensure_payment_access_token(email="a@example.com")
         self.assertTrue(result["ok"])
         self.assertTrue(result["refreshed"])
         self.assertTrue(result["token_changed"])
         self.assertEqual(result["access_token"], "new")
+        self.assertEqual(relogin.call_args.kwargs["mode"], "auto")
 
     def test_public_result_never_contains_credentials(self):
         public = payment_auth.public_payment_auth_result({

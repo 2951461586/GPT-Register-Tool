@@ -23,6 +23,61 @@ public sealed class MailboxPoolFileStoreTests
         Assert.Empty(MailboxPoolFileStore.BuildReMailLine("user@example.com", "service-token", "", "purchase-456"));
     }
 
+    [Theory]
+    [InlineData("user@icloud.com----https://mail.example/inbox/private-token", "user@icloud.com")]
+    [InlineData("user@me.com---http://mail.example/messages/private-token", "user@me.com")]
+    public void ParsesICloudReceiveUrlLines(string line, string expectedEmail)
+    {
+        Assert.True(MailboxPoolFileStore.TryParseICloudUrlLine(line, out string email, out string receiveUrl));
+        Assert.Equal(expectedEmail, email);
+        Assert.StartsWith("http", receiveUrl, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("user@example.com----https://mail.example/inbox/private-token")]
+    [InlineData("user@icloud.com----ftp://mail.example/inbox/private-token")]
+    [InlineData("user@icloud.com----not-a-url")]
+    public void RejectsInvalidICloudReceiveUrlLines(string line)
+    {
+        Assert.False(MailboxPoolFileStore.TryParseICloudUrlLine(line, out _, out _));
+    }
+
+    [Theory]
+    [InlineData("iCloud邮箱池", "icloud_url", true)]
+    [InlineData("SQLite/iCloud", "icloud_url", true)]
+    [InlineData("SQLite/Gmail", "gmail", true)]
+    [InlineData("SQLite", "", false)]
+    public void MailboxFilterIncludesRegisteredProviderAccounts(string accountType, string provider, bool expected)
+    {
+        Assert.Equal(expected, MailboxPoolFileStore.IsMailboxPoolLike(accountType, provider));
+    }
+
+    [Fact]
+    public void ImportSupportedLinesAcceptsICloudAndDeduplicates()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "smsworkbench-mailbox-import-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string target = Path.Combine(root, "mailbox_tokens.txt");
+            string icloud = "user@icloud.com----https://mail.example/inbox/private-token";
+            string chatai = "other@example.com----password----client-id----refresh-token";
+
+            (int imported, int skipped) = MailboxPoolFileStore.ImportSupportedLines(
+                target,
+                new[] { icloud, chatai, icloud, "invalid" });
+
+            Assert.Equal(2, imported);
+            Assert.Equal(2, skipped);
+            Assert.Equal(new[] { icloud, chatai }, File.ReadAllLines(target, Encoding.UTF8));
+            Assert.False(File.ReadAllBytes(target).Take(3).SequenceEqual(new byte[] { 0xEF, 0xBB, 0xBF }));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Fact]
     public void DeleteMatchingLinesRemovesDuplicatesWithoutAddingBom()
     {

@@ -20,16 +20,26 @@ internal sealed class StubBackendClient : IBackendClient
     public Func<BackendCommand, BackendCommandResult> Handler { get; set; } = _ =>
         new BackendCommandResult(0, "", "", null, false);
 
+    public Func<BackendCommand, CancellationToken, Task<BackendCommandResult>>? AsyncHandler { get; set; }
+
+    public Action<IProgress<BackendOutputLine>?>? ReportProgress { get; set; }
+
     public BackendCommand? LastCommand { get; private set; }
 
-    public Task<BackendCommandResult> RunAsync(
+    public List<BackendCommand> Commands { get; } = new();
+
+    public async Task<BackendCommandResult> RunAsync(
         BackendCommand command,
         IProgress<BackendOutputLine>? progress = null,
         CancellationToken cancellationToken = default)
     {
         LastCommand = command;
+        Commands.Add(command);
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Handler(command));
+        ReportProgress?.Invoke(progress);
+        if (AsyncHandler != null)
+            return await AsyncHandler(command, cancellationToken);
+        return Handler(command);
     }
 }
 

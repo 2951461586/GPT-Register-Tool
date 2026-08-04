@@ -8,7 +8,7 @@ from sms_tool import cli
 
 
 class CliQuotaTests(unittest.TestCase):
-    def test_refresh_local_quota_never_relogins_on_401(self):
+    def test_refresh_local_quota_enables_requested_401_recovery_chain(self):
         args = SimpleNamespace(
             email="user@example.com",
             email_file=None,
@@ -20,6 +20,7 @@ class CliQuotaTests(unittest.TestCase):
             refresh_timeout=30,
             quota_auto_relogin=True,
             quota_relogin_timeout=180,
+            scan_relogin_mode="auto",
             cpa_api_url=None,
             cpa_api_token=None,
         )
@@ -28,7 +29,9 @@ class CliQuotaTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()):
                 cli._refresh_cpa_quota(args)
 
-        self.assertFalse(refresh.call_args.kwargs["relogin_on_401"])
+        self.assertTrue(refresh.call_args.kwargs["relogin_on_401"])
+        self.assertEqual(refresh.call_args.kwargs["relogin_timeout"], 180)
+        self.assertEqual(refresh.call_args.kwargs["relogin_mode"], "auto")
 
 
 if __name__ == "__main__":

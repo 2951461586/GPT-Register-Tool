@@ -8,6 +8,78 @@ namespace SmsWorkbench
 {
     internal static class MailboxPoolFileStore
     {
+        internal static (int Imported, int Skipped) ImportSupportedLines(string targetPath, IEnumerable<string> sourceLines)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath)) throw new ArgumentException("Target path is required.", nameof(targetPath));
+
+            string fullPath = Path.GetFullPath(targetPath);
+            string? directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(fullPath))
+            {
+                foreach (string line in File.ReadAllLines(fullPath, Encoding.UTF8))
+                {
+                    string normalized = NormalizeLine(line);
+                    if (normalized.Length > 0) existing.Add(normalized);
+                }
+            }
+
+            int skipped = 0;
+            var additions = new List<string>();
+            foreach (string raw in sourceLines ?? Enumerable.Empty<string>())
+            {
+                string line = NormalizeLine(raw);
+                if (line.Length == 0 || line.StartsWith('#')) continue;
+                if (!IsSupportedImportLine(line) || !existing.Add(line))
+                {
+                    skipped++;
+                    continue;
+                }
+                additions.Add(line);
+            }
+
+            if (additions.Count > 0) File.AppendAllLines(fullPath, additions, new UTF8Encoding(false));
+            return (additions.Count, skipped);
+        }
+
+        internal static bool TryParseICloudUrlLine(string line, out string email, out string receiveUrl)
+        {
+            email = "";
+            receiveUrl = "";
+            string value = NormalizeLine(line);
+            foreach (string delimiter in new[] { "----", "---" })
+            {
+                int separator = value.IndexOf(delimiter, StringComparison.Ordinal);
+                if (separator <= 0) continue;
+
+                string candidateEmail = value.Substring(0, separator).Trim().ToLowerInvariant();
+                string candidateUrl = value.Substring(separator + delimiter.Length).Trim();
+                int at = candidateEmail.LastIndexOf('@');
+                if (at <= 0 || at == candidateEmail.Length - 1 || candidateEmail.Contains(' ')) continue;
+                string domain = candidateEmail.Substring(at + 1);
+                if (!domain.Equals("icloud.com", StringComparison.OrdinalIgnoreCase)
+                    && !domain.Equals("me.com", StringComparison.OrdinalIgnoreCase)
+                    && !domain.Equals("mac.com", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!Uri.TryCreate(candidateUrl, UriKind.Absolute, out Uri? uri)
+                    || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) continue;
+
+                email = candidateEmail;
+                receiveUrl = candidateUrl;
+                return true;
+            }
+            return false;
+        }
+
+        internal static bool IsMailboxPoolLike(string accountType, string mailboxProvider)
+        {
+            string type = accountType ?? "";
+            return type.Contains("邮箱池", StringComparison.OrdinalIgnoreCase)
+                || type.Contains("Chatai", StringComparison.OrdinalIgnoreCase)
+                || !string.IsNullOrWhiteSpace(mailboxProvider);
+        }
+
         internal static IReadOnlyList<string> DiscoverKnownFiles(string rootDir, string tokenFile, string selectedFile)
         {
             var paths = new List<string>();
@@ -82,6 +154,13 @@ namespace SmsWorkbench
             string line = "remail://" + normalizedEmail + "---" + normalizedToken + "---" + normalizedOrderNo;
             string normalizedPurchaseId = (purchaseId ?? "").Trim();
             return normalizedPurchaseId.Length > 0 ? line + "---" + normalizedPurchaseId : line;
+        }
+
+        private static bool IsSupportedImportLine(string line)
+        {
+            if (TryParseICloudUrlLine(line, out _, out _)) return true;
+            string[] parts = line.Split(new[] { "----" }, 4, StringSplitOptions.None);
+            return parts.Length >= 4;
         }
 
         private static void AddExistingTextFile(List<string> paths, string path)

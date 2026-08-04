@@ -47,6 +47,8 @@ public sealed class PaymentBatchServiceTests
         Assert.False(payload.GetProperty("ok").GetBoolean());
         Assert.NotNull(backend.LastCommand);
         Assert.Contains("--desktop-ipc", backend.LastCommand.Arguments);
+        Assert.Contains("--extract-payment-link", backend.LastCommand.Arguments);
+        Assert.Equal("momo", ArgumentAfter(backend.LastCommand.Arguments, "--payment-method"));
         Assert.Contains("--payment-probe-only", backend.LastCommand.Arguments);
         Assert.DoesNotContain("--no-require-zero", backend.LastCommand.Arguments);
         Assert.Equal("probe-batch", ArgumentAfter(backend.LastCommand.Arguments, "--payment-batch-id"));
@@ -101,6 +103,30 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal("VN", cell.GetProperty("registration_country").GetString());
         Assert.Equal("JP", cell.GetProperty("checkout_country").GetString());
         Assert.Equal(3, cell.GetProperty("sample_size").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("gopay", "ID")]
+    [InlineData("gcash", "PH")]
+    [InlineData("grabpay", "PH")]
+    public void WalletDefaultMatrixUsesProviderCountryForEveryStage(
+        string paymentMethod,
+        string expectedCountry)
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        PaymentMatrixRow row = service.CreateDefaultMatrixRow(paymentMethod);
+
+        Assert.Equal(expectedCountry.ToLowerInvariant() + "_" + paymentMethod, row.Name);
+        Assert.Equal(expectedCountry, row.RegistrationCountry);
+        Assert.Equal(expectedCountry, row.CheckoutCountry);
+        Assert.Equal(expectedCountry, row.PromotionCountry);
+        Assert.Equal(expectedCountry, row.ProviderCountry);
+        Assert.Equal(expectedCountry, row.ApproveCountry);
+        Assert.Equal(expectedCountry, row.RedirectCountry);
+        Assert.Equal(1, row.SampleSize);
     }
 
     private static string ArgumentAfter(IReadOnlyList<string> arguments, string option)

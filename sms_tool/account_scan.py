@@ -779,8 +779,8 @@ def _attempt_scan_relogin(email, data, json_path="", proxy=None, timeout=120, fa
     account["email"] = email
     if json_path:
         account["json_path"] = json_path
-    relogin_mode = "codex_oauth"
-    print(f"[*] {email} AT invalid; trying email-OTP OAuth to refresh AT...")
+    relogin_mode = _normalize_relogin_mode(relogin_mode)
+    print(f"[*] {email} AT invalid; trying the configured AT recovery chain...")
     relogin = relogin_codex_account(
         account,
         proxy=proxy,
@@ -804,6 +804,8 @@ def _normalize_relogin_mode(value):
     text = str(value or "").strip().lower().replace("-", "_")
     if text in {"web", "web_session", "session", "chatgpt_session"}:
         return "web_session"
+    if text in {"browser", "browser_login", "browser_session"}:
+        return "browser"
     if text in {"codex", "codex_oauth", "oauth", "pkce"}:
         return "codex_oauth"
     return "auto"

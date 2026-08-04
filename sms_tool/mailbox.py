@@ -33,6 +33,7 @@ from . import mailbox_remail
 from . import mailbox_graph
 from .mailbox_graph import MailboxTokenExpiredError
 from . import mailbox_chongzhi
+from . import mailbox_icloud_url
 
 # MailboxAccount and parsers moved to mailbox_types/mailbox_parsers.
 
@@ -109,7 +110,7 @@ def _resolve_mailbox_proxy(proxy=None):
 def _provider_otp_issued_after(mailbox, issued_after_unix):
     issued_after_unix = int(issued_after_unix or 0)
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    defaults = {"remail": 90, "cfworker": 10}
+    defaults = {"remail": 90, "cfworker": 10, mailbox_icloud_url.PROVIDER: 90}
     if provider not in defaults:
         return issued_after_unix
     try:
@@ -121,7 +122,7 @@ def _provider_otp_issued_after(mailbox, issued_after_unix):
 
 def _snapshot_mailbox_message(mailbox, proxy=None):
     provider = getattr(mailbox, "provider", "")
-    if provider in {"cfworker", "remail"}:
+    if provider in {"cfworker", "remail", mailbox_icloud_url.PROVIDER}:
         try:
             messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
             message_id = _message_id(messages[0]) if messages else ""
@@ -396,6 +397,8 @@ def mailbox_has_inbox_credentials(mailbox):
         return bool(getattr(mailbox, "email", ""))
     if provider == "remail":
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
+    if provider == mailbox_icloud_url.PROVIDER:
+        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         return mailbox_gmail.mailbox_has_credentials(mailbox, _gmail_cfg())
     return bool(getattr(mailbox, "refresh_token", ""))
@@ -457,6 +460,12 @@ def _fetch_mailbox_messages(mailbox, limit=25, proxy=None, include_body=False):
             limit=limit,
             proxy=proxy,
             include_body=include_body,
+        )
+    if getattr(mailbox, "provider", "") == mailbox_icloud_url.PROVIDER:
+        return mailbox_icloud_url.fetch_icloud_url_messages(
+            mailbox,
+            limit=limit,
+            proxy=proxy,
         )
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         if not _gmail_imap_enabled():
@@ -547,7 +556,6 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
             excluded_otps=excluded_otps,
             poll_interval=None,
         )
-
     # ── chongzhi.art OTP polling ──
     # If the mailbox has a password and chongzhi is enabled, poll via API first.
     if provider == "chongzhi" or (mailbox_chongzhi.chongzhi_enabled(_email_cfg()) and getattr(mailbox, "password", "")):
@@ -569,6 +577,7 @@ def _poll_email_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix=
             proxy=proxy,
             excluded_otps=excluded_otps,
         )
+    issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix)
     keyword = (subject_keyword or "").lower()
     deadline = time.time() + timeout
     interval = _otp_poll_interval()

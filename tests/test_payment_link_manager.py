@@ -10,11 +10,16 @@ from sms_tool import payment_link_manager as manager
 class PaymentLinkManagerTests(unittest.TestCase):
     def test_supported_methods_include_reference_adapters(self):
         keys = {item["key"] for item in manager.supported_payment_methods()}
-        self.assertEqual(keys, {"paypal", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"})
+        self.assertEqual(keys, {
+            "paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao",
+            "blik", "twint", "direct_card", "momo",
+        })
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")
         self.assertEqual(manager.normalize_payment_method("kakao pay"), "kakao")
+        self.assertEqual(manager.normalize_payment_method("go-pay"), "gopay")
+        self.assertEqual(manager.normalize_payment_method("grab pay"), "grabpay")
 
     def test_unknown_method_is_rejected(self):
         self.assertEqual(manager.normalize_payment_method("unsupported_wallet"), "")

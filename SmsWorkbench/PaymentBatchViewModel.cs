@@ -76,10 +76,14 @@ namespace SmsWorkbench
                 _automaticBatchId = CreateBatchId(value.Id);
                 BatchId = _automaticBatchId;
             }
+            OnPropertyChanged(nameof(RequireZeroEnabled));
             ReloadMatrix();
         }
 
-        partial void OnProbeOnlyChanged(bool value) => OnPropertyChanged(nameof(RequireZeroEnabled));
+        partial void OnProbeOnlyChanged(bool value)
+        {
+            OnPropertyChanged(nameof(RequireZeroEnabled));
+        }
 
         partial void OnSelectedMatrixRowChanged(PaymentMatrixRow value) => DeleteMatrixRowCommand.NotifyCanExecuteChanged();
 
@@ -111,13 +115,30 @@ namespace SmsWorkbench
         [RelayCommand(CanExecute = nameof(CanOpenReport))]
         private void OpenReport() => _fileLauncher.Open(ReportPath);
 
+        [RelayCommand]
+        private void CopyResult(PaymentBatchResultRow row)
+        {
+            if (row == null || !row.HasCopyableResult) return;
+            try
+            {
+                Clipboard.SetText(row.ResultValue);
+                Status = $"已复制{row.ResultKind}：{row.AccountRef}";
+            }
+            catch (Exception exception)
+            {
+                Status = "复制失败：" + exception.Message;
+            }
+        }
+
         [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
         private async Task RunAsync(CancellationToken cancellationToken)
         {
             if (!TryCreateRequest(out PaymentBatchRequest request)) return;
             Results.Clear();
             ReportPath = "";
-            Status = ProbeOnly ? "正在执行 JIT 探测与资格矩阵校验..." : "正在执行 JIT 探测与协议支付批次...";
+            Status = ProbeOnly
+                ? "正在执行 Checkout 与 Stripe init 支付能力探测..."
+                : "正在执行 JIT 探测与协议支付批次...";
             IsRunning = true;
             try
             {
@@ -132,7 +153,15 @@ namespace SmsWorkbench
             }
             catch (OperationCanceledException)
             {
-                Status = "已取消。";
+                Status = request.ProbeOnly
+                    ? "已取消。"
+                    : "结果未知，请先核对批次断点和支付服务状态，不要重试。";
+            }
+            catch (TimeoutException)
+            {
+                Status = request.ProbeOnly
+                    ? "能力探测已超时，可按策略重试。"
+                    : "结果未知，请先核对批次断点和支付服务状态，不要重试。";
             }
             catch (Exception exception)
             {
@@ -203,6 +232,21 @@ namespace SmsWorkbench
                     && eligible.ValueKind is JsonValueKind.True or JsonValueKind.False)
                     eligibility = eligible.GetBoolean() ? "符合" : "不符合";
                 string decision = JsonString(row, "decision");
+                string paymentUrl = FirstNonEmpty(JsonString(row, "url"), JsonString(row, "long_url"));
+                string qrData = JsonString(row, "qr_data");
+                string qrPath = JsonString(row, "qr_path");
+                string terminalState = FirstNonEmpty(
+                    JsonString(row, "terminal_state"),
+                    JsonString(row, "status"),
+                    JsonString(row, "state"));
+                if (terminalState.Equals("canceled", StringComparison.OrdinalIgnoreCase))
+                    terminalState = "cancelled";
+                string resultKind = paymentUrl.Length > 0
+                    ? "支付链接"
+                    : qrData.Length > 0
+                        ? "二维码内容"
+                        : qrPath.Length > 0 ? "二维码文件" : "";
+                string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
                 Results.Add(new PaymentBatchResultRow
                 {
                     AccountRef = JsonString(row, "account_ref"),
@@ -211,6 +255,11 @@ namespace SmsWorkbench
                     RefreshStatus = JsonBool(row, "refreshed") ? "已刷新" : "未刷新",
                     Eligibility = eligibility,
                     Decision = decision.Length > 0 ? decision : JsonString(row, "error"),
+                    TerminalState = terminalState,
+                    ErrorStage = JsonString(row, "error_stage"),
+                    Retryable = JsonBool(row, "retryable"),
+                    ResultKind = resultKind,
+                    ResultValue = resultValue,
                     Attempts = JsonInt(row, "attempts")
                 });
             }
@@ -223,7 +272,9 @@ namespace SmsWorkbench
             return $"请求 {JsonInt(counts, "requested")}  ·  AT 200 {JsonInt(counts, "authenticated")}"
                 + $"  ·  JIT {JsonInt(counts, "refreshed")}  ·  资格 {JsonInt(counts, "eligible")}"
                 + $"  ·  完成 {JsonInt(counts, "completed")}  ·  链接 {JsonInt(counts, "link_ready")}"
-                + $"  ·  二维码 {JsonInt(counts, "qr_ready")}  ·  失败 {JsonInt(counts, "failed")}"
+                + $"  ·  二维码 {JsonInt(counts, "qr_ready")}  ·  取消 {JsonInt(counts, "cancelled")}"
+                + $"  ·  未知 {JsonInt(counts, "unknown")}  ·  超时 {JsonInt(counts, "timed_out")}"
+                + $"  ·  失败 {JsonInt(counts, "failed")}  ·  可重试 {JsonInt(counts, "retryable")}"
                 + $"  ·  断点恢复 {JsonInt(report, "resumed")}";
         }
 
@@ -242,6 +293,9 @@ namespace SmsWorkbench
 
         private static bool JsonBool(JsonElement element, string name)
             => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.True;
+
+        private static string FirstNonEmpty(params string[] values)
+            => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
         private static string CreateBatchId(string paymentMethod)
             => PaymentMethods.Normalize(paymentMethod) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);

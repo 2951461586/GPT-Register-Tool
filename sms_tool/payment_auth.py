@@ -48,7 +48,7 @@ def ensure_payment_access_token(
     stabilization_probes: int = 1,
     stabilization_delay_seconds: float = 0.0,
 ) -> dict[str, Any]:
-    """Probe immediately before payment and OAuth-refresh once on HTTP 401.
+    """Probe immediately before payment and run the recovery chain on HTTP 401.
 
     ``access_token`` is intentionally present for the in-process payment caller.
     Use :func:`public_payment_auth_result` before reporting or persistence.
@@ -98,7 +98,7 @@ def ensure_payment_access_token(
             data,
             proxy=proxy,
             timeout=max(int(timeout or 30), 30),
-            mode="codex_oauth",
+            mode="auto",
         )
         refreshed = True
         if not relogin.get("ok"):
