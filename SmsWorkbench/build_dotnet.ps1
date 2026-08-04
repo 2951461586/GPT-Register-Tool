@@ -26,6 +26,25 @@ $project = Join-Path $PSScriptRoot "SmsWorkbench.csproj"
 # intermediate build location and should not be used as a second distribution.
 $publishDir = Join-Path $repoRoot "dist\net10"
 
+# Remove binaries left by the retired local card-executor build. Keep the
+# publish directory's runtime data; it is operator state, not build output.
+$retiredExecutorArtifacts = @(
+    "Microsoft.Web.WebView2.Core.dll",
+    "Microsoft.Web.WebView2.Core.xml",
+    "Microsoft.Web.WebView2.WinForms.dll",
+    "Microsoft.Web.WebView2.WinForms.xml",
+    "Microsoft.Web.WebView2.Wpf.dll",
+    "Microsoft.Web.WebView2.Wpf.xml",
+    "WebView2Loader.dll",
+    "runtimes\win-x64\native\WebView2Loader.dll"
+)
+foreach ($relative in $retiredExecutorArtifacts) {
+    $target = Join-Path $publishDir $relative
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        Remove-Item -LiteralPath $target -Force
+    }
+}
+
 & $dotnet publish $project `
     -c Release `
     -r win-x64 `

@@ -7,13 +7,17 @@ namespace SmsWorkbench
         string DisplayName,
         string DefaultCountry,
         string SingleAccountDescription,
-        bool BatchEnabled = true);
+        bool BatchEnabled = true,
+        bool RegistrationEnabled = true);
 
     public static class PaymentMethods
     {
         public static IReadOnlyList<PaymentMethodDefinition> All { get; } = new[]
         {
             new PaymentMethodDefinition("paypal", "PayPal", "US", "PayPal - 美国/全球 BA 授权链接"),
+            new PaymentMethodDefinition("gopay", "GoPay", "ID", "GoPay - 印度尼西亚钱包支付"),
+            new PaymentMethodDefinition("gcash", "GCash", "PH", "GCash - 菲律宾钱包支付"),
+            new PaymentMethodDefinition("grabpay", "GrabPay", "PH", "GrabPay - 菲律宾钱包支付"),
             new PaymentMethodDefinition("upi", "UPI", "IN", "UPI - 印度统一支付接口"),
             new PaymentMethodDefinition("ideal", "iDEAL", "NL", "iDEAL - 荷兰银行支付"),
             new PaymentMethodDefinition("pix", "PIX", "BR", "PIX - 巴西即时支付"),
@@ -29,13 +33,19 @@ namespace SmsWorkbench
             .Select(method => new PaymentMethodOption(method.Id, RegistrationDisplayName(method)))
             .ToArray();
 
-        public static IReadOnlyList<PaymentMethodOption> RegistrationOptions { get; } = BatchOptions;
+        public static IReadOnlyList<PaymentMethodOption> RegistrationOptions { get; } = All
+            .Where(method => method.BatchEnabled && method.RegistrationEnabled)
+            .Select(method => new PaymentMethodOption(method.Id, RegistrationDisplayName(method)))
+            .ToArray();
 
         public static string Normalize(string? paymentMethod)
         {
             string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
             return value switch
             {
+                "gopay" or "go_pay" => "gopay",
+                "gcash" => "gcash",
+                "grabpay" or "grab_pay" => "grabpay",
                 "upi" or "upiqr" or "upi_qr" => "upi",
                 "ideal" => "ideal",
                 "pix" => "pix",
@@ -61,6 +71,9 @@ namespace SmsWorkbench
             => method.Id switch
             {
                 "paypal" => "PayPal 支付链接",
+                "gopay" => "GoPay 印尼钱包",
+                "gcash" => "GCash 菲律宾钱包",
+                "grabpay" => "GrabPay 菲律宾钱包",
                 "direct_card" => "直卡 Checkout 直连结账",
                 "momo" => "MoMo 越南扫码",
                 _ => method.DisplayName + " " + CountryName(method.DefaultCountry) + "协议"
@@ -69,6 +82,8 @@ namespace SmsWorkbench
         private static string CountryName(string country)
             => country switch
             {
+                "ID" => "印度尼西亚",
+                "PH" => "菲律宾",
                 "IN" => "印度",
                 "NL" => "荷兰",
                 "BR" => "巴西",

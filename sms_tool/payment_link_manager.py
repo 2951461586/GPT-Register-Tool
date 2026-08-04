@@ -1,12 +1,13 @@
 """Unified state machine for protocol payment-link extraction.
 
-Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`, while
-iDEAL/PIX/Kakao Pay/BLIK/TWINT run the vendored protocol extractors under
-``services/protocol-payment``.
+Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`; GoPay, GCash and
+GrabPay use the shared wallet provider; iDEAL/PIX/Kakao Pay/BLIK/TWINT run the
+vendored protocol extractors under ``services/protocol-payment``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -36,6 +37,9 @@ class PaymentMethodSpec:
 
 PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
     "paypal": PaymentMethodSpec("paypal", "PayPal", "US", "USD", "native"),
+    "gopay": PaymentMethodSpec("gopay", "GoPay", "ID", "IDR", "wallet"),
+    "gcash": PaymentMethodSpec("gcash", "GCash", "PH", "PHP", "wallet"),
+    "grabpay": PaymentMethodSpec("grabpay", "GrabPay", "PH", "PHP", "wallet"),
     "upi": PaymentMethodSpec("upi", "UPI", "IN", "INR", "native"),
     "ideal": PaymentMethodSpec("ideal", "iDEAL", "NL", "EUR", "script", "ideal/ideal_qr_extract.py"),
     "pix": PaymentMethodSpec("pix", "PIX", "BR", "BRL", "pix", "pix/run_pix.py"),
@@ -47,6 +51,10 @@ PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
 }
 
 _ALIASES = {
+    "go_pay": "gopay",
+    "go-pay": "gopay",
+    "grab_pay": "grabpay",
+    "grab-pay": "grabpay",
     "upiqr": "upi",
     "upi_qr": "upi",
     "upi-qr": "upi",
@@ -63,14 +71,15 @@ _ALIASES = {
     "momoqr": "momo",
 }
 
+_TERMINAL_STATES = frozenset({"completed", "failed", "cancelled", "unknown", "timed_out"})
+_NON_SUCCESS_TERMINAL_STATES = _TERMINAL_STATES - {"completed"}
 _TRANSITIONS = {
-    "created": {"validating", "failed"},
-    "validating": {"preparing_proxy", "failed"},
-    "preparing_proxy": {"running", "failed"},
-    "running": {"extracting", "failed"},
-    "extracting": {"completed", "failed"},
-    "completed": set(),
-    "failed": set(),
+    "created": {"validating"} | _NON_SUCCESS_TERMINAL_STATES,
+    "validating": {"preparing_proxy"} | _NON_SUCCESS_TERMINAL_STATES,
+    "preparing_proxy": {"running"} | _NON_SUCCESS_TERMINAL_STATES,
+    "running": {"extracting"} | _NON_SUCCESS_TERMINAL_STATES,
+    "extracting": set(_TERMINAL_STATES),
+    **{state: set() for state in _TERMINAL_STATES},
 }
 
 _STATE_LOCK = threading.Lock()
@@ -107,9 +116,13 @@ class PaymentLinkRun:
         self._record(state, message)
 
     def fail(self, message: str) -> None:
-        if self.state not in {"completed", "failed"}:
-            self.state = "failed"
-            self._record("failed", message)
+        self.terminate("failed", message)
+
+    def terminate(self, state: str, message: str) -> None:
+        if state not in _TERMINAL_STATES:
+            raise ValueError(f"not a terminal payment state: {state}")
+        if self.state not in _TERMINAL_STATES:
+            self.move(state, message)
 
     def _record(self, state: str, message: str) -> None:
         self.history.append({"state": state, "at": int(time.time()), "message": message})
@@ -130,7 +143,7 @@ def supported_payment_methods() -> list[dict[str, Any]]:
     root = _reference_root()
     output = []
     for spec in PAYMENT_METHODS.values():
-        available = spec.adapter == "native" or (root / spec.script).is_file()
+        available = spec.adapter in {"native", "wallet"} or (root / spec.script).is_file()
         output.append({
             "key": spec.key,
             "label": spec.label,
@@ -172,7 +185,17 @@ def generate_payment_link(
         move("preparing_proxy", "加载分段代理和协议适配器")
         move("running", f"执行 {spec.label} 协议提链")
 
-        if method == "paypal":
+        if bool(kwargs.get("probe_only")):
+            from .payment_capability import payment_method_capability_probe
+
+            result = payment_method_capability_probe(
+                access_token=access_token,
+                payment_method=method,
+                auth_context=auth_context,
+                proxy=proxy,
+                **kwargs,
+            )
+        elif method == "paypal":
             from .gen_pp_link import generate_pp_link
             native_kwargs = _select_kwargs(kwargs, {
                 "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
@@ -202,47 +225,84 @@ def generate_payment_link(
             result = _run_direct_card(spec, access_token, proxy=proxy, **kwargs)
         elif method == "momo":
             result = _run_momo(spec, access_token, proxy=proxy, **kwargs)
+        elif spec.adapter == "wallet":
+            result = _run_wallet_adapter(
+                spec,
+                access_token,
+                proxy=proxy,
+                auth_context=auth_context,
+                **kwargs,
+            )
         else:
             result = _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
 
         move("extracting", "归一化链接、二维码和协议结果")
         normalized = _normalize_result(spec, result)
         if not normalized.get("ok"):
-            run.fail(str(normalized.get("error") or f"{spec.label} extraction failed"))
-            normalized.update({
-                "run_id": run.run_id,
-                "manager_state": run.state,
-                "state_history": run.history,
-            })
-            _safe_persist_run(normalized)
-            return normalized
-        completion_message = (
-            "BLIK 协议支付已完成"
-            if normalized.get("operation") == "execute_payment"
-            else "协议支付链接提取完成"
-        )
-        run.move("completed", completion_message)
-        normalized.update({
-            "run_id": run.run_id,
-            "manager_state": run.state,
-            "state_history": run.history,
-        })
-        _safe_persist_run(normalized)
-        return normalized
-    except Exception as exc:
-        run.fail(str(exc))
-        failed = {
+            terminal_state = _result_terminal_state(normalized)
+            return _finish_run(
+                run,
+                normalized,
+                terminal_state,
+                str(normalized.get("error") or f"{spec.label} extraction failed"),
+            )
+        if normalized.get("operation") == "payment_method_capability_probe":
+            completion_message = "支付方式能力探测完成"
+        elif normalized.get("operation") == "execute_payment":
+            completion_message = "BLIK 协议支付已完成"
+        else:
+            completion_message = "协议支付链接提取完成"
+        return _finish_run(run, normalized, "completed", completion_message)
+    except (KeyboardInterrupt, asyncio.CancelledError) as exc:
+        cancelled = {
             "ok": False,
-            "error": str(exc),
-            "error_code": "payment_link_manager_failed",
+            "status": "cancelled",
+            "error": _redact_sensitive_text(str(exc)) or "payment-link extraction cancelled",
+            "error_code": "payment_link_cancelled",
+            "error_stage": _manager_error_stage(run.state),
+            "retryable": False,
             "payment_method": method or str(payment_method or ""),
-            "run_id": run.run_id,
-            "manager_state": run.state,
-            "state_history": run.history,
             "url": "",
         }
-        _safe_persist_run(failed)
-        return failed
+        return _finish_run(run, cancelled, "cancelled", cancelled["error"])
+    except Exception as exc:
+        terminal_state, error_code, retryable = _classify_exception(exc)
+        error = _redact_sensitive_text(str(exc)) or type(exc).__name__
+        failed = {
+            "ok": False,
+            "error": error,
+            "error_code": error_code,
+            "error_stage": str(
+                getattr(exc, "error_stage", "")
+                or getattr(exc, "stage", "")
+                or _manager_error_stage(run.state)
+            ),
+            "retryable": retryable,
+            "payment_method": method or str(payment_method or ""),
+            "url": "",
+        }
+        if terminal_state != "failed":
+            failed["status"] = terminal_state
+        if terminal_state == "unknown":
+            failed["requires_reconciliation"] = True
+        return _finish_run(run, failed, terminal_state, error)
+
+
+def _finish_run(
+    run: PaymentLinkRun,
+    result: dict[str, Any],
+    terminal_state: str,
+    message: str,
+) -> dict[str, Any]:
+    """Attach the common terminal contract and persist one final run record."""
+    run.terminate(terminal_state, message)
+    result.update({
+        "run_id": run.run_id,
+        "manager_state": run.state,
+        "state_history": run.history,
+    })
+    _safe_persist_run(result)
+    return result
 
 
 def _run_extractor_subprocess(
@@ -274,7 +334,14 @@ def _run_extractor_subprocess(
         output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         return proc, output, None
     except subprocess.TimeoutExpired:
-        return None, "", {"ok": False, "error": f"{spec.label} extractor timed out after {timeout}s"}
+        return None, "", {
+            "ok": False,
+            "status": "timed_out",
+            "error": f"{spec.label} extractor timed out after {timeout}s",
+            "error_code": "extractor_timed_out",
+            "error_stage": "adapter_subprocess",
+            "retryable": True,
+        }
     finally:
         for path in cleanup_paths:
             if path:
@@ -409,6 +476,57 @@ def _write_token_file(access_token: str) -> str:
     with handle:
         handle.write(str(access_token or "").strip() + "\n")
     return handle.name
+
+
+def _run_wallet_adapter(
+    spec: PaymentMethodSpec,
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    from .wallet_provider import run_wallet_provider
+    from .wallet_transport import ChatGPTStripeWalletTransport
+
+    cfg = _protocol_cfg()
+    methods = cfg.get("methods") if isinstance(cfg.get("methods"), dict) else {}
+    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), dict) else {}
+    timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
+    stage_keys = (
+        "checkout_proxy", "stripe_init_proxy", "provider_proxy", "payment_method_proxy",
+        "confirm_proxy", "approve_proxy", "redirect_proxy",
+    )
+    transport_context: dict[str, Any] = {
+        key: kwargs.get(key) or method_cfg.get(key) or ""
+        for key in stage_keys
+    }
+    transport_context["default_proxy"] = proxy or method_cfg.get("proxy") or ""
+    billing = kwargs.get("billing_details") or method_cfg.get("billing_details")
+    if not isinstance(billing, dict):
+        billing = None
+    return run_wallet_provider(
+        spec.key,
+        access_token,
+        ChatGPTStripeWalletTransport(timeout=timeout),
+        probe_only=bool(kwargs.get("probe_only")),
+        billing_details=billing,
+        auth_context=auth_context if isinstance(auth_context, dict) else {},
+        transport_context=transport_context,
+        stripe_publishable_key=str(
+            kwargs.get("stripe_publishable_key")
+            or method_cfg.get("stripe_publishable_key")
+            or os.environ.get("PP_STRIPE_PUBLISHABLE_KEY")
+            or ""
+        ).strip(),
+        require_zero=bool(kwargs.get("require_zero", method_cfg.get("require_zero", False))),
+        max_approve_attempts=int(
+            kwargs.get("max_approve_attempts") or method_cfg.get("max_approve_attempts") or 6
+        ),
+        max_poll_attempts=int(kwargs.get("max_poll_attempts") or method_cfg.get("max_poll_attempts") or 25),
+        poll_interval_seconds=float(
+            kwargs.get("poll_interval_seconds") or method_cfg.get("poll_interval_seconds") or 2.0
+        ),
+    )
 
 
 def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
@@ -589,7 +707,13 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
 
 
 def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
-    data = dict(result) if isinstance(result, dict) else {"ok": False, "error": str(result)}
+    is_mapping = isinstance(result, dict)
+    data = dict(result) if is_mapping else {
+        "ok": False,
+        "error": str(result),
+        "error_code": "invalid_adapter_result",
+        "error_stage": "adapter_contract",
+    }
     data.setdefault("payment_method", spec.key)
     data.setdefault("method", spec.key)
     data.setdefault("target_country", spec.country)
@@ -604,10 +728,195 @@ def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
         and data.get("operation") == "execute_payment"
         and data.get("link_type") == "blik_protocol_completed"
     )
-    if data.get("ok") and not completed_payment and not (data.get("url") or data.get("qr_data") or data.get("qr_path")):
+    explicit_terminal = _explicit_terminal_state(data)
+    if "ok" not in data:
+        data["ok"] = False
+        if not explicit_terminal:
+            data.setdefault("error", f"{spec.label} extractor returned an invalid result contract")
+            data.setdefault("error_code", "invalid_adapter_result")
+            data.setdefault("error_stage", "adapter_contract")
+    if explicit_terminal:
+        data["ok"] = False
+        data["status"] = explicit_terminal
+        if explicit_terminal == "unknown":
+            data.setdefault("requires_reconciliation", True)
+        data.setdefault("error_code", {
+            "cancelled": "payment_link_cancelled",
+            "unknown": "payment_outcome_unknown",
+            "timed_out": "payment_link_timed_out",
+        }[explicit_terminal])
+        data.setdefault("error", {
+            "cancelled": f"{spec.label} extraction was cancelled",
+            "unknown": f"{spec.label} extraction outcome is unknown",
+            "timed_out": f"{spec.label} extraction timed out",
+        }[explicit_terminal])
+    capability_probe = data.get("operation") == "payment_method_capability_probe"
+    if (
+        data.get("ok")
+        and not completed_payment
+        and not capability_probe
+        and not (data.get("url") or data.get("qr_data") or data.get("qr_path"))
+    ):
         data["ok"] = False
         data["error"] = f"{spec.label} extractor returned no link or QR data"
+        data["error_code"] = "adapter_result_missing_artifact"
+        data["error_stage"] = "normalization"
+    _normalize_error_contract(data)
     return data
+
+
+def _explicit_terminal_state(data: dict[str, Any]) -> str:
+    """Return a non-success terminal state explicitly reported by an adapter."""
+    if _as_bool(data.get("outcome_unknown")) is True or _as_bool(data.get("requires_reconciliation")) is True:
+        return "unknown"
+
+    for key in ("terminal_state", "state", "status", "outcome", "error_code", "error_type", "decision"):
+        state = _canonical_terminal_state(data.get(key))
+        if state:
+            return state
+
+    exit_code = data.get("exit_code")
+    try:
+        numeric_exit_code = int(exit_code)
+    except (TypeError, ValueError):
+        numeric_exit_code = 0
+    if numeric_exit_code in {124}:
+        return "timed_out"
+    if numeric_exit_code in {-2, 130, -1073741510, 3221225786}:
+        return "cancelled"
+
+    status = _normalized_contract_value(data.get("status") or data.get("state"))
+    has_artifact = bool(data.get("url") or data.get("qr_data") or data.get("qr_path"))
+    if not data.get("ok") and not has_artifact and status in {
+        "pending", "processing", "submitted", "requires_action", "awaiting_confirmation",
+    }:
+        return "unknown"
+    return ""
+
+
+def _canonical_terminal_state(value: Any) -> str:
+    normalized = _normalized_contract_value(value)
+    if normalized in {
+        "cancelled", "canceled", "cancelled_by_user", "canceled_by_user", "interrupted",
+        "keyboard_interrupt", "keyboardinterrupt",
+    } or normalized.endswith("_cancelled") or normalized.endswith("_canceled"):
+        return "cancelled"
+    if normalized in {"timed_out", "timeout", "timeout_expired", "extractor_timeout"} or (
+        normalized.endswith("_timed_out") or normalized.endswith("_timeout")
+    ):
+        return "timed_out"
+    if normalized in {"unknown", "outcome_unknown", "payment_outcome_unknown", "indeterminate", "inconclusive"} or (
+        normalized.endswith("_outcome_unknown")
+    ):
+        return "unknown"
+    return ""
+
+
+def _normalized_contract_value(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+
+def _normalize_error_contract(data: dict[str, Any]) -> None:
+    """Ensure every adapter result has stable retry and error-stage fields."""
+    if data.get("ok"):
+        data["retryable"] = False
+        data["error_stage"] = ""
+        return
+
+    terminal_state = _explicit_terminal_state(data) or "failed"
+    stage = data.get("error_stage") or data.get("stage") or data.get("failed_step")
+    data["error_stage"] = str(stage or "adapter").strip() or "adapter"
+    data.setdefault("error", "payment-link extraction failed")
+    data.setdefault("error_code", "payment_link_extraction_failed")
+
+    explicit_retryable = _as_bool(data.get("retryable"))
+    if explicit_retryable is None:
+        explicit_retryable = _as_bool(data.get("retry_safe"))
+    if terminal_state in {"cancelled", "unknown"}:
+        data["retryable"] = False
+    elif explicit_retryable is not None:
+        data["retryable"] = explicit_retryable
+    elif terminal_state == "timed_out":
+        data["retryable"] = True
+    else:
+        data["retryable"] = _is_retryable_failure(data)
+
+
+def _as_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+    return None
+
+
+def _is_retryable_failure(data: dict[str, Any]) -> bool:
+    try:
+        status_code = int(data.get("status_code") or data.get("http_status") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    if status_code == 429 or 500 <= status_code <= 599:
+        return True
+    code = _normalized_contract_value(data.get("error_code") or data.get("error_type"))
+    retryable_codes = {
+        "connection_error", "connect_timeout", "read_timeout", "network_error",
+        "proxy_error", "proxy_unavailable", "rate_limited", "service_unavailable",
+    }
+    return code in retryable_codes
+
+
+def _result_terminal_state(data: dict[str, Any]) -> str:
+    return "completed" if data.get("ok") else (_explicit_terminal_state(data) or "failed")
+
+
+def _classify_exception(exc: Exception) -> tuple[str, str, bool]:
+    explicit_state = _canonical_terminal_state(
+        getattr(exc, "status", "") or getattr(exc, "terminal_state", "")
+    )
+    custom_code = str(
+        getattr(exc, "error_code", "")
+        or getattr(exc, "code", "")
+        or ""
+    )
+    if explicit_state:
+        default_code = {
+            "cancelled": "payment_link_cancelled",
+            "unknown": "payment_outcome_unknown",
+            "timed_out": "payment_link_timed_out",
+        }[explicit_state]
+        explicit_retryable = _as_bool(getattr(exc, "retryable", None))
+        if explicit_state in {"cancelled", "unknown"}:
+            explicit_retryable = False
+        elif explicit_retryable is None:
+            explicit_retryable = explicit_state == "timed_out"
+        return explicit_state, custom_code or default_code, bool(explicit_retryable)
+    if _as_bool(getattr(exc, "outcome_unknown", None)) is True:
+        return "unknown", custom_code or "payment_outcome_unknown", False
+    names = {_normalized_contract_value(cls.__name__) for cls in type(exc).mro()}
+    if names & {"cancellederror", "cancelled_error", "canceled_error"}:
+        return "cancelled", "payment_link_cancelled", False
+    if isinstance(exc, (subprocess.TimeoutExpired, TimeoutError)) or any("timeout" in name for name in names):
+        return "timed_out", "payment_link_timed_out", True
+    retryable = _as_bool(getattr(exc, "retryable", None)) is True
+    return "failed", custom_code or "payment_link_manager_failed", retryable
+
+
+def _manager_error_stage(state: str) -> str:
+    return {
+        "created": "validation",
+        "validating": "validation",
+        "preparing_proxy": "proxy_setup",
+        "running": "adapter",
+        "extracting": "normalization",
+    }.get(state, "manager")
 
 
 def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:

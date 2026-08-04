@@ -1,0 +1,64 @@
+{
+  "method": "gcash",
+  "profile": {
+    "country": "PH",
+    "currency": "PHP",
+    "locale": "en-PH"
+  },
+  "expected": {
+    "checkout": {
+      "entry_point": "all_plans_pricing_modal",
+      "plan_name": "chatgptplusplan",
+      "billing_details": {
+        "country": "PH",
+        "currency": "PHP"
+      },
+      "promo_campaign": {
+        "promo_campaign_id": "plus-1-month-free",
+        "is_coupon_from_query_param": false
+      },
+      "checkout_ui_mode": "custom"
+    },
+    "stripe_init_subset": {
+      "browser_locale": "en-PH",
+      "browser_timezone": "Asia/Manila",
+      "elements_session_client[locale]": "en-PH",
+      "elements_session_client[elements_init_source]": "custom_checkout"
+    },
+    "payment_method_subset": {
+      "type": "gcash",
+      "billing_details[address][country]": "PH",
+      "client_attribution_metadata[checkout_session_id]": "cs_test_gcash_fixture"
+    },
+    "confirm_subset": {
+      "expected_amount": "0",
+      "expected_payment_method_type": "gcash",
+      "payment_method": "pm_test_gcash_fixture"
+    }
+  },
+  "responses": {
+    "checkout": {
+      "checkout_session_id": "cs_test_gcash_fixture",
+      "processor_entity": "openai_ie",
+      "publishable_key": "pk_test_fixture_gcash_123456"
+    },
+    "stripe_init": {
+      "init_checksum": "init_fixture_gcash",
+      "config_id": "config_fixture_gcash",
+      "currency": "php",
+      "total_summary": {"due": 0},
+      "payment_method_types": ["card", "gcash"],
+      "custom_payment_methods": [{"type": "gcash"}]
+    },
+    "payment_method": {"id": "pm_test_gcash_fixture"},
+    "confirm": {"status": "requires_action"},
+    "approve": {"result": "approved"},
+    "poll": {
+      "next_action": {
+        "type": "redirect_to_url",
+        "redirect_to_url": {"url": "https://pm-redirects.stripe.com/authorize/gcash-fixture"}
+      }
+    },
+    "follow": {"final_url": "https://m.gcash.com/authorize/gcash-fixture"}
+  }
+}

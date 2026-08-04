@@ -1,4 +1,4 @@
-﻿﻿# Documentation Index
+# Documentation Index
 
 This directory contains source-owned project documentation. Runtime files, local
 configuration, generated sessions, and debug output stay outside this directory.
@@ -6,10 +6,14 @@ configuration, generated sessions, and debug output stay outside this directory.
 ## Core documents
 
 - [Architecture and Boundaries](architecture.md) - module ownership, command
-  seams, state flow, payment responsibilities, Agent Identity/SUB2API boundaries,
-  and forbidden cross-module dependencies.
+  seams, state flow, Checkout/capability and wallet contracts, PayPal return
+  reconciliation, Agent Identity/SUB2API boundaries, and forbidden cross-module
+  dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
+- [v2026.08.04 Release Notes](release-v2026.08.04.md) - payment command
+  modularization, shared Checkout and wallet contracts, result semantics, and
+  repository hygiene.
 - [v2026.08.02 Release Notes](release-v2026.08.02.md) - GoPay removal, focused
   account health modules, registration concurrency ownership, and desktop
   payment-method catalog cleanup.
@@ -35,6 +39,11 @@ configuration, generated sessions, and debug output stay outside this directory.
 - Prefer repository-relative paths in examples.
 - If a module starts calling another module's private helper, update the
   boundary document or add a public seam first.
+- Keep one immutable release-note file per published tag. Update this index and
+  the root README to point at the newest release; do not rewrite historical
+  release notes to describe current behavior.
+- Generated test output, IDE metadata, local agent memory, installer payloads,
+  and published binaries do not belong in documentation or source commits.
 - 新增注册、邮箱、K12 逻辑时，优先在 `auth_flow.py`、`account_creation.py`、
   `batch_runner.py`、`mailbox_*`、`k12_*` 等 focused modules 中落实现；
   `registration.py`、`mailbox.py` 主要保留编排和兼容 wrapper。

@@ -24,30 +24,15 @@ from .commands.helpers import (
     mailbox_from_explicit_args as _mailbox_from_explicit_args,
     one_click_sms_max_reuse as _one_click_sms_max_reuse,
 )
+from .commands import payment as payment_commands
 
 
 def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
-    requested = max(1, int(getattr(args, "workers", 1) or 1))
-    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    configured = cfg.get("max_regenerate_workers", cfg.get("regenerate_workers"))
-    try:
-        cap = int(configured)
-    except (TypeError, ValueError):
-        cap = 4
-    cap = max(1, cap)
-    return max(1, min(requested, cap, total))
+    return payment_commands.regenerate_workers(args, payment_method, total, CFG)
 
 
 def _payment_regenerate_delay_seconds(payment_method: str) -> float:
-    cfg = CFG.get(payment_method) if isinstance(CFG.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    try:
-        return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
-    except (TypeError, ValueError):
-        return 0.0
+    return payment_commands.regenerate_delay_seconds(payment_method, CFG)
 
 
 def _proxy_pool_values(args) -> list[str]:
@@ -65,18 +50,11 @@ def _proxy_pool_values(args) -> list[str]:
 
 
 def _protocol_proxy_pool() -> list[str]:
-    protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
-    configured = protocol.get("proxy_pool") or []
-    if isinstance(configured, str):
-        configured = re.split(r"[\r\n,;]+", configured)
-    return list(dict.fromkeys(str(item or "").strip() for item in configured if str(item or "").strip()))
+    return payment_commands.protocol_proxy_pool(CFG)
 
 
 def _has_explicit_payment_proxy(args) -> bool:
-    return bool(getattr(args, "proxy_explicit", False) or any(
-        str(getattr(args, name, "") or "").strip()
-        for name in ("checkout_proxy", "provider_proxy", "approve_proxy", "promotion_proxy")
-    ))
+    return payment_commands.has_explicit_payment_proxy(args)
 
 
 def _registration_phone_pool(args):
@@ -111,122 +89,30 @@ def _registration_phone_pool(args):
 
 
 def _payment_country(payment_method: str, explicit: str = "") -> str:
-    value = str(explicit or "").strip().upper()
-    if value:
-        return value
-    from .payment_link_manager import PAYMENT_METHODS
-
-    spec = PAYMENT_METHODS.get(str(payment_method or "paypal").strip().lower().replace("-", "_"))
-    return spec.country if spec else "US"
+    return payment_commands.payment_country(payment_method, explicit)
 
 
 def _at_payment_stage_args(args, payment_method="paypal"):
-    proxy = (getattr(args, "proxy", None) or "").strip() or None
-    if not getattr(args, "proxy_explicit", False):
-        proxy = None
-    explicit_checkout = (getattr(args, "checkout_proxy", None) or "").strip() or None
-    explicit_provider = (getattr(args, "provider_proxy", None) or "").strip() or None
-    explicit_approve = (getattr(args, "approve_proxy", None) or "").strip() or None
-    has_country_override = any((
-        (getattr(args, "checkout_proxy_country", None) or "").strip(),
-        (getattr(args, "approve_proxy_country", None) or "").strip(),
-    ))
-    if not has_country_override and (proxy or explicit_checkout or explicit_provider or explicit_approve):
-        return proxy, explicit_checkout, explicit_provider, explicit_approve
-
-    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
-    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
-    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
-    proxy_default = (CFG.get("proxy") or {}).get("default") or ""
-
-    checkout_proxy = explicit_checkout or method_stage.get("checkout") or paypal_stage.get("checkout") or proxy or proxy_default
-    if method == "upi":
-        provider_proxy = (
-            explicit_provider
-            or method_stage.get("provider")
-            or method_stage.get("stripe_init")
-            or paypal_stage.get("provider")
-            or paypal_stage.get("stripe_init")
-            or "http://107.150.109.49:11001"
-        )
-        approve_proxy = (
-            explicit_approve
-            or method_stage.get("approve")
-            or method_stage.get("confirm")
-            or paypal_stage.get("approve")
-            or paypal_stage.get("confirm")
-            or provider_proxy
-            or "http://107.150.109.49:11001"
-        )
-    else:
-        provider_proxy = (
-            explicit_provider
-            or method_stage.get("provider")
-            or method_stage.get("stripe_init")
-            or paypal_stage.get("provider")
-            or paypal_stage.get("stripe_init")
-            or proxy_default
-        )
-        approve_proxy = (
-            explicit_approve
-            or method_stage.get("approve")
-            or method_stage.get("confirm")
-            or paypal_stage.get("approve")
-            or paypal_stage.get("confirm")
-            or provider_proxy
-            or proxy_default
-        )
-    return _apply_stage_country_overrides(args, proxy, checkout_proxy, provider_proxy, approve_proxy)
+    return payment_commands.payment_stage_args(
+        args,
+        payment_method,
+        CFG,
+        apply_country_overrides=_apply_stage_country_overrides,
+    )
 
 
 def _apply_stage_country_overrides(args, proxy, checkout_proxy, provider_proxy, approve_proxy):
-    """Apply country-aware session rotation to the three operator-facing stages."""
-    from .paypal_proxy import rotate_proxy_session
-
-    def apply(value, option):
-        country = (getattr(args, option, None) or "").strip().upper()
-        return rotate_proxy_session(value, country) if value and country else value
-
-    return (
+    return payment_commands.apply_stage_country_overrides(
+        args,
         proxy,
-        apply(checkout_proxy, "checkout_proxy_country"),
+        checkout_proxy,
         provider_proxy,
-        apply(approve_proxy, "approve_proxy_country"),
+        approve_proxy,
     )
 
 
 def _at_promotion_proxy_arg(args, payment_method="paypal"):
-    """Resolve the promotion-update stage proxy (opt-in, promo-eligible region).
-
-    Priority: explicit --promotion-proxy > <method>.stage_proxies.promotion
-    > paypal.stage_proxies.promotion. Returns None when unset so the promotion
-    stage stays disabled (behaviour unchanged).
-    """
-    explicit = (getattr(args, "promotion_proxy", None) or "").strip()
-    if explicit:
-        from .paypal_proxy import rotate_proxy_session
-        country = (getattr(args, "promotion_proxy_country", None) or "").strip().upper()
-        return rotate_proxy_session(explicit, country) if country else explicit
-    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
-    method_cfg = CFG.get(method) if isinstance(CFG.get(method), dict) else {}
-    method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
-    paypal_cfg = CFG.get("paypal") if isinstance(CFG.get("paypal"), dict) else {}
-    paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
-    resolved = (
-        method_stage.get("promotion")
-        or method_stage.get("promotion_update")
-        or paypal_stage.get("promotion")
-        or paypal_stage.get("promotion_update")
-    )
-    value = (str(resolved).strip() or None) if resolved else None
-    if value:
-        from .paypal_proxy import rotate_proxy_session
-        country = (getattr(args, "promotion_proxy_country", None) or "").strip().upper()
-        if country:
-            value = rotate_proxy_session(value, country)
-    return value
+    return payment_commands.promotion_proxy_arg(args, payment_method, CFG)
 
 
 def main():
@@ -264,7 +150,7 @@ def main():
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
@@ -305,7 +191,7 @@ def main():
     parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
     parser.add_argument("--payment-batch-id", default=None, help="Stable cohort ID for a resumable protocol-payment batch")
     parser.add_argument("--no-jit-at-refresh", action="store_true", help="Probe the saved AT but do not run email OTP OAuth on HTTP 401")
-    parser.add_argument("--payment-probe-only", action="store_true", help="Run the JIT AT/eligibility gate without creating a payment method")
+    parser.add_argument("--payment-probe-only", action="store_true", help="Create Checkout and run Stripe capability detection without creating a payment method")
     parser.add_argument("--payment-matrix", default=None, help="Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix")
     parser.add_argument("--payment-canary", type=int, default=0, help="Limit a payment batch to the first N unique accounts")
     parser.add_argument("--payment-retries", type=int, default=1, help="Retries for classified transient payment failures")
@@ -378,7 +264,7 @@ def main():
     parser.add_argument("--scan-switch-workspace-id", default=None, help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used")
-    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries ChatGPT web session before Codex OAuth")
+    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "browser", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, isolated browser, then Codex OAuth")
     
     parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
     parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
@@ -1225,7 +1111,9 @@ def _refresh_cpa_quota(args):
             workers=max(1, int(args.quota_workers or args.workers or 4)),
             proxy=args.proxy,
             timeout=max(5, int(args.refresh_timeout or 30)),
-            relogin_on_401=False,
+            relogin_on_401=bool(getattr(args, "quota_auto_relogin", False)),
+            relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 180) or 180)),
+            relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
         )
         if quota_mode == "auto" and result.get("failed", 0):
             fallback = refresh_cpa_quota_statuses(
@@ -1373,275 +1261,38 @@ def _generate_upi_qr(args):
         raise SystemExit(3)
 
 
-def _list_payment_methods():
-    from .payment_link_manager import supported_payment_methods
+def _payment_command_context():
+    return payment_commands.PaymentCommandContext(
+        read_email_file=_read_email_file,
+        payment_method=_payment_method,
+        resolve_access_token=_resolve_payment_access_token,
+        payment_stage_args=_at_payment_stage_args,
+        promotion_proxy_arg=_at_promotion_proxy_arg,
+        stage_country_overrides=_payment_stage_country_overrides,
+        payment_country=_payment_country,
+        protocol_proxy_pool=_protocol_proxy_pool,
+        has_explicit_payment_proxy=_has_explicit_payment_proxy,
+    )
 
-    print(json.dumps({"ok": True, "methods": supported_payment_methods()}, ensure_ascii=False, indent=2))
+
+def _list_payment_methods():
+    return payment_commands.list_payment_methods()
 
 
 def _payment_stage_country_overrides(args):
-    return {
-        key: value
-        for key, value in {
-            "checkout": (getattr(args, "checkout_proxy_country", None) or "").strip().upper(),
-            "approve": (getattr(args, "approve_proxy_country", None) or "").strip().upper(),
-            "promotion": (getattr(args, "promotion_proxy_country", None) or "").strip().upper(),
-        }.items()
-        if value
-    }
+    return payment_commands.stage_country_overrides(args)
 
 
 def _resolve_payment_access_token(args):
-    at = (getattr(args, "at", None) or "").strip()
-    if at:
-        return at, None
-
-    email = (getattr(args, "email", None) or "").strip()
-    session_file = (getattr(args, "session_file", None) or "").strip()
-    if not email and not session_file:
-        return "", None
-
-    import contextlib
-    from .session_refresh import _load_seed_session
-
-    with contextlib.redirect_stdout(sys.stderr):
-        data, _ = _load_seed_session(email=email, session_file=session_file)
-    if not isinstance(data, dict):
-        return "", None
-
-    def nested(mapping, *keys):
-        value = mapping
-        for key in keys:
-            if not isinstance(value, dict):
-                return ""
-            value = value.get(key)
-        return str(value or "").strip()
-
-    access_token = next((value for value in (
-        str(data.get("access_token") or "").strip(),
-        str(data.get("accessToken") or "").strip(),
-        nested(data, "auth_session", "access_token"),
-        nested(data, "auth_session", "accessToken"),
-        nested(data, "session", "access_token"),
-        nested(data, "session", "accessToken"),
-    ) if value), "")
-    return access_token, data
+    return payment_commands.resolve_access_token(args, stderr=sys.stderr)
 
 
 def _test_payment_proxies(args):
-    from .paypal_proxy import probe_proxy, redact_proxy_url, rotate_proxy_session, select_proxy_from_pool
-
-    method = _payment_method(args)
-    _, checkout_proxy, _, approve_proxy = _at_payment_stage_args(args, method)
-    promotion_proxy = _at_promotion_proxy_arg(args, method)
-    countries = _payment_stage_country_overrides(args)
-    default_country = _payment_country(method, getattr(args, "target_country", ""))
-    use_pool = not _has_explicit_payment_proxy(args) and bool(_protocol_proxy_pool())
-    stage_values = {
-        "checkout": checkout_proxy,
-        "approve": approve_proxy,
-        "update": promotion_proxy,
-    }
-    stage_country_keys = {"checkout": "checkout", "approve": "approve", "update": "promotion"}
-    stages = {}
-    for stage, proxy in stage_values.items():
-        expected = countries.get(stage_country_keys[stage], "") or default_country
-        candidate = proxy or ""
-        attempts = []
-        result = None
-        if use_pool:
-            candidate, attempts = select_proxy_from_pool(_protocol_proxy_pool(), expected, stage)
-            if not candidate:
-                stages[stage] = {
-                    "ok": False,
-                    "stage": stage,
-                    "expected_country": expected,
-                    "error": "payment_proxy_pool_unavailable",
-                    "proxy": "DIRECT",
-                    "attempts": attempts,
-                }
-                continue
-            stages[stage] = {**attempts[-1], "proxy": redact_proxy_url(candidate), "attempts": attempts}
-            continue
-        for attempt in range(1, 4):
-            if attempt > 1 and candidate:
-                candidate = rotate_proxy_session(candidate, expected)
-            result = probe_proxy(candidate, expected_country=expected, stage=stage)
-            attempts.append({"attempt": attempt, "ok": result.ok, "error": result.error})
-            if result.ok:
-                break
-        stages[stage] = {**result.to_dict(), "proxy": redact_proxy_url(candidate), "attempts": attempts}
-    ok = all(bool(item.get("ok")) for item in stages.values())
-    print(json.dumps({"ok": ok, "payment_method": method, "stages": stages}, ensure_ascii=False, indent=2))
-    if not ok:
-        raise SystemExit(3)
+    return payment_commands.test_payment_proxies(args, _payment_command_context())
 
 
 def _extract_payment_link(args):
-    """Extract any supported protocol payment link from an AT or saved account."""
-    from .desktop_ipc import emit_result
-    from .payment_link_manager import generate_payment_link
-
-    def output(payload):
-        emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
-
-    method = _payment_method(args)
-    email_file = str(getattr(args, "email_file", None) or "").strip()
-    if email_file:
-        if method == "blik" and not getattr(args, "payment_probe_only", False):
-            output({
-                "ok": False,
-                "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
-            })
-            raise SystemExit(2)
-        from .payment_batch import run_payment_batch
-
-        emails = _read_email_file(email_file)
-        if getattr(args, "email", None):
-            emails.insert(0, str(args.email).strip())
-        if not emails:
-            output({"ok": False, "error": "email file contains no accounts"})
-            raise SystemExit(1)
-        proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
-        stage_countries = _payment_stage_country_overrides(args)
-        target_country = _payment_country(method, getattr(args, "target_country", ""))
-        payment_kwargs = {
-            "checkout_proxy": checkout_proxy,
-            "provider_proxy": provider_proxy,
-            "stripe_init_proxy": getattr(args, "stripe_init_proxy", None),
-            "payment_method_proxy": getattr(args, "payment_method_proxy", None),
-            "confirm_proxy": getattr(args, "confirm_proxy", None),
-            "approve_proxy": approve_proxy,
-            "redirect_proxy": getattr(args, "redirect_proxy", None),
-            "promotion_proxy": _at_promotion_proxy_arg(args, method),
-            "stage_proxy_countries": stage_countries,
-            "target_country": target_country,
-            "checkout_country": str(getattr(args, "checkout_country", "") or target_country).strip().upper(),
-            "require_zero": not getattr(args, "no_require_zero", False),
-        }
-        try:
-            report = run_payment_batch(
-                emails,
-                payment_method=method,
-                workers=getattr(args, "workers", 1),
-                batch_id=getattr(args, "payment_batch_id", "") or "",
-                proxy=proxy,
-                payment_kwargs=payment_kwargs,
-                jit_refresh=not getattr(args, "no_jit_at_refresh", False),
-                probe_only=bool(getattr(args, "payment_probe_only", False)),
-                matrix=getattr(args, "payment_matrix", None),
-                canary=getattr(args, "payment_canary", 0),
-                retries=getattr(args, "payment_retries", 1),
-                timeout=getattr(args, "refresh_timeout", 30),
-            )
-        except RuntimeError as exc:
-            output({"ok": False, "error": str(exc)})
-            raise SystemExit(3)
-        output(report)
-        counts = report.get("counts", {})
-        if (
-            getattr(args, "payment_probe_only", False) and not counts.get("authenticated")
-        ) or (
-            not getattr(args, "payment_probe_only", False) and not counts.get("completed")
-        ):
-            raise SystemExit(3)
-        return
-
-    at = ""
-    auth_context = None
-    if not str(getattr(args, "at", None) or "").strip() and (
-        getattr(args, "email", None) or getattr(args, "session_file", None)
-    ):
-        from .payment_auth import ensure_payment_access_token, public_payment_auth_result
-
-        legacy_at, legacy_context = _resolve_payment_access_token(args)
-        auth = ensure_payment_access_token(
-            email=str(getattr(args, "email", None) or ""),
-            session_file=str(getattr(args, "session_file", None) or ""),
-            proxy=getattr(args, "proxy", None),
-            timeout=min(max(10, int(getattr(args, "refresh_timeout", 30) or 30)), 300),
-            relogin_on_401=not getattr(args, "no_jit_at_refresh", False),
-        )
-        if not auth.get("ok"):
-            if auth.get("error") == "missing_access_token" and legacy_at:
-                at, auth_context = legacy_at, legacy_context
-            else:
-                print(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
-                raise SystemExit(3)
-        else:
-            at = str(auth.get("access_token") or "")
-            auth_context = auth.get("auth_context")
-        if auth.get("ok") and getattr(args, "payment_probe_only", False):
-            print(json.dumps(public_payment_auth_result(auth), ensure_ascii=False, indent=2))
-            return
-    else:
-        at, auth_context = _resolve_payment_access_token(args)
-    if not at:
-        print(json.dumps({
-            "ok": False,
-            "error": "selected account has no Access Token" if (getattr(args, "email", None) or getattr(args, "session_file", None)) else "missing --at (Access Token)",
-        }, ensure_ascii=False))
-        raise SystemExit(1)
-    proxy, checkout_proxy, provider_proxy, approve_proxy = _at_payment_stage_args(args, method)
-    stage_countries = _payment_stage_country_overrides(args)
-    target_country = _payment_country(method, getattr(args, "target_country", ""))
-    checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
-    if not _has_explicit_payment_proxy(args):
-        defaults = _protocol_proxy_pool()
-        if defaults:
-            from .paypal_proxy import rotate_proxy_session, select_proxy_from_pool
-            proxy, attempts = select_proxy_from_pool(defaults, target_country, "payment")
-            if not proxy:
-                print(json.dumps({
-                    "ok": False,
-                    "error": "payment_proxy_pool_unavailable",
-                    "target_country": target_country,
-                    "attempts": attempts,
-                }, ensure_ascii=False, indent=2))
-                raise SystemExit(3)
-            checkout_proxy = rotate_proxy_session(proxy, stage_countries.get("checkout") or checkout_country)
-            provider_proxy = rotate_proxy_session(proxy, target_country)
-            approve_proxy = rotate_proxy_session(proxy, stage_countries.get("approve") or target_country)
-    kwargs = {
-        "checkout_proxy": checkout_proxy,
-        "provider_proxy": provider_proxy,
-        "stripe_init_proxy": getattr(args, "stripe_init_proxy", None),
-        "payment_method_proxy": getattr(args, "payment_method_proxy", None),
-        "confirm_proxy": getattr(args, "confirm_proxy", None),
-        "approve_proxy": approve_proxy,
-        "redirect_proxy": getattr(args, "redirect_proxy", None),
-        "promotion_proxy": (
-            rotate_proxy_session(proxy, stage_countries.get("promotion") or target_country)
-            if proxy and not _has_explicit_payment_proxy(args) and _protocol_proxy_pool()
-            else _at_promotion_proxy_arg(args, method)
-        ),
-        "stage_proxy_countries": stage_countries,
-        "require_zero": not getattr(args, "no_require_zero", False),
-    }
-    if target_country:
-        kwargs["target_country"] = target_country
-    if checkout_country:
-        kwargs["checkout_country"] = checkout_country
-    if method == "paypal":
-        kwargs["require_ba_token"] = bool(getattr(args, "require_ba_token", False))
-    if method == "upi":
-        kwargs["payment_country"] = (getattr(args, "payment_country", None) or "IN").strip().upper()
-        kwargs["qr_path"] = getattr(args, "qr_path", None)
-    if method == "blik":
-        kwargs["blik_code"] = getattr(args, "blik_code", None)
-
-    result = generate_payment_link(
-        access_token=at,
-        proxy=proxy,
-        payment_method=method,
-        auth_context=auth_context,
-        paypal_generation_type=getattr(args, "paypal_generation_type", None),
-        **kwargs,
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    if not result.get("ok"):
-        raise SystemExit(3)
-
+    return payment_commands.extract_payment_link(args, _payment_command_context())
 
 def _regenerate_paypal_link(args):
     from .paypal_links import regenerate_paypal_link

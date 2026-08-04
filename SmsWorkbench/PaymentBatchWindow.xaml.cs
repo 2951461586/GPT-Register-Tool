@@ -6,6 +6,13 @@ namespace SmsWorkbench
         {
             InitializeComponent();
             DataContext = viewModel;
+            Closing += (_, args) =>
+            {
+                if (!viewModel.IsRunning) return;
+                args.Cancel = true;
+                if (viewModel.RunCancelCommand.CanExecute(null))
+                    viewModel.RunCancelCommand.Execute(null);
+            };
         }
     }
 }

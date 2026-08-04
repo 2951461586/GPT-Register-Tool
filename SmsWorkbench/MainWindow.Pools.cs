@@ -26,7 +26,7 @@ namespace SmsWorkbench
         private bool IsMailboxPoolLikeRow(PoolRow row)
         {
             if (row == null) return false;
-            return row.AccountType.Contains("邮箱池") || row.AccountType.Contains("Chatai");
+            return MailboxPoolFileStore.IsMailboxPoolLike(row.AccountType, row.MailboxProvider);
         }
 
         private void RefreshPools()
@@ -243,6 +243,27 @@ namespace SmsWorkbench
                     continue;
                 }
 
+                if (MailboxPoolFileStore.TryParseICloudUrlLine(line, out string icloudEmail, out string receiveUrl))
+                {
+                    allRows.Add(new PoolRow
+                    {
+                        Id = "M" + (i + 1),
+                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
+                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
+                        Identifier = icloudEmail,
+                        AccountType = "iCloud邮箱池",
+                        Status = "可收信",
+                        RefreshToken = "接码链接",
+                        Notes = path,
+                        SourcePath = path,
+                        RawLine = line,
+                        MailboxLine = line,
+                        MailboxProvider = "icloud_url",
+                        MailboxToken = receiveUrl
+                    });
+                    continue;
+                }
+
                 if (line.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
                 {
                     string payload = line.Substring("gmail://".Length).Trim();
@@ -398,14 +419,15 @@ namespace SmsWorkbench
                     bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
                     bool isReMailMailbox = mailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase);
                     bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
-                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox && !isReMailMailbox);
+                    bool isICloudMailbox = mailboxProvider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase);
+                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox && !isReMailMailbox && !isICloudMailbox);
                     var dbRow = new PoolRow
                     {
                         Id = "DB" + data["id"],
                         CreatedAt = UnixTimeText(data.TryGetValue("created_at", out string created) ? created : ""),
                         CompletedAt = UnixTimeText(data.TryGetValue("updated_at", out string updated) ? updated : ""),
                         Identifier = data.TryGetValue("email", out string email) ? email : "",
-                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
+                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isICloudMailbox ? "SQLite/iCloud" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
                         AccountPlanType = GetAccountPlanType(rawData),
                         RegistrationCountry = data.TryGetValue("registration_country", out string registrationCountry) ? registrationCountry : "",
                         QuotaStatus = GetQuotaStatus(rawData),
@@ -417,7 +439,7 @@ namespace SmsWorkbench
                         HasAccessToken = !string.IsNullOrWhiteSpace(access),
                         AccessTokenProbeStatusCode = GetAccessTokenProbeStatusCode(rawData),
                         PayPalUrl = paypalUrl,
-                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(isChataiMailbox ? mailboxRefreshToken : access),
+                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : isICloudMailbox ? "接码链接" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
                         Proxy = DbTimingText(data),
                         Notes = string.IsNullOrWhiteSpace(jsonPath) ? dbPath : jsonPath,
                         SourcePath = dbPath,

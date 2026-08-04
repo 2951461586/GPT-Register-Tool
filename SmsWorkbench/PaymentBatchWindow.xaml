@@ -67,8 +67,8 @@
       </StackPanel>
 
       <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2">
-        <CheckBox Content="401 时邮箱 OTP OAuth 新 AT" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
-        <CheckBox Content="仅探测资格" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
+        <CheckBox Content="401 自动恢复（RT/Cookie/浏览器/OAuth）" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
+        <CheckBox Content="仅能力探测（Checkout + Stripe init）" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
         <CheckBox Content="要求 0 元金额" IsChecked="{Binding RequireZero}" IsEnabled="{Binding RequireZeroEnabled}"/>
       </StackPanel>
     </Grid>
@@ -112,24 +112,61 @@
       </DataGrid>
     </Grid>
 
-    <DataGrid Grid.Row="3"
-              ItemsSource="{Binding Results}"
-              IsReadOnly="True"
-              AutoGenerateColumns="False"
-              HeadersVisibility="Column"
-              GridLinesVisibility="Horizontal"
-              RowHeight="32"
-              Margin="0,0,0,12">
-      <DataGrid.Columns>
-        <DataGridTextColumn Header="账号" Binding="{Binding AccountRef}" Width="135"/>
-        <DataGridTextColumn Header="矩阵" Binding="{Binding MatrixCell}" Width="115"/>
-        <DataGridTextColumn Header="AT" Binding="{Binding AuthStatus}" Width="68"/>
-        <DataGridTextColumn Header="JIT" Binding="{Binding RefreshStatus}" Width="66"/>
-        <DataGridTextColumn Header="资格" Binding="{Binding Eligibility}" Width="66"/>
-        <DataGridTextColumn Header="结果" Binding="{Binding Decision}" Width="*"/>
-        <DataGridTextColumn Header="次数" Binding="{Binding Attempts}" Width="56"/>
-      </DataGrid.Columns>
-    </DataGrid>
+    <Grid Grid.Row="3" Margin="0,0,0,12">
+      <DataGrid x:Name="ResultsGrid"
+                ItemsSource="{Binding Results}"
+                IsReadOnly="True"
+                AutoGenerateColumns="False"
+                HeadersVisibility="Column"
+                GridLinesVisibility="Horizontal"
+                RowHeight="42"
+                Margin="0">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="账号" Binding="{Binding AccountRef}" Width="135"/>
+          <DataGridTextColumn Header="矩阵" Binding="{Binding MatrixCell}" Width="115"/>
+          <DataGridTextColumn Header="AT" Binding="{Binding AuthStatus}" Width="68"/>
+          <DataGridTextColumn Header="JIT" Binding="{Binding RefreshStatus}" Width="66"/>
+          <DataGridTextColumn Header="资格" Binding="{Binding Eligibility}" Width="66"/>
+          <DataGridTextColumn Header="终态" Binding="{Binding TerminalState}" Width="82"/>
+          <DataGridTextColumn Header="错误阶段" Binding="{Binding ErrorStage}" Width="96"/>
+          <DataGridTemplateColumn Header="支付链接 / 二维码" Width="*">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Grid Margin="6,2">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding ResultKind}"
+                             Foreground="{DynamicResource TextSub}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"/>
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding ResultDisplay}"
+                             ToolTip="{Binding ResultDisplay}"
+                             FontFamily="Consolas"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center"/>
+                  <Button Grid.Column="2"
+                          Width="30"
+                          Height="28"
+                          Padding="0"
+                          Margin="8,0,0,0"
+                          Command="{Binding DataContext.CopyResultCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                          CommandParameter="{Binding}"
+                          IsEnabled="{Binding HasCopyableResult}"
+                          ToolTip="{Binding CopyToolTip}">
+                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="次数" Binding="{Binding Attempts}" Width="56"/>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Grid>
 
     <Grid Grid.Row="4">
       <Grid.ColumnDefinitions>

@@ -16,6 +16,13 @@ This directory vendors the protocol-only extractors used by
   `run_momo.py` is the thin runner the manager drives (single normalized JSON,
   decodes the `data:image` QR to a PNG under `--qr-out-dir`).
 
+GoPay, GCash, and GrabPay are not vendored subprocess extractors. Their shared
+Python adapter lives in `sms_tool/wallet_provider.py`, with production HTTP and
+stage-proxy routing in `sms_tool/wallet_transport.py`. The shared ChatGPT
+Checkout/Stripe init request contract lives in `sms_tool/checkout_contract.py`;
+vendored and native adapters should reuse that contract instead of introducing
+another payload shape.
+
 Runtime tokens, proxy seeds, logs, dumps and state files must not be committed.
 The unified manager passes tokens through environment variables and creates a
 temporary proxy-seed file for each run.
@@ -38,16 +45,58 @@ For a resumable production cohort, add a stable ID and bounded retries:
 python -m sms_tool --extract-payment-link --payment-method momo --email-file runtime/eligible.txt --payment-batch-id momo_vn_20260731 --workers 2 --payment-retries 1
 ```
 
-Use `--payment-probe-only` for a no-payment JIT-authentication and
-registration-country-matrix pass; it never invokes a payment adapter. Reusing
-the same `--payment-batch-id` resumes the atomic checkpoint only when the hashed
-execution mode, matrix, proxy, retry, and JIT settings still match. Reports never
-include access tokens or authenticated proxy URLs.
+Use `--payment-probe-only` for a side-effect-limited capability pass. After JIT
+authentication and registration-country-matrix validation it creates one
+ChatGPT Checkout and calls Stripe init, then stops before payment-method
+creation, confirm, approve, polling, or provider redirect. The result preserves
+the discovered amount, currency, and payment-method catalog and classifies the
+method as `eligible`, `ineligible`, or `unknown`. A conclusive unavailable method
+or non-zero offer does not pause a Canary; a systemic `unknown` capability result
+does. Reusing the same `--payment-batch-id` resumes the atomic checkpoint only
+when the hashed execution mode, matrix, proxy, retry, and JIT settings still
+match. Reports never include access tokens or authenticated proxy URLs.
 
-Each worker runs the JIT AT gate immediately before checkout. HTTP 401 goes
-directly to mailbox OTP OAuth, and a replacement AT is persisted only after a
-second HTTP 200 probe. `account_deactivated` is permanent and is not retried.
+The three wallet profiles use one adapter contract:
+
+- GoPay: ID checkout, IDR, provider hosts owned by GoPay/Gojek/Midtrans.
+- GCash: PH checkout, PHP, provider hosts owned by GCash/Mynt.
+- GrabPay: PH checkout, PHP, provider hosts owned by Grab/GrabPay.
+
+Their full flow is Checkout → Stripe init → wallet PM → confirm → ChatGPT
+approve → poll → validated provider redirect. The adapter's `probe_only` mode
+stops after Stripe init and is covered by request/response fixtures under
+`tests/fixtures/wallet_provider/`; it performs no wallet authorization. Start a
+new profile with a one-account capability Canary before enabling a full cohort:
+
+```powershell
+python -m sms_tool --extract-payment-link --payment-method gopay --email-file runtime/canary.txt --payment-probe-only --payment-canary 1 --workers 1
+```
+
+### Unified Result Contract
+
+The manager has five terminal states: `completed`, `failed`, `cancelled`,
+`unknown`, and `timed_out`. Every normalized result includes `retryable` and
+`error_stage`. `cancelled` is not retryable. `unknown` also sets
+`requires_reconciliation=true` and is never automatically retried because a
+side-effecting request may already have reached the provider. `timed_out` is
+retryable unless an adapter has stronger outcome evidence. A successful link or
+QR extraction means an artifact is ready; it does not assert that the customer
+completed the remote wallet payment.
+
+Each worker runs the JIT AT gate immediately before checkout. HTTP 401 enters the
+shared recovery order: OAuth refresh token, existing ChatGPT session cookie,
+isolated-browser email OTP, then Codex OAuth. A replacement AT is persisted only
+after a second HTTP 200 probe. `account_deactivated` is permanent and is not
+retried.
 MoMo accepts
 separate checkout, promotion, provider, approve, and redirect proxies. Kakao
 prints a final structured JSON object for both success and conclusive failures;
 the manager no longer infers Kakao state from free-form log URLs.
+
+PayPal merchant-return reconciliation is deliberately separate from extraction.
+`sms_tool/paypal_reconciliation.py` validates and follows only the allowlisted
+`pm-redirects.stripe.com → pay.openai.com → chatgpt.com/checkout/verify`
+chain through a caller-supplied transport, and returns secret-free
+`conclusive`/`unknown`/`failed` evidence. It does not change
+`generate_payment_link()` or turn a return-chain result into a newly extracted
+link.

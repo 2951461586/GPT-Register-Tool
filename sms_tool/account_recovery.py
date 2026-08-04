@@ -1,19 +1,21 @@
-"""Local account liveness refresh and explicit OAuth recovery workflows.
+"""Local account liveness refresh and ordered AT recovery workflows.
 
 The liveness probe itself is side-effect free and lives in
-``account_liveness``. This module owns persistence, deactivation handling, and
-the explicitly requested email-OTP relogin path.
+``account_liveness``. This module owns verified persistence, deactivation
+handling, and the RT/cookie/browser/Codex recovery chain.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 from .account_liveness import probe_account_liveness
+from .config import CFG
 from .storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
 
 
@@ -101,12 +103,223 @@ def relogin_web_session_account(account: dict[str, Any], proxy: str | None = Non
             email,
             max(30, int(timeout or 180)),
             proxy=proxy,
+            persist=False,
         ) or {})
-        result["mode"] = "web_session"
-        result["ok"] = bool(result.get("ok"))
-        return result
+        if not result.get("ok"):
+            safe = _safe_relogin_result(result)
+            safe.update({"ok": False, "mode": "web_session"})
+            return safe
+        return _verify_and_persist_candidate(
+            account,
+            result.get("data") if isinstance(result.get("data"), dict) else {},
+            mode="web_session",
+            proxy=proxy,
+            timeout=timeout,
+        )
     except Exception as exc:
-        return {"ok": False, "mode": "web_session", "error": str(exc)}
+        return {"ok": False, "mode": "web_session", "error": _redact_recovery_error(exc)}
+
+
+def relogin_refresh_token_account(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 180,
+) -> dict[str, Any]:
+    """Exchange a stored OpenAI refresh token and persist only a verified AT."""
+    if not isinstance(account, dict):
+        return {"ok": False, "mode": "oauth_refresh_token", "error": "invalid_account"}
+    email = str(account.get("email") or "").strip().lower()
+    if not email:
+        return {"ok": False, "mode": "oauth_refresh_token", "error": "missing_email"}
+    from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
+
+    auth_session = account.get("auth_session") if isinstance(account.get("auth_session"), dict) else {}
+    refresh_token = _openai_refresh_token(account, auth_session)
+    if not refresh_token:
+        return {"ok": False, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": True}
+    result = _refresh_with_openai_oauth(account, refresh_token, proxy=proxy)
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "mode": "oauth_refresh_token",
+            "error": _redact_recovery_error(result.get("error") or "oauth_refresh_failed"),
+        }
+    candidate = dict(account)
+    candidate.update(result.get("data") if isinstance(result.get("data"), dict) else {})
+    candidate["email"] = email
+    candidate["refresh_token_status"] = "oauth_present"
+    candidate["refresh_token_updated_at"] = int(time.time())
+    return _verify_and_persist_candidate(
+        account,
+        candidate,
+        mode="oauth_refresh_token",
+        proxy=proxy,
+        timeout=timeout,
+    )
+
+
+def relogin_browser_account(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 180,
+    *,
+    headless: bool = True,
+) -> dict[str, Any]:
+    """Acquire an AT through an isolated browser email-OTP login."""
+    if not isinstance(account, dict):
+        return {"ok": False, "mode": "browser", "error": "invalid_account"}
+    email = str(account.get("email") or "").strip().lower()
+    if not email:
+        return {"ok": False, "mode": "browser", "error": "missing_email"}
+    try:
+        from .session_refresh import _refresh_session_browser
+
+        data = dict(account)
+        data["email"] = email
+        result = _refresh_session_browser(
+            data,
+            str(account.get("json_path") or ""),
+            email,
+            max(30, int(timeout or 180)),
+            headless,
+            proxy=proxy,
+            persist=False,
+            automated_login=True,
+        )
+        if not result.get("ok"):
+            safe = _safe_relogin_result(result)
+            safe.update({"ok": False, "mode": "browser"})
+            return safe
+        return _verify_and_persist_candidate(
+            account,
+            result.get("data") if isinstance(result.get("data"), dict) else {},
+            mode="browser",
+            proxy=proxy,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return {"ok": False, "mode": "browser", "error": _redact_recovery_error(exc)}
+
+
+def relogin_chatgpt_email_account(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 300,
+) -> dict[str, Any]:
+    """Acquire a ChatGPT web AT through the passwordless email-OTP protocol."""
+    if not isinstance(account, dict):
+        return {"ok": False, "mode": "chatgpt_email_otp", "error": "invalid_account"}
+    email = str(account.get("email") or "").strip().lower()
+    if not email:
+        return {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_email"}
+    try:
+        import uuid
+
+        from curl_cffi import requests as curl_requests
+
+        from .account_creation import _auth_session_access_token, _fetch_auth_session
+        from .auth_flow import _json_or_raw
+        from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
+        from .codex_oauth import _mailbox_from_data
+        from .http_client import request_with_retry
+        from .registration import _login_existing_account_with_email_otp
+        from .sentinel_tokens import _extract_sentinel, _sentinel_device_id, _set_oai_did_cookie
+        from .session_refresh import _auth_session_email
+
+        mailbox = _mailbox_from_data(account)
+        if mailbox is None:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_mailbox"}
+
+        select_auth_fingerprint(rotate=True)
+        sentinel = _extract_sentinel(proxy=proxy, force_fresh=True, persist=False)
+        if not isinstance(sentinel, dict) or not sentinel.get("sentinel_token"):
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "sentinel_extract_failed"}
+
+        chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
+        auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+        chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+        device_id = _sentinel_device_id(sentinel) or str(uuid.uuid4())
+        logging_id = str(uuid.uuid4()).replace("-", "")
+        session = curl_requests.Session()
+        if proxy:
+            session.proxies = {"http": proxy, "https": proxy}
+        _set_oai_did_cookie(session, device_id)
+        base_headers = openai_auth_headers(device_id, accept="application/json", include_trace=True)
+
+        request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/",
+            label="ChatGPT email relogin prime",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml"},
+            impersonate=auth_impersonate(),
+        )
+        csrf_response = request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/api/auth/csrf",
+            label="ChatGPT email relogin csrf",
+            headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
+            impersonate=auth_impersonate(),
+        )
+        csrf_token = str(_json_or_raw(csrf_response).get("csrfToken") or "").strip()
+        if not csrf_token:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_csrf_token"}
+
+        login = _login_existing_account_with_email_otp(
+            session=session,
+            username=email,
+            mailbox=mailbox,
+            did=device_id,
+            session_logging_id=logging_id,
+            auth_base=auth_base,
+            chat_base=chat_base,
+            base_headers=base_headers,
+            csrf_token=csrf_token,
+            proxy=proxy,
+            sentinel_token=str(sentinel.get("sentinel_token") or ""),
+            sentinel_so_token=str(sentinel.get("sentinel_so_token") or ""),
+        )
+        if not login.get("ok"):
+            return {
+                "ok": False,
+                "mode": "chatgpt_email_otp",
+                "error": _redact_recovery_error(login.get("error") or "email_login_failed"),
+            }
+
+        auth_result = _fetch_auth_session(session, chat_base, base_headers)
+        auth_session = auth_result.get("body") if isinstance(auth_result.get("body"), dict) else {}
+        access_token = str(_auth_session_access_token(auth_session) or "").strip()
+        if not access_token:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_missing_access_token"}
+        authenticated_email = _auth_session_email(auth_session)
+        if not authenticated_email:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_missing_email"}
+        if authenticated_email != email:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_email_mismatch"}
+
+        candidate = dict(account)
+        candidate.update({
+            "email": email,
+            "device_id": device_id,
+            "access_token": access_token,
+            "auth_session": auth_session,
+            "cookie_header": str(auth_result.get("cookie_header") or ""),
+            "refresh_token_status": "no_rt",
+        })
+        return _verify_and_persist_candidate(
+            account,
+            candidate,
+            mode="chatgpt_email_otp",
+            proxy=proxy,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "mode": "chatgpt_email_otp",
+            "error": _redact_recovery_error(exc),
+        }
 
 
 def relogin_codex_account(
@@ -115,7 +328,7 @@ def relogin_codex_account(
     timeout: int = 180,
     mode: str = "auto",
 ) -> dict[str, Any]:
-    """Refresh an AT through an explicit OAuth recovery mode."""
+    """Recover an invalid AT through the selected recovery strategy."""
     if is_permanently_deactivated(account):
         return {
             "ok": False,
@@ -127,7 +340,46 @@ def relogin_codex_account(
     normalized_mode = _normalize_relogin_mode(mode)
     if normalized_mode == "web_session":
         return relogin_web_session_account(account, proxy=proxy, timeout=timeout)
-    return relogin_local_codex_account(account, proxy=proxy, timeout=timeout)
+    if normalized_mode == "browser":
+        return relogin_browser_account(account, proxy=proxy, timeout=timeout)
+    if normalized_mode == "codex_oauth":
+        return relogin_local_codex_account(account, proxy=proxy, timeout=timeout)
+
+    recovery_proxy, proxy_attempts = _select_recovery_proxy(account, proxy)
+    attempts: list[dict[str, Any]] = []
+    strategies = (
+        ("oauth_refresh_token", relogin_refresh_token_account, timeout),
+        ("web_session", relogin_web_session_account, min(max(15, int(timeout or 180)), 30)),
+        ("browser", relogin_browser_account, timeout),
+        ("codex_oauth_pkce", relogin_local_codex_account, timeout),
+    )
+    for strategy, handler, strategy_timeout in strategies:
+        result = dict(handler(account, proxy=recovery_proxy, timeout=strategy_timeout) or {})
+        if result.get("ok"):
+            success = _safe_relogin_result(result)
+            success["attempts"] = attempts
+            if proxy_attempts:
+                success["proxy_attempts"] = proxy_attempts
+            return success
+        attempt = _safe_relogin_result(result)
+        attempt.setdefault("mode", strategy)
+        attempts.append(attempt)
+        if result.get("terminal") or _looks_account_deactivated(result):
+            return {
+                "ok": False,
+                "mode": strategy,
+                "error": "account_deactivated",
+                "terminal": True,
+                "attempts": attempts,
+                **({"proxy_attempts": proxy_attempts} if proxy_attempts else {}),
+            }
+    return {
+        "ok": False,
+        "mode": "auto",
+        "error": "all_relogin_methods_failed",
+        "attempts": attempts,
+        **({"proxy_attempts": proxy_attempts} if proxy_attempts else {}),
+    }
 
 
 def relogin_local_codex_account(
@@ -206,7 +458,99 @@ def relogin_local_codex_account(
         safe.update({"ok": True, "probe": probe, "persisted": True})
         return safe
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": _redact_recovery_error(exc)}
+
+
+def _verify_and_persist_candidate(
+    account: dict[str, Any],
+    candidate: dict[str, Any],
+    *,
+    mode: str,
+    proxy: str | None,
+    timeout: int,
+) -> dict[str, Any]:
+    email = str(candidate.get("email") or account.get("email") or "").strip().lower()
+    access_token = str(candidate.get("access_token") or "").strip()
+    if not access_token:
+        return {"ok": False, "mode": mode, "error": f"{mode}_missing_access_token", "persisted": False}
+
+    verified = dict(account)
+    verified.update(candidate)
+    verified["email"] = email
+    if mode in {"web_session", "browser"}:
+        from .session_refresh import _auth_session_email
+
+        auth_session = verified.get("auth_session") if isinstance(verified.get("auth_session"), dict) else {}
+        authenticated_email = _auth_session_email(auth_session)
+        if not authenticated_email:
+            return {"ok": False, "mode": mode, "error": "auth_session_missing_email", "persisted": False}
+        if authenticated_email != email:
+            return {"ok": False, "mode": mode, "error": "auth_session_email_mismatch", "persisted": False}
+    probe = probe_account_liveness(
+        verified,
+        proxy=proxy,
+        timeout=min(max(10, int(timeout or 30)), 60),
+    )
+    if int(probe.get("status_code") or 0) != 200:
+        return {
+            "ok": False,
+            "mode": mode,
+            "error": f"{mode}_access_token_probe_failed:{probe.get('status_code') or 'unknown'}",
+            "probe": probe,
+            "persisted": False,
+        }
+
+    now = int(time.time())
+    verified["success"] = True
+    verified["access_token_updated_at"] = now
+    verified["refreshed_at"] = now
+    json_path = str(verified.get("json_path") or account.get("json_path") or "").strip()
+    from .session_refresh import _save_refreshed
+
+    saved_path = _save_refreshed(verified, json_path)
+    return {
+        "ok": True,
+        "mode": mode,
+        "email": email,
+        "json_path": saved_path,
+        "probe": probe,
+        "persisted": True,
+        "refresh_token_status": str(verified.get("refresh_token_status") or "no_rt"),
+    }
+
+
+def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[str | None, list[dict[str, Any]]]:
+    country = str(account.get("registration_country") or "").strip().upper()
+    if not country:
+        return proxy, []
+    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    configured = proxy_cfg.get("pool") or []
+    if isinstance(configured, str):
+        configured = [configured]
+    candidates = [
+        value
+        for value in (
+            proxy,
+            *configured,
+            proxy_cfg.get("registration"),
+            proxy_cfg.get("default"),
+        )
+        if str(value or "").strip()
+    ]
+    if not candidates:
+        return proxy, []
+    try:
+        from .paypal_proxy import select_proxy_from_pool
+
+        selected, attempts = select_proxy_from_pool(candidates, country, "account_recovery")
+        return (selected or proxy or str(candidates[0])), attempts
+    except Exception as exc:
+        return proxy or str(candidates[0]), [{
+            "ok": False,
+            "stage": "account_recovery",
+            "expected_country": country,
+            "error": _redact_recovery_error(exc)[:200],
+        }]
 
 
 def is_permanently_deactivated(account: dict[str, Any]) -> bool:
@@ -291,11 +635,24 @@ def _persist_permanent_deactivation(account: dict[str, Any], result: dict[str, A
 
 
 def _safe_relogin_result(result: dict[str, Any] | None) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in dict(result or {}).items()
-        if key not in {"tokens", "access_token", "id_token", "refresh_token"}
+    blocked = {
+        "tokens", "access_token", "id_token", "refresh_token", "oauth_refresh_token",
+        "data", "auth_session", "cookie_header", "password", "mailbox", "raw_json",
     }
+    safe: dict[str, Any] = {}
+    for key, value in dict(result or {}).items():
+        if key in blocked:
+            continue
+        safe[key] = _redact_recovery_error(value) if key in {"error", "message", "last_url"} else value
+    return safe
+
+
+def _redact_recovery_error(value: Any) -> str:
+    text = str(value or "")
+    text = re.sub(r"((?:https?|socks5h?)://)[^@\s/]+@", r"\1[REDACTED]@", text, flags=re.I)
+    text = re.sub(r"\brt_[A-Za-z0-9._~-]+", "rt_[REDACTED]", text)
+    text = re.sub(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[REDACTED_JWT]", text)
+    return text[:1000]
 
 
 def _looks_account_deactivated(value: Any) -> bool:
@@ -313,6 +670,8 @@ def _normalize_relogin_mode(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_")
     if text in {"web", "web_session", "session", "chatgpt_session"}:
         return "web_session"
+    if text in {"browser", "browser_login", "browser_session"}:
+        return "browser"
     if text in {"codex", "codex_oauth", "oauth", "pkce"}:
         return "codex_oauth"
     return "auto"

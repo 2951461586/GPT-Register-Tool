@@ -370,17 +370,22 @@ public sealed class DesktopWindowSmokeTests
             VerifySettingsLayout(settings, settingsViewModel);
             settings.Close();
 
-            var payment = new PaymentBatchWindow(new PaymentBatchViewModel(
+            var paymentViewModel = new PaymentBatchViewModel(
                 new WindowPaymentBatchService(),
                 launcher,
-                new[] { new PaymentBatchAccount("smoke@example.com", true) }));
+                new[] { new PaymentBatchAccount("smoke@example.com", true) });
+            var payment = new PaymentBatchWindow(paymentViewModel);
             payment.Show();
             payment.UpdateLayout();
             Assert.True(payment.ActualWidth >= payment.MinWidth);
             Assert.True(payment.ActualHeight >= payment.MinHeight);
             Assert.DoesNotContain(
-                ((PaymentBatchViewModel)payment.DataContext).PaymentMethodOptions,
+                paymentViewModel.PaymentMethodOptions,
                 option => option.Id == "blik");
+            Assert.Contains(
+                paymentViewModel.PaymentMethodOptions,
+                option => option.Id == "direct_card");
+            Assert.IsType<DataGrid>(payment.FindName("ResultsGrid"));
             payment.Close();
             VerifyMainWindowRegistrationAndContextMenu(fixture.Path);
             application.Shutdown();
@@ -442,7 +447,9 @@ public sealed class DesktopWindowSmokeTests
             SampleSize = 1
         };
 
-        public Task<JsonElement> RunAsync(PaymentBatchRequest request, CancellationToken cancellationToken)
+        public Task<JsonElement> RunAsync(
+            PaymentBatchRequest request,
+            CancellationToken cancellationToken)
             => throw new NotSupportedException();
     }
 

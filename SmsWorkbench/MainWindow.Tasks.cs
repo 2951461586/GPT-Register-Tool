@@ -29,6 +29,7 @@ namespace SmsWorkbench
             File.WriteAllLines(tempFile, lines, new UTF8Encoding(false));
 
             var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
+            AddNoPhoneRegistrationArgs(args);
             AddRegistrationProxy(args);
             RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
         }

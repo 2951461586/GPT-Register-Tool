@@ -6,6 +6,7 @@ namespace SmsWorkbench
         private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
         {
             var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
+            AddNoPhoneRegistrationArgs(args);
             AddRegistrationProxy(args);
             RunBackend("邮箱池注册", args);
         }
@@ -15,7 +16,7 @@ namespace SmsWorkbench
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
-                Title = "选择 Chatai 邮箱文件"
+                Title = "选择邮箱文件"
             };
             if (dialog.ShowDialog() != true) return;
 
@@ -31,36 +32,8 @@ namespace SmsWorkbench
                 return;
             }
 
-            int imported = 0, skipped = 0;
-            var targetFile = Path.Combine(rootDir, "hotmail.txt");
-            var existingLines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (File.Exists(targetFile))
-            {
-                foreach (string existing in File.ReadAllLines(targetFile, Encoding.UTF8))
-                {
-                    string trimmed = existing.Trim();
-                    if (trimmed.Length > 0) existingLines.Add(trimmed);
-                }
-            }
-
-            var newLines = new List<string>();
-            foreach (string raw in lines)
-            {
-                string line = raw.Trim();
-                if (line.Length == 0 || line.StartsWith("#")) continue;
-                if (!line.Contains("----")) { skipped++; continue; }
-                string[] parts = line.Split(new[] { "----" }, StringSplitOptions.None);
-                if (parts.Length < 4) { skipped++; continue; }
-                if (existingLines.Contains(line)) { skipped++; continue; }
-                newLines.Add(line);
-                imported++;
-            }
-
-            if (newLines.Count > 0)
-            {
-                File.AppendAllLines(targetFile, newLines, Encoding.UTF8);
-            }
-
+            string targetFile = GetMailboxTokenFile();
+            (int imported, int skipped) = MailboxPoolFileStore.ImportSupportedLines(targetFile, lines);
             ChataiMailboxFilePath = targetFile;
             RefreshPools();
             NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
@@ -148,9 +121,9 @@ namespace SmsWorkbench
                 {
                     "--target-at200", options.Count.ToString(),
                     "--buy-remail-mailbox", "--remail-service-mode", "purchase",
-                    "--workers", options.Workers.ToString(),
-                    "--phone-reuse", "--phone-source", "smsbower"
+                    "--workers", options.Workers.ToString()
                 };
+                AddNoPhoneRegistrationArgs(targetArgs);
                 AddRegistrationProxy(targetArgs);
                 RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
                 return;
@@ -173,6 +146,11 @@ namespace SmsWorkbench
         private void AddRegistrationAtOnlyArgs(List<string> args)
         {
             args.Add("--registration-at-only");
+            AddNoPhoneRegistrationArgs(args);
+        }
+
+        private void AddNoPhoneRegistrationArgs(List<string> args)
+        {
             args.Add("--no-phone-reuse");
         }
 
@@ -634,6 +612,7 @@ namespace SmsWorkbench
                 || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
+            if (MailboxPoolFileStore.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
             return "";
@@ -701,6 +680,10 @@ namespace SmsWorkbench
                 if (provider.Equals("remail", StringComparison.OrdinalIgnoreCase))
                 {
                     return MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
+                }
+                if (provider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase))
+                {
+                    return serviceToken.Length > 0 ? email + "----" + serviceToken : "";
                 }
                 if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
                 {
@@ -771,6 +754,14 @@ namespace SmsWorkbench
                     token = serviceToken;
                     clientId = "";
                     mailboxLine = MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
+                    return mailboxLine.Length > 0;
+                }
+
+                if (provider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = serviceToken;
+                    clientId = "";
+                    mailboxLine = serviceToken.Length > 0 ? email + "----" + serviceToken : "";
                     return mailboxLine.Length > 0;
                 }
 

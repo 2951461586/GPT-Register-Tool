@@ -15,6 +15,7 @@ from typing import Any
 from .config import CFG
 from .paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
+from .payment_capability import payment_method_capability_probe
 from .payment_link_manager import generate_payment_link, normalize_payment_method
 
 
@@ -133,6 +134,7 @@ def run_payment_batch(
             "refreshed": bool(auth.get("refreshed")),
             "authenticated": bool(auth.get("ok")),
             "eligible": None,
+            "capability_probed": False,
             "attempted": False,
             "ok": False,
             "decision": "",
@@ -147,11 +149,29 @@ def run_payment_batch(
             row["decision"] = "matrix_registration_country_mismatch"
             row["error"] = row["decision"]
             return index, row
-        if probe_only:
-            row["ok"] = True
-            row["decision"] = "probe_authenticated"
-            return index, row
         kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy)
+        if probe_only:
+            kwargs.pop("proxy", None)
+            capability = payment_method_capability_probe(
+                access_token=str(auth.get("access_token") or ""),
+                payment_method=method,
+                auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+                proxy=proxy,
+                timeout=max(5, int(timeout or 30)),
+                **kwargs,
+            )
+            public = _public_payment_result(capability)
+            decision = str(public.get("decision") or public.get("error_code") or "capability_unknown")
+            row.update(public)
+            row.update({
+                "auth": public_auth,
+                "capability_probed": True,
+                "attempted": False,
+                "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
+                "decision": decision,
+                "attempts": 1,
+            })
+            return index, row
         last: dict[str, Any] = {}
         for attempt in range(1, retry_count + 2):
             row["attempted"] = True
@@ -221,7 +241,7 @@ def run_payment_batch(
             ordered[index] = row
             checkpoint("running")
     report = checkpoint("finished")
-    if canary and not probe_only:
+    if canary:
         report["canary_state"] = _record_canary_state(method, report)
         _write_checkpoint(report_path, report)
     return report
@@ -254,12 +274,21 @@ def _build_report(*, batch_id: str, method: str, started: float, workers: int,
 
 def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, int]:
     decisions = [str(row.get("decision") or "").lower() for row in results]
+    terminal_states = [
+        str(row.get("terminal_state") or row.get("status") or row.get("state") or "").lower()
+        for row in results
+    ]
     return {
         "requested": requested,
         "probed": sum(bool(row.get("probed")) for row in results),
         "refreshed": sum(bool(row.get("refreshed")) for row in results),
         "authenticated": sum(bool(row.get("authenticated")) for row in results),
         "eligible": sum(row.get("eligible") is True for row in results),
+        "capability_probed": sum(bool(row.get("capability_probed")) for row in results),
+        "capability_unknown": sum(
+            bool(row.get("capability_probed") and str(row.get("classification") or "") == "unknown")
+            for row in results
+        ),
         "attempted": sum(bool(row.get("attempted")) for row in results),
         "completed": sum(bool(row.get("ok") and row.get("attempted")) for row in results),
         "trial_ineligible": sum("trial_ineligible" in value for value in decisions),
@@ -269,6 +298,10 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
         "qr_ready": sum(_is_qr_ready(row) for row in results),
         "terminal": sum(bool((row.get("auth") or {}).get("terminal")) for row in results),
         "failed": sum(not bool(row.get("ok")) for row in results),
+        "cancelled": sum(state in {"cancelled", "canceled"} for state in terminal_states),
+        "unknown": sum(state in {"unknown", "outcome_unknown"} for state in terminal_states),
+        "timed_out": sum(state in {"timed_out", "timeout", "timeout_expired"} for state in terminal_states),
+        "retryable": sum(row.get("retryable") is True for row in results),
     }
 
 
@@ -346,6 +379,8 @@ def _cell_payment_kwargs(base: dict[str, Any], cell: dict[str, Any], proxy: Any)
 
 
 def _eligible_from_result(method: str, result: dict[str, Any]) -> bool | None:
+    if isinstance(result.get("eligible"), bool):
+        return bool(result["eligible"])
     if method == "momo":
         if result.get("has_momo") is True and result.get("amount_due") == 0:
             return True
@@ -369,6 +404,8 @@ def _is_qr_ready(row: dict[str, Any]) -> bool:
 
 
 def _is_transient(result: dict[str, Any]) -> bool:
+    if isinstance(result.get("retryable"), bool):
+        return bool(result["retryable"])
     text = json.dumps(result or {}, ensure_ascii=False).lower()
     return any(marker in text for marker in _TRANSIENT_MARKERS)
 
@@ -494,19 +531,30 @@ def _active_canary_pause(batch_cfg: dict[str, Any], method: str) -> dict[str, An
 
 def _record_canary_state(method: str, report: dict[str, Any]) -> dict[str, Any]:
     rows = report.get("results") if isinstance(report.get("results"), list) else []
-    attempted = [row for row in rows if row.get("attempted")]
-    completed = int((report.get("counts") or {}).get("completed") or 0)
+    probe_only = bool(report.get("probe_only"))
+    evaluated = [
+        row for row in rows
+        if (row.get("capability_probed") if probe_only else row.get("attempted"))
+    ]
+    completed = (
+        sum(bool(row.get("conclusive")) for row in evaluated)
+        if probe_only
+        else int((report.get("counts") or {}).get("completed") or 0)
+    )
     conclusive_offer = {
         "account_trial_ineligible", "card_only_full_price", "promo_nonzero", "momo_not_enabled",
         "nonzero_offer", "wrong_currency", "kakao_not_enabled", "credential_invalid", "account_deactivated",
     }
-    decisions = {str(row.get("decision") or "") for row in attempted}
-    systemic = bool(attempted and not completed and decisions and not decisions.issubset(conclusive_offer))
+    conclusive_offer.update({"payment_method_unavailable", "nonzero_offer"})
+    decisions = {str(row.get("decision") or "") for row in evaluated}
+    systemic = bool(evaluated and not completed and decisions and not decisions.issubset(conclusive_offer))
     state = {
         "payment_method": method,
+        "probe_only": probe_only,
         "paused": systemic,
         "reason": "protocol_profile_canary_failed" if systemic else "",
-        "attempted": len(attempted),
+        "attempted": sum(bool(row.get("attempted")) for row in evaluated),
+        "capability_probed": sum(bool(row.get("capability_probed")) for row in evaluated),
         "completed": completed,
         "decisions": sorted(decisions),
         "updated_at": int(time.time()),

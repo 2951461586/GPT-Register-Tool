@@ -1,6 +1,6 @@
 # GPT-Register-Tool
 
-面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理与协议支付链接提取工具。
+面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理、协议支付链接提取与显式支付执行工具。
 
 项目采用 **WPF 桌面端 + Python 业务核心**：桌面端负责操作入口、配置和结果展示，Python 模块负责邮箱、注册、会话、支付、代理与外部服务协议。运行数据默认保存在本机，不写入 Git。
 
@@ -21,7 +21,7 @@
 ### 适用场景
 
 - 从邮箱池、ReMail 或 CFWorker 执行批量邮箱注册。
-- 统一轮询 Microsoft、Gmail、ReMail、CFWorker 等邮箱的 OTP。
+- 统一轮询 Microsoft、Gmail、iCloud 接码链接、ReMail、CFWorker 等邮箱的 OTP。
 - 管理本地账号、Session、额度状态和支付链接。
 - 按阶段选择代理出口并提取 PayPal 或其他本地支付方式链接。
 - 将账号数据导出为 Codex、CPA、SUB2API 等目标格式。
@@ -33,8 +33,8 @@
 | 桌面端 | WPF、.NET 10、C#、Generic Host、CommunityToolkit.Mvvm、WPF-UI |
 | 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
-| 邮箱协议 | ReMail API、CFWorker、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
-| 支付协议 | Stripe Checkout、PayPal、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
+| 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
+| 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
 | 浏览器辅助 | Playwright、Camoufox、CloakBrowser |
 
 ## 安装部署方式
@@ -159,26 +159,31 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - Microsoft Graph/OAuth。
 - Outlook/Hotmail IMAP 回退。
 - Gmail IMAP 与 SMTP。
+- iCloud 接码链接，桌面端“导入邮箱”和后端均支持 `email----接码URL` 和 `email---接码URL`。
 - Chatai、token 文件及历史邮箱池格式。
 
 OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务端时间戳过滤和候选排序。
 
 ### 协议支付提链
 
-- 支持 PayPal、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
+- 支持 PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
 - BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
+- GoPay（印尼 ID/IDR）、GCash 和 GrabPay（菲律宾 PH/PHP）复用同一个钱包适配器：Checkout → Stripe init → 建钱包 PM → Confirm → Approve → Poll → 校验 Provider Redirect。三者只在地区、币种、locale 和最终域名白名单上分型。
 - PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
+- PayPal 回跳对账由独立 `paypal_reconciliation.py` 处理，只跟踪白名单内的 Stripe Return → OpenAI Pay → Checkout Verify，并输出脱敏的 `conclusive`/`unknown`/`failed` 证据；它不改变提链接口，也不生成或覆盖支付链接。
 - 支持 `checkout`、`approve`、`update` 分段代理。
 - 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
 - 协议支付代理池按顺序探测，当前代理不可用或出口国家不匹配时自动切换下一条。
 - 地区和代理选择保存为历史记录。
 - 支持实际测试代理出口 IP、国家及预期地区是否匹配。
 - 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
+- 通用提链终态为 `completed`、`failed`、`cancelled`、`unknown`、`timed_out`，每条结果都有 `retryable` 和 `error_stage`。`unknown` 会额外标记 `requires_reconciliation=true`，在完成对账前禁止自动重试；`cancelled` 不重试，普通 `timed_out` 可按策略重试。
 - 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
 - MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
-- 批量支付执行器支持 JIT AT、HTTP 401 邮箱 OTP OAuth 新 AT、资格探测、Canary 暂停、方法级并发、瞬态重试、原子断点和同批次续跑。
+
+- 批量支付执行器支持 JIT AT、HTTP 401 分层恢复（RT、Cookie、隔离浏览器邮箱 OTP、Codex OAuth）、资格探测、Canary 暂停、方法级并发、瞬态重试、原子断点和同批次续跑。
 - MoMo 按 Checkout、Promotion、Stripe Provider、Approve、Redirect 分阶段使用代理；Kakao 输出结构化结果，只有明确的 Kakao/Nicepay Redirect 才算链接成功。
 
 ### Agent Identity 与 SUB2API 导入边界
@@ -195,7 +200,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 - Session JSON 与 SQLite 双层索引。
 - 账号状态、AT（已获取/未获取/401失效）、RT、支付链接和手机号验证结果集中展示。
-- 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在支付 JIT 流程中尝试邮箱 OTP OAuth 刷新。
+- 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在显式恢复或支付 JIT 流程中依次尝试 RT、Cookie、隔离浏览器邮箱 OTP 和 Codex OAuth。
 - 支持复制 AT、查看邮箱、重新注册和重新生成支付链接。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
 - 账号列表保留注册地区、注册批次和入库状态，便于按 cohort 选择批量支付账号。
@@ -204,10 +209,10 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 ### 桌面端批量支付操作
 
 1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
-2. 选择 MoMo/Kakao 等支付方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
-3. 默认开启“401 时邮箱 OTP OAuth 新 AT”；需要只验证 AT 和注册地区矩阵时勾选“仅探测资格”，该模式不会调用任何支付适配器。
+2. 选择 MoMo、Kakao、直卡 Checkout 等提链方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
+3. 默认开启“401 自动恢复”；勾选“仅探测资格”后会完成 JIT AT、注册地区矩阵、ChatGPT Checkout 和 Stripe init，然后在创建 PM、Confirm、Approve 和 Provider Redirect 前停止。结果会明确记录金额、币种、支付方式可见性和 `eligible`/`ineligible`/`unknown` 分类。
 4. 通过“账号地区 / 支付资格矩阵”确认注册区、Checkout、Promotion、Provider、Approve 和 Redirect 的地区组合。
-5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。报告会分开显示 AT 200、JIT 刷新、资格、链接、二维码和失败计数。
+5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。系统性的 `unknown` Canary 会暂停该方法后续完整批次，明确的支付方式不可用或非零报价不会误判为协议故障。报告会分开显示 AT 200、JIT 刷新、能力探测、资格、链接、二维码和失败计数。
 
 ### 手机接码
 
@@ -248,7 +253,15 @@ sms_tool/account_liveness.py / account_recovery.py
 
 sms_tool/payment_auth.py / payment_batch.py
   JIT AT 门禁与批量协议支付
-  -> 401 OAuth 刷新、资格矩阵、Canary、重试、断点报告
+  -> 401 分层恢复、Checkout/Stripe 能力探测、资格矩阵、Canary、重试、断点报告
+
+sms_tool/checkout_contract.py / payment_capability.py
+  统一 Checkout 契约与支付方式能力探测
+  -> 地区/币种/locale、Stripe init、金额与支付方式目录归一化
+
+sms_tool/wallet_provider.py / wallet_transport.py
+  GoPay、GCash、GrabPay 共用钱包适配器
+  -> PM、Confirm、Approve、Poll、Provider Redirect 与分阶段代理
 
 sms_tool/mailbox.py
   邮箱统一路由
@@ -256,7 +269,11 @@ sms_tool/mailbox.py
 
 sms_tool/payment_link_manager.py
   协议支付管理器
-  -> 方法注册、分段代理、运行状态、统一结果
+  -> 方法注册、分段代理、五种终态、retryable/error_stage 统一结果
+
+sms_tool/paypal_reconciliation.py
+  独立 PayPal 回跳对账
+  -> 白名单跳转状态机、秘密脱敏、结论/未知分类
 
 sms_tool/storage.py
   数据持久化
@@ -276,20 +293,26 @@ services/
 | `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
 | `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
 | `sms_tool/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
-| `sms_tool/account_recovery.py` | 本地额度刷新、401 OAuth 恢复与停用账号持久化 |
+| `sms_tool/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
 | `sms_tool/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
 | `sms_tool/mailbox_graph.py` | Microsoft OAuth 与 Graph 边界 |
 | `sms_tool/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
+| `sms_tool/mailbox_icloud_url.py` | iCloud 接码链接收件、HTML/API 正文解析与 OTP 归一化 |
 | `sms_tool/payment_link_manager.py` | 支付方法注册、状态机与统一结果 |
+| `sms_tool/checkout_contract.py` | ChatGPT Checkout、Stripe init 请求/响应与支付方式能力证据契约 |
+| `sms_tool/payment_capability.py` | 只到 Checkout + Stripe init 的通用能力探测 |
+| `sms_tool/wallet_provider.py` | GoPay、GCash、GrabPay 共用编排与结构化结果 |
+| `sms_tool/wallet_transport.py` | 钱包真实 HTTP、分阶段代理和 Provider Redirect 校验 |
 | `sms_tool/gen_pp_link.py` | PayPal/Stripe Checkout 与链接生成 |
 | `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
+| `sms_tool/paypal_reconciliation.py` | 与提链独立的 PayPal 商户回跳对账和脱敏证据 |
 | `sms_tool/storage.py` | SQLite、Session 索引和状态持久化 |
 | `sms_tool/agent_identity.py` | 显式 SUB2API Agent Identity 凭据转换、Ed25519 密钥生成与持久化 |
 | `sms_tool/sub2api_import.py` | SUB2API 导入（多认证模式） |
 | `sms_tool/session_converter.py` | 多格式账号与 Session 转换 |
-| `sms_tool/payment_auth.py` | 支付前 AT 探测、401 邮箱 OTP OAuth 刷新与安全遥测 |
+| `sms_tool/payment_auth.py` | 支付前 AT 探测、401 分层恢复与安全遥测 |
 | `sms_tool/payment_batch.py` | 批量协议支付、资格矩阵、Canary、重试与原子断点 |
 | `sms_tool/registration_progress.py` | 注册阶段进度跟踪与持久化 |
 | `sms_tool/error_classification.py` | 错误类型分类与重试/报告规范化 |
@@ -377,7 +400,7 @@ services/
 }
 ```
 
-HTTP 401 的支付账号默认直接进入邮箱 OTP OAuth 新 AT 流程，候选 AT 只有再次探测为 HTTP 200 才会持久化。`account_deactivated` 归类为永久失败，不会反复重登。
+HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/session`、隔离浏览器邮箱 OTP、Codex OAuth 的顺序恢复。每个候选 AT 只有再次探测为 HTTP 200 才会写入 Session JSON 和 SQLite。浏览器上下文按账号隔离并校验登录邮箱；`account_deactivated` 归类为永久失败，不会反复重登。
 
 ### SUB2API 导入
 
@@ -439,10 +462,19 @@ python chatgpt_phone_reg.py --test-payment-proxies --checkout-proxy-country GB -
 python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --workers 2 --payment-batch-id momo_vn_20260731 --payment-canary 5 --payment-retries 1
 ```
 
-只执行 JIT AT 与注册地区矩阵校验，不调用支付适配器或创建支付方式：
+### 直卡 Checkout 提链
+
+提取 PH/PHP 零金额 Checkout 链接：
 
 ```powershell
-python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email-file runtime\eligible.txt --payment-probe-only --payment-batch-id momo_probe_20260731 --workers 2
+python chatgpt_phone_reg.py --extract-payment-link --payment-method direct_card --email user@example.com --proxy "http://proxy"
+```
+
+以 GoPay 单账号 Canary 执行 JIT AT、ID 矩阵、Checkout 和 Stripe init
+能力探测；不会创建支付方式或发送 Confirm/Approve：
+
+```powershell
+python chatgpt_phone_reg.py --extract-payment-link --payment-method gopay --email-file runtime\canary.txt --payment-probe-only --payment-canary 1 --payment-batch-id gopay_id_probe --workers 1
 ```
 
 ### 注册并自动导入 SUB2API
@@ -502,12 +534,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ### 发布检查
 
 1. 确认 `config.json`、邮箱凭据、代理密码、API Key 和 Token 未进入 Git。
-2. 执行全量测试。
+2. 执行全量测试、示例配置解析、Python 编译检查和 `git diff --check`。
 3. 使用唯一支持的编译脚本更新 `dist/net10`。
-4. 构建安装器、便携包和校验文件。
-5. 创建版本标签并上传 Release 资产。
+4. 构建安装器、便携包和校验文件，并复核校验清单中的 SHA-256。
+5. 确认待发布提交已推送，且 `git status --short` 为空；本地 `runtime/`、`sessions/` 等忽略数据不进入发布提交。
+6. 在该提交上创建版本标签并上传同一次构建生成的 Release 资产。
 
-当前发布使用 `vYYYY.MM.DD`；同日文档或构建修订使用 `vYYYY.MM.DD.1` 等补丁标签。安装器、便携 ZIP 和 SHA-256 文件必须来自同一次 `scripts/build_installer.ps1` 构建，并在上传前校验摘要。
+当前发布使用 `vYYYY.MM.DD`；同日文档或构建修订使用 `vYYYY.MM.DD.1` 等补丁标签。安装器、便携 ZIP 和 SHA-256 文件必须来自同一次 `scripts/build_installer.ps1` 构建，并在上传前校验摘要。发布资产固定为 `GPT-Register-Tool-Setup-<version>.exe`、`GPT-Register-Tool-win-x64-<version>.zip` 和 `GPT-Register-Tool-<version>.sha256.txt`。
 
 ## 数据与安全
 
@@ -522,7 +555,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.01.2.md)
+- [最新发布说明](docs/release-v2026.08.04.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任
