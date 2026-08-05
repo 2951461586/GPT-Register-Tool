@@ -47,3 +47,17 @@ def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
     assert 'value.StartsWith("remail://"' in source
     assert 'provider.Equals("remail"' in source
     assert "BuildReMailLine(email, serviceToken, orderNo, purchaseId)" in source
+
+
+def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
+    register_source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    tasks_source = (ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
+
+    start = register_source.index("private bool TryCreateSelectedUnregisteredMailboxFile")
+    end = register_source.index("private bool IsUnregisteredMailboxRow", start)
+    selected_block = register_source[start:end]
+    assert "TryCreateMailboxFile(rows, out mailboxArg, out mailboxFile, out selectedCount)" in selected_block
+    assert 'mailboxArg = "--chatai-mailbox-file"' not in selected_block
+
+    assert "TryCreateMailboxFile(failedRows, out string mailboxArg" in tasks_source
+    assert 'new List<string> { mailboxArg, tempFile' in tasks_source

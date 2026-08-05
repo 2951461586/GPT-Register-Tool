@@ -1,4 +1,5 @@
 import json
+import re
 import threading
 import time
 import uuid
@@ -9,6 +10,7 @@ from .codex_sentinel import import_cookie_header
 from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
 from .paths import runtime_file
+from .phone_proxy import normalize_proxy_url
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
@@ -27,6 +29,29 @@ _sentinel_metrics = {
     "providers": {},
 }
 _sentinel_provider_health: dict[str, dict[str, float]] = {}
+
+
+def _redact_proxy_url(proxy):
+    value = normalize_proxy_url(proxy)
+    return re.sub(r"://[^/@\s]+@", "://***:***@", value) if value else ""
+
+
+def _redact_proxy_text(message, proxy=None):
+    value = str(message or "")
+    for candidate in (str(proxy or "").strip(), normalize_proxy_url(proxy)):
+        if candidate:
+            value = value.replace(candidate, _redact_proxy_url(candidate))
+    value = re.sub(
+        r"(?i)(\b(?:https?|socks5h?)://)[^/@\s]+@",
+        r"\1***:***@",
+        value,
+    )
+    return re.sub(
+        r"(?i)(\b(?:https?|socks5h?)://[a-z0-9.-]+:\d+):[^:\s'\"]+:[^\s'\"]+",
+        r"\1:***:***",
+        value,
+    )
+
 
 def _get_cached_sentinel(force_fresh=False):
     if force_fresh: return None
@@ -190,7 +215,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
             data = resp.json()
             results[flow] = data
         except Exception as e:
-            print(f"  [!] HTTP sentinel fetch failed for flow={flow}: {e}")
+            print(f"  [!] HTTP sentinel fetch failed for flow={flow}: {_redact_proxy_text(e, proxy)}")
             return None
 
     upc = results.get("username_password_create", {})
@@ -232,7 +257,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
         session.cookies.set("oai-did", did, domain=".openai.com")
         cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
     except Exception as e:
-        print(f"  [!] Auth prime request failed: {e}")
+        print(f"  [!] Auth prime request failed: {_redact_proxy_text(e, proxy)}")
         cookie_str = f"oai-did={did}"
 
     result = {
@@ -351,7 +376,7 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
     try:
         from .sentinel_quickjs import get_sentinel_token_via_quickjs
     except Exception as exc:
-        print(f"  [!] Sentinel QuickJS unavailable: {exc}")
+        print(f"  [!] Sentinel QuickJS unavailable: {_redact_proxy_text(exc, proxy)}")
         return None
 
     tokens = {}
@@ -360,7 +385,7 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
             session,
             device_id=did,
             flow=flow,
-            log=lambda message: print(f"  {message}"),
+            log=lambda message: print(f"  {_redact_proxy_text(message, proxy)}"),
         )
         if not token:
             return None
@@ -392,7 +417,7 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
         cookie_str = _cookie_jar_header(session.cookies)
         cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
     except Exception as exc:
-        print(f"  [!] Auth prime request failed after QuickJS sentinel: {exc}")
+        print(f"  [!] Auth prime request failed after QuickJS sentinel: {_redact_proxy_text(exc, proxy)}")
         cookie_str = f"oai-did={did}"
 
     result = {
@@ -447,6 +472,7 @@ def _extract_sentinel_uncached(proxy=None, persist=True):
 
 
 def _extract_sentinel(proxy=None, force_fresh=False, persist=True):
+    proxy = normalize_proxy_url(proxy) or None
     cached = _get_cached_sentinel(force_fresh=force_fresh)
     if cached:
         return cached
@@ -500,12 +526,12 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True):
     except Exception as e:
         err_msg = str(e)
         if "ERR_PROXY" in err_msg or "ERR_TUNNEL" in err_msg or "ERR_CONNECTION" in err_msg:
-            print(f"  [Error] Proxy connection failed: {browser_proxy}")
+            print(f"  [Error] Proxy connection failed: {_redact_proxy_url(browser_proxy)}")
             print(f"  [Error] Please check if your proxy (Clash/V2Ray etc.) is running on the correct port.")
             browser.close(); return None
         try: page.goto(page_url, wait_until="commit", timeout=120000)
         except Exception as e2:
-            print(f"  [Error] Page navigation failed: {e2}"); browser.close(); return None
+            print(f"  [Error] Page navigation failed: {_redact_proxy_text(e2, browser_proxy)}"); browser.close(); return None
 
     if "error" in page.url:
         print(f"  [Error] Auth page returned error: {page.url[:200]}")

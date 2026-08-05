@@ -32,6 +32,43 @@ def test_probe_uses_saved_access_token_and_account_id():
     assert call.kwargs["proxies"]["https"] == "http://proxy.example:8080"
 
 
+def test_probe_normalizes_provider_host_port_user_password_proxy():
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"quota": {"remaining": 3, "limit": 5}}
+
+    with patch.object(account_liveness.curl_requests, "get", return_value=FakeResponse()) as get:
+        result = account_liveness.probe_account_liveness(
+            {"email": "ok@example.com", "access_token": "at_123"},
+            proxy="http://sg.cliproxy.io:443:user-region-JP:pass",
+        )
+
+    assert result["ok"]
+    assert get.call_args.kwargs["proxies"]["https"] == "http://user-region-JP:pass@sg.cliproxy.io:443"
+
+
+def test_probe_redacts_proxy_credentials_from_transport_errors():
+    proxy = "http://sg.cliproxy.io:443:user-region-JP:secret"
+    normalized = "http://user-region-JP:secret@sg.cliproxy.io:443"
+    with patch.object(
+        account_liveness.curl_requests,
+        "get",
+        side_effect=RuntimeError(f"proxy connection failed: {normalized}"),
+    ):
+        result = account_liveness.probe_account_liveness(
+            {"email": "ok@example.com", "access_token": "at_123"},
+            proxy=proxy,
+        )
+
+    assert not result["ok"]
+    assert "secret" not in result["error"]
+    assert "http://***:***@sg.cliproxy.io:443" in result["error"]
+
+
 def test_quota_contract_classifies_only_401_as_invalid_token():
     invalid = account_liveness.quota_result_from_payload(
         {"status_code": 401, "body": {"error": {"message": "unauthorized"}}},

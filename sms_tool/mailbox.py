@@ -124,9 +124,20 @@ def _snapshot_mailbox_message(mailbox, proxy=None):
     provider = getattr(mailbox, "provider", "")
     if provider in {"cfworker", "remail", mailbox_icloud_url.PROVIDER}:
         try:
-            messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
+            if provider == mailbox_icloud_url.PROVIDER:
+                messages = mailbox_icloud_url.snapshot_icloud_url_messages(
+                    mailbox,
+                    limit=25,
+                    proxy=_resolve_mailbox_proxy(proxy),
+                )
+            else:
+                messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
             message_id = _message_id(messages[0]) if messages else ""
             mailbox.seen_message_id = message_id
+            mailbox.seen_message_ids = tuple(
+                message_id for message_id in (_message_id(message) for message in messages) if message_id
+            )
+            mailbox.seen_message_received_ts = _message_received_ts(messages[0]) if messages else 0
             return message_id
         except Exception as e:
             print(f"[{provider} snapshot error: {e}]")
@@ -406,15 +417,28 @@ def mailbox_has_inbox_credentials(mailbox):
 
 def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None, override_messages=None):
     latest = None
+    seen_message_id = str(getattr(mailbox, "seen_message_id", "") or "").strip()
+    seen_message_ids = {
+        str(message_id or "").strip()
+        for message_id in (getattr(mailbox, "seen_message_ids", ()) or ())
+        if str(message_id or "").strip()
+    }
+    if seen_message_id:
+        seen_message_ids.add(seen_message_id)
+    seen_message_received_ts = int(getattr(mailbox, "seen_message_received_ts", 0) or 0)
     messages = override_messages if override_messages is not None else _fetch_mailbox_messages(mailbox, proxy=proxy)
     for msg in messages:
+        if _message_id(msg) in seen_message_ids:
+            continue
         candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
         if not candidate:
+            continue
+        candidate_ts = int(candidate.get("received_ts") or 0)
+        if seen_message_received_ts and candidate_ts and candidate_ts < seen_message_received_ts:
             continue
         if latest is None:
             latest = candidate
             continue
-        candidate_ts = int(candidate.get("received_ts") or 0)
         latest_ts = int(latest.get("received_ts") or 0)
         if candidate_ts and latest_ts:
             if candidate_ts > latest_ts:

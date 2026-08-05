@@ -32,11 +32,9 @@ namespace SmsWorkbench
             {
                 var config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
                 var proxy = GetSection(config, "proxy");
-                var paypal = GetSection(config, "paypal");
                 string configured = FirstNonEmpty(
                     GetString(proxy, "registration"),
                     GetString(config, "registration_proxy"),
-                    FirstListValue(paypal, "proxies"),
                     GetString(proxy, "default"));
                 if (configured.Length > 0) return configured;
             }

@@ -16,6 +16,8 @@ class MailboxAccount:
     auth_mode: str = ""
     sender_name: str = ""
     seen_message_id: str = ""
+    seen_message_ids: tuple[str, ...] = ()
+    seen_message_received_ts: int = 0
     purchase_id: str = ""
     project_name: str = ""
     price: str = ""

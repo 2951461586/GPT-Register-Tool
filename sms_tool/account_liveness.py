@@ -11,6 +11,7 @@ import base64
 import json
 import re
 from typing import Any
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from curl_cffi import requests as curl_requests
 
@@ -21,6 +22,42 @@ CODEX_QUOTA_HEADERS = {
     "Content-Type": "application/json",
     "User-Agent": "codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal",
 }
+
+
+def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
+    """Convert configured provider proxy formats to a curl-compatible URL."""
+    value = str(proxy or "").strip()
+    if not value:
+        return ""
+    scheme = ""
+    rest = value
+    if "://" in value:
+        scheme, rest = value.split("://", 1)
+    parts = rest.split(":")
+    if "@" not in rest and len(parts) == 4 and "." in parts[0] and parts[1].isdigit():
+        host, port, username, password = parts
+        return f"{scheme or default_scheme}://{quote(username, safe='-._~')}:{quote(password, safe='-._~')}@{host}:{port}"
+    if not scheme:
+        return f"{default_scheme}://{rest}"
+    return value
+
+
+def redact_proxy_url(proxy: str | None) -> str:
+    """Return a log-safe proxy URL without exposing credentials."""
+    value = normalize_proxy_url(proxy)
+    if not value:
+        return ""
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        auth = "***:***@" if parsed.username is not None else ""
+        return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        return "***"
 
 
 def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, timeout: int = 30) -> dict[str, Any]:
@@ -48,7 +85,8 @@ def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, ti
     account_id = account_chatgpt_id(account)
     if account_id:
         headers["Chatgpt-Account-Id"] = account_id
-    proxies = {"http": proxy, "https": proxy} if proxy else None
+    normalized_proxy = normalize_proxy_url(proxy)
+    proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
     try:
         response = curl_requests.get(
             CODEX_USAGE_URL,
@@ -68,12 +106,16 @@ def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, ti
             account_id=account_id,
         )
     except Exception as exc:
+        error = str(exc)
+        for candidate in (str(proxy or "").strip(), normalized_proxy):
+            if candidate:
+                error = error.replace(candidate, redact_proxy_url(candidate))
         return {
             "ok": False,
             "mode": "local",
             "status": "unknown",
             "quota_status": "检测失败",
-            "error": str(exc),
+            "error": error,
         }
 
 

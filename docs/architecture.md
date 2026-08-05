@@ -820,3 +820,13 @@ runtime data stay local and are not copied into the package. The canonical
 one portable ZIP, and one SHA-256 manifest under `dist/release/`; all uploaded
 assets must come from that same invocation. Historical `docs/release-<tag>.md`
 files remain immutable after publication.
+
+## Terminal Account Cleanup
+
+`sms_tool.account_cleanup` owns the classification rule for local removal. It
+accepts only missing-AT rows and explicit terminal states such as
+`account_deactivated`, `dropped`, `token_invalid`, `401`, or expired-token
+errors. Timeout, proxy, TLS, and other unknown probe failures remain eligible
+for a later recheck. `scripts/cleanup_invalid_accounts.py` owns the filesystem
+operation: dry-run is the default, and `--apply` creates a SQLite backup,
+archives matching session JSON files, and removes matching mailbox-pool lines.

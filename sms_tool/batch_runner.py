@@ -7,20 +7,32 @@ from .paypal_proxy import infer_proxy_country
 from .phone_proxy import probe_proxy_with_scheme_detection, refresh_proxy_sid
 
 
-def select_registration_proxy_base(proxy_pool, fallback=None):
+def _registration_proxy_candidates(proxy_pool, fallback=None):
     candidates = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
     fallback = str(fallback or "").strip()
     if fallback and fallback not in candidates:
         candidates.insert(0, fallback)
+    return list(dict.fromkeys(candidates))
+
+
+def select_registration_proxy_pool(proxy_pool, fallback=None):
+    candidates = _registration_proxy_candidates(proxy_pool, fallback)
     if len(candidates) <= 1:
-        return candidates[0] if candidates else fallback
+        return candidates
+    healthy = []
     for base in candidates:
         candidate = refresh_proxy_sid(base)
         expected = infer_proxy_country(candidate)
         checked = probe_proxy_with_scheme_detection(candidate, expected, use_cache=True)
         if checked.get("ok"):
-            return base
-    return candidates[0]
+            healthy.append(base)
+    return healthy or candidates
+
+
+def select_registration_proxy_base(proxy_pool, fallback=None):
+    candidates = select_registration_proxy_pool(proxy_pool, fallback)
+    return candidates[0] if candidates else str(fallback or "").strip()
+
 
 def _unique_mailboxes(mailboxes):
     if not mailboxes:
@@ -57,9 +69,8 @@ def run_batch_impl(
         proxy_pool.insert(0, str(proxy).strip())
     if not proxy_pool and proxy:
         proxy_pool = [str(proxy).strip()]
-    selected_proxy = select_registration_proxy_base(proxy_pool, proxy)
-    proxy_pool = [selected_proxy] if selected_proxy else []
-    proxy = selected_proxy or proxy
+    proxy_pool = select_registration_proxy_pool(proxy_pool, proxy)
+    proxy = proxy_pool[0] if proxy_pool else proxy
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
         count = len(mailboxes)
@@ -105,9 +116,9 @@ def run_batch_impl(
         print(f"\n{'#' * 40}")
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
-        base_proxy = proxy_pool[i % len(proxy_pool)] if proxy_pool else proxy
         mailbox = mailboxes[i] if mailboxes else None
         for attempt in range(1, max_attempts + 1):
+            base_proxy = proxy_pool[(i + attempt - 1) % len(proxy_pool)] if proxy_pool else proxy
             worker_proxy = (
                 first_attempt_proxies[i]
                 if attempt == 1 and i in first_attempt_proxies

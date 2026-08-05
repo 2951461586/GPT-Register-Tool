@@ -381,7 +381,8 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                 seen_sentinels.append(kwargs["sentinel_data"])
                 return {"success": True, "email": kwargs["mailbox"].email}
 
-            with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
+            with patch("sms_tool.registration.run_email", side_effect=fake_run_email), \
+                 patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
                 results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, workers=2)
 
             self.assertEqual(seen_sentinels, [None, None, None])

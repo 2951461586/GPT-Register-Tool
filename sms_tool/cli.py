@@ -35,17 +35,42 @@ def _payment_regenerate_delay_seconds(payment_method: str) -> float:
     return payment_commands.regenerate_delay_seconds(payment_method, CFG)
 
 
+def _configured_registration_proxy() -> str:
+    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    return str(
+        proxy_cfg.get("registration")
+        or CFG.get("registration_proxy")
+        or proxy_cfg.get("default")
+        or ""
+    ).strip()
+
+
+def _apply_registration_proxy_defaults(args) -> None:
+    if bool(getattr(args, "proxy_explicit", False)):
+        return
+    if str(getattr(args, "proxy_pool", "") or "").strip():
+        args.proxy = None
+        return
+    args.proxy = _configured_registration_proxy() or None
+
+
 def _proxy_pool_values(args) -> list[str]:
     raw = str(getattr(args, "proxy_pool", "") or "").strip()
     values = [item.strip() for item in re.split(r"[\r\n,;]+", raw) if item.strip()]
     primary = str(getattr(args, "proxy", "") or "").strip()
-    if primary:
+    if bool(getattr(args, "proxy_explicit", False)) and primary:
         values.insert(0, primary)
-    if not values:
-        configured = (CFG.get("proxy") or {}).get("pool") or []
-        if isinstance(configured, str):
-            configured = re.split(r"[\r\n,;]+", configured)
-        values.extend(str(item or "").strip() for item in configured if str(item or "").strip())
+    if values:
+        return list(dict.fromkeys(values))
+
+    configured_primary = _configured_registration_proxy()
+    if configured_primary:
+        values.append(configured_primary)
+    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    configured = proxy_cfg.get("pool") or []
+    if isinstance(configured, str):
+        configured = re.split(r"[\r\n,;]+", configured)
+    values.extend(str(item or "").strip() for item in configured if str(item or "").strip())
     return list(dict.fromkeys(values))
 
 
@@ -143,8 +168,8 @@ def main():
     parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
     parser.add_argument("--remail-project-id", type=int, default=None, help="ReMail project ID")
     parser.add_argument("--remail-product-id", type=int, default=None, help="ReMail product ID")
-    parser.add_argument("--mailbox-file", default=None, help="Mailbox token file: email---password---refresh_token---access_token---0")
-    parser.add_argument("--chatai-mailbox-file", default=None, help="Chatai mailbox token file: email----password----client_id----refresh_token")
+    parser.add_argument("--mailbox-file", default=None, help="Unified mailbox file: Graph, Gmail, ReMail, CFWorker, or iCloud receive URL")
+    parser.add_argument("--chatai-mailbox-file", default=None, help="Legacy mixed mailbox file: Chatai plus all unified mailbox formats")
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
@@ -351,6 +376,9 @@ def main():
     if args.batch_auto_pay:
         _batch_auto_pay(args)
         return
+
+    _apply_registration_proxy_defaults(args)
+
     if args.one_click_sms:
         _one_click_sms(args)
         return
