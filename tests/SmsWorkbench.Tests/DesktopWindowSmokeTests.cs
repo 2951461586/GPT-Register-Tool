@@ -322,10 +322,46 @@ public sealed class DesktopWindowSmokeTests
             Assert.Null(captureFailure);
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(0, selectedCheckBoxCount);
+            VerifyMailboxSelectionFileRouting(main);
         }
         finally
         {
             main.Close();
+        }
+    }
+
+    private static void VerifyMailboxSelectionFileRouting(MainWindow main)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "TryCreateMailboxFile",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        string icloudLine = "target@icloud.com----https://mail.example/messages/AbCd_0123-credential/target%40icloud.com";
+        string chataiLine = "other@example.com----password----client-id----refresh-token";
+        AssertSelectionFile(method, main, new[] { icloudLine }, "--mailbox-file");
+        AssertSelectionFile(method, main, new[] { icloudLine, chataiLine }, "--chatai-mailbox-file");
+    }
+
+    private static void AssertSelectionFile(
+        System.Reflection.MethodInfo method,
+        MainWindow main,
+        string[] lines,
+        string expectedArgument)
+    {
+        var rows = lines.Select(line => new PoolRow { RawLine = line }).ToArray();
+        object?[] arguments = { rows, "", "", 0 };
+        Assert.True(Assert.IsType<bool>(method.Invoke(main, arguments)));
+        Assert.Equal(expectedArgument, Assert.IsType<string>(arguments[1]));
+        string path = Assert.IsType<string>(arguments[2]);
+        try
+        {
+            Assert.Equal(lines.Length, Assert.IsType<int>(arguments[3]));
+            Assert.Equal(lines, File.ReadAllLines(path, System.Text.Encoding.UTF8));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
         }
     }
 

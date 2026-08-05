@@ -19,19 +19,16 @@ namespace SmsWorkbench
             if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取 access token→存 session 入库",
                 "确认重注册", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
-            string tempFile = Path.Combine(Path.GetTempPath(), "rerun_failed_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".txt");
-            var lines = new List<string>();
-            foreach (PoolRow row in failedRows)
+            if (!TryCreateMailboxFile(failedRows, out string mailboxArg, out string tempFile, out int mailboxCount))
             {
-                string line = row.RawLine.Trim();
-                if (line.Length > 0) lines.Add(line);
+                MessageBox.Show("失败记录缺少可用邮箱凭据，无法重新注册。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
-            File.WriteAllLines(tempFile, lines, new UTF8Encoding(false));
 
-            var args = new List<string> { "--chatai-mailbox-file", tempFile, "--count", lines.Count.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
+            var args = new List<string> { mailboxArg, tempFile, "--count", mailboxCount.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
             AddNoPhoneRegistrationArgs(args);
             AddRegistrationProxy(args);
-            RunBackend("重新注册失败账号 (" + lines.Count + ")", args);
+            RunBackend("重新注册失败账号 (" + mailboxCount + ")", args);
         }
 
         private void RebuildSqlite_Click(object sender, RoutedEventArgs e)

@@ -10,6 +10,7 @@ from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fin
 from .error_classification import classify_error
 from .config import CFG
 from .http_client import request_with_retry
+from .phone_proxy import normalize_proxy_url
 from .sentinel_tokens import (
     _cookie_jar_header,
     _extract_sentinel,
@@ -200,6 +201,7 @@ def _probe_registration_access_token(access_token, auth_session, proxy=None):
 
 def _resolve_proxy_scheme(proxy):
     """Detect working proxy scheme. Many providers labeled socks5h:// are actually HTTP CONNECT proxies."""
+    proxy = normalize_proxy_url(proxy)
     if not proxy or not proxy.startswith(("socks5h://", "socks5://")):
         return proxy
     # Quick connectivity test: try socks5h first, fall back to http

@@ -306,6 +306,11 @@ def _parse_chatai_mailbox_file(path):
             if account:
                 records.append(account)
             continue
+        if _is_icloud_url_line(line):
+            account = _parse_icloud_url_line(line, chatai_path, line_no)
+            if account:
+                records.append(account)
+            continue
         if _is_cfworker_line(line):
             account = _parse_cfworker_line(line, chatai_path, line_no)
             if account:

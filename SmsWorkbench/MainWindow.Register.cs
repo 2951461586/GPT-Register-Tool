@@ -544,9 +544,10 @@ namespace SmsWorkbench
                     mailboxArgs.Add(lineArg);
                 }
             }
-            if (lines.Count == 0 || mailboxArgs.Count != 1) return false;
+            if (lines.Count == 0) return false;
 
-            mailboxArg = mailboxArgs.First();
+            // The legacy parser is the compatibility superset for mixed provider selections.
+            mailboxArg = mailboxArgs.Count == 1 ? mailboxArgs.First() : "--chatai-mailbox-file";
             mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
             selectedCount = lines.Count;
@@ -555,31 +556,9 @@ namespace SmsWorkbench
 
         private bool TryCreateSelectedUnregisteredMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount, out int pendingRowCount)
         {
-            mailboxArg = "--chatai-mailbox-file";
-            mailboxFile = "";
-            selectedCount = 0;
-            pendingRowCount = 0;
-
-            var lines = new List<string>();
-            foreach (PoolRow row in SelectedRowsOrCurrent().Where(IsUnregisteredMailboxRow))
-            {
-                pendingRowCount++;
-                string line = (row.RawLine ?? "").Trim().TrimStart('\ufeff');
-                if (MailboxArgForLine(line).Length == 0)
-                {
-                    line = FindMailboxLineForRow(row);
-                }
-                if (MailboxArgForLine(line).Length > 0)
-                {
-                    lines.Add(line.Trim());
-                }
-            }
-            if (lines.Count == 0) return false;
-
-            mailboxFile = Path.Combine(Path.GetTempPath(), "selected_unregistered_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-            File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
-            selectedCount = lines.Count;
-            return true;
+            List<PoolRow> rows = SelectedRowsOrCurrent().Where(IsUnregisteredMailboxRow).ToList();
+            pendingRowCount = rows.Count;
+            return TryCreateMailboxFile(rows, out mailboxArg, out mailboxFile, out selectedCount);
         }
 
         private bool IsUnregisteredMailboxRow(PoolRow row)
