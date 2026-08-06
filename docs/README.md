@@ -11,6 +11,9 @@ configuration, generated sessions, and debug output stay outside this directory.
   dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
+- [v2026.08.06 Release Notes](release-v2026.08.06.md) - protocol
+  registration decoupling (session_builder / registration_outcome / account_2fa),
+  P0 TOTP 2FA auto-enrollment, P1 device_id persistence, P2 think_time jitter.
 - [v2026.08.04 Release Notes](release-v2026.08.04.md) - payment command
   modularization, shared Checkout and wallet contracts, result semantics, and
   repository hygiene.

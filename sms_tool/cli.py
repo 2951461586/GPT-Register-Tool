@@ -12,7 +12,8 @@ from pathlib import Path
 from .config import CFG
 from .mailbox import _load_mailbox_pool, _remail_enabled
 from .paths import output_dir, runtime_file
-from .registration import _build_session_file, _mailbox_snapshot, run_batch, run_email
+from .registration import _build_session_file, _mailbox_snapshot, run_email
+from .batch_runner import run_batch_impl as run_batch
 from .storage import database_path, get_paypal_url, list_paypal_accounts, mark_paypal_status, rebuild_from_session_dir, upsert_account
 from .commands.helpers import (
     read_email_file as _read_email_file,
@@ -478,6 +479,7 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
             registration_mode=args.registration_mode,
+            run_email_func=run_email,
         )
     else:
         mailbox = mailboxes[0] if mailboxes else None
@@ -643,6 +645,7 @@ def _run_target_at200(args, base_dir):
                 phone_pool=phone_pool,
                 codex_oauth=not args.registration_at_only,
                 registration_mode=args.registration_mode,
+                run_email_func=run_email,
             )
             saved = _save_registration_results(
                 args,

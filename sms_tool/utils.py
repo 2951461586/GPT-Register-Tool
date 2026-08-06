@@ -1,4 +1,5 @@
 import random
+import secrets
 import threading
 import time
 
@@ -53,4 +54,25 @@ def _generate_password():
     suffix = reg.get("password_suffix", "!A1")
     charset = reg.get("password_charset", "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     base_len = max(1, length - len(suffix))
-    return "".join(random.choices(charset, k=base_len)) + suffix
+    # Use cryptographic RNG to eliminate PRNG-based predictability markers
+    return "".join(secrets.choice(charset) for _ in range(base_len)) + suffix
+
+
+def think_stage(stage_label: str = "", cfg: dict | None = None):
+    """Insert human-like dwell time between registration stages.
+
+    Configured via ``registration.think_time_ms`` in config.json.
+    Disabled (0) by default. Typical values: 800–3000 ms.
+
+    This defeats OpenAI's bot-timing detection, which flags accounts that
+    complete multi-stage OAuth flows in sub-second total time.
+    """
+    cfg = cfg or CFG
+    registration_cfg = cfg.get("registration", {}) if isinstance(cfg, dict) else {}
+    ms = 0
+    try:
+        ms = int(registration_cfg.get("think_time_ms", 0))
+    except (TypeError, ValueError):
+        ms = 0
+    if ms > 0 and stage_label:
+        time.sleep(ms / 1000.0)

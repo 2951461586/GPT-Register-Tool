@@ -65,6 +65,29 @@ class UpstreamProxy:
 
     @classmethod
     def from_url(cls, url: str, label: str = "", priority: int = 0) -> UpstreamProxy:
+        """Parse a proxy URL into UpstreamProxy.
+
+        Supports standard ``scheme://user:pass@host:port`` and the Kookeey /
+        ippeak non-standard 4-segment ``host:port:user:pass`` format.
+        """
+        # Detect Kookeey / ippeak 4-segment format: host:port:user:pass
+        # Example: gate.kookeey.info:1000:9408785-edbd645b:54ad4d54-JP
+        if "://" not in url:
+            parts = url.split(":")
+            if len(parts) == 4 and "." in parts[0]:
+                host, port_s, user, pwd = parts
+                try:
+                    port = int(port_s)
+                except ValueError:
+                    port = 1080
+                return cls(
+                    host=host,
+                    port=port,
+                    username=user,
+                    password=pwd,
+                    label=label or f"{user}@{host}:{port}",
+                    priority=priority,
+                )
         p = urlparse(url)
         return cls(
             host=p.hostname or "127.0.0.1",
