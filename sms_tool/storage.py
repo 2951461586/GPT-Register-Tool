@@ -13,6 +13,11 @@ EXTRA_COLUMNS = {
     "batch_id": "TEXT DEFAULT ''",
     "registration_state": "TEXT DEFAULT ''",
     "registration_country": "TEXT DEFAULT ''",
+    "totp_secret": "TEXT DEFAULT ''",
+    "twofa_enrolled_at": "INTEGER DEFAULT 0",
+    "twofa_enroll_error": "TEXT DEFAULT ''",
+    "auth_session_logging_id": "TEXT DEFAULT ''",
+    "device_id_generated_at": "INTEGER DEFAULT 0",
     "payment_method": "TEXT DEFAULT 'paypal'",
     "paypal_status": "TEXT DEFAULT ''",
     "paypal_updated_at": "INTEGER DEFAULT 0",
@@ -466,6 +471,11 @@ def upsert_account(data, json_path=""):
         "batch_id": str(_get(data, "batch_id")),
         "registration_state": str(_get(data, "registration_state") or ("active" if _get(data, "success") else "failed")),
         "registration_country": str(_get(data, "registration_country")),
+        "totp_secret": str(_get(data, "totp_secret")),
+        "twofa_enrolled_at": _as_int(_get(data, "twofa_enrolled_at")) or (now if _get(data, "totp_secret") else 0),
+        "twofa_enroll_error": str(_get(data, "twofa_enroll_error")),
+        "auth_session_logging_id": str(_get(data, "auth_session_logging_id")),
+        "device_id_generated_at": _as_int(_get(data, "device_id_generated_at")) or (now if _get(data, "device_id") else 0),
         "mailbox_provider": str(_get(mailbox, "provider") or _get(purchase, "provider")),
         "mailbox_source": str(_get(mailbox, "source") or _get(purchase, "source")),
         "mailbox_token": str(_get(mailbox, "token")),
@@ -597,6 +607,26 @@ def get_account_record(email):
     finally:
         conn.close()
     return dict(row) if row else {}
+
+
+def get_device_context(email):
+    """Return persisted {device_id, auth_session_logging_id} for an existing account.
+
+    Used by registration to reuse the SAME device fingerprint across re-runs,
+    preventing "same account, multiple unrelated devices" correlation signals.
+    Returns {} if no stored record exists.
+    """
+    row = get_account_record(email)
+    if not row:
+        return {}
+    device_id = str(row.get("device_id") or "").strip()
+    logging_id = str(row.get("auth_session_logging_id") or "").strip()
+    if not device_id and not logging_id:
+        return {}
+    return {
+        "device_id": device_id,
+        "auth_session_logging_id": logging_id,
+    }
 
 
 def list_terminal_remail_accounts():

@@ -382,20 +382,25 @@ normalized into the canonical message shape before OTP filtering.
 
 ### Registration Layer
 
-`sms_tool/registration.py` is the orchestration seam. Focused modules own the
-implementation:
+`sms_tool/registration.py` 是协议注册的**编排入口（orchestration seam）**，
+本身不再承载具体实现。拆出后职责划分如下：
 
-- `auth_flow.py`: signin URL construction, authorize navigation, continue calls, and auth-state URL classification.
-- `account_creation.py`: OTP validation, create-account continuation, and `/api/auth/session` fetch.
-- `batch_runner.py`: concurrent registration worker scheduling, result ordering, mailbox-count capping, and bounded retry of network/auth-state failures with a fresh proxy session.
-- `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel extraction, QuickJS SDK path, PoW/browser fallback, and cache.
-- `auth_state.py`: `client_auth_session_dump` capture and redacted diagnostic summaries.
-- `otp_strategy.py`: OTP send/resend endpoint selection.
+- `auth_flow.py`: signin URL 拼装 / authorize 导航 / continue 调用 / auth-state 页面分类。
+- `account_creation.py`: OTP 校验 / create-account 继续流 / `/api/auth/session` 拉取。
+- `account_2fa.py`: TOTP 2FA 自动 enrollment（密钥生成 / totp URI 校验 / 激活轮询 / secret 入库）。
+- `otp_strategy.py`: 注册用 OTP 发送 / 重发 endpoint 选择。
+- `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel 提取 / QuickJS SDK 路径 / PoW+浏览器回退 / 缓存。
+- `auth_state.py`: `client_auth_session_dump` 抓取与脱敏诊断摘要。
+- `batch_runner.py`: 并发注册 worker 调度 / 结果排序 / mailbox 数量上限 / 网络+auth-state 失败有界重试并换新鲜代理 session。
+- `registration_outcome.py`: 注册结果归一化 — 账号创建错误提炼 / 多轮 AT 稳定性探测 / `codex_oauth.require_registration_refresh_token`、`require_registration_phone_verification` 开关。
+- `session_builder.py`: 从注册最终态拼装 canonical session JSON（含 `mailbox` 嵌套、token 优先级链、profile/device/paypal 字段、`created_at`）。
 
-Batch registration uses each loaded mailbox at most once. If `--count` exceeds loaded unique mailboxes, the batch is capped instead of wrapping with modulo and reusing a mailbox concurrently.
-Each account owns a fresh Sentinel transaction and `oai-did`; batch workers do not return tokens to a shared pool. Fresh per-account and mid-flow refresh tokens are not written into the shared cache, and an OAuth-create refresh retains the account's existing device ID. Fresh extraction is guarded by a configurable bounded semaphore (`sentinel_max_concurrency`, default 2, capped at 4); cache-eligible callers retain single-flight population.
-`registration.py` re-exports focused helpers directly; it must not shadow them
-with local copies or mutate another module's `CFG`/request globals at runtime.
+`registration.py` 通过 `from .session_builder import build_session_file as _build_session_file`
+和 `from .registration_outcome import (_create_account_error, _probe_registration_access_token, ...)` **对外暴露**这些 helper；不允许用本地定义遮蔽它们，也不要在运行时修改其他模块的 `CFG` / 请求全局状态。
+
+批量注册每条加载的 mailbox 最多使用一次：`--count` 超过已加载的唯一 mailbox 数时会被截断，不会用取模方式回绕重复复用。
+每个账号拥有独立的 Sentinel 事务与 `oai-did`，batch worker 不把 token 返回共享池；账号创建过程产生的新鲜 refresh token 不写入共享缓存，OAuth create 创建的 refresh token 保留账号既有的 device ID。
+Fresh 提取受可配置的有界信号量保护（`sentinel_max_concurrency` 默认 2，上限 4）；缓存路径调用方保留 single-flight 填充语义。
 
 If OTP validation succeeds but create-account returns
 `registration_disallowed`, the failure is treated as a provider/server-side

@@ -1,4 +1,4 @@
-import json
+﻿import json
 import time
 import uuid
 from urllib.parse import quote, urlencode
@@ -54,7 +54,7 @@ from .otp_strategy import send_registration_email_otp as _send_registration_emai
 from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
 from .paths import runtime_file
 from .registration_progress import registration_stage, track_registration
-from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl
+from .utils import _generate_password, _print_timings, _random_birthdate, _random_name, _tick, _timing_summary, _tock, _tl, think_stage
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
@@ -129,18 +129,6 @@ def _safe_tock():
         _tock()
 
 
-def _create_account_error(create_ok, create_data):
-    if create_ok:
-        return ""
-    create_error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
-    create_code = str(create_error.get("code") or "").strip()
-    create_message = str(create_error.get("message") or "").strip()
-    error = "create_account_failed"
-    if create_code:
-        error += f":{create_code}"
-    if create_message:
-        error += f": {create_message}"
-    return error
 
 
 def _registration_outcome(create_ok, create_data, access_token, at_probe):
@@ -161,41 +149,6 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe):
     return False, f"access_token_probe_failed:{probe_error}", create_error
 
 
-def _probe_registration_access_token(access_token, auth_session, proxy=None):
-    from .account_liveness import probe_account_liveness
-
-    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
-    try:
-        timeout = max(5, min(int(registration_cfg.get("at_probe_timeout_seconds") or 30), 120))
-    except (TypeError, ValueError):
-        timeout = 30
-    try:
-        count = max(1, min(int(registration_cfg.get("at_stability_probe_count") or 2), 3))
-    except (TypeError, ValueError):
-        count = 2
-    try:
-        delay = max(0.0, min(float(registration_cfg.get("at_stability_probe_delay_seconds") or 10), 60.0))
-    except (TypeError, ValueError):
-        delay = 10.0
-    probes = []
-    for index in range(count):
-        probe = probe_account_liveness(
-            {"access_token": access_token, "auth_session": auth_session or {}},
-            proxy=proxy,
-            timeout=timeout,
-        )
-        probes.append(probe)
-        if int(probe.get("status_code") or 0) != 200:
-            break
-        if index + 1 < count and delay:
-            registration_stage("access_token_stability_wait")
-            time.sleep(delay)
-            registration_stage("access_token_probe")
-    result = dict(probes[-1] if probes else {})
-    result["stability_probe_count"] = len(probes)
-    result["stability_status_codes"] = [int(item.get("status_code") or 0) for item in probes]
-    result["stability_window_seconds"] = round(delay * max(0, len(probes) - 1), 3)
-    return result
 
 # Sentinel token extraction moved to sms_tool.sentinel_tokens.
 
@@ -561,6 +514,8 @@ def run_email(
     if not sentinel_data or not sentinel_data.get("sentinel_token"):
         return _failure_result("sentinel_extract_failed", email=getattr(mailbox, "email", ""), mailbox=mailbox)
 
+    think_stage("post_sentinel")
+
     # Step 1: Generate credentials
     explicit_password = bool(str(password or "").strip())
     stored_password = "" if explicit_password else _stored_registration_password(mailbox.email)
@@ -574,11 +529,25 @@ def run_email(
     registration_mode = _normalize_registration_mode(registration_mode)
     registration_mode_used = registration_mode
 
-    # Keep device_id aligned with the fresh sentinel/auth cookies.  A mismatch
-    # makes auth.openai.com drop the signup state and user/register returns
-    # invalid_state.
-    did = _sentinel_device_id(sentinel_data) or str(uuid.uuid4())
-    session_logging_id = str(uuid.uuid4()).replace("-", "")
+    # --- Device fingerprint persistence (P1) ---
+    # Reuse existing device_id / auth_session_logging_id from previous runs to
+    # avoid "same account, multiple distinct devices" correlation signals.
+    from .storage import get_device_context
+    resume_email_verification_local = False
+    _existing_device = get_device_context(username)
+    _reused_device_id = _existing_device.get("device_id") or ""
+    _reused_logging_id = _existing_device.get("auth_session_logging_id") or ""
+    if _reused_device_id:
+        did = _reused_device_id
+    else:
+        did = _sentinel_device_id(sentinel_data) or str(uuid.uuid4())
+    session_logging_id = _reused_logging_id if _reused_logging_id else str(uuid.uuid4()).replace("-", "")
+    if _reused_device_id or _reused_logging_id:
+        print(f"  [Device] Reusing persisted device_id={did[:8]}... logging_id={session_logging_id[:8]}...")
+
+    # --- Think-time configuration (P2, human-like pacing) ---
+    # Add small pauses between auth stages to defeat bot-timing detection.
+    # Configured via registration.think_time_ms (0=disabled).
 
     # Use original sentinel tokens — do NOT patch the embedded id, as it breaks the HMAC signature
     _sentinel_token = str(sentinel_data.get("sentinel_token") or "")
@@ -825,6 +794,8 @@ def run_email(
     print(f"  Status: {r.status_code}")
     print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
     create_ok = r.status_code == 200
+
+    think_stage("post_create_account")
     existing_account = _is_user_already_exists(create_data)
     password_unknown = bool(resume_email_verification and not (explicit_password or password_from_storage))
     if not create_ok and existing_account:
@@ -962,6 +933,7 @@ def run_email(
     )
     at_probe = {}
     if access_token:
+        think_stage("pre_at_probe")
         registration_stage("access_token_probe")
         _tick("8d-Validate access token")
         try:
@@ -982,6 +954,10 @@ def run_email(
 
     fingerprint = current_auth_fingerprint()
     token_telemetry = access_token_telemetry(access_token)
+
+    # TOTP enrollment initial state (defined before result dict to avoid UnboundLocalError)
+    totp_secret = ""
+    twofa_result = {}
 
     result = {
         "success": success,
@@ -1011,6 +987,8 @@ def run_email(
             "updated_at": int(time.time()),
             "last_result": at_probe,
         } if at_probe else {},
+        "totp_secret": totp_secret or "",
+        "twofa_enrollment": twofa_result if twofa_result else {"ok": False, "reason": "skipped"},
         "registration_success_basis": "at_http_200" if success else "",
         "registration_state": "active" if success else ("terminal" if "account_deactivated" in error else "failed"),
         "access_token_telemetry": token_telemetry,
@@ -1022,8 +1000,48 @@ def run_email(
         "cookie_header": auth_session.get("cookie_header", ""),
         "registration_mode": registration_mode_used,
         "device_id": did,
+        "auth_session_logging_id": session_logging_id,
         "timing": _timing_summary(),
     }
+    # ===== Step 9: 2FA (TOTP) auto-enrollment =====
+    # Binds TOTP to freshly registered account → boosts account reputation,
+    # lowers ban rate, marks account as "mfa: true" in ChatGPT backend.
+    if success and access_token and mailbox:
+        from .mailbox import _poll_email_otp as _poll_mailbox_otp
+        email_cfg = CFG.get("email_registration", {})
+
+        def _poll_reauth_otp(email, issued_after_unix=0, timeout=120, **kwargs):
+            return _poll_mailbox_otp(
+                mailbox,
+                subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+                timeout=int(timeout or 120),
+                issued_after_unix=issued_after_unix,
+                proxy=proxy,
+            )
+
+        try:
+            from .account_2fa import setup_totp_2fa
+            twofa_result = setup_totp_2fa(
+                session=session,
+                email=username,
+                access_token=access_token,
+                did=did,
+                base_headers=base_headers,
+                poll_otp_fn=_poll_reauth_otp,
+            )
+            if twofa_result.get("ok"):
+                totp_secret = twofa_result.get("totp_secret", "")
+                access_token = twofa_result.get("access_token") or access_token
+                print(f"  [2FA] ✅ TOTP enrolled. Secret: {totp_secret[:10]}...")
+            else:
+                print(f"  [2FA] ⚠️ Enrollment skipped: {twofa_result.get('error', 'unknown')}")
+        except ImportError as e:
+            twofa_result = {"ok": False, "error": f"pyotp_missing: {e}"}
+            print(f"  [2FA] ⚠️ pyotp not installed: {e}")
+        except Exception as e:
+            twofa_result = {"ok": False, "error": str(e)}
+            print(f"  [2FA] ⚠️ Setup failed: {e}")
+
     if mailbox:
         result["mailbox"] = {
             "email": mailbox.email,
@@ -1356,15 +1374,6 @@ def run_phone_register(
     }
 
 
-def _registration_requires_refresh_token():
-    cfg = CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
-    return bool(cfg.get("require_registration_refresh_token", True))
-
-
-def _registration_requires_phone_verification(phone_pool=None):
-    cfg = CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
-    default = bool(phone_pool)
-    return bool(cfg.get("require_registration_phone_verification", default))
 
 
 def _oauth_result_summary(result):
@@ -1379,149 +1388,27 @@ def _oauth_result_summary(result):
     return summary
 
 
-# Batch runner moved to sms_tool.batch_runner.
-def run_batch(
-    count=1,
-    proxy=None,
-    proxy_pool=None,
-    mailboxes=None,
-    workers=4,
-    phone_pool=None,
-    codex_oauth=True,
-    registration_mode=None,
-):
-    from .batch_runner import run_batch_impl
-    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
-    return run_batch_impl(
-        count=count, proxy=proxy, proxy_pool=proxy_pool, mailboxes=mailboxes,
-        workers=workers, phone_pool=phone_pool, codex_oauth=codex_oauth,
-        registration_mode=registration_mode, run_email_func=run_email,
-        max_attempts=registration_cfg.get("retry_attempts", 2),
-        retry_delay_seconds=registration_cfg.get("retry_delay_seconds", 1.0),
-    )
+# ===== 结果判定 / 代理解析 / 输出生成 — 委托独立模块 =====
+from .registration_outcome import (
+    _create_account_error,
+    _probe_registration_access_token,
+    _registration_requires_phone_verification,
+    _registration_requires_refresh_token,
+)
+from .session_builder import build_session_file
+
+# 保持向后兼容（cli.py 等通过 `_build_session_file` 引用）
+_build_session_file = build_session_file
 
 
-def _extract_nested(data, *keys):
-    current = data
-    for key in keys:
-        if not isinstance(current, dict):
-            return ""
-        current = current.get(key)
-    return current if isinstance(current, str) else ""
-
-
-def _build_session_file(data):
-    mailbox = data.get("mailbox") or {}
-    response = data.get("response") or {}
-    auth_session = data.get("auth_session") or response.get("auth_session") or {}
-    paypal = data.get("paypal") or {}
-    session_token = (
-        data.get("session_token")
-        or response.get("session_token")
-        or response.get("sessionToken")
-        or _extract_nested(response, "session", "session_token")
-        or auth_session.get("sessionToken")
-        or auth_session.get("session_token")
-    )
-    access_token = (
-        data.get("access_token")
-        or response.get("access_token")
-        or response.get("accessToken")
-        or _extract_nested(response, "session", "access_token")
-        or auth_session.get("accessToken")
-        or auth_session.get("access_token")
-    )
-    id_token = (
-        data.get("id_token")
-        or data.get("idToken")
-        or auth_session.get("idToken")
-        or auth_session.get("id_token")
-        or _extract_nested(auth_session, "session", "id_token")
-        or _extract_nested(auth_session, "session", "idToken")
-    )
-    refresh_token = (
-        data.get("refresh_token")
-        or response.get("refresh_token")
-        or response.get("refreshToken")
-        or mailbox.get("refresh_token")
-    )
-    oauth_refresh_token = (
-        data.get("oauth_refresh_token")
-        or auth_session.get("refreshToken")
-        or auth_session.get("refresh_token")
-        or _extract_nested(auth_session, "session", "refresh_token")
-        or _extract_nested(auth_session, "session", "refreshToken")
-    )
-    paypal_status = (
-        data.get("paypal_status")
-        or paypal.get("paypal_status")
-        or ("qr_ready" if paypal.get("ok") and (paypal.get("qr_path") or paypal.get("qr_data")) else "")
-        or paypal.get("status")
-        or ("pm_created" if paypal.get("ok") and str(paypal.get("pm_id") or "").startswith("pm_") else "")
-        or ("link_ready" if paypal.get("url") else "")
-    )
-    payment_method = (
-        data.get("payment_method")
-        or paypal.get("payment_method")
-        or paypal.get("method")
-        or ("paypal" if (paypal.get("url") or paypal.get("pm_id")) else "")
-    )
-    refresh_token_status = data.get("refresh_token_status") or ("oauth_present" if oauth_refresh_token else ("legacy_present" if refresh_token else "no_rt"))
-    purchase = {
-        "source": mailbox.get("source", ""),
-        "provider": mailbox.get("provider", ""),
-        "email": mailbox.get("email", ""),
-        "purchase_id": mailbox.get("purchase_id", ""),
-        "project_name": mailbox.get("project_name", ""),
-        "price": mailbox.get("price", ""),
-        "total_cost": mailbox.get("purchase_total_cost", ""),
-        "balance_after": mailbox.get("balance_after", ""),
-    }
-    purchase = {key: value for key, value in purchase.items() if value}
-    return {
-        "email": data.get("email") or mailbox.get("email") or "",
-        "phone": data.get("phone", ""),
-        "password": data.get("password", ""),
-        "session_token": session_token or "",
-        "access_token": access_token or "",
-        "id_token": id_token or "",
-        "refresh_token": refresh_token or "",
-        "device_id": data.get("device_id") or response.get("device_id") or "",
-        "cookie_header": data.get("cookie_header") or response.get("cookie_header") or "",
-        "auth_session": auth_session,
-        "paypal": paypal,
-        "payment_method": payment_method,
-        "paypal_status": paypal_status,
-        "registration_mode": data.get("registration_mode", ""),
-        "oauth_refresh_token": oauth_refresh_token or "",
-        "refresh_token_status": refresh_token_status,
-        "quota_status": data.get("quota_status", ""),
-        "quota": data.get("quota") or {},
-        "registration_success_basis": data.get("registration_success_basis", ""),
-        "registration_warning": data.get("registration_warning", ""),
-        "registration_country": data.get("registration_country", ""),
-        "auth_fingerprint_profile": data.get("auth_fingerprint_profile", ""),
-        "sentinel_version": data.get("sentinel_version", ""),
-        "access_token_telemetry": data.get("access_token_telemetry") or {},
-        "post_registration_ready": data.get("post_registration_ready"),
-        "timing": data.get("timing") or {},
-        "pipeline_timing": data.get("pipeline_timing") or {},
-        "purchase": data.get("purchase") or purchase,
-        "mailbox": {
-            "email": mailbox.get("email", ""),
-            "password": mailbox.get("password", ""),
-            "refresh_token": mailbox.get("refresh_token", ""),
-            "access_token": mailbox.get("access_token", ""),
-            "source": mailbox.get("source", ""),
-            "provider": mailbox.get("provider", ""),
-            "order_no": mailbox.get("order_no", ""),
-            "token": mailbox.get("token", ""),
-            "purchase_id": mailbox.get("purchase_id", ""),
-            "project_name": mailbox.get("project_name", ""),
-            "price": mailbox.get("price", ""),
-            "purchase_total_cost": mailbox.get("purchase_total_cost", ""),
-            "balance_after": mailbox.get("balance_after", ""),
-        } if mailbox else {},
-        "created_at": int(time.time()),
-    }
+def _oauth_result_summary(result):
+    if not isinstance(result, dict):
+        return {}
+    summary = {key: value for key, value in result.items() if key != "tokens"}
+    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    if tokens:
+        summary["has_access_token"] = bool(tokens.get("access_token"))
+        summary["has_refresh_token"] = bool(tokens.get("refresh_token"))
+        summary["has_id_token"] = bool(tokens.get("id_token"))
+    return summary
 
