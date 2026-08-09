@@ -5,46 +5,15 @@ from .codex_sentinel import load_cached_sentinel, with_sentinel
 from .auth_headers import auth_impersonate, openai_auth_headers
 from .config import CFG
 from .http_client import request_with_retry
-from .sentinel_tokens import _extract_sentinel_http
-from .auth_flow import _absolute_url, _json_or_raw
+from .http_utils import _absolute_url, _cookie_header, _json_or_raw, _minimal_chatgpt_cookie_header
 
 def _create_account_sentinel_token(sentinel_data, proxy=None):
     token = str((sentinel_data or {}).get("sentinel_oauth_token") or "").strip()
     if token:
         return token
-    # Older browser-based sentinel extraction only captured a username-password
-    # token.  HAR evidence for passwordless signup shows create_account now uses
-    # oauth_create_account, so try one direct protocol refresh before falling
-    # back to the legacy token.
-    #
-    # Refresh with the same device ID. A valid token from a different Sentinel
-    # transaction would invalidate the auth state at create_account.
-    did = str((sentinel_data or {}).get("oai_did") or "").strip()
-    if not did:
-        try:
-            did = str(json.loads(str((sentinel_data or {}).get("sentinel_token") or "{}")).get("id") or "").strip()
-        except Exception:
-            did = ""
-    try:
-        refreshed = _extract_sentinel_http(proxy=proxy, persist=False, device_id=did or None)
-        if refreshed and refreshed.get("sentinel_oauth_token"):
-            return refreshed["sentinel_oauth_token"]
-    except Exception as exc:
-        print(f"  OAuth create sentinel refresh warning: {exc}")
-    return str((sentinel_data or {}).get("sentinel_token") or "").strip()
+    raise RuntimeError("sentinel_extract_failed: oauth_create_account SDK token is required")
 
 
-def _follow_continue_url(session, url, base_headers, referer="", label="continue"):
-    if not url:
-        return None
-    full_url = _absolute_url(CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com"), url)
-    headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
-    if referer:
-        headers["Referer"] = referer
-    r = request_with_retry(session, "get", full_url, label=label,
-        headers=headers, impersonate=auth_impersonate())
-    print(f"  {label}: {r.status_code} {r.url}")
-    return r
 
 
 def _email_otp_send_url(reg_data, auth_base, resume_email_verification=False):
@@ -134,34 +103,6 @@ def _is_wrong_email_otp_code(data):
         return False
 
 
-def _cookie_header(session):
-    cookies = getattr(session, "cookies", None)
-    if not cookies:
-        return ""
-    if hasattr(cookies, "get_dict"):
-        items = cookies.get_dict().items()
-    else:
-        items = [(cookie.name, cookie.value) for cookie in cookies]
-    return _minimal_chatgpt_cookie_header("; ".join(f"{name}={value}" for name, value in items))
-
-
-def _minimal_chatgpt_cookie_header(cookie_header):
-    keep = {
-        "__Host-next-auth.csrf-token",
-        "__Secure-next-auth.callback-url",
-        "__Secure-next-auth.session-token",
-    }
-    output = []
-    for item in str(cookie_header or "").split(";"):
-        item = item.strip()
-        if "=" not in item:
-            continue
-        name, value = item.split("=", 1)
-        name = name.strip()
-        value = value.strip()
-        if name in keep and value:
-            output.append(f"{name}={value}")
-    return "; ".join(output)
 
 
 def _extract_nested(data, *keys):

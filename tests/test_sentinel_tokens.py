@@ -59,7 +59,9 @@ class SentinelTokenTests(unittest.TestCase):
         self.assertEqual(json.loads(result["sentinel_oauth_token"])["id"], "did-fixed")
 
     def test_quickjs_extract_persist_false_does_not_write_shared_cache(self):
+        seen = []
         def token(_session, device_id, *, flow, **_kwargs):
+            seen.append(_kwargs)
             return json.dumps({"p": "p", "t": "t", "c": "c", "id": device_id, "flow": flow})
 
         with patch("sms_tool.sentinel_tokens.curl_requests.Session", _Session), \
@@ -70,21 +72,32 @@ class SentinelTokenTests(unittest.TestCase):
         save.assert_not_called()
         self.assertEqual(result["oai_did"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_oauth_token"])["id"], "did-fixed")
+        self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["id"], "did-fixed")
+        self.assertTrue(all(item["user_agent"].startswith("Mozilla/5.0 (Windows") for item in seen))
+        self.assertTrue(all(item["navigator_platform"] == "Win32" for item in seen))
+
+    def test_quickjs_extract_rejects_token_device_mismatch(self):
+        def token(_session, device_id, *, flow, **_kwargs):
+            return json.dumps({"p": "p", "t": "t", "c": "c", "id": "other", "flow": flow})
+
+        with patch("sms_tool.sentinel_tokens.curl_requests.Session", _Session), \
+             patch("sms_tool.sentinel_quickjs.get_sentinel_token_via_quickjs", side_effect=token):
+            self.assertIsNone(sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed"))
 
     def test_force_fresh_propagates_non_persistent_extraction(self):
         expected = {"sentinel_token": "token", "oai_did": "did"}
-        with patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="http"), \
+        with patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}), \
+             patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="http"), \
              patch("sms_tool.sentinel_tokens._extract_sentinel_http", return_value=expected) as extract:
             result = sentinel_tokens._extract_sentinel(force_fresh=True, persist=False)
 
         self.assertIs(result, expected)
         extract.assert_called_once_with(None, persist=False)
 
-    def test_auto_mode_falls_back_from_quickjs_to_http(self):
-        expected = {"sentinel_token": "token", "oai_did": "did"}
+    def test_auto_mode_does_not_fall_back_to_synthetic_http_pow(self):
         with patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="auto"), \
              patch("sms_tool.sentinel_tokens._extract_sentinel_quickjs", return_value=None) as quickjs, \
-             patch("sms_tool.sentinel_tokens._extract_sentinel_http", return_value=expected) as http, \
+             patch("sms_tool.sentinel_tokens._extract_sentinel_http") as http, \
              patch("sms_tool.sentinel_tokens._extract_sentinel_cloakbrowser") as browser:
             result = sentinel_tokens._extract_sentinel(
                 proxy="socks5h://127.0.0.1:7897",
@@ -92,9 +105,9 @@ class SentinelTokenTests(unittest.TestCase):
                 persist=False,
             )
 
-        self.assertIs(result, expected)
-        quickjs.assert_called_once_with("socks5h://127.0.0.1:7897", persist=False)
-        http.assert_called_once_with("socks5h://127.0.0.1:7897", persist=False)
+        self.assertIsNone(result)
+        quickjs.assert_called_once_with("socks5h://127.0.0.1:7897", persist=False, device_id=None)
+        http.assert_not_called()
         browser.assert_not_called()
 
     def test_fresh_extraction_is_bounded_to_two_concurrent_calls(self):
@@ -117,7 +130,8 @@ class SentinelTokenTests(unittest.TestCase):
             return {"sentinel_token": "token", "persist": persist}
 
         gate = threading.BoundedSemaphore(2)
-        with patch.object(sentinel_tokens, "_sentinel_extraction_gate", gate), \
+        with patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}), \
+             patch.object(sentinel_tokens, "_sentinel_extraction_gate", gate), \
              patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="http"), \
              patch("sms_tool.sentinel_tokens._extract_sentinel_http", side_effect=extract):
             with ThreadPoolExecutor(max_workers=4) as executor:
@@ -152,18 +166,17 @@ class SentinelTokenTests(unittest.TestCase):
         self.assertTrue(cached["sentinel_token"].startswith("t-"))
         self.assertIn("ts", cached)
 
-    def test_auto_mode_records_fallback_metrics_without_token_data(self):
-        expected = {"sentinel_token": "secret", "oai_did": "did", "sentinel_source": "http"}
+    def test_auto_mode_records_quickjs_failure_without_synthetic_fallback(self):
         with patch.object(sentinel_tokens, "_sentinel_mode", return_value="auto"), \
              patch.object(sentinel_tokens, "_extract_sentinel_quickjs", return_value=None), \
-             patch.object(sentinel_tokens, "_extract_sentinel_http", return_value=expected), \
+             patch.object(sentinel_tokens, "_extract_sentinel_http"), \
              patch.object(sentinel_tokens, "_extract_sentinel_cloakbrowser") as browser:
             result = sentinel_tokens._extract_sentinel_uncached(persist=False)
         metrics = sentinel_tokens.sentinel_metrics_snapshot()
-        self.assertIs(result, expected)
-        self.assertEqual(metrics["fallbacks"], 1)
+        self.assertIsNone(result)
+        self.assertEqual(metrics["fallbacks"], 0)
         self.assertEqual(metrics["providers"]["quickjs"]["failure"], 1)
-        self.assertEqual(metrics["providers"]["http"]["success"], 1)
+        self.assertNotIn("http", metrics["providers"])
         self.assertNotIn("secret", json.dumps(metrics))
         browser.assert_not_called()
 

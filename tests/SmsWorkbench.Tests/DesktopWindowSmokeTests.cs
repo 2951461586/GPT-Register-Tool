@@ -191,9 +191,12 @@ public sealed class DesktopWindowSmokeTests
     private static void VerifyMainWindowRegistrationAndContextMenu(string rootDirectory)
     {
         using var logger = new Serilog.LoggerConfiguration().CreateLogger();
+        var backendClient = new StubBackendClient();
         var main = new MainWindow(
             new TestApplicationPaths(rootDirectory),
-            new StubBackendClient(),
+            backendClient,
+            new BackendTaskCoordinator(backendClient),
+            new DesktopReadClient(new BackendTaskCoordinator(backendClient)),
             new WindowPaymentBatchDialogService(),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),

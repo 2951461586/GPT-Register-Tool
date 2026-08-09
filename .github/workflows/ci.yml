@@ -19,7 +19,15 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - shell: powershell
         run: Copy-Item config.example.json config.json
+      - shell: powershell
+        run: .\scripts\environment_preflight.ps1
+      - run: python -m compileall -q sms_tool services
+      - run: python -m pytest --collect-only -q
       - run: python -m pytest -q
       - run: dotnet test GPTRegisterTool.slnx -c Release
+      - run: python -c "import sms_tool.cli"
+      - run: python -m pytest -q tests/test_protocol_payment_common.py tests/test_wallet_provider.py tests/test_wallet_manager_integration.py
+      - run: python scripts/sensitive_field_scan.py
+      - run: python scripts/architecture_scan.py
       - shell: powershell
         run: powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1

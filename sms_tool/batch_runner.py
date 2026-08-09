@@ -60,6 +60,7 @@ def run_batch_impl(
     max_attempts=2,
     retry_delay_seconds=1.0,
     run_email_func=None,
+    browser_headless: bool | None = None,
 ):
     if run_email_func is None:
         raise ValueError("run_email_func is required")
@@ -133,6 +134,7 @@ def run_batch_impl(
                     codex_oauth=codex_oauth,
                     sentinel_data=sentinel_data,
                     registration_mode=registration_mode,
+                    browser_headless=browser_headless,
                 )
             except Exception as e:
                 import traceback; traceback.print_exc()

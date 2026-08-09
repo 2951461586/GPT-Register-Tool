@@ -224,7 +224,7 @@ async def _do_pay(
                       clear=True)
 
     # ── Step 9: Fill card ──
-    print(f"[nd-pay] Filling card: ****{card['number'][-4:]}")
+    print("[nd-pay] Filling card: [REDACTED]")
     await _fill_field(page, card["number"],
                       selectors=["input[name='cardNumber']", "input[name='card_number']",
                                  "#cardNumber", "input[autocomplete='cc-number']"],

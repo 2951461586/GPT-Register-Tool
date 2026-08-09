@@ -1,0 +1,38 @@
+{
+  "custom_payment_method_type_id": "cpmt_fixture_gcash",
+  "responses": {
+    "checkout": {
+      "checkout_session_id": "cs_test_gcash_custom_fixture",
+      "processor_entity": "openai_ie",
+      "payment_method_types": ["card", "custom_payment_method"],
+      "total_summary": {"due": 0},
+      "currency": "php"
+    },
+    "update": {
+      "discountAmounts": {"total": 0}
+    },
+    "resolve": {
+      "payment_status": "unpaid",
+      "payment_method_types": ["card", "custom_payment_method"],
+      "custom_payment_method_data": [
+        {"id": "cpmt_fixture_gcash", "display_name": "GCash"}
+      ],
+      "total_summary": {"due": 0},
+      "currency": "php"
+    },
+    "custom_capability": {
+      "custom_payment_method_data": [
+        {"id": "cpmt_fixture_gcash", "display_name": "GCash"}
+      ]
+    },
+    "taxes": {"ok": true},
+    "confirm": {"status": "confirmed"},
+    "start": {
+      "status": "requires_action",
+      "next_action": {
+        "url": "https://checkoutshopper-live.adyen.com/checkoutshopper/checkoutPaymentRedirect?redirectData=fixture",
+        "paymentMethodType": "gcash"
+      }
+    }
+  }
+}

@@ -126,6 +126,25 @@ namespace SmsWorkbench
             return "liziai.cloud";
         }
 
+        private string GetConfiguredSmailrDomain()
+        {
+            try
+            {
+                var email = GetSection(ReadJsonObject(Path.Combine(rootDir, "config.json")), "email_registration");
+                if (email.TryGetValue("smailr", out object nestedRaw) && nestedRaw is Dictionary<string, object> nested)
+                {
+                    string domain = GetString(nested, "default_domain").Trim().TrimStart('@');
+                    if (domain.Length > 0) return domain;
+                    domain = GetString(nested, "domain").Trim().TrimStart('@');
+                    if (domain.Length > 0) return domain;
+                }
+            }
+            catch
+            {
+            }
+            return "smailr.com";
+        }
+
         private string NormalizePaymentMethod(string paymentMethod)
             => PaymentMethods.Normalize(paymentMethod);
 
@@ -927,6 +946,7 @@ namespace SmsWorkbench
 
         private void OpenPayPalUrl(string url, string accountEmail = "")
         {
+            url = ResolveBackendPaymentUrl(url, accountEmail);
             if (!IsHttpUrl(url))
             {
                 Log("无效支付链接：" + url);
@@ -959,8 +979,9 @@ namespace SmsWorkbench
             }
         }
 
-        private void CopyPayPalUrl(string url)
+        private void CopyPayPalUrl(string url, string accountEmail = "")
         {
+            url = ResolveBackendPaymentUrl(url, accountEmail);
             if (!IsHttpUrl(url))
             {
                 Log("无效支付链接，无法复制。");
@@ -974,6 +995,20 @@ namespace SmsWorkbench
             catch (Exception ex)
             {
                 Log("复制支付链接失败：" + ex.Message);
+            }
+        }
+
+        private string ResolveBackendPaymentUrl(string url, string accountEmail)
+        {
+            if (!string.Equals(url, "backend://payment-url", StringComparison.OrdinalIgnoreCase)) return url;
+            try
+            {
+                return desktopRead.ReadPaymentUrlAsync("", accountEmail).GetAwaiter().GetResult().Trim();
+            }
+            catch (Exception ex)
+            {
+                Log("读取支付链接 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
+                return "";
             }
         }
 
@@ -1001,14 +1036,21 @@ namespace SmsWorkbench
 
         private void Log(string text)
         {
-            logger?.Information(text);
-            LogText += "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text + Environment.NewLine;
+            string safeText = SensitiveDataSanitizer.Redact(text);
+            logger?.Information("{Message}", safeText);
+            LogText += "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + safeText + Environment.NewLine;
+        }
+
+        private Dictionary<string, object> JsonElementToDictionary(JsonElement element)
+        {
+            return JsonTextToObject(element.GetRawText());
         }
 
         private void UiLog(string text)
         {
-            logger?.Debug("[backend] {Line}", text);
-            Dispatcher.BeginInvoke(new Action(() => Log(text)), DispatcherPriority.Background);
+            string safeText = SensitiveDataSanitizer.Redact(text);
+            logger?.Debug("[backend] {Line}", safeText);
+            Dispatcher.BeginInvoke(new Action(() => Log(safeText)), DispatcherPriority.Background);
         }
 
         private void NotifySuccess(string message)

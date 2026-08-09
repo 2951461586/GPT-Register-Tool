@@ -5,9 +5,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import payment_link_manager as manager
+from sms_tool.payment_catalog import PAYMENT_CATALOG
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
+    def test_payment_manager_uses_versioned_catalog(self):
+        self.assertEqual(set(manager.PAYMENT_METHODS), set(PAYMENT_CATALOG.methods))
+        self.assertEqual(manager.normalize_payment_method("go-pay"), "gopay")
+        self.assertEqual(manager.PAYMENT_METHODS["momo"].country, "VN")
     def test_supported_methods_include_reference_adapters(self):
         keys = {item["key"] for item in manager.supported_payment_methods()}
         self.assertEqual(keys, {
@@ -77,6 +82,29 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(result["link_type"], "blik_protocol_completed")
         self.assertEqual(result["operation"], "execute_payment")
         self.assertEqual(result["manager_state"], "completed")
+
+    def test_protocol_v1_result_is_preferred_over_log_url_scraping(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=(
+                "diagnostic https://docs.example.test/not-the-result\n"
+                '{"payment_method":"ideal","ok":true,"status":"completed",'
+                '"operation":"extract_link","url":"https://bank.example.test/authorize",'
+                '"link_type":"ideal_protocol","schema":"protocol_payment.v1"}\n'
+            ),
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+            result = manager.generate_payment_link(
+                "token", payment_method="ideal", seed_proxy="socks5h://127.0.0.1:1080",
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "https://bank.example.test/authorize")
+        self.assertEqual(result["schema"], "protocol_payment.v1")
 
     def test_blik_completion_marker_requires_explicit_success_contract(self):
         completed = subprocess.CompletedProcess(
@@ -238,9 +266,10 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 }):
                     result = manager.generate_payment_link("token", payment_method="paypal")
             persisted = runs.read_text(encoding="utf-8")
-        # 落盘记录不得含完整 BA token，但保留前缀便于诊断
+        # Persisted records must not retain the complete BA token or any prefix.
         self.assertNotIn("BA-1AB23456CD789012E", persisted)
-        self.assertIn("ba_token=BA-1AB", persisted)
+        self.assertNotIn("BA-1AB", persisted)
+        self.assertIn("ba_token=[REDACTED]", persisted)
         # 返回给调用方/UI 的结果仍是完整链接（脱敏只作用于持久化）
         self.assertEqual(result["url"], approve_url)
 

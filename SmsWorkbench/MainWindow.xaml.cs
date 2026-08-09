@@ -6,6 +6,8 @@ namespace SmsWorkbench
         private static readonly HttpClient httpClient = new HttpClient();
         private const string LocalNonPaymentProxy = "http://127.0.0.1:7897";
         private readonly IBackendClient backendClient;
+        private readonly IBackendTaskCoordinator backendTasks;
+        private readonly IDesktopReadClient desktopRead;
         private readonly Serilog.ILogger logger;
         private readonly IPaymentBatchDialogService paymentBatchDialogs;
         private readonly Wpf.Ui.ISnackbarService snackbarService;
@@ -29,7 +31,6 @@ namespace SmsWorkbench
         };
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
-        private CancellationTokenSource runningBackendCancellation;
         private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
@@ -201,12 +202,16 @@ namespace SmsWorkbench
         public MainWindow(
             IApplicationPaths paths,
             IBackendClient backendClient,
+            IBackendTaskCoordinator backendTasks,
+            IDesktopReadClient desktopRead,
             IPaymentBatchDialogService paymentBatchDialogs,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             Serilog.ILogger logger)
         {
             this.backendClient = backendClient;
+            this.backendTasks = backendTasks;
+            this.desktopRead = desktopRead;
             this.paymentBatchDialogs = paymentBatchDialogs;
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;

@@ -66,7 +66,8 @@ def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
 def _verify_with_legacy(session, did, current_url, proxy=None):
     """Legacy single-phone verification from paypal_auto config."""
     try:
-        from .paypal_auto import _pick_phone_and_sms, _sms_baseline, _poll_sms_code
+        from .paypal_auto import _pick_phone_and_sms
+        from .sms_utils import _poll_sms_code, _sms_baseline
     except Exception as exc:
         return {"ok": False, "error": f"phone_helpers_unavailable:{exc}"}
 

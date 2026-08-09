@@ -27,10 +27,14 @@ verify_proxy.py             Standalone proxy configuration verification utility.
 sms_tool/
   __main__.py               `python -m sms_tool` entrypoint; no import-time side effects.
   cli.py                    CLI parsing, high-level orchestration, process exit codes.
-  config.py                 Config loading only.
+  config.py                 Deterministic immutable runtime config and preflight schema validation.
+  sanitizer.py              Shared-policy redaction for text, structured output, IPC, and reports.
+  account_models.py         Typed account/session persistence model and safe snapshot contract.
   paths.py                  Project-relative path resolution.
   account_seed.py           Shared account/session seed lookup and access-token extraction.
   mailbox.py                Mailbox provider routing and OTP retrieval compatibility seam.
+  mailbox_service.py        Config-injected mailbox fetch/poll application service.
+  mailbox_strategies.py     Typed provider adapter protocol and immutable provider registry.
   mailbox_types.py          Shared mailbox dataclass and type definitions.
   mailbox_parsers.py        Mailbox import format parsing.
   mailbox_remail.py         ReMail order, pickup, adaptive OTP polling, and message normalization.
@@ -47,7 +51,9 @@ sms_tool/
     helpers.py              Shared command-level utilities.
     payment.py              Protocol-payment argument adaptation and exit-code boundary.
   http_client.py            curl_cffi retry/transport handling.
-  registration.py           ChatGPT registration orchestration compatibility seam.
+  registration.py           Public registration facade and compatibility exports only.
+  registration_state.py     Immutable input context, ordered state machine, and common stage deadline.
+  registration_handlers.py Typed runtime state plus independent registration stage handlers and cleanup.
   registration_progress.py  Registration stage progress tracking and persistence.
   registration_concurrency.py Registration stage resource gates and wait metrics.
   auth_flow.py              OpenAI signin/authorize/continue helpers.
@@ -68,7 +74,9 @@ sms_tool/
   gen_pp_link.py            PayPal/Stripe payment-link generation. PayPal supports hosted long URL and PP direct approve URL; UPI uses a hosted link variant.
   checkout_contract.py      Canonical ChatGPT Checkout/Stripe init request and response contracts.
   payment_capability.py     Checkout + Stripe init capability probe; no PM creation or confirm.
-  payment_link_manager.py   Unified method registry, state machine, adapter routing, and redacted run history.
+  payment_catalog.py        Versioned shared payment-method catalog loader and alias normalization.
+  payment_adapters.py       Typed adapter protocol and complete registry validation.
+  payment_link_manager.py   Payment state machine, adapter composition, and redacted run history.
   wallet_provider.py        Shared GoPay/GCash/GrabPay orchestration and structured outcomes.
   wallet_transport.py       Wallet HTTP transport, stage proxies, Stripe metadata, and redirect validation.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
@@ -102,6 +110,8 @@ sms_tool/
   utils.py                  Shared utility helpers.
 
 SmsWorkbench/               WPF desktop UI.
+  BackendTaskCoordinator.cs  Backend process task lifecycle, cancellation, and error normalization.
+  SensitiveDataSanitizer.cs  C# consumer of the repository sensitive-data policy.
   ProtocolPaymentExecution.cs  Deterministic command planning and backend-result presentation.
 services/
   protocol-payment/         Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo protocol extractors; wallets stay in sms_tool.
@@ -121,12 +131,12 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Desktop payment command planning | `SmsWorkbench.ProtocolPaymentExecution*` | immutable request/view models and Python backend command names | WPF control access, provider protocol, process-global mutable state |
 | Mailbox parsing/polling | `sms_tool.mailbox`, `sms_tool.providers/*` | Microsoft Graph, Gmail IMAP/SMTP, mailbox provider clients | Registration success persistence, payment state |
 | Phone inventory | `sms_tool.phone_reuse`, `sms_tool.smsbower` | SMS provider APIs | ChatGPT account state, payment state |
-| ChatGPT registration | `sms_tool.registration`, `sms_tool.registration_concurrency` | mailbox/phone seams, stage resource gates, storage through result writers | Payment execution, CPA upload |
+| ChatGPT registration | `sms_tool.registration_handlers`, `sms_tool.registration_state`, `sms_tool.registration_concurrency` | immutable runtime config, mailbox/phone seams, stage resource gates, storage through result writers | Payment execution, CPA upload, process-current-directory config lookup |
 | Auth/session refresh | `sms_tool.codex_oauth`, `sms_tool.session_refresh` | mailbox OTP seam, phone seam when explicitly enabled | Phone inventory purchasing outside configured provider seam |
 | Account liveness | `sms_tool.account_liveness` | account seed data, `/backend-api/wham/usage` | Persistence, OAuth relogin, payment creation |
 | Account recovery | `sms_tool.account_recovery` | account liveness, Codex OAuth/session refresh, storage | CPA API calls, payment creation |
 | JIT payment authentication | `sms_tool.payment_auth` | account seed, account liveness/recovery | Registration success classification, payment-method creation |
-| Payment link generation | `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.wallet_provider`, `sms_tool.wallet_transport`, `sms_tool.paypal_links` | account seed, shared Checkout contract, Stripe init, protocol adapters | PayPal account signup, final customer authorization |
+| Payment link generation | `payment_methods.json`, `sms_tool.payment_catalog`, `sms_tool.payment_adapters`, `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.wallet_provider`, `sms_tool.wallet_transport`, `sms_tool.paypal_links` | immutable runtime config, account seed, shared Checkout contract, Stripe init, protocol adapters | duplicate method/alias registries, PayPal account signup, final customer authorization |
 | Checkout capability probing | `sms_tool.checkout_contract`, `sms_tool.payment_capability` | ChatGPT Checkout, Stripe init, matrix-selected country/proxy context | payment-method creation, confirm, approve, provider redirect |
 | Batch payment execution | `sms_tool.payment_batch` | JIT auth, capability probe/payment manager, eligibility matrix, proxy stages, atomic reports | Registration/mailbox procurement, token-bearing public reports |
 | PayPal return reconciliation | `sms_tool.paypal_reconciliation` | caller-supplied authenticated transport, allowlisted merchant return hosts | payment-link extraction, link persistence, payment authorization |
@@ -135,6 +145,7 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import`, `sms_tool.sub2api_import` | session JSON, account seed, CPA/SUB2API API | Registration or payment execution |
 | Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
+| Backend task lifecycle | `SmsWorkbench.BackendTaskCoordinator` | `PythonBackendClient`, cancellation, sanitized error/result normalization | WPF control state or command argument construction |
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
 ## Dependency Direction
@@ -162,6 +173,65 @@ WPF controls -> command planner -> Python CLI -> command adapter
   routing tests cover only the boundary between two modules.
 
 ## Boundary Rules
+
+### Runtime Configuration
+
+`sms_tool.config` performs no import-time file I/O. CLI and desktop-launched CLI
+processes parse and validate `config.json` once at startup into an immutable
+`RuntimeConfig`. Application workflows accept that object explicitly and enter a
+`ContextVar` scope so legacy leaf helpers see the same injected snapshot without
+reading the current directory or reparsing configuration. `CFG` is compatibility
+only: it is a dynamic view over the active scope for older integrations and must
+not be used as mutable production state.
+
+Registration, mailbox, storage, and payment composition boundaries accept a
+`RuntimeConfig`. Validation runs before network or subprocess work and covers
+workflow names, proxy pool shapes, timeouts, supported payment methods, and the
+payment country matrix.
+
+### Sensitive Information Policy
+
+`sensitive_policy.json` is the single language-neutral policy. Python loads it
+through `sms_tool.sanitizer`; WPF embeds and loads the same file through
+`SensitiveDataSanitizer`. Token, TOTP, proxy credential, card, password, and
+payment-secret values are fully replaced, never prefix-masked. Operator logs,
+exceptions, IPC progress, subprocess stderr, JSONL, and batch reports must pass
+through this policy before display or persistence. Structured backend stdout may
+remain raw only inside the parser boundary and must be sanitized before display.
+
+### Mailbox Provider Adapters
+
+`MailboxProviderAdapter` defines provider matching, message fetch, and OTP poll
+operations. `MailboxProviderRegistry` resolves immutable adapter instances, and
+`MailboxService` composes a registry with an injected `RuntimeConfig` for one
+workflow. Registration depends on `MailboxService`, not provider tuples or
+module-global configuration. Compatibility registration functions remain only
+for external adapters while they migrate to typed adapter objects.
+
+### Registration Protocol Consistency
+
+The CLI runs ChatGPT/Auth/Sentinel transport and browser-profile preflight before
+claiming a paid or disposable mailbox. A selected route is promoted to the front
+of the account proxy pool. Each account then keeps one proxy-bound HTTP session;
+only classified network or auth-state retries create a fresh session and route.
+
+`auth_headers` owns three explicit families: NextAuth, Auth API, and ChatGPT.
+They share the account DID, stable session logging ID, flow invocation ID, UA,
+client hints, and a GeoIP-derived locale/timezone. Sentinel QuickJS consumes the
+same fingerprint and emits separate tokens for `username_password_create`,
+`authorize_continue`, and `oauth_create_account`. Token payload IDs, `oai-did`
+cookies, and auth headers must match. Production registration fails closed when
+QuickJS/SDK extraction fails and never uses the pure-HTTP PoW fallback.
+
+`http_client` owns the per-session 403/429 circuit breaker. Registration handlers
+write an atomic checkpoint before post-create AT probing, so a transport-unknown
+probe can resume without replaying account creation. The active account/session
+boundary remains a persisted AT followed by a conclusive HTTP 200 probe.
+
+ReMail structured OTP values bypass localized subject matching only when the
+code is six digits, the recipient exactly matches the selected mailbox, and the
+sender is an exact supported OpenAI OTP address. Timestamp, snapshot, and
+excluded-code checks still apply.
 
 ### Account Liveness Contract
 
@@ -713,6 +783,22 @@ python -m unittest discover -s tests
 - Rebuilding SQLite from `sessions/session_*.json`.
 
 `accounts.email` is treated as a normalized logical key. Updates should modify an existing row for the same complete email address instead of creating a new row with different casing.
+
+`AccountSessionModel` is the persistence-boundary input. Legacy mappings are
+normalized once by `storage.upsert_account`; internal storage code then reads
+typed `SessionCredentials`, `MailboxSnapshot`, and `PaymentSnapshot` values.
+Required credentials retain dedicated encrypted/private storage semantics, while
+`accounts.raw_json` and registration audits use `safe_snapshot()` and contain no
+access token, refresh token, mailbox token, BA token, TOTP secret, password, or
+card value.
+
+### Desktop Backend Task Lifecycle
+
+`BackendTaskCoordinator` owns the one-active-task invariant, cancellation token
+lifetime, timeout/cancel/error normalization, and cleanup around
+`PythonBackendClient`. `MainWindow.Tasks.cs` owns only UI transitions and command
+callbacks. New backend actions must use the coordinator instead of adding another
+window-owned `CancellationTokenSource` lifecycle.
 
 ### Codex OAuth and CPA Layer
 

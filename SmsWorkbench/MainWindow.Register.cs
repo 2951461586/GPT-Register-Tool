@@ -129,6 +129,24 @@ namespace SmsWorkbench
                 return;
             }
 
+            if (options.Source == "smailr")
+            {
+                var smailrArgs = new List<string>
+                {
+                    "--buy-smailr-mailbox",
+                    "--smailr-domain",
+                    GetConfiguredSmailrDomain(),
+                    "--count",
+                    options.Count.ToString(),
+                    "--workers",
+                    options.Workers.ToString()
+                };
+                AddRegistrationAtOnlyArgs(smailrArgs);
+                AddRegistrationProxy(smailrArgs);
+                RunBackend("Smailr 临时邮箱注册", smailrArgs);
+                return;
+            }
+
             string mailboxArg = "--chatai-mailbox-file";
             string mailboxFile = GetChataiMailboxFilePath();
             int count = options.Count;
@@ -442,6 +460,7 @@ namespace SmsWorkbench
             sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail 长效邮箱", Tag = "remail_target" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "CF Woker Mail", Tag = "cfworker" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "Smailr 临时邮箱", Tag = "smailr" });
             sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
             Grid.SetRow(sourceLabel, 0);
@@ -590,6 +609,7 @@ namespace SmsWorkbench
                 || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
+            if (value.StartsWith("smailr://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (MailboxPoolFileStore.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
             if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
@@ -601,7 +621,7 @@ namespace SmsWorkbench
         {
             if (!string.IsNullOrWhiteSpace(row?.MailboxLine)) return row.MailboxLine.Trim();
 
-            string fromDb = FindMailboxLineFromSqlite(row);
+            string fromDb = FindMailboxLineFromBackend(row);
             if (fromDb.Length > 0) return fromDb;
 
             string email = (row.Identifier ?? "").Trim();
@@ -628,71 +648,21 @@ namespace SmsWorkbench
             return "";
         }
 
-        private string FindMailboxLineFromSqlite(PoolRow row)
+
+
+        private string FindMailboxLineFromBackend(PoolRow row)
         {
-            if (row == null || string.IsNullOrWhiteSpace(row.SourcePath) || !row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)) return "";
+            if (row == null) return "";
             try
             {
-                string sql = "SELECT raw_json FROM accounts WHERE id=" + OnlyDigits(row.RawLine);
-                var rows = SqliteNative.Query(row.SourcePath, sql);
-                if (rows.Count == 0 || !rows[0].TryGetValue("raw_json", out string rawJson) || string.IsNullOrWhiteSpace(rawJson)) return "";
-
-                using JsonDocument document = JsonDocument.Parse(rawJson);
-                if (!document.RootElement.TryGetProperty("mailbox", out JsonElement mailbox) || mailbox.ValueKind != JsonValueKind.Object) return "";
-
-                string email = JsonString(mailbox, "email");
-                string password = JsonString(mailbox, "password");
-                string loginPassword = JsonString(mailbox, "login_password");
-                string refreshToken = JsonString(mailbox, "refresh_token");
-                string accessToken = JsonString(mailbox, "access_token");
-                string clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
-                string clientSecret = JsonString(mailbox, "client_secret");
-                string provider = JsonString(mailbox, "provider");
-                string serviceToken = JsonString(mailbox, "token");
-                string orderNo = JsonString(mailbox, "order_no");
-                string purchaseId = JsonString(mailbox, "purchase_id");
-                if (email.Length == 0) return "";
-                if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
-                {
-                    return "cfworker://" + email;
-                }
-                if (provider.Equals("remail", StringComparison.OrdinalIgnoreCase))
-                {
-                    return MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
-                }
-                if (provider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase))
-                {
-                    return serviceToken.Length > 0 ? email + "----" + serviceToken : "";
-                }
-                if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (clientId.Length > 0 && clientSecret.Length > 0 && refreshToken.Length > 0)
-                    {
-                        return "gmail://" + email + "----" + clientId + "----" + clientSecret + "----" + refreshToken
-                            + (accessToken.Length > 0 ? "----" + accessToken : "");
-                    }
-                    if (password.Length > 0)
-                    {
-                        if (loginPassword.Length > 0)
-                        {
-                            return "gmail://" + email + "----" + loginPassword + "----" + password;
-                        }
-                        return "gmail://" + email + "---" + password;
-                    }
-                    return "";
-                }
-                if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
-                {
-                    if (clientId.Length == 0 || refreshToken.Length == 0) return "";
-                    return email + "----" + password + "----" + clientId + "----" + refreshToken;
-                }
-                if (refreshToken.Length == 0) return "";
-                return email + "---" + password + "---" + refreshToken + "---" + accessToken + "---0";
+                return desktopRead.ReadMailboxLineAsync(OnlyDigits(row.RawLine), row.Identifier)
+                    .GetAwaiter().GetResult().Trim();
             }
-            catch
+            catch (Exception ex)
             {
-                return "";
+                Log("读取邮箱 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
             }
+            return "";
         }
 
         private bool TryReadMailboxFromRawJson(string rawJson, out string provider, out string clientId, out string refreshToken, out string token, out string mailboxLine)
@@ -720,11 +690,18 @@ namespace SmsWorkbench
                 provider = JsonString(mailbox, "provider");
                 string orderNo = JsonString(mailbox, "order_no");
                 string purchaseId = JsonString(mailbox, "purchase_id");
-                if (email.Length == 0) return false;
+                                if (email.Length == 0) return false;
 
                 if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
                 {
                     mailboxLine = "cfworker://" + email;
+                    return true;
+                }
+
+                if (provider.Equals("smailr", StringComparison.OrdinalIgnoreCase))
+                {
+                    token = serviceToken;
+                    mailboxLine = "smailr://" + email;
                     return true;
                 }
 

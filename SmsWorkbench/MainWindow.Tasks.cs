@@ -55,7 +55,7 @@ namespace SmsWorkbench
 
         private async void RunBackend(string taskName, List<string> args)
         {
-            if (runningBackendCancellation != null)
+            if (backendTasks.IsRunning)
             {
                 MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -82,17 +82,13 @@ namespace SmsWorkbench
                 CaptureBackendLine(line.Text);
                 UiLog(line.Text);
             });
-            using var cancellation = new CancellationTokenSource();
-            runningBackendCancellation = cancellation;
-
             try
             {
                 Log("启动：python " + safeArgs);
                 StatusText = taskName + " 运行中";
-                BackendCommandResult result = await backendClient.RunAsync(
+                BackendCommandResult result = await backendTasks.RunAsync(
                     BackendCommand.Create(taskName, args, 12 * 60 * 60 * 1000),
-                    progress,
-                    cancellation.Token);
+                    progress);
 
                 task.Status = result.ExitCode == 0 ? "完成" : "失败";
                 task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
@@ -116,61 +112,30 @@ namespace SmsWorkbench
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusText = taskName + " 已取消";
             }
+            catch (BackendTaskAlreadyRunningException)
+            {
+                task.Status = "未启动";
+                task.DoneAt = SafeTime(DateTime.Now);
+                StatusText = taskName + " 未启动";
+                MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
             catch (Exception ex)
             {
                 task.Status = "启动失败";
                 Log("启动失败：" + ex.Message);
-            }
-            finally
-            {
-                if (ReferenceEquals(runningBackendCancellation, cancellation))
-                    runningBackendCancellation = null;
             }
         }
 
         private string RunBackendWithResult(string taskName, List<string> args, int timeoutMs = 120000)
         {
             Log("启动：python " + FormatBackendArgsForDisplay(args));
-            BackendCommandResult result = backendClient.RunAsync(
+            return backendTasks.RunForResultAsync(
                 BackendCommand.Create(taskName, args, timeoutMs)).GetAwaiter().GetResult();
-            if (result.Payload.HasValue)
-                return result.Payload.Value.GetRawText();
-            if (result.TimedOut)
-                throw new TimeoutException($"Backend execution timed out ({timeoutMs / 1000}s)");
-            if (!string.IsNullOrEmpty(result.StandardError))
-                throw new InvalidOperationException(result.StandardError);
-            return result.StandardOutput;
         }
 
         private static string FormatBackendArgsForDisplay(List<string> args)
         {
-            var sensitiveOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "--at", "--access-token", "--refresh-token", "--api-key", "--api-token",
-                "--admin-token", "--client-secret", "--password", "--service-token",
-                "--proxy", "--proxy-pool", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
-                "--promotion-proxy", "--stripe-init-proxy", "--payment-method-proxy",
-                "--confirm-proxy", "--redirect-proxy", "--blik-code", "--mailbox-line",
-            };
-            var output = new List<string>();
-            for (int index = 0; index < (args?.Count ?? 0); index++)
-            {
-                string value = args[index] ?? "";
-                int equals = value.IndexOf('=');
-                string option = equals > 0 ? value.Substring(0, equals) : value;
-                if (sensitiveOptions.Contains(option))
-                {
-                    output.Add(equals > 0 ? option + "=***" : option);
-                    if (equals < 0 && index + 1 < args.Count)
-                    {
-                        output.Add("***");
-                        index++;
-                    }
-                    continue;
-                }
-                output.Add(value);
-            }
-            return string.Join(" ", output);
+            return SensitiveDataSanitizer.RedactArguments(args);
         }
 
         private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();
@@ -191,7 +156,11 @@ namespace SmsWorkbench
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
-            int failed = selected.Count(row => !DeleteRow(row));
+            int failed = 0;
+            foreach (PoolRow row in selected)
+            {
+                if (!await DeleteRowAsync(row)) failed++;
+            }
             RefreshPools();
             if (failed > 0)
             {
@@ -212,11 +181,25 @@ namespace SmsWorkbench
                 isDanger: true);
         }
 
-        private bool DeleteRow(PoolRow row)
+        private async Task<bool> DeleteRowAsync(PoolRow row)
         {
             try
             {
                 string emailKey = NormalizeEmailKey(row.Identifier);
+                if (emailKey.Length == 0) return false;
+                var args = new List<string> { "--delete-account", "--email", emailKey, "--desktop-ipc" };
+                BackendCommandResult backend = await backendTasks.RunAsync(
+                    BackendCommand.Create("删除账号", args, 120000));
+                if (backend.ExitCode != 0 || !backend.Payload.HasValue)
+                {
+                    Log("删除失败：" + SensitiveDataSanitizer.Redact(emailKey));
+                    return false;
+                }
+                Log("删除账号完成：" + SensitiveDataSanitizer.Redact(emailKey));
+                return true;
+#if LEGACY_DELETE_CODE
+#pragma warning disable CS0162
+                string legacyEmailKey = NormalizeEmailKey(row.Identifier);
                 int removedPoolLines = DeleteMailboxLines(row, emailKey);
                 int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey);
                 int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey);
@@ -234,14 +217,17 @@ namespace SmsWorkbench
                     + " 条，SQLite " + removedSqliteRows
                     + " 条，session " + removedSessionFiles + " 个");
                 return true;
+#endif
             }
+#pragma warning restore CS0162
             catch (Exception ex)
             {
-                Log("删除失败：" + row.Identifier + " " + ex.Message);
+                Log("删除失败：" + SensitiveDataSanitizer.Redact(row.Identifier) + " " + SensitiveDataSanitizer.Redact(ex.Message));
                 return false;
             }
         }
 
+#if LEGACY_DELETE_CODE
         private bool DeletionEmailMatch(string candidate, string emailKey)
         {
             if (emailKey.Length == 0) return false;
@@ -349,18 +335,34 @@ namespace SmsWorkbench
                 return false;
             }
         }
+#endif
+
+        private bool TryDeleteFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                File.Delete(path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log("删除文件失败：" + SensitiveDataSanitizer.Redact(path) + " " + SensitiveDataSanitizer.Redact(ex.Message));
+                return false;
+            }
+        }
 
         private void CancelBatch_Click(object sender, RoutedEventArgs e)
         {
-            if (runningBackendCancellation == null)
+            if (!backendTasks.IsRunning)
             {
                 Log("当前没有运行中的批次。");
                 return;
             }
             try
             {
-                runningBackendCancellation.Cancel();
-                Log("已取消当前批次。");
+                if (backendTasks.Cancel())
+                    Log("已取消当前批次。");
             }
             catch (Exception ex)
             {

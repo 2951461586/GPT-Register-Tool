@@ -55,7 +55,7 @@ namespace SmsWorkbench
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
             int exitCode = process.HasExited ? process.ExitCode : -1;
             string output = stdout.ToString().Trim();
-            string error = stderr.ToString().Trim();
+            string error = SensitiveDataSanitizer.Redact(stderr.ToString().Trim());
             JsonElement? payload = BackendJsonProtocol.ExtractPayload(output);
             _logger.Information(
                 "Backend command {CommandName} exited with code {ExitCode}; payload={HasPayload}; timedOut={TimedOut}",
@@ -96,7 +96,7 @@ namespace SmsWorkbench
             while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
             {
                 target.AppendLine(line);
-                progress?.Report(new BackendOutputLine(channel, line));
+                progress?.Report(new BackendOutputLine(channel, SensitiveDataSanitizer.Redact(line)));
             }
         }
 

@@ -26,6 +26,13 @@ def test_emit_result_preserves_normal_cli_json(capsys):
     assert json.loads(capsys.readouterr().out) == {"ok": True}
 
 
+def test_emit_result_redacts_sensitive_values(capsys):
+    emit_result({"access_token": "at-visible-prefix", "totp_secret": "totp-visible-prefix"}, enabled=True)
+    output = capsys.readouterr().out
+    assert "at-visible-prefix" not in output
+    assert "totp-visible-prefix" not in output
+
+
 def test_view_inbox_failure_uses_desktop_ipc_envelope(monkeypatch, capsys):
     import sms_tool.codex_oauth as codex_oauth
     import sms_tool.mailbox as mailbox

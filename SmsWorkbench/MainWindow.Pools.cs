@@ -366,101 +366,70 @@ namespace SmsWorkbench
 
         private void LoadSessionPool()
         {
-            if (LoadSessionDatabase())
-            {
-                return;
-            }
-            LoadSessionJsonPool();
+            if (!LoadSessionPoolFromBackend()) LoadSessionJsonPool();
         }
 
-        private bool LoadSessionDatabase()
+        private bool LoadSessionPoolFromBackend()
         {
-            string dbPath = GetDatabasePath();
-            if (!File.Exists(dbPath)) return false;
+            if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return true;
             try
             {
-                EnsureAccountExtraColumns(dbPath);
-                string sql = "SELECT id,email,access_token,status,error,paypal_ok,payment_method,paypal_url,paypal_status,refresh_token_status,batch_id,registration_state,registration_country,json_path,raw_json,pipeline_total_seconds,timing_total_seconds,created_at,updated_at FROM accounts ORDER BY updated_at DESC";
-                var rows = SqliteNative.Query(dbPath, sql);
-                if (rows.Count == 0) return false;
-                foreach (Dictionary<string, string> data in rows)
+                JsonElement payload = desktopRead.ReadAccountsAsync().GetAwaiter().GetResult();
+                if (!payload.TryGetProperty("accounts", out JsonElement accounts) || accounts.ValueKind != JsonValueKind.Array) return false;
+                foreach (JsonElement account in accounts.EnumerateArray())
                 {
-                    string status = data.TryGetValue("status", out string rawStatus) ? rawStatus : "";
-                    string error = data.TryGetValue("error", out string rawError) ? rawError : "";
-                    string paypalOk = data.TryGetValue("paypal_ok", out string rawPaypalOk) ? rawPaypalOk : "";
-                    string paymentMethod = data.TryGetValue("payment_method", out string rawPaymentMethod) ? rawPaymentMethod : "";
-                    string paypalUrl = data.TryGetValue("paypal_url", out string rawPaypalUrl) ? rawPaypalUrl : "";
-                    string paypalStatus = data.TryGetValue("paypal_status", out string rawPaypalStatus) ? rawPaypalStatus : "";
-                    string refreshTokenStatus = data.TryGetValue("refresh_token_status", out string rawRefreshTokenStatus) ? rawRefreshTokenStatus : "";
-                    string access = data.TryGetValue("access_token", out string rawAccess) ? rawAccess : "";
-                    string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
-                    string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
-                    Dictionary<string, object> rawData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                    try
-                    {
-                        if (!string.IsNullOrWhiteSpace(rawJson)) rawData = JsonTextToObject(rawJson);
-                    }
-                    catch { }
-                    foreach (var kv in data)
-                    {
-                        if (!rawData.ContainsKey(kv.Key)) rawData[kv.Key] = kv.Value;
-                    }
-                    string paypalAmount = GetPaypalAmount(rawJson);
-                    string importedStatus = GetImportedStatus(rawJson);
-                    string verifiedPhone = GetVerifiedPhone(rawJson);
-                    if (IsPaymentLinkMethodMismatch(rawJson, paymentMethod))
-                    {
-                        paypalStatus = "failed";
-                        paypalOk = "0";
-                        paypalUrl = "";
-                        paypalAmount = "";
-                    }
-                    TryReadMailboxFromRawJson(rawJson, out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxToken, out string mailboxLine);
-                    bool isCfWorkerMailbox = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase);
-                    bool isReMailMailbox = mailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase);
-                    bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
-                    bool isICloudMailbox = mailboxProvider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase);
-                    bool isChataiMailbox = mailboxProvider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || (mailboxClientId.Length > 0 && !isCfWorkerMailbox && !isReMailMailbox && !isICloudMailbox);
-                    var dbRow = new PoolRow
-                    {
-                        Id = "DB" + data["id"],
-                        CreatedAt = UnixTimeText(data.TryGetValue("created_at", out string created) ? created : ""),
-                        CompletedAt = UnixTimeText(data.TryGetValue("updated_at", out string updated) ? updated : ""),
-                        Identifier = data.TryGetValue("email", out string email) ? email : "",
-                        AccountType = isCfWorkerMailbox ? "SQLite/CFWorker" : isReMailMailbox ? "SQLite/ReMail" : isGmailMailbox ? "SQLite/Gmail" : isICloudMailbox ? "SQLite/iCloud" : isChataiMailbox ? "SQLite/Chatai" : "SQLite",
-                        AccountPlanType = GetAccountPlanType(rawData),
-                        RegistrationCountry = data.TryGetValue("registration_country", out string registrationCountry) ? registrationCountry : "",
-                        QuotaStatus = GetQuotaStatus(rawData),
-                        Status = DisplayAccountStatus(status, paypalOk, access, error, paypalStatus, refreshTokenStatus, importedStatus),
-                        PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
-                        PayPalAmount = paypalAmount,
-                        RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
-                        Phone = verifiedPhone,
-                        HasAccessToken = !string.IsNullOrWhiteSpace(access),
-                        AccessTokenProbeStatusCode = GetAccessTokenProbeStatusCode(rawData),
-                        PayPalUrl = paypalUrl,
-                        RefreshToken = isCfWorkerMailbox ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : isICloudMailbox ? "接码链接" : Mask(isChataiMailbox ? mailboxRefreshToken : access),
-                        Proxy = DbTimingText(data),
-                        Notes = string.IsNullOrWhiteSpace(jsonPath) ? dbPath : jsonPath,
-                        SourcePath = dbPath,
-                        RawLine = data["id"],
-                        ClientId = mailboxClientId,
-                        RawRefreshToken = mailboxRefreshToken,
-                        MailboxLine = mailboxLine,
-                        MailboxProvider = mailboxProvider,
-                        MailboxToken = mailboxToken
-                    };
-                    PopulateQuotaFields(dbRow, rawData);
-                    allRows.Add(dbRow);
+                    Dictionary<string, object> data = JsonElementToDictionary(account);
+                    AddBackendAccountRow(data);
                 }
-                Log("已从 SQLite 加载账号索引：" + dbPath);
-                return true;
+                return accounts.GetArrayLength() > 0;
             }
             catch (Exception ex)
             {
-                Log("读取 SQLite 失败，回退读取 JSON：" + ex.Message);
+                Log("读取账号 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
                 return false;
             }
+        }
+
+        private void AddBackendAccountRow(Dictionary<string, object> data)
+        {
+            string rawJson = data.TryGetValue("session", out object session) ? JsonSerializer.Serialize(session) : "{}";
+            string status = GetString(data, "status");
+            bool hasAccess = GetString(data, "has_access_token").Equals("True", StringComparison.OrdinalIgnoreCase)
+                || GetString(data, "has_access_token") == "1";
+            bool hasPaymentUrl = GetString(data, "has_payment_url").Equals("True", StringComparison.OrdinalIgnoreCase)
+                || GetString(data, "has_payment_url") == "1";
+            string accessState = hasAccess ? "present" : "";
+            string paymentMethod = GetString(data, "payment_method");
+            string paypalUrl = hasPaymentUrl ? "backend://payment-url" : "";
+            string paypalStatus = GetString(data, "paypal_status");
+            string paypalOk = GetString(data, "paypal_ok");
+            string refreshStatus = GetString(data, "refresh_token_status");
+            string provider = GetString(data, "mailbox_provider");
+            var row = new PoolRow
+            {
+                Id = "DB" + GetString(data, "id"),
+                CreatedAt = UnixTimeText(GetString(data, "created_at")),
+                CompletedAt = UnixTimeText(GetString(data, "updated_at")),
+                Identifier = GetString(data, "email"),
+                AccountType = "SQLite" + (provider.Length > 0 ? "/" + provider : ""),
+                AccountPlanType = GetAccountPlanType(data),
+                RegistrationCountry = GetString(data, "registration_country"),
+                QuotaStatus = GetQuotaStatus(data),
+                Status = DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, GetImportedStatus(rawJson)),
+                PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
+                PayPalAmount = GetPaypalAmount(rawJson),
+                RefreshTokenStatus = DisplayRtStatus(refreshStatus),
+                HasAccessToken = hasAccess,
+                PayPalUrl = paypalUrl,
+                RefreshToken = provider == "remail" ? "ReMail" : hasAccess ? "AT" : "",
+                Proxy = DbTimingText(new Dictionary<string, string>(data.ToDictionary(pair => pair.Key, pair => Convert.ToString(pair.Value) ?? ""))),
+                Notes = GetString(data, "json_path").Length > 0 ? GetString(data, "json_path") : GetDatabasePath(),
+                SourcePath = GetDatabasePath(),
+                RawLine = GetString(data, "id"),
+                MailboxProvider = provider
+            };
+            PopulateQuotaFields(row, data);
+            allRows.Add(row);
         }
 
         private void LoadSessionJsonPool()
@@ -530,39 +499,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void EnsureAccountExtraColumns(string dbPath)
-        {
-            string[] migrations =
-            {
-                "ALTER TABLE accounts ADD COLUMN payment_method TEXT DEFAULT 'paypal'",
-                "ALTER TABLE accounts ADD COLUMN paypal_status TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN paypal_updated_at INTEGER DEFAULT 0",
-                "ALTER TABLE accounts ADD COLUMN refresh_token_status TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN refresh_token_updated_at INTEGER DEFAULT 0",
-                "ALTER TABLE accounts ADD COLUMN oauth_refresh_token TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN workspace_status TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN workspace_id TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN workspace_name TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN workspace_switch_result TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN workspace_updated_at INTEGER DEFAULT 0",
-                "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN quota_status TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN batch_id TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN registration_state TEXT DEFAULT ''",
-                "ALTER TABLE accounts ADD COLUMN registration_country TEXT DEFAULT ''"
-            };
-            foreach (string sql in migrations)
-            {
-                try { SqliteNative.Execute(dbPath, sql); }
-                catch { }
-            }
-            try
-            {
-                SqliteNative.Execute(dbPath, "UPDATE accounts SET paypal_status='link_ready' WHERE (paypal_status IS NULL OR paypal_status='') AND paypal_url IS NOT NULL AND paypal_url<>''");
-                SqliteNative.Execute(dbPath, "UPDATE accounts SET refresh_token_status='no_rt' WHERE refresh_token_status IS NULL OR refresh_token_status=''");
-            }
-            catch { }
-        }
+
 
     }
 }

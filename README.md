@@ -43,6 +43,7 @@
 
 - Windows 10/11 x64。
 - Python 3.10 或更高版本。
+- `curl_cffi==0.16.0`。注册预检会校验安装版本和 `chrome146` profile；旧版本不会进入邮箱采购或注册阶段。
 - .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
 - **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
 - **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
@@ -129,6 +130,16 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
 - 注册、OTP、Session 获取和 Codex OAuth 分别记录阶段结果，避免把中间状态误报为成功；支付提链只由独立支付操作触发。
 
+### 协议一致性与恢复
+
+- CLI 在领取或购买邮箱前依次预检 ChatGPT、Auth 和 Sentinel 三段网络，并从注册代理池选择首条可用线路；TLS、代理或 profile 不满足要求时不会继续消耗邮箱。
+- 每个账号绑定独立代理会话；批量注册只在网络或认证状态故障时切换代理并创建新会话，不把同一事务拆到不同出口。
+- NextAuth、Auth API、ChatGPT 使用各自的 Header 模板，并共享稳定的 `oai-did`、`oai-session-id`、调用 ID、UA 和 client hints。
+- Fingerprint 的语言与时区根据代理 GeoIP 生成；Sentinel QuickJS 使用同一份 UA、平台、时区、屏幕、内存和 client hints。
+- Sentinel 分别生成 `username_password_create`、`authorize_continue`、`oauth_create_account` token。Token、Cookie 和 Header 中的 DID 不一致时按 `sentinel_extract_failed` 终止。
+- 单会话收到 403/429 后打开熔断，冷却期间不继续请求；生产注册不允许纯 HTTP PoW 降级。
+- 创建账号并获得 AT 后立即持久化候选和断点，再执行 AT HTTP 200 探活。代理/TLS 探活失败可以从断点恢复，不重复邮箱 OTP 和账号创建。
+
 ### ReMail 邮箱源
 
 - 一键注册来源中提供 `ReMail 长效邮箱`，统一使用 `purchase` 长效邮箱模式。
@@ -141,6 +152,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - Service Token 返回 401 时会用 API Key 查询所属订单；如服务端返回新 Token，会保存到 Session JSON 和 SQLite 后重试一次。
 - `code` 订单只能在 `receiveUntil` 前收件，API Key 不能代替过期的 Service Token；需要后续持续查看收件箱时请选择 `purchase`。
 - 邮件摘要无验证码时自动读取邮件详情，并执行时间、收件人、消息 ID 和已排除验证码过滤。
+- ReMail 返回可信 OpenAI 发件人的结构化六位验证码时，会校验精确收件人和时间戳；即使本地化主题发生乱码，也不会误等到超时。
 - 桌面端可从 ReMail 注册记录打开收件箱；查看模式会读取邮件完整正文和验证码。
 - 日志会脱敏 API Key 和 Service Token。
 - 自适应 OTP 轮询：初始延迟 1s，渐进退避（1s → 1.5s → 3s），根据邮件到达状态和服务器限流建议动态调整轮询间隔，减少无效请求。
@@ -438,6 +450,14 @@ python chatgpt_phone_reg.py --remail-service-mode code --count 1 --workers 1 --r
 python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --target-at200 40 --max-mailbox-purchases 80 --workers 10 --phone-reuse --phone-source smsbower
 ```
 
+### ReMail 长效邮箱 AT-Only 协议注册
+
+```powershell
+python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase --count 1 --workers 1 --registration-at-only --no-phone-reuse
+```
+
+该模式跳过 Codex OAuth RT 和手机验证，只在 Session 已落盘且 AT 探活返回 HTTP 200 后计为成功。
+
 ### CFWorker 邮箱注册
 
 ```powershell
@@ -539,6 +559,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 4. 构建安装器、便携包和校验文件，并复核校验清单中的 SHA-256。
 5. 确认待发布提交已推送，且 `git status --short` 为空；本地 `runtime/`、`sessions/` 等忽略数据不进入发布提交。
 6. 在该提交上创建版本标签并上传同一次构建生成的 Release 资产。
+7. GitHub Release 标题和正文统一使用中文；命令、文件名和错误码保持原始格式。
 
 当前发布使用 `vYYYY.MM.DD`；同日文档或构建修订使用 `vYYYY.MM.DD.1` 等补丁标签。安装器、便携 ZIP 和 SHA-256 文件必须来自同一次 `scripts/build_installer.ps1` 构建，并在上传前校验摘要。发布资产固定为 `GPT-Register-Tool-Setup-<version>.exe`、`GPT-Register-Tool-win-x64-<version>.zip` 和 `GPT-Register-Tool-<version>.sha256.txt`。
 
@@ -555,7 +576,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.04.md)
+- [最新发布说明](docs/release-v2026.08.09.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

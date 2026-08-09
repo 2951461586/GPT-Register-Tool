@@ -20,6 +20,8 @@ public sealed class PaymentMethodsTests
     public void SingleAccountAndBatchSurfacesUseOneCatalog()
     {
         Assert.Equal(12, PaymentMethods.All.Count);
+        Assert.Equal("USD", PaymentMethods.Find("paypal").Currency);
+        Assert.Equal("wallet", PaymentMethods.Find("gopay").Adapter);
         Assert.Equal(3, PaymentMethods.All.Count(method => method.Id is "gopay" or "gcash" or "grabpay"));
         Assert.Contains(PaymentMethods.All, method => method.Id == "blik" && !method.BatchEnabled);
         Assert.Contains(PaymentMethods.All, method => method.Id == "direct_card");
@@ -39,4 +41,8 @@ public sealed class PaymentMethodsTests
     [InlineData("grabpay", "PH")]
     public void WalletCatalogUsesProviderDefaultCountry(string paymentMethod, string expectedCountry)
         => Assert.Equal(expectedCountry, PaymentMethods.Find(paymentMethod).DefaultCountry);
+
+    [Fact]
+    public void UnknownPaymentMethodDoesNotSilentlyBecomePaypal()
+        => Assert.Equal("", PaymentMethods.Normalize("not-a-method"));
 }

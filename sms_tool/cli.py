@@ -9,7 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.utils import formataddr
 from pathlib import Path
 
-from .config import CFG
+from .config import CFG, initialize_runtime_config
+from .diagnostics import install_safe_stdio, safe_print
 from .mailbox import _load_mailbox_pool, _remail_enabled
 from .paths import output_dir, runtime_file
 from .registration import _build_session_file, _mailbox_snapshot, run_email
@@ -73,6 +74,34 @@ def _proxy_pool_values(args) -> list[str]:
         configured = re.split(r"[\r\n,;]+", configured)
     values.extend(str(item or "").strip() for item in configured if str(item or "").strip())
     return list(dict.fromkeys(values))
+
+
+def _preflight_registration_before_mailbox(args) -> dict:
+    """Select a healthy auth route before a paid/disposable mailbox is claimed."""
+    from .registration import registration_network_preflight
+
+    candidates = _proxy_pool_values(args) or [None]
+    last_error = None
+    for candidate in candidates:
+        try:
+            result = registration_network_preflight(candidate, proxy_attempts=2)
+        except Exception as exc:
+            last_error = exc
+            continue
+        selected = str(result.get("proxy") or candidate or "").strip()
+        if selected:
+            ordered = [selected]
+            ordered.extend(str(item).strip() for item in candidates if item and str(item).strip() != selected)
+            args.proxy_pool = "\n".join(dict.fromkeys(ordered))
+            args.proxy = selected
+        else:
+            args.proxy_pool = ""
+            args.proxy = None
+        return result
+    raise RuntimeError(
+        "registration_preflight_failed:no_healthy_route:"
+        + (type(last_error).__name__ if last_error is not None else "unknown")
+    )
 
 
 def _protocol_proxy_pool() -> list[str]:
@@ -142,12 +171,21 @@ def _at_promotion_proxy_arg(args, payment_method="paypal"):
 
 
 def main():
+    initialize_runtime_config()
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    install_safe_stdio()
 
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
     parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--desktop-read",
+        choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file"],
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument("--account-id", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--proxy", default=None)
     parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
     parser.add_argument("--count", type=int, default=1)
@@ -164,6 +202,8 @@ def main():
     parser.add_argument("--buy-remail-mailbox", action="store_true", help="Buy ReMail long-term mailbox before registration")
     parser.add_argument("--buy-cfworker-mailbox", action="store_true", help="Use CF Worker temp mailboxes before registration")
     parser.add_argument("--cfworker-domain", default=None, help="CF Worker mailbox domain, default cfworker_domain in config.json")
+    parser.add_argument("--buy-smailr-mailbox", action="store_true", help="Use Smailr disposable mailboxes before registration")
+    parser.add_argument("--smailr-domain", default=None, help="Smailr mailbox domain, default smailr.default_domain in config.json")
     parser.add_argument("--remail-service-mode", choices=["code", "purchase"], default=None, help="ReMail service mode override")
     parser.add_argument("--remail-supply", choices=["private_first", "public_only"], default=None, help="ReMail inventory policy")
     parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
@@ -180,6 +220,7 @@ def main():
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
+    parser.add_argument("--delete-account", action="store_true", help="Delete/archive one account through the lifecycle adapter")
     parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
     parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
     parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
@@ -313,6 +354,35 @@ def main():
         args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
 
     base_dir = args.output_dir or str(output_dir(CFG))
+    if args.desktop_read:
+        from .desktop_ipc import emit_result
+        from .desktop_read import (
+            create_account_file,
+            create_mailbox_file,
+            create_payment_url_file,
+            read_account,
+            read_accounts,
+        )
+        if args.desktop_read == "accounts":
+            payload = {"ok": True, "accounts": read_accounts(CFG)}
+        elif args.desktop_read == "account":
+            payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
+        elif args.desktop_read == "mailbox-file":
+            payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
+        elif args.desktop_read == "account-file":
+            payload = create_account_file(args.account_id or "", args.email or "", CFG)
+        else:
+            payload = create_payment_url_file(args.account_id or "", args.email or "", CFG)
+        emit_result(payload, enabled=True)
+        return
+    if args.delete_account:
+        from .account_lifecycle import AccountDeleteRequest, AccountLifecycle
+        if not args.email:
+            raise SystemExit("--delete-account requires --email")
+        result = AccountLifecycle(CFG).delete(AccountDeleteRequest(args.email))
+        from .desktop_ipc import emit_result
+        emit_result({"ok": True, **result.to_dict()}, enabled=bool(args.desktop_ipc))
+        return
     if args.rebuild_sqlite:
         count = rebuild_from_session_dir(base_dir)
         print(f"[*] SQLite rebuilt: {database_path()} ({count} account record(s))")
@@ -391,6 +461,12 @@ def main():
         _convert_session_json(args)
         return
 
+    try:
+        _preflight_registration_before_mailbox(args)
+    except Exception as exc:
+        print(f"[Error] {exc}")
+        raise SystemExit(2) from None
+
     if getattr(args, "target_at200", 0):
         _run_target_at200(args, base_dir)
         return
@@ -409,6 +485,7 @@ def main():
         or args.buy_remail_mailbox
         or args.remail_service_mode
         or args.buy_cfworker_mailbox
+        or args.buy_smailr_mailbox
     )
     if not mailboxes and explicit_mailbox_source:
         print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
@@ -428,6 +505,10 @@ def main():
         effective_count = len(mailboxes)
         if effective_count != requested_count:
             print(f"[!] Requested {requested_count} mailbox(es), CFWorker returned {effective_count}; registering returned mailboxes only.")
+    elif getattr(args, "buy_smailr_mailbox", False):
+        effective_count = len(mailboxes)
+        if effective_count != requested_count:
+            print(f"[!] Requested {requested_count} mailbox(es), Smailr returned {effective_count}; registering returned mailboxes only.")
     elif mailboxes and requested_count > len(mailboxes):
         effective_count = len(mailboxes)
         print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
@@ -457,7 +538,7 @@ def main():
             )
             results.append(result)
             if result.get("success"):
-                print(f"[OK] Phone registered: {result.get('phone', '')} | AT: {str(result.get('access_token', ''))[:20]}...")
+                print(f"[OK] Phone registered: {result.get('phone', '')} | AT: [REDACTED]")
             else:
                 print(f"[FAIL] {result.get('error', 'unknown')}")
         _save_registration_results(
@@ -479,6 +560,7 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
             registration_mode=args.registration_mode,
+            browser_headless=bool(getattr(args, "browser_headless", False)),
             run_email_func=run_email,
         )
     else:
@@ -1499,7 +1581,7 @@ def _auto_pay(args):
         print(f"\n[*] Auto-pay completed successfully!")
         print(f"    Email: {result.get('email', '')}")
         print(f"    Alias: {result.get('alias_email', '')}")
-        print(f"    Card: ****{result.get('card_last4', '')}")
+        print("    Card: [REDACTED]")
         print(f"    Status: {result.get('paypal_status', '')}")
         print(f"    Session: {result.get('json_path', '')}")
     else:
@@ -1755,7 +1837,7 @@ def _omakse_extract(args):
         stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
         us_proxies = stage.get("checkout") or (CFG.get("proxy") or {}).get("default", "")
         if us_proxies:
-            print(f"[*] Using checkout stage proxy as US proxy: {us_proxies}", file=sys.stderr)
+            safe_print(f"[*] Using checkout stage proxy as US proxy: {us_proxies}", file=sys.stderr)
 
     # Resolve promotion proxies
     promo_proxies = (args.omakse_promo_proxies or "").strip()
@@ -1819,7 +1901,7 @@ def _omakse_us_pay(args):
         stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
         proxy = stage.get("checkout") or (CFG.get("proxy") or {}).get("default", "")
         if proxy:
-            print(f"[*] Using config proxy for US payment: {proxy}", file=sys.stderr)
+            safe_print(f"[*] Using config proxy for US payment: {proxy}", file=sys.stderr)
 
     if not proxy:
         print("[Error] No proxy available for US payment. Use --checkout-proxy or configure proxy.default", file=sys.stderr)

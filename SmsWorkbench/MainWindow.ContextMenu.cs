@@ -59,7 +59,7 @@ namespace SmsWorkbench
         {
             if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
-                CopyPayPalUrl(row.PayPalUrl);
+                CopyPayPalUrl(row.PayPalUrl, row.Identifier);
             }
             else
             {

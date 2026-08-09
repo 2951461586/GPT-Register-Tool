@@ -24,9 +24,10 @@ except ImportError:
 import requests as _requests
 
 from .config import CFG
-
-# Re-exported from paypal_auto (shared with browser flow)
-from .paypal_auto import _extract_sms_code, _sms_baseline
+from .paypal_fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
+from .paypal_fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
+from .paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
+from .sms_utils import _extract_sms_code, _sms_baseline
 
 
 # ──────────────────────────── data types ────────────────────────────
@@ -60,13 +61,6 @@ class ReversePayResult:
 
 
 # ──────────────────────────── constants ────────────────────────────
-
-_CHROME_VERSION = "136"
-_CHROME_FULL_VERSION = "136.0.7103.93"
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_CHROME_VERSION}.0.0.0 Safari/537.36"
-)
 
 # Patterns indicating JS-only rendering or CAPTCHA
 _CAPTCHA_PATTERNS = [
@@ -242,7 +236,7 @@ class PayPalReverseClient:
                 self._ba_token = (params.get("ba_token") or [""])[0]
                 self._cmd = (params.get("cmd") or [""])[0]
                 if self._pp_token or self._ba_token:
-                    print(f"[re] Got PayPal token: {self._pp_token[:20]}..." if self._pp_token else f"[re] Got BA token: {self._ba_token[:20]}...")
+                    print("[re] PayPal approval token captured")
                     return
                 # Maybe it redirected again
                 if "paypal.com" in parsed.netloc:

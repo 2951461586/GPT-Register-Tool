@@ -8,7 +8,7 @@ request shape so registration code does not duplicate state-sensitive details.
 import json
 
 from .config import CFG
-from .auth_headers import auth_impersonate, openai_auth_headers
+from .auth_headers import AUTH_IMPERSONATE, openai_auth_headers
 from .auth_flow import _absolute_url, _invalid_state_auth_response, _json_or_raw
 from .http_client import request_with_retry
 
@@ -59,7 +59,9 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
     for endpoint, payload in endpoints:
         kwargs = {
             "headers": headers,
-            "impersonate": auth_impersonate(),
+            # Registration preflight validates that the configured profile is
+            # supported before this stage consumes a mailbox.
+            "impersonate": AUTH_IMPERSONATE,
         }
         if payload is not None:
             kwargs["json"] = payload

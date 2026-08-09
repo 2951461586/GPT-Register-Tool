@@ -7,10 +7,10 @@ import uuid
 from curl_cffi import requests as curl_requests
 
 from .codex_sentinel import import_cookie_header
-from .auth_headers import auth_impersonate, auth_user_agent
+from .auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
 from .config import CFG
 from .paths import runtime_file
-from .phone_proxy import normalize_proxy_url
+from .phone_proxy import normalize_proxy_url, redact_proxy_text as _phone_redact_proxy_text, redact_proxy_url as _phone_redact_proxy_url
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
@@ -31,26 +31,10 @@ _sentinel_metrics = {
 _sentinel_provider_health: dict[str, dict[str, float]] = {}
 
 
-def _redact_proxy_url(proxy):
-    value = normalize_proxy_url(proxy)
-    return re.sub(r"://[^/@\s]+@", "://***:***@", value) if value else ""
-
-
-def _redact_proxy_text(message, proxy=None):
-    value = str(message or "")
-    for candidate in (str(proxy or "").strip(), normalize_proxy_url(proxy)):
-        if candidate:
-            value = value.replace(candidate, _redact_proxy_url(candidate))
-    value = re.sub(
-        r"(?i)(\b(?:https?|socks5h?)://)[^/@\s]+@",
-        r"\1***:***@",
-        value,
-    )
-    return re.sub(
-        r"(?i)(\b(?:https?|socks5h?)://[a-z0-9.-]+:\d+):[^:\s'\"]+:[^\s'\"]+",
-        r"\1:***:***",
-        value,
-    )
+# Re-export phone_proxy helpers under sentinel_tokens-local names so
+# existing call-sites keep working while the bodies live in one place.
+_redact_proxy_url = _phone_redact_proxy_url
+_redact_proxy_text = _phone_redact_proxy_text
 
 
 def _get_cached_sentinel(force_fresh=False):
@@ -111,6 +95,41 @@ def _sentinel_device_id(sentinel_data):
         return str(token.get("id") or "").strip()
     except Exception:
         return ""
+
+
+def assert_sentinel_device_id(sentinel_data, device_id: str) -> str:
+    """Validate every Sentinel token and cookie identity before auth requests."""
+    expected = str(device_id or "").strip()
+    data = sentinel_data if isinstance(sentinel_data, dict) else {}
+    actual = str(data.get("oai_did") or "").strip()
+    if expected and actual and expected != actual:
+        raise ValueError("sentinel_extract_failed: oai-did does not match Sentinel device id")
+    if expected and not actual:
+        actual = expected
+    for key in ("sentinel_token", "sentinel_oauth_token"):
+        raw = str(data.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            token_id = str(json.loads(raw).get("id") or "").strip()
+        except Exception as exc:
+            raise ValueError(f"sentinel_extract_failed: invalid {key}") from exc
+        if expected and token_id != expected:
+            raise ValueError(f"sentinel_extract_failed: {key} id does not match oai-did")
+    if expected and actual != expected:
+        raise ValueError("sentinel_extract_failed: missing Sentinel device id")
+    cookie_header = str(data.get("cookie_str") or data.get("cookie_header") or "")
+    if expected and cookie_header:
+        cookie_match = re.search(r"(?:^|[;\s])oai-did=([^;\s]+)", cookie_header, re.I)
+        if cookie_match and cookie_match.group(1).strip() != expected:
+            raise ValueError("sentinel_extract_failed: cookie oai-did does not match Sentinel device id")
+    for header_key in ("headers", "auth_headers"):
+        headers = data.get(header_key)
+        if isinstance(headers, dict):
+            header_did = next((str(value).strip() for key, value in headers.items() if str(key).lower() in {"oai-did", "oai-device-id"} and value), "")
+            if expected and header_did and header_did != expected:
+                raise ValueError("sentinel_extract_failed: auth header oai-did does not match Sentinel device id")
+    return expected or actual
 
 
 def _set_oai_did_cookie(session, did):
@@ -267,6 +286,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
+    assert_sentinel_device_id(result, did)
     if persist:
         _save_sentinel_cache(result)
     return result
@@ -291,6 +311,11 @@ def _sentinel_mode():
 
 def _quickjs_enabled():
     return _sentinel_mode() in {"auto", "quickjs"}
+
+
+def _http_fallback_enabled() -> bool:
+    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    return bool(cfg.get("sentinel_allow_http_fallback") is True)
 
 
 def _sentinel_max_concurrency():
@@ -380,14 +405,39 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
         return None
 
     tokens = {}
-    for flow in ("username_password_create", "oauth_create_account"):
+    fingerprint = sentinel_fingerprint()
+    for flow in ("username_password_create", "authorize_continue", "oauth_create_account"):
         token = get_sentinel_token_via_quickjs(
             session,
             device_id=did,
             flow=flow,
             log=lambda message: print(f"  {_redact_proxy_text(message, proxy)}"),
+            user_agent=str(fingerprint.get("user_agent") or ""),
+            screen=str(fingerprint.get("screen") or ""),
+            lang=str(fingerprint.get("lang") or ""),
+            lang_full=str(fingerprint.get("lang_full") or ""),
+            browser_type=str(fingerprint.get("browser_type") or ""),
+            navigator_platform=str(fingerprint.get("navigator_platform") or ""),
+            navigator_vendor=str(fingerprint.get("navigator_vendor") or ""),
+            hardware_concurrency=int(fingerprint.get("hardware_concurrency") or 8),
+            device_memory=fingerprint.get("device_memory"),
+            max_touch_points=int(fingerprint.get("max_touch_points") or 0),
+            device_pixel_ratio=float(fingerprint.get("device_pixel_ratio") or 1.0),
+            timezone=str(fingerprint.get("timezone") or "UTC"),
+            sec_ch_ua_full_version_list=str(fingerprint.get("sec_ch_ua_full_version_list") or ""),
+            sec_ch_ua_arch=str(fingerprint.get("sec_ch_ua_arch") or ""),
+            sec_ch_ua_bitness=str(fingerprint.get("sec_ch_ua_bitness") or ""),
+            sec_ch_ua_model=str(fingerprint.get("sec_ch_ua_model") or ""),
+            sec_ch_ua_platform_version=str(fingerprint.get("sec_ch_ua_platform_version") or ""),
         )
         if not token:
+            return None
+        try:
+            token_id = str(json.loads(token).get("id") or "").strip()
+        except Exception:
+            return None
+        if token_id != did:
+            print("  [!] Sentinel token device id mismatch")
             return None
         tokens[flow] = token
 
@@ -422,12 +472,14 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
 
     result = {
         "sentinel_token": tokens["username_password_create"],
+        "sentinel_authorize_continue_token": tokens["authorize_continue"],
         "sentinel_oauth_token": tokens["oauth_create_account"],
         "sentinel_so_token": json.dumps(sentinel_so_obj, separators=(",", ":"), ensure_ascii=False),
         "cookie_str": cookie_str,
         "oai_did": did,
         "sentinel_source": "quickjs",
     }
+    assert_sentinel_device_id(result, did)
     if persist:
         _save_sentinel_cache(result)
     return result
@@ -439,9 +491,12 @@ _sentinel_extraction_gate = threading.BoundedSemaphore(_sentinel_max_concurrency
 _sentinel_cache_fill_lock = threading.Lock()
 
 
-def _extract_sentinel_uncached(proxy=None, persist=True):
+def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool | None = None, device_id=None):
     mode = _sentinel_mode()
-    providers = [mode] if mode != "auto" else ["quickjs", "http", "browser"]
+    if mode == "http" and not _http_fallback_enabled():
+        print("[!] Sentinel HTTP PoW mode is disabled; real SDK extraction is required")
+        return None
+    providers = [mode] if mode != "auto" else ["quickjs"]
     attempted = 0
     for provider in providers:
         if not _provider_available(provider, explicit=mode != "auto"):
@@ -453,14 +508,22 @@ def _extract_sentinel_uncached(proxy=None, persist=True):
         started = time.perf_counter()
         if provider == "quickjs":
             print("[*] Extracting sentinel tokens via QuickJS SDK...")
-            result = _extract_sentinel_quickjs(proxy, persist=persist)
+            result = _extract_sentinel_quickjs(proxy, persist=persist, device_id=device_id)
         elif provider == "http":
             print("[*] Extracting sentinel tokens via HTTP protocol...")
-            result = _extract_sentinel_http(proxy, persist=persist)
+            if device_id:
+                result = _extract_sentinel_http(proxy, persist=persist, device_id=device_id)
+            else:
+                result = _extract_sentinel_http(proxy, persist=persist)
         else:
             print("[*] Falling back to browser Sentinel extraction...")
             browser_proxy = proxy.replace("socks5h://", "socks5://") if proxy and proxy.startswith("socks5h://") else proxy
-            result = _extract_sentinel_cloakbrowser(browser_proxy, persist=persist)
+            result = _extract_sentinel_cloakbrowser(
+                browser_proxy,
+                persist=persist,
+                headless=True if browser_headless is None else bool(browser_headless),
+                device_id=device_id,
+            )
         duration_ms = (time.perf_counter() - started) * 1000
         _record_provider(provider, bool(result), duration_ms)
         if result:
@@ -471,7 +534,7 @@ def _extract_sentinel_uncached(proxy=None, persist=True):
     return None
 
 
-def _extract_sentinel(proxy=None, force_fresh=False, persist=True):
+def _extract_sentinel(proxy=None, force_fresh=False, persist=True, browser_headless: bool | None = None, device_id=None):
     proxy = normalize_proxy_url(proxy) or None
     cached = _get_cached_sentinel(force_fresh=force_fresh)
     if cached:
@@ -483,7 +546,12 @@ def _extract_sentinel(proxy=None, force_fresh=False, persist=True):
         queue_ms = (time.perf_counter() - queued) * 1000
         started = time.perf_counter()
         try:
-            result = _extract_sentinel_uncached(proxy, persist=persist)
+            if browser_headless is None:
+                result = _extract_sentinel_uncached(proxy, persist=persist, device_id=device_id)
+            else:
+                result = _extract_sentinel_uncached(
+                    proxy, persist=persist, browser_headless=browser_headless, device_id=device_id
+                )
         finally:
             _sentinel_extraction_gate.release()
         duration_ms = (time.perf_counter() - started) * 1000
@@ -500,10 +568,10 @@ def _extract_sentinel(proxy=None, force_fresh=False, persist=True):
         if cached:
             return cached
         with _sentinel_extraction_gate:
-            return _extract_sentinel_uncached(proxy, persist=persist)
+            return _extract_sentinel_uncached(proxy, persist=persist, device_id=device_id)
 
 
-def _extract_sentinel_cloakbrowser(browser_proxy, persist=True):
+def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, device_id=None):
     """Extract sentinel tokens using CloakBrowser."""
     try:
         from cloakbrowser import launch
@@ -511,7 +579,7 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True):
         print("[Error] pip install cloakbrowser")
         return None
 
-    browser = launch(headless=True, humanize=True, proxy=browser_proxy)
+    browser = launch(headless=bool(headless), humanize=True, proxy=browser_proxy)
     ctx = browser.new_context(
         user_agent=auth_user_agent(),
         viewport={"width": 1280, "height": 800}, locale="en-US", timezone_id="America/New_York")
@@ -573,7 +641,20 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True):
         browser.close(); return None
     print("  SentinelSDK loaded")
 
+    if device_id:
+        try:
+            page.evaluate("(did) => document.cookie = `oai-did=${encodeURIComponent(did)}; path=/; domain=.openai.com`", str(device_id))
+        except Exception as exc:
+            print(f"  [!] Failed to apply persisted device id: {_redact_proxy_text(exc, browser_proxy)}")
+            browser.close()
+            return None
     result = _collect_sentinel_tokens(page, ctx, persist=persist)
+    if device_id and result:
+        try:
+            assert_sentinel_device_id(result, str(device_id))
+        except ValueError:
+            browser.close()
+            return None
     browser.close()
     return result
 
@@ -609,6 +690,7 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
+    assert_sentinel_device_id(result, did)
     if persist:
         _save_sentinel_cache(result)
     return result

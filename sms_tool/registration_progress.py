@@ -15,6 +15,7 @@ from .registration_concurrency import (
     registration_stage_metrics,
     release_registration_stage,
 )
+from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 
 
 _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.ContextVar(
@@ -41,7 +42,7 @@ class RegistrationProgress:
             "at": int(time.time()),
         }
         if detail:
-            event["detail"] = str(detail)[:240]
+            event["detail"] = _sanitize_text(detail)[:240]
         self.events.append(event)
 
     def snapshot(self) -> dict[str, Any]:
@@ -54,9 +55,9 @@ class RegistrationProgress:
 
     def persist(self, result: dict[str, Any] | None, error: str = "") -> None:
         success = bool((result or {}).get("success"))
-        final_error = str(error or (result or {}).get("error") or "")[:300]
+        final_error = _sanitize_text(error or (result or {}).get("error") or "")[:300]
         self.stage("completed" if success else "failed", "success" if success else "failed", final_error)
-        row = {
+        row = _sanitize({
             "run_id": self.run_id,
             "email": self.email or str((result or {}).get("email") or ""),
             "success": success,
@@ -65,7 +66,7 @@ class RegistrationProgress:
             "finished_at": int(time.time()),
             "last_stage": self.last_stage,
             "events": self.events,
-        }
+        })
         path = runtime_file(CFG, "registration_progress.jsonl")
         with _write_lock:
             path.parent.mkdir(parents=True, exist_ok=True)

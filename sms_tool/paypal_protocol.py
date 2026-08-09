@@ -18,15 +18,13 @@ except ImportError:
 
 import requests
 
+from .paypal_fingerprints import PAYPAL_USER_AGENT as USER_AGENT
+
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 PP_ORIGIN = "https://www.paypal.com"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -104,10 +102,7 @@ def extract_ec_token(text: str) -> Optional[str]:
 
 def _mask_ba_token(value: str) -> str:
     def _mask(match: re.Match[str]) -> str:
-        token = match.group(0)
-        if len(token) <= 12:
-            return "BA-***"
-        return f"{token[:6]}...{token[-4:]}"
+        return "[REDACTED]"
 
     return _BA_RE.sub(_mask, str(value or ""))
 

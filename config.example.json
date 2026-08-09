@@ -26,8 +26,9 @@
     "use_as_username": false,
     "token_file": "mailbox_tokens.txt",
     "auth_fingerprint": {
-      "mode": "rotate",
-      "profiles": ["chrome124", "chrome131", "chrome136", "chrome142"]
+      "mode": "fixed",
+      "profile": "chrome146",
+      "profiles": ["chrome146"]
     },
     "remail": {
       "enabled": false,

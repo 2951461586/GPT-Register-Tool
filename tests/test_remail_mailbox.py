@@ -343,6 +343,30 @@ class ReMailPickupTests(unittest.TestCase):
         self.assertEqual(candidate["otp"], "444444")
         self.assertEqual(candidate["id"], "13")
 
+    def test_structured_code_accepts_localized_subject_from_exact_openai_sender(self):
+        item = {
+            "sender": "ChatGPT <otp@tm1.openai.com>",
+            "recipient": self.account.email,
+            "subject": "ChatGPT localized subject",
+            "verificationCode": "654321",
+        }
+
+        self.assertEqual(
+            mailbox_remail._trusted_structured_remail_code(self.account, item),
+            "654321",
+        )
+
+    def test_structured_code_rejects_wrong_recipient_or_untrusted_tm1_sender(self):
+        item = {
+            "sender": "Attacker <alerts@tm1.openai.com>",
+            "recipient": self.account.email,
+            "subject": "Your verification code",
+            "verificationCode": "654321",
+        }
+        self.assertEqual(mailbox_remail._trusted_structured_remail_code(self.account, item), "")
+        item.update({"sender": "ChatGPT <otp@tm1.openai.com>", "recipient": "other@example.com"})
+        self.assertEqual(mailbox_remail._trusted_structured_remail_code(self.account, item), "")
+
     def test_router_uses_remail_polling_and_applies_clock_skew_grace(self):
         issued_after = 1_000
         with patch.object(mailbox_router, "_email_cfg", return_value={

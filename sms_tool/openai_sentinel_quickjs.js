@@ -225,9 +225,26 @@ function installRuntime(payload) {
     language: String(payload.language || "zh-CN"),
     languages: Array.isArray(payload.languages) ? payload.languages : ["zh-CN", "zh"],
     hardwareConcurrency: Number(payload.hardware_concurrency || 12),
-    platform: "Win32",
-    vendor: "Google Inc.",
+    deviceMemory: Number(payload.device_memory || 8),
+    maxTouchPoints: Number(payload.max_touch_points || 0),
+    platform: String(payload.platform || "Win32"),
+    vendor: String(payload.vendor || "Google Inc."),
     webdriver: false,
+    userAgentData: {
+      brands: [
+        { brand: "Chromium", version: String(payload.chrome_version || "146") },
+        { brand: "Google Chrome", version: String(payload.chrome_version || "146") },
+        { brand: "Not.A/Brand", version: "99" },
+      ],
+      mobile: false,
+      platform: "Windows",
+      getHighEntropyValues: async () => ({
+        architecture: String(payload.sec_ch_ua_arch || "x86"),
+        bitness: String(payload.sec_ch_ua_bitness || "64"),
+        model: String(payload.sec_ch_ua_model || ""),
+        platformVersion: String(payload.sec_ch_ua_platform_version || "10.0.0"),
+      }),
+    },
   };
   globalThis.location = {
     href: "https://auth.openai.com/",
@@ -236,6 +253,13 @@ function installRuntime(payload) {
     search: "",
   };
   globalThis.screen = screen;
+  globalThis.innerWidth = screen.width;
+  globalThis.innerHeight = screen.height;
+  globalThis.outerWidth = screen.width;
+  globalThis.outerHeight = screen.height;
+  globalThis.scrollX = 0;
+  globalThis.scrollY = 0;
+  globalThis.devicePixelRatio = Number(payload.device_pixel_ratio || 1);
   globalThis.performance = performance;
   globalThis.localStorage = createStorage();
   globalThis.sessionStorage = createStorage();

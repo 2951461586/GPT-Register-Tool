@@ -116,6 +116,60 @@ def normalize_proxy_url(proxy: str, default_scheme: str = "http") -> str:
     return value
 
 
+def redact_proxy_url(proxy: str | None, empty_placeholder: str = "DIRECT") -> str:
+    """Return a log-safe proxy URL with credentials replaced by ``***:***``.
+
+    ``empty_placeholder`` lets callers signal a missing proxy (``"DIRECT"`` for
+    paypal-proxy paths, ``""`` for phone-registration paths).
+    """
+    value = normalize_proxy_url(proxy)
+    if not value:
+        return empty_placeholder
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname or ""
+        if not host:
+            return "***"
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        auth = "***:***@" if parsed.username is not None else ""
+        return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        return "***"
+
+
+def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
+    """Redact proxy-credential substrings from an arbitrary text."""
+    text = str(value or "")
+    raw = str(proxy or "").strip()
+    normalized = normalize_proxy_url(proxy)
+    if normalized:
+        redacted_canonical = redact_proxy_url(normalized, empty_placeholder="")
+        if raw:
+            text = text.replace(raw, redacted_canonical)
+        # Replace both the exact normalized form and common suffix variants
+        # (trailing slash / ?query) that log paths usually carry.
+        text = text.replace(normalized, redacted_canonical)
+        if normalized.endswith("/"):
+            text = text.replace(normalized[:-1], redacted_canonical)
+    # Embedded ``protocol://user:pass@host`` patterns — keep scheme so the
+    # result is still recognisable as a proxy URL.
+    text = re.sub(
+        r"(?i)\b((?:https?|socks5h?)://)[^/@\s]+@",
+        r"\1***:***@",
+        text,
+    )
+    # ``host:port:user:pass`` form (4 colon-separated fields) — keep ``host:port``.
+    text = re.sub(
+        r"(?i)\b([a-z0-9.\-]+:\d+):[^\s'\"]+:[^\s'\"]+",
+        r"\1:***:***",
+        text,
+    )
+    return text
+
+
 def _random_sid(length: int = DEFAULT_SID_LENGTH, digits_only: bool = False) -> str:
     chars = string.digits if digits_only else string.ascii_letters + string.digits
     return "".join(random.choice(chars) for _ in range(max(1, int(length or DEFAULT_SID_LENGTH))))

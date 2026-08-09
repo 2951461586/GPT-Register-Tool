@@ -2,7 +2,16 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import auth_headers
-from sms_tool.auth_headers import AUTH_IMPERSONATE, DEFAULT_SEC_CH_UA, DEFAULT_USER_AGENT, openai_auth_headers
+from sms_tool.auth_headers import (
+    AUTH_IMPERSONATE,
+    DEFAULT_SEC_CH_UA,
+    DEFAULT_USER_AGENT,
+    openai_auth_headers,
+    nextauth_headers,
+    chatgpt_headers,
+    set_fingerprint_geo,
+    sentinel_fingerprint,
+)
 from sms_tool.error_classification import classify_error
 
 
@@ -31,6 +40,21 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertEqual(headers["Origin"], "https://auth.openai.com")
         self.assertEqual(headers["Referer"], "https://auth.openai.com/email-verification")
 
+    def test_geo_profile_changes_locale_and_timezone(self):
+        set_fingerprint_geo("JP")
+        fingerprint = sentinel_fingerprint()
+        self.assertEqual(fingerprint["timezone"], "Asia/Tokyo")
+        self.assertEqual(fingerprint["lang"], "ja-JP")
+        set_fingerprint_geo("US")
+
+    def test_header_families_have_distinct_protocol_fields(self):
+        nextauth = nextauth_headers("did", session_id="sid")
+        chat = chatgpt_headers("did", session_id="sid")
+        self.assertNotIn("traceparent", nextauth)
+        self.assertNotIn("oai-client-build-number", nextauth)
+        self.assertEqual(chat["oai-client-build-number"], "8370486")
+        self.assertEqual(chat["oai-session-id"], "sid")
+
     def test_auth_browser_fingerprint_versions_are_consistent(self):
         version = AUTH_IMPERSONATE.removeprefix("chrome")
         self.assertIn(f"Chrome/{version}.", DEFAULT_USER_AGENT)
@@ -48,6 +72,20 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertIn(f"Chrome/{version}.", headers["User-Agent"])
         self.assertIn(f'v="{version}"', headers["sec-ch-ua"])
         auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = AUTH_IMPERSONATE
+
+    def test_sentinel_fingerprint_matches_auth_profile(self):
+        with patch.object(auth_headers, "current_auth_fingerprint", return_value={
+            "name": "chrome146",
+            "impersonate": "chrome146",
+            "user_agent": "Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36",
+            "sec_ch_ua": '"Chromium";v="146"',
+            "sec_ch_ua_mobile": "?0",
+            "sec_ch_ua_platform": '"Windows"',
+        }):
+            fingerprint = sentinel_fingerprint()
+        self.assertEqual(fingerprint["impersonate"], "chrome146")
+        self.assertIn("Chrome/146.", fingerprint["user_agent"])
+        self.assertEqual(fingerprint["navigator_platform"], "Win32")
 
     def test_error_classification_prioritizes_account_over_timeout_substring(self):
         self.assertEqual(classify_error("outlook otp timeout"), "mailbox")

@@ -191,7 +191,7 @@ namespace SmsWorkbench
         private static string BackendFailureMessage(BackendCommandResult result)
         {
             string message = string.IsNullOrWhiteSpace(result.StandardError)
-                ? result.StandardOutput
+                ? SensitiveDataSanitizer.Redact(result.StandardOutput)
                 : result.StandardError;
             message = (message ?? "").Trim();
             if (message.Length > 800) message = string.Concat(message.AsSpan(0, 800), "...");

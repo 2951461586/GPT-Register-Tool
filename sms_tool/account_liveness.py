@@ -11,9 +11,9 @@ import base64
 import json
 import re
 from typing import Any
-from urllib.parse import quote, urlsplit, urlunsplit
-
 from curl_cffi import requests as curl_requests
+
+from .phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
 
 
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -24,40 +24,9 @@ CODEX_QUOTA_HEADERS = {
 }
 
 
-def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
-    """Convert configured provider proxy formats to a curl-compatible URL."""
-    value = str(proxy or "").strip()
-    if not value:
-        return ""
-    scheme = ""
-    rest = value
-    if "://" in value:
-        scheme, rest = value.split("://", 1)
-    parts = rest.split(":")
-    if "@" not in rest and len(parts) == 4 and "." in parts[0] and parts[1].isdigit():
-        host, port, username, password = parts
-        return f"{scheme or default_scheme}://{quote(username, safe='-._~')}:{quote(password, safe='-._~')}@{host}:{port}"
-    if not scheme:
-        return f"{default_scheme}://{rest}"
-    return value
-
-
 def redact_proxy_url(proxy: str | None) -> str:
-    """Return a log-safe proxy URL without exposing credentials."""
-    value = normalize_proxy_url(proxy)
-    if not value:
-        return ""
-    try:
-        parsed = urlsplit(value)
-        host = parsed.hostname or ""
-        if ":" in host and not host.startswith("["):
-            host = f"[{host}]"
-        if parsed.port:
-            host = f"{host}:{parsed.port}"
-        auth = "***:***@" if parsed.username is not None else ""
-        return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
-    except Exception:
-        return "***"
+    """Return a log-safe proxy URL without exposing credentials (delegates to phone_proxy)."""
+    return _redact_proxy_url(proxy, empty_placeholder="")
 
 
 def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, timeout: int = 30) -> dict[str, Any]:

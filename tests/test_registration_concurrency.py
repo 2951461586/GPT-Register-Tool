@@ -139,20 +139,12 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "oauth-create-token",
         )
 
-    def test_create_account_refresh_keeps_device_id_and_does_not_persist(self):
-        refreshed = {"sentinel_oauth_token": '{"id":"did-1","flow":"oauth_create_account"}'}
-        with patch("sms_tool.account_creation._extract_sentinel_http", return_value=refreshed) as extract:
-            token = _create_account_sentinel_token({
+    def test_create_account_requires_oauth_sentinel_token(self):
+        with self.assertRaisesRegex(RuntimeError, "sentinel_extract_failed"):
+            _create_account_sentinel_token({
                 "sentinel_token": '{"id":"did-1","flow":"username_password_create"}',
                 "oai_did": "did-1",
             }, proxy="http://proxy.example:8080")
-
-        self.assertEqual(token, refreshed["sentinel_oauth_token"])
-        extract.assert_called_once_with(
-            proxy="http://proxy.example:8080",
-            persist=False,
-            device_id="did-1",
-        )
 
     def test_invalid_state_auth_response_detection(self):
         self.assertTrue(_invalid_state_auth_response({
