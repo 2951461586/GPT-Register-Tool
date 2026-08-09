@@ -1,23 +1,9 @@
 import json
 from urllib.parse import quote, urlencode, urlparse
 
-from .config import CFG
 from .auth_headers import auth_impersonate, openai_auth_headers
 from .http_client import request_with_retry
-
-def _json_or_raw(response, limit=500):
-    try:
-        return response.json()
-    except Exception:
-        return {"_raw": response.text[:limit]}
-
-
-def _absolute_url(base_url, url):
-    if not url:
-        return ""
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return base_url.rstrip("/") + "/" + url.lstrip("/")
+from .http_utils import _absolute_url, _follow_continue_url, _json_or_raw
 
 
 def _is_existing_login_redirect(url):
@@ -110,25 +96,6 @@ def _invalid_state_auth_response(data):
     code = str(error.get("code") or "").strip().lower()
     message = str(error.get("message") or "").strip().lower()
     return code == "invalid_state" or "session is no longer valid" in message
-
-
-def _follow_continue_url(session, url, base_headers, referer="", label="continue"):
-    if not url:
-        return None
-    full_url = _absolute_url(CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com"), url)
-    headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
-    if referer:
-        headers["Referer"] = referer
-    response = request_with_retry(
-        session,
-        "get",
-        full_url,
-        label=label,
-        headers=headers,
-        impersonate=auth_impersonate(),
-    )
-    print(f"  {label}: {response.status_code} {response.url}")
-    return response
 
 
 def _continue_signup_username(session, username, did, auth_base, base_headers, current_url, sentinel_token="", sentinel_so_token=""):
@@ -232,6 +199,7 @@ def _prepare_signup_auth_state(
     base_headers,
     csrf_token,
     sentinel_token="",
+    authorize_sentinel_token="",
     sentinel_so_token="",
     attempts=None,
 ):
@@ -304,7 +272,7 @@ def _prepare_signup_auth_state(
             auth_base,
             base_headers,
             current_url,
-            sentinel_token=sentinel_token,
+            sentinel_token=authorize_sentinel_token or sentinel_token,
             sentinel_so_token=sentinel_so_token,
         )
         signup_state["attempt"] = name

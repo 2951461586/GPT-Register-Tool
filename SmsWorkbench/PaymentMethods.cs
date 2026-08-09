@@ -1,3 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace SmsWorkbench
 {
     public sealed record PaymentMethodOption(string Id, string DisplayName);
@@ -6,56 +14,94 @@ namespace SmsWorkbench
         string Id,
         string DisplayName,
         string DefaultCountry,
-        string SingleAccountDescription,
+        string Currency,
+        string Adapter,
+        string RegistrationDisplayName,
+        IReadOnlyList<string> Aliases,
         bool BatchEnabled = true,
-        bool RegistrationEnabled = true);
+        bool RegistrationEnabled = true)
+    {
+        public string SingleAccountDescription => RegistrationDisplayName;
+    }
+
+    internal sealed class PaymentMethodCatalogDocument
+    {
+        [JsonPropertyName("schema")]
+        public string Schema { get; init; } = "";
+
+        [JsonPropertyName("default_method")]
+        public string DefaultMethod { get; init; } = "";
+
+        [JsonPropertyName("methods")]
+        public List<PaymentMethodDocument> Methods { get; init; } = [];
+    }
+
+    internal sealed class PaymentMethodDocument
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; init; } = "";
+
+        [JsonPropertyName("display_name")]
+        public string DisplayName { get; init; } = "";
+
+        [JsonPropertyName("registration_display_name")]
+        public string RegistrationDisplayName { get; init; } = "";
+
+        [JsonPropertyName("country")]
+        public string Country { get; init; } = "";
+
+        [JsonPropertyName("currency")]
+        public string Currency { get; init; } = "";
+
+        [JsonPropertyName("adapter")]
+        public string Adapter { get; init; } = "";
+
+        [JsonPropertyName("aliases")]
+        public List<string> Aliases { get; init; } = [];
+
+        [JsonPropertyName("batch_enabled")]
+        public bool BatchEnabled { get; init; } = true;
+
+        [JsonPropertyName("registration_enabled")]
+        public bool RegistrationEnabled { get; init; } = true;
+    }
 
     public static class PaymentMethods
     {
-        public static IReadOnlyList<PaymentMethodDefinition> All { get; } = new[]
-        {
-            new PaymentMethodDefinition("paypal", "PayPal", "US", "PayPal - 美国/全球 BA 授权链接"),
-            new PaymentMethodDefinition("gopay", "GoPay", "ID", "GoPay - 印度尼西亚钱包支付"),
-            new PaymentMethodDefinition("gcash", "GCash", "PH", "GCash - 菲律宾钱包支付"),
-            new PaymentMethodDefinition("grabpay", "GrabPay", "PH", "GrabPay - 菲律宾钱包支付"),
-            new PaymentMethodDefinition("upi", "UPI", "IN", "UPI - 印度统一支付接口"),
-            new PaymentMethodDefinition("ideal", "iDEAL", "NL", "iDEAL - 荷兰银行支付"),
-            new PaymentMethodDefinition("pix", "PIX", "BR", "PIX - 巴西即时支付"),
-            new PaymentMethodDefinition("kakao", "Kakao Pay", "KR", "Kakao Pay - 韩国钱包支付"),
-            new PaymentMethodDefinition("blik", "BLIK", "PL", "BLIK - 波兰银行码支付（提交六位码）", BatchEnabled: false),
-            new PaymentMethodDefinition("twint", "TWINT", "CH", "TWINT - 瑞士钱包支付"),
-            new PaymentMethodDefinition("direct_card", "直卡 Checkout", "PH", "直卡 Checkout - 直接刷卡结账链接"),
-            new PaymentMethodDefinition("momo", "MoMo", "VN", "MoMo - 越南钱包扫码支付")
-        };
+        private const string CatalogSchema = "payment_methods.v1";
+        private const string CatalogResource = "SmsWorkbench.payment_methods.json";
+        private static readonly PaymentMethodCatalogDocument Catalog = LoadCatalog();
+        private static readonly Dictionary<string, string> AliasMap = BuildAliasMap();
+
+        public static IReadOnlyList<PaymentMethodDefinition> All { get; } = Catalog.Methods
+            .Select(method => new PaymentMethodDefinition(
+                method.Id,
+                method.DisplayName,
+                method.Country,
+                method.Currency,
+                method.Adapter,
+                method.RegistrationDisplayName,
+                method.Aliases,
+                method.BatchEnabled,
+                method.RegistrationEnabled))
+            .ToArray();
 
         public static IReadOnlyList<PaymentMethodOption> BatchOptions { get; } = All
             .Where(method => method.BatchEnabled)
-            .Select(method => new PaymentMethodOption(method.Id, RegistrationDisplayName(method)))
+            .Select(method => new PaymentMethodOption(method.Id, method.RegistrationDisplayName))
             .ToArray();
 
         public static IReadOnlyList<PaymentMethodOption> RegistrationOptions { get; } = All
             .Where(method => method.BatchEnabled && method.RegistrationEnabled)
-            .Select(method => new PaymentMethodOption(method.Id, RegistrationDisplayName(method)))
+            .Select(method => new PaymentMethodOption(method.Id, method.RegistrationDisplayName))
             .ToArray();
 
         public static string Normalize(string? paymentMethod)
         {
-            string value = (paymentMethod ?? "").Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-            return value switch
-            {
-                "gopay" or "go_pay" => "gopay",
-                "gcash" => "gcash",
-                "grabpay" or "grab_pay" => "grabpay",
-                "upi" or "upiqr" or "upi_qr" => "upi",
-                "ideal" => "ideal",
-                "pix" => "pix",
-                "kakao" or "kakao_pay" => "kakao",
-                "blik" => "blik",
-                "twint" => "twint",
-                "direct_card" or "directcard" or "direct" or "zhika" or "card" or "checkout" => "direct_card",
-                "momo" or "momo_qr" or "momoqr" => "momo",
-                _ => "paypal"
-            };
+            string value = NormalizeKey(paymentMethod);
+            if (value.Length == 0)
+                return Catalog.DefaultMethod;
+            return AliasMap.TryGetValue(value, out string? normalized) ? normalized : "";
         }
 
         public static string DisplayName(string? paymentMethod)
@@ -64,32 +110,51 @@ namespace SmsWorkbench
         public static PaymentMethodDefinition Find(string? paymentMethod)
         {
             string normalized = Normalize(paymentMethod);
-            return All.First(method => method.Id == normalized);
+            return All.FirstOrDefault(method => method.Id == normalized)
+                ?? throw new ArgumentException($"Unsupported payment method: {paymentMethod}", nameof(paymentMethod));
         }
 
-        private static string RegistrationDisplayName(PaymentMethodDefinition method)
-            => method.Id switch
-            {
-                "paypal" => "PayPal 支付链接",
-                "gopay" => "GoPay 印尼钱包",
-                "gcash" => "GCash 菲律宾钱包",
-                "grabpay" => "GrabPay 菲律宾钱包",
-                "direct_card" => "直卡 Checkout 直连结账",
-                "momo" => "MoMo 越南扫码",
-                _ => method.DisplayName + " " + CountryName(method.DefaultCountry) + "协议"
-            };
+        private static PaymentMethodCatalogDocument LoadCatalog()
+        {
+            Assembly assembly = typeof(PaymentMethods).Assembly;
+            using Stream stream = assembly.GetManifestResourceStream(CatalogResource)
+                ?? throw new InvalidOperationException($"Embedded payment catalog not found: {CatalogResource}");
+            PaymentMethodCatalogDocument catalog = JsonSerializer.Deserialize<PaymentMethodCatalogDocument>(stream)
+                ?? throw new InvalidOperationException("Payment catalog is empty");
+            if (!string.Equals(catalog.Schema, CatalogSchema, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Unsupported payment catalog schema: {catalog.Schema}");
+            if (catalog.Methods.Count == 0)
+                throw new InvalidOperationException("Payment catalog has no methods");
+            if (!catalog.Methods.Any(method => method.Id == catalog.DefaultMethod))
+                throw new InvalidOperationException($"Payment catalog default is invalid: {catalog.DefaultMethod}");
+            if (catalog.Methods.Select(method => method.Id).Distinct(StringComparer.Ordinal).Count() != catalog.Methods.Count)
+                throw new InvalidOperationException("Payment catalog contains duplicate method ids");
+            return catalog;
+        }
 
-        private static string CountryName(string country)
-            => country switch
+        private static Dictionary<string, string> BuildAliasMap()
+        {
+            var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (PaymentMethodDocument method in Catalog.Methods)
             {
-                "ID" => "印度尼西亚",
-                "PH" => "菲律宾",
-                "IN" => "印度",
-                "NL" => "荷兰",
-                "BR" => "巴西",
-                "KR" => "韩国",
-                "CH" => "瑞士",
-                _ => ""
-            };
+                AddAlias(aliases, method.Id, method.Id);
+                foreach (string alias in method.Aliases)
+                    AddAlias(aliases, alias, method.Id);
+            }
+            return aliases;
+        }
+
+        private static void AddAlias(Dictionary<string, string> aliases, string value, string method)
+        {
+            string key = NormalizeKey(value);
+            if (key.Length == 0)
+                return;
+            if (aliases.TryGetValue(key, out string? existing) && existing != method)
+                throw new InvalidOperationException($"Duplicate payment catalog alias: {value}");
+            aliases[key] = method;
+        }
+
+        private static string NormalizeKey(string? value)
+            => (value ?? "").Trim().ToLowerInvariant().Replace(" ", "_");
     }
 }

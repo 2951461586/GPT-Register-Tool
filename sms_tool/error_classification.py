@@ -26,6 +26,7 @@ NETWORK_ERROR_MARKERS = (
     "remote disconnected",
     "connection reset",
     "connection aborted",
+    "session_circuit_open",
     "max retries exceeded",
     "/sentinel/req",
     "sentinel quickjs",

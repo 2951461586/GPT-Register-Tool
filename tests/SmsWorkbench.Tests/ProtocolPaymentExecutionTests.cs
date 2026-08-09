@@ -222,4 +222,19 @@ public sealed class ProtocolPaymentResultPresenterTests
         Assert.Equal("", result.Url);
         Assert.Equal("", result.QrPath);
     }
+
+    [Fact]
+    public void SensitiveValuesAreFullyRedactedFromOperatorText()
+    {
+        const string url = "https://pay.example/approve?ba_token=BA-secret-value";
+        ProtocolPaymentResultPresentation result = ProtocolPaymentResultPresenter.Parse(
+            $$"""
+            { "ok": true, "status": "completed", "operation": "extract_link", "url": "{{url}}", "card_last4": "4242" }
+            """);
+
+        Assert.Equal(url, result.Url);
+        Assert.DoesNotContain("BA-secret", result.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("4242", result.Text, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", result.Text, StringComparison.Ordinal);
+    }
 }

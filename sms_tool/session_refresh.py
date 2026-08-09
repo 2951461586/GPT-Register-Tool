@@ -8,6 +8,7 @@ from curl_cffi import requests as curl_requests
 from .config import CFG
 from .paths import output_dir
 from .storage import get_account_record, list_paypal_accounts, upsert_account
+from .http_utils import _minimal_chatgpt_cookie_header
 
 
 def refresh_session(
@@ -265,25 +266,6 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None):
         print(f"[*] Waiting for protocol auth session... {last_status}")
         time.sleep(3)
     return {}
-
-
-def _minimal_chatgpt_cookie_header(cookie_header):
-    keep = {
-        "__Host-next-auth.csrf-token",
-        "__Secure-next-auth.callback-url",
-        "__Secure-next-auth.session-token",
-    }
-    output = []
-    for item in str(cookie_header or "").split(";"):
-        item = item.strip()
-        if "=" not in item:
-            continue
-        name, value = item.split("=", 1)
-        name = name.strip()
-        value = value.strip()
-        if name in keep and value:
-            output.append(f"{name}={value}")
-    return "; ".join(output)
 
 
 def _ensure_session_cookie(cookie_header, data):

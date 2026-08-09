@@ -24,6 +24,8 @@ from .checkout_contract import (
     PAYMENT_METHOD_PROFILES,
     StripeCapabilityEvidence,
 )
+from .phone_proxy import redact_proxy_text as _redact_proxy_text
+from .sanitizer import sanitize_text as _canonical_sanitize_text
 
 
 _RUNTIME_VERSION = "6f8494a281"
@@ -33,7 +35,6 @@ _TERMINAL_CANCEL_STATES = frozenset({"canceled", "cancelled"})
 
 _BEARER_RE = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b")
-_PROXY_AUTH_RE = re.compile(r"(?i)\b(https?|socks5h?)://[^\s/@]+@")
 _SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|"
     r"publishable[_-]?key|password|authorization)\b[\"']?\s*[:=]\s*[\"']?)"
@@ -70,7 +71,6 @@ class WalletMethodSpec:
 
 WALLET_METHODS: dict[str, WalletMethodSpec] = {
     "gopay": WalletMethodSpec("gopay", "GoPay", ("gopay.co.id", "gojek.com", "midtrans.com")),
-    "gcash": WalletMethodSpec("gcash", "GCash", ("gcash.com", "mynt.com")),
     "grabpay": WalletMethodSpec("grabpay", "GrabPay", ("grab.com", "grabpay.com")),
 }
 
@@ -181,7 +181,7 @@ class WalletUnknownResultError(WalletProviderError):
 
 def wallet_method_spec(payment_method: Any) -> WalletMethodSpec:
     key = str(payment_method or "").strip().lower().replace("-", "").replace("_", "")
-    aliases = {"gopay": "gopay", "gcash": "gcash", "grabpay": "grabpay"}
+    aliases = {"gopay": "gopay", "grabpay": "grabpay"}
     normalized = aliases.get(key, "")
     if not normalized:
         raise WalletProviderError(
@@ -193,10 +193,15 @@ def wallet_method_spec(payment_method: Any) -> WalletMethodSpec:
 
 
 def redact_sensitive_text(value: Any) -> str:
-    text = str(value or "")
+    """Redact bearer / JWT / proxy-auth / secret / id tokens from text.
+
+    Proxy-credential redaction delegates to the canonical helper in
+    :mod:`phone_proxy` so all proxy shapes (``host:port:user:pass`` included)
+    share a single implementation.
+    """
+    return _canonical_sanitize_text(value)
     text = _BEARER_RE.sub(r"\1[REDACTED]", text)
     text = _JWT_RE.sub("[REDACTED_JWT]", text)
-    text = _PROXY_AUTH_RE.sub(r"\1://[REDACTED]@", text)
     text = _SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
     text = _STRIPE_SECRET_RE.sub("[REDACTED_STRIPE_KEY]", text)
     text = _SESSION_ID_RE.sub(lambda match: _identifier_hint(match.group(0)), text)
@@ -415,11 +420,22 @@ def run_wallet_provider(
                 retryable=False,
                 status="unknown",
             )
-        if require_zero and evidence.amount_minor != 0:
+        # amount_minor is None 表示 Stripe 响应里取不到金额证据 —— 属于协议模糊，
+        # 应交由上层当 unknown 处理，而不是用 Python 的 `None != 0 == True` 语义误判成
+        # 非零报价、误杀一个可能可用的 0 元 checkout。
+        if require_zero and evidence.amount_minor is not None and evidence.amount_minor != 0:
             raise WalletProviderError(
                 f"wallet checkout is not zero due: amount={evidence.amount_minor} currency={evidence.currency}",
                 error_code="wallet_checkout_not_zero_due",
                 error_stage="stripe_init",
+            )
+        if require_zero and evidence.amount_minor is None:
+            raise WalletProviderError(
+                f"wallet checkout zero-due check inconclusive: amount not present in stripe init response",
+                error_code="wallet_checkout_amount_unknown",
+                error_stage="stripe_init",
+                retryable=False,
+                status="unknown",
             )
 
         stage = "payment_method"

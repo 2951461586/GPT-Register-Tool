@@ -1,4 +1,4 @@
-"""HTTP transport for the shared GoPay, GCash, and GrabPay wallet adapter."""
+"""HTTP transport for the shared GoPay and GrabPay wallet adapter."""
 
 from __future__ import annotations
 

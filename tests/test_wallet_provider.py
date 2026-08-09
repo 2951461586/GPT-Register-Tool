@@ -67,7 +67,6 @@ class WalletProviderContractTests(unittest.TestCase):
     def test_method_specs_use_shared_profiles(self):
         expected = {
             "gopay": ("ID", "IDR", "id"),
-            "gcash": ("PH", "PHP", "en-PH"),
             "grabpay": ("PH", "PHP", "en-PH"),
         }
         self.assertEqual(set(WALLET_METHODS), set(expected))
@@ -143,15 +142,15 @@ class WalletProviderContractTests(unittest.TestCase):
                 )
 
     def test_ineligible_probe_is_conclusive_but_does_not_execute_payment(self):
-        fixture = load_fixture("gcash")
+        fixture = load_fixture("grabpay")
         fixture["responses"]["stripe_init"] = {
             "total_summary": {"due": 0},
             "currency": "php",
-            "payment_method_types": ["card", "grabpay"],
+            "payment_method_types": ["card", "gopay"],
         }
         transport = FixtureTransport(fixture)
 
-        result = run_wallet_provider("gcash", "fixture-access-token", transport, probe_only=True)
+        result = run_wallet_provider("grabpay", "fixture-access-token", transport, probe_only=True)
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["capability"]["classification"], "ineligible")
@@ -159,15 +158,15 @@ class WalletProviderContractTests(unittest.TestCase):
         self.assertEqual([name for name, _ in transport.calls], ["checkout", "stripe_init"])
 
     def test_full_flow_stops_when_wallet_is_conclusively_unavailable(self):
-        fixture = load_fixture("gcash")
+        fixture = load_fixture("grabpay")
         fixture["responses"]["stripe_init"] = {
             "total_summary": {"due": 0},
             "currency": "php",
-            "payment_method_types": ["card", "grabpay"],
+            "payment_method_types": ["card", "gopay"],
         }
         transport = FixtureTransport(fixture)
 
-        result = run_wallet_provider("gcash", "fixture-access-token", transport)
+        result = run_wallet_provider("grabpay", "fixture-access-token", transport)
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "failed")
@@ -247,14 +246,14 @@ class WalletProviderFailureTests(unittest.TestCase):
         self.assertTrue(result["requires_reconciliation"])
 
     def test_transport_cancellation_preserves_cancelled_terminal_state(self):
-        fixture = load_fixture("gcash")
+        fixture = load_fixture("gopay")
 
         class CancelledTransport(FixtureTransport):
             def approve_checkout(self, request):
                 self.calls.append(("approve", request))
                 raise WalletCancelledError("operator cancelled", error_stage="approve")
 
-        result = run_wallet_provider("gcash", "fixture-access-token", CancelledTransport(fixture))
+        result = run_wallet_provider("gopay", "fixture-access-token", CancelledTransport(fixture))
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "cancelled")

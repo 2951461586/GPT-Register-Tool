@@ -14,6 +14,7 @@ from curl_cffi import requests as curl_requests
 from .codex_export import build_codex_json
 from .config import CFG
 from .paths import output_dir
+from .phone_proxy import normalize_proxy_url
 
 
 REGISTER_URL = "https://auth.openai.com/api/accounts/v1/agent/register"
@@ -624,10 +625,7 @@ def _token_expired(access_token):
 
 
 def _normalize_proxy(value):
-    proxy = str(value or "").strip()
-    if proxy and "://" not in proxy:
-        proxy = "http://" + proxy
-    return proxy if proxy.lower().startswith(("http://", "https://")) else ""
+    return normalize_proxy_url(value)
 
 
 def _create_agent_registration_session(proxy=""):

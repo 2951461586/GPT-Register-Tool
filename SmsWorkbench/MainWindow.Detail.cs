@@ -224,7 +224,7 @@ namespace SmsWorkbench
             var openPayPalButton = new Button { Content = "打开支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             openPayPalButton.Click += (_, __) => OpenPayPalUrl(paypalUrl, row.Identifier);
             var copyPayPalButton = new Button { Content = "复制支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
-            copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl);
+            copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl, row.Identifier);
             var markPayPalCompleteButton = new Button { Content = "标记支付完成", MinWidth = 120, Style = (System.Windows.Style)FindResource("PrimaryButton"), Margin = new Thickness(0, 0, 8, 0) };
             markPayPalCompleteButton.Click += (_, __) =>
             {
@@ -287,16 +287,14 @@ namespace SmsWorkbench
 
             try
             {
-                string sql = "SELECT email,json_path,raw_json FROM accounts WHERE id=" + OnlyDigits(row.RawLine);
-                var rows = SqliteNative.Query(source, sql);
-                if (rows.Count == 0) return "";
-                Dictionary<string, string> data = rows[0];
-                string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
+                JsonElement payload = desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier).GetAwaiter().GetResult();
+                if (!payload.TryGetProperty("account", out JsonElement account)) return "";
+                Dictionary<string, object> data = JsonElementToDictionary(account);
+                string jsonPath = GetString(data, "json_path");
                 if (File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return jsonPath;
-
-                string rawJson = data.TryGetValue("raw_json", out string rawRawJson) ? rawRawJson : "";
+                string rawJson = data.TryGetValue("session", out object session) ? JsonSerializer.Serialize(session) : "";
                 if (string.IsNullOrWhiteSpace(rawJson)) return "";
-                string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : row.Identifier;
+                string email = GetString(data, "email");
                 string safeEmail = Regex.Replace((email ?? "unknown").Trim(), @"[^a-zA-Z0-9_.@+-]+", "_");
                 string dir = Path.Combine(rootDir, "runtime", "account_json");
                 Directory.CreateDirectory(dir);
@@ -381,13 +379,12 @@ namespace SmsWorkbench
             {
                 if (row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase))
                 {
-                    string sql = "SELECT * FROM accounts WHERE id=" + OnlyDigits(row.RawLine);
-                    var rows = SqliteNative.Query(row.SourcePath, sql);
-                    if (rows.Count > 0)
+                    JsonElement payload = desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier).GetAwaiter().GetResult();
+                    if (payload.TryGetProperty("account", out JsonElement account))
                     {
-                        foreach (KeyValuePair<string, string> item in rows[0])
+                        foreach (KeyValuePair<string, object> item in JsonElementToDictionary(account))
                         {
-                            lines.Add(item.Key + ": " + MaskSensitiveField(item.Key, item.Value));
+                            lines.Add(item.Key + ": " + MaskSensitiveField(item.Key, Convert.ToString(item.Value) ?? ""));
                         }
                     }
                     return string.Join(Environment.NewLine, lines);

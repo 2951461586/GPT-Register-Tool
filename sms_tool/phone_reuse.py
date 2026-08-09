@@ -756,12 +756,12 @@ def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=N
 
 
 def get_sms_baseline(sms_api_url: str) -> dict:
-    from .paypal_auto import _sms_baseline
+    from .sms_utils import _sms_baseline
     return _sms_baseline(sms_api_url)
 
 
 def poll_sms_code(sms_api_url: str, baseline: dict, timeout: int = 120, poll_interval: int = 5) -> Optional[str]:
-    from .paypal_auto import _poll_sms_code
+    from .sms_utils import _poll_sms_code
     return _poll_sms_code(sms_api_url, baseline, timeout=timeout, poll_interval=poll_interval)
 
 

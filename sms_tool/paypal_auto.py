@@ -22,7 +22,10 @@ from .account_seed import extract_access_token as _extract_access_token
 from .account_seed import load_account_seed as _load_seed
 from .config import CFG
 from .gen_pp_link import generate_pp_link
+from .paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
+from .paypal_reverse import try_reverse_pay
 from .session_refresh import _poll_auth_session, _session_token
+from .sms_utils import _extract_sms_code, _poll_sms_code, _sms_baseline
 from .storage import upsert_account
 from .utils import _generate_password, _random_name
 
@@ -63,12 +66,6 @@ def _safe_import_cookie_header(ctx, cookie_header):
         except Exception as e:
             print(f"[!] Cookie import warning: {e}")
 
-
-_CHROME_VERSION = "136"
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{_CHROME_VERSION}.0.0.0 Safari/537.36"
-)
 
 _SMS_CODE_RE = re.compile(r"\b(\d{4,6})\b")
 
@@ -130,7 +127,7 @@ def auto_pay(
     password = _generate_password()
     alias_email = _generate_alias_email(target_email)
 
-    print(f"[*] Card: ****{card['number'][-4:]}  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone}")
+    print(f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone}")
 
     # 4. Try reverse protocol first
     use_reverse = cfg.get("reverse_engineering", True)
@@ -231,8 +228,6 @@ def _try_reverse_pay(
     timeout: int = 60,
 ) -> dict[str, Any]:
     """Attempt PayPal payment via reverse-engineered HTTP protocol."""
-    from .paypal_reverse import try_reverse_pay
-
     sms_cfg = {
         "api_url": sms_api_url,
         "phone": phone,
@@ -777,87 +772,6 @@ def _pick_phone_and_sms(cfg: dict) -> tuple[str, str]:
 
     # Legacy fallback
     return cfg.get("phone_number", ""), cfg.get("sms_api_url", "")
-
-
-# ──────────────────────────── SMS polling (shared) ────────────────────────────
-
-
-def _sms_baseline(api_url: str) -> dict:
-    """Record the current SMS state as baseline before starting."""
-    result = {"raw": "", "timestamp": 0}
-    try:
-        r = _requests.get(api_url, timeout=10)
-        if r.status_code == 200:
-            result["raw"] = r.text.strip()
-            result["timestamp"] = time.time()
-    except Exception:
-        pass
-    return result
-
-
-def _extract_sms_code(text: str) -> str | None:
-    """Extract verification code from SMS text, avoiding false positives."""
-    if not text:
-        return None
-
-    keyword_patterns = [
-        re.compile(r"(?:code|otp|verification|verify)[:\s]+(\d{4,6})", re.IGNORECASE),
-        re.compile(r"(?:is|:)\s*(\d{4,6})\s*(?:for|to|\.|$)", re.IGNORECASE),
-    ]
-    for pattern in keyword_patterns:
-        match = pattern.search(text)
-        if match:
-            return match.group(1)
-
-    standalone_pattern = re.compile(r"(?<![0-9-])(?<!20[0-9]{2})(\d{4,6})(?![0-9-])")
-    match = standalone_pattern.search(text)
-    if match:
-        code = match.group(1)
-        if 2000 <= int(code) <= 2099 and len(code) == 4:
-            return None
-        return code
-
-    return None
-
-
-def _poll_sms_code(api_url: str, baseline: dict, timeout: int = 120, poll_interval: int = 5) -> str | None:
-    """Poll SMS API for a new verification code."""
-    deadline = time.time() + timeout
-    baseline_raw = baseline.get("raw", "")
-    attempt = 0
-
-    print(f"[*] Polling SMS (timeout={timeout}s, interval={poll_interval}s)...")
-
-    while time.time() < deadline:
-        attempt += 1
-        try:
-            r = _requests.get(api_url, timeout=10)
-            if r.status_code == 200:
-                text = r.text.strip()
-
-                if text and text != baseline_raw:
-                    code = _extract_sms_code(text)
-                    if code:
-                        print(f"\n[*] SMS code received (content change): {code}")
-                        return code
-
-                if text:
-                    code = _extract_sms_code(text)
-                    if code and attempt > 2:
-                        if not hasattr(_poll_sms_code, '_last_seen') or _poll_sms_code._last_seen != text:
-                            _poll_sms_code._last_seen = text
-                            print(f"\n[*] SMS code received (new message): {code}")
-                            return code
-
-        except Exception as e:
-            print(f"[sms poll error: {e}]")
-
-        remaining = int(deadline - time.time())
-        print(f". [{attempt}/{timeout//poll_interval}]", end="", flush=True)
-        time.sleep(poll_interval)
-
-    print(f"\n[!] SMS poll timeout after {timeout}s")
-    return None
 
 
 # ──────────────────────────── Browser helpers ────────────────────────────
@@ -1696,7 +1610,7 @@ def _fill_card(page, card: dict):
         except Exception:
             pass
     else:
-        print(f"[*] Card number filled: ****{number[-4:]}")
+        print("[*] Card number filled: [REDACTED]")
     time.sleep(random.uniform(0.5, 1.0))
 
     month_selectors = [
@@ -1843,11 +1757,11 @@ def _verify_checkout_fields(page):
         raise _PayPalStepError("verify_fields", f"blank PayPal field(s): {', '.join(missing)}")
     masked = dict(values)
     if masked.get("cardNumber"):
-        masked["cardNumber"] = f"****{masked['cardNumber'][-4:]}"
+        masked["cardNumber"] = "[REDACTED]"
     if masked.get("cardCvv"):
-        masked["cardCvv"] = "***"
+        masked["cardCvv"] = "[REDACTED]"
     if masked.get("password"):
-        masked["password"] = "***"
+        masked["password"] = "[REDACTED]"
     print(f"[*] PayPal fields verified: {masked}")
 
 

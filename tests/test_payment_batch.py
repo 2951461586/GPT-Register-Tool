@@ -48,6 +48,20 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertNotIn("access_token", report["results"][0]["auth"])
         self.assertNotIn("email", report["results"][0])
 
+    def test_stage_proxies_rotate_sticky_session_for_each_account(self):
+        base = "http://user-region-US-sid-Old12345-t-5:secret@proxy.example:443"
+        values = {
+            "checkout_proxy": base,
+            "promotion_proxy": base,
+            "stage_proxy_countries": {"checkout": "US", "promotion": "JP"},
+        }
+        with patch("sms_tool.paypal_proxy._random_session_id", side_effect=["New11111", "New22222"]):
+            result = payment_batch._cell_payment_kwargs(values, {}, base)
+
+        self.assertIn("region-US-sid-New11111", result["checkout_proxy"])
+        self.assertIn("region-JP-sid-New22222", result["promotion_proxy"])
+        self.assertNotEqual(result["checkout_proxy"], base)
+
     def test_conclusive_ineligible_result_is_not_retried(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {"ok": False, "decision": "account_trial_ineligible", "error": "no trial"}
@@ -157,6 +171,35 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertEqual(report["counts"]["completed"], 0)
         self.assertEqual(report["counts"]["capability_probed"], 1)
         self.assertEqual(report["results"][0]["decision"], "payment_method_available")
+
+    def test_probe_only_retries_only_classified_transient_failures(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        transient = {
+            "ok": False,
+            "status": "failed",
+            "classification": "unknown",
+            "decision": "transport_failed",
+            "retryable": True,
+        }
+        completed = {
+            "ok": True,
+            "status": "completed",
+            "classification": "ineligible",
+            "eligible": False,
+            "decision": "payment_method_unavailable",
+            "retryable": False,
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "payment_method_capability_probe", side_effect=[transient, completed]) as probe, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-retry.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="gcash", probe_only=True, retries=1,
+            )
+
+        self.assertEqual(probe.call_count, 2)
+        self.assertEqual(report["results"][0]["attempts"], 2)
+        self.assertEqual(report["results"][0]["decision"], "payment_method_unavailable")
 
     def test_probe_only_canary_records_capability_state(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}

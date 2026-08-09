@@ -9,23 +9,13 @@ import json
 
 from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
-
-
-def _json_or_raw(response, limit=500):
-    try:
-        return response.json()
-    except Exception:
-        return {"_raw": getattr(response, "text", "")[:limit]}
+from .http_utils import _json_or_raw
 
 
 def _redact_auth_dump_value(value):
     if isinstance(value, str):
         text = value.strip()
-        if not text:
-            return ""
-        if len(text) <= 12:
-            return f"<len:{len(text)}>"
-        return f"{text[:4]}...{text[-4:]}(len={len(text)})"
+        return f"[REDACTED](len={len(text)})" if text else ""
     if isinstance(value, (int, float, bool)) or value is None:
         return value
     if isinstance(value, list):

@@ -161,6 +161,9 @@ def payment_method_capability_probe(
     checkout_proxy: Any = None,
     provider_proxy: Any = None,
     stripe_init_proxy: Any = None,
+    promotion_proxy: Any = None,
+    approve_proxy: Any = None,
+    confirm_proxy: Any = None,
     checkout_country: str = "",
     billing_country: str = "",
     currency: str = "",
@@ -172,6 +175,7 @@ def payment_method_capability_probe(
     require_zero: bool = True,
     timeout: int = 45,
     transport: PaymentCapabilityTransport | None = None,
+    custom_payment_method_type_id: str = "",
     **_: Any,
 ) -> dict[str, Any]:
     """Create Checkout and call Stripe init, stopping before payment-method creation."""
@@ -198,6 +202,28 @@ def payment_method_capability_probe(
             "error_code": "missing_access_token",
             "error_stage": "validation",
         }
+    if method == "gcash" and transport is None:
+        from .gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
+        from .gcash_transport import ChatGPTGCashTransport
+
+        return run_gcash_provider(
+            str(access_token).strip(),
+            ChatGPTGCashTransport(timeout=timeout),
+            probe_only=True,
+            auth_context=auth_context if isinstance(auth_context, dict) else {},
+            transport_context={
+                "default_proxy": _proxy_text(proxy),
+                "checkout_proxy": _proxy_text(checkout_proxy or proxy),
+                "provider_proxy": _proxy_text(checkout_proxy or provider_proxy or stripe_init_proxy or proxy),
+                "promotion_proxy": _proxy_text(promotion_proxy or provider_proxy or proxy),
+                "confirm_proxy": _proxy_text(confirm_proxy or checkout_proxy or provider_proxy or proxy),
+            },
+            custom_payment_method_type_id=(
+                str(custom_payment_method_type_id or "").strip()
+                or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
+            ),
+            require_zero=require_zero,
+        )
     try:
         contract = CheckoutRequestContract.for_payment_method(
             method,
@@ -229,7 +255,7 @@ def payment_method_capability_probe(
         eligible: bool | None = available
         if available and require_zero and evidence.amount_minor is None:
             classification, eligible, reason = "unknown", None, "checkout_amount_unknown"
-        elif available and require_zero and evidence.amount_minor != 0:
+        elif available and require_zero and evidence.amount_minor is not None and evidence.amount_minor != 0:
             classification, eligible, reason = "ineligible", False, "nonzero_offer"
         elif available:
             classification, eligible, reason = "eligible", True, "payment_method_available"

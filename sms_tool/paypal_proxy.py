@@ -14,6 +14,8 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 import requests
 
+from .phone_proxy import normalize_proxy_url as _normalize_proxy_url, redact_proxy_url as _canon_redact_proxy_url, redact_proxy_text as _canon_redact_proxy_text
+
 
 _NETWORK_ERROR_MARKERS = (
     "timed out",
@@ -53,47 +55,17 @@ class ProxyProbeResult:
 
 
 def normalize_proxy_url(proxy: str) -> str:
-    value = str(proxy or "").strip()
-    if not value:
-        return ""
-    scheme = ""
-    rest = value
-    if "://" in value:
-        scheme, rest = value.split("://", 1)
-    parts = rest.split(":")
-    if "@" not in rest and len(parts) == 4 and "." in parts[0] and parts[1].isdigit():
-        host, port, username, password = parts
-        return f"{scheme or 'http'}://{quote(username, safe='-._~')}:{quote(password, safe='-._~')}@{host}:{port}"
-    if not scheme:
-        value = f"http://{rest}"
-    return value
+    return _normalize_proxy_url(proxy)
 
 
 def redact_proxy_url(proxy: str) -> str:
-    value = normalize_proxy_url(proxy)
-    if not value:
-        return "DIRECT"
-    try:
-        parsed = urlsplit(value)
-    except Exception:
-        return "***"
-    host = parsed.hostname or ""
-    if not host:
-        return "***"
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    auth = "***:***@" if parsed.username is not None else ""
-    return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
+    """Canonical (phone_proxy); preserved here for historical importers."""
+    return _canon_redact_proxy_url(proxy, empty_placeholder="DIRECT")
 
 
 def _redact_proxy_auth_text(value: Any) -> str:
-    return re.sub(
-        r"(?i)(https?|socks5h?)://[^\s/@]+@",
-        lambda match: f"{match.group(1)}://***:***@",
-        str(value or ""),
-    )
+    """Redact inline proxy auth embedded in free-form log / error text (uses phone_proxy)."""
+    return _canon_redact_proxy_text(value)
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:

@@ -1,0 +1,18 @@
+{
+  "schema": "payment_methods.v1",
+  "default_method": "paypal",
+  "methods": [
+    {"id":"paypal","display_name":"PayPal","registration_display_name":"PayPal payment link","country":"US","currency":"USD","adapter":"native_paypal","aliases":[],"batch_enabled":true,"registration_enabled":true},
+    {"id":"gopay","display_name":"GoPay","registration_display_name":"GoPay Indonesia wallet","country":"ID","currency":"IDR","adapter":"wallet","aliases":["go_pay","go-pay"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"gcash","display_name":"GCash","registration_display_name":"GCash Philippines wallet","country":"PH","currency":"PHP","adapter":"gcash_custom","aliases":[],"batch_enabled":true,"registration_enabled":true},
+    {"id":"grabpay","display_name":"GrabPay","registration_display_name":"GrabPay Philippines wallet","country":"PH","currency":"PHP","adapter":"wallet","aliases":["grab_pay","grab-pay"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"upi","display_name":"UPI","registration_display_name":"UPI India protocol","country":"IN","currency":"INR","adapter":"native_upi","aliases":["upiqr","upi_qr","upi-qr"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"ideal","display_name":"iDEAL","registration_display_name":"iDEAL Netherlands protocol","country":"NL","currency":"EUR","adapter":"script","script":"ideal/ideal_qr_extract.py","aliases":[],"batch_enabled":true,"registration_enabled":true},
+    {"id":"pix","display_name":"PIX","registration_display_name":"PIX Brazil protocol","country":"BR","currency":"BRL","adapter":"script","script":"pix/run_pix.py","aliases":[],"batch_enabled":true,"registration_enabled":true},
+    {"id":"kakao","display_name":"Kakao Pay","registration_display_name":"Kakao Pay Korea protocol","country":"KR","currency":"KRW","adapter":"script","script":"kakao/kakao_extract.py","aliases":["kakao_pay","kakao-pay"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"blik","display_name":"BLIK","registration_display_name":"BLIK Poland protocol","country":"PL","currency":"PLN","adapter":"script","script":"blik/blik_qr_extract.py","aliases":[],"batch_enabled":false,"registration_enabled":true},
+    {"id":"twint","display_name":"TWINT","registration_display_name":"TWINT Switzerland protocol","country":"CH","currency":"CHF","adapter":"script","script":"twint/twint_extract.py","aliases":[],"batch_enabled":true,"registration_enabled":true},
+    {"id":"direct_card","display_name":"Direct Card Checkout","registration_display_name":"Direct card checkout","country":"PH","currency":"PHP","adapter":"direct_card","script":"direct_card/direct_card_extract.py","aliases":["direct-card","directcard","direct","zhika","card","checkout"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"momo","display_name":"MoMo","registration_display_name":"MoMo Vietnam QR","country":"VN","currency":"VND","adapter":"momo","script":"momo/run_momo.py","aliases":["momo_qr","momo-qr","momoqr"],"batch_enabled":true,"registration_enabled":true}
+  ]
+}

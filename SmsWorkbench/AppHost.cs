@@ -32,6 +32,8 @@ namespace SmsWorkbench
                     services.AddSingleton<Serilog.ILogger>(Log.Logger);
                     services.AddSingleton<IApplicationPaths>(paths);
                     services.AddSingleton<IBackendClient, PythonBackendClient>();
+                    services.AddSingleton<IBackendTaskCoordinator, BackendTaskCoordinator>();
+                    services.AddSingleton<IDesktopReadClient, DesktopReadClient>();
                     services.AddSingleton<Wpf.Ui.ISnackbarService, Wpf.Ui.SnackbarService>();
                     services.AddSingleton<IFileLauncher, FileLauncher>();
                     services.AddSingleton<IPaymentBatchService, PaymentBatchService>();

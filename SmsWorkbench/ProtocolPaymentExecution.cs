@@ -202,13 +202,13 @@ namespace SmsWorkbench
                     && !string.IsNullOrEmpty(upiUri.GetString()))
                 {
                     url = upiUri.GetString() ?? "";
-                    text.AppendLine(CultureInfo.InvariantCulture, $"UPI URI: {url}");
+                    text.AppendLine(CultureInfo.InvariantCulture, $"UPI URI: {SensitiveDataSanitizer.Redact(url)}");
                 }
                 else if (root.TryGetProperty("url", out JsonElement urlElement)
                     && !string.IsNullOrEmpty(urlElement.GetString()))
                 {
                     url = urlElement.GetString() ?? "";
-                    text.AppendLine(CultureInfo.InvariantCulture, $"链接: {url}");
+                    text.AppendLine(CultureInfo.InvariantCulture, $"链接: {SensitiveDataSanitizer.Redact(url)}");
                 }
 
                 AppendString(text, root, "hosted_url", "托管 URL: ");
@@ -222,7 +222,7 @@ namespace SmsWorkbench
 
                 if (root.TryGetProperty("card_last4", out JsonElement last4)
                     && !string.IsNullOrWhiteSpace(last4.GetString()))
-                    text.AppendLine(CultureInfo.InvariantCulture, $"卡片尾号: {last4.GetString()}");
+                    text.AppendLine("卡片: [REDACTED]");
 
                 string qrPath = root.TryGetProperty("qr_path", out JsonElement qrPathElement)
                     ? qrPathElement.GetString() ?? ""
@@ -266,7 +266,7 @@ namespace SmsWorkbench
             }
             catch
             {
-                return new ProtocolPaymentResultPresentation(rawResult, "", "");
+                return new ProtocolPaymentResultPresentation(SensitiveDataSanitizer.Redact(rawResult), "", "");
             }
         }
 
@@ -304,7 +304,7 @@ namespace SmsWorkbench
 
         private static ProtocolPaymentResultPresentation Failed(JsonElement root, string operation)
         {
-            string error = StringValue(root, "error");
+            string error = SensitiveDataSanitizer.Redact(StringValue(root, "error"));
             string errorCode = StringValue(root, "error_code");
             string state = TerminalState(root);
             if (state.Length == 0)
@@ -387,7 +387,7 @@ namespace SmsWorkbench
         {
             if (!root.TryGetProperty(propertyName, out JsonElement value))
                 return;
-            text.AppendLine(prefix + (value.GetString() ?? ""));
+            text.AppendLine(prefix + SensitiveDataSanitizer.Redact(value.GetString()));
         }
 
         private static void AppendNonEmptyString(
@@ -402,7 +402,7 @@ namespace SmsWorkbench
             string content = value.GetString() ?? "";
             bool empty = rejectWhitespace ? string.IsNullOrWhiteSpace(content) : content.Length == 0;
             if (!empty)
-                text.AppendLine(prefix + content);
+                text.AppendLine(prefix + SensitiveDataSanitizer.Redact(content));
         }
     }
 }

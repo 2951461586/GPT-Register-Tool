@@ -1,7 +1,8 @@
 """Unified state machine for protocol payment-link extraction.
 
-Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`; GoPay, GCash and
-GrabPay use the shared wallet provider; iDEAL/PIX/Kakao Pay/BLIK/TWINT run the
+Native PayPal/UPI flows stay in :mod:`sms_tool.gen_pp_link`; GoPay and GrabPay
+use the shared wallet provider, while GCash owns its custom-payment-method
+adapter; iDEAL/PIX/Kakao Pay/BLIK/TWINT run the
 vendored protocol extractors under ``services/protocol-payment``.
 """
 
@@ -19,10 +20,29 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
-from .config import CFG
+from .config import current_config_data, resolve_runtime_config, validate_config
 from .paths import project_path, runtime_file
+from .payment_contracts import PaymentRequest, PaymentResult
+from .payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method
+from .payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+
+
+# Deprecated monkeypatch hook. Production callers inject RuntimeConfig or use
+# the current application scope.
+CFG: dict[str, Any] = {}
+
+
+def _config_data(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+    if runtime_config is not None:
+        return resolve_runtime_config(runtime_config).data
+    if CFG:
+        merged = dict(current_config_data())
+        merged.update(CFG)
+        return merged
+    return current_config_data()
 
 
 @dataclass(frozen=True)
@@ -35,40 +55,16 @@ class PaymentMethodSpec:
     script: str = ""
 
 
-PAYMENT_METHODS: dict[str, PaymentMethodSpec] = {
-    "paypal": PaymentMethodSpec("paypal", "PayPal", "US", "USD", "native"),
-    "gopay": PaymentMethodSpec("gopay", "GoPay", "ID", "IDR", "wallet"),
-    "gcash": PaymentMethodSpec("gcash", "GCash", "PH", "PHP", "wallet"),
-    "grabpay": PaymentMethodSpec("grabpay", "GrabPay", "PH", "PHP", "wallet"),
-    "upi": PaymentMethodSpec("upi", "UPI", "IN", "INR", "native"),
-    "ideal": PaymentMethodSpec("ideal", "iDEAL", "NL", "EUR", "script", "ideal/ideal_qr_extract.py"),
-    "pix": PaymentMethodSpec("pix", "PIX", "BR", "BRL", "pix", "pix/run_pix.py"),
-    "kakao": PaymentMethodSpec("kakao", "Kakao Pay", "KR", "KRW", "script", "kakao/kakao_extract.py"),
-    "blik": PaymentMethodSpec("blik", "BLIK", "PL", "PLN", "script", "blik/blik_qr_extract.py"),
-    "twint": PaymentMethodSpec("twint", "TWINT", "CH", "CHF", "script", "twint/twint_extract.py"),
-    "direct_card": PaymentMethodSpec("direct_card", "直卡 Checkout", "PH", "PHP", "direct_card", "direct_card/direct_card_extract.py"),
-    "momo": PaymentMethodSpec("momo", "MoMo", "VN", "VND", "momo", "momo/run_momo.py"),
-}
-
-_ALIASES = {
-    "go_pay": "gopay",
-    "go-pay": "gopay",
-    "grab_pay": "grabpay",
-    "grab-pay": "grabpay",
-    "upiqr": "upi",
-    "upi_qr": "upi",
-    "upi-qr": "upi",
-    "kakao_pay": "kakao",
-    "kakao-pay": "kakao",
-    "direct-card": "direct_card",
-    "directcard": "direct_card",
-    "direct": "direct_card",
-    "zhika": "direct_card",
-    "card": "direct_card",
-    "checkout": "direct_card",
-    "momo_qr": "momo",
-    "momo-qr": "momo",
-    "momoqr": "momo",
+PAYMENT_METHODS = {
+    key: PaymentMethodSpec(
+        key,
+        definition.label,
+        definition.country,
+        definition.currency,
+        {"native_paypal": "native", "native_upi": "native"}.get(definition.adapter, definition.adapter),
+        definition.script,
+    )
+    for key, definition in CATALOG_METHODS.items()
 }
 
 _TERMINAL_STATES = frozenset({"completed", "failed", "cancelled", "unknown", "timed_out"})
@@ -98,6 +94,78 @@ _SENSITIVE_VALUE_RE = re.compile(
     r"(?i)(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|"
     r"client[_-]?secret|password|blik[_-]?code)\b[\"']?\s*[:=]\s*[\"']?)([^\s\"'&,}]+)"
 )
+
+def build_default_payment_registry() -> PaymentAdapterRegistry:
+    """Build and validate the complete adapter composition for the catalog."""
+    registry = PaymentAdapterRegistry()
+
+    def methods_for(adapter_key: str) -> tuple[str, ...]:
+        return tuple(
+            key for key, definition in CATALOG_METHODS.items()
+            if definition.adapter == adapter_key
+        )
+
+    def paypal_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        from .gen_pp_link import generate_pp_link
+        runtime_config = kwargs.pop("runtime_config", None)
+        kwargs.pop("payment_method", None)
+        return generate_pp_link(
+            access_token=access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            paypal_generation_type=kwargs.pop("paypal_generation_type", None),
+            runtime_config=runtime_config,
+            **_select_kwargs(kwargs, {
+                "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
+                "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
+                "checkout_country", "require_zero", "require_ba_token", "stage_proxy_countries",
+            }),
+        )
+
+    def upi_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        from .gen_pp_link import generate_upi_qr_link
+        runtime_config = kwargs.pop("runtime_config", None)
+        kwargs.pop("payment_method", None)
+        return generate_upi_qr_link(
+            access_token=access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            runtime_config=runtime_config,
+            **_select_kwargs(kwargs, {
+                "checkout_proxy", "provider_proxy", "approve_proxy", "target_country",
+                "checkout_country", "payment_country", "require_zero", "qr_path",
+            }),
+        )
+
+    def wallet_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        return _run_wallet_adapter(PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
+
+    def gcash_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        kwargs.pop("payment_method", None)
+        return _run_gcash_adapter(PAYMENT_METHODS["gcash"], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
+
+    def script_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        spec = PAYMENT_METHODS[str(kwargs.pop("payment_method"))]
+        return _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
+
+    def direct_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        return _run_direct_card(PAYMENT_METHODS["direct_card"], access_token, proxy=proxy, **kwargs)
+
+    def momo_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        return _run_momo(PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs)
+
+    registry.register(FunctionPaymentAdapter("native_paypal", methods_for("native_paypal"), paypal_runner))
+    registry.register(FunctionPaymentAdapter("native_upi", methods_for("native_upi"), upi_runner))
+    registry.register(FunctionPaymentAdapter("wallet", methods_for("wallet"), wallet_runner))
+    registry.register(FunctionPaymentAdapter("gcash_custom", methods_for("gcash_custom"), gcash_runner))
+    registry.register(FunctionPaymentAdapter("script", methods_for("script"), script_runner))
+    registry.register(FunctionPaymentAdapter("direct_card", methods_for("direct_card"), direct_runner))
+    registry.register(FunctionPaymentAdapter("momo", methods_for("momo"), momo_runner))
+    registry.validate_methods(set(PAYMENT_METHODS))
+    return registry
+
+
+PAYMENT_ADAPTERS = build_default_payment_registry()
 
 
 class PaymentLinkRun:
@@ -129,8 +197,7 @@ class PaymentLinkRun:
 
 
 def normalize_payment_method(value: Any) -> str:
-    method = str(value or "paypal").strip().lower().replace(" ", "_")
-    method = _ALIASES.get(method, method)
+    method = normalize_catalog_payment_method(value)
     return method if method in PAYMENT_METHODS else ""
 
 
@@ -155,6 +222,12 @@ def supported_payment_methods() -> list[dict[str, Any]]:
     return output
 
 
+def register_payment_adapter(adapter: Any) -> Any:
+    """Register an adapter at the payment seam; useful for new methods/tests."""
+    PAYMENT_ADAPTERS.register(adapter)
+    return adapter
+
+
 def generate_payment_link(
     access_token: str,
     proxy: Any = None,
@@ -162,8 +235,11 @@ def generate_payment_link(
     auth_context: dict[str, Any] | None = None,
     paypal_generation_type: str | None = None,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    runtime_config = _config_data(runtime_config)
+    validate_config(runtime_config, workflow="protocol_payments")
     method = normalize_payment_method(payment_method)
     run = PaymentLinkRun(method or str(payment_method or ""))
 
@@ -179,7 +255,7 @@ def generate_payment_link(
         if not str(access_token or "").strip():
             raise ValueError("access_token is required")
         spec = PAYMENT_METHODS[method]
-        enabled = _enabled_methods()
+        enabled = _enabled_methods(runtime_config)
         if method not in enabled:
             raise ValueError(f"payment method disabled by protocol_payments.enabled_methods: {method}")
         move("preparing_proxy", "加载分段代理和协议适配器")
@@ -195,46 +271,16 @@ def generate_payment_link(
                 proxy=proxy,
                 **kwargs,
             )
-        elif method == "paypal":
-            from .gen_pp_link import generate_pp_link
-            native_kwargs = _select_kwargs(kwargs, {
-                "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
-                "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
-                "checkout_country", "require_zero", "require_ba_token", "stage_proxy_countries",
-            })
-            result = generate_pp_link(
-                access_token=access_token,
-                proxy=proxy,
-                auth_context=auth_context,
-                paypal_generation_type=paypal_generation_type,
-                **native_kwargs,
-            )
-        elif method == "upi":
-            from .gen_pp_link import generate_upi_qr_link
-            native_kwargs = _select_kwargs(kwargs, {
-                "checkout_proxy", "provider_proxy", "approve_proxy", "target_country",
-                "checkout_country", "payment_country", "require_zero", "qr_path",
-            })
-            result = generate_upi_qr_link(
-                access_token=access_token,
-                proxy=proxy,
-                auth_context=auth_context,
-                **native_kwargs,
-            )
-        elif method == "direct_card":
-            result = _run_direct_card(spec, access_token, proxy=proxy, **kwargs)
-        elif method == "momo":
-            result = _run_momo(spec, access_token, proxy=proxy, **kwargs)
-        elif spec.adapter == "wallet":
-            result = _run_wallet_adapter(
-                spec,
-                access_token,
-                proxy=proxy,
-                auth_context=auth_context,
-                **kwargs,
-            )
         else:
-            result = _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
+            request = PaymentRequest.create(
+                payment_method=method,
+                access_token=access_token,
+                proxy=proxy,
+                auth_context=auth_context,
+                runtime_config=runtime_config,
+                options={**kwargs, "paypal_generation_type": paypal_generation_type},
+            )
+            result = PAYMENT_ADAPTERS.execute(request).to_dict()
 
         move("extracting", "归一化链接、二维码和协议结果")
         normalized = _normalize_result(spec, result)
@@ -296,6 +342,11 @@ def _finish_run(
 ) -> dict[str, Any]:
     """Attach the common terminal contract and persist one final run record."""
     run.terminate(terminal_state, message)
+    result = PaymentResult.from_mapping(
+        result,
+        payment_method=run.method,
+        terminal_state=terminal_state,
+    ).to_dict()
     result.update({
         "run_id": run.run_id,
         "manager_state": run.state,
@@ -352,14 +403,15 @@ def _run_extractor_subprocess(
 
 
 def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
-    root = _reference_root()
+    runtime_config = kwargs.pop("runtime_config", None)
+    root = _reference_root(runtime_config)
     script = root / spec.script
     if not script.is_file():
         return {"ok": False, "error": f"protocol extractor not found: {script}"}
 
-    cfg = _protocol_cfg()
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), dict) else {}
-    if not isinstance(method_cfg, dict):
+    cfg = _protocol_cfg(runtime_config)
+    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
+    if not isinstance(method_cfg, Mapping):
         method_cfg = {}
     timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
     seed_proxy = str(
@@ -427,7 +479,15 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     )
     if timeout_err:
         return timeout_err
-    parsed = _last_json_object(proc.stdout or "") if spec.key in {"pix", "kakao"} else {}
+    parsed = _last_json_object(proc.stdout or "")
+    if (
+        parsed.get("schema") == "protocol_payment.v1"
+        and (proc.returncode == 0 or parsed.get("ok") is False)
+    ):
+        parsed.setdefault("payment_method", spec.key)
+        parsed.setdefault("link_type", f"{spec.key}_protocol")
+        return parsed
+    parsed = parsed if spec.key in {"pix", "kakao"} else {}
     if parsed and spec.key == "kakao":
         parsed.setdefault("payment_method", "kakao")
         parsed.setdefault("url", parsed.get("provider_redirect_url") or "")
@@ -488,9 +548,10 @@ def _run_wallet_adapter(
     from .wallet_provider import run_wallet_provider
     from .wallet_transport import ChatGPTStripeWalletTransport
 
-    cfg = _protocol_cfg()
-    methods = cfg.get("methods") if isinstance(cfg.get("methods"), dict) else {}
-    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), dict) else {}
+    runtime_config = kwargs.pop("runtime_config", None)
+    cfg = _protocol_cfg(runtime_config)
+    methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
+    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
     timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     stage_keys = (
         "checkout_proxy", "stripe_init_proxy", "provider_proxy", "payment_method_proxy",
@@ -529,6 +590,56 @@ def _run_wallet_adapter(
     )
 
 
+def _run_gcash_adapter(
+    spec: PaymentMethodSpec,
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    from .gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
+    from .gcash_transport import ChatGPTGCashTransport
+
+    runtime_config = kwargs.pop("runtime_config", None)
+    cfg = _protocol_cfg(runtime_config)
+    methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
+    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
+    timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
+    transport_context: dict[str, Any] = {
+        "checkout_proxy": kwargs.get("checkout_proxy") or method_cfg.get("checkout_proxy") or "",
+        "promotion_proxy": kwargs.get("promotion_proxy") or method_cfg.get("promotion_proxy") or "",
+        "update_proxy": kwargs.get("update_proxy") or method_cfg.get("update_proxy") or "",
+        # The proven GCash route keeps checkout, taxes, resolve and provider start
+        # on one exit. Promotion update may use its own exit.
+        "provider_proxy": (
+            kwargs.get("checkout_proxy") or kwargs.get("provider_proxy")
+            or method_cfg.get("provider_proxy") or ""
+        ),
+        "confirm_proxy": (
+            kwargs.get("confirm_proxy")
+            or kwargs.get("checkout_proxy")
+            or kwargs.get("provider_proxy")
+            or method_cfg.get("confirm_proxy")
+            or kwargs.get("approve_proxy")
+            or ""
+        ),
+    }
+    transport_context["default_proxy"] = proxy or method_cfg.get("proxy") or ""
+    return run_gcash_provider(
+        access_token,
+        ChatGPTGCashTransport(timeout=timeout),
+        probe_only=bool(kwargs.get("probe_only")),
+        auth_context=auth_context if isinstance(auth_context, dict) else {},
+        transport_context=transport_context,
+        custom_payment_method_type_id=str(
+            kwargs.get("custom_payment_method_type_id")
+            or method_cfg.get("custom_payment_method_type_id")
+            or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
+        ).strip(),
+        require_zero=bool(kwargs.get("require_zero", method_cfg.get("require_zero", True))),
+    )
+
+
 def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
     """直卡 checkout short-link extractor adapter.
 
@@ -537,19 +648,20 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     ``chatgpt.com/checkout/<entity>/<cs_id>`` long link. The access token is passed
     via a temp ``--credential-file`` so it never reaches the process argv.
     """
-    root = _reference_root()
+    runtime_config = kwargs.pop("runtime_config", None)
+    root = _reference_root(runtime_config)
     script = root / spec.script
     if not script.is_file():
         return {"ok": False, "error": f"protocol extractor not found: {script}"}
 
-    cfg = _protocol_cfg()
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), dict) else {}
-    if not isinstance(method_cfg, dict):
+    cfg = _protocol_cfg(runtime_config)
+    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
+    if not isinstance(method_cfg, Mapping):
         method_cfg = {}
     timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
 
     checkout_proxy = str(
-        kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or method_cfg.get("proxy") or ""
+        kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or ""
     ).strip()
     if not checkout_proxy:
         return {"ok": False, "error": f"{spec.label} requires a checkout proxy seed"}
@@ -629,14 +741,15 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     a single normalized JSON object (``ok``/``url``/``qr_data``/``qr_path``/...). A
     ``data:image`` QR is decoded to a PNG under ``runtime/momo_qr`` by the runner.
     """
-    root = _reference_root()
+    runtime_config = kwargs.pop("runtime_config", None)
+    root = _reference_root(runtime_config)
     script = root / spec.script
     if not script.is_file():
         return {"ok": False, "error": f"protocol extractor not found: {script}"}
 
-    cfg = _protocol_cfg()
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), dict) else {}
-    if not isinstance(method_cfg, dict):
+    cfg = _protocol_cfg(runtime_config)
+    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
+    if not isinstance(method_cfg, Mapping):
         method_cfg = {}
     timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
     request_timeout = int(method_cfg.get("request_timeout_seconds") or 25)
@@ -653,7 +766,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         "redirect": str(kwargs.get("redirect_proxy") or fallback_proxy).strip(),
     }
     pre_proxy = str(method_cfg.get("pre_proxy") or "off").strip() or "off"
-    qr_dir = runtime_file(CFG, "momo_qr")
+    qr_dir = runtime_file(runtime_config or _config_data(), "momo_qr")
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
@@ -675,7 +788,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         command.extend(["--strategy", strategy])
     if kwargs.get("probe_only"):
         command.append("--probe-only")
-    stripe_profile = method_cfg.get("stripe_profile") if isinstance(method_cfg.get("stripe_profile"), dict) else {}
+    stripe_profile = method_cfg.get("stripe_profile") if isinstance(method_cfg.get("stripe_profile"), Mapping) else {}
     for env_key, config_key in {
         "MOMO_STRIPE_RUNTIME_VERSION": "runtime_version",
         "MOMO_STRIPE_API_VERSION": "api_version",
@@ -714,6 +827,13 @@ def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
         "error_code": "invalid_adapter_result",
         "error_stage": "adapter_contract",
     }
+    if is_mapping and not data and "ok" not in data:
+        data.update({
+            "ok": False,
+            "error": f"{spec.label} extractor returned an invalid result contract",
+            "error_code": "invalid_adapter_result",
+            "error_stage": "adapter_contract",
+        })
     data.setdefault("payment_method", spec.key)
     data.setdefault("method", spec.key)
     data.setdefault("target_country", spec.country)
@@ -762,6 +882,10 @@ def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
         data["error_code"] = "adapter_result_missing_artifact"
         data["error_stage"] = "normalization"
     _normalize_error_contract(data)
+    if explicit_terminal == "cancelled" and data.get("error_code") == "payment_link_extraction_failed":
+        data["error_code"] = "payment_link_cancelled"
+    elif explicit_terminal == "timed_out" and data.get("error_code") == "payment_link_extraction_failed":
+        data["error_code"] = "payment_link_timed_out"
     return data
 
 
@@ -827,7 +951,7 @@ def _normalize_error_contract(data: dict[str, Any]) -> None:
 
     terminal_state = _explicit_terminal_state(data) or "failed"
     stage = data.get("error_stage") or data.get("stage") or data.get("failed_step")
-    data["error_stage"] = str(stage or "adapter").strip() or "adapter"
+    data["error_stage"] = str(stage or ("adapter_contract" if data.get("error_code") == "invalid_adapter_result" else "adapter")).strip() or "adapter"
     data.setdefault("error", "payment-link extraction failed")
     data.setdefault("error_code", "payment_link_extraction_failed")
 
@@ -923,13 +1047,14 @@ def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
 
 
-def _protocol_cfg() -> dict[str, Any]:
-    value = CFG.get("protocol_payments")
-    return value if isinstance(value, dict) else {}
+def _protocol_cfg(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+    source = _config_data(runtime_config)
+    value = source.get("protocol_payments")
+    return value if isinstance(value, Mapping) else {}
 
 
-def _enabled_methods() -> set[str]:
-    raw = _protocol_cfg().get("enabled_methods")
+def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str]:
+    raw = _protocol_cfg(runtime_config).get("enabled_methods")
     if isinstance(raw, str):
         values = re.split(r"[,;\s]+", raw)
     elif isinstance(raw, (list, tuple, set)):
@@ -939,14 +1064,14 @@ def _enabled_methods() -> set[str]:
     return {method for value in values if (method := normalize_payment_method(value))}
 
 
-def _reference_root() -> Path:
-    configured = _protocol_cfg().get("reference_root") or "services/protocol-payment"
+def _reference_root(runtime_config: Mapping[str, Any] | None = None) -> Path:
+    configured = _protocol_cfg(runtime_config).get("reference_root") or "services/protocol-payment"
     return project_path(configured)
 
 
 def _state_path() -> Path:
     configured = str(_protocol_cfg().get("state_file") or "").strip()
-    return project_path(configured) if configured else runtime_file(CFG, "payment_link_runs.jsonl")
+    return project_path(configured) if configured else runtime_file(_config_data(), "payment_link_runs.jsonl")
 
 
 def _persist_run(result: dict[str, Any]) -> None:
@@ -955,7 +1080,16 @@ def _persist_run(result: dict[str, Any]) -> None:
     record = {}
     for key, value in result.items():
         lowered = key.lower()
-        if lowered in {"raw_output", "raw_output_tail"} or "token" in lowered or "proxy" in lowered:
+        # Key 黑名单：原始子进程输出、token、proxy 已知不能落盘；
+        # card_* / card_last4 / pan 同样是敏感凭据 —— 浏览器支付路径
+        # 会把卡号末四位塞进返回 dict，这里按 key 名拦截，避免进 jsonl。
+        if (
+            lowered in {"raw_output", "raw_output_tail"}
+            or "token" in lowered
+            or "proxy" in lowered
+            or lowered.startswith("card_")
+            or lowered in {"card", "pan", "cardnumber", "card_number"}
+        ):
             continue
         record[key] = _redact_sensitive_values(value)
     with _STATE_LOCK:
@@ -1020,15 +1154,11 @@ def _blik_completion(stdout: str) -> dict[str, Any]:
 
 
 def _mask_ba_token(token: str) -> str:
-    return f"{token[:6]}...{token[-4:]}" if len(token) > 12 else "BA-***"
+    return "[REDACTED]" if token else ""
 
 
 def _redact_sensitive_text(value: str) -> str:
-    text = _BA_TOKEN_RE.sub(lambda match: _mask_ba_token(match.group(0)), value)
-    text = _BEARER_RE.sub(r"\1***", text)
-    text = _JWT_RE.sub("***JWT***", text)
-    text = _PROXY_AUTH_RE.sub(lambda match: f"{match.group(1)}://***:***@", text)
-    return _SENSITIVE_VALUE_RE.sub(r"\1***", text)
+    return _canonical_sanitize_text(value)
 
 
 def _redact_sensitive_values(value: Any) -> Any:
@@ -1039,10 +1169,4 @@ def _redact_sensitive_values(value: Any) -> Any:
     保留，需按值脱敏后再落盘。日志和错误文本还可能包含 Bearer/JWT、代理认证或
     其他命名凭据，因此统一递归清洗。仅影响持久化记录，不改动返回给调用方的结果。
     """
-    if isinstance(value, str):
-        return _redact_sensitive_text(value)
-    if isinstance(value, dict):
-        return {key: _redact_sensitive_values(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_redact_sensitive_values(item) for item in value]
-    return value
+    return _canonical_sanitize(value)

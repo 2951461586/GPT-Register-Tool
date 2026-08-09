@@ -5,6 +5,8 @@ configuration, generated sessions, and debug output stay outside this directory.
 
 ## Core documents
 
+- [v2026.08.09 发布说明](release-v2026.08.09.md) - 注册 P0/P1 一致性与恢复、
+  ReMail 本地化 OTP、配置/敏感数据边界、桌面任务生命周期和支付适配器整理。
 - [Architecture and Boundaries](architecture.md) - module ownership, command
   seams, state flow, Checkout/capability and wallet contracts, PayPal return
   reconciliation, Agent Identity/SUB2API boundaries, and forbidden cross-module
@@ -45,6 +47,7 @@ configuration, generated sessions, and debug output stay outside this directory.
 - Keep one immutable release-note file per published tag. Update this index and
   the root README to point at the newest release; do not rewrite historical
   release notes to describe current behavior.
+- GitHub Release 标题和正文统一使用中文；代码符号、命令、文件名和协议错误码保留原文。
 - Generated test output, IDE metadata, local agent memory, installer payloads,
   and published binaries do not belong in documentation or source commits.
 - 新增注册、邮箱、K12 逻辑时，优先在 `auth_flow.py`、`account_creation.py`、

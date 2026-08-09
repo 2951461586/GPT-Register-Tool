@@ -80,6 +80,21 @@ except ImportError:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+PROTOCOL_ROOT = SCRIPT_DIR.parent
+if str(PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.protocol_core import (
+    ProtocolResult,
+    amount_from_payload as common_amount_from_payload,
+    collect_strings as common_collect_strings,
+    collect_urls as common_collect_urls,
+    env_bool as common_env_bool,
+    env_int as common_env_int,
+    extract_redirect_url as common_extract_redirect_url,
+    find_submission_attempt as common_find_submission_attempt,
+    first_value_by_key as common_first_value_by_key,
+)
+
 LOG_DIR = SCRIPT_DIR / "logs"
 DUMP_DIR = SCRIPT_DIR / "dumps"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -212,20 +227,11 @@ def log(message: str, prefix: str = "") -> None:
 
 
 def env_bool(name: str, default: bool = False) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    return common_env_bool(name, default)
 
 
 def env_int(name: str, default: int, minimum: int = 1) -> int:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return max(minimum, default)
-    try:
-        return max(minimum, int(raw))
-    except ValueError:
-        return max(minimum, default)
+    return common_env_int(name, default, minimum)
 
 
 def is_checkout_not_active_error(value: Any) -> bool:
@@ -331,19 +337,23 @@ def print_result_url(url: str) -> None:
         # 结构化完成哨兵：BLIK 自动提交模式直接向 Stripe 提交 6 位码完成支付，产物是
         # “支付已完成”状态而非可分享 URL。payment_link_manager 依赖此行判定成功，
         # 避免从截断日志里误抓/误判 URL。
-        print("BLIK_RESULT:" + json.dumps(
-            {
-                "ok": True,
-                "payment_method": "blik",
-                "status": "completed",
-                "operation": "execute_payment",
-                "link_type": "blik_protocol_completed",
-                "message": "BLIK 自动提交完成",
-            },
-            ensure_ascii=False,
-        ))
+        print("BLIK_RESULT:" + ProtocolResult(
+            payment_method="blik",
+            ok=True,
+            status="completed",
+            operation="execute_payment",
+            link_type="blik_protocol_completed",
+            message="BLIK 自动提交完成",
+            side_effect_started=True,
+        ).to_json())
         return
-    print(f"{payment_method_label()} 支付页 URL:\n{url}")
+    print(ProtocolResult(
+        payment_method=payment_method_type(),
+        ok=True,
+        status="completed",
+        url=url,
+        link_type=f"{payment_method_type()}_protocol",
+    ).to_json())
 
 
 def validate_blik_code_before_start() -> bool:
@@ -1538,16 +1548,7 @@ def find_named_token(payload: Any, aliases: tuple[str, ...]) -> str:
 
 
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
-    values = result if result is not None else []
-    if isinstance(payload, str):
-        values.append(payload)
-    elif isinstance(payload, dict):
-        for value in payload.values():
-            collect_strings(value, values)
-    elif isinstance(payload, list):
-        for item in payload:
-            collect_strings(item, values)
-    return values
+    return common_collect_strings(payload, result)
 
 
 def find_session_cookie(payload: Any) -> str:
@@ -1826,34 +1827,7 @@ def stripe_init(cs_id: str, stripe_pk: str, proxy: str) -> dict[str, Any]:
 
 
 def amount_from_payload(payload: Any) -> int:
-    if isinstance(payload, dict):
-        total_summary = payload.get("total_summary")
-        if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-            return int(total_summary.get("due") or 0)
-        invoice = payload.get("invoice")
-        if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-            return int(invoice.get("amount_due") or 0)
-        line_items = payload.get("line_items")
-        if isinstance(line_items, list):
-            total = 0
-            found = False
-            for item in line_items:
-                if isinstance(item, dict) and item.get("amount") is not None:
-                    total += int(item.get("amount") or 0)
-                    found = True
-            if found:
-                return total
-    text = json.dumps(payload, ensure_ascii=False) if not isinstance(payload, str) else payload
-    for pattern in (
-        r'"total"\s*:\s*(\d+)',
-        r'"amount_total"\s*:\s*(\d+)',
-        r'"checkout_amount"\s*:\s*(\d+)',
-        r'"amount"\s*:\s*(\d+)',
-    ):
-        match = re.search(pattern, text)
-        if match:
-            return int(match.group(1))
-    return 0
+    return common_amount_from_payload(payload)
 
 
 def build_ctx(init_payload: dict[str, Any], checkout: dict[str, str]) -> dict[str, Any]:
@@ -2299,19 +2273,7 @@ def stripe_confirm_blik(
 
 
 def collect_urls(payload: Any, urls: list[str] | None = None) -> list[str]:
-    found = urls if urls is not None else []
-    if isinstance(payload, str):
-        for match in re.findall(r"https?://[^\s\"'<>]+", payload):
-            found.append(match.rstrip("),.;]"))
-        for match in re.findall(r"data:image/(?:png|svg\+xml|jpeg);base64,[A-Za-z0-9+/=]+", payload):
-            found.append(match)
-    elif isinstance(payload, dict):
-        for value in payload.values():
-            collect_urls(value, found)
-    elif isinstance(payload, list):
-        for item in payload:
-            collect_urls(item, found)
-    return found
+    return common_collect_urls(payload, urls)
 
 
 def is_resource_url(url: str) -> bool:
@@ -2392,68 +2354,15 @@ def extract_qr_candidates(payload: Any) -> list[str]:
 
 
 def find_submission_attempt(payload: Any) -> dict[str, Any]:
-    if isinstance(payload, dict):
-        value = payload.get("submission_attempt")
-        if isinstance(value, dict):
-            return value
-        for item in payload.values():
-            nested = find_submission_attempt(item)
-            if nested:
-                return nested
-    elif isinstance(payload, list):
-        for item in payload:
-            nested = find_submission_attempt(item)
-            if nested:
-                return nested
-    return {}
+    return common_find_submission_attempt(payload)
 
 
 def extract_redirect_url(payload: Any, path: tuple[str, ...] = ()) -> str:
-    if isinstance(payload, dict):
-        next_action = payload.get("next_action")
-        if isinstance(next_action, dict):
-            redirect = next_action.get("redirect_to_url")
-            if isinstance(redirect, dict):
-                url = str(redirect.get("url") or "").strip()
-                if is_redirect_like_url(url, True):
-                    return url
-            for key in ("url", "redirect_url", "redirect_to_url", "hosted_url"):
-                value = next_action.get(key)
-                if is_redirect_like_url(value, True):
-                    return value
-
-        for key in ("redirect_url", "redirect_to_url", "authorization_url", "authentication_url"):
-            value = payload.get(key)
-            if is_redirect_like_url(value, True):
-                return value
-
-        for key, value in payload.items():
-            nested = extract_redirect_url(value, path + (str(key),))
-            if nested:
-                return nested
-    elif isinstance(payload, list):
-        for index, item in enumerate(payload):
-            nested = extract_redirect_url(item, path + (str(index),))
-            if nested:
-                return nested
-
-    return ""
+    return common_extract_redirect_url(payload, is_redirect_like_url)
 
 
 def first_value_by_key(payload: Any, key: str) -> Any:
-    if isinstance(payload, dict):
-        if key in payload:
-            return payload[key]
-        for value in payload.values():
-            found = first_value_by_key(value, key)
-            if found not in (None, "", [], {}):
-                return found
-    elif isinstance(payload, list):
-        for item in payload:
-            found = first_value_by_key(item, key)
-            if found not in (None, "", [], {}):
-                return found
-    return None
+    return common_first_value_by_key(payload, key)
 
 
 def setup_intent_last_error(payload: Any) -> str:
@@ -3348,7 +3257,7 @@ def run_single_link_attempt(
             log(f"命中成功 checkout/provider 组合优先: provider={len(preferred_providers)}")
 
         stripe_pk = checkout.get("stripe_pk") or DEFAULT_STRIPE_PK
-        log(f"Stripe PK: {stripe_pk[:18]}...")
+        log("Stripe publishable key loaded")
         log(f"Step 2: 首次尝试 PM={pm_country}...")
 
         for provider_index, provider_proxy in enumerate(provider_candidates, start=1):
@@ -3565,7 +3474,7 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
             log(f"命中成功 checkout/provider 组合优先: provider={len(preferred_providers)}")
 
         stripe_pk = checkout.get("stripe_pk") or DEFAULT_STRIPE_PK
-        log(f"Stripe PK: {stripe_pk[:18]}...")
+        log("Stripe publishable key loaded")
         log(f"Step 2: 首次尝试 PM={pm_country}...")
 
         for provider_index, provider_proxy in enumerate(provider_candidates, start=1):

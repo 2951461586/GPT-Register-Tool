@@ -52,12 +52,40 @@ def test_cli_main_uses_registration_proxy_for_direct_registration():
     with patch.object(cli, "CFG", config), \
          patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only"]), \
          patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]), \
+         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
          patch.object(cli, "_registration_phone_pool", return_value=None), \
          patch.object(cli, "run_email", side_effect=run_email), \
          patch.object(cli, "_save_registration_results", return_value={}):
         cli.main()
 
     assert captured == ["http://registration.example:8080"]
+
+
+def test_cli_preflights_before_claiming_mailbox_and_promotes_healthy_proxy():
+    args = SimpleNamespace(
+        proxy="http://first.example:8080",
+        proxy_explicit=False,
+        proxy_pool="",
+    )
+    calls = []
+
+    def preflight(proxy, **_kwargs):
+        calls.append(proxy)
+        if "first" in proxy:
+            raise RuntimeError("tls_failed")
+        return {"ok": True, "proxy": proxy}
+
+    with patch.object(
+        cli,
+        "_proxy_pool_values",
+        return_value=["http://first.example:8080", "http://second.example:8080"],
+    ), patch("sms_tool.registration.registration_network_preflight", side_effect=preflight):
+        result = cli._preflight_registration_before_mailbox(args)
+
+    assert result["ok"] is True
+    assert calls == ["http://first.example:8080", "http://second.example:8080"]
+    assert args.proxy == "http://second.example:8080"
+    assert args.proxy_pool.splitlines()[0] == "http://second.example:8080"
 
 
 def test_registration_normalizes_provider_proxy_before_sentinel_extraction():
@@ -75,6 +103,34 @@ def test_registration_normalizes_provider_proxy_before_sentinel_extraction():
 
     assert extract.call_args.args[0] == "http://user-region-JP:pass@sg.cliproxy.io:443"
     assert sentinel_tokens._redact_proxy_url(proxy) == "http://***:***@sg.cliproxy.io:443"
+
+
+def test_registration_preflight_checks_chatgpt_auth_and_sentinel_before_mailbox():
+    urls = []
+
+    class Session:
+        def __init__(self):
+            self.proxies = {}
+
+        def get(self, url, **_kwargs):
+            urls.append(url)
+            return SimpleNamespace(status_code=200)
+
+    with patch.object(registration.curl_requests, "Session", Session), \
+         patch.object(registration, "auth_fingerprint_capabilities", return_value={
+             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
+         }), \
+         patch.object(registration, "_sentinel_frame_version", return_value="sv-test"), \
+         patch.object(registration, "auth_impersonate", return_value="chrome146"), \
+         patch.object(registration, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+        result = registration.registration_network_preflight("http://proxy.example:8080")
+
+    assert result == {"ok": True, "profile": "chrome146"}
+    assert urls == [
+        "https://chatgpt.com/login",
+        "https://auth.openai.com/log-in",
+        "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=sv-test",
+    ]
 
 
 def test_sentinel_proxy_errors_redact_standard_and_provider_proxy_forms():

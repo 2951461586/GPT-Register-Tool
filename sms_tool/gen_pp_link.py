@@ -36,6 +36,7 @@ import re
 import sys
 import time
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit, urlunsplit
@@ -44,8 +45,50 @@ import requests
 
 try:
     from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+    from .phone_proxy import normalize_proxy_url
+    from .pp_link_helpers import (
+        DEFAULT_STRIPE_PK,
+        STRIPE_VERSION,
+        DEFAULT_TIMEOUT,
+        CHATGPT_TIMEOUT,
+        RETRY_ATTEMPTS,
+        _SIDE_EFFECT_STAGES,
+        normalize_proxy_template,
+        proxy_for_country_template,
+        rotate_proxy_session,
+        find_submission_attempt,
+        stripe_confirm_error_diagnostics,
+        is_paypal_ba_approve_url,
+        extract_ba_token,
+        find_url_in_value,
+        extract_redirect_url,
+        resolve_external_redirect,
+        billing_for_country,
+        stripe_amount_details,
+    )
 except ImportError:  # pragma: no cover - direct script execution
     from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
+    from phone_proxy import normalize_proxy_url  # type: ignore
+    from pp_link_helpers import (  # type: ignore
+        DEFAULT_STRIPE_PK,
+        STRIPE_VERSION,
+        DEFAULT_TIMEOUT,
+        CHATGPT_TIMEOUT,
+        RETRY_ATTEMPTS,
+        _SIDE_EFFECT_STAGES,
+        normalize_proxy_template,
+        proxy_for_country_template,
+        rotate_proxy_session,
+        find_submission_attempt,
+        stripe_confirm_error_diagnostics,
+        is_paypal_ba_approve_url,
+        extract_ba_token,
+        find_url_in_value,
+        extract_redirect_url,
+        resolve_external_redirect,
+        billing_for_country,
+        stripe_amount_details,
+    )
 
 try:
     from .paypal_proxy import (
@@ -73,23 +116,28 @@ except ImportError:
     curl_requests = None
 _CurlCffiSession = None  # Session API disabled — use functional API instead
 
+try:
+    from .sanitizer import sanitize_text
+except ImportError:  # pragma: no cover - direct script execution
+    from sanitizer import sanitize_text  # type: ignore
+
+# ─── 输出 ────────────────────────────────────────────────────────────────────
+
+
+def _emit(step: str, msg: str, **kw: Any) -> None:
+    """Top-level progress/error sink used by every pipeline entry point.
+
+    Centralised so all five ``def emit(...)`` closures (one per pipeline
+    function) share identical semantics and a single place to extend with
+    structured logging/progress reporting.
+    """
+    print(f"[{step}] {msg}", file=sys.stderr)
+
+
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
-# PK 由 OpenAI 下发，checkout 响应通常带 publishable_key；下面的硬编码仅为兜底。
-# 用环境变量 PP_STRIPE_PUBLISHABLE_KEY 统一覆盖两处副本（本文件与
-# services/protocol-payment/momo/ac_paylink_core.py），避免 OpenAI 轮换 PK 时改代码。
-DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
-    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRac"
-    "ViovU3kLKvpkjh7IqkW00iXQsjo3n"
-)
-STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
-DEFAULT_TIMEOUT = 30
-CHATGPT_TIMEOUT = 45
-RETRY_ATTEMPTS = 3
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
-
-
 class CheckoutNotZeroDueError(Exception):
     def __init__(self, amount: int | None, currency: str = ""):
         self.amount = amount
@@ -196,265 +244,13 @@ def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", tim
     return requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout)
 
 
+
 # ─── 代理工具 ──────────────────────────────────────────────────────────────────
-
-
-def normalize_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if proxy and "://" not in proxy:
-        return f"http://{proxy}"
-    return proxy
-
-
-def normalize_proxy_template(template: str) -> str:
-    """规范化代理模板，支持多种格式:
-    - 标准: user:pass@host:port
-    - 反转: host:port@user:pass
-    - 冒号分隔: host:port:user:pass
-    """
-    proxy = str(template or "").strip()
-    if not proxy:
-        return proxy
-
-    # 格式1: host:port:user:pass (无@符号，4段冒号分隔)
-    if "@" not in proxy:
-        parts = proxy.split(":")
-        if len(parts) == 4:
-            host, port, user, pwd = parts
-            if "." in host and port.isdigit():
-                return normalize_proxy_url(f"{user}:{pwd}@{host}:{port}")
-        return normalize_proxy_url(proxy)
-
-    # 格式2/3: 包含@符号
-    parts = proxy.split("@")
-    if len(parts) != 2:
-        return normalize_proxy_url(proxy)
-    left, right = parts
-    # 检测反转格式: host:port@user:pass
-    # 标准格式: user:pass@host:port
-    # 判断依据: 左侧包含端口号且含点号(域名特征)
-    if re.match(r"^[a-zA-Z0-9\.\-]+:\d+$", left) and "." in left.split(":")[0]:
-        # 反转格式，交换
-        return normalize_proxy_url(f"{right}@{left}")
-    return normalize_proxy_url(proxy)
-
-
-def proxy_for_country_template(template: str, country: str) -> str:
-    """从代理模板中替换国家码，生成目标国家的代理 URL。"""
-    proxy = normalize_proxy_template(template)
-    country = str(country or "").strip().upper()
-    if not proxy or not country:
-        return proxy
-    userinfo, separator, host = proxy.rpartition("@")
-    if not separator:
-        return proxy
-    # 替换 region-XX
-    replaced, count = re.subn(r"region-[A-Za-z]{2}(?=$|[-_:])", f"region-{country}", userinfo, count=1)
-    if count != 1:
-        # 尝试替换末尾 -XX
-        replaced, count = re.subn(r"-[A-Za-z]{2}$", f"-{country}", userinfo)
-    elif country != "JP":
-        # 非JP国家移除 -st-...-city-... 段
-        replaced = re.sub(r"-st-[^-@]+-city-[^-@]+(?=-sid-)", "", replaced, count=1)
-    if count != 1:
-        return proxy
-    return normalize_proxy_url(f"{replaced}@{host}")
-
-
-def rotate_proxy_session(proxy: str) -> str:
-    """轮换代理的 session ID (支持 Kookeey 数字 sid 和 cliproxy 字母 sid)。"""
-    return rotate_stage_proxy_session(proxy)
-
-
-def find_submission_attempt(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {}
-    direct = payload.get("submission_attempt")
-    if isinstance(direct, dict):
-        return direct
-    for value in payload.values():
-        if isinstance(value, dict):
-            found = find_submission_attempt(value)
-            if found:
-                return found
-        elif isinstance(value, list):
-            for item in value:
-                found = find_submission_attempt(item)
-                if found:
-                    return found
-    return {}
 
 
 def _compact_diagnostic(value: Any, limit: int = 180) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     return text if len(text) <= limit else text[: limit - 3] + "..."
-
-
-def stripe_confirm_error_diagnostics(response: Any, cs_id: str, pm_id: str, init_payload: dict) -> str:
-    try:
-        payload = response.json() or {}
-    except Exception:
-        payload = {}
-    error = payload.get("error") if isinstance(payload, dict) else {}
-    error = error if isinstance(error, dict) else {}
-    submission = find_submission_attempt(payload)
-    parts = [
-        f"stripe_confirm_failed:http={getattr(response, 'status_code', 0)}",
-        f"cs_id={str(cs_id)[:18]}",
-        f"pm_id={str(pm_id)[:18]}",
-        f"amount={stripe_amount_details(init_payload).get('amount')}",
-        f"init_checksum={'present' if init_payload.get('init_checksum') else 'missing'}",
-    ]
-    for label, value in (
-        ("error_type", error.get("type")),
-        ("error_code", error.get("code")),
-        ("error_param", error.get("param")),
-        ("error_message", error.get("message")),
-        ("submission_state", submission.get("state")),
-        ("submission_reason", submission.get("reason")),
-        ("submission_code", submission.get("code")),
-        ("submission_message", submission.get("message")),
-    ):
-        if value not in (None, ""):
-            parts.append(f"{label}={_compact_diagnostic(value)}")
-    if len(parts) == 5:
-        parts.append(f"body={_compact_diagnostic(getattr(response, 'text', ''))}")
-    return "; ".join(parts)
-
-
-# ─── URL 提取 ──────────────────────────────────────────────────────────────────
-
-
-def is_paypal_ba_approve_url(url: str) -> bool:
-    try:
-        parsed = urlsplit(url)
-    except Exception:
-        return False
-    host = (parsed.netloc or "").lower()
-    if not (host == "paypal.com" or host.endswith(".paypal.com")):
-        return False
-    path = parsed.path.rstrip("/").lower()
-    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    return path == "/agreements/approve" and bool(str(query.get("ba_token") or "").strip())
-
-
-def extract_ba_token(url: str) -> str:
-    marker = "ba_token="
-    lower = url.lower()
-    if marker not in lower:
-        return ""
-    start = lower.find(marker) + len(marker)
-    end = len(url)
-    for sep in ("&", "#", '"', "'", " "):
-        pos = url.find(sep, start)
-        if pos != -1:
-            end = min(end, pos)
-    return url[start:end]
-
-
-def find_url_in_value(value: Any, patterns: list[re.Pattern]) -> str:
-    if isinstance(value, str):
-        for pat in patterns:
-            m = pat.search(value)
-            if m:
-                return m.group(0)
-    if isinstance(value, dict):
-        # 优先检查已知字段
-        for key in ("url", "redirect_url", "return_url"):
-            if key in value:
-                found = find_url_in_value(value[key], patterns)
-                if found:
-                    return found
-        for child in value.values():
-            found = find_url_in_value(child, patterns)
-            if found:
-                return found
-    if isinstance(value, list):
-        for child in value:
-            found = find_url_in_value(child, patterns)
-            if found:
-                return found
-    return ""
-
-
-def extract_redirect_url(payload: dict) -> str:
-    """从 Stripe confirm/poll 响应中提取 redirect URL (仅返回真正的 PayPal/Stripe 授权链接)。"""
-    # 检查 next_action.redirect_to_url
-    next_action = payload.get("next_action") or {}
-    if isinstance(next_action, dict) and next_action.get("type") == "redirect_to_url":
-        rurl = next_action.get("redirect_to_url") or {}
-        if isinstance(rurl, dict) and rurl.get("url"):
-            return str(rurl["url"])
-
-    # 递归搜索 (仅匹配 pm-redirects 和 PayPal approve)
-    url = find_url_in_value(payload, [PM_REDIRECT_RE, PAYPAL_BA_RE])
-    if url:
-        return url
-
-    # 检查 setup_intent/payment_intent 的 next_action
-    for si_key in ("setup_intent", "payment_intent"):
-        si = payload.get(si_key) or {}
-        if isinstance(si, dict):
-            na = si.get("next_action") or {}
-            if isinstance(na, dict) and na.get("type") == "redirect_to_url":
-                rurl = na.get("redirect_to_url") or {}
-                if isinstance(rurl, dict) and rurl.get("url"):
-                    return str(rurl["url"])
-
-    return ""
-
-
-def resolve_external_redirect(session: Any, redirect_url: str, max_hops: int = 5) -> str:
-    """跟随 redirect 链，直到找到 PayPal BA approve URL。"""
-    current = redirect_url
-    for _ in range(max_hops):
-        if not current:
-            return ""
-        if is_paypal_ba_approve_url(current):
-            return current
-        try:
-            resp = session.get(current, allow_redirects=False, timeout=DEFAULT_TIMEOUT)
-        except Exception:
-            return current
-        if resp.status_code not in (301, 302, 303, 307, 308):
-            return current
-        location = str(resp.headers.get("Location") or "").strip()
-        if not location:
-            return current
-        current = urljoin(current, location)
-    return current
-
-
-# ─── 账单地址 ──────────────────────────────────────────────────────────────────
-
-
-def billing_for_country(country: str) -> dict:
-    data = BILLING_DATA.get(country.upper()) or BILLING_DATA.get("DE")
-    return {
-        "country": country.upper(),
-        "name": data["name"],
-        "email": f"buyer{random.randint(1000,9999)}@example.{country.lower()}",
-        "street": data["street"],
-        "city": data["city"],
-        "state": data["state"],
-        "postal": data["postal"],
-    }
-
-
-# ─── Stripe 金额检查 ──────────────────────────────────────────────────────────
-
-
-def stripe_amount_details(init_payload: dict) -> dict:
-    if not isinstance(init_payload, dict):
-        return {"amount": None, "currency": "", "source": "unknown"}
-    currency = str(init_payload.get("currency") or "").lower()
-    total_summary = init_payload.get("total_summary") or {}
-    if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-        return {"amount": int(total_summary["due"]), "currency": str(total_summary.get("currency") or currency).lower(), "source": "total_summary.due"}
-    invoice = init_payload.get("invoice") or {}
-    if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-        return {"amount": int(invoice["amount_due"]), "currency": str(invoice.get("currency") or currency).lower(), "source": "invoice.amount_due"}
-    return {"amount": None, "currency": currency, "source": "unknown"}
 
 
 # ─── 核心流程 ──────────────────────────────────────────────────────────────────
@@ -771,8 +567,15 @@ class PPLinkExtractor:
         amount = amount_info.get("amount")
         self._log("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
         self.proxy_state.record_zero_result(self.checkout_proxy, self.checkout_country, amount)
-        if self.require_zero and amount != 0:
+        # amount is None = Stripe 响应里没取到金额证据，属于协议模糊。
+        # 不能用 `None != 0 == True` 误判成非零、误杀可能可用的 0 元 checkout；
+        # 也不能当成 0 元放行（不知道真实金额）。归一为 not_zero_due 但带 unknown 标记，
+        # 由上层交账/对账决定。
+        if self.require_zero and amount is not None and amount != 0:
             raise CheckoutNotZeroDueError(amount, amount_info.get("currency", ""))
+        if self.require_zero and amount is None:
+            self._log("stripe_init", "amount not present in stripe init response; treating as inconclusive zero-due check")
+            raise CheckoutNotZeroDueError(None, amount_info.get("currency", ""))
         # 检查 PayPal 是否可用
         pm_types = init.get("payment_method_types") or []
         if pm_types and "paypal" not in [str(t).lower() for t in pm_types]:
@@ -992,6 +795,17 @@ class PPLinkExtractor:
                     "confirm": self.confirm_proxy,
                 }.get(stage, self.provider_proxy)
                 self._record_stage_result(stage, failed_proxy, False, str(exc))
+                # confirm 是副作用阶段：请求可能已被 Stripe 接收并生效，
+                # 网络抖动返回 5xx/超时时重试会重复发起支付意图。
+                # 对齐 wallet_provider 的约定 —— 副作用阶段失败一律不重试，
+                # 由上层标记 unknown 并要求对账后再决定是否重试。
+                if stage in _SIDE_EFFECT_STAGES:
+                    self._log(
+                        stage,
+                        f"side-effect stage '{stage}' failed after request was sent; "
+                        "not retrying to avoid duplicate payment. Requires reconciliation.",
+                    )
+                    raise
                 retryable = is_retryable_network_error(exc) or "proxy_preflight_failed" in str(exc)
                 self._log(stage, f"stage attempt {attempt}/{self.max_stage_retries} failed: {exc}")
                 if not retryable or attempt >= self.max_stage_retries:
@@ -1071,7 +885,7 @@ class PPLinkExtractor:
             raise Exception(f"未提取到 PayPal BA approve URL: {redirect_url[:200]}")
 
         ba_token = extract_ba_token(redirect_url)
-        self._log("done", f"✅ 提取成功! ba_token={ba_token[:6]}...")
+        self._log("done", "Payment approval token captured")
         self.proxy_state.record_pair_result(
             self.checkout_proxy,
             self.provider_proxy,
@@ -1302,8 +1116,7 @@ def main():
     if not token:
         parser.error("请提供 Access Token")
 
-    def emit(step, msg, **kw):
-        print(f"[{step}] {msg}", file=sys.stderr)
+    emit = _emit
 
     require_zero = not args.no_require_zero
 
@@ -1344,9 +1157,9 @@ def main():
     else:
         if result.get("ok"):
             print(f"\n✅ PP 直链提取成功!")
-            print(f"   URL: {result['url']}")
+            print(f"   URL: {sanitize_text(result['url'])}")
             if result.get("ba_token"):
-                print(f"   BA Token: {result['ba_token']}")
+                print("   BA Token: [REDACTED]")
             print(f"   cs_id: {result['cs_id']}")
             print(f"   金额: {result.get('amount')} {result.get('currency')}")
             print(f"   目标国: {result.get('target_country')}")
@@ -1597,6 +1410,7 @@ def generate_pp_link(
     require_zero: bool | None = None,
     require_ba_token: bool | None = None,
     stage_proxy_countries: dict[str, str] | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """生成 PayPal BA 直链 (兼容旧接口)。
 
@@ -1613,7 +1427,7 @@ def generate_pp_link(
     Returns:
         {"ok": bool, "url": str, "ba_token": str, "cs_id": str, ...}
     """
-    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = cfg.get("paypal") or {}
     target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
     regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
@@ -1723,8 +1537,7 @@ def generate_pp_link(
         email = str(auth_context.get("email") or "")
         cookie_header = str(auth_context.get("cookie_header") or "")
 
-    def emit(step: str, msg: str, **kw: Any) -> None:
-        print(f"[{step}] {msg}", file=sys.stderr)
+    emit = _emit
 
     state = _paypal_proxy_state(paypal_cfg)
     configured_countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
@@ -1983,8 +1796,7 @@ def generate_chatgpt_checkout_link(
     checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
     state = _paypal_proxy_state(paypal_cfg)
 
-    def emit(step: str, msg: str, **kw: Any) -> None:
-        print(f"[{step}] {msg}", file=sys.stderr)
+    emit = _emit
 
     try:
         country_overrides = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
@@ -2085,8 +1897,7 @@ def generate_hosted_long_url(
     if require_zero is None:
         require_zero = bool(paypal_cfg.get("require_zero_due", True))
 
-    def emit(step: str, msg: str, **kw: Any) -> None:
-        print(f"[{step}] {msg}", file=sys.stderr)
+    emit = _emit
 
     try:
         countries = paypal_cfg.get("stage_proxy_countries") if isinstance(paypal_cfg.get("stage_proxy_countries"), dict) else {}
@@ -2144,16 +1955,35 @@ def generate_hosted_long_url(
         amount = amount_info.get("amount")
         state.record_zero_result(checkout_proxy, checkout_country, amount)
         emit("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
-        if require_zero and amount != 0:
-            amount_label = "unknown" if amount is None else str(amount)
+        if require_zero and amount is not None and amount != 0:
             return {
                 "ok": False,
-                "error": f"checkout_not_zero_due: amount={amount_label} {amount_info.get('currency')}",
+                "error": f"checkout_not_zero_due: amount={amount} {amount_info.get('currency')}",
                 "error_code": "checkout_not_zero_due",
                 "link_type": "chatgpt_checkout_hosted_long_url",
                 "url": "",
                 "cs_id": cs_id,
                 "amount": amount,
+                "currency": str(amount_info.get("currency") or currency).upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_method_types": init.get("payment_method_types") or [],
+            }
+        if require_zero and amount is None:
+            # Stripe 响应里取不到金额证据 —— 协议模糊，既不能当 0 元放行也不能当非零误杀。
+            # 归为 unknown，交上层对账；retryable=False 防止自动重试复制 checkout。
+            return {
+                "ok": False,
+                "status": "unknown",
+                "error": f"checkout_amount_unknown: amount not present in stripe init response {amount_info.get('currency')}",
+                "error_code": "checkout_amount_unknown",
+                "requires_reconciliation": True,
+                "retryable": False,
+                "link_type": "chatgpt_checkout_hosted_long_url",
+                "url": "",
+                "cs_id": cs_id,
+                "amount": None,
                 "currency": str(amount_info.get("currency") or currency).upper(),
                 "target_country": target_country,
                 "checkout_country": checkout_country,
@@ -2467,6 +2297,7 @@ def generate_upi_qr_link(
     payment_country: str | None = None,
     require_zero: bool | None = None,
     qr_path: str | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate a UPI payment link with full Stripe Confirm + Approve flow.
 
@@ -2482,7 +2313,7 @@ def generate_upi_qr_link(
     Returns ``upi://`` deep link + QR PNG path on success, or
     ``stripe_hosted_url`` as fallback if UPI data is not available.
     """
-    cfg = _load_json(DEFAULT_CONFIG_PATH)
+    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _load_json(DEFAULT_CONFIG_PATH)
     upi_cfg = _method_cfg(cfg, "upi")
     stage_proxies = _payment_stage_proxies_from_config(cfg, "upi")
     _checkout = checkout_proxy or proxy or stage_proxies["checkout"]
@@ -2515,8 +2346,7 @@ def generate_upi_qr_link(
         paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
         require_zero = bool(upi_cfg.get("require_zero_due", paypal_cfg.get("require_zero_due", True)))
 
-    def emit(step: str, msg: str, **kw: Any) -> None:
-        print(f"[{step}] {msg}", file=sys.stderr)
+    emit = _emit
 
     try:
         # ── Stage 1: ChatGPT checkout ────────────────────────────────────

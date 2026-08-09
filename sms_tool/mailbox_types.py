@@ -1,18 +1,18 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class MailboxAccount:
     email: str
-    password: str = ""
-    login_password: str = ""
-    refresh_token: str = ""
-    access_token: str = ""
+    password: str = field(default="", repr=False)
+    login_password: str = field(default="", repr=False)
+    refresh_token: str = field(default="", repr=False)
+    access_token: str = field(default="", repr=False)
     source: str = ""
     provider: str = "graph"
     order_no: str = ""
-    token: str = ""
-    client_secret: str = ""
+    token: str = field(default="", repr=False)
+    client_secret: str = field(default="", repr=False)
     auth_mode: str = ""
     sender_name: str = ""
     seen_message_id: str = ""

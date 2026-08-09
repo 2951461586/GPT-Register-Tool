@@ -123,42 +123,28 @@ def _poll_cfworker_otp(
     excluded_otps=None,
 ):
     keyword = (subject_keyword or "").lower()
-    deadline = time.time() + timeout
-    interval = (otp_poll_interval_func or (lambda: 2.0))()
-    settle_seconds = _cfworker_otp_settle_seconds(email_cfg or {})
     seen_message_id = getattr(mailbox, "seen_message_id", "")
-    while time.time() < deadline:
-        try:
-            candidate = _latest_cfworker_otp_candidate(
-                mailbox,
-                keyword=keyword,
-                issued_after_unix=issued_after_unix,
-                seen_message_id=seen_message_id,
-                proxy=proxy,
-                fetch_messages_func=fetch_messages_func,
-                excluded_otps=excluded_otps,
-            )
-            if candidate:
-                stable_until = time.time() + settle_seconds
-                while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
-                    time.sleep(min(interval, max(0.0, stable_until - time.time())))
-                    newer = _latest_cfworker_otp_candidate(
-                        mailbox,
-                        keyword=keyword,
-                        issued_after_unix=issued_after_unix,
-                        seen_message_id=seen_message_id,
-                        proxy=proxy,
-                        fetch_messages_func=fetch_messages_func,
-                        excluded_otps=excluded_otps,
-                    )
-                    if newer and newer.get("id") != candidate.get("id"):
-                        candidate = newer
-                        stable_until = time.time() + settle_seconds
-                print(f" code:{candidate['otp']}!")
-                return candidate["otp"]
-        except Exception as e:
-            print(f"[mailbox poll error: {e}]")
-        print(".", end="", flush=True)
-        time.sleep(interval)
-    print(" timeout")
-    return None
+
+    def _fetch_candidate():
+        return _latest_cfworker_otp_candidate(
+            mailbox,
+            keyword=keyword,
+            issued_after_unix=issued_after_unix,
+            seen_message_id=seen_message_id,
+            proxy=proxy,
+            fetch_messages_func=fetch_messages_func,
+            excluded_otps=excluded_otps,
+        )
+
+    def _is_newer(a, b):
+        return (a or {}).get("id") != (b or {}).get("id") and a is not None
+
+    from .mailbox_poll import _poll_otp_with_settle
+    return _poll_otp_with_settle(
+        _fetch_candidate,
+        timeout=timeout,
+        interval=(otp_poll_interval_func or (lambda: 2.0))(),
+        settle_seconds=_cfworker_otp_settle_seconds(email_cfg or {}),
+        log_prefix="mailbox poll",
+        is_newer=_is_newer,
+    )

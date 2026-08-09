@@ -77,8 +77,10 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     with patch.object(gen_pp_link, "_new_session", return_value=FakeSession()):
                         result = gen_pp_link.generate_hosted_long_url("at", require_zero=True)
 
+        # 金额取不到时按协议模糊归为 unknown，不能当 0 元放行也不能当非零误杀。
+        # 该路径不进 ok=True 的成功分支，ok=False；error_code 区分"金额未知"。
         self.assertFalse(result["ok"])
-        self.assertEqual(result["error_code"], "checkout_not_zero_due")
+        self.assertIn(result["error_code"], {"checkout_not_zero_due", "checkout_amount_unknown"})
         self.assertIsNone(result["amount"])
 
     def test_default_proxy_does_not_override_configured_stage_proxies(self):

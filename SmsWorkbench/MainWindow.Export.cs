@@ -688,10 +688,17 @@ namespace SmsWorkbench
             if (row == null) return false;
 
             string source = (row.SourcePath ?? "").Trim();
-            if (source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) && File.Exists(source))
-            {
-                if (TryLoadAccountDataFromSqlite(row, out data)) return true;
-            }
+                if (source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) && File.Exists(source))
+                {
+                    try
+                    {
+                        JsonElement account = desktopRead.ReadAccountExportAsync(
+                            OnlyDigits(row.RawLine), row.Identifier).GetAwaiter().GetResult();
+                        data = JsonElementToDictionary(account);
+                        if (data.Count > 0) return true;
+                    }
+                    catch { }
+                }
 
             var paths = new List<string> { row.Notes, row.SourcePath };
             foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -709,51 +716,7 @@ namespace SmsWorkbench
             return false;
         }
 
-        private bool TryLoadAccountDataFromSqlite(PoolRow row, out Dictionary<string, object> data)
-        {
-            data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                string id = OnlyDigits(row.RawLine);
-                string sql;
-                if (id.Length > 0)
-                {
-                    sql = "SELECT raw_json,json_path FROM accounts WHERE id=" + id + " LIMIT 1";
-                }
-                else
-                {
-                    string email = SqlLiteral((row.Identifier ?? "").Trim());
-                    if (email.Length == 0) return false;
-                    sql = "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower('" + email + "') ORDER BY updated_at DESC LIMIT 1";
-                }
 
-                var rows = SqliteNative.Query(row.SourcePath, sql);
-                if (rows.Count == 0) return false;
-                string rawJson = rows[0].TryGetValue("raw_json", out string raw) ? raw : "";
-                string jsonPath = rows[0].TryGetValue("json_path", out string jp) ? jp : "";
-
-                if (!string.IsNullOrWhiteSpace(jsonPath) && File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        MergeJsonObject(data, ReadJsonObject(jsonPath));
-                    }
-                    catch
-                    {
-                    }
-                }
-                if (!string.IsNullOrWhiteSpace(rawJson))
-                {
-                    MergeJsonObject(data, JsonTextToObject(rawJson));
-                }
-                return data.Count > 0;
-            }
-            catch
-            {
-                data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                return false;
-            }
-        }
 
         private void MergeJsonObject(Dictionary<string, object> target, Dictionary<string, object> source)
         {

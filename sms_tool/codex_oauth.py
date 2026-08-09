@@ -14,6 +14,7 @@ from .codex_phone import complete_phone_verification
 from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
 from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
 from .http_client import request_with_retry
+from .http_utils import _absolute_url
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
 from . import mailbox_gmail
 from .storage import upsert_account
@@ -76,6 +77,7 @@ def collect_codex_oauth_tokens(
     force_email_otp_login=False,
     phone_pool=None,
     phone_probe_only=False,
+    browser_headless: bool | None = None,
 ):
     select_auth_fingerprint(rotate=True)
     email = str(data.get("email") or "").strip().lower()
@@ -108,6 +110,7 @@ def collect_codex_oauth_tokens(
             force_email_otp_login=force_email_otp_login,
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
         )
         if not result.get("ok"):
             return result
@@ -128,6 +131,7 @@ def _login_and_exchange(
     force_email_otp_login=False,
     phone_pool=None,
     phone_probe_only=False,
+    browser_headless: bool | None = None,
 ):
     max_restarts = 2
     for restart_attempt in range(max_restarts + 1):
@@ -171,6 +175,7 @@ def _login_and_exchange(
             force_email_otp_login=force_email_otp_login,
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
         )
         if not result.get("needs_session_restart") or restart_attempt >= max_restarts:
             return result
@@ -194,6 +199,7 @@ def _run_protocol_login_stages(
     force_email_otp_login=False,
     phone_pool=None,
     phone_probe_only=False,
+    browser_headless: bool | None = None,
 ):
     allow_takeover = bool(force_email_otp_login or _allow_passwordless_takeover())
     stage = _detect_protocol_stage(current_url)
@@ -225,6 +231,7 @@ def _run_protocol_login_stages(
             reason="email_otp_required" if _needs_email_otp(current_url) else "email_otp_forced",
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
         )
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
@@ -243,6 +250,7 @@ def _run_protocol_login_stages(
             timeout=timeout,
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
         )
         if password_result.get("ok"):
             password_result.setdefault("protocol_stage", "password")
@@ -260,6 +268,7 @@ def _run_protocol_login_stages(
             reason="password_login_failed",
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
         )
         if email_otp_result.get("ok"):
             email_otp_result.setdefault("protocol_stage", "email_otp")
@@ -316,6 +325,7 @@ def _passwordless_login_and_exchange(
     reason="",
     phone_pool=None,
     phone_probe_only=False,
+    browser_headless: bool | None = None,
 ):
     mailbox = _mailbox_from_data(data)
     if mailbox is None:
@@ -440,7 +450,7 @@ def _passwordless_login_and_exchange(
     }
 
 
-def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, phone_pool=None, phone_probe_only=False):
+def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, phone_pool=None, phone_probe_only=False, browser_headless: bool | None = None):
     password = str(data.get("password") or "").strip()
     if not password:
         return {
@@ -1049,14 +1059,6 @@ def _jwt_segment(segment):
         return json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
     except Exception:
         return {}
-
-
-def _absolute_url(base_url, url):
-    if not url:
-        return ""
-    if str(url).startswith(("http://", "https://")):
-        return str(url)
-    return base_url.rstrip("/") + "/" + str(url).lstrip("/")
 
 
 def _safe_url(url):

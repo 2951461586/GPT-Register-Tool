@@ -12,17 +12,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from .account_seed import load_account_seed
 from .config import CFG
+from .sanitizer import sanitize as _canonical_sanitize
 from .paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
 from .payment_capability import payment_method_capability_probe
 from .payment_link_manager import generate_payment_link, normalize_payment_method
-
-
-_TRANSIENT_MARKERS = (
-    "network", "timeout", "timed out", "tls", "proxy", "http_407", "http_429",
-    "rate_limit", "cloudflare", "checkout_failed", "stripe_init_failed",
-)
+from .payment_contracts import payment_retry_allowed
 
 
 def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
@@ -143,6 +140,21 @@ def run_payment_batch(
         if not auth.get("ok"):
             row["decision"] = str(auth.get("error") or "jit_auth_failed")
             row["error"] = row["decision"]
+            # account_deactivated 是永久终态。ensure_payment_access_token 已经把终态
+            # 探测出来，但以前只写进 row["decision"] 就返回了，SQLite accounts 表
+            # 不会被更新 —— 下次批量还会把这个 deactivated 账号选进来再 JIT 一次，
+            # 白浪费一次 probe + 一次恢复链。这里显式落库，让后续批次过滤掉它。
+            if auth.get("terminal") or row["decision"] == "account_deactivated":
+                try:
+                    from .account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
+                    seed_data, _ = load_account_seed(email=email)
+                    if seed_data is not None and is_permanently_deactivated(seed_data):
+                        _persist_permanent_deactivation(seed_data)
+                        row["terminal_persisted"] = True
+                except Exception as exc:
+                    # 落库失败不影响批次主流程，只标记一下，避免拖垮整批。
+                    row["terminal_persisted"] = False
+                    row["terminal_persist_error"] = str(exc)
             return index, row
         if cell.get("matrix_mismatch"):
             row["eligible"] = False
@@ -152,14 +164,18 @@ def run_payment_batch(
         kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy)
         if probe_only:
             kwargs.pop("proxy", None)
-            capability = payment_method_capability_probe(
-                access_token=str(auth.get("access_token") or ""),
-                payment_method=method,
-                auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
-                proxy=proxy,
-                timeout=max(5, int(timeout or 30)),
-                **kwargs,
-            )
+            capability: dict[str, Any] = {}
+            for probe_attempt in range(1, retry_count + 2):
+                capability = payment_method_capability_probe(
+                    access_token=str(auth.get("access_token") or ""),
+                    payment_method=method,
+                    auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+                    proxy=proxy,
+                    timeout=max(5, int(timeout or 30)),
+                    **kwargs,
+                )
+                if capability.get("ok") or not _is_transient(capability) or probe_attempt > retry_count:
+                    break
             public = _public_payment_result(capability)
             decision = str(public.get("decision") or public.get("error_code") or "capability_unknown")
             row.update(public)
@@ -169,7 +185,7 @@ def run_payment_batch(
                 "attempted": False,
                 "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
                 "decision": decision,
-                "attempts": 1,
+                "attempts": probe_attempt,
             })
             return index, row
         last: dict[str, Any] = {}
@@ -369,12 +385,14 @@ def _cell_payment_kwargs(base: dict[str, Any], cell: dict[str, Any], proxy: Any)
             values[key] = cell[key]
     seed = str(proxy or values.get("checkout_proxy") or "").strip()
     if seed and countries:
-        from .paypal_proxy import retarget_proxy_country, rotate_proxy_session
-        chain_seed = rotate_proxy_session(seed, countries.get("checkout") or "")
+        from .paypal_proxy import rotate_proxy_session
+
         for stage in ("checkout", "promotion", "provider", "approve", "redirect"):
             country = countries.get(stage)
-            if country and not str(values.get(f"{stage}_proxy") or "").strip():
-                values[f"{stage}_proxy"] = retarget_proxy_country(chain_seed, country)
+            stage_key = f"{stage}_proxy"
+            stage_seed = str(values.get(stage_key) or seed).strip()
+            if country and stage_seed:
+                values[stage_key] = rotate_proxy_session(stage_seed, country)
     return values
 
 
@@ -404,10 +422,7 @@ def _is_qr_ready(row: dict[str, Any]) -> bool:
 
 
 def _is_transient(result: dict[str, Any]) -> bool:
-    if isinstance(result.get("retryable"), bool):
-        return bool(result["retryable"])
-    text = json.dumps(result or {}, ensure_ascii=False).lower()
-    return any(marker in text for marker in _TRANSIENT_MARKERS)
+    return payment_retry_allowed(result)
 
 
 def _public_payment_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -416,8 +431,8 @@ def _public_payment_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sanitize_report_value(value: Any, key: str = "") -> Any:
-    blocked = {"email", "access_token", "refresh_token", "id_token", "auth_context", "password"}
     lowered = key.lower()
+    blocked = {"email", "access_token", "refresh_token", "id_token", "auth_context", "password"}
     token_metadata = {"token_telemetry", "token_hash", "token_changed"}
     if lowered in blocked or "proxy" in lowered or ("token" in lowered and lowered not in token_metadata):
         return None
@@ -429,9 +444,7 @@ def _sanitize_report_value(value: Any, key: str = "") -> Any:
         }
     if isinstance(value, list):
         return [_sanitize_report_value(item) for item in value]
-    if isinstance(value, str):
-        return re.sub(r"(?i)(https?://)[^/@\s]+:[^/@\s]+@", r"\1***:***@", value)
-    return value
+    return _canonical_sanitize(value, key=key)
 
 
 def _unique_emails(emails: list[str]) -> list[str]:

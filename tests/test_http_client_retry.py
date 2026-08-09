@@ -30,6 +30,23 @@ class HttpClientRetryTests(unittest.TestCase):
         self.assertEqual(calls[1]["headers"]["Connection"], "close")
         self.assertEqual(calls[1]["headers"]["Accept"], "application/json")
 
+    def test_403_opens_session_circuit_for_following_requests(self):
+        class Response:
+            status_code = 403
+            headers = {"Retry-After": "12"}
+
+        class FakeSession:
+            def get(self, _url, **_kwargs):
+                return Response()
+
+        session = FakeSession()
+        first = http_client.request_with_retry(session, "get", "https://example.test", attempts=1)
+        self.assertEqual(first.status_code, 403)
+        with self.assertRaises(http_client.SessionCircuitOpen):
+            http_client.request_with_retry(session, "get", "https://example.test", attempts=1)
+        http_client.clear_session_circuit(session)
+        self.assertEqual(http_client.request_with_retry(session, "get", "https://example.test", attempts=1).status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()
