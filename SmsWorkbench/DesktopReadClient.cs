@@ -5,6 +5,7 @@ namespace SmsWorkbench
     public interface IDesktopReadClient
     {
         Task<JsonElement> ReadAccountsAsync(CancellationToken cancellationToken = default);
+        Task<JsonElement> ReadMailboxPoolAsync(string selectedFile = "", CancellationToken cancellationToken = default);
         Task<JsonElement> ReadAccountAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
         Task<JsonElement> ReadAccountExportAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
         Task<string> ReadMailboxLineAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
@@ -20,6 +21,13 @@ namespace SmsWorkbench
 
         public Task<JsonElement> ReadAccountsAsync(CancellationToken cancellationToken = default) =>
             RunAsync("Read account index", ReadAccountsArguments, cancellationToken);
+
+        public Task<JsonElement> ReadMailboxPoolAsync(string selectedFile = "", CancellationToken cancellationToken = default)
+        {
+            var args = new List<string> { "--desktop-read", "mailbox-pool", "--desktop-ipc" };
+            if (!string.IsNullOrWhiteSpace(selectedFile)) args.AddRange(["--chatai-mailbox-file", selectedFile]);
+            return RunAsync("Read mailbox pool", args, cancellationToken);
+        }
 
         public Task<JsonElement> ReadAccountAsync(string accountId, string email = "", CancellationToken cancellationToken = default)
         {

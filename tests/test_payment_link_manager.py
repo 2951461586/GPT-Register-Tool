@@ -14,11 +14,13 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(manager.normalize_payment_method("go-pay"), "gopay")
         self.assertEqual(manager.PAYMENT_METHODS["momo"].country, "VN")
     def test_supported_methods_include_reference_adapters(self):
-        keys = {item["key"] for item in manager.supported_payment_methods()}
+        methods = {item["key"]: item for item in manager.supported_payment_methods()}
+        keys = set(methods)
         self.assertEqual(keys, {
             "paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao",
             "blik", "twint", "direct_card", "momo",
         })
+        self.assertTrue(methods["gcash"]["available"])
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")
@@ -39,6 +41,284 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual([item["state"] for item in result["state_history"]], [
             "created", "validating", "preparing_proxy", "running", "extracting", "completed"
         ])
+
+    def test_manager_selects_configured_checkout_and_approve_pools(self):
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return f"http://selected-{stage}:8080", [{"ok": True}]
+
+        captured = {}
+
+        def fake_generate(**kwargs):
+            captured.update(kwargs)
+            return {"ok": True, "url": "https://example.test/pay"}
+
+        config = {
+            "chatgpt": {},
+            "protocol_payments": {
+                "enabled_methods": ["paypal"],
+                "methods": {
+                    "paypal": {
+                        "checkout_proxy": "http://legacy-checkout:8080",
+                        "approve_proxy": "http://legacy-approve:8080",
+                        "checkout_proxy_pool": "http://checkout-a:8080,http://checkout-b:8080",
+                        "approve_proxy_pool": ["http://approve-a:8080", "http://approve-b:8080"],
+                        "stage_proxy_countries": {"checkout": "JP", "approve": "GB"},
+                    },
+                },
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose), \
+             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="paypal",
+                runtime_config=config,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([item[2] for item in seen], ["checkout", "approve"])
+        self.assertEqual(seen[0][1], "JP")
+        self.assertEqual(seen[1][1], "GB")
+        self.assertEqual(captured["checkout_proxy"], "http://selected-checkout:8080")
+        self.assertEqual(captured["approve_proxy"], "http://selected-approve:8080")
+
+    def test_gopay_manager_defaults_approve_pool_to_jp_and_honors_override(self):
+        config = {
+            "chatgpt": {},
+            "protocol_payments": {
+                "methods": {
+                    "gopay": {
+                        "checkout_proxy_pool": ["http://checkout-a:8080"],
+                        "approve_proxy_pool": ["http://approve-a:8080"],
+                    },
+                },
+            },
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            manager._resolve_proxy_pool_routes(
+                "gopay",
+                None,
+                {"target_country": "ID", "checkout_country": "ID"},
+                config,
+            )
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+
+        seen.clear()
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            manager._resolve_proxy_pool_routes(
+                "gopay",
+                None,
+                {
+                    "target_country": "ID",
+                    "checkout_country": "ID",
+                    "stage_proxy_countries": {"approve": "TR"},
+                },
+                config,
+            )
+        self.assertEqual([item[1] for item in seen], ["ID", "TR"])
+
+    def _gopay_pool_config(self):
+        return {
+            "chatgpt": {},
+            "protocol_payments": {
+                "methods": {
+                    "gopay": {
+                        "checkout_proxy_pool": ["http://checkout-a:8080"],
+                        "approve_proxy_pool": ["http://approve-a:8080"],
+                    },
+                },
+            },
+        }
+
+    def test_gopay_approve_country_outside_allowlist_is_coerced_to_jp(self):
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING") as logs:
+                _proxy, values = manager._resolve_proxy_pool_routes(
+                    "gopay",
+                    None,
+                    {
+                        "target_country": "ID",
+                        "checkout_country": "ID",
+                        "stage_proxy_countries": {"approve": "US"},
+                    },
+                    self._gopay_pool_config(),
+                )
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+        # The enforced country is written back so wallet stage rotation uses it.
+        self.assertEqual(values["stage_proxy_countries"]["approve"], "JP")
+        self.assertTrue(any("US" in message and "JP" in message for message in logs.output))
+
+    def test_gopay_approve_country_kwarg_is_coerced_and_written_back(self):
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+                _proxy, values = manager._resolve_proxy_pool_routes(
+                    "gopay",
+                    None,
+                    {"target_country": "ID", "approve_country": "US"},
+                    self._gopay_pool_config(),
+                )
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+        self.assertEqual(values["approve_country"], "JP")
+        self.assertEqual(values["stage_proxy_countries"]["approve"], "JP")
+
+    def test_gopay_approve_country_jp_tr_and_blank_are_not_coerced(self):
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        for approve in ("JP", "TR"):
+            with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+                _proxy, values = manager._resolve_proxy_pool_routes(
+                    "gopay",
+                    None,
+                    {"target_country": "ID", "stage_proxy_countries": {"approve": approve}},
+                    self._gopay_pool_config(),
+                )
+            self.assertEqual(values["stage_proxy_countries"]["approve"], approve)
+        self.assertEqual([item[1] for item in seen], ["ID", "JP", "ID", "TR"])
+
+        # Blank approve country keeps the existing JP default without a
+        # coercion write-back adding new keys to the kwargs.
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            _proxy, values = manager._resolve_proxy_pool_routes(
+                "gopay",
+                None,
+                {"target_country": "ID"},
+                self._gopay_pool_config(),
+            )
+        self.assertNotIn("stage_proxy_countries", values)
+        self.assertNotIn("approve_country", values)
+
+    def test_gopay_approve_allowlist_honors_catalog_override(self):
+        from sms_tool.payment_catalog import PaymentMethodDefinition
+
+        override = PaymentMethodDefinition(
+            key="gopay",
+            label="GoPay",
+            registration_label="GoPay",
+            country="ID",
+            currency="IDR",
+            adapter="wallet",
+            approve_countries=("TR",),
+        )
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch.object(manager, "CATALOG_METHODS", {"gopay": override}):
+            with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+                with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+                    _proxy, values = manager._resolve_proxy_pool_routes(
+                        "gopay",
+                        None,
+                        {"target_country": "ID", "stage_proxy_countries": {"approve": "US"}},
+                        self._gopay_pool_config(),
+                    )
+        # JP is not in the catalog override allowlist, so the first allowed
+        # entry becomes the coercion target.
+        self.assertEqual([item[1] for item in seen], ["ID", "TR"])
+        self.assertEqual(values["stage_proxy_countries"]["approve"], "TR")
+
+    def test_non_gopay_approve_country_is_not_coerced(self):
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        config = {
+            "chatgpt": {},
+            "protocol_payments": {
+                "methods": {
+                    "grabpay": {
+                        "checkout_proxy_pool": ["http://checkout-a:8080"],
+                        "approve_proxy_pool": ["http://approve-a:8080"],
+                    },
+                },
+            },
+        }
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            _proxy, values = manager._resolve_proxy_pool_routes(
+                "grabpay",
+                None,
+                {"target_country": "PH", "stage_proxy_countries": {"approve": "US"}},
+                config,
+            )
+        self.assertEqual([item[1] for item in seen], ["PH", "US"])
+        self.assertEqual(values["stage_proxy_countries"]["approve"], "US")
+
+    def test_generate_payment_link_records_gopay_approve_coercion(self):
+        adapter_result = {
+            "ok": True,
+            "status": "completed",
+            "operation": "extract_link",
+            "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
+            "link_type": "gopay_protocol",
+        }
+        config = {"chatgpt": {}, "protocol_payments": {}}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
+            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+                result = manager.generate_payment_link(
+                    "token",
+                    payment_method="gopay",
+                    runtime_config=config,
+                    stage_proxy_countries={"approve": "US"},
+                )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["approve_country"], "JP")
+        self.assertEqual(result["approve_country_original"], "US")
+        self.assertTrue(result["approve_country_coerced"])
+
+    def test_generate_payment_link_without_coercion_has_no_coercion_fields(self):
+        adapter_result = {
+            "ok": True,
+            "status": "completed",
+            "operation": "extract_link",
+            "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
+            "link_type": "gopay_protocol",
+        }
+        config = {"chatgpt": {}, "protocol_payments": {}}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="gopay",
+                runtime_config=config,
+                stage_proxy_countries={"approve": "TR"},
+            )
+        self.assertTrue(result["ok"])
+        self.assertNotIn("approve_country_coerced", result)
+        self.assertNotIn("approve_country_original", result)
 
     def test_unsupported_method_returns_failed_state(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,6 +464,65 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertIn("proxy", result["error"].lower())
         run.assert_not_called()
 
+    def test_direct_card_proxy_credentials_travel_via_env_not_argv(self):
+        secret = "socks5h://user:sekret@127.0.0.1:1080"
+        captured = {}
+
+        def fake_run(command, *args, **kwargs):
+            captured["command"] = list(command)
+            captured["env"] = dict(kwargs.get("env") or {})
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"ok": true, "long_url": "https://chatgpt.com/checkout/openai_llc/oaics_x", "cs_id": "oaics_x", "amount_minor": 0}\n',
+                stderr="",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+                with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
+                    result = manager.generate_payment_link(
+                        "token", payment_method="direct_card", checkout_proxy=secret
+                    )
+        self.assertTrue(result["ok"])
+        self.assertNotIn(secret, captured["command"])
+        self.assertNotIn("--checkout-proxy", captured["command"])
+        self.assertNotIn("--update-proxy", captured["command"])
+        self.assertEqual(captured["env"]["DIRECT_CARD_CHECKOUT_PROXY"], secret)
+        self.assertEqual(captured["env"]["DIRECT_CARD_UPDATE_PROXY"], secret)
+
+    def test_pix_proxy_credentials_travel_via_env_not_argv(self):
+        secret = "socks5h://user:sekret@127.0.0.1:1080"
+        provider = "http://prov:pw@10.0.0.2:9000"
+        captured = {}
+
+        def fake_run(command, *args, **kwargs):
+            captured["command"] = list(command)
+            captured["env"] = dict(kwargs.get("env") or {})
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"long_url": "https://example.test/pix", "pix_qr_code": "000201"}\n',
+                stderr="",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+                with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
+                    result = manager.generate_payment_link(
+                        "token",
+                        payment_method="pix",
+                        seed_proxy=secret,
+                        provider_proxy=provider,
+                    )
+        self.assertTrue(result["ok"])
+        self.assertNotIn(secret, captured["command"])
+        self.assertNotIn("--proxy", captured["command"])
+        self.assertNotIn("--br-proxy", captured["command"])
+        self.assertEqual(captured["env"]["PIX_PROXY"], secret)
+        self.assertEqual(captured["env"]["PIX_BR_PROXY"], provider)
+        self.assertNotIn(secret, " ".join(captured["command"]))
+
     def test_momo_passes_through_runner_qr_json(self):
         gateway = "https://payment.momo.vn/v2/gateway/pay?t=1&s=2"
         completed = subprocess.CompletedProcess(
@@ -253,7 +592,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         self.assertEqual(manager._last_payment_url(output), "https://bank.example.test/authorize")
 
-    def test_persist_run_masks_ba_token_in_persisted_url(self):
+    def test_persist_run_stores_url_presence_without_the_payment_link(self):
         approve_url = "https://www.paypal.com/agreements/approve?ba_token=BA-1AB23456CD789012E"
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
@@ -266,12 +605,36 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 }):
                     result = manager.generate_payment_link("token", payment_method="paypal")
             persisted = runs.read_text(encoding="utf-8")
-        # Persisted records must not retain the complete BA token or any prefix.
+        # Run history keeps artifact presence only; the provider link never lands on disk.
+        self.assertNotIn(approve_url, persisted)
+        self.assertNotIn("https://", persisted)
         self.assertNotIn("BA-1AB23456CD789012E", persisted)
         self.assertNotIn("BA-1AB", persisted)
-        self.assertIn("ba_token=[REDACTED]", persisted)
+        self.assertIn('"url_present": true', persisted)
         # 返回给调用方/UI 的结果仍是完整链接（脱敏只作用于持久化）
         self.assertEqual(result["url"], approve_url)
+
+    def test_persist_run_replaces_nested_provider_and_qr_artifacts_with_presence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp) / "runs.jsonl"
+            with patch.object(manager, "_state_path", return_value=runs):
+                manager._persist_run({
+                    "ok": True,
+                    "provider_redirect_url": "https://provider.example.test/pay/secret-session",
+                    "details": {
+                        "fallback_url": "https://fallback.example.test/secret",
+                        "qr_data": "upi://pay?pa=sensitive",
+                        "qr_path": "C:/private/payment.png",
+                    },
+                })
+            record = runs.read_text(encoding="utf-8")
+
+        for secret in ("provider.example.test", "fallback.example.test", "upi://", "payment.png"):
+            self.assertNotIn(secret, record)
+        self.assertIn('"provider_redirect_url_present": true', record)
+        self.assertIn('"fallback_url_present": true', record)
+        self.assertIn('"qr_data_present": true', record)
+        self.assertIn('"qr_path_present": true', record)
 
     def test_persist_run_drops_raw_tail_and_redacts_embedded_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:

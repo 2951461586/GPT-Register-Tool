@@ -804,8 +804,6 @@ def _normalize_relogin_mode(value):
     text = str(value or "").strip().lower().replace("-", "_")
     if text in {"web", "web_session", "session", "chatgpt_session"}:
         return "web_session"
-    if text in {"browser", "browser_login", "browser_session"}:
-        return "browser"
     if text in {"codex", "codex_oauth", "oauth", "pkce"}:
         return "codex_oauth"
     return "auto"

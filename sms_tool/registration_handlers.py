@@ -13,6 +13,7 @@ from curl_cffi import requests as curl_requests
 from .registration_state import (
     RegistrationContext,
     RegistrationStage,
+    RegistrationStageOverrun,
     RegistrationState,
     RegistrationStateMachine,
     prepare_registration_context,
@@ -22,15 +23,24 @@ from .registration_state import (
 class RegistrationStageHandler(Protocol):
     state: RegistrationState
 
-    def __call__(self, context: RegistrationContext, state: dict[str, Any]) -> Mapping[str, Any] | None: ...
+    def __call__(self, context: Any, state: dict[str, Any]) -> Mapping[str, Any] | None: ...
 
 
 @dataclass(frozen=True)
 class BoundRegistrationStage:
+    """Bind a handler that returns state deltas to a stage.
+
+    This is the generic dict-delta seam (a handler returns a mapping that is
+    merged into shared ``state``).  The email workflow does not use it: it keeps
+    mutable outputs on ``RegistrationRuntimeState`` and drives stages one at a
+    time through :meth:`RegistrationStageRunner.run_stage`.  ``context`` is the
+    opaque object handed to the stage and may be ignored.
+    """
+
     stage: RegistrationStage
     handler: RegistrationStageHandler
 
-    def run(self, context: RegistrationContext, machine: RegistrationStateMachine, state: dict[str, Any]) -> None:
+    def run(self, context: Any, machine: RegistrationStateMachine, state: dict[str, Any]) -> None:
         result = RegistrationStage(
             self.stage.state,
             lambda current: self.handler(current, state),
@@ -41,11 +51,18 @@ class BoundRegistrationStage:
 
 
 class RegistrationStageRunner:
-    """Run a stage sequence with one shared state, machine, and cleanup hook."""
+    """Run stages against one machine, sharing an opaque context object.
+
+    ``context`` is whatever the caller wants handlers to see; the email
+    workflow passes its ``RegistrationRuntimeState`` (not a
+    ``RegistrationContext``) and its handlers close over that instead of reading
+    the argument.  ``run_stage`` is the production execution seam; ``run`` is the
+    generic multi-stage helper used by focused tests.
+    """
 
     def __init__(
         self,
-        context: RegistrationContext,
+        context: Any,
         machine: RegistrationStateMachine,
         *,
         cleanup: Callable[[dict[str, Any]], None] | None = None,
@@ -153,6 +170,7 @@ class RegistrationEmailWorkflow:
         codex_oauth: bool = True,
         registration_mode: Any = None,
         browser_headless: bool | None = None,
+        enroll_2fa: bool = True,
         config: Mapping[str, Any] | None = None,
         operations: Any,
     ) -> None:
@@ -165,6 +183,7 @@ class RegistrationEmailWorkflow:
         self.codex_oauth = codex_oauth
         self.input_registration_mode = registration_mode
         self.browser_headless = browser_headless
+        self.enroll_2fa = bool(enroll_2fa)
         self.config = config
         self._operations = operations
         self.runtime = RegistrationRuntimeState()
@@ -238,6 +257,8 @@ class RegistrationEmailWorkflow:
             )
         except RegistrationAbort:
             raise
+        except RegistrationStageOverrun as exc:
+            raise RegistrationAbort(f"{state.value}_stage_budget_exceeded:{exc}") from exc
         except Exception as exc:
             raise RegistrationAbort(f"{state.value}_transport:{exc}") from exc
         finally:
@@ -262,6 +283,19 @@ class RegistrationEmailWorkflow:
             return float(values[state.value])
         except (TypeError, ValueError):
             return None
+
+    def _otp_poll_timeout(self) -> int:
+        """Mailbox poll budget for the OTP wait stage.
+
+        The stage budget is only observable after a handler returns, so the
+        stage that can legitimately block for minutes hands the smaller of the
+        two limits to the poll that actually blocks.
+        """
+        timeout = int(self.runtime.email_cfg.get("otp_timeout", 300) or 300)
+        budget = self._stage_timeout(RegistrationState.EMAIL_OTP_WAIT)
+        if budget is None:
+            return timeout
+        return max(1, min(timeout, int(budget)))
 
     def _abort(self, error: str) -> None:
         raise RegistrationAbort(error)
@@ -352,7 +386,7 @@ class RegistrationEmailWorkflow:
         if self.config is None:
             self.config = r.current_config_data()
         r.validate_config(self.config, workflow="registration")
-        s.proxy = r._resolve_proxy_scheme(self.input_proxy)
+        s.proxy = r._resolve_proxy_scheme(self.input_proxy, cfg=self.config)
         preflight = r.registration_network_preflight(proxy=s.proxy, proxy_attempts=2)
         s.proxy = str(preflight.get("proxy") or s.proxy or "")
         s.mailbox = r._ensure_mailbox_account(self.input_mailbox)
@@ -460,6 +494,7 @@ class RegistrationEmailWorkflow:
             r._import_sentinel_cookies(s.session, s.sentinel_data, s.device_id)
         from .paypal_proxy import infer_proxy_country
         r.set_fingerprint_geo(infer_proxy_country(s.proxy))
+        r.set_fingerprint_device(s.device_id)
         s.base_headers = r.openai_auth_headers(
             s.device_id,
             accept="application/json",
@@ -608,7 +643,7 @@ class RegistrationEmailWorkflow:
         s.email_code = r._poll_registration_email_otp(
             s.mailbox,
             subject_keyword=r.REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
-            timeout=int(s.email_cfg.get("otp_timeout", 300)),
+            timeout=self._otp_poll_timeout(),
             issued_after_unix=s.otp_issued_after,
             proxy=s.proxy,
             resend_callback=lambda: r._send_registration_email_otp(
@@ -847,6 +882,9 @@ class RegistrationEmailWorkflow:
         s = self.runtime
         if not (s.success and s.access_token and s.mailbox):
             return
+        if not self.enroll_2fa:
+            print("  [2FA] Enrollment disabled (--no-2fa)")
+            return
         def poll_reauth_otp(email: str, issued_after_unix: int = 0, timeout: int = 120, **kwargs: Any) -> str:
             return s.mailbox_service.poll_otp(
                 s.mailbox,
@@ -854,7 +892,32 @@ class RegistrationEmailWorkflow:
                 timeout=int(timeout or 120),
                 issued_after_unix=issued_after_unix,
                 proxy=s.proxy,
+                excluded_otps=kwargs.get("excluded_otps") or ({s.email_code} if s.email_code else set()),
             )
+
+        def reauth_existing_account() -> str:
+            login = r._login_existing_account_with_email_otp(
+                session=s.session,
+                username=s.username,
+                mailbox=s.mailbox,
+                did=s.device_id,
+                session_logging_id=s.session_logging_id,
+                auth_base=s.auth_base,
+                chat_base=s.chat_base,
+                base_headers=s.base_headers,
+                csrf_token=s.csrf_token,
+                proxy=s.proxy,
+                sentinel_token=s.sentinel_token,
+                sentinel_so_token=s.sentinel_so_token,
+            )
+            if not login.get("ok"):
+                raise RuntimeError(str(login.get("error") or "existing_account_reauth_failed"))
+            auth_session = r._fetch_auth_session(s.session, s.chat_base, s.base_headers)
+            auth_body = auth_session.get("body") if isinstance(auth_session, dict) else {}
+            refreshed_token = str(r._auth_session_access_token(auth_body or {}) or "").strip()
+            if not refreshed_token:
+                raise RuntimeError("existing_account_reauth_missing_access_token")
+            return refreshed_token
 
         try:
             from .account_2fa import setup_totp_2fa
@@ -866,6 +929,8 @@ class RegistrationEmailWorkflow:
                 did=s.device_id,
                 base_headers=s.base_headers,
                 poll_otp_fn=poll_reauth_otp,
+                excluded_otps={s.email_code} if s.email_code else set(),
+                reauth_login_fn=reauth_existing_account,
             )
             if s.twofa_result.get("ok"):
                 s.totp_secret = s.twofa_result.get("totp_secret", "")
@@ -919,7 +984,8 @@ class RegistrationEmailWorkflow:
                 "last_result": s.at_probe,
             } if s.at_probe else {},
             "totp_secret": s.totp_secret or "",
-            "totp_enrolled": bool(s.totp_secret),
+            "totp_enrolled": bool(s.totp_secret) or bool(s.twofa_result.get("already_enrolled")),
+            "twofa_enrolled_at": int(time.time()) if (s.totp_secret or s.twofa_result.get("already_enrolled")) else 0,
             "twofa_enrollment": s.twofa_result or {"ok": False, "reason": "skipped"},
             "registration_success_basis": "at_http_200" if s.success else "",
             "registration_state": "active" if s.success else ("terminal" if "account_deactivated" in s.error else "failed"),

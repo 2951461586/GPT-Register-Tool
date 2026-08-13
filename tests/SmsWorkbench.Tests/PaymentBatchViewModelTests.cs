@@ -39,6 +39,78 @@ public sealed class PaymentBatchViewModelTests
     }
 
     [Fact]
+    public async Task BatchUsesSeparateCheckoutAndApprovePoolsAndCanSaveThem()
+    {
+        var service = new StubPaymentBatchService
+        {
+            ProxyConfiguration = new PaymentBatchProxyConfiguration(
+                "http://checkout-config",
+                "http://approve-config",
+                "ID",
+                "TR")
+        };
+        var viewModel = new PaymentBatchViewModel(
+            service,
+            new StubFileLauncher(),
+            new[] { new PaymentBatchAccount("user@example.com", true) })
+        {
+            ProbeOnly = true,
+            CanaryText = "1",
+            CheckoutProxyPool = "http://checkout-one\nhttp://checkout-two",
+            ApproveProxyPool = "http://approve-jp\nhttp://approve-tr",
+            CheckoutProxyCountry = "ID",
+            ApproveProxyCountry = "JP",
+        };
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        Assert.NotNull(service.LastRequest);
+        Assert.Equal("http://checkout-one\nhttp://checkout-two", service.LastRequest!.CheckoutProxyPool);
+        Assert.Equal("http://approve-jp\nhttp://approve-tr", service.LastRequest.ApproveProxyPool);
+        Assert.Equal("ID", service.LastRequest.CheckoutCountry);
+        Assert.Equal("JP", service.LastRequest.ApproveCountry);
+        Assert.Equal("ID", service.LastRequest.MatrixRows[0].CheckoutCountry);
+        Assert.Equal("TR", service.LastRequest.MatrixRows[0].ApproveCountry);
+
+        viewModel.SaveProxyConfigurationCommand.Execute(null);
+        Assert.Equal("http://checkout-one\nhttp://checkout-two", service.LastSaved!.CheckoutProxyPool);
+        Assert.Equal("http://approve-jp\nhttp://approve-tr", service.LastSaved.ApproveProxyPool);
+    }
+
+    [Fact]
+    public async Task ResumedPresenceOnlyPaymentResultIsVisibleButNotCopyable()
+    {
+        var service = new StubPaymentBatchService("""
+            {
+              "ok": true,
+              "report_path": "report.json",
+              "counts": { "requested": 1, "authenticated": 1, "link_ready": 1 },
+              "results": [
+                {
+                  "account_ref": "resumed-ref",
+                  "authenticated": true,
+                  "decision": "ready",
+                  "url_present": true,
+                  "attempts": 1
+                }
+              ]
+            }
+            """);
+        var viewModel = new PaymentBatchViewModel(
+            service,
+            new StubFileLauncher(),
+            new[] { new PaymentBatchAccount("user@example.com", true) });
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+
+        PaymentBatchResultRow row = Assert.Single(viewModel.Results);
+        Assert.Equal("支付链接", row.ResultKind);
+        Assert.Equal("已生成（报告仅保留存在状态）", row.ResultDisplay);
+        Assert.True(row.ResultPresent);
+        Assert.False(row.HasCopyableResult);
+    }
+
+    [Fact]
     public async Task RunCommandDisplaysConcretePaymentResultsInsteadOfReadyDecision()
     {
         var service = new StubPaymentBatchService("""
@@ -116,6 +188,66 @@ public sealed class PaymentBatchViewModelTests
     }
 
     [Fact]
+    public void CountryOptionsComeFromThePaymentCatalog()
+    {
+        var viewModel = new PaymentBatchViewModel(
+            new StubPaymentBatchService(),
+            new StubFileLauncher(),
+            new[] { new PaymentBatchAccount("user@example.com", true) });
+
+        Assert.Equal("momo", viewModel.SelectedMethod.Id);
+        Assert.Equal(new PaymentProxyCountryOption("", "自动（跟随账单区）"), viewModel.CheckoutCountryOptions[0]);
+        Assert.Equal(
+            PaymentMethods.CheckoutCountryOptions("momo"),
+            viewModel.CheckoutCountryOptions.Skip(1).ToArray());
+        Assert.Equal(PaymentMethods.ApproveCountryOptions("momo"), viewModel.ApproveCountryOptions);
+    }
+
+    private static readonly PaymentProxyCountryOption[] StubCheckoutDefaults = { new("US", "美国 US") };
+    private static readonly PaymentProxyCountryOption[] StubApproveDefaults = { new("JP", "日本 JP") };
+    private static readonly PaymentProxyCountryOption[] StubGoPayCheckoutOverride = { new("ID", "印度尼西亚 ID") };
+    private static readonly PaymentProxyCountryOption[] StubGoPayApproveOverride = { new("TR", "土耳其 TR") };
+    private static readonly string[] ExpectedCheckoutDefaultCodes = { "", "US" };
+    private static readonly string[] ExpectedApproveDefaultCodes = { "JP" };
+    private static readonly string[] ExpectedGoPayCheckoutCodes = { "", "ID" };
+    private static readonly string[] ExpectedGoPayApproveCodes = { "TR" };
+
+    [Fact]
+    public void SwitchingMethodReResolvesCountryOptionsFromCatalogOverrides()
+    {
+        var catalog = new StubCountryCatalog(
+            checkoutDefaults: StubCheckoutDefaults,
+            approveDefaults: StubApproveDefaults,
+            checkoutOverrides: new Dictionary<string, IReadOnlyList<PaymentProxyCountryOption>>
+            {
+                ["gopay"] = StubGoPayCheckoutOverride
+            },
+            approveOverrides: new Dictionary<string, IReadOnlyList<PaymentProxyCountryOption>>
+            {
+                ["gopay"] = StubGoPayApproveOverride
+            });
+        var service = new StubPaymentBatchService
+        {
+            ProxyConfiguration = new PaymentBatchProxyConfiguration("", "", "", "")
+        };
+        var viewModel = new PaymentBatchViewModel(
+            service,
+            new StubFileLauncher(),
+            new[] { new PaymentBatchAccount("user@example.com", true) },
+            catalog);
+
+        Assert.Equal(ExpectedCheckoutDefaultCodes, viewModel.CheckoutCountryOptions.Select(option => option.Code).ToArray());
+        Assert.Equal(ExpectedApproveDefaultCodes, viewModel.ApproveCountryOptions.Select(option => option.Code).ToArray());
+        Assert.Equal("JP", viewModel.ApproveProxyCountry);
+
+        viewModel.SelectedMethod = viewModel.PaymentMethodOptions.First(option => option.Id == "gopay");
+
+        Assert.Equal(ExpectedGoPayCheckoutCodes, viewModel.CheckoutCountryOptions.Select(option => option.Code).ToArray());
+        Assert.Equal(ExpectedGoPayApproveCodes, viewModel.ApproveCountryOptions.Select(option => option.Code).ToArray());
+        Assert.Equal("TR", viewModel.ApproveProxyCountry);
+    }
+
+    [Fact]
     public async Task InvalidMatrixStopsBeforeBackendExecution()
     {
         var service = new StubPaymentBatchService();
@@ -130,6 +262,36 @@ public sealed class PaymentBatchViewModelTests
         Assert.Null(service.LastRequest);
         Assert.Contains("两位字母", viewModel.Status, StringComparison.Ordinal);
         Assert.False(viewModel.HasRun);
+    }
+
+    private sealed class StubCountryCatalog : IPaymentCountryCatalog
+    {
+        private readonly IReadOnlyList<PaymentProxyCountryOption> _checkoutDefaults;
+        private readonly IReadOnlyList<PaymentProxyCountryOption> _approveDefaults;
+        private readonly IReadOnlyDictionary<string, IReadOnlyList<PaymentProxyCountryOption>> _checkoutOverrides;
+        private readonly IReadOnlyDictionary<string, IReadOnlyList<PaymentProxyCountryOption>> _approveOverrides;
+
+        public StubCountryCatalog(
+            IReadOnlyList<PaymentProxyCountryOption> checkoutDefaults,
+            IReadOnlyList<PaymentProxyCountryOption> approveDefaults,
+            IReadOnlyDictionary<string, IReadOnlyList<PaymentProxyCountryOption>> checkoutOverrides,
+            IReadOnlyDictionary<string, IReadOnlyList<PaymentProxyCountryOption>> approveOverrides)
+        {
+            _checkoutDefaults = checkoutDefaults;
+            _approveDefaults = approveDefaults;
+            _checkoutOverrides = checkoutOverrides;
+            _approveOverrides = approveOverrides;
+        }
+
+        public IReadOnlyList<PaymentProxyCountryOption> CheckoutCountryOptions(string paymentMethod)
+            => _checkoutOverrides.TryGetValue(paymentMethod, out IReadOnlyList<PaymentProxyCountryOption>? options)
+                ? options
+                : _checkoutDefaults;
+
+        public IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions(string paymentMethod)
+            => _approveOverrides.TryGetValue(paymentMethod, out IReadOnlyList<PaymentProxyCountryOption>? options)
+                ? options
+                : _approveDefaults;
     }
 
     private sealed class StubPaymentBatchService : IPaymentBatchService
@@ -152,6 +314,11 @@ public sealed class PaymentBatchViewModelTests
 
         private readonly string _report;
 
+        public PaymentBatchProxyConfiguration ProxyConfiguration { get; set; } =
+            new("", "", "", "JP");
+
+        public PaymentBatchProxyConfiguration? LastSaved { get; private set; }
+
         public StubPaymentBatchService(string? report = null)
         {
             _report = report ?? DefaultReport;
@@ -162,6 +329,17 @@ public sealed class PaymentBatchViewModelTests
         public Action? OnRun { get; set; }
 
         public IReadOnlyList<PaymentMatrixRow> LoadMatrix(string paymentMethod) => Array.Empty<PaymentMatrixRow>();
+
+        public PaymentBatchProxyConfiguration LoadProxyConfiguration(string paymentMethod)
+            => ProxyConfiguration;
+
+        public SettingsSaveResult SaveProxyConfiguration(
+            string paymentMethod,
+            PaymentBatchProxyConfiguration configuration)
+        {
+            LastSaved = configuration;
+            return new(true);
+        }
 
         public PaymentMatrixRow CreateDefaultMatrixRow(string paymentMethod) => new()
         {
@@ -176,6 +354,31 @@ public sealed class PaymentBatchViewModelTests
             LastRequest = request;
             OnRun?.Invoke();
             using JsonDocument document = JsonDocument.Parse(_report);
+            return Task.FromResult(document.RootElement.Clone());
+        }
+
+        public string? LastProbeMethod { get; private set; }
+
+        public Task<JsonElement> ProbeProxiesAsync(
+            string paymentMethod,
+            string checkoutProxyPool,
+            string approveProxyPool,
+            string checkoutCountry,
+            string approveCountry,
+            CancellationToken cancellationToken)
+        {
+            LastProbeMethod = paymentMethod;
+            const string probe = """
+                {
+                  "ok": true,
+                  "payment_method": "paypal",
+                  "stages": {
+                    "checkout": { "ok": true, "ip": "203.0.113.9", "country_code": "US", "region": "CA", "expected_country_paypal_supported": true },
+                    "approve": { "ok": true, "ip": "203.0.113.10", "country_code": "GB", "region": "ENG", "expected_country_paypal_supported": true }
+                  }
+                }
+                """;
+            using JsonDocument document = JsonDocument.Parse(probe);
             return Task.FromResult(document.RootElement.Clone());
         }
     }

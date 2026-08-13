@@ -14,12 +14,13 @@ Smailr REST surface used here::
     GET  /api/v1/mailboxes/{mbId}/mails   list received mail (paged)
     GET  /api/v1/mails/{id}               fetch one mail's full body
 
-Configure via ``email_registration.smailr.*`` in ``config.json``::
+Configure via ``email_registration.smailr.*`` in ``config.json``.  Keep the
+API key outside source control (``SMAILR_API_KEY`` is preferred)::
 
     {
       "email_registration": {
         "smailr": {
-          "api_key": "***REMOVED***",
+          "api_key": "",
           "base_url": "https://smailr.com",
           "domains": ["smailr.com", "smail-pro.com"],
           "default_domain": "smailr.com",
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.parse
 import urllib.error
 import urllib.request
 from typing import Any
@@ -44,6 +46,26 @@ from ..phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_prox
 
 DEFAULT_BASE_URL = "https://smailr.com"
 DEFAULT_TIMEOUT = 30
+
+
+def _normalize_base_url(value: str) -> str:
+    """Accept either the site URL or the OpenAPI server URL."""
+    base = str(value or DEFAULT_BASE_URL).strip().rstrip("/")
+    while base.lower().endswith("/api/v1"):
+        base = base[:-7].rstrip("/")
+    return base or DEFAULT_BASE_URL
+
+
+def _redact_secret(value: Any, secret: str) -> Any:
+    if not secret:
+        return value
+    if isinstance(value, str):
+        return value.replace(secret, "<redacted>")
+    if isinstance(value, dict):
+        return {key: _redact_secret(item, secret) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_secret(item, secret) for item in value]
+    return value
 
 
 class SmailrError(RuntimeError):
@@ -67,7 +89,7 @@ class SmailrClient:
         self.api_key = str(api_key or "").strip()
         if not self.api_key:
             raise RuntimeError("smailr.api_key is required")
-        self.base_url = str(base_url or DEFAULT_BASE_URL).strip().rstrip("/")
+        self.base_url = _normalize_base_url(base_url)
         self.timeout = max(1, int(timeout or DEFAULT_TIMEOUT))
         self.proxy = normalize_proxy_url(proxy)
         self._proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
@@ -95,20 +117,19 @@ class SmailrClient:
         try:
             response = curl_requests.request(method, url, **kwargs)
         except Exception as exc:
-            raise SmailrError(
-                f"smailr request failed: {_redact_proxy_text(exc, self.proxy)}",
-                body=str(exc),
-            ) from exc
+            message = _redact_secret(_redact_proxy_text(exc, self.proxy), self.api_key)
+            raise SmailrError(f"smailr request failed: {message}", body=message) from exc
         if response.status_code < 200 or response.status_code >= 300:
             body: Any
             try:
                 body = response.json()
             except Exception:
                 body = response.text[:500]
+            safe_body = _redact_secret(body, self.api_key)
             raise SmailrError(
-                f"smailr {method} {path} -> {response.status_code}",
+                f"smailr {method} {path} -> {response.status_code}: {safe_body}",
                 status_code=response.status_code,
-                body=body,
+                body=safe_body,
             )
         try:
             if response.status_code == 204 or not response.content:
@@ -120,7 +141,7 @@ class SmailrClient:
     # ── Mailbox CRUD ────────────────────────────────────────────────────────
 
     def list_mailboxes(self) -> list[dict]:
-        data = self._request("GET", "/api/v1/mailboxes") or []
+        data = _unwrap_data(self._request("GET", "/api/v1/mailboxes") or [])
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
@@ -134,20 +155,20 @@ class SmailrClient:
         payload: dict[str, str] = {"local_part": str(local_part or "").strip()}
         if domain_id:
             payload["domain_id"] = str(domain_id).strip()
-        data = self._request("POST", "/api/v1/mailboxes", json_body=payload) or {}
+        data = _unwrap_data(self._request("POST", "/api/v1/mailboxes", json_body=payload) or {})
         if not isinstance(data, dict):
             data = {"raw": data}
         return data
 
     def mailbox_detail(self, mailbox_id: str) -> dict:
-        data = self._request("GET", f"/api/v1/mailboxes/{mailbox_id}") or {}
+        data = _unwrap_data(self._request("GET", f"/api/v1/mailboxes/{mailbox_id}") or {})
         return data if isinstance(data, dict) else {"raw": data}
 
     # ── Mail access ─────────────────────────────────────────────────────────
 
     def list_mails(self, mailbox_id: str, folder: str = "INBOX", page: int = 1, per_page: int = 25) -> list[dict]:
-        params = f"?folder={folder}&page={int(page)}&per_page={int(per_page)}"
-        data = self._request("GET", f"/api/v1/mailboxes/{mailbox_id}/mails{params}") or []
+        params = urllib.parse.urlencode({"folder": folder, "page": int(page), "per_page": int(per_page)})
+        data = _unwrap_data(self._request("GET", f"/api/v1/mailboxes/{mailbox_id}/mails?{params}") or [])
         items = data if isinstance(data, list) else []
         if isinstance(data, dict):
             for key in ("data", "mails", "items", "value"):
@@ -158,7 +179,7 @@ class SmailrClient:
         return items
 
     def mail_detail(self, mail_id: str) -> dict:
-        data = self._request("GET", f"/api/v1/mails/{mail_id}") or {}
+        data = _unwrap_data(self._request("GET", f"/api/v1/mails/{mail_id}") or {})
         return data if isinstance(data, dict) else {"raw": data}
 
 
@@ -183,10 +204,18 @@ def _mailbox_email(mb: dict) -> str:
     return ""
 
 
+def _unwrap_data(value: Any) -> Any:
+    """Unwrap common OpenAPI response envelopes without assuming one shape."""
+    if not isinstance(value, dict):
+        return value
+    nested = value.get("data")
+    return nested if isinstance(nested, (dict, list)) else value
+
+
 def _mailbox_id(mb: dict) -> str:
     if not isinstance(mb, dict):
         return ""
-    return str(mb.get("id") or mb.get("mailbox_id") or "").strip()
+    return str(mb.get("id") or mb.get("mailbox_id") or mb.get("uuid") or "").strip()
 
 
 def _format_received(value: Any) -> str:
@@ -283,6 +312,18 @@ def fetch_messages(client: SmailrClient, mailbox_id: str, mailbox_email: str, li
         if not items:
             break
         for item in items:
+            # The list endpoint may return only headers.  Fetch the detail so
+            # OTP extraction still works when the body is not in the summary.
+            if isinstance(item, dict) and not any(item.get(key) for key in ("body", "body_text", "body_html", "content", "text", "html")):
+                message_id = str(item.get("id") or item.get("mail_id") or item.get("message_id") or "").strip()
+                if message_id:
+                    try:
+                        detail = client.mail_detail(message_id)
+                        detail = _unwrap_data(detail)
+                        if isinstance(detail, dict):
+                            item = {**item, **detail}
+                    except Exception:
+                        pass
             combined.append(_normalize_message(item, mailbox_email=mailbox_email))
         if len(items) < limit:
             break

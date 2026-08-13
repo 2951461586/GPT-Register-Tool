@@ -575,6 +575,8 @@ def mailbox_has_inbox_credentials(mailbox):
         return bool(getattr(mailbox, "email", ""))
     if provider == "remail":
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
+    if provider == "smailr":
+        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if provider == mailbox_icloud_url.PROVIDER:
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if mailbox_gmail.is_gmail_mailbox(mailbox):

@@ -6,10 +6,15 @@ from pathlib import Path
 from sms_tool.registration_state import (
     RegistrationState,
     RegistrationStage,
+    RegistrationStageOverrun,
     RegistrationStateMachine,
     prepare_registration_context,
 )
-from sms_tool.registration_handlers import BoundRegistrationStage, RegistrationStageRunner
+from sms_tool.registration_handlers import (
+    BoundRegistrationStage,
+    RegistrationEmailWorkflow,
+    RegistrationStageRunner,
+)
 
 
 class Mailbox:
@@ -54,11 +59,36 @@ class RegistrationStateTests(unittest.TestCase):
         ]
         self.assertNotIn("registration", imported_modules)
     def test_stage_handler_applies_common_timeout_and_failure_transition(self):
-        machine = RegistrationStateMachine(lambda *_: None)
+        events = []
+        machine = RegistrationStateMachine(lambda state, status, detail: events.append((state, status, detail)))
         stage = RegistrationStage(RegistrationState.AUTH_FLOW, lambda _context: time.sleep(0.05), timeout_seconds=0.001)
-        with self.assertRaises(TimeoutError):
+        with self.assertRaises(RegistrationStageOverrun):
             stage.run(object(), machine)
         self.assertEqual(machine.snapshot()["state"], "failed")
+        # A budget overrun must be distinguishable from a transport timeout.
+        self.assertTrue(issubclass(RegistrationStageOverrun, TimeoutError))
+        failed = [event for event in events if event[1] == "failed"][-1]
+        self.assertIn("stage_budget_exceeded", failed[2])
+
+    def test_otp_poll_timeout_is_clamped_to_stage_budget(self):
+        workflow = RegistrationEmailWorkflow(
+            RegistrationStateMachine(lambda *_: None),
+            config={"registration": {"stage_timeouts": {"email_otp_wait": 45}}},
+            operations=object(),
+        )
+        workflow.runtime.email_cfg = {"otp_timeout": 300}
+        # The blocking poll receives the smaller of its own timeout and the
+        # stage budget so the configured limit is enforced while it runs.
+        self.assertEqual(workflow._otp_poll_timeout(), 45)
+
+    def test_otp_poll_timeout_falls_back_to_config_without_budget(self):
+        workflow = RegistrationEmailWorkflow(
+            RegistrationStateMachine(lambda *_: None),
+            config={"registration": {}},
+            operations=object(),
+        )
+        workflow.runtime.email_cfg = {"otp_timeout": 210}
+        self.assertEqual(workflow._otp_poll_timeout(), 210)
 
     def test_state_machine_allows_forward_skips_and_rejects_backtracking(self):
         events = []

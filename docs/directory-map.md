@@ -52,8 +52,8 @@ These directories are runtime state and are ignored by Git:
 | Agent Identity / explicit import | `agent_identity.py`, `sub2api_import.py` | Ed25519 credential conversion for explicit SUB2API import; not called by the registration pipeline. Keys are persisted under `sessions/agent_identities/`. |
 | Workspace compatibility | `k12_client.py`, `k12_identity.py`, `workspace_scan.py` | Legacy explicit Workspace helpers retained for Python callers; the CLI account scan no longer enables this path. |
 | Account liveness and recovery | `account_liveness.py`, `account_recovery.py`, `account_scan.py` | Canonical side-effect-free quota probe, explicit OAuth recovery/persistence, and batch account scan; does not switch Workspace state. |
-| Account cleanup | `account_cleanup.py`, `scripts/cleanup_invalid_accounts.py` | Classify only terminal dropped/deactivated/missing-AT/token-invalid rows and archive/delete their local representations; unknown transport results are retained. |
-| Payment links and capability | `payment_link_manager.py`, `payment_auth.py`, `checkout_contract.py`, `payment_capability.py`, `gen_pp_link.py`, `wallet_provider.py`, `wallet_transport.py`, `paypal_links.py`, `paypal_proxy.py`, `paypal_reverse.py` | JIT AT gate, canonical Checkout/Stripe init contract, side-effect-limited capability probing, unified terminal results, native/shared-wallet adapters, link reuse, and stage proxy resolution. Optional promotion-update stage (`/checkout/update`) for 0元+PayPal — see [`paypal-zero-due-link.md`](paypal-zero-due-link.md). |
+| Account cleanup | `account_cleanup.py`, `scripts/cleanup_invalid_accounts.py`, `scripts/mailbox_pool_orphans.py` | Classify only terminal dropped/deactivated/missing-AT/token-invalid rows and archive/delete their local representations; unknown transport results are retained. `mailbox_pool_orphans.py` is a read-only pool/DB/session reconciliation report that prunes only no-session orphans with `--apply` (dry-run + pool backup by default). |
+| Payment links and capability | `payment_link_manager.py`, `payment_auth.py`, `checkout_contract.py`, `payment_capability.py`, `gen_pp_link.py`, `wallet_provider.py`, `wallet_transport.py`, `gcash_provider.py`, `gcash_transport.py`, `paypal_links.py`, `paypal_proxy.py`, `paypal_reverse.py` | JIT AT gate, canonical Checkout/Stripe init contract, provider-aware side-effect-limited probing, unified terminal results, native/shared-wallet/custom-payment adapters, link reuse, and stage proxy resolution. Promotion/Update is supported by PayPal and by GoPay full/probe zero-due flows; see [`paypal-zero-due-link.md`](paypal-zero-due-link.md) for PayPal details. |
 | Payment batch execution | `payment_batch.py` | Stable email cohorts, JIT refresh, capability-aware eligibility matrix, method concurrency, canary pause, classified retry, and atomic token-free checkpoints under `runtime/payment_batches/`. |
 | Payment execution and reconciliation | `paypal_auto.py`, `paypal_protocol.py`, `paypal_reconciliation.py`, `nodriver_paypal.py`, `omakse_client.py` | Execute explicit payment commands or independently reconcile an allowlisted PayPal merchant return; reconciliation does not alter the payment-link interface. |
 | Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `session_converter.py`, `import_targets.py` | Normalize account/session state, convert between formats, and upload to external import targets (CPA, SUB2API); CPA import does not own local liveness or recovery. |
@@ -68,11 +68,26 @@ These directories are runtime state and are ignored by Git:
 | `PaymentBatchService.cs`, `PaymentBatchViewModel.cs` | Batch dialog execution and state; do not duplicate single-account command planning. |
 | `PaymentMethods.cs` | Canonical desktop payment-method catalog, aliases, countries, and single/batch availability. |
 
+## `SmsWorkbench/` window-independent backend interpreters
+
+These types hold the deterministic command-building and backend-result logic that
+must stay testable without a WPF window (see placement rule 8). `MainWindow.*`
+partials call them and only apply the returned view state.
+
+| File | Responsibility |
+| --- | --- |
+| `BackendCommandPlanner.cs` | Build `BackendCommandPlan` argument lists for registration/payment/scan tasks from primitive inputs; no WPF access. |
+| `BackendResultInterpreter.cs` | Interpret backend execution results and proxy-test JSON into typed outcomes (success/timeout/cancelled). |
+| `BackendJson.cs`, `BackendJsonProtocol.cs` | Canonical JSON-to-dictionary projection and protocol framing shared by interpreters; keep WPF out of JSON plumbing. |
+| `BackendContracts.cs`, `BackendTaskCoordinator.cs` | Backend output-channel contracts and single-flight task coordination. |
+| `AccountStatusInterpreter.cs` | Window-independent account JSON interpretation: plan type, wham quota labels, payment status, deactivation, import state. |
+| `AccountScanResultInterpreter.cs` | Parse account-scan backend output into per-row presentation state. |
+
 ## `services/` module groups
 
 | Path | Boundary |
 | --- | --- |
-| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo subprocess extractors. GoPay/GCash/GrabPay remain shared Python adapters under `sms_tool/`. |
+| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo subprocess extractors. GoPay/GrabPay share a Python adapter under `sms_tool/`; GCash uses its own Python custom-payment adapter under `sms_tool/`. |
 | `services/mail-otp-web/` | Standalone Microsoft Graph inbox/OTP helper UI; operator diagnostic service, not the main registration mailbox owner. |
 
 ## Placement rules for new work

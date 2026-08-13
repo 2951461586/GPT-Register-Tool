@@ -1125,8 +1125,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cliproxy-username", default=os.getenv("CLIPROXY_USERNAME", ""))
     parser.add_argument("--cliproxy-password", default=os.getenv("CLIPROXY_PASSWORD", ""))
-    parser.add_argument("--checkout-proxy", default="", help="explicit proxy; overrides Cliproxy for checkout")
-    parser.add_argument("--update-proxy", default="", help="explicit proxy; overrides Cliproxy for update")
+    parser.add_argument(
+        "--checkout-proxy",
+        default=os.getenv("DIRECT_CARD_CHECKOUT_PROXY", ""),
+        help="explicit proxy; overrides Cliproxy for checkout (env: DIRECT_CARD_CHECKOUT_PROXY)",
+    )
+    parser.add_argument(
+        "--update-proxy",
+        default=os.getenv("DIRECT_CARD_UPDATE_PROXY", ""),
+        help="explicit proxy; overrides Cliproxy for update (env: DIRECT_CARD_UPDATE_PROXY)",
+    )
     parser.add_argument("--billing-country", default="PH")
     parser.add_argument("--currency", default="PHP")
     parser.add_argument("--checkout-proxy-country", default="US")

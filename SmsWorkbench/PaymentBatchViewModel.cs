@@ -7,8 +7,12 @@ namespace SmsWorkbench
 {
     public sealed partial class PaymentBatchViewModel : ObservableObject
     {
+        private static readonly PaymentProxyCountryOption AutomaticCheckoutCountryOption =
+            new("", "自动（跟随账单区）");
+
         private readonly IPaymentBatchService _paymentBatchService;
         private readonly IFileLauncher _fileLauncher;
+        private readonly IPaymentCountryCatalog? _countryCatalog;
         private readonly PaymentBatchAccount[] _accounts;
         private string _automaticBatchId;
 
@@ -17,7 +21,10 @@ namespace SmsWorkbench
         [ObservableProperty] private int retries = 1;
         [ObservableProperty] private string canaryText = "0";
         [ObservableProperty] private string batchId = "";
-        [ObservableProperty] private string proxy = "";
+        [ObservableProperty] private string checkoutProxyPool = "";
+        [ObservableProperty] private string approveProxyPool = "";
+        [ObservableProperty] private string checkoutProxyCountry = "";
+        [ObservableProperty] private string approveProxyCountry = "";
         [ObservableProperty] private bool jitRefresh = true;
         [ObservableProperty] private bool probeOnly;
         [ObservableProperty] private bool requireZero = true;
@@ -31,9 +38,19 @@ namespace SmsWorkbench
             IPaymentBatchService paymentBatchService,
             IFileLauncher fileLauncher,
             IEnumerable<PaymentBatchAccount> accounts)
+            : this(paymentBatchService, fileLauncher, accounts, null)
+        {
+        }
+
+        internal PaymentBatchViewModel(
+            IPaymentBatchService paymentBatchService,
+            IFileLauncher fileLauncher,
+            IEnumerable<PaymentBatchAccount> accounts,
+            IPaymentCountryCatalog? countryCatalog)
         {
             _paymentBatchService = paymentBatchService;
             _fileLauncher = fileLauncher;
+            _countryCatalog = countryCatalog;
             _accounts = (accounts ?? Array.Empty<PaymentBatchAccount>())
                 .Where(account => !string.IsNullOrWhiteSpace(account.Email))
                 .GroupBy(account => account.Email.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -45,6 +62,8 @@ namespace SmsWorkbench
             selectedMethod = PaymentMethodOptions.First(option => option.Id == "momo");
             _automaticBatchId = CreateBatchId(selectedMethod.Id);
             batchId = _automaticBatchId;
+            ReloadCountryOptions();
+            ReloadProxyConfiguration();
             ReloadMatrix();
         }
 
@@ -53,6 +72,12 @@ namespace SmsWorkbench
         public IReadOnlyList<int> WorkerOptions { get; }
 
         public IReadOnlyList<int> RetryOptions { get; }
+
+        public IReadOnlyList<PaymentProxyCountryOption> CheckoutCountryOptions { get; private set; } =
+            Array.Empty<PaymentProxyCountryOption>();
+
+        public IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions { get; private set; } =
+            Array.Empty<PaymentProxyCountryOption>();
 
         public ObservableCollection<PaymentMatrixRow> MatrixRows { get; } = new();
 
@@ -77,7 +102,10 @@ namespace SmsWorkbench
                 BatchId = _automaticBatchId;
             }
             OnPropertyChanged(nameof(RequireZeroEnabled));
+            ReloadCountryOptions();
+            ReloadProxyConfiguration();
             ReloadMatrix();
+            SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
         }
 
         partial void OnProbeOnlyChanged(bool value)
@@ -92,6 +120,8 @@ namespace SmsWorkbench
         partial void OnIsRunningChanged(bool value)
         {
             RunCommand.NotifyCanExecuteChanged();
+            SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
+            TestProxiesCommand.NotifyCanExecuteChanged();
             DeleteMatrixRowCommand.NotifyCanExecuteChanged();
             OpenReportCommand.NotifyCanExecuteChanged();
         }
@@ -99,7 +129,9 @@ namespace SmsWorkbench
         [RelayCommand]
         private void AddMatrixRow()
         {
-            MatrixRows.Add(_paymentBatchService.CreateDefaultMatrixRow(SelectedMethod?.Id ?? "paypal"));
+            PaymentMatrixRow row = _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod?.Id ?? "paypal");
+            ApplyProxyCountryDefaults(row);
+            MatrixRows.Add(row);
             DeleteMatrixRowCommand.NotifyCanExecuteChanged();
         }
 
@@ -128,6 +160,91 @@ namespace SmsWorkbench
             {
                 Status = "复制失败：" + exception.Message;
             }
+        }
+
+        private bool CanSaveProxyConfiguration() => !IsRunning && SelectedMethod != null;
+
+        [RelayCommand(CanExecute = nameof(CanSaveProxyConfiguration))]
+        private void SaveProxyConfiguration()
+        {
+            string method = SelectedMethod?.Id ?? "paypal";
+            SettingsSaveResult result = _paymentBatchService.SaveProxyConfiguration(
+                method,
+                new PaymentBatchProxyConfiguration(
+                    CheckoutProxyPool,
+                    ApproveProxyPool,
+                    CheckoutProxyCountry,
+                    ApproveProxyCountry));
+            Status = result.Ok
+                ? $"{PaymentMethods.DisplayName(method)} Checkout / Approve 代理配置已保存。"
+                : result.Error;
+        }
+
+        [RelayCommand(CanExecute = nameof(CanSaveProxyConfiguration))]
+        private async Task TestProxiesAsync(CancellationToken cancellationToken)
+        {
+            string method = SelectedMethod?.Id ?? "paypal";
+            Status = "正在探测 Checkout / Approve 代理出口...";
+            IsRunning = true;
+            try
+            {
+                JsonElement report = await _paymentBatchService.ProbeProxiesAsync(
+                    method,
+                    CheckoutProxyPool ?? "",
+                    ApproveProxyPool ?? "",
+                    CheckoutProxyCountry ?? "",
+                    ApproveProxyCountry ?? "",
+                    cancellationToken);
+                Status = FormatProxyProbe(report);
+            }
+            catch (OperationCanceledException)
+            {
+                Status = "代理探测已取消。";
+            }
+            catch (TimeoutException)
+            {
+                Status = "代理探测超时。";
+            }
+            catch (Exception exception)
+            {
+                Status = "代理探测失败：" + exception.Message;
+            }
+            finally
+            {
+                IsRunning = false;
+            }
+        }
+
+        private static string FormatProxyProbe(JsonElement report)
+        {
+            bool ok = report.TryGetProperty("ok", out JsonElement okElement)
+                && okElement.ValueKind == JsonValueKind.True;
+            var parts = new List<string>();
+            if (report.TryGetProperty("stages", out JsonElement stages)
+                && stages.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty stage in stages.EnumerateObject())
+                {
+                    JsonElement value = stage.Value;
+                    bool stageOk = value.TryGetProperty("ok", out JsonElement stageOkElement)
+                        && stageOkElement.ValueKind == JsonValueKind.True;
+                    string cc = JsonString(value, "country_code");
+                    string region = JsonString(value, "region");
+                    string ip = JsonString(value, "ip");
+                    string error = JsonString(value, "error");
+                    string unsupported =
+                        value.TryGetProperty("expected_country_paypal_supported", out JsonElement supportedElement)
+                        && supportedElement.ValueKind == JsonValueKind.False
+                            ? "（非 PayPal 支持国）"
+                            : "";
+                    string where = string.Join("/", new[] { cc, region }.Where(item => item.Length > 0));
+                    parts.Add(stageOk
+                        ? $"{stage.Name}✓ {where} {ip}{unsupported}".Trim()
+                        : $"{stage.Name}✗ {error}{unsupported}".Trim());
+                }
+            }
+            string prefix = ok ? "代理探测通过：" : "代理探测存在问题：";
+            return parts.Count > 0 ? prefix + string.Join("  |  ", parts) : prefix + "无可探测的代理";
         }
 
         [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
@@ -200,7 +317,10 @@ namespace SmsWorkbench
                 Retries,
                 canary,
                 normalizedBatchId,
-                Proxy ?? "",
+                CheckoutProxyPool ?? "",
+                ApproveProxyPool ?? "",
+                CheckoutProxyCountry ?? "",
+                string.IsNullOrWhiteSpace(ApproveProxyCountry) ? DefaultApproveCountry : ApproveProxyCountry,
                 JitRefresh,
                 ProbeOnly,
                 RequireZero,
@@ -213,13 +333,62 @@ namespace SmsWorkbench
             if (_paymentBatchService == null || SelectedMethod == null) return;
             MatrixRows.Clear();
             IReadOnlyList<PaymentMatrixRow> configured = _paymentBatchService.LoadMatrix(SelectedMethod.Id);
-            foreach (PaymentMatrixRow row in configured.Count > 0
+            IEnumerable<PaymentMatrixRow> rows = configured.Count > 0
                 ? configured
-                : new[] { _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod.Id) })
+                : new[] { _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod.Id) };
+            foreach (PaymentMatrixRow row in rows)
             {
+                if (configured.Count == 0)
+                    ApplyProxyCountryDefaults(row);
                 MatrixRows.Add(row);
             }
             DeleteMatrixRowCommand.NotifyCanExecuteChanged();
+        }
+
+        private void ApplyProxyCountryDefaults(PaymentMatrixRow row)
+        {
+            if (row == null) return;
+            if (!string.IsNullOrWhiteSpace(CheckoutProxyCountry))
+                row.CheckoutCountry = CheckoutProxyCountry.Trim().ToUpperInvariant();
+            if (!string.IsNullOrWhiteSpace(ApproveProxyCountry))
+                row.ApproveCountry = ApproveProxyCountry.Trim().ToUpperInvariant();
+        }
+
+        private void ReloadCountryOptions()
+        {
+            if (SelectedMethod == null) return;
+            CheckoutCountryOptions = new[] { AutomaticCheckoutCountryOption }
+                .Concat(ResolveCheckoutCountryOptions(SelectedMethod.Id))
+                .ToArray();
+            ApproveCountryOptions = ResolveApproveCountryOptions(SelectedMethod.Id);
+            OnPropertyChanged(nameof(CheckoutCountryOptions));
+            OnPropertyChanged(nameof(ApproveCountryOptions));
+        }
+
+        private IReadOnlyList<PaymentProxyCountryOption> ResolveCheckoutCountryOptions(string paymentMethod)
+            => _countryCatalog?.CheckoutCountryOptions(paymentMethod)
+                ?? PaymentMethods.CheckoutCountryOptions(paymentMethod);
+
+        private IReadOnlyList<PaymentProxyCountryOption> ResolveApproveCountryOptions(string paymentMethod)
+            => _countryCatalog?.ApproveCountryOptions(paymentMethod)
+                ?? PaymentMethods.ApproveCountryOptions(paymentMethod);
+
+        private string DefaultApproveCountry => ApproveCountryOptions.Count > 0 ? ApproveCountryOptions[0].Code : "";
+
+        private void ReloadProxyConfiguration()
+        {
+            if (_paymentBatchService == null || SelectedMethod == null) return;
+            PaymentBatchProxyConfiguration configured = _paymentBatchService.LoadProxyConfiguration(SelectedMethod.Id);
+            CheckoutProxyPool = configured.CheckoutProxyPool ?? "";
+            ApproveProxyPool = configured.ApproveProxyPool ?? "";
+            CheckoutProxyCountry = configured.CheckoutCountry ?? "";
+            // The configured approve country wins only when the catalog offers
+            // it for the selected method; otherwise fall back to the catalog's
+            // first approve option instead of a hardcoded JP/TR pair.
+            string configuredApproveCountry = (configured.ApproveCountry ?? "").Trim().ToUpperInvariant();
+            ApproveProxyCountry = ApproveCountryOptions.Any(option => option.Code == configuredApproveCountry)
+                ? configuredApproveCountry
+                : DefaultApproveCountry;
         }
 
         private void PopulateResults(JsonElement report)
@@ -235,17 +404,22 @@ namespace SmsWorkbench
                 string paymentUrl = FirstNonEmpty(JsonString(row, "url"), JsonString(row, "long_url"));
                 string qrData = JsonString(row, "qr_data");
                 string qrPath = JsonString(row, "qr_path");
+                bool paymentUrlPresent = paymentUrl.Length > 0
+                    || JsonBool(row, "url_present")
+                    || JsonBool(row, "long_url_present");
+                bool qrDataPresent = qrData.Length > 0 || JsonBool(row, "qr_data_present");
+                bool qrPathPresent = qrPath.Length > 0 || JsonBool(row, "qr_path_present");
                 string terminalState = FirstNonEmpty(
                     JsonString(row, "terminal_state"),
                     JsonString(row, "status"),
                     JsonString(row, "state"));
                 if (terminalState.Equals("canceled", StringComparison.OrdinalIgnoreCase))
                     terminalState = "cancelled";
-                string resultKind = paymentUrl.Length > 0
+                string resultKind = paymentUrlPresent
                     ? "支付链接"
-                    : qrData.Length > 0
+                    : qrDataPresent
                         ? "二维码内容"
-                        : qrPath.Length > 0 ? "二维码文件" : "";
+                        : qrPathPresent ? "二维码文件" : "";
                 string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
                 Results.Add(new PaymentBatchResultRow
                 {
@@ -260,6 +434,7 @@ namespace SmsWorkbench
                     Retryable = JsonBool(row, "retryable"),
                     ResultKind = resultKind,
                     ResultValue = resultValue,
+                    ResultPresent = paymentUrlPresent || qrDataPresent || qrPathPresent,
                     Attempts = JsonInt(row, "attempts")
                 });
             }

@@ -2,13 +2,18 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Registration, SMS, K12 and selection mailbox argument builders
+        // Registration, SMS, K12 and selection mailbox argument builders.
+        // All CLI argument construction is delegated to BackendCommandPlanner
+        // so the CLI contract lives in exactly one module that can be unit
+        // tested without WPF.
+
         private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
         {
-            var args = new List<string> { "--count", CountValue().ToString(), "--workers", "4" };
-            AddNoPhoneRegistrationArgs(args);
-            AddRegistrationProxy(args);
-            RunBackend("邮箱池注册", args);
+            var plan = BackendCommandPlanner.CreatePoolRegistration(
+                CountValue(),
+                GetRegistrationProxyPool(),
+                workers: 4);
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
         private void ImportChataiMailbox_Click(object sender, RoutedEventArgs e)
@@ -58,10 +63,16 @@ namespace SmsWorkbench
             {
                 RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelectedCount);
                 if (selectedOptions == null) return;
-                var pendingArgs = new List<string> { pendingMailboxArg, pendingMailboxFile, "--count", pendingSelectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
-                AddRegistrationAtOnlyArgs(pendingArgs);
-                AddRegistrationProxy(pendingArgs);
-                RunBackend("选中未注册邮箱注册", pendingArgs);
+                var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
+                    "选中未注册邮箱注册",
+                    pendingMailboxArg,
+                    pendingMailboxFile,
+                    pendingSelectedCount,
+                    selectedOptions.Workers,
+                    registrationAtOnly: true,
+                    GetRegistrationProxyPool(),
+                    disable2fa: selectedOptions.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
             if (pendingRowCount > 0)
@@ -74,10 +85,16 @@ namespace SmsWorkbench
             {
                 RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(selectedCount);
                 if (selectedOptions == null) return;
-                var selectedArgs = new List<string> { selectedArg, selectedFile, "--count", selectedCount.ToString(), "--workers", selectedOptions.Workers.ToString() };
-                AddRegistrationAtOnlyArgs(selectedArgs);
-                AddRegistrationProxy(selectedArgs);
-                RunBackend("选中邮箱注册", selectedArgs);
+                var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
+                    "选中邮箱注册",
+                    selectedArg,
+                    selectedFile,
+                    selectedCount,
+                    selectedOptions.Workers,
+                    registrationAtOnly: true,
+                    GetRegistrationProxyPool(),
+                    disable2fa: selectedOptions.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
@@ -86,79 +103,66 @@ namespace SmsWorkbench
 
             if (options.Source == "phone")
             {
-                var phoneArgs = new List<string>
-                {
-                    "--phone-register",
-                    "--count",
-                    options.Count.ToString(),
-                };
-                AddRegistrationProxy(phoneArgs);
-                RunBackend("手机号注册 (SMSBower)", phoneArgs);
+                var plan = BackendCommandPlanner.CreatePhoneRegistration(
+                    options.Count,
+                    GetRegistrationProxyPool(),
+                    disable2fa: options.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
             if (options.Source == "cfworker")
             {
-                var cfArgs = new List<string>
-                {
-                    "--buy-cfworker-mailbox",
-                    "--cfworker-domain",
+                var plan = BackendCommandPlanner.CreateCfWorkerRegistration(
                     GetConfiguredCfWorkerDomain(),
-                    "--count",
-                    options.Count.ToString(),
-                    "--workers",
-                    options.Workers.ToString()
-                };
-                AddRegistrationAtOnlyArgs(cfArgs);
-                AddRegistrationProxy(cfArgs);
-                RunBackend("CFWorker邮箱注册", cfArgs);
+                    options.Count,
+                    options.Workers,
+                    GetRegistrationProxyPool(),
+                    disable2fa: options.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
             if (options.Source == "remail_target")
             {
-                var targetArgs = new List<string>
-                {
-                    "--target-at200", options.Count.ToString(),
-                    "--buy-remail-mailbox", "--remail-service-mode", "purchase",
-                    "--workers", options.Workers.ToString()
-                };
-                AddNoPhoneRegistrationArgs(targetArgs);
-                AddRegistrationProxy(targetArgs);
-                RunBackend("ReMail 长效邮箱注册 (" + options.Count + ")", targetArgs);
+                var plan = BackendCommandPlanner.CreateRemailTargetRegistration(
+                    options.Count,
+                    options.Workers,
+                    GetRegistrationProxyPool(),
+                    disable2fa: options.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
             if (options.Source == "smailr")
             {
-                var smailrArgs = new List<string>
-                {
-                    "--buy-smailr-mailbox",
-                    "--smailr-domain",
+                var plan = BackendCommandPlanner.CreateSmailrRegistration(
                     GetConfiguredSmailrDomain(),
-                    "--count",
-                    options.Count.ToString(),
-                    "--workers",
-                    options.Workers.ToString()
-                };
-                AddRegistrationAtOnlyArgs(smailrArgs);
-                AddRegistrationProxy(smailrArgs);
-                RunBackend("Smailr 临时邮箱注册", smailrArgs);
+                    options.Count,
+                    options.Workers,
+                    GetRegistrationProxyPool(),
+                    disable2fa: options.Disable2fa);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
-            string mailboxArg = "--chatai-mailbox-file";
+            // Default: chatai mailbox file
             string mailboxFile = GetChataiMailboxFilePath();
-            int count = options.Count;
             if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
             {
                 ShowThemedInfoDialog("缺少邮箱文件", "未选择邮箱，且未找到 Chatai 邮箱文件。请先导入邮箱，或勾选要注册的邮箱记录。");
                 return;
             }
-            var args = new List<string> { mailboxArg, mailboxFile, "--count", count.ToString(), "--workers", options.Workers.ToString() };
-            AddRegistrationAtOnlyArgs(args);
-            AddRegistrationProxy(args);
-            RunBackend("一键注册", args);
+            var defaultPlan = BackendCommandPlanner.CreateMailboxFileRegistration(
+                "一键注册",
+                "--chatai-mailbox-file",
+                mailboxFile,
+                options.Count,
+                options.Workers,
+                registrationAtOnly: true,
+                GetRegistrationProxyPool(),
+                disable2fa: options.Disable2fa);
+            RunBackend(defaultPlan.TaskName, defaultPlan.Arguments.ToList());
         }
 
         private void AddRegistrationAtOnlyArgs(List<string> args)
@@ -182,27 +186,21 @@ namespace SmsWorkbench
                 return;
             }
 
-            var args = new List<string> { "--one-click-sms", "--phone-source", "smsbower", "--workers", "1", "--refresh-timeout", "60" };
             if (!TryCreateMailboxFile(rows, out string mailboxArg, out string mailboxFile, out int mailboxCount)
                 || mailboxCount != rows.Count)
             {
                 ShowThemedInfoDialog("未选择邮箱", "一键接码需要读取邮箱验证码。请先导入并选择包含完整邮箱凭据的账号。");
                 return;
             }
-            args.AddRange(new[] { mailboxArg, mailboxFile });
-            if (rows.Count > 1)
-            {
-                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_sms_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-                args.AddRange(new[] { "--email-file", emailFile });
-            }
-            else
-            {
-                args.AddRange(new[] { "--email", rows[0].Identifier });
-                AddSessionFileArg(args, rows[0]);
-            }
-            AddRegistrationProxy(args);
-            RunBackend("一键接码(" + rows.Count + ")", args);
+
+            var plan = BackendCommandPlanner.CreateOneClickSms(
+                mailboxArg,
+                mailboxFile,
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                rows.Count == 1 ? SessionFileFor(rows[0]) : "",
+                GetRegistrationProxyPool());
+            // Ensure temp files are cleaned up by the coordinator
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
         private void OneClickScan_Click(object sender, RoutedEventArgs e)
@@ -230,20 +228,31 @@ namespace SmsWorkbench
             ScanOptions options = ShowScanOptionsDialog(rows.Count);
             if (options == null) return;
 
-            var args = new List<string> { "--refresh-local-quota", "--quota-workers", options.Workers.ToString(), "--refresh-timeout", "90" };
-            if (rows.Count > 1)
+            var plan = BackendCommandPlanner.CreateAccountScan(
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                rows.Count == 1 ? SessionFileFor(rows[0]) : "",
+                options.Workers,
+                options.AutoRelogin,
+                GetLivenessProxyPool());
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
+        }
+
+        private void CheckPromotion_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Identifier))
+                .ToList();
+            if (rows.Count == 0)
             {
-                string emailFile = Path.Combine(Path.GetTempPath(), "oneclick_scan_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-                File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-                args.AddRange(new[] { "--email-file", emailFile });
+                ShowThemedInfoDialog("账号优惠检测", "没有找到可检测的账号。请先勾选账号，或切换到包含账号的筛选范围。");
+                return;
             }
-            else
-            {
-                args.AddRange(new[] { "--email", rows[0].Identifier });
-                AddSessionFileArg(args, rows[0]);
-            }
-            AddRegistrationProxy(args);
-            RunBackend("账号测活(" + rows.Count + ")", args);
+
+            var plan = BackendCommandPlanner.CreatePromotionCheck(
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                DefaultWorkerCount(),
+                GetLivenessProxyPool());
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
         private ScanOptions ShowScanOptionsDialog(int accountCount)
@@ -252,8 +261,8 @@ namespace SmsWorkbench
             {
                 Title = "账号测活设置",
                 Owner = this,
-                Width = 600,
-                MinWidth = 560,
+                Width = 770,
+                MinWidth = 720,
                 SizeToContent = SizeToContent.Height,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -263,14 +272,14 @@ namespace SmsWorkbench
             var root = new Grid { Margin = new Thickness(18) };
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             }
 
             var title = new TextBlock
             {
-                Text = "测活 " + Math.Max(1, accountCount).ToString() + " 个账号。HTTP 200 表示 AT 有效，HTTP 401 表示 AT 已失效；不会自动重登。",
+                Text = "测活 " + Math.Max(1, accountCount).ToString() + " 个账号。HTTP 200 表示 AT 有效，HTTP 401 表示 AT 已失效；可勾选 401 自动重登。",
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("TextSub"),
@@ -288,6 +297,17 @@ namespace SmsWorkbench
             Grid.SetRow(workerBox, 1);
             Grid.SetColumn(workerBox, 1);
             root.Children.Add(workerBox);
+
+            var autoReloginBox = new CheckBox
+            {
+                Content = "401 自动重登（RT / Cookie / 邮箱 OTP / OAuth）",
+                IsChecked = false,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(autoReloginBox, 2);
+            Grid.SetColumn(autoReloginBox, 1);
+            root.Children.Add(autoReloginBox);
 
             var actions = new StackPanel
             {
@@ -309,7 +329,8 @@ namespace SmsWorkbench
             {
                 selected = new ScanOptions
                 {
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount)))
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount))),
+                    AutoRelogin = autoReloginBox.IsChecked == true
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
@@ -374,9 +395,9 @@ namespace SmsWorkbench
                 Title = "选中邮箱注册",
                 Owner = this,
                 Width = 560,
-                Height = 196,
+                Height = 238,
                 MinWidth = 480,
-                MinHeight = 180,
+                MinHeight = 220,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
@@ -407,12 +428,23 @@ namespace SmsWorkbench
             root.Children.Add(workerLabel);
             root.Children.Add(workerBox);
 
+            var no2faBox = new CheckBox
+            {
+                Content = "关闭 2FA（不注册 TOTP）",
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(no2faBox, 2);
+            Grid.SetColumn(no2faBox, 1);
+            root.Children.Add(no2faBox);
+
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 2);
+            Grid.SetRow(actions, 3);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -423,7 +455,8 @@ namespace SmsWorkbench
                 {
                     Source = "pool",
                     Count = Math.Max(1, selectedCount),
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount())
+                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount()),
+                    Disable2fa = no2faBox.IsChecked == true
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
@@ -440,14 +473,15 @@ namespace SmsWorkbench
                 Title = "一键注册",
                 Owner = this,
                 Width = 560,
-                Height = 250,
+                Height = 292,
                 MinWidth = 480,
-                MinHeight = 230,
+                MinHeight = 272,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -488,6 +522,17 @@ namespace SmsWorkbench
             root.Children.Add(workerLabel);
             root.Children.Add(workerBox);
 
+            var no2faBox = new CheckBox
+            {
+                Content = "关闭 2FA（不注册 TOTP）",
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(no2faBox, 3);
+            Grid.SetColumn(no2faBox, 1);
+            root.Children.Add(no2faBox);
+
             void UpdateTargetControls()
             {
                 bool targetMode = string.Equals((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string, "remail_target", StringComparison.OrdinalIgnoreCase);
@@ -501,7 +546,7 @@ namespace SmsWorkbench
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 3);
+            Grid.SetRow(actions, 4);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -515,7 +560,8 @@ namespace SmsWorkbench
                 {
                     Source = selectedSource,
                     Count = count,
-                    Workers = workers
+                    Workers = workers,
+                    Disable2fa = no2faBox.IsChecked == true
                 };
                 CountText = count.ToString();
                 dialog.DialogResult = true;
@@ -663,98 +709,6 @@ namespace SmsWorkbench
                 Log("读取邮箱 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
             }
             return "";
-        }
-
-        private bool TryReadMailboxFromRawJson(string rawJson, out string provider, out string clientId, out string refreshToken, out string token, out string mailboxLine)
-        {
-            provider = "";
-            clientId = "";
-            refreshToken = "";
-            token = "";
-            mailboxLine = "";
-            if (string.IsNullOrWhiteSpace(rawJson)) return false;
-            try
-            {
-                using JsonDocument document = JsonDocument.Parse(rawJson);
-                if (!document.RootElement.TryGetProperty("mailbox", out JsonElement mailbox) || mailbox.ValueKind != JsonValueKind.Object) return false;
-
-                string email = JsonString(mailbox, "email");
-                string password = JsonString(mailbox, "password");
-                string loginPassword = JsonString(mailbox, "login_password");
-                refreshToken = JsonString(mailbox, "refresh_token");
-                string accessToken = JsonString(mailbox, "access_token");
-                string serviceToken = JsonString(mailbox, "token");
-                token = accessToken;
-                clientId = JsonStringAny(mailbox, "client_id", "clientId", "token");
-                string clientSecret = JsonString(mailbox, "client_secret");
-                provider = JsonString(mailbox, "provider");
-                string orderNo = JsonString(mailbox, "order_no");
-                string purchaseId = JsonString(mailbox, "purchase_id");
-                                if (email.Length == 0) return false;
-
-                if (provider.Equals("cfworker", StringComparison.OrdinalIgnoreCase))
-                {
-                    mailboxLine = "cfworker://" + email;
-                    return true;
-                }
-
-                if (provider.Equals("smailr", StringComparison.OrdinalIgnoreCase))
-                {
-                    token = serviceToken;
-                    mailboxLine = "smailr://" + email;
-                    return true;
-                }
-
-                if (provider.Equals("remail", StringComparison.OrdinalIgnoreCase))
-                {
-                    token = serviceToken;
-                    clientId = "";
-                    mailboxLine = MailboxPoolFileStore.BuildReMailLine(email, serviceToken, orderNo, purchaseId);
-                    return mailboxLine.Length > 0;
-                }
-
-                if (provider.Equals("icloud_url", StringComparison.OrdinalIgnoreCase))
-                {
-                    token = serviceToken;
-                    clientId = "";
-                    mailboxLine = serviceToken.Length > 0 ? email + "----" + serviceToken : "";
-                    return mailboxLine.Length > 0;
-                }
-
-                if (provider.Equals("gmail", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (clientId.Length > 0 && clientSecret.Length > 0 && refreshToken.Length > 0)
-                    {
-                        mailboxLine = "gmail://" + email + "----" + clientId + "----" + clientSecret + "----" + refreshToken
-                            + (accessToken.Length > 0 ? "----" + accessToken : "");
-                        return true;
-                    }
-                    if (password.Length > 0)
-                    {
-                        mailboxLine = loginPassword.Length > 0
-                            ? "gmail://" + email + "----" + loginPassword + "----" + password
-                            : "gmail://" + email + "---" + password;
-                        return true;
-                    }
-                    return false;
-                }
-
-                if (provider.Equals("chatai", StringComparison.OrdinalIgnoreCase) || clientId.Length > 0)
-                {
-                    if (clientId.Length == 0 || refreshToken.Length == 0) return false;
-                    mailboxLine = email + "----" + password + "----" + clientId + "----" + refreshToken;
-                }
-                else
-                {
-                    if (refreshToken.Length == 0) return false;
-                    mailboxLine = email + "---" + password + "---" + refreshToken + "---" + accessToken + "---0";
-                }
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private string JsonString(JsonElement obj, string property)

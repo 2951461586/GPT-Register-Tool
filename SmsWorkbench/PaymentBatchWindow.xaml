@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="批量协议支付"
         Width="1120"
-        Height="820"
+        Height="900"
         MinWidth="920"
-        MinHeight="680"
+        MinHeight="760"
         ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}">
@@ -38,6 +38,8 @@
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
       <StackPanel Margin="0,0,7,10">
@@ -62,12 +64,46 @@
         <TextBox Text="{Binding BatchId, UpdateSourceTrigger=PropertyChanged}"/>
       </StackPanel>
       <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
-        <TextBlock Text="代理 Seed" Style="{StaticResource FieldLabel}"/>
-        <TextBox Text="{Binding Proxy, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas"/>
+        <TextBlock Text="代理配置按支付方式保存" Style="{StaticResource FieldLabel}"/>
+        <TextBlock Text="Checkout / Approve 两个独立池，不继承注册代理" Foreground="{DynamicResource TextSub}"/>
       </StackPanel>
 
-      <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2">
-        <CheckBox Content="401 自动恢复（RT/Cookie/浏览器/OAuth）" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
+      <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,0,7,10">
+        <TextBlock Text="Checkout 代理池（每行一条）" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                 FontFamily="Consolas"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 Height="62"
+                 VerticalScrollBarVisibility="Auto"/>
+      </StackPanel>
+      <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
+        <TextBlock Text="Approve 代理池（优惠区，每行一条）" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                 FontFamily="Consolas"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 Height="62"
+                 VerticalScrollBarVisibility="Auto"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,7,10">
+        <TextBlock Text="Checkout 出口国家（默认跟随账单区）" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding CheckoutCountryOptions}"
+                  DisplayMemberPath="DisplayName"
+                  SelectedValuePath="Code"
+                  SelectedValue="{Binding CheckoutProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+      <StackPanel Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
+        <TextBlock Text="Approve 出口国家（默认 JP，可选 TR）" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding ApproveCountryOptions}"
+                  DisplayMemberPath="DisplayName"
+                  SelectedValuePath="Code"
+                  SelectedValue="{Binding ApproveProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="4" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2">
+        <CheckBox Content="401 自动恢复（RT/Cookie/邮箱OTP/OAuth）" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
         <CheckBox Content="仅能力探测（Checkout + Stripe init）" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
         <CheckBox Content="要求 0 元金额" IsChecked="{Binding RequireZero}" IsEnabled="{Binding RequireZeroEnabled}"/>
       </StackPanel>
@@ -101,11 +137,8 @@
         <DataGrid.Columns>
           <DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="120"/>
           <DataGridTextColumn Header="注册区" Binding="{Binding RegistrationCountry}" Width="62"/>
-          <DataGridTextColumn Header="Checkout" Binding="{Binding CheckoutCountry}" Width="78"/>
-          <DataGridTextColumn Header="Promotion" Binding="{Binding PromotionCountry}" Width="82"/>
-          <DataGridTextColumn Header="Provider" Binding="{Binding ProviderCountry}" Width="76"/>
-          <DataGridTextColumn Header="Approve" Binding="{Binding ApproveCountry}" Width="72"/>
-          <DataGridTextColumn Header="Redirect" Binding="{Binding RedirectCountry}" Width="72"/>
+          <DataGridTextColumn Header="账单区 / Checkout" Binding="{Binding CheckoutCountry}" Width="120"/>
+          <DataGridTextColumn Header="优惠区 / Approve" Binding="{Binding ApproveCountry}" Width="120"/>
           <DataGridTextColumn Header="策略" Binding="{Binding Strategy}" Width="*"/>
           <DataGridTextColumn Header="样本" Binding="{Binding SampleSize}" Width="56"/>
         </DataGrid.Columns>
@@ -175,6 +208,8 @@
       </Grid.ColumnDefinitions>
       <TextBlock Text="{Binding Status}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,16,0"/>
       <StackPanel Grid.Column="1" Orientation="Horizontal">
+        <Button Content="测试代理" Command="{Binding TestProxiesCommand}" MinWidth="84" Margin="0,0,8,0"/>
+        <Button Content="保存代理配置" Command="{Binding SaveProxyConfigurationCommand}" MinWidth="108" Margin="0,0,8,0"/>
         <Button Content="打开报告" Command="{Binding OpenReportCommand}" MinWidth="84" Margin="0,0,8,0"/>
         <Button Content="取消" Command="{Binding RunCancelCommand}" MinWidth="72" Margin="0,0,8,0"/>
         <Button Content="开始执行" Command="{Binding RunCommand}" MinWidth="96" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>

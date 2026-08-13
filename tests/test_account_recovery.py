@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
 from sms_tool import account_recovery
+from sms_tool import codex_oauth
+from sms_tool.mailbox import MailboxAccount
 
 
 def test_chatgpt_email_relogin_validates_account_input():
@@ -16,6 +18,24 @@ def test_chatgpt_email_relogin_requires_saved_mailbox():
         result = account_recovery.relogin_chatgpt_email_account({"email": "ok@example.com"})
 
     assert result == {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_mailbox"}
+
+
+def test_icloud_mailbox_url_is_resolved_from_configured_pool_without_persisting_it():
+    mailbox = MailboxAccount(
+        email="ok@icloud.com",
+        provider="icloud_url",
+        source="token_file",
+        token="https://mail.example/private-token/ok@icloud.com",
+        auth_mode="otp_url",
+    )
+    with patch.object(codex_oauth, "_mailbox_from_configured_pool", return_value=mailbox) as lookup:
+        result = codex_oauth._mailbox_from_data({
+            "email": "ok@icloud.com",
+            "mailbox": {"email": "ok@icloud.com", "provider": "icloud_url", "source": "token_file"},
+        })
+
+    assert result is mailbox
+    lookup.assert_called_once_with("ok@icloud.com")
 
 
 def test_refresh_local_quota_statuses_persists_result():
@@ -50,10 +70,107 @@ def test_refresh_local_quota_statuses_recovers_401():
 
     assert result["ok"]
     assert result["results"][0]["quota_status"] == "active"
+    assert result["relogin_attempted"] == 1
+    assert result["relogin_success"] == 1
+    assert result["relogin_failed"] == 0
     assert relogin.call_args.kwargs["mode"] == "codex_oauth"
 
 
-def test_relogin_auto_uses_refresh_cookie_browser_then_oauth():
+def test_refresh_local_quota_statuses_does_not_count_persisted_401_as_success():
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "invalid@example.com", "access_token": "expired_at"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={
+                "ok": False,
+                "status": "token_invalid",
+                "status_code": 401,
+                "quota_status": "401失效",
+            },
+        ),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["invalid@example.com"])
+
+    assert not result["ok"]
+    assert result["success"] == 0
+    assert result["failed"] == 1
+    assert result["persisted"] == 1
+    assert result["persist_failed"] == 0
+    assert result["at_invalid"] == 1
+    assert result["account_deactivated"] == 0
+    assert result["probe_failed"] == 0
+    assert result["results"][0]["persisted"] is True
+    assert result["results"][0]["probe_ok"] is False
+    assert result["results"][0]["ok"] is False
+
+
+def test_refresh_local_quota_statuses_accepts_http_401_without_normalized_status():
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "status-code-only@example.com", "access_token": "expired_at"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status_code": 401, "quota_status": "401失效"},
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_codex_account",
+            return_value={
+                "ok": True,
+                "probe": {"ok": True, "status_code": 200, "status": "active"},
+            },
+        ) as relogin,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["status-code-only@example.com"],
+            relogin_on_401=True,
+        )
+
+    assert result["ok"]
+    relogin.assert_called_once()
+
+
+def test_refresh_local_quota_statuses_classifies_terminal_account_without_relogin():
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={
+                "email": "closed@example.com",
+                "access_token": "expired_at",
+                "status": "account_deactivated",
+            },
+        ),
+        patch.object(account_recovery, "probe_account_liveness") as probe,
+        patch.object(account_recovery, "relogin_codex_account") as relogin,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["closed@example.com"],
+            relogin_on_401=True,
+        )
+
+    assert not result["ok"]
+    assert result["account_deactivated"] == 1
+    assert result["at_invalid"] == 0
+    assert result["probe_failed"] == 0
+    assert result["relogin_attempted"] == 0
+    probe.assert_not_called()
+    relogin.assert_not_called()
+
+
+def test_relogin_auto_uses_refresh_cookie_email_then_oauth():
     with (
         patch.object(
             account_recovery,
@@ -67,9 +184,9 @@ def test_relogin_auto_uses_refresh_cookie_browser_then_oauth():
         ) as web,
         patch.object(
             account_recovery,
-            "relogin_browser_account",
-            return_value={"ok": False, "mode": "browser", "error": "browser_login_challenge_required"},
-        ) as browser,
+            "relogin_chatgpt_email_account",
+            return_value={"ok": False, "mode": "chatgpt_email_otp", "error": "email_login_failed"},
+        ) as email_otp,
         patch.object(
             account_recovery,
             "relogin_local_codex_account",
@@ -79,15 +196,17 @@ def test_relogin_auto_uses_refresh_cookie_browser_then_oauth():
         result = account_recovery.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
 
     assert result["ok"]
+    # Browser re-login has been removed: the auto chain is protocol-only.
     assert [item["mode"] for item in result["attempts"]] == [
         "oauth_refresh_token",
         "web_session",
-        "browser",
+        "chatgpt_email_otp",
     ]
     refresh.assert_called_once()
     web.assert_called_once()
-    browser.assert_called_once()
+    email_otp.assert_called_once()
     oauth.assert_called_once()
+    assert not hasattr(account_recovery, "relogin_browser_account")
 
 
 def test_relogin_auto_stops_after_refresh_token_success():
@@ -98,7 +217,7 @@ def test_relogin_auto_stops_after_refresh_token_success():
             return_value={"ok": True, "mode": "oauth_refresh_token", "persisted": True},
         ) as refresh,
         patch.object(account_recovery, "relogin_web_session_account") as web,
-        patch.object(account_recovery, "relogin_browser_account") as browser,
+        patch.object(account_recovery, "relogin_chatgpt_email_account") as email_otp,
         patch.object(account_recovery, "relogin_local_codex_account") as oauth,
     ):
         result = account_recovery.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
@@ -108,8 +227,26 @@ def test_relogin_auto_stops_after_refresh_token_success():
     assert result["attempts"] == []
     refresh.assert_called_once()
     web.assert_not_called()
-    browser.assert_not_called()
+    email_otp.assert_not_called()
     oauth.assert_not_called()
+
+
+def test_relogin_auto_persists_permanent_deactivation():
+    with (
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "mode": "oauth_refresh_token", "error": "account_deactivated"},
+        ),
+        patch.object(account_recovery, "_persist_permanent_deactivation", return_value=True) as persist,
+        patch.object(account_recovery, "relogin_web_session_account") as web,
+    ):
+        result = account_recovery.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
+
+    assert result["terminal"] is True
+    assert result["error"] == "account_deactivated"
+    persist.assert_called_once()
+    web.assert_not_called()
 
 
 def test_relogin_persists_only_after_http_200_probe():
@@ -126,12 +263,46 @@ def test_relogin_persists_only_after_http_200_probe():
     save.assert_called_once()
 
 
+def test_successful_relogin_replaces_stale_quota_401_metadata():
+    data = {
+        "status": "at_invalid",
+        "error": "oauth_refresh_http_401",
+        "quota_status": "401失效",
+        "quota": {
+            "status": "401失效",
+            "last_result": {"status": "token_invalid", "status_code": 401},
+        },
+    }
+    probe = {
+        "ok": True,
+        "status": "active",
+        "status_code": 200,
+        "quota_status": "可用",
+        "access_token": "must-not-persist-in-quota-metadata",
+    }
+
+    account_recovery._mark_successful_relogin(data, probe, now=123)
+
+    assert data["status"] == "registered"
+    assert "error" not in data
+    assert data["quota_status"] == "可用"
+    assert data["quota_updated_at"] == 123
+    assert data["quota"]["status"] == "可用"
+    assert data["quota"]["updated_at"] == 123
+    assert data["quota"]["last_result"]["status_code"] == 200
+    assert "access_token" not in data["quota"]["last_result"]
+
+
 def test_refresh_token_recovery_verifies_before_persisting():
     account = {
         "email": "ok@example.com",
         "access_token": "old_at",
         "oauth_refresh_token": "rt_old",
         "json_path": "session.json",
+        "success": False,
+        "status": "at_invalid",
+        "error": "oauth_refresh_http_401",
+        "account_scan": {"token_probe": {"status": "token_invalid", "status_code": 401}},
     }
     with (
         patch("sms_tool.codex_export._openai_refresh_token", return_value="rt_old"),
@@ -153,6 +324,10 @@ def test_refresh_token_recovery_verifies_before_persisting():
     assert result["persisted"]
     assert probe.call_args.args[0]["access_token"] == "new_at"
     assert save.call_args.args[0]["oauth_refresh_token"] == "rt_new"
+    assert save.call_args.args[0]["status"] == "registered"
+    assert "error" not in save.call_args.args[0]
+    assert save.call_args.args[0]["account_scan_status"] == "alive"
+    assert save.call_args.args[0]["account_scan"]["token_probe"]["status_code"] == 200
 
 
 def test_refresh_token_recovery_rejects_unverified_candidate():

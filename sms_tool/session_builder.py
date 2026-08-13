@@ -130,6 +130,7 @@ def build_session_file(data):
         "timing": data.get("timing") or {},
         "pipeline_timing": data.get("pipeline_timing") or {},
         "totp_secret": data.get("totp_secret", ""),
+        "twofa_enrolled_at": data.get("twofa_enrolled_at", 0),
         "twofa_enroll_error": (
             data.get("twofa_enrollment", {}).get("error", "")
             if isinstance(data.get("twofa_enrollment"), dict)

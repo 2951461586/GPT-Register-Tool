@@ -108,6 +108,10 @@ def _protocol_proxy_pool() -> list[str]:
     return payment_commands.protocol_proxy_pool(CFG)
 
 
+def _payment_proxy_pools(payment_method: str) -> dict[str, list[str]]:
+    return payment_commands.payment_proxy_pools(CFG, payment_method)
+
+
 def _has_explicit_payment_proxy(args) -> bool:
     return payment_commands.has_explicit_payment_proxy(args)
 
@@ -147,6 +151,12 @@ def _payment_country(payment_method: str, explicit: str = "") -> str:
     return payment_commands.payment_country(payment_method, explicit)
 
 
+def _payment_method_choices() -> tuple[str, ...]:
+    from .payment_catalog import PAYMENT_CATALOG
+
+    return tuple(PAYMENT_CATALOG.aliases)
+
+
 def _at_payment_stage_args(args, payment_method="paypal"):
     return payment_commands.payment_stage_args(
         args,
@@ -181,7 +191,7 @@ def main():
     parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--desktop-read",
-        choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file"],
+        choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file", "mailbox-pool"],
         default=None,
         help=argparse.SUPPRESS,
     )
@@ -216,7 +226,7 @@ def main():
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=["paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao", "blik", "twint", "direct_card", "momo"], default=None, help="Protocol payment-link method")
+    parser.add_argument("--payment-method", "--payment-link-method", choices=_payment_method_choices(), default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
@@ -235,6 +245,7 @@ def main():
     parser.add_argument("--refresh-cpa-quota", action="store_true", help="Refresh quota status and update SQLite; defaults to local access_token probing")
     parser.add_argument("--refresh-local-quota", action="store_true", help="Refresh quota status locally with saved access_token and update SQLite")
     parser.add_argument("--quota-usage", action="store_true", help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)")
+    parser.add_argument("--check-promotion", action="store_true", help="Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status")
     parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
     parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
     parser.add_argument("--quota-relogin-timeout", type=int, default=180, help="Timeout in seconds for --quota-auto-relogin")
@@ -269,16 +280,19 @@ def main():
     parser.add_argument("--checkout-country", "--billing-country", dest="checkout_country", default=None, help="Hosted/UPI checkout billing country/currency, e.g. US or JP")
     parser.add_argument("--payment-country", default=None, help="UPI local payment-method country, e.g. IN")
     parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
+    parser.add_argument("--checkout-proxy-pool", default="", help="Checkout proxy pool; comma or newline separated")
     parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
     parser.add_argument("--stripe-init-proxy", default=None, help="Explicit Stripe init proxy (falls back to provider proxy)")
     parser.add_argument("--payment-method-proxy", default=None, help="Explicit payment-method creation proxy")
     parser.add_argument("--confirm-proxy", default=None, help="Explicit Stripe confirm proxy")
     parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
+    parser.add_argument("--approve-proxy-pool", default="", help="Approve proxy pool; comma or newline separated")
     parser.add_argument("--redirect-proxy", default=None, help="Explicit final provider redirect proxy")
     parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
-    parser.add_argument("--checkout-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate checkout proxy credentials to this exit country")
-    parser.add_argument("--approve-proxy-country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate approve proxy credentials to this exit country")
-    parser.add_argument("--promotion-proxy-country", "--update-proxy-country", dest="promotion_proxy_country", choices=["US", "GB", "DE", "JP", "BR", "TR", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"], default=None, help="Rotate checkout/update proxy credentials to this exit country")
+    payment_proxy_countries = ["US", "GB", "DE", "JP", "BR", "TR", "TH", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"]
+    parser.add_argument("--checkout-proxy-country", choices=payment_proxy_countries, default=None, help="Rotate checkout proxy credentials to this exit country")
+    parser.add_argument("--approve-proxy-country", choices=payment_proxy_countries, default=None, help="Rotate approve proxy credentials to this exit country")
+    parser.add_argument("--promotion-proxy-country", "--update-proxy-country", dest="promotion_proxy_country", choices=payment_proxy_countries, default=None, help="Rotate checkout/update proxy credentials to this exit country")
     parser.add_argument("--test-payment-proxies", action="store_true", help="Probe checkout/approve/update proxy exits and print JSON")
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
@@ -317,8 +331,6 @@ def main():
     parser.add_argument("--gmail-send-body", default=None, help="Plain-text body for --gmail-send")
     parser.add_argument("--gmail-send-html", default=None, help="Optional HTML body for --gmail-send")
     parser.add_argument("--gmail-send-self", action="store_true", help="Send --gmail-send to the Gmail mailbox itself")
-    parser.add_argument("--browser-refresh-session", action="store_true", help="Use the old browser-based refresh flow")
-    parser.add_argument("--headless-refresh", action="store_true", help="Run browser refresh headless; visible browser is default")
     parser.add_argument("--auto-pay", action="store_true", help="Automate PayPal payment (reverse protocol first, browser fallback)")
     parser.add_argument("--auto-pay-reverse-only", action="store_true", help="Use reverse protocol only, no browser fallback")
     parser.add_argument("--auto-pay-headless", action="store_true", help="Run auto-pay browser headless")
@@ -331,12 +343,13 @@ def main():
     parser.add_argument("--scan-switch-workspace-id", default=None, help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used")
-    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "browser", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, isolated browser, then Codex OAuth")
+    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth")
     
     parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
     parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
     parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
     parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
+    parser.add_argument("--no-2fa", action="store_true", help="Skip TOTP 2FA enrollment after a successful registration")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
     parser.add_argument("--phone-source", default=None, choices=["smsbower", "phone_pool"], help="Override phone source for registration/one-click SMS")
@@ -362,11 +375,15 @@ def main():
             create_payment_url_file,
             read_account,
             read_accounts,
+            read_mailbox_pool,
         )
         if args.desktop_read == "accounts":
             payload = {"ok": True, "accounts": read_accounts(CFG)}
         elif args.desktop_read == "account":
             payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
+        elif args.desktop_read == "mailbox-pool":
+            extra_files = (args.chatai_mailbox_file,) if args.chatai_mailbox_file else ()
+            payload = {"ok": True, **read_mailbox_pool(CFG, extra_files=extra_files)}
         elif args.desktop_read == "mailbox-file":
             payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
         elif args.desktop_read == "account-file":
@@ -404,6 +421,9 @@ def main():
         return
     if getattr(args, "quota_usage", False):
         _quota_usage(args)
+        return
+    if getattr(args, "check_promotion", False):
+        _check_promotion(args)
         return
     if args.export_codex_json:
         _export_codex_json(args)
@@ -561,6 +581,7 @@ def main():
             codex_oauth=not args.registration_at_only,
             registration_mode=args.registration_mode,
             browser_headless=bool(getattr(args, "browser_headless", False)),
+            enroll_2fa=not getattr(args, "no_2fa", False),
             run_email_func=run_email,
         )
     else:
@@ -577,6 +598,7 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=not args.registration_at_only,
             registration_mode=args.registration_mode,
+            enroll_2fa=not getattr(args, "no_2fa", False),
         )]
     register_seconds = time.time() - register_started
 
@@ -727,6 +749,7 @@ def _run_target_at200(args, base_dir):
                 phone_pool=phone_pool,
                 codex_oauth=not args.registration_at_only,
                 registration_mode=args.registration_mode,
+                enroll_2fa=not getattr(args, "no_2fa", False),
                 run_email_func=run_email,
             )
             saved = _save_registration_results(
@@ -913,8 +936,6 @@ def _refresh_session(args):
         email=args.email or "",
         session_file=args.session_file or "",
         timeout=args.refresh_timeout,
-        headless=args.headless_refresh,
-        browser=args.browser_refresh_session,
         proxy=args.proxy,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -1198,6 +1219,32 @@ def _import_cpa(args):
         print(f"[*] CPA quota refresh after import skipped: {exc}")
 
 
+def _check_promotion(args):
+    from .account_promotion import refresh_promotion_statuses
+    from .storage import list_paypal_accounts
+
+    emails = _read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    emails = _unique_emails(emails)
+    if not emails:
+        emails = [str(row.get("email") or "").strip() for row in list_paypal_accounts()]
+    result = refresh_promotion_statuses(
+        emails=emails,
+        workers=max(1, int(args.quota_workers or args.workers or 4)),
+        proxy=args.proxy,
+        timeout=max(5, int(args.refresh_timeout or 20)),
+    )
+    from .desktop_ipc import emit_result
+
+    if bool(getattr(args, "desktop_ipc", False)):
+        emit_result(result, enabled=True)
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
 def _refresh_cpa_quota(args):
     from .account_recovery import refresh_local_quota_statuses
     from .cpa_import import refresh_cpa_quota_statuses
@@ -1228,17 +1275,28 @@ def _refresh_cpa_quota(args):
             relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 180) or 180)),
             relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
         )
-        if quota_mode == "auto" and result.get("failed", 0):
+        fallback_emails = [
+            item.get("email")
+            for item in result.get("results", [])
+            if not item.get("ok")
+            and str((item.get("probe") or {}).get("status") or "").strip().lower() != "account_deactivated"
+            and not bool(
+                (item.get("relogin") if isinstance(item.get("relogin"), dict) else {}).get("terminal")
+            )
+            and "account_deactivated" not in str(
+                (item.get("relogin") if isinstance(item.get("relogin"), dict) else {}).get("error") or ""
+            ).lower()
+        ]
+        if quota_mode == "auto" and fallback_emails:
             fallback = refresh_cpa_quota_statuses(
-                emails=[item.get("email") for item in result.get("results", []) if not item.get("ok")],
+                emails=fallback_emails,
                 workers=max(1, int(args.quota_workers or args.workers or 4)),
                 api_url=args.cpa_api_url or "",
                 api_token=args.cpa_api_token or "",
                 timeout=max(5, int(args.refresh_timeout or 30)),
             )
             result["fallback_cpa"] = fallback
-            if fallback.get("success", 0):
-                result["ok"] = True
+            result["ok"] = bool(fallback.get("ok"))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)
@@ -1385,6 +1443,7 @@ def _payment_command_context():
         payment_country=_payment_country,
         protocol_proxy_pool=_protocol_proxy_pool,
         has_explicit_payment_proxy=_has_explicit_payment_proxy,
+        payment_proxy_pools=_payment_proxy_pools,
     )
 
 
@@ -1392,8 +1451,8 @@ def _list_payment_methods():
     return payment_commands.list_payment_methods()
 
 
-def _payment_stage_country_overrides(args):
-    return payment_commands.stage_country_overrides(args)
+def _payment_stage_country_overrides(args, payment_method="paypal"):
+    return payment_commands.stage_country_overrides(args, payment_method, CFG)
 
 
 def _resolve_payment_access_token(args):
@@ -1407,25 +1466,33 @@ def _test_payment_proxies(args):
 def _extract_payment_link(args):
     return payment_commands.extract_payment_link(args, _payment_command_context())
 
+
+def _resolve_cli_payment_route(args, payment_method):
+    try:
+        route = payment_commands.resolve_payment_route(
+            args,
+            payment_method,
+            _payment_command_context(),
+        )
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
+        raise SystemExit(2) from exc
+    if not route.get("ok"):
+        print(json.dumps(route, ensure_ascii=False, indent=2))
+        raise SystemExit(3)
+    return route
+
+
 def _regenerate_paypal_link(args):
     from .paypal_links import regenerate_paypal_link
 
     email = (args.email or "").strip()
     emails = _read_email_file(args.email_file)
     payment_method = _payment_method(args)
-    payment_proxy = args.proxy
-    payment_checkout_proxy = getattr(args, "checkout_proxy", None)
-    payment_provider_proxy = getattr(args, "provider_proxy", None)
-    payment_approve_proxy = getattr(args, "approve_proxy", None)
-    if not _has_explicit_payment_proxy(args) and _protocol_proxy_pool():
-        from .paypal_proxy import select_proxy_from_pool
-
-        country = _payment_country(payment_method, getattr(args, "target_country", ""))
-        payment_proxy, attempts = select_proxy_from_pool(_protocol_proxy_pool(), country, "payment")
-        if not payment_proxy:
-            print(json.dumps({"ok": False, "error": "payment_proxy_pool_unavailable", "attempts": attempts}, ensure_ascii=False, indent=2))
-            raise SystemExit(3)
-        payment_checkout_proxy = payment_provider_proxy = payment_approve_proxy = payment_proxy
+    if not emails and not email and not args.session_file:
+        print("[Error] --email or --session-file is required with --regenerate-paypal-link")
+        return
+    route = _resolve_cli_payment_route(args, payment_method)
     if emails:
         workers = _payment_regenerate_workers(args, payment_method, len(emails))
         delay_seconds = _payment_regenerate_delay_seconds(payment_method)
@@ -1443,13 +1510,13 @@ def _regenerate_paypal_link(args):
             return index, regenerate_paypal_link(
                 email=item_email,
                 session_file="",
-                proxy=payment_proxy,
+                proxy=route["proxy"],
                 payment_method=payment_method,
                 paypal_generation_type=args.paypal_generation_type,
-                checkout_proxy=payment_checkout_proxy,
-                provider_proxy=payment_provider_proxy,
-                approve_proxy=payment_approve_proxy,
-                promotion_proxy=getattr(args, "promotion_proxy", None),
+                checkout_proxy=route["checkout_proxy"],
+                provider_proxy=route["provider_proxy"],
+                approve_proxy=route["approve_proxy"],
+                promotion_proxy=route["promotion_proxy"],
                 require_zero=not getattr(args, "no_require_zero", False),
             )
 
@@ -1466,19 +1533,16 @@ def _regenerate_paypal_link(args):
             raise SystemExit(3)
         return
 
-    if not email and not args.session_file:
-        print("[Error] --email or --session-file is required with --regenerate-paypal-link")
-        return
     result = regenerate_paypal_link(
         email=email,
         session_file=args.session_file or "",
-        proxy=payment_proxy,
+        proxy=route["proxy"],
         payment_method=payment_method,
         paypal_generation_type=args.paypal_generation_type,
-        checkout_proxy=payment_checkout_proxy,
-        provider_proxy=payment_provider_proxy,
-        approve_proxy=payment_approve_proxy,
-        promotion_proxy=getattr(args, "promotion_proxy", None),
+        checkout_proxy=route["checkout_proxy"],
+        provider_proxy=route["provider_proxy"],
+        approve_proxy=route["approve_proxy"],
+        promotion_proxy=route["promotion_proxy"],
         require_zero=not getattr(args, "no_require_zero", False),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -1493,6 +1557,7 @@ def _regenerate_paypal_link_fallback(args, emails):
     from .paypal_links import regenerate_paypal_link
 
     payment_method = _payment_method(args)
+    route = _resolve_cli_payment_route(args, payment_method)
     workers = _payment_regenerate_workers(args, payment_method, len(emails))
     delay_seconds = _payment_regenerate_delay_seconds(payment_method)
     print(f"[*] Fallback: {len(emails)} account(s), workers={workers} delay={delay_seconds:g}s")
@@ -1505,12 +1570,14 @@ def _regenerate_paypal_link_fallback(args, emails):
         return index, regenerate_paypal_link(
             email=item_email,
             session_file="",
-            proxy=args.proxy,
+            proxy=route["proxy"],
             payment_method=payment_method,
             paypal_generation_type=args.paypal_generation_type,
-            checkout_proxy=getattr(args, "checkout_proxy", None),
-            provider_proxy=getattr(args, "provider_proxy", None),
-            approve_proxy=getattr(args, "approve_proxy", None),
+            checkout_proxy=route["checkout_proxy"],
+            provider_proxy=route["provider_proxy"],
+            approve_proxy=route["approve_proxy"],
+            promotion_proxy=route["promotion_proxy"],
+            require_zero=not getattr(args, "no_require_zero", False),
         )
 
     with ThreadPoolExecutor(max_workers=workers) as executor:

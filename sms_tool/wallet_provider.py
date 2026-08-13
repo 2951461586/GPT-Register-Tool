@@ -24,7 +24,7 @@ from .checkout_contract import (
     PAYMENT_METHOD_PROFILES,
     StripeCapabilityEvidence,
 )
-from .phone_proxy import redact_proxy_text as _redact_proxy_text
+from .payment_capability import build_capability_probe_result
 from .sanitizer import sanitize_text as _canonical_sanitize_text
 
 
@@ -32,17 +32,7 @@ _RUNTIME_VERSION = "6f8494a281"
 _SIDE_EFFECT_STAGES = frozenset({"confirm", "approve", "poll", "follow_redirect"})
 _TERMINAL_FAILURE_STATES = frozenset({"declined", "denied", "failed", "rejected"})
 _TERMINAL_CANCEL_STATES = frozenset({"canceled", "cancelled"})
-
-_BEARER_RE = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
-_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b")
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"(?i)(\b(?:access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|"
-    r"publishable[_-]?key|password|authorization)\b[\"']?\s*[:=]\s*[\"']?)"
-    r"([^\s\"'&,}]+)"
-)
-_STRIPE_SECRET_RE = re.compile(r"\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_]{6,}\b")
 _SESSION_ID_RE = re.compile(r"\b(?:cs|oaics|pm|pi|seti)_(?:live_|test_)?[A-Za-z0-9_]{8,}\b")
-
 
 @dataclass(frozen=True)
 class WalletMethodSpec:
@@ -113,6 +103,8 @@ class WalletProviderTransport(Protocol):
     """Wire boundary implemented by the application HTTP/proxy layer."""
 
     def create_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]: ...
+
+    def update_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]: ...
 
     def stripe_init(self, request: WalletTransportRequest) -> Mapping[str, Any]: ...
 
@@ -195,17 +187,10 @@ def wallet_method_spec(payment_method: Any) -> WalletMethodSpec:
 def redact_sensitive_text(value: Any) -> str:
     """Redact bearer / JWT / proxy-auth / secret / id tokens from text.
 
-    Proxy-credential redaction delegates to the canonical helper in
-    :mod:`phone_proxy` so all proxy shapes (``host:port:user:pass`` included)
-    share a single implementation.
+    The canonical sanitizer owns all credential and provider-identifier rules.
     """
-    return _canonical_sanitize_text(value)
-    text = _BEARER_RE.sub(r"\1[REDACTED]", text)
-    text = _JWT_RE.sub("[REDACTED_JWT]", text)
-    text = _SENSITIVE_ASSIGNMENT_RE.sub(r"\1[REDACTED]", text)
-    text = _STRIPE_SECRET_RE.sub("[REDACTED_STRIPE_KEY]", text)
-    text = _SESSION_ID_RE.sub(lambda match: _identifier_hint(match.group(0)), text)
-    return text
+    text = _canonical_sanitize_text(value)
+    return _SESSION_ID_RE.sub("[REDACTED_STRIPE_ID]", text)
 
 
 def build_payment_method_payload(
@@ -306,6 +291,7 @@ def capability_result(evidence: StripeCapabilityEvidence, contract: CheckoutRequ
         "supported": supported,
         "amount_minor": evidence.amount_minor,
         "currency": evidence.currency,
+        "currency_present": evidence.currency_present,
         "payment_method_types": list(evidence.payment_method_types),
         "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
         "custom_payment_methods": list(evidence.custom_payment_methods),
@@ -324,6 +310,7 @@ def run_wallet_provider(
     transport_context: Mapping[str, Any] | None = None,
     stripe_publishable_key: str = "",
     require_zero: bool = False,
+    promotion_update: bool | None = None,
     max_approve_attempts: int = 6,
     max_poll_attempts: int = 25,
     poll_interval_seconds: float = 2.0,
@@ -370,6 +357,23 @@ def run_wallet_provider(
             fallback_publishable_key=stripe_publishable_key,
         )
 
+        if _promotion_update_enabled(spec.key, require_zero, promotion_update, wire_context):
+            stage = "promotion"
+            promotion_response = transport.update_checkout(
+                _request(
+                    stage,
+                    spec,
+                    contract,
+                    flow_id,
+                    token,
+                    _promotion_payload(session, checkout_payload),
+                    session=session,
+                    auth_context=context,
+                    transport_context=wire_context,
+                )
+            )
+            _raise_for_promotion_payload(promotion_response)
+
         stage = "stripe_init"
         init_request_payload = contract.stripe_init_payload(
             session.publishable_key,
@@ -393,19 +397,18 @@ def run_wallet_provider(
         base_result = {
             "payment_method": spec.key,
             "capability": capability,
-            "checkout_session_id_hint": _identifier_hint(session.checkout_session_id),
+            "checkout_session_id_present": bool(session.checkout_session_id),
             "retryable": False,
             "error_stage": "",
         }
         if probe_only:
-            return {
-                **base_result,
-                "ok": True,
-                "status": "probe_complete",
-                "operation": "probe",
-                "probe_only": True,
-                "url": "",
-            }
+            return build_capability_probe_result(
+                contract,
+                evidence,
+                checkout_session_present=bool(session.checkout_session_id),
+                require_zero=require_zero,
+                extra={**base_result, "probe_only": True, "url": ""},
+            )
         if capability["supported"] is False:
             raise WalletProviderError(
                 f"Stripe init does not offer {spec.label}",
@@ -419,6 +422,23 @@ def run_wallet_provider(
                 error_stage="stripe_init",
                 retryable=False,
                 status="unknown",
+            )
+        expected_currency = str(contract.currency or "").strip().upper()
+        actual_currency = str(evidence.currency or "").strip().upper()
+        if not evidence.currency_present:
+            raise WalletProviderError(
+                "Stripe init did not provide a currency for the wallet contract",
+                error_code="wallet_checkout_currency_unknown",
+                error_stage="stripe_init",
+                retryable=False,
+                status="unknown",
+            )
+        if expected_currency and actual_currency != expected_currency:
+            raise WalletProviderError(
+                f"wallet checkout currency mismatch: expected={expected_currency} actual={actual_currency}",
+                error_code="wallet_checkout_currency_mismatch",
+                error_stage="stripe_init",
+                retryable=False,
             )
         # amount_minor is None 表示 Stripe 响应里取不到金额证据 —— 属于协议模糊，
         # 应交由上层当 unknown 处理，而不是用 Python 的 `None != 0 == True` 语义误判成
@@ -616,6 +636,55 @@ def _request(
     )
 
 
+def _promotion_update_enabled(
+    payment_method: str,
+    require_zero: bool,
+    configured: bool | None,
+    transport_context: Mapping[str, Any],
+) -> bool:
+    if payment_method != "gopay":
+        return False
+    if require_zero or configured is True:
+        return True
+    if configured is False:
+        return False
+    return any(
+        str(transport_context.get(key) or "").strip()
+        for key in ("promotion_proxy", "update_proxy")
+    )
+
+
+def _promotion_payload(
+    session: CheckoutSessionContract,
+    checkout_payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    campaign = checkout_payload.get("promo_campaign")
+    if not isinstance(campaign, Mapping):
+        campaign = {
+            "promo_campaign_id": "plus-1-month-free",
+            "is_coupon_from_query_param": False,
+        }
+    return {
+        "checkout_session_id": session.checkout_session_id,
+        "processor_entity": session.processor_entity,
+        "plan_name": str(checkout_payload.get("plan_name") or "chatgptplusplan"),
+        "price_interval": "month",
+        "seat_quantity": 1,
+        "promo_campaign": dict(campaign),
+    }
+
+
+def _raise_for_promotion_payload(payload: Mapping[str, Any]) -> None:
+    _raise_for_terminal_payload(payload, "promotion")
+    if payload.get("success") is False:
+        raise WalletProviderError(
+            "wallet checkout promotion update was rejected",
+            error_code="wallet_promotion_rejected",
+            error_stage="promotion",
+            retryable=False,
+        )
+
+
 def _billing_details(
     contract: CheckoutRequestContract,
     supplied: Mapping[str, Any] | None,
@@ -753,6 +822,18 @@ def _is_provider_url(value: str, spec: WalletMethodSpec) -> bool:
 
 def _structured_error(exc: Exception, stage: str) -> WalletProviderError:
     if isinstance(exc, WalletProviderError):
+        if (
+            stage in _SIDE_EFFECT_STAGES
+            and exc.status == "failed"
+            and exc.error_code != "wallet_provider_rejected"
+        ):
+            return WalletProviderError(
+                str(exc),
+                error_code=exc.error_code,
+                error_stage=exc.error_stage or stage,
+                retryable=False,
+                status="unknown",
+            )
         return exc
     if isinstance(exc, CheckoutContractError):
         return WalletProviderError(
@@ -770,7 +851,9 @@ def _structured_error(exc: Exception, stage: str) -> WalletProviderError:
         return WalletTimedOutError(str(exc) or "wallet transport timed out", error_stage=stage)
     status_code = _exception_status_code(exc)
     retryable = status_code == 429 or status_code >= 500 if status_code else not isinstance(exc, (TypeError, ValueError))
-    uncertain = stage in _SIDE_EFFECT_STAGES and retryable
+    # Once a side-effecting request starts, a local exception cannot prove that
+    # the provider rejected it. Treat every unstructured failure as unknown.
+    uncertain = stage in _SIDE_EFFECT_STAGES
     return WalletProviderError(
         str(exc) or exc.__class__.__name__,
         error_code="wallet_transport_error",
@@ -806,6 +889,7 @@ def _failure_result(
         "error_code": error.error_code,
         "retryable": error.retryable,
         "error_stage": error.error_stage,
+        "side_effect_started": error.error_stage in _SIDE_EFFECT_STAGES,
     }
     if capability is not None:
         result["capability"] = dict(capability)
@@ -813,13 +897,6 @@ def _failure_result(
         result["retryable"] = False
         result["requires_reconciliation"] = True
     return result
-
-
-def _identifier_hint(value: str) -> str:
-    text = str(value or "")
-    if len(text) <= 12:
-        return "[REDACTED_ID]" if text else ""
-    return f"{text[:7]}...{text[-4:]}"
 
 
 __all__ = [

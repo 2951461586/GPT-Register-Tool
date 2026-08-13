@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
 
 from .checkout_contract import (
     CHECKOUT_PATH,
@@ -152,6 +152,65 @@ class ChatGPTStripeCapabilityTransport:
         )
 
 
+def build_capability_probe_result(
+    contract: CheckoutRequestContract,
+    evidence: StripeCapabilityEvidence,
+    *,
+    checkout_session_present: bool,
+    require_zero: bool,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the common, side-effect-free capability result contract."""
+    classification, available = evidence.classification_for(contract.stripe_payment_method)
+    reason = "payment_method_available" if available else "payment_method_unavailable"
+    eligible: bool | None = available
+    expected_currency = str(contract.currency or "").strip().upper()
+    actual_currency = str(evidence.currency or "").strip().upper()
+    if available and not evidence.currency_present:
+        classification, eligible, reason = "unknown", None, "checkout_currency_unknown"
+    elif available and expected_currency and actual_currency != expected_currency:
+        classification, eligible, reason = "ineligible", False, "checkout_currency_mismatch"
+    elif available and require_zero and evidence.amount_minor is None:
+        classification, eligible, reason = "unknown", None, "checkout_amount_unknown"
+    elif available and require_zero and evidence.amount_minor != 0:
+        classification, eligible, reason = "ineligible", False, "nonzero_offer"
+    elif available:
+        classification, eligible, reason = "eligible", True, "payment_method_available"
+
+    conclusive = classification in {"eligible", "ineligible"}
+    result = dict(extra or {})
+    result.update({
+        "ok": conclusive,
+        "operation": "payment_method_capability_probe",
+        "payment_method": contract.payment_method,
+        "status": "completed" if conclusive else "unknown",
+        "classification": classification,
+        "decision": reason,
+        "eligible": eligible,
+        "method_available": available,
+        "conclusive": conclusive,
+        "checkout_country": contract.billing_country,
+        "currency": evidence.currency or contract.currency,
+        "amount": evidence.amount_minor,
+        "offer_state": evidence.offer_state,
+        "payment_method_types": list(evidence.payment_method_types),
+        "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
+        "custom_payment_methods": list(evidence.custom_payment_methods),
+        "checkout_session_present": bool(checkout_session_present),
+        "retryable": not conclusive,
+        "error_stage": "",
+        "error_code": "",
+        "error": "",
+    })
+    if not conclusive:
+        result.update({
+            "error": reason,
+            "error_code": reason,
+            "error_stage": "capability_classification",
+        })
+    return result
+
+
 def payment_method_capability_probe(
     access_token: str,
     payment_method: str,
@@ -250,42 +309,12 @@ def payment_method_capability_probe(
             timeout=max(5, int(timeout or 45)),
         )
         evidence = StripeCapabilityEvidence.from_payload(init_payload, fallback_currency=contract.currency)
-        classification, available = evidence.classification_for(contract.stripe_payment_method)
-        reason = "payment_method_available" if available else "payment_method_unavailable"
-        eligible: bool | None = available
-        if available and require_zero and evidence.amount_minor is None:
-            classification, eligible, reason = "unknown", None, "checkout_amount_unknown"
-        elif available and require_zero and evidence.amount_minor is not None and evidence.amount_minor != 0:
-            classification, eligible, reason = "ineligible", False, "nonzero_offer"
-        elif available:
-            classification, eligible, reason = "eligible", True, "payment_method_available"
-        conclusive = classification in {"eligible", "ineligible"}
-        result = {
-            **base,
-            "ok": conclusive,
-            "status": "completed" if conclusive else "unknown",
-            "classification": classification,
-            "decision": reason,
-            "eligible": eligible,
-            "method_available": available,
-            "conclusive": conclusive,
-            "checkout_country": contract.billing_country,
-            "currency": evidence.currency or contract.currency,
-            "amount": evidence.amount_minor,
-            "offer_state": evidence.offer_state,
-            "payment_method_types": list(evidence.payment_method_types),
-            "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
-            "custom_payment_methods": list(evidence.custom_payment_methods),
-            "checkout_session_present": bool(checkout.checkout_session_id),
-            "retryable": not conclusive,
-        }
-        if not conclusive:
-            result.update({
-                "error": reason,
-                "error_code": reason,
-                "error_stage": "capability_classification",
-            })
-        return result
+        return build_capability_probe_result(
+            contract,
+            evidence,
+            checkout_session_present=bool(checkout.checkout_session_id),
+            require_zero=require_zero,
+        )
     except CapabilityProbeError as exc:
         return {
             **base,

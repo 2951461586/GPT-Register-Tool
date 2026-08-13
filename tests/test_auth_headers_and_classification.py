@@ -9,6 +9,7 @@ from sms_tool.auth_headers import (
     openai_auth_headers,
     nextauth_headers,
     chatgpt_headers,
+    set_fingerprint_device,
     set_fingerprint_geo,
     sentinel_fingerprint,
 )
@@ -86,6 +87,35 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertEqual(fingerprint["impersonate"], "chrome146")
         self.assertIn("Chrome/146.", fingerprint["user_agent"])
         self.assertEqual(fingerprint["navigator_platform"], "Win32")
+
+    def test_device_profile_is_deterministic_per_account_and_differs_across(self):
+        # Same device id → identical hardware/display readings every time, so a
+        # single account looks like one stable machine across relogin/recovery.
+        hardware_keys = (
+            "screen", "hardware_concurrency", "device_memory",
+            "device_pixel_ratio", "js_heap_size_limit",
+        )
+        set_fingerprint_device("device-alpha")
+        first = {key: sentinel_fingerprint()[key] for key in hardware_keys}
+        set_fingerprint_device("device-alpha")
+        second = {key: sentinel_fingerprint()[key] for key in hardware_keys}
+        self.assertEqual(first, second)
+
+        # A different account must not reuse the same device silhouette.
+        distinct = set()
+        for seed in ("device-beta", "device-gamma", "device-delta", "device-epsilon"):
+            set_fingerprint_device(seed)
+            profile = sentinel_fingerprint()
+            distinct.add(tuple(profile[key] for key in hardware_keys))
+        self.assertGreater(len(distinct), 1)
+
+        # Values stay within the realistic desktop pools (deviceMemory capped 8).
+        set_fingerprint_device("device-alpha")
+        profile = sentinel_fingerprint()
+        self.assertIn(profile["screen"], auth_headers._SCREEN_CHOICES)
+        self.assertIn(profile["device_memory"], (4, 8))
+        self.assertEqual(profile["max_touch_points"], 0)
+        set_fingerprint_device("")
 
     def test_error_classification_prioritizes_account_over_timeout_substring(self):
         self.assertEqual(classify_error("outlook otp timeout"), "mailbox")

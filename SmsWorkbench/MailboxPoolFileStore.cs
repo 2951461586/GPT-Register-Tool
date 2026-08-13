@@ -80,27 +80,6 @@ namespace SmsWorkbench
                 || !string.IsNullOrWhiteSpace(mailboxProvider);
         }
 
-        internal static IReadOnlyList<string> DiscoverKnownFiles(string rootDir, string tokenFile, string selectedFile)
-        {
-            var paths = new List<string>();
-            AddExistingTextFile(paths, selectedFile);
-            AddExistingTextFile(paths, tokenFile);
-
-            if (!string.IsNullOrWhiteSpace(rootDir) && Directory.Exists(rootDir))
-            {
-                foreach (string name in new[] { "hotmail.txt", "chatai_mailbox.txt", "chatai.txt" })
-                {
-                    AddExistingTextFile(paths, Path.Combine(rootDir, name));
-                }
-                foreach (string path in Directory.GetFiles(rootDir, "*chatai*.txt", SearchOption.TopDirectoryOnly))
-                {
-                    AddExistingTextFile(paths, path);
-                }
-            }
-
-            return paths;
-        }
-
         internal static int DeleteMatchingLines(string path, string emailKey, IEnumerable<string> exactLines)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return 0;
@@ -161,14 +140,6 @@ namespace SmsWorkbench
             if (TryParseICloudUrlLine(line, out _, out _)) return true;
             string[] parts = line.Split(new[] { "----" }, 4, StringSplitOptions.None);
             return parts.Length >= 4;
-        }
-
-        private static void AddExistingTextFile(List<string> paths, string path)
-        {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-            if (!path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) return;
-            string fullPath = Path.GetFullPath(path);
-            if (!paths.Contains(fullPath, StringComparer.OrdinalIgnoreCase)) paths.Add(fullPath);
         }
 
         private static string EmailForLine(string line)

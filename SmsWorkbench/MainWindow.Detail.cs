@@ -389,37 +389,12 @@ namespace SmsWorkbench
                     }
                     return string.Join(Environment.NewLine, lines);
                 }
-
-                if (File.Exists(row.SourcePath) && row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                {
-                    Dictionary<string, object> data = ReadJsonObject(row.SourcePath);
-                    AppendJsonDetail(lines, data, "");
-                }
             }
             catch (Exception ex)
             {
                 lines.Add("detail_error: " + ex.Message);
             }
             return string.Join(Environment.NewLine, lines);
-        }
-
-        private void AppendJsonDetail(List<string> lines, Dictionary<string, object> data, string prefix)
-        {
-            foreach (KeyValuePair<string, object> item in data)
-            {
-                string key = string.IsNullOrEmpty(prefix) ? item.Key : prefix + "." + item.Key;
-                if (item.Value is Dictionary<string, object> nested)
-                {
-                    AppendJsonDetail(lines, nested, key);
-                    continue;
-                }
-                if (item.Value is List<object> list)
-                {
-                    lines.Add(key + ": [" + list.Count + " item(s)]");
-                    continue;
-                }
-                lines.Add(key + ": " + MaskSensitiveField(key, Convert.ToString(item.Value) ?? ""));
-            }
         }
 
         private string MaskSensitiveField(string key, string value)

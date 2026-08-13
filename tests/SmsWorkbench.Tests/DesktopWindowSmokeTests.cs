@@ -157,9 +157,9 @@ public sealed class DesktopWindowSmokeTests
         TextBox[] proxyEditors = editors
             .OfType<TextBox>()
             .Where(editor => editor.DataContext is SettingFieldViewModel field
-                && field.Key is "registration_proxy_pool" or "protocol_proxy_pool")
+                && field.Key == "registration_proxy_pool")
             .ToArray();
-        Assert.Equal(2, proxyEditors.Length);
+        Assert.Single(proxyEditors);
         foreach (TextBox proxyEditor in proxyEditors)
         {
             Assert.Equal(148, proxyEditor.ActualHeight, precision: 3);
@@ -200,12 +200,14 @@ public sealed class DesktopWindowSmokeTests
             new WindowPaymentBatchDialogService(),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
+            new SettingsService(new TestApplicationPaths(rootDirectory)),
             logger);
         try
         {
             main.Show();
             main.UpdateLayout();
             FlushDispatcher();
+            VerifyAccountScanSummary(main);
 
             var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
             string[] headers = accountGrid.Columns.Select(column => column.Header?.ToString() ?? "").ToArray();
@@ -290,6 +292,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.DoesNotContain("注册批次 ID", fieldLabels);
             Assert.DoesNotContain("生链方式", fieldLabels);
             Assert.DoesNotContain("只注册，不生成支付链接", checkBoxLabels);
+            Assert.Contains("关闭 2FA（不注册 TOTP）", checkBoxLabels);
             Assert.Equal(1, comboBoxCount);
 
             int selectedComboBoxCount = -1;
@@ -324,13 +327,76 @@ public sealed class DesktopWindowSmokeTests
             Assert.Null(method.Invoke(main, new object[] { 1 }));
             Assert.Null(captureFailure);
             Assert.Equal(0, selectedComboBoxCount);
-            Assert.Equal(0, selectedCheckBoxCount);
+            Assert.Equal(1, selectedCheckBoxCount);
             VerifyMailboxSelectionFileRouting(main);
         }
         finally
         {
             main.Close();
         }
+    }
+
+    private static void VerifyAccountScanSummary(MainWindow main)
+    {
+        var formatter = typeof(MainWindow).GetMethod(
+            "FormatDirectProbeSummary",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(formatter);
+
+        var results = new List<Dictionary<string, object>>
+        {
+            new()
+            {
+                ["probe"] = new Dictionary<string, object>
+                {
+                    ["ok"] = true, ["status"] = "active", ["status_code"] = 200
+                }
+            },
+            new()
+            {
+                ["probe"] = new Dictionary<string, object>
+                {
+                    ["ok"] = false, ["status"] = "token_invalid", ["status_code"] = 401
+                }
+            },
+            new()
+            {
+                ["probe"] = new Dictionary<string, object>
+                {
+                    ["ok"] = false, ["status"] = "account_deactivated", ["terminal"] = true
+                }
+            },
+            new()
+            {
+                ["status"] = "account_deactivated",
+                ["probe"] = new Dictionary<string, object>
+                {
+                    ["ok"] = false, ["status"] = "unknown", ["status_code"] = 500
+                }
+            },
+            new()
+            {
+                ["probe"] = new Dictionary<string, object>
+                {
+                    ["ok"] = false, ["status"] = "unknown", ["status_code"] = 500
+                }
+            }
+        };
+        var summary = new Dictionary<string, object>
+        {
+            ["relogin_attempted"] = 1,
+            ["relogin_success"] = 0,
+            ["relogin_failed"] = 1,
+            ["relogin_account_deactivated"] = 1
+        };
+
+        string formatted = Assert.IsType<string>(formatter.Invoke(main, new object[] { results, summary }));
+        Assert.Contains("总数：5", formatted);
+        Assert.Contains("AT有效：1", formatted);
+        Assert.Contains("AT失效：1", formatted);
+        Assert.Contains("账号停用：2", formatted);
+        Assert.Contains("其他失败：1", formatted);
+        Assert.Contains("确认停用：1", formatted);
     }
 
     private static void VerifyMailboxSelectionFileRouting(MainWindow main)
@@ -480,6 +546,14 @@ public sealed class DesktopWindowSmokeTests
     {
         public IReadOnlyList<PaymentMatrixRow> LoadMatrix(string paymentMethod) => Array.Empty<PaymentMatrixRow>();
 
+        public PaymentBatchProxyConfiguration LoadProxyConfiguration(string paymentMethod)
+            => new("", "", "", "JP");
+
+        public SettingsSaveResult SaveProxyConfiguration(
+            string paymentMethod,
+            PaymentBatchProxyConfiguration configuration)
+            => new(true);
+
         public PaymentMatrixRow CreateDefaultMatrixRow(string paymentMethod) => new()
         {
             Name = "default",
@@ -488,6 +562,15 @@ public sealed class DesktopWindowSmokeTests
 
         public Task<JsonElement> RunAsync(
             PaymentBatchRequest request,
+            CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<JsonElement> ProbeProxiesAsync(
+            string paymentMethod,
+            string checkoutProxyPool,
+            string approveProxyPool,
+            string checkoutCountry,
+            string approveCountry,
             CancellationToken cancellationToken)
             => throw new NotSupportedException();
     }

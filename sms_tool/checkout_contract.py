@@ -43,6 +43,47 @@ class PaymentMethodProfile:
     browser_timezone: str
 
 
+@dataclass(frozen=True)
+class BrowserProfile:
+    browser_locale: str
+    browser_timezone: str
+
+
+# Egress country -> browser locale/timezone presented to Stripe.  A checkout
+# created from a JP exit must not advertise an unrelated timezone, so callers
+# that pick a country at runtime resolve the pair here instead of hardcoding one.
+COUNTRY_BROWSER_PROFILES: dict[str, BrowserProfile] = {
+    "US": BrowserProfile("en-US", "America/New_York"),
+    "CA": BrowserProfile("en-CA", "America/Toronto"),
+    "BR": BrowserProfile("pt-BR", "America/Sao_Paulo"),
+    "GB": BrowserProfile("en-GB", "Europe/London"),
+    "IE": BrowserProfile("en-IE", "Europe/Dublin"),
+    "DE": BrowserProfile("de-DE", "Europe/Berlin"),
+    "FR": BrowserProfile("fr-FR", "Europe/Paris"),
+    "NL": BrowserProfile("nl-NL", "Europe/Amsterdam"),
+    "CH": BrowserProfile("de-CH", "Europe/Zurich"),
+    "PL": BrowserProfile("pl-PL", "Europe/Warsaw"),
+    "TR": BrowserProfile("tr-TR", "Europe/Istanbul"),
+    "IN": BrowserProfile("en-IN", "Asia/Kolkata"),
+    "SG": BrowserProfile("en-SG", "Asia/Singapore"),
+    "TH": BrowserProfile("th-TH", "Asia/Bangkok"),
+    "ID": BrowserProfile("id-ID", "Asia/Jakarta"),
+    "PH": BrowserProfile("en-PH", "Asia/Manila"),
+    "VN": BrowserProfile("vi-VN", "Asia/Ho_Chi_Minh"),
+    "KR": BrowserProfile("ko-KR", "Asia/Seoul"),
+    "JP": BrowserProfile("ja-JP", "Asia/Tokyo"),
+    "AU": BrowserProfile("en-AU", "Australia/Sydney"),
+    "NZ": BrowserProfile("en-NZ", "Pacific/Auckland"),
+}
+DEFAULT_BROWSER_PROFILE = BrowserProfile("en-US", "America/New_York")
+
+
+def browser_profile_for_country(country: Any) -> BrowserProfile:
+    """Resolve the browser locale/timezone pair advertised for an egress country."""
+    key = str(country or "").strip().upper()
+    return COUNTRY_BROWSER_PROFILES.get(key, DEFAULT_BROWSER_PROFILE)
+
+
 PAYMENT_METHOD_PROFILES: dict[str, PaymentMethodProfile] = {
     "paypal": PaymentMethodProfile("paypal", "paypal", "US", "USD", "en", "en-US", "America/New_York"),
     "upi": PaymentMethodProfile("upi", "upi", "IN", "INR", "en", "en-IN", "Asia/Kolkata"),
@@ -204,6 +245,7 @@ class CheckoutSessionContract:
 class StripeCapabilityEvidence:
     amount_minor: int | None
     currency: str
+    currency_present: bool
     payment_method_types: tuple[str, ...]
     ordered_payment_method_types: tuple[str, ...]
     custom_payment_methods: tuple[str, ...]
@@ -223,9 +265,10 @@ class StripeCapabilityEvidence:
         custom = _collect_method_group(payload, "custom_payment_methods")
         methods = tuple(_dedupe((*standard, *ordered, *custom)))
         amount = _extract_amount_minor(payload)
-        currency = _extract_currency(payload) or str(fallback_currency or "").upper()
+        raw_currency = _extract_currency(payload)
+        currency = raw_currency or str(fallback_currency or "").upper()
         offer_state = "zero_due" if amount == 0 else "nonzero_due" if amount is not None else "unknown_amount"
-        return cls(amount, currency, methods, tuple(ordered), tuple(custom), offer_state)
+        return cls(amount, currency, bool(raw_currency), methods, tuple(ordered), tuple(custom), offer_state)
 
     def classification_for(self, stripe_payment_method: str) -> tuple[str, bool | None]:
         expected = normalize_payment_method_token(stripe_payment_method)

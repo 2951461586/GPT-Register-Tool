@@ -65,6 +65,26 @@ def _is_remail_line(line):
     return line.lower().startswith("remail://")
 
 
+def _is_smailr_line(line):
+    return line.lower().startswith("smailr://")
+
+
+def _parse_smailr_line(line, source_path, line_no):
+    payload = line.split("://", 1)[1].strip() if "://" in line else line.strip()
+    parts = [part.strip() for part in payload.split("---", 1)]
+    email = _normalize_mailbox_email(parts[0] if parts else "")
+    mailbox_id = parts[1] if len(parts) >= 2 else ""
+    if not email or not mailbox_id:
+        print(f"[!] Skip malformed Smailr mailbox line {source_path}:{line_no}")
+        return None
+    return MailboxAccount(
+        email=email,
+        source=str(source_path),
+        provider="smailr",
+        token=mailbox_id,
+    )
+
+
 def _is_icloud_url_line(line):
     return mailbox_icloud_url.is_icloud_url_line(line)
 
@@ -212,6 +232,61 @@ def _parse_gmail_line(line, source_path, line_no):
     )
 
 
+def parse_mailbox_pool_line(line, source_path="", line_no=0):
+    """Parse one mailbox-pool line with the canonical provider dispatch order.
+
+    This is the single owner of pool-line format detection (used by both the
+    file loaders below and the desktop mailbox-pool read). Returns a
+    MailboxAccount, or None for blank/comment/malformed lines.
+    """
+    line = str(line or "").strip().lstrip("\ufeff")
+    if not line or line.startswith("#"):
+        return None
+    if _is_remail_line(line):
+        return _parse_remail_line(line, source_path, line_no)
+    if _is_smailr_line(line):
+        return _parse_smailr_line(line, source_path, line_no)
+    if _is_icloud_url_line(line):
+        return _parse_icloud_url_line(line, source_path, line_no)
+    if _is_cfworker_line(line):
+        return _parse_cfworker_line(line, source_path, line_no)
+    if _is_gmail_line(line):
+        return _parse_gmail_line(line, source_path, line_no)
+    if _is_chongzhi_line(line):
+        return _parse_chongzhi_line(line, source_path, line_no)
+    if "----" in line:
+        parts = line.split("----", 3)
+        if len(parts) < 4:
+            print(f"[!] Skip malformed chatai line {source_path}:{line_no}")
+            return None
+        email = _normalize_mailbox_email(parts[0].strip())
+        password = parts[1].strip()
+        client_id, refresh_token = _split_chatai_client_refresh(parts[2], parts[3])
+        if not email or not refresh_token:
+            if not email:
+                print(f"[!] Skip malformed chatai email {source_path}:{line_no}")
+            return None
+        return MailboxAccount(
+            email=email.lower(), password=password, refresh_token=refresh_token,
+            source=str(source_path), provider="chatai", token=client_id,
+        )
+    parts = line.split("---", 4)
+    if len(parts) < 3:
+        print(f"[!] Skip malformed mailbox line {source_path}:{line_no}")
+        return None
+    email, password, refresh_token = (part.strip() for part in parts[:3])
+    email = _normalize_mailbox_email(email)
+    access_token = parts[3].strip() if len(parts) >= 4 else ""
+    if not email or not refresh_token:
+        if not email:
+            print(f"[!] Skip malformed mailbox email {source_path}:{line_no}")
+        return None
+    return MailboxAccount(
+        email=email.lower(), password=password, refresh_token=refresh_token,
+        access_token=access_token, source=str(source_path), provider="graph",
+    )
+
+
 def _parse_mailbox_token_file(path):
     records = []
     token_path = Path(path)
@@ -223,6 +298,11 @@ def _parse_mailbox_token_file(path):
             continue
         if _is_remail_line(line):
             account = _parse_remail_line(line, token_path, line_no)
+            if account:
+                records.append(account)
+            continue
+        if _is_smailr_line(line):
+            account = _parse_smailr_line(line, token_path, line_no)
             if account:
                 records.append(account)
             continue
@@ -298,58 +378,7 @@ def _parse_chatai_mailbox_file(path):
     if not chatai_path.exists():
         return records
     for line_no, raw in enumerate(chatai_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
-        line = raw.strip().lstrip("\ufeff")
-        if not line or line.startswith("#"):
-            continue
-        if _is_remail_line(line):
-            account = _parse_remail_line(line, chatai_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if _is_icloud_url_line(line):
-            account = _parse_icloud_url_line(line, chatai_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if _is_cfworker_line(line):
-            account = _parse_cfworker_line(line, chatai_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if _is_gmail_line(line):
-            account = _parse_gmail_line(line, chatai_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if _is_chongzhi_line(line):
-            account = _parse_chongzhi_line(line, chatai_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if "----" in line:
-            parts = line.split("----", 3)
-            if len(parts) < 4:
-                print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
-                continue
-            email = _normalize_mailbox_email(parts[0].strip())
-            password = parts[1].strip()
-            client_id, refresh_token = _split_chatai_client_refresh(parts[2], parts[3])
-            if not email or not refresh_token:
-                if not email:
-                    print(f"[!] Skip malformed chatai email {chatai_path}:{line_no}")
-                continue
-            records.append(MailboxAccount(email=email.lower(), password=password, refresh_token=refresh_token, source=str(chatai_path), provider="chatai", token=client_id))
-            continue
-        parts = line.split("---", 4)
-        if len(parts) < 3:
-            print(f"[!] Skip malformed chatai line {chatai_path}:{line_no}")
-            continue
-        email, password, refresh_token = (part.strip() for part in parts[:3])
-        email = _normalize_mailbox_email(email)
-        access_token = parts[3].strip() if len(parts) >= 4 else ""
-        if not email or not refresh_token:
-            if not email:
-                print(f"[!] Skip malformed chatai email {chatai_path}:{line_no}")
-            continue
-        records.append(MailboxAccount(email=email.lower(), password=password, refresh_token=refresh_token, access_token=access_token, source=str(chatai_path), provider="graph"))
+        account = parse_mailbox_pool_line(raw, chatai_path, line_no)
+        if account:
+            records.append(account)
     return records

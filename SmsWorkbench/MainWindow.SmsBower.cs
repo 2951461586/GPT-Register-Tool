@@ -1,22 +1,19 @@
+using System.Text.Json.Nodes;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
     {
         private async Task<bool> ShowSmsBowerOneClickDialogAsync()
         {
-            string path = Path.Combine(rootDir, "config.json");
-            EnsureConfigFile(path);
-            var config = ReadJsonObject(path);
-            var phoneReuse = GetSection(config, "phone_reuse");
-            var smsBower = GetChildSection(phoneReuse, "smsbower");
-            string apiKey = ResolveSmsBowerApiKey(GetString(smsBower, "api_key"));
+            string apiKey = ResolveSmsBowerApiKey(settingsService.GetString("phone_reuse.smsbower.api_key"));
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 ShowThemedInfoDialog("SMSBower 未配置", "请先在设置的手机接码分类中填写 SMSBower API Key。");
                 return false;
             }
 
-            string endpoint = FirstNonEmpty(GetString(smsBower, "endpoint"), SmsBowerCatalogClient.DefaultEndpoint);
+            string endpoint = FirstNonEmpty(settingsService.GetString("phone_reuse.smsbower.endpoint"), SmsBowerCatalogClient.DefaultEndpoint);
             IReadOnlyList<SmsBowerCountryChoice> countries;
             string balance = "--";
             try
@@ -49,11 +46,11 @@ namespace SmsWorkbench
                 return false;
             }
 
-            string savedCountry = FirstNonEmpty(GetString(smsBower, "country"), "38");
+            string savedCountry = FirstNonEmpty(settingsService.GetString("phone_reuse.smsbower.country"), "38");
             string savedPrice = FirstNonEmpty(
-                GetString(smsBower, "target_price"),
-                GetString(smsBower, "max_price"),
-                GetString(smsBower, "min_price"));
+                settingsService.GetString("phone_reuse.smsbower.target_price"),
+                settingsService.GetString("phone_reuse.smsbower.max_price"),
+                settingsService.GetString("phone_reuse.smsbower.min_price"));
             var selectedCountry = countries.FirstOrDefault(item => item.Id == savedCountry) ?? countries[0];
             var selectedTier = selectedCountry.Tiers.FirstOrDefault(item => PriceEquals(item.Price, savedPrice))
                 ?? selectedCountry.Tiers[0];
@@ -210,26 +207,38 @@ namespace SmsWorkbench
                 return false;
             }
 
-            smsBower["service"] = SmsBowerCatalogClient.OpenAiService;
-            smsBower["service_name"] = "OpenAI (ChatGPT)";
-            smsBower["country"] = chosenCountry.Id;
-            smsBower["country_name"] = chosenCountry.EnglishName;
-            smsBower["country_name_zh"] = chosenCountry.ChineseName;
-            smsBower.Remove("country_prefix");
-            smsBower["min_price"] = chosenTier.Price;
-            smsBower["max_price"] = chosenTier.Price;
-            smsBower["target_price"] = chosenTier.Price;
-            if (string.IsNullOrWhiteSpace(chosenTier.ProviderIds))
+            settingsService.UpdateConfig(root =>
             {
-                smsBower.Remove("provider_ids");
-            }
-            else
-            {
-                smsBower["provider_ids"] = chosenTier.ProviderIds;
-            }
-            phoneReuse["smsbower"] = smsBower;
-            SaveConfig(path, config);
+                JsonObject smsBower = GetOrCreateSection(GetOrCreateSection(root, "phone_reuse"), "smsbower");
+                smsBower["service"] = SmsBowerCatalogClient.OpenAiService;
+                smsBower["service_name"] = "OpenAI (ChatGPT)";
+                smsBower["country"] = chosenCountry.Id;
+                smsBower["country_name"] = chosenCountry.EnglishName;
+                smsBower["country_name_zh"] = chosenCountry.ChineseName;
+                smsBower.Remove("country_prefix");
+                smsBower["min_price"] = chosenTier.Price;
+                smsBower["max_price"] = chosenTier.Price;
+                smsBower["target_price"] = chosenTier.Price;
+                if (string.IsNullOrWhiteSpace(chosenTier.ProviderIds))
+                {
+                    smsBower.Remove("provider_ids");
+                }
+                else
+                {
+                    smsBower["provider_ids"] = chosenTier.ProviderIds;
+                }
+            });
             return true;
+        }
+
+        private static JsonObject GetOrCreateSection(JsonObject parent, string key)
+        {
+            if (parent[key] is not JsonObject child)
+            {
+                child = new JsonObject();
+                parent[key] = child;
+            }
+            return child;
         }
 
         private Grid CreateSmsBowerDialogRow(string label, out ContentControl host)

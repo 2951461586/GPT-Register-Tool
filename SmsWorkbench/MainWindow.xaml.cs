@@ -12,23 +12,7 @@ namespace SmsWorkbench
         private readonly IPaymentBatchDialogService paymentBatchDialogs;
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
-        private static readonly ConfigComboOption[] BillingRegionOptions = new[]
-        {
-            new ConfigComboOption("JP", "日本 / Japan (JPY)", "Japan", "JPY"),
-            new ConfigComboOption("US", "美国 / United States (USD)", "United States", "USD"),
-            new ConfigComboOption("AU", "澳大利亚 / Australia (AUD)", "Australia", "AUD"),
-            new ConfigComboOption("DE", "德国 / Germany (EUR)", "Germany", "EUR"),
-            new ConfigComboOption("FR", "法国 / France (EUR)", "France", "EUR"),
-            new ConfigComboOption("GB", "英国 / United Kingdom (GBP)", "United Kingdom", "GBP"),
-            new ConfigComboOption("IN", "印度 / India (INR)", "India", "INR"),
-            new ConfigComboOption("BR", "巴西 / Brazil (BRL)", "Brazil", "BRL"),
-        };
-        private static readonly ConfigComboOption[] LinkGenerationTypeOptions = new[]
-        {
-            new ConfigComboOption("hosted_long_url", "托管长链接 / Hosted Long URL", "hosted_long_url", "hosted_long_url"),
-            new ConfigComboOption("paypal_direct", "PayPal 直链 / PayPal Direct", "paypal_direct", "paypal_direct"),
-            new ConfigComboOption("paypal_direct_zero_due", "PayPal 直链零金额 / PayPal Direct Zero Due", "paypal_direct_zero_due", "paypal_direct_zero_due"),
-        };
+        private readonly ISettingsService settingsService;
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
         private int taskSeq = 1;
@@ -207,6 +191,7 @@ namespace SmsWorkbench
             IPaymentBatchDialogService paymentBatchDialogs,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
+            ISettingsService settingsService,
             Serilog.ILogger logger)
         {
             this.backendClient = backendClient;
@@ -215,6 +200,7 @@ namespace SmsWorkbench
             this.paymentBatchDialogs = paymentBatchDialogs;
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;
+            this.settingsService = settingsService;
             this.logger = logger;
             rootDir = paths.RootDirectory;
             InitializeComponent();
@@ -273,7 +259,9 @@ namespace SmsWorkbench
         public string Status { get; set; } = "";
         public string PayPalStatus { get; set; } = "";
         public string PayPalAmount { get; set; } = "";
+        public string PromotionStatus { get; set; } = "";
         public string RefreshTokenStatus { get; set; } = "";
+        public string TwoFactorStatus { get; set; } = "未设置";
         public string Phone { get; set; } = "";
         public bool HasAccessToken { get; set; }
         public string AccessTokenProbeStatusCode { get; set; } = "";
@@ -296,11 +284,13 @@ namespace SmsWorkbench
         public string Source { get; set; } = "pool";
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
+        public bool Disable2fa { get; set; } = true;
     }
 
     public sealed class ScanOptions
     {
         public int Workers { get; set; } = 4;
+        public bool AutoRelogin { get; set; }
     }
 
     public sealed partial class TaskRow : ObservableObject
@@ -314,142 +304,6 @@ namespace SmsWorkbench
         public string Retry { get; set; } = "0";
     }
 
-    internal static class SqliteNative
-    {
-        private const int SQLITE_OK = 0;
-        private const int SQLITE_ROW = 100;
-        private const int SQLITE_DONE = 101;
-        private const int SQLITE_OPEN_READONLY = 0x00000001;
-        private const int SQLITE_OPEN_READWRITE = 0x00000002;
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_open_v2(byte[] filename, out IntPtr db, int flags, IntPtr vfs);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_close(IntPtr db);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_prepare_v2(IntPtr db, byte[] sql, int numBytes, out IntPtr stmt, IntPtr tail);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_step(IntPtr stmt);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_finalize(IntPtr stmt);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_column_count(IntPtr stmt);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr sqlite3_column_name(IntPtr stmt, int index);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr sqlite3_column_text(IntPtr stmt, int index);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int sqlite3_column_bytes(IntPtr stmt, int index);
-
-        [DllImport("winsqlite3", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr sqlite3_errmsg(IntPtr db);
-
-        public static List<Dictionary<string, string>> Query(string path, string sql)
-        {
-            IntPtr db = Open(path, SQLITE_OPEN_READONLY);
-            try
-            {
-                IntPtr stmt = Prepare(db, sql);
-                try
-                {
-                    var rows = new List<Dictionary<string, string>>();
-                    int columnCount = sqlite3_column_count(stmt);
-                    while (sqlite3_step(stmt) == SQLITE_ROW)
-                    {
-                        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                        for (int i = 0; i < columnCount; i++)
-                        {
-                            row[PtrToString(sqlite3_column_name(stmt, i), -1)] = ColumnText(stmt, i);
-                        }
-                        rows.Add(row);
-                    }
-                    return rows;
-                }
-                finally
-                {
-                    sqlite3_finalize(stmt);
-                }
-            }
-            finally
-            {
-                sqlite3_close(db);
-            }
-        }
-
-        public static void Execute(string path, string sql)
-        {
-            IntPtr db = Open(path, SQLITE_OPEN_READWRITE);
-            try
-            {
-                IntPtr stmt = Prepare(db, sql);
-                try
-                {
-                    int code = sqlite3_step(stmt);
-                    if (code != SQLITE_DONE && code != SQLITE_ROW) throw new InvalidOperationException(Error(db));
-                }
-                finally
-                {
-                    sqlite3_finalize(stmt);
-                }
-            }
-            finally
-            {
-                sqlite3_close(db);
-            }
-        }
-
-        private static IntPtr Open(string path, int flags)
-        {
-            int code = sqlite3_open_v2(NullTerminatedUtf8(path), out IntPtr db, flags, IntPtr.Zero);
-            if (code != SQLITE_OK) throw new InvalidOperationException(Error(db));
-            return db;
-        }
-
-        private static IntPtr Prepare(IntPtr db, string sql)
-        {
-            int code = sqlite3_prepare_v2(db, NullTerminatedUtf8(sql), -1, out IntPtr stmt, IntPtr.Zero);
-            if (code != SQLITE_OK) throw new InvalidOperationException(Error(db));
-            return stmt;
-        }
-
-        private static string Error(IntPtr db) => PtrToString(sqlite3_errmsg(db), -1);
-
-        private static string ColumnText(IntPtr stmt, int index)
-        {
-            int bytes = sqlite3_column_bytes(stmt, index);
-            return PtrToString(sqlite3_column_text(stmt, index), bytes);
-        }
-
-        private static string PtrToString(IntPtr ptr, int bytes)
-        {
-            if (ptr == IntPtr.Zero) return "";
-            if (bytes < 0)
-            {
-                int len = 0;
-                while (Marshal.ReadByte(ptr, len) != 0) len++;
-                bytes = len;
-            }
-            byte[] buffer = new byte[bytes];
-            Marshal.Copy(ptr, buffer, 0, bytes);
-            return Encoding.UTF8.GetString(buffer);
-        }
-
-        private static byte[] NullTerminatedUtf8(string value)
-        {
-            byte[] body = Encoding.UTF8.GetBytes(value ?? "");
-            byte[] output = new byte[body.Length + 1];
-            Buffer.BlockCopy(body, 0, output, 0, body.Length);
-            return output;
-        }
-    }
     public sealed class CollapsedLabelConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -479,7 +333,7 @@ namespace SmsWorkbench
             // Success states (green)
             if (s.Contains("✅") || s.Contains("完成") || s.Contains("已注册")
                 || s.Contains("已获取") || s.Contains("已导入") || s.Contains("K12已进入")
-                || s.Contains("PM已创建"))
+                || s.Contains("PM已创建") || s.Contains("已设置"))
                 return "success";
 
             // Danger states (red)

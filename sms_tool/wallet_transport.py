@@ -13,6 +13,8 @@ from .wallet_provider import WALLET_METHODS, WalletProviderError, WalletTranspor
 
 
 PAYMENT_METHOD_URL = "https://api.stripe.com/v1/payment_methods"
+UPDATE_PATH = "/backend-api/payments/checkout/update"
+UPDATE_URL = f"https://chatgpt.com{UPDATE_PATH}"
 APPROVE_PATH = "/backend-api/payments/checkout/approve"
 APPROVE_URL = f"https://chatgpt.com{APPROVE_PATH}"
 _STRIPE_PAGE_URL = "https://api.stripe.com/v1/payment_pages/{checkout_session_id}"
@@ -65,6 +67,30 @@ class ChatGPTStripeWalletTransport:
             )
         except Exception as exc:
             raise WalletHTTPError(f"checkout transport failed: {type(exc).__name__}") from exc
+        return self._json_response(response, request.stage)
+
+    def update_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
+        from . import gen_pp_link
+
+        cookie_header = str(request.auth_context.get("cookie_header") or "")
+        proxy = self._stage_proxy(request)
+        referer = f"https://chatgpt.com/checkout/{request.processor_entity}/{request.checkout_session_id}"
+        try:
+            response = gen_pp_link._checkout_post(
+                UPDATE_URL,
+                dict(request.payload),
+                request.access_token,
+                cookie_header,
+                proxy,
+                self.timeout,
+                extra_headers={
+                    "Referer": referer,
+                    "x-openai-target-path": UPDATE_PATH,
+                    "x-openai-target-route": UPDATE_PATH,
+                },
+            )
+        except Exception as exc:
+            raise WalletHTTPError(f"promotion transport failed: {type(exc).__name__}") from exc
         return self._json_response(response, request.stage)
 
     def stripe_init(self, request: WalletTransportRequest) -> Mapping[str, Any]:
@@ -197,10 +223,12 @@ class ChatGPTStripeWalletTransport:
         context = request.transport_context
         stage_keys = {
             "checkout": ("checkout_proxy",),
+            "promotion": ("promotion_proxy", "update_proxy"),
             "stripe_init": ("stripe_init_proxy", "provider_proxy"),
             "payment_method": ("payment_method_proxy", "provider_proxy"),
             "confirm": ("confirm_proxy", "provider_proxy"),
-            "approve": ("approve_proxy", "checkout_proxy"),
+            "approve": ("approve_proxy", "final_review_proxy", "checkout_proxy"),
+            "final_review": ("final_review_proxy", "approve_proxy", "checkout_proxy"),
             "poll": ("provider_proxy", "stripe_init_proxy"),
             "follow_redirect": ("redirect_proxy", "provider_proxy"),
         }
@@ -209,8 +237,41 @@ class ChatGPTStripeWalletTransport:
             if isinstance(value, Mapping):
                 value = value.get("https") or value.get("http") or ""
             if str(value or "").strip():
-                return str(value).strip()
+                return self._attempt_proxy(request, str(value).strip())
         return ""
+
+    @staticmethod
+    def _attempt_proxy(request: WalletTransportRequest, proxy: str) -> str:
+        context = request.transport_context
+        resolver = (
+            context.get(f"{request.stage}_proxy_resolver")
+            or (
+                context.get("final_review_proxy_resolver")
+                if request.stage == "approve"
+                else None
+            )
+            or context.get("proxy_resolver")
+        )
+        if callable(resolver):
+            resolved = resolver(request.stage, request.attempt, proxy)
+            if isinstance(resolved, Mapping):
+                resolved = resolved.get("https") or resolved.get("http") or ""
+            value = str(resolved or "").strip()
+            if value:
+                return value
+        rotate = context.get("rotate_proxy_sessions")
+        if isinstance(rotate, str):
+            rotate = rotate.strip().lower() in {"1", "true", "yes", "on"}
+        if not rotate or request.stage not in {"approve", "final_review", "poll"}:
+            return proxy
+        countries = context.get("stage_proxy_countries")
+        if not isinstance(countries, Mapping):
+            countries = {}
+        country_key = "approve" if request.stage == "final_review" else request.stage
+        country = str(countries.get(country_key) or countries.get("provider") or "").strip().upper()
+        from .paypal_proxy import rotate_proxy_session
+
+        return rotate_proxy_session(proxy, country)
 
     @staticmethod
     def _stripe_headers(request: WalletTransportRequest) -> dict[str, str]:

@@ -77,8 +77,10 @@ sms_tool/
   payment_catalog.py        Versioned shared payment-method catalog loader and alias normalization.
   payment_adapters.py       Typed adapter protocol and complete registry validation.
   payment_link_manager.py   Payment state machine, adapter composition, and redacted run history.
-  wallet_provider.py        Shared GoPay/GCash/GrabPay orchestration and structured outcomes.
-  wallet_transport.py       Wallet HTTP transport, stage proxies, Stripe metadata, and redirect validation.
+  wallet_provider.py        Shared GoPay/GrabPay orchestration and structured outcomes.
+  wallet_transport.py       GoPay/GrabPay HTTP transport, stage proxies, Stripe metadata, and redirect validation.
+  gcash_provider.py         GCash custom-payment-method orchestration and structured outcomes.
+  gcash_transport.py        GCash-specific Checkout update and custom-method HTTP transport.
   paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_reconciliation.py  Independent, secret-free PayPal merchant-return reconciliation.
   paypal_auto.py            Project-local PayPal browser page automation helper.
@@ -253,8 +255,9 @@ API surfaces must reuse this implementation instead of issuing their own probe.
 `sms_tool.account_recovery` owns all side effects around that contract: local
 quota-status persistence, ordered 401 recovery, verified candidate persistence,
 and permanent-deactivation records. Recovery order is OAuth Refresh Token,
-existing ChatGPT session cookie, isolated browser email-OTP login, then Codex
-OAuth. `sms_tool.cpa_import` owns only CPA-side listing, remote quota proxying,
+existing ChatGPT session cookie, protocol email-OTP login (curl_cffi), then
+Codex OAuth PKCE. Browser-based re-login has been removed; recovery is
+protocol-only. `sms_tool.cpa_import` owns only CPA-side listing, remote quota proxying,
 payload conversion, and upload; it must not become the local liveness owner again.
 
 ### Registration Progress and Concurrency
@@ -268,9 +271,10 @@ concurrency module must not write progress files or classify registration result
 ### Proxy Routing Boundary
 
 Registration, mailbox receiving, and payment each have their own proxy owner.
-The desktop **设置 → 网络与支付 / 网络代理** page exposes them as three separate
-fields (`注册代理（主）` + `注册代理池`, `邮箱收件代理`, `协议支付代理池`); that page
-holds the authoritative per-machine values, so consult it for the live routing.
+The desktop **设置 → 网络与支付 / 网络代理** page exposes registration and mailbox
+routes only. Protocol payment egress is shown in the **批量协议支付** window as
+two method-owned pools (`Checkout` and `Approve`) and is saved under
+`protocol_payments.methods.<method>`.
 
 - **Registration traffic → JP dynamic proxy.** Registration workers use
   `proxy.registration` (desktop field `注册代理（主）`) plus the `proxy.pool`
@@ -283,13 +287,58 @@ holds the authoritative per-machine values, so consult it for the live routing.
   `http://127.0.0.1:7897` and never inherits the rotating registration proxy
   (`mailbox._resolve_mailbox_proxy`). This keeps inbox fetches on a stable local
   egress independent of the registration session.
-- **Payment traffic → independent stage proxies.** PayPal and protocol-payment
-  modules resolve `paypal.stage_proxies` / `protocol_payments.proxy_pool` from
-  their own payment configuration. A registration or mailbox proxy is never
-  treated as a payment override, so configured checkout/provider/confirm/approve/
-  promotion routes keep their existing behavior. Only an operator-provided
-  payment proxy may explicitly override those stages where the payment module
-  permits it.
+- **Payment traffic → independent method-owned pools.** PayPal and protocol-payment
+  modules resolve their own payment configuration. Batch protocol payment uses
+  `checkout_proxy_pool` for Checkout/JIT and `approve_proxy_pool` for the
+  promotion/provider/confirm/approve/redirect route where the adapter permits
+  that shared exit. A registration or mailbox proxy is never treated as a
+  payment override. The legacy `protocol_payments.proxy_pool` remains a
+  read-only compatibility fallback and is not exposed in Settings.
+
+Proxy string manipulation has a single authority: `sms_tool.proxy_entry` owns
+parsing (`parse_proxy`) plus credential rebuild, exit-region retargeting, and
+sticky-session rotation (`rebuild_proxy_credentials`, `retarget_region`,
+`rotate_session`, `infer_region`). `phone_proxy` (registration/phone) and
+`paypal_proxy` (payment) must not reimplement these; their
+`refresh_proxy_sid` / `match_proxy_region` / `rotate_proxy_session` /
+`retarget_proxy_country` / `infer_proxy_country` are thin wrappers that
+normalize and delegate to `proxy_entry`, so the same provider proxy rotates
+identically regardless of the calling flow (Cliproxy `region-XX`/`-sid-…-t-N`
+username templates and Kookeey `BASE-CC-SESSION-TTL` password templates, with
+the `\d+[smhd]` TTL unit superset).
+
+#### Payment proxy config-per-method, health cache, and test-proxy
+
+The **批量协议支付** window owns payment proxy configuration entirely per method
+(`protocol_payments.methods.<method>`):
+
+- **保存代理配置** (`PaymentBatchService.SaveProxyConfiguration`) writes the
+  `Checkout` and `Approve` pools plus their `stage_proxy_countries` for the
+  selected method; the first line is mirrored to the legacy `checkout_proxy` /
+  `approve_proxy` singular keys for older workers, but the `*_proxy_pool` arrays
+  are authoritative.
+- **测试代理** (`PaymentBatchService.ProbeProxiesAsync` → `--test-payment-proxies`)
+  probes the Checkout / Approve / update exits before a batch and shows, per
+  stage, `ip / country / region`, whether the exit country is PayPal-supported,
+  and any `country_mismatch`. This is the pre-flight check that stops a whole
+  batch from launching on a dead or wrong-country pool.
+
+Pool selection shares one process-level health/geo cache
+(`paypal_proxy.PayPalProxyState`, keyed by the stable `proxy_key`) so a batch of
+many accounts probes each pool proxy **once** instead of hammering the free IP
+geolocation services per cell. `select_proxy_from_pool(..., state=...)` ranks
+candidates by accumulated health (cooldown-skipped via
+`proxy_health.fail_skip_after` / `fail_cooldown_seconds`, then success-ordered),
+serves the geo result from `probe_cache_ttl_seconds` (default 600s), and records
+each outcome back. The geo probe itself rides the payment TLS stack (curl_cffi
+Chrome impersonation, `requests` fallback). Without an explicit `state` the
+selector keeps its original probe-every-candidate behaviour.
+
+PayPal-family methods (`paypal` / `upi`) additionally validate the requested
+checkout/approve egress against `payment_country_catalog.PAYPAL_SUPPORTED_COUNTRIES`
+and fail fast on an unsupported country (e.g. `TR`, which PayPal withdrew from),
+rather than discovering it mid-protocol. Wallet/script methods keep their own
+country rules.
 
 ### PayPal Generation Type
 
@@ -544,20 +593,27 @@ profile.
 
 ### Shared Wallet Provider Layer
 
-GoPay, GCash, and GrabPay share `sms_tool.wallet_provider`; production HTTP and
-stage-proxy routing live in `sms_tool.wallet_transport`. Profiles provide the
-only method-specific country/currency/locale and final redirect host policy:
-GoPay uses ID/IDR, while GCash and GrabPay use PH/PHP. The full adapter sequence
-is Checkout -> Stripe init -> wallet PM -> confirm -> ChatGPT approve -> poll ->
-allowlisted provider redirect. Checkout, Stripe init/provider, payment-method,
-confirm, approve, and redirect stages may be routed independently.
+GoPay and GrabPay share `sms_tool.wallet_provider`; their production HTTP and
+stage-proxy routing live in `sms_tool.wallet_transport`. GoPay uses ID/IDR and
+adds an independent Promotion/Update request after Checkout so a TH promotion
+exit can produce and verify a zero-due offer before the flow returns to its ID
+provider route. GrabPay uses PH/PHP without that GoPay-only update requirement.
+The remaining sequence is Stripe init -> wallet PM -> confirm -> ChatGPT
+approve -> poll -> allowlisted provider redirect. Checkout, promotion,
+Stripe init/provider, payment-method, confirm, approve, and redirect stages may
+be routed independently.
 
-The wallet core also exposes `probe_only=True` for its fixture contract tests.
-That path stops after Checkout and Stripe init and must never create a wallet PM
-or confirm an intent. Request/response fixtures for all three profiles live
-under `tests/fixtures/wallet_provider/`. The maintained manager and batch
-probe-only path uses the narrower shared `payment_method_capability_probe` so
-all payment methods receive the same matrix and Canary semantics.
+GCash is a separate custom-payment-method adapter implemented by
+`sms_tool.gcash_provider` and `sms_tool.gcash_transport`; it is registered in the
+same manager catalog but does not enter the shared wallet core. The wallet core
+also exposes `probe_only=True` for fixture contract tests. It reuses the real
+pre-side-effect preparation path: GoPay performs Checkout -> Promotion/Update ->
+Stripe init, while GrabPay performs Checkout -> Stripe init. Neither path may
+create a wallet PM or confirm an intent. GoPay and GrabPay fixtures live under
+`tests/fixtures/wallet_provider/`; GCash has its own provider and transport
+tests. The manager and batch call the provider-aware `probe_payment_method`
+entry point, which returns the same capability result contract as the generic
+`payment_method_capability_probe` while preserving matrix and Canary semantics.
 
 ### Payment Responsibility Boundary
 
@@ -568,7 +624,9 @@ each run through `created -> validating -> preparing_proxy -> running ->
 extracting` and one of `completed`, `failed`, `cancelled`, `unknown`, or
 `timed_out`, dispatches the native, shared-wallet, or vendored adapter,
 normalizes the result, and appends a redacted record to
-`runtime/payment_link_runs.jsonl`.
+`runtime/payment_link_runs.jsonl`. Full payment/provider URLs and QR artifacts
+are returned to the caller but are not written to run history; persistence keeps
+only `*_present` metadata for those artifacts.
 
 Every normalized result carries `retryable` and `error_stage`. A successful
 result forces `retryable=false` and an empty error stage. `cancelled` is a
@@ -622,10 +680,11 @@ artifacts under ignored runtime paths and must not be committed or packaged.
 
 `sms_tool.payment_auth` is the only payment-boundary AT gate. A saved account is
 probed immediately before checkout. HTTP 401 enters the shared recovery chain:
-OAuth Refresh Token, existing cookie `/api/auth/session`, isolated browser email
-OTP, then Codex OAuth. Every candidate AT is re-probed and persisted only on HTTP
-200. Browser contexts are per-account, use the account proxy, and reject an auth
-session whose email differs from the target. Permanent `account_deactivated`
+OAuth Refresh Token, existing cookie `/api/auth/session`, protocol email-OTP
+login (curl_cffi), then Codex OAuth PKCE. Browser-based re-login has been
+removed; recovery is protocol-only. Every candidate AT is re-probed and persisted
+only on HTTP 200. Recovery uses the account proxy and rejects an auth session
+whose email differs from the target. Permanent `account_deactivated`
 rows never enter a relogin loop. Public diagnostics contain only status codes,
 JWT timing, and a short SHA-256 correlation value.
 
@@ -668,7 +727,11 @@ offer shape, link-ready, and QR-ready counts per cell. Account/offer conclusions
 are not retried with another proxy.
 
 The default wallet matrix gives each profile a `sample_size` of 1: GoPay uses an
-ID registration/checkout/provider chain, and GCash plus GrabPay use PH chains.
+ID registration/checkout/provider chain with a distinct TH Promotion/Update
+stage, while GCash and GrabPay use PH chains through their respective adapters.
+The batch window displays only the billing/Checkout and discount/Approve columns;
+the underlying promotion/provider/redirect country fields remain intact for
+adapter contracts and serialization.
 Use `--payment-canary 1` to turn one of those profiles into a true one-account
 validation. A probe-only Canary counts a conclusive capability result as
 completed even when the result is `ineligible`; only a systemic `unknown` result

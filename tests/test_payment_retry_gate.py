@@ -25,7 +25,9 @@ class PaymentRetryGateTests(unittest.TestCase):
         self.assertEqual(result["adapter_detail"], "kept")
 
     def test_confirm_approve_and_redirect_failures_are_never_retried(self):
-        for stage in ("confirm", "approve", "provider_redirect", "redirect"):
+        for stage in (
+            "confirm", "approve", "provider_redirect", "redirect", "follow_redirect", "poll",
+        ):
             with self.subTest(stage=stage):
                 result = {
                     "ok": False,

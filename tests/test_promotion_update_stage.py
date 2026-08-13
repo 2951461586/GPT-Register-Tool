@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link as g
+from sms_tool import paypal_extract
 
 
 class _Resp:
@@ -55,7 +56,7 @@ class PromotionUpdateStageTests(unittest.TestCase):
             seen["headers"] = extra_headers or {}
             return _Resp(200, {"success": True})
 
-        with patch.object(g, "_checkout_post", side_effect=fake_post):
+        with patch.object(paypal_extract, "_checkout_post", side_effect=fake_post):
             ok = e._checkout_update_promotion("cs_live_X", "openai_llc")
 
         self.assertTrue(ok)
@@ -67,7 +68,7 @@ class PromotionUpdateStageTests(unittest.TestCase):
 
     def test_update_promotion_non_fatal_on_error(self):
         e = g.PPLinkExtractor("at", provider_proxy="http://us", promotion_proxy="http://vn", target_country="US")
-        with patch.object(g, "_checkout_post", return_value=_Resp(409, text="checkout_not_active")):
+        with patch.object(paypal_extract, "_checkout_post", return_value=_Resp(409, text="checkout_not_active")):
             self.assertFalse(e._checkout_update_promotion("cs_live_X", "openai_llc"))
 
     def test_extract_calls_promotion_before_stripe_init(self):
@@ -92,8 +93,8 @@ class PromotionUpdateStageTests(unittest.TestCase):
             calls.append(("STRIPE_INIT", cs_id, None))
             raise RuntimeError("stop-after-init-order-check")
 
-        with patch.object(g, "_checkout_post", side_effect=fake_checkout_post):
-            with patch.object(g, "_new_session", lambda proxy="": object()):
+        with patch.object(paypal_extract, "_checkout_post", side_effect=fake_checkout_post):
+            with patch.object(paypal_extract, "_new_session", lambda proxy="": object()):
                 with patch.object(e, "_stripe_init", side_effect=fake_stripe_init):
                     with self.assertRaises(RuntimeError):
                         e.extract()

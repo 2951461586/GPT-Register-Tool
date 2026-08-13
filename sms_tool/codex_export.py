@@ -11,7 +11,7 @@ from .config import CFG
 from .codex_oauth import refresh_codex_oauth_session
 from .paths import output_dir
 from .session_refresh import _load_seed_session, _session_token, refresh_session
-from .storage import upsert_account
+from .storage import _looks_codex_refresh_token, upsert_account
 
 
 def export_codex_session(
@@ -63,12 +63,12 @@ def export_codex_session(
     if not codex_json.get("email"):
         codex_json["email"] = target_email
 
-    if require_refresh_token and not str(codex_json.get("refresh_token") or "").strip().startswith("rt_"):
+    if require_refresh_token and not _looks_codex_refresh_token(codex_json.get("refresh_token")):
         return {
             "ok": False,
             "email": target_email,
             "error": "missing_refresh_token_for_cpa",
-            "message": "CPA导入必须先拿到 OpenAI refresh_token(rt_开头)，当前账号已跳过无RT导出。",
+            "message": "CPA导入必须先拿到 OpenAI OAuth refresh token，当前账号已跳过无RT导出。",
             "refresh": refresh_result,
             "refresh_token_status": "no_rt",
             "warnings": warnings,
@@ -319,7 +319,7 @@ def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, requir
     print(f"[*] Codex OAuth PKCE did not return RT: {oauth_result.get('error', 'unknown')}")
     if require_refresh_token:
         return oauth_result
-    result = refresh_session(email=target_email, session_file=json_path, timeout=timeout, browser=False, proxy=proxy)
+    result = refresh_session(email=target_email, session_file=json_path, timeout=timeout, proxy=proxy)
     result.setdefault("mode", "protocol_auth_session")
     result["oauth_attempt"] = oauth_result
     return result
@@ -379,7 +379,7 @@ def _openai_refresh_token(data, auth_session):
     ]
     for value in candidates:
         token = str(value or "").strip()
-        if token.startswith("rt_"):
+        if _looks_codex_refresh_token(token):
             return token
     return ""
 

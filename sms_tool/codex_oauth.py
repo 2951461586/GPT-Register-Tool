@@ -1,5 +1,6 @@
 ﻿import base64
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 import secrets
@@ -904,7 +905,8 @@ def _mailbox_from_data(data):
     mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
     email = str(mailbox.get("email") or data.get("email") or "").strip()
     refresh_token = str(mailbox.get("refresh_token") or "").strip()
-    provider = str(mailbox.get("provider") or "").strip()
+    provider = str(mailbox.get("provider") or data.get("mailbox_provider") or "").strip()
+    source = str(mailbox.get("source") or data.get("mailbox_source") or "").strip()
     if not email:
         return None
     mailbox_password = mailbox.get("password") if "password" in mailbox else data.get("password")
@@ -918,7 +920,7 @@ def _mailbox_from_data(data):
         client_secret=str(mailbox.get("client_secret") or "").strip(),
         auth_mode=str(mailbox.get("auth_mode") or "").strip(),
         sender_name=str(mailbox.get("sender_name") or "").strip(),
-        source=str(mailbox.get("source") or "").strip(),
+        source=source,
         provider=provider,
         order_no=str(mailbox.get("order_no") or "").strip(),
         purchase_id=str(mailbox.get("purchase_id") or "").strip(),
@@ -928,6 +930,19 @@ def _mailbox_from_data(data):
         balance_after=str(mailbox.get("balance_after") or "").strip(),
     )
     if not mailbox_has_inbox_credentials(result):
+        # Safe account snapshots intentionally omit iCloud OTP URLs.  Resolve
+        # those credentials from the configured mailbox pool at use time rather
+        # than persisting the URL in SQLite/session JSON or exposing it in a
+        # recovery result.
+        if provider == "icloud_url" or source.lower() in {
+            "icloud_url",
+            "icloud",
+            "token_file",
+            "mailbox_file",
+        }:
+            fallback = _mailbox_from_configured_pool(email)
+            if fallback is not None and mailbox_has_inbox_credentials(fallback):
+                return fallback
         if mailbox_gmail.is_gmail_mailbox(result):
             from .mailbox import _mailbox_from_config
 
@@ -936,6 +951,31 @@ def _mailbox_from_data(data):
                 return fallback
         return None
     return result
+
+
+def _mailbox_from_configured_pool(email):
+    """Return a matching configured mailbox without copying credentials into data."""
+    normalized = str(email or "").strip().lower()
+    if not normalized:
+        return None
+    return _configured_mailbox_index().get(normalized)
+
+
+@lru_cache(maxsize=1)
+def _configured_mailbox_index():
+    """Load the configured mailbox pool once per recovery process."""
+    try:
+        from .mailbox import _load_mailbox_pool
+
+        return {
+            str(getattr(candidate, "email", "") or "").strip().lower(): candidate
+            for candidate in _load_mailbox_pool()
+            if str(getattr(candidate, "email", "") or "").strip()
+        }
+    except Exception:
+        # Recovery will report the ordinary missing-mailbox error; never leak
+        # a token-file or provider transport exception from this lookup.
+        return {}
 
 
 def _is_terminal_account_data(data):

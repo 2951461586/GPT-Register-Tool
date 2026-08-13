@@ -37,13 +37,81 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "normalize_payment_method", return_value="gopay"), \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "payment_method_capability_probe", return_value=capability) as probe, \
+             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="gopay", probe_only=True, matrix=matrix,
             )
         self.assertEqual(probe.call_args.kwargs["checkout_country"], "ID")
         self.assertEqual(report["matrix"][0]["eligible"], 1)
+
+    def test_gopay_canary_uses_promotion_update_before_zero_due_decision(self):
+        class PromotionAwareTransport:
+            def __init__(self):
+                self.amount = 290_000
+                self.calls = []
+
+            def create_checkout(self, request):
+                self.calls.append(("checkout", request, self.amount))
+                return {
+                    "checkout_session_id": "cs_test_gopay_batch_probe",
+                    "processor_entity": "openai_ie",
+                    "publishable_key": "pk_test_gopay_batch_probe",
+                }
+
+            def update_checkout(self, request):
+                self.calls.append(("promotion", request, self.amount))
+                self.amount = 0
+                return {"success": True}
+
+            def stripe_init(self, request):
+                self.calls.append(("stripe_init", request, self.amount))
+                return {
+                    "currency": "idr",
+                    "total_summary": {"due": self.amount},
+                    "payment_method_types": ["gopay"],
+                }
+
+        transport = PromotionAwareTransport()
+        auth = {
+            "ok": True,
+            "access_token": "secret",
+            "auth_context": {"registration_country": "ID"},
+            "probed": 1,
+        }
+        checkout_proxy = "http://id-checkout.test:80"
+        promotion_proxy = "http://th-promotion.test:80"
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "load_account_seed", return_value=({"registration_country": "ID"}, "")), \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "gopay-canary.json"), \
+             patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe:
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"],
+                payment_method="gopay",
+                proxy=checkout_proxy,
+                payment_kwargs={
+                    "checkout_proxy": checkout_proxy,
+                    "promotion_proxy": promotion_proxy,
+                    "transport": transport,
+                },
+                probe_only=True,
+                canary=1,
+                retries=0,
+            )
+
+        self.assertEqual(
+            [(name, amount) for name, _request, amount in transport.calls],
+            [("checkout", 290_000), ("promotion", 290_000), ("stripe_init", 0)],
+        )
+        promotion_context = transport.calls[1][1].transport_context
+        self.assertEqual(promotion_context["checkout_proxy"], checkout_proxy)
+        self.assertEqual(promotion_context["promotion_proxy"], promotion_proxy)
+        self.assertTrue(report["results"][0]["eligible"])
+        self.assertEqual(report["results"][0]["decision"], "payment_method_available")
+        self.assertEqual(report["results"][0]["amount"], 0)
+        generic_probe.assert_not_called()
 
     def test_unknown_capability_canary_pauses_profile(self):
         report = {

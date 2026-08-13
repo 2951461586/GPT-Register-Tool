@@ -2,7 +2,12 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Backend process, task list, deletion and cancellation actions
+        // Backend process, task list, deletion and cancellation actions.
+        //
+        // CLI argument construction is delegated to BackendCommandPlanner;
+        // backend JSON business interpretation is delegated to
+        // BackendResultInterpreter.
+
         private void RerunFailed_Click(object sender, RoutedEventArgs e)
         {
             var failedRows = allRows.Where(r =>
@@ -25,16 +30,18 @@ namespace SmsWorkbench
                 return;
             }
 
-            var args = new List<string> { mailboxArg, tempFile, "--count", mailboxCount.ToString(CultureInfo.InvariantCulture), "--workers", "4" };
-            AddNoPhoneRegistrationArgs(args);
-            AddRegistrationProxy(args);
-            RunBackend("重新注册失败账号 (" + mailboxCount + ")", args);
+            var plan = BackendCommandPlanner.CreateRerunFailedRegistration(
+                mailboxArg,
+                tempFile,
+                mailboxCount,
+                GetRegistrationProxyPool());
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
         private void RebuildSqlite_Click(object sender, RoutedEventArgs e)
         {
-            var args = new List<string> { "--rebuild-sqlite" };
-            RunBackend("重建SQLite索引", args);
+            var plan = BackendCommandPlanner.CreateRebuildSqlite();
+            RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
         private void AccountGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -90,7 +97,11 @@ namespace SmsWorkbench
                     BackendCommand.Create(taskName, args, 12 * 60 * 60 * 1000),
                     progress);
 
-                task.Status = result.ExitCode == 0 ? "完成" : "失败";
+                // Use BackendResultInterpreter to normalize the outcome
+                BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(
+                    result, taskName, 12 * 60 * 60);
+
+                task.Status = interpreted.IsSuccess ? "完成" : "失败";
                 task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusText = taskName + " 已结束";
@@ -187,9 +198,9 @@ namespace SmsWorkbench
             {
                 string emailKey = NormalizeEmailKey(row.Identifier);
                 if (emailKey.Length == 0) return false;
-                var args = new List<string> { "--delete-account", "--email", emailKey, "--desktop-ipc" };
+                var plan = BackendCommandPlanner.CreateDeleteAccount(emailKey);
                 BackendCommandResult backend = await backendTasks.RunAsync(
-                    BackendCommand.Create("删除账号", args, 120000));
+                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000));
                 if (backend.ExitCode != 0 || !backend.Payload.HasValue)
                 {
                     Log("删除失败：" + SensitiveDataSanitizer.Redact(emailKey));
@@ -197,145 +208,13 @@ namespace SmsWorkbench
                 }
                 Log("删除账号完成：" + SensitiveDataSanitizer.Redact(emailKey));
                 return true;
-#if LEGACY_DELETE_CODE
-#pragma warning disable CS0162
-                string legacyEmailKey = NormalizeEmailKey(row.Identifier);
-                int removedPoolLines = DeleteMailboxLines(row, emailKey);
-                int removedSqliteRows = DeleteSqliteAccountRows(row, emailKey);
-                int removedSessionFiles = DeleteSessionJsonFiles(row, emailKey);
-
-                if (row.SourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                    && File.Exists(row.SourcePath)
-                    && IsUnderDirectory(row.SourcePath, GetSessionsDir()))
-                {
-                    File.Delete(row.SourcePath);
-                    removedSessionFiles++;
-                }
-
-                Log("删除账号：" + row.Identifier
-                    + "，邮箱池 " + removedPoolLines
-                    + " 条，SQLite " + removedSqliteRows
-                    + " 条，session " + removedSessionFiles + " 个");
-                return true;
-#endif
             }
-#pragma warning restore CS0162
             catch (Exception ex)
             {
                 Log("删除失败：" + SensitiveDataSanitizer.Redact(row.Identifier) + " " + SensitiveDataSanitizer.Redact(ex.Message));
                 return false;
             }
         }
-
-#if LEGACY_DELETE_CODE
-        private bool DeletionEmailMatch(string candidate, string emailKey)
-        {
-            if (emailKey.Length == 0) return false;
-            string normalizedCandidate = NormalizeEmailKey(candidate);
-            return normalizedCandidate.Length > 0 && normalizedCandidate == emailKey;
-        }
-
-        private int DeleteMailboxLines(PoolRow row, string emailKey)
-        {
-            int removed = 0;
-            var paths = GetKnownMailboxPoolFiles().ToList();
-            if (!string.IsNullOrWhiteSpace(row.SourcePath)
-                && row.SourcePath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
-                && File.Exists(row.SourcePath))
-            {
-                paths.Insert(0, row.SourcePath);
-            }
-            var exactLines = new[] { row.RawLine, row.MailboxLine };
-            foreach (string path in paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                removed += MailboxPoolFileStore.DeleteMatchingLines(path, emailKey, exactLines);
-            }
-            return removed;
-        }
-
-        private int DeleteSqliteAccountRows(PoolRow row, string emailKey)
-        {
-            string dbPath = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
-                ? row.SourcePath
-                : GetDatabasePath();
-            if (!File.Exists(dbPath)) return 0;
-
-            var rows = SqliteNative.Query(dbPath, "SELECT id,email,json_path FROM accounts");
-            var deleteIds = new List<string>();
-            string explicitId = row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) ? OnlyDigits(row.RawLine) : "";
-            foreach (Dictionary<string, string> data in rows)
-            {
-                string id = data.TryGetValue("id", out string rawId) ? rawId : "";
-                string email = data.TryGetValue("email", out string rawEmail) ? rawEmail : "";
-                bool matches = explicitId.Length > 0 && id == explicitId;
-                matches = matches || DeletionEmailMatch(email, emailKey);
-                if (!matches) continue;
-                deleteIds.Add(id);
-
-                string jsonPath = data.TryGetValue("json_path", out string rawJsonPath) ? rawJsonPath : "";
-                if (File.Exists(jsonPath) && IsUnderDirectory(jsonPath, GetSessionsDir()))
-                {
-                    TryDeleteFile(jsonPath);
-                }
-            }
-
-            foreach (string id in deleteIds.Distinct())
-            {
-                SqliteNative.Execute(dbPath, "DELETE FROM accounts WHERE id=" + OnlyDigits(id));
-            }
-            return deleteIds.Distinct().Count();
-        }
-
-        private int DeleteSessionJsonFiles(PoolRow row, string emailKey)
-        {
-            int removed = 0;
-            var dirs = new List<string> { GetSessionsDir(), rootDir };
-            foreach (string dir in dirs.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                foreach (string path in Directory.GetFiles(dir, "session_*.json", SearchOption.TopDirectoryOnly))
-                {
-                    if (!SessionJsonMatchesEmail(path, emailKey)) continue;
-                    if (TryDeleteFile(path)) removed++;
-                }
-            }
-            string notes = (row.Notes ?? "").Trim();
-            if (File.Exists(notes) && notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                && IsUnderDirectory(notes, GetSessionsDir()) && TryDeleteFile(notes))
-            {
-                removed++;
-            }
-            return removed;
-        }
-
-        private bool SessionJsonMatchesEmail(string path, string emailKey)
-        {
-            if (emailKey.Length == 0) return false;
-            try
-            {
-                Dictionary<string, object> data = ReadJsonObject(path);
-                return DeletionEmailMatch(GetString(data, "email"), emailKey);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private bool TryDeleteFile(string path)
-        {
-            try
-            {
-                if (!File.Exists(path)) return false;
-                File.Delete(path);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log("删除文件失败：" + path + " " + ex.Message);
-                return false;
-            }
-        }
-#endif
 
         private bool TryDeleteFile(string path)
         {

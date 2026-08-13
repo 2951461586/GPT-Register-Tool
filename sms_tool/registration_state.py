@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass, field
 from enum import Enum
-import time
 from typing import Any, Callable, Mapping
 
+from .config import current_config_data
 from .sanitizer import sanitize_text
 
 
@@ -79,25 +81,50 @@ class RegistrationStateMachine:
         }
 
 
+class RegistrationStageOverrun(TimeoutError):
+    """A stage exceeded its configured budget, detected after it returned.
+
+    Distinct from a transport ``TimeoutError`` raised inside a stage, which the
+    orchestrator must keep classifying as a network failure.
+    """
+
+    def __init__(self, state: RegistrationState, elapsed_seconds: float, budget_seconds: float):
+        self.state = state
+        self.elapsed_seconds = elapsed_seconds
+        self.budget_seconds = budget_seconds
+        super().__init__(
+            f"registration stage exceeded its budget: {state.value} "
+            f"({elapsed_seconds:.1f}s > {budget_seconds:.1f}s)"
+        )
+
+
 @dataclass(frozen=True)
 class RegistrationStage:
     state: RegistrationState
-    handler: Callable[["RegistrationContext"], Any]
+    # The handler receives whatever opaque state object the caller supplies and
+    # is free to ignore it. The email workflow keeps its mutable outputs on a
+    # shared ``RegistrationRuntimeState`` and closes over it, so this is
+    # deliberately ``Any`` rather than ``RegistrationContext``.
+    handler: Callable[[Any], Any]
     timeout_seconds: float | None = None
 
-    def run(self, context: "RegistrationContext", machine: RegistrationStateMachine) -> Any:
-        """Run one stage and enforce its deadline without orphan worker threads.
+    def run(self, context: Any, machine: RegistrationStateMachine) -> Any:
+        """Run one stage and enforce its budget without orphan worker threads.
 
-        Network and browser operations remain responsible for transport-level
-        cancellation. The stage deadline classifies an overrun after control
-        returns, so cleanup always happens in the calling thread.
+        This is a budget check, not a cancellation: the handler runs to
+        completion and the overrun is classified once control returns, so
+        cleanup always happens in the calling thread. Stages that can block for
+        minutes (mailbox OTP polling) receive the same budget as their own
+        operation timeout so the limit is also enforced while they run.
         """
         machine.transition(self.state)
         started = time.monotonic()
         value = self.handler(context)
-        if self.timeout_seconds is not None and time.monotonic() - started > max(0.0, float(self.timeout_seconds)):
-            machine.fail(f"{self.state.value}_timeout")
-            raise TimeoutError(f"registration stage timed out: {self.state.value}")
+        elapsed = time.monotonic() - started
+        budget = None if self.timeout_seconds is None else max(0.0, float(self.timeout_seconds))
+        if budget is not None and elapsed > budget:
+            machine.fail(f"{self.state.value}_stage_budget_exceeded")
+            raise RegistrationStageOverrun(self.state, elapsed, budget)
         return value
 
 @dataclass(frozen=True)
@@ -175,3 +202,37 @@ def prepare_registration_context(
         ),
         browser_headless=browser_headless,
     )
+
+
+def _normalize_registration_mode(value=None):
+    raw = str(value or "").strip().lower().replace("-", "_")
+    if not raw:
+        value = current_config_data().get("email_registration")
+        cfg = value if isinstance(value, Mapping) else {}
+        raw = str(cfg.get("registration_mode") or cfg.get("signup_mode") or "passwordless").strip().lower().replace("-", "_")
+    if raw in {"password", "password_signup", "user_register", "legacy"}:
+        return "password"
+    if raw in {"passwordless", "passwordless_signup", "login_or_signup", "har"}:
+        return "passwordless"
+    return "passwordless"
+
+
+def _stored_registration_password(email):
+    try:
+        from .storage import get_account_record
+        row = get_account_record(email)
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    error = str(row.get("error") or "").lower()
+    if "password_verify_failed" in error:
+        return ""
+    password = str(row.get("password") or "").strip()
+    if password:
+        return password
+    try:
+        raw = json.loads(row.get("raw_json") or "{}")
+    except Exception:
+        raw = {}
+    return str(raw.get("password") or "").strip()
