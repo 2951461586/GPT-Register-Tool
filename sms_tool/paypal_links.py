@@ -292,7 +292,21 @@ def _generate_link(access_token, proxy=None, payment_method="paypal", seed_data=
             promotion_proxy=promotion_proxy,
             require_zero=require_zero,
         )
-    return generate_payment_link(access_token, proxy=proxy, payment_method=payment_method, auth_context=auth_context)
+    payment_kwargs = {
+        "checkout_proxy": checkout_proxy,
+        "provider_proxy": provider_proxy,
+        "approve_proxy": approve_proxy,
+        "promotion_proxy": promotion_proxy,
+    }
+    if require_zero is not None:
+        payment_kwargs["require_zero"] = bool(require_zero)
+    return generate_payment_link(
+        access_token,
+        proxy=proxy,
+        payment_method=payment_method,
+        auth_context=auth_context,
+        **payment_kwargs,
+    )
 
 
 def _is_chatgpt_checkout_link(paypal):

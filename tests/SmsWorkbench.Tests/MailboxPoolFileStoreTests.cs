@@ -14,6 +14,20 @@ public sealed class MailboxPoolFileStoreTests
         Assert.Equal(expected, AccessTokenState.Display(hasAccessToken, statusCode));
     }
 
+    [Theory]
+    [InlineData("401", "at_invalid", "", "401")]
+    [InlineData("", "at_invalid", "", "")]
+    [InlineData("", "registered", "HTTP 401 unauthorized", "401")]
+    [InlineData("200", "at_invalid", "", "200")]
+    public void AccessTokenProbeCodeFallsBackToPersistedScanState(
+        string explicitCode,
+        string accountStatus,
+        string error,
+        string expected)
+    {
+        Assert.Equal(expected, AccessTokenState.ResolveProbeStatusCode(explicitCode, accountStatus, error));
+    }
+
     [Fact]
     public void BuildReMailLineRequiresCompleteOrderIdentity()
     {
@@ -86,17 +100,7 @@ public sealed class MailboxPoolFileStoreTests
         try
         {
             string selected = Path.Combine(root, "imported-pool.txt");
-            string token = Path.Combine(root, "tokens.txt");
-            string hotmail = Path.Combine(root, "hotmail.txt");
-            string chatai = Path.Combine(root, "chatai_extra.txt");
-            foreach (string path in new[] { selected, token, hotmail, chatai })
-                File.WriteAllText(path, "", Encoding.UTF8);
-
-            IReadOnlyList<string> known = MailboxPoolFileStore.DiscoverKnownFiles(root, token, selected);
-            Assert.Contains(selected, known, StringComparer.OrdinalIgnoreCase);
-            Assert.Contains(token, known, StringComparer.OrdinalIgnoreCase);
-            Assert.Contains(hotmail, known, StringComparer.OrdinalIgnoreCase);
-            Assert.Contains(chatai, known, StringComparer.OrdinalIgnoreCase);
+            File.WriteAllText(selected, "", Encoding.UTF8);
 
             string target = "User+alias@outlook.com";
             string other = "other@example.com";

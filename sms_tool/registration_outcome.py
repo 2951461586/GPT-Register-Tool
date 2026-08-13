@@ -9,12 +9,15 @@
 这些函数与主流程的 register_loop 主入口解耦，便于单独测试或复用。
 """
 
+import time
 from collections.abc import Mapping
 
 from .account_liveness import probe_account_liveness
 from .config import CFG
+from .error_classification import classify_error
 from .registration_progress import registration_stage
-import time
+from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from .utils import _timing_summary
 
 
 def _create_account_error(create_ok, create_data):
@@ -102,3 +105,69 @@ def _registration_requires_phone_verification(phone_pool=None, runtime_cfg=None)
     cfg = value if isinstance(value, Mapping) else {}
     default = bool(phone_pool)
     return bool(cfg.get("require_registration_phone_verification", default))
+
+
+def _mailbox_snapshot(mailbox):
+    if not mailbox:
+        return {}
+    return {
+        "email": getattr(mailbox, "email", ""),
+        "password": getattr(mailbox, "password", ""),
+        "login_password": getattr(mailbox, "login_password", ""),
+        "refresh_token": getattr(mailbox, "refresh_token", ""),
+        "access_token": getattr(mailbox, "access_token", ""),
+        "source": getattr(mailbox, "source", ""),
+        "provider": getattr(mailbox, "provider", ""),
+        "order_no": getattr(mailbox, "order_no", ""),
+        "token": getattr(mailbox, "token", ""),
+        "client_secret": getattr(mailbox, "client_secret", ""),
+        "auth_mode": getattr(mailbox, "auth_mode", ""),
+        "sender_name": getattr(mailbox, "sender_name", ""),
+        "purchase_id": getattr(mailbox, "purchase_id", ""),
+        "project_name": getattr(mailbox, "project_name", ""),
+        "price": getattr(mailbox, "price", ""),
+        "purchase_total_cost": getattr(mailbox, "purchase_total_cost", ""),
+        "balance_after": getattr(mailbox, "balance_after", ""),
+    }
+
+
+def _failure_result(error, email="", mailbox=None, password=""):
+    result = {"success": False, "error": _sanitize_text(error), "failure_class": classify_error(_sanitize_text(error)), "timing": _timing_summary()}
+    if email:
+        result["email"] = email
+    if password:
+        result["password"] = "[REDACTED]"
+    mailbox_data = _mailbox_snapshot(mailbox)
+    if mailbox_data:
+        result["mailbox"] = mailbox_data
+    return _sanitize(result)
+
+
+def _registration_outcome(create_ok, create_data, access_token, at_probe):
+    probe = at_probe if isinstance(at_probe, dict) else {}
+    try:
+        status_code = int(probe.get("status_code") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    create_error = _create_account_error(create_ok, create_data or {})
+    success = bool(str(access_token or "").strip()) and status_code == 200
+    if success:
+        return True, "", create_error
+    if not str(access_token or "").strip():
+        return False, create_error or "missing_auth_session_access_token", ""
+    if status_code:
+        return False, f"access_token_probe_http_{status_code}", create_error
+    probe_error = str(probe.get("error") or probe.get("status") or "unknown").strip()
+    return False, f"access_token_probe_failed:{probe_error}", create_error
+
+
+def _oauth_result_summary(result):
+    if not isinstance(result, dict):
+        return {}
+    summary = {key: value for key, value in result.items() if key != "tokens"}
+    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    if tokens:
+        summary["has_access_token"] = bool(tokens.get("access_token"))
+        summary["has_refresh_token"] = bool(tokens.get("refresh_token"))
+        summary["has_id_token"] = bool(tokens.get("id_token"))
+    return summary

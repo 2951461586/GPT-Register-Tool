@@ -2,6 +2,8 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
+from sms_tool import paypal_extract
+from sms_tool import upi_link
 
 
 class GeneratePpLinkContractTests(unittest.TestCase):
@@ -510,8 +512,8 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             qr_path = Path(tmp) / "upi.png"
-            with patch.object(gen_pp_link, "_new_session", side_effect=fake_new_session):
-                with patch.object(gen_pp_link, "_write_qr_png", side_effect=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1]):
+            with patch.object(upi_link, "_new_session", side_effect=fake_new_session):
+                with patch.object(upi_link, "_write_qr_png", side_effect=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1]):
                     result = gen_pp_link.generate_upi_qr_link(
                         "at",
                         checkout_proxy="socks5h://jp-checkout",
@@ -565,7 +567,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 return FakeResponse({"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_NOUPI", "payment_method_types": ["card"], "currency": "inr", "total_summary": {"due": 0, "currency": "inr"}})
 
         cfg = {"upi": {"checkout_country": "JP", "payment_country": "IN", "require_zero_due": True}}
-        with patch.object(gen_pp_link, "_load_json", return_value=cfg), patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+        with patch.object(upi_link, "_load_json", return_value=cfg), patch.object(upi_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
             result = gen_pp_link.generate_upi_qr_link("at", checkout_proxy="jp", provider_proxy="in")
 
         self.assertFalse(result["ok"])
@@ -772,8 +774,8 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 })
             raise AssertionError(url)
 
-        with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
-            with patch.object(gen_pp_link, "_checkout_post", side_effect=fake_checkout_post):
+        with patch.object(paypal_extract, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+            with patch.object(paypal_extract, "_checkout_post", side_effect=fake_checkout_post):
                 extractor = gen_pp_link.PPLinkExtractor(
                     access_token="at",
                     target_country="US",

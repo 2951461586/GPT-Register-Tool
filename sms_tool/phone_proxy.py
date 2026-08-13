@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import json
 import os
-import random
 import re
-import string
+import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, quote, urlencode, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -26,7 +26,6 @@ from .paths import runtime_file
 
 DEFAULT_PROBE_TTL_SECONDS = 300
 DEFAULT_PROBE_TIMEOUT_SECONDS = 12
-DEFAULT_SID_LENGTH = 8
 
 # SMS-Activate/SMSBower common country ids used by this project and the
 # standalone phone protocol.  Unknown ids fall back to configured country_name
@@ -72,6 +71,10 @@ COUNTRY_NAME_TO_ISO = {
 }
 
 _TRANSIENT_CACHE: dict[str, dict[str, Any]] = {}
+# Guards ``_TRANSIENT_CACHE`` and the on-disk probe cache file.  Batch
+# registration probes proxies from several worker threads concurrently, so the
+# in-memory dict and the file write must be serialized.
+_CACHE_LOCK = threading.RLock()
 
 
 def phone_proxy_cfg() -> dict:
@@ -101,6 +104,14 @@ def normalize_proxy_url(proxy: str, default_scheme: str = "http") -> str:
     value = str(proxy or "").strip()
     if not value:
         return ""
+    # Delegate to the unified, single-authority parser first; fall back to the
+    # historical permissive logic (e.g. http proxy without a port) when the
+    # strict parser refuses (returns None) so behaviour stays backward-compatible.
+    from .proxy_entry import parse_proxy, proxy_to_url
+
+    entry = parse_proxy(value, default_scheme=default_scheme)
+    if entry is not None:
+        return proxy_to_url(entry)
     scheme = ""
     rest = value
     if "://" in value:
@@ -170,65 +181,34 @@ def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
     return text
 
 
-def _random_sid(length: int = DEFAULT_SID_LENGTH, digits_only: bool = False) -> str:
-    chars = string.digits if digits_only else string.ascii_letters + string.digits
-    return "".join(random.choice(chars) for _ in range(max(1, int(length or DEFAULT_SID_LENGTH))))
-
-
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
-    host = parsed.hostname or ""
-    if not host:
-        return parsed.geturl()
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    netloc = f"{quote(username, safe='-._~')}:{quote(password, safe='-._~')}@{host}"
-    return urlunsplit((parsed.scheme or "http", netloc, parsed.path, parsed.query, parsed.fragment))
+    from .proxy_entry import rebuild_proxy_credentials
+
+    return rebuild_proxy_credentials(parsed, username, password)
 
 
 def match_proxy_region(proxy: str, iso_code: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    iso = str(iso_code or "").strip().upper()
-    if not proxy or not iso:
-        return proxy
-    # Cliproxy/Novproxy style: username contains region-XX.
-    replaced, count = re.subn(r"(^|-)region-[A-Za-z]{2}(?=-|:|@|$)", lambda m: f"{m.group(1)}region-{iso}", proxy, count=1)
-    if count:
-        return replaced
-    # Kookeey password style: password-base-JP-session-5m.  Preserve session.
-    try:
-        parsed = urlsplit(proxy)
-        username = unquote(parsed.username or "")
-        password = unquote(parsed.password or "")
-        next_password, count = re.subn(r"-[A-Za-z]{2}(?=-[A-Za-z0-9]+-(?:\d+m|\d+h)$)", f"-{iso}", password, count=1)
-        if count:
-            return _rebuild_proxy_url(parsed, username, next_password)
-    except Exception:
-        pass
-    return proxy
+    """Retarget the exit region while preserving the sticky session id.
+
+    Thin wrapper over the single-authority ``proxy_entry.retarget_region`` after
+    normalizing to canonical URL form.
+    """
+    from .proxy_entry import retarget_region
+
+    return retarget_region(normalize_proxy_url(proxy), iso_code)
 
 
 def refresh_proxy_sid(proxy: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    if not proxy:
+    """Refresh the sticky session id (region unchanged).
+
+    Thin wrapper over the single-authority ``proxy_entry.rotate_session``.
+    """
+    from .proxy_entry import rotate_session
+
+    normalized = normalize_proxy_url(proxy)
+    if not normalized:
         return ""
-    # Cliproxy style: sid-yuRiTaDA-t-5.
-    match = re.search(r"(?<=-sid-)[A-Za-z0-9]+(?=-t-|-|:|@|$)", proxy)
-    if match:
-        return proxy[: match.start()] + _random_sid(len(match.group(0))) + proxy[match.end() :]
-    # Kookeey style: password-JP-04061532-5m.
-    try:
-        parsed = urlsplit(proxy)
-        username = unquote(parsed.username or "")
-        password = unquote(parsed.password or "")
-        m = re.search(r"(?<=-[A-Za-z]{2}-)[A-Za-z0-9]+(?=-(?:\d+m|\d+h)$)", password)
-        if m:
-            next_password = password[: m.start()] + _random_sid(len(m.group(0)), digits_only=m.group(0).isdigit()) + password[m.end() :]
-            return _rebuild_proxy_url(parsed, username, next_password)
-    except Exception:
-        pass
-    return proxy
+    return rotate_session(normalized, "")
 
 
 def phone_country_iso(country: Any = "", provider: str = "", cfg: dict | None = None) -> str:
@@ -334,23 +314,36 @@ def _cache_ttl_seconds() -> int:
 
 def _load_probe_cache() -> dict:
     path = _cache_path()
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                _TRANSIENT_CACHE.update(data)
-        except Exception:
-            pass
-    return _TRANSIENT_CACHE
+    with _CACHE_LOCK:
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    _TRANSIENT_CACHE.update(data)
+            except Exception:
+                pass
+        return dict(_TRANSIENT_CACHE)
 
 
 def _save_probe_cache() -> None:
-    try:
-        path = _cache_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(_TRANSIENT_CACHE, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    path = _cache_path()
+    with _CACHE_LOCK:
+        temp: Path | None = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(_TRANSIENT_CACHE, ensure_ascii=False, indent=2)
+            # Atomic replace so concurrent worker probes never observe or leave a
+            # half-written cache file.  The temp name is unique per process+call
+            # to avoid collisions even if the lock is ever bypassed.
+            temp = path.with_name(f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+            temp.write_text(payload, encoding="utf-8")
+            os.replace(temp, path)
+        except Exception:
+            if temp is not None:
+                try:
+                    temp.unlink()
+                except Exception:
+                    pass
 
 
 def _probe_timeout_seconds() -> int:
@@ -401,8 +394,9 @@ def probe_proxy(proxy: str, expected_country: str = "", *, use_cache: bool = Tru
     except Exception as exc:
         result = {"ok": False, "proxy": proxy, "scheme": urlsplit(proxy).scheme, "error": f"{type(exc).__name__}: {str(exc)[:240]}", "cache": False}
     if ttl > 0:
-        _TRANSIENT_CACHE[key] = {"ts": now, "result": result}
-        _save_probe_cache()
+        with _CACHE_LOCK:
+            _TRANSIENT_CACHE[key] = {"ts": now, "result": result}
+            _save_probe_cache()
     return result
 
 

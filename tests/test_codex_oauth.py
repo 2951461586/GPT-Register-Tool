@@ -227,8 +227,18 @@ class CodexOauthTests(unittest.TestCase):
             issued_after_values.append(kwargs.get("issued_after_unix"))
             return "123456"
 
+        # ``time.time`` is patched on the shared ``time`` module, so any incidental
+        # caller (e.g. auth-header/sentinel fingerprint building) also sees it.
+        # Anchor the first read (the initial OTP window) to 1000 and every later
+        # read to 1005 so the assertion still proves a 409 resend keeps the
+        # original window without depending on the exact number of time reads.
+        def fake_time():
+            fake_time.calls += 1
+            return 1000 if fake_time.calls == 1 else 1005
+        fake_time.calls = 0
+
         with patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False), \
-             patch("sms_tool.codex_oauth.time.time", side_effect=[1000, 1005]), \
+             patch("sms_tool.codex_oauth.time.time", side_effect=fake_time), \
              patch("sms_tool.codex_oauth._poll_email_otp", side_effect=poll), \
              patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}):
             result = codex_oauth._passwordless_login_and_exchange(

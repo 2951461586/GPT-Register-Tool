@@ -3,14 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import random
 import re
+import sys
 import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit
 
 import requests
 
@@ -48,6 +48,7 @@ class ProxyProbeResult:
     ip: str = ""
     country_code: str = ""
     country: str = ""
+    region: str = ""
     error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -69,109 +70,39 @@ def _redact_proxy_auth_text(value: Any) -> str:
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
-    host = parsed.hostname or ""
-    if not host:
-        return parsed.geturl()
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    if username:
-        auth = quote(username, safe="-._~")
-        if password:
-            auth += ":" + quote(password, safe="-._~")
-        host = f"{auth}@{host}"
-    return urlunsplit((parsed.scheme or "http", host, parsed.path, parsed.query, parsed.fragment))
+    from .proxy_entry import rebuild_proxy_credentials
 
-
-def _random_session_id(length: int, numeric: bool = False) -> str:
-    alphabet = "0123456789" if numeric else "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    size = max(6, int(length or 8))
-    return "".join(random.choice(alphabet) for _ in range(size))
+    return rebuild_proxy_credentials(parsed, username, password)
 
 
 def rotate_proxy_session(proxy: str, country: str = "") -> str:
-    """Rotate provider session credentials without changing the proxy endpoint."""
-    value = normalize_proxy_url(proxy)
-    country = str(country or "").strip().upper()
-    if not value:
-        return value
-    try:
-        parsed = urlsplit(value)
-    except Exception:
-        return value
-    username = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    if not username:
-        return value
+    """Rotate provider session credentials (and optionally the exit country).
 
-    changed = False
-    if country:
-        username, count = re.subn(r"region-[A-Za-z]{2}", f"region-{country}", username, count=1)
-        changed = changed or bool(count)
+    Thin wrapper over the single-authority ``proxy_entry.rotate_session``.
+    """
+    from .proxy_entry import rotate_session
 
-    username, count = re.subn(
-        r"(?<=-sid-)[A-Za-z0-9]+(?=-t-)",
-        lambda match: _random_session_id(len(match.group(0))),
-        username,
-        count=1,
-    )
-    changed = changed or bool(count)
-
-    # Kookeey gateway passwords commonly end in BASE-CC-SESSION-TTL.
-    match = re.match(r"^(?P<base>.+?)-(?P<country>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$", password)
-    if match:
-        password = (
-            f"{match.group('base')}-{country or match.group('country').upper()}-"
-            f"{_random_session_id(len(match.group('sid')), numeric=match.group('sid').isdigit())}-{match.group('ttl')}"
-        )
-        changed = True
-
-    return _rebuild_proxy_url(parsed, username, password) if changed else value
+    return rotate_session(normalize_proxy_url(proxy), country)
 
 
 def retarget_proxy_country(proxy: str, country: str = "") -> str:
-    """Change only the exit country while preserving the existing sticky ID."""
-    value = normalize_proxy_url(proxy)
-    country = str(country or "").strip().upper()
-    if not value or not country:
-        return value
-    try:
-        parsed = urlsplit(value)
-    except Exception:
-        return value
-    username = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    if not username:
-        return value
-    changed = False
-    username, count = re.subn(r"region-[A-Za-z]{2}", f"region-{country}", username, count=1)
-    changed = changed or bool(count)
-    match = re.match(r"^(?P<base>.+?)-(?P<country>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$", password)
-    if match:
-        password = f"{match.group('base')}-{country}-{match.group('sid')}-{match.group('ttl')}"
-        changed = True
-    return _rebuild_proxy_url(parsed, username, password) if changed else value
+    """Change only the exit country while preserving the existing sticky ID.
+
+    Thin wrapper over the single-authority ``proxy_entry.retarget_region``.
+    """
+    from .proxy_entry import retarget_region
+
+    return retarget_region(normalize_proxy_url(proxy), country)
 
 
 def infer_proxy_country(proxy: str) -> str:
-    value = normalize_proxy_url(proxy)
-    if not value:
-        return ""
-    try:
-        parsed = urlsplit(value)
-        username = unquote(parsed.username or "")
-        password = unquote(parsed.password or "")
-    except Exception:
-        return ""
-    match = re.search(r"region-([A-Za-z]{2})(?=$|[-_:])", username)
-    if match:
-        return match.group(1).upper()
-    match = re.match(r"^.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]$", password)
-    if match:
-        return match.group(1).upper()
-    match = re.search(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?$", username)
-    return match.group(1).upper() if match else ""
+    """Best-effort exit-country inference from the proxy credential template.
+
+    Thin wrapper over the single-authority ``proxy_entry.infer_region``.
+    """
+    from .proxy_entry import infer_region
+
+    return infer_region(normalize_proxy_url(proxy))
 
 
 def is_retryable_network_error(error: Any) -> bool:
@@ -182,22 +113,64 @@ def is_retryable_network_error(error: Any) -> bool:
     return any(marker in text for marker in _NETWORK_ERROR_MARKERS)
 
 
-def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", timeout: float = 12) -> ProxyProbeResult:
+def probe_proxy(
+    proxy: str,
+    expected_country: str = "",
+    stage: str = "proxy",
+    timeout: float = 12,
+    *,
+    state: "PayPalProxyState | None" = None,
+) -> ProxyProbeResult:
     value = normalize_proxy_url(proxy)
     expected = str(expected_country or "").strip().upper()
     if not value:
         return ProxyProbeResult(ok=True, stage=stage, expected_country=expected, error="direct")
 
-    session = requests.Session()
-    session.trust_env = False
-    session.proxies = {"http": value, "https": value}
+    if state is not None:
+        cached = state.cached_probe(value, expected, stage)
+        if cached is not None:
+            return cached
+
+    result = _probe_proxy_network(value, expected, stage, timeout)
+    if state is not None:
+        state.record_probe(value, result)
+    return result
+
+
+def _probe_http_get_json(url: str, proxy: str, timeout: float) -> tuple[dict[str, Any], int]:
+    """GET a geo-lookup URL through ``proxy`` and return ``(json, status_code)``.
+
+    Prefers curl_cffi with a Chrome impersonation so the probe rides the same TLS
+    stack the payment flow uses (curl_cffi/Playwright); a proxy that only fails
+    under that stack is caught here rather than mid-checkout. Falls back to
+    ``requests`` when curl_cffi is unavailable.
+    """
+    proxies = {"http": proxy, "https": proxy}
+    try:
+        from curl_cffi import requests as _curl_requests
+
+        response = _curl_requests.get(url, proxies=proxies, timeout=timeout, impersonate="chrome124")
+    except Exception:
+        session = requests.Session()
+        session.trust_env = False
+        session.proxies = proxies
+        response = session.get(url, timeout=timeout)
+    status = int(getattr(response, "status_code", 0) or 0)
+    if status and not (200 <= status < 400):
+        raise RuntimeError(f"HTTP {status}")
+    body = response.json() or {}
+    return (body if isinstance(body, dict) else {}), status
+
+
+def _probe_proxy_network(value: str, expected: str, stage: str, timeout: float) -> ProxyProbeResult:
     probes = (
         (
-            "http://ip-api.com/json/?fields=status,message,country,countryCode,query",
+            "http://ip-api.com/json/?fields=status,message,country,countryCode,query,regionName",
             lambda body: (
                 str(body.get("query") or ""),
                 str(body.get("countryCode") or "").upper(),
                 str(body.get("country") or ""),
+                str(body.get("regionName") or body.get("region") or ""),
                 str(body.get("message") or ""),
                 str(body.get("status") or "") == "success",
             ),
@@ -208,6 +181,7 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
                 str(body.get("ip") or ""),
                 str(body.get("country_code") or "").upper(),
                 str(body.get("country") or ""),
+                str(body.get("region") or ""),
                 str(body.get("message") or ""),
                 bool(body.get("success", True)),
             ),
@@ -218,6 +192,7 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
                 str(body.get("ip") or ""),
                 str(body.get("country_code") or "").upper(),
                 str(body.get("country_name") or ""),
+                str(body.get("region") or ""),
                 str(body.get("reason") or body.get("error") or ""),
                 not bool(body.get("error")),
             ),
@@ -226,11 +201,10 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
     errors: list[str] = []
     for url, parser in probes:
         try:
-            response = session.get(url, timeout=timeout)
-            response.raise_for_status()
-            ip, country_code, country_name, message, ok = parser(response.json() or {})
+            body, status_code = _probe_http_get_json(url, value, timeout)
+            ip, country_code, country_name, region, message, ok = parser(body)
             if not ok or not ip or not country_code:
-                errors.append(message or f"HTTP {response.status_code}")
+                errors.append(message or f"HTTP {status_code}")
                 continue
             if expected and country_code != expected:
                 return ProxyProbeResult(
@@ -240,6 +214,7 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
                     ip=ip,
                     country_code=country_code,
                     country=country_name,
+                    region=region,
                     error=f"country_mismatch:{country_code}",
                 )
             return ProxyProbeResult(
@@ -249,6 +224,7 @@ def probe_proxy(proxy: str, expected_country: str = "", stage: str = "proxy", ti
                 ip=ip,
                 country_code=country_code,
                 country=country_name,
+                region=region,
             )
         except Exception as exc:
             errors.append(_redact_proxy_auth_text(exc)[:160])
@@ -264,18 +240,49 @@ def select_proxy_from_pool(
     proxy_pool: Iterable[str],
     expected_country: str = "",
     stage: str = "payment",
+    *,
+    pool_loader: Any = None,
+    state: "PayPalProxyState | None" = None,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Return the first healthy country-matched dynamic proxy in pool order."""
+    """Return the first healthy country-matched dynamic proxy in pool order.
+
+    ``pool_loader`` is an optional zero-arg callable returning an iterable of
+    proxy strings.  When ``proxy_pool`` is empty, it is invoked to populate the
+    candidate set (e.g. ``lambda: [e.url for e in load_proxy_pool(...)]``).
+
+    When ``state`` is supplied the candidates are first ordered by accumulated
+    health (cooldown-skipped, success-ranked) and geo probes are served from the
+    shared cache, so a whole batch shares one probe per proxy instead of
+    re-probing per account. Without ``state`` the behaviour is unchanged: probe
+    every candidate in pool order and take the first country match.
+    """
     expected = str(expected_country or "").strip().upper()
+    raw_pool = list(dict.fromkeys(str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()))
+    if not raw_pool and callable(pool_loader):
+        try:
+            loaded = pool_loader()
+            raw_pool = list(dict.fromkeys(
+                str(item or "").strip() for item in (loaded or []) if str(item or "").strip()
+            ))
+        except Exception:
+            raw_pool = []
     candidates = list(dict.fromkeys(
         normalize_proxy_url(item)
-        for item in (proxy_pool or [])
-        if str(item or "").strip()
+        for item in raw_pool
     ))
+    if state is not None and candidates:
+        # Prefer healthy proxies and skip ones still in their failure cooldown;
+        # fall back to raw order if every candidate is cooling down.
+        candidates = state.rank(stage, candidates, country=expected) or candidates
     attempts: list[dict[str, Any]] = []
     for base in candidates:
         candidate = rotate_proxy_session(base, expected)
-        result = probe_proxy(candidate, expected_country=expected, stage=stage)
+        # Preserve the exact no-state call shape so patched probe doubles that
+        # only accept (proxy, expected_country, stage, timeout) keep working.
+        if state is not None:
+            result = probe_proxy(candidate, expected_country=expected, stage=stage, state=state)
+        else:
+            result = probe_proxy(candidate, expected_country=expected, stage=stage)
         attempts.append({
             "proxy": redact_proxy_url(candidate),
             "ok": result.ok,
@@ -286,6 +293,8 @@ def select_proxy_from_pool(
             "country": result.country,
             "error": result.error,
         })
+        if state is not None:
+            state.record_result(stage, candidate, result.ok, reason=result.error, country=result.country_code)
         if result.ok:
             return candidate, attempts
     return "", attempts
@@ -321,12 +330,17 @@ class PayPalProxyState:
         fail_skip_after: int = 2,
         fail_cooldown_seconds: int = 180,
         zero_cache_ttl_seconds: int = 1800,
+        probe_cache_ttl_seconds: int = 600,
     ):
         self.path = Path(path)
         self.enabled = bool(enabled)
         self.fail_skip_after = max(1, int(fail_skip_after or 1))
         self.fail_cooldown_seconds = max(0, int(fail_cooldown_seconds or 0))
         self.zero_cache_ttl_seconds = max(0, int(zero_cache_ttl_seconds or 0))
+        # Geo-probe results are cached per stable proxy key so a batch of many
+        # accounts probes each pool proxy once instead of hammering the free IP
+        # geolocation services (ip-api/ipwho/ipapi) into rate limits per cell.
+        self.probe_cache_ttl_seconds = max(0, int(probe_cache_ttl_seconds or 0))
         self._lock = threading.RLock()
         self._data: dict[str, Any] | None = None
 
@@ -344,6 +358,7 @@ class PayPalProxyState:
                     data = {}
             data.setdefault("stages", {})
             data.setdefault("pairs", {})
+            data.setdefault("probes", {})
             self._data = data
             return data
 
@@ -404,6 +419,54 @@ class PayPalProxyState:
         if str(record.get("zero_country") or "").upper() != str(country or "").upper():
             return "", None
         return ("ok" if record.get("zero_ok") is True else "bad"), record.get("zero_amount")
+
+    def record_probe(self, proxy: str, result: "ProxyProbeResult") -> None:
+        """Persist a geo-probe outcome so later selections can skip the network."""
+        if not self.enabled or not proxy or not isinstance(result, ProxyProbeResult):
+            return
+        with self._lock:
+            probes = self._load().setdefault("probes", {})
+            probes[proxy_key(proxy)] = {
+                "ok": bool(result.ok),
+                "ip": str(result.ip or ""),
+                "country_code": str(result.country_code or "").upper(),
+                "country": str(result.country or ""),
+                "region": str(result.region or ""),
+                "expected_country": str(result.expected_country or "").upper(),
+                "error": str(result.error or "")[:200],
+                "checked_at": int(time.time()),
+            }
+            self._save()
+
+    def cached_probe(self, proxy: str, expected_country: str = "", stage: str = "proxy") -> "ProxyProbeResult | None":
+        """Return a still-fresh cached geo probe for ``proxy``, or ``None``.
+
+        A cached *mismatch* is honoured too: within the TTL a wrong-country proxy
+        stays skipped instead of being re-probed for every account in a batch.
+        """
+        if not self.enabled or not proxy or self.probe_cache_ttl_seconds <= 0:
+            return None
+        record = self._load().get("probes", {}).get(proxy_key(proxy))
+        if not isinstance(record, dict):
+            return None
+        checked_at = int(record.get("checked_at") or 0)
+        if not checked_at or int(time.time()) - checked_at > self.probe_cache_ttl_seconds:
+            return None
+        expected = str(expected_country or "").strip().upper()
+        cached_country = str(record.get("country_code") or "").upper()
+        # Only trust an OK cache entry whose exit country still matches the ask.
+        if record.get("ok") and expected and cached_country and cached_country != expected:
+            return None
+        return ProxyProbeResult(
+            ok=bool(record.get("ok")),
+            stage=stage,
+            expected_country=expected or str(record.get("expected_country") or ""),
+            ip=str(record.get("ip") or ""),
+            country_code=cached_country,
+            country=str(record.get("country") or ""),
+            region=str(record.get("region") or ""),
+            error=str(record.get("error") or ("cached" if record.get("ok") else "cached_probe_failed")),
+        )
 
     def record_pair_result(
         self,
@@ -480,3 +543,228 @@ class PayPalProxyState:
             )
 
         return sorted(kept, key=score, reverse=True)
+
+
+# ─── 阶段代理配置解析 (从 gen_pp_link.py 纯搬迁, 零行为变化) ────────────────────
+#
+# 本块负责把 ``paypal.stage_proxies`` / ``paypal.stage_proxy_api_urls`` /
+# ``paypal.stage_proxy_pools`` / ``paypal.proxy_health`` 解析成各阶段的实际
+# 代理值。``_PAYPAL_PROXY_STATE_CACHE`` 是进程级单例缓存, ``gen_pp_link``
+# 通过 re-export 共享同一对象 (测试会 clear 它)。
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+_PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
+
+
+def _fetch_proxy_api_url(api_url: str) -> str:
+    """Fetch a short-lived proxy from a plain-text proxy API such as Cliproxy white/api."""
+    api_url = str(api_url or "").strip()
+    if not api_url:
+        return ""
+    try:
+        response = requests.get(
+            api_url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0 CodexATStageProxyAPI/1.0"},
+        )
+        response.raise_for_status()
+        for line in response.text.splitlines():
+            line = line.strip()
+            if line:
+                return normalize_proxy_url(line)
+    except Exception as exc:
+        print(f"[proxy_api] fetch failed: {exc}", file=sys.stderr)
+    return ""
+
+
+def _stage_proxy_value(stage_proxies: dict, api_urls: dict, key: str, fallback: str = "") -> str:
+    api_url = str((api_urls or {}).get(key) or "").strip()
+    if api_url:
+        fetched = _fetch_proxy_api_url(api_url)
+        if fetched:
+            return fetched
+    return str((stage_proxies or {}).get(key) or fallback or "").strip()
+
+
+def _proxy_health_cfg(paypal_cfg: dict) -> dict:
+    value = paypal_cfg.get("proxy_health") if isinstance(paypal_cfg.get("proxy_health"), dict) else {}
+    return value or {}
+
+
+def _paypal_proxy_state(paypal_cfg: dict) -> PayPalProxyState:
+    health = _proxy_health_cfg(paypal_cfg)
+    state_file = str(health.get("state_file") or "runtime/paypal_proxy_state.json").strip()
+    state_path = Path(state_file).expanduser()
+    if not state_path.is_absolute():
+        state_path = Path(PROJECT_ROOT) / state_path
+    key = (
+        str(state_path),
+        bool(health.get("enabled", True)),
+        int(health.get("fail_skip_after", 2) or 2),
+        int(health.get("fail_cooldown_seconds", 180) or 0),
+        int(health.get("zero_cache_ttl_seconds", 1800) or 0),
+        int(health.get("probe_cache_ttl_seconds", 600) or 0),
+    )
+    state = _PAYPAL_PROXY_STATE_CACHE.get(key)
+    if state is None:
+        state = PayPalProxyState(
+            state_path,
+            enabled=key[1],
+            fail_skip_after=key[2],
+            fail_cooldown_seconds=key[3],
+            zero_cache_ttl_seconds=key[4],
+            probe_cache_ttl_seconds=key[5],
+        )
+        _PAYPAL_PROXY_STATE_CACHE[key] = state
+    return state
+
+
+def proxy_state_from_config(cfg: Any) -> PayPalProxyState:
+    """Return the process-shared proxy-health state for a full config mapping.
+
+    Reads ``paypal.proxy_health`` (health thresholds + state file) so that the
+    two-pool manager path, the batch runner, and the single-proxy stage path all
+    share one health/geo-probe cache instead of re-probing independently.
+    """
+    paypal_cfg = cfg.get("paypal") if isinstance(cfg, dict) else None
+    if not isinstance(paypal_cfg, dict):
+        try:
+            paypal_cfg = dict(cfg.get("paypal") or {}) if hasattr(cfg, "get") else {}
+        except Exception:
+            paypal_cfg = {}
+    return _paypal_proxy_state(paypal_cfg if isinstance(paypal_cfg, dict) else {})
+
+
+def _proxy_pool_values(paypal_cfg: dict, key: str) -> list[str]:
+    pools = paypal_cfg.get("stage_proxy_pools") if isinstance(paypal_cfg.get("stage_proxy_pools"), dict) else {}
+    raw = pools.get(key)
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    return [normalize_proxy_url(item) for item in raw if str(item or "").strip()]
+
+
+def _rank_stage_proxy(
+    paypal_cfg: dict,
+    state: PayPalProxyState,
+    stage: str,
+    configured_value: str,
+    *,
+    country: str = "",
+    checkout_proxy: str = "",
+) -> str:
+    candidates = _proxy_pool_values(paypal_cfg, stage)
+    if configured_value:
+        candidates.append(normalize_proxy_url(configured_value))
+    ranked = state.rank(stage, candidates, country=country, checkout_proxy=checkout_proxy)
+    return ranked[0] if ranked else (normalize_proxy_url(configured_value) if configured_value else "")
+
+
+def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
+    """Resolve payment stage proxies from static config or proxy API URLs.
+
+    Supports static ``paypal.stage_proxies`` and dynamic plain-text proxy APIs in
+    ``paypal.stage_proxy_api_urls``.  API values are resolved at runtime so
+    short-lived Cliproxy IP:PORT leases do not get frozen in config.json.
+    """
+    paypal_cfg = cfg.get("paypal") or {}
+    stage_proxies = paypal_cfg.get("stage_proxies") or {}
+    api_urls = paypal_cfg.get("stage_proxy_api_urls") or {}
+    proxy_default = (cfg.get("proxy") or {}).get("default") or ""
+    state = _paypal_proxy_state(paypal_cfg)
+
+    checkout_value = _stage_proxy_value(stage_proxies, api_urls, "checkout", proxy_default)
+    checkout = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "checkout",
+        checkout_value,
+        country=checkout_country,
+    )
+    provider_value = (
+        _stage_proxy_value(stage_proxies, api_urls, "provider")
+        or _stage_proxy_value(stage_proxies, api_urls, "stripe_init")
+        or proxy_default
+    )
+    provider = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "provider",
+        provider_value,
+        country=target_country,
+        checkout_proxy=checkout,
+    )
+    stripe_init_value = _stage_proxy_value(stage_proxies, api_urls, "stripe_init") or provider
+    stripe_init = _rank_stage_proxy(
+        paypal_cfg, state, "stripe_init", stripe_init_value, country=target_country, checkout_proxy=checkout,
+    )
+    payment_method_value = _stage_proxy_value(stage_proxies, api_urls, "payment_method") or provider
+    payment_method = _rank_stage_proxy(
+        paypal_cfg, state, "payment_method", payment_method_value, country=target_country, checkout_proxy=checkout,
+    )
+    confirm_value = _stage_proxy_value(stage_proxies, api_urls, "confirm") or provider
+    confirm = _rank_stage_proxy(
+        paypal_cfg, state, "confirm", confirm_value, country=target_country, checkout_proxy=checkout,
+    )
+    approve_value = (
+        _stage_proxy_value(stage_proxies, api_urls, "approve")
+        or confirm
+        or provider
+        or proxy_default
+    )
+    approve = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "approve",
+        approve_value,
+        country=target_country,
+        checkout_proxy=checkout,
+    )
+    # Promotion stage is OPT-IN: only resolved from explicit config, no fallback
+    # to provider/default, so leaving it unset keeps the original behaviour.
+    promotion_value = (
+        _stage_proxy_value(stage_proxies, api_urls, "promotion")
+        or _stage_proxy_value(stage_proxies, api_urls, "promotion_update")
+    )
+    promotion = _rank_stage_proxy(
+        paypal_cfg,
+        state,
+        "promotion",
+        promotion_value,
+    )
+    return {
+        "checkout": checkout,
+        "promotion": promotion,
+        "provider": provider,
+        "stripe_init": stripe_init,
+        "payment_method": payment_method,
+        "confirm": confirm,
+        "approve": approve,
+    }
+
+
+def _stage_proxy_is_configured(paypal_cfg: dict, *keys: str) -> bool:
+    stage_proxies = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    api_urls = paypal_cfg.get("stage_proxy_api_urls") if isinstance(paypal_cfg.get("stage_proxy_api_urls"), dict) else {}
+    return any(str(stage_proxies.get(key) or api_urls.get(key) or "").strip() for key in keys)
+
+
+def _resolve_stage_proxy(
+    explicit_stage_proxy: Any,
+    single_proxy: Any,
+    configured_proxy: Any,
+    configured: bool,
+    single_proxy_overrides: bool,
+) -> str:
+    explicit_value = str(explicit_stage_proxy or "").strip()
+    if explicit_value:
+        return explicit_value
+    single_value = str(single_proxy or "").strip()
+    configured_value = str(configured_proxy or "").strip()
+    if single_proxy_overrides and single_value:
+        return single_value
+    if configured and configured_value:
+        return configured_value
+    return single_value or configured_value

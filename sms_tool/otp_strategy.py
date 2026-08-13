@@ -6,11 +6,14 @@ request shape so registration code does not duplicate state-sensitive details.
 """
 
 import json
+from collections.abc import Mapping
 
-from .config import CFG
+from .config import CFG, current_config_data
 from .auth_headers import AUTH_IMPERSONATE, openai_auth_headers
 from .auth_flow import _absolute_url, _invalid_state_auth_response, _json_or_raw
 from .http_client import request_with_retry
+from .mailbox import _poll_email_otp
+from .registration_progress import registration_stage
 
 
 class SyntheticResponse:
@@ -94,3 +97,73 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
         if response.status_code not in (404, 405):
             return response
     return last
+
+
+def _poll_registration_email_otp(
+    mailbox,
+    *,
+    subject_keyword,
+    timeout,
+    issued_after_unix,
+    proxy=None,
+    excluded_otps=None,
+    resend_callback=None,
+    resend_after_seconds=None,
+    poll_otp_fn=None,
+):
+    poll_otp_fn = poll_otp_fn or _poll_email_otp
+    total_timeout = max(0, int(timeout or 0))
+    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
+    if provider != "remail" or resend_callback is None:
+        return poll_otp_fn(
+            mailbox,
+            subject_keyword=subject_keyword,
+            timeout=total_timeout,
+            issued_after_unix=issued_after_unix,
+            proxy=proxy,
+            excluded_otps=excluded_otps,
+        )
+    if resend_after_seconds is None:
+        value = current_config_data().get("email_registration")
+        email_cfg = value if isinstance(value, Mapping) else {}
+        resend_after_seconds = email_cfg.get("remail_otp_resend_after_seconds", 30)
+    try:
+        first_window = max(0, int(resend_after_seconds or 0))
+    except (TypeError, ValueError):
+        first_window = 30
+    if first_window <= 0 or first_window >= total_timeout:
+        return _poll_email_otp(
+            mailbox,
+            subject_keyword=subject_keyword,
+            timeout=total_timeout,
+            issued_after_unix=issued_after_unix,
+            proxy=proxy,
+            excluded_otps=excluded_otps,
+        )
+    code = poll_otp_fn(
+        mailbox,
+        subject_keyword=subject_keyword,
+        timeout=first_window,
+        issued_after_unix=issued_after_unix,
+        proxy=proxy,
+        excluded_otps=excluded_otps,
+    )
+    if code:
+        return code
+    registration_stage("email_otp_resend")
+    try:
+        response = resend_callback()
+        status = int(getattr(response, "status_code", 0) or 0)
+        if status not in (200, 202, 204, 409):
+            print(f"  ReMail OTP resend was not accepted: {status}")
+    except Exception as exc:
+        print(f"  ReMail OTP resend warning: {exc}")
+    registration_stage("email_otp_wait")
+    return poll_otp_fn(
+        mailbox,
+        subject_keyword=subject_keyword,
+        timeout=total_timeout - first_window,
+        issued_after_unix=issued_after_unix,
+        proxy=proxy,
+        excluded_otps=excluded_otps,
+    )

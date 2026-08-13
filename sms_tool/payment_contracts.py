@@ -85,6 +85,8 @@ _SIDE_EFFECT_STAGES = {
     "provider_redirect",
     "redirect",
     "redirect_follow",
+    "follow_redirect",
+    "poll",
     "blik_submit",
     "blik_confirm",
 }
@@ -214,3 +216,23 @@ def payment_retry_allowed(result: Mapping[str, Any] | None) -> bool:
     """Return true only for an explicitly retryable pre-side-effect failure."""
     contract = PaymentResult.from_mapping(result)
     return not contract.ok and contract.error.retryable
+
+
+def payment_history_metadata(value: Any) -> Any:
+    """Replace persisted payment artifacts with presence-only metadata."""
+    if isinstance(value, Mapping):
+        output: dict[str, Any] = {}
+        for raw_key, item in value.items():
+            key = str(raw_key)
+            lowered = key.lower()
+            is_artifact_value = item is None or isinstance(item, str)
+            is_url = is_artifact_value and (lowered == "url" or lowered.endswith("_url"))
+            is_qr_artifact = is_artifact_value and lowered in {"qr_data", "qr_path"}
+            if is_url or is_qr_artifact:
+                output[f"{key}_present"] = bool(str(item or "").strip())
+            else:
+                output[key] = payment_history_metadata(item)
+        return output
+    if isinstance(value, (list, tuple)):
+        return [payment_history_metadata(item) for item in value]
+    return value

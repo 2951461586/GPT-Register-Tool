@@ -291,25 +291,29 @@ def _try_nodriver_pay(
         "timeout": int(cfg.get("sms_timeout", 120)),
     }
 
-    # Normalize proxy
-    nd_proxy = proxy
-    if nd_proxy and "socks5h://" in nd_proxy:
-        nd_proxy = nd_proxy.replace("socks5h://", "socks5://")
+    # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
+    # endpoint the browser can consume; also restores remote-DNS semantics.
+    from .proxy_bridge import proxy_for_browser
+
+    nd_proxy, close_bridge = proxy_for_browser(proxy)
 
     print("[*] Attempting nodriver payment flow...")
-    result = run_nodriver_pay(
-        paypal_url=paypal_url,
-        card=card,
-        address=address,
-        first_name=first_name,
-        last_name=last_name,
-        alias_email=alias_email,
-        password=password,
-        phone=phone,
-        sms_cfg=sms_cfg,
-        proxy=nd_proxy or "",
-        timeout=180,
-    )
+    try:
+        result = run_nodriver_pay(
+            paypal_url=paypal_url,
+            card=card,
+            address=address,
+            first_name=first_name,
+            last_name=last_name,
+            alias_email=alias_email,
+            password=password,
+            phone=phone,
+            sms_cfg=sms_cfg,
+            proxy=nd_proxy or "",
+            timeout=180,
+        )
+    finally:
+        close_bridge()
 
     if result.get("ok"):
         result.setdefault("paypal_status", "completed")
@@ -358,10 +362,11 @@ def _try_browser_pay(
     sms_cfg["manual_human_verification"] = bool(cfg.get("manual_human_verification", not use_headless))
     sms_cfg["human_verification_timeout"] = int(cfg.get("human_verification_timeout", 300))
 
-    # Normalize proxy: socks5h:// -> socks5:// (browser compatibility)
-    browser_proxy = proxy
-    if browser_proxy and "socks5h://" in browser_proxy:
-        browser_proxy = browser_proxy.replace("socks5h://", "socks5://")
+    # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
+    # endpoint the browser can consume; also restores remote-DNS semantics.
+    from .proxy_bridge import proxy_for_browser
+
+    browser_proxy, close_bridge = proxy_for_browser(proxy)
 
     # Determine browser engine: prefer Camoufox, fall back to CloakBrowser
     browser_engine = cfg.get("browser_engine", "camoufox")
@@ -375,18 +380,21 @@ def _try_browser_pay(
             print("[*] Camoufox not installed, falling back to CloakBrowser")
             use_camoufox = False
 
-    if not use_camoufox:
-        return _try_browser_pay_cloakbrowser(
+    try:
+        if not use_camoufox:
+            return _try_browser_pay_cloakbrowser(
+                paypal_url, card, address, first_name, last_name,
+                alias_email, password, sms_cfg, debug_dir, debug_enabled,
+                use_headless, browser_proxy, cookie_header, cfg,
+            )
+
+        return _try_browser_pay_camoufox(
             paypal_url, card, address, first_name, last_name,
             alias_email, password, sms_cfg, debug_dir, debug_enabled,
             use_headless, browser_proxy, cookie_header, cfg,
         )
-
-    return _try_browser_pay_camoufox(
-        paypal_url, card, address, first_name, last_name,
-        alias_email, password, sms_cfg, debug_dir, debug_enabled,
-        use_headless, browser_proxy, cookie_header, cfg,
-    )
+    finally:
+        close_bridge()
 
 
 def _try_browser_pay_camoufox(

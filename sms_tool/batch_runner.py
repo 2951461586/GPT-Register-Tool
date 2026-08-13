@@ -61,6 +61,7 @@ def run_batch_impl(
     retry_delay_seconds=1.0,
     run_email_func=None,
     browser_headless: bool | None = None,
+    enroll_2fa: bool = True,
 ):
     if run_email_func is None:
         raise ValueError("run_email_func is required")
@@ -135,6 +136,7 @@ def run_batch_impl(
                     sentinel_data=sentinel_data,
                     registration_mode=registration_mode,
                     browser_headless=browser_headless,
+                    enroll_2fa=enroll_2fa,
                 )
             except Exception as e:
                 import traceback; traceback.print_exc()

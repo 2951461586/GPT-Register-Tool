@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -48,6 +49,61 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertNotIn("access_token", report["results"][0]["auth"])
         self.assertNotIn("email", report["results"][0])
 
+    def test_checkpoint_keeps_only_artifact_presence_without_mutating_report(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        payment = {
+            "ok": True,
+            "decision": "ready_with_qr",
+            "url": "https://provider.example.test/pay/opaque-reference",
+            "provider_redirect_url": "https://redirect.example.test/opaque-reference",
+            "details": {
+                "fallback_url": "https://fallback.example.test/opaque-reference",
+                "qr_data": "gopay://pay/opaque-reference",
+                "qr_path": "C:/private/payment.png",
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
+             patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "canary.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="gopay", canary=1, retries=0,
+            )
+            checkpoint = json.loads((Path(tmp) / "canary.json").read_text(encoding="utf-8"))
+
+        row = report["results"][0]
+        self.assertEqual(row["url"], payment["url"])
+        self.assertEqual(row["provider_redirect_url"], payment["provider_redirect_url"])
+        self.assertEqual(row["details"]["fallback_url"], payment["details"]["fallback_url"])
+        self.assertEqual(row["details"]["qr_data"], payment["details"]["qr_data"])
+        persisted_row = checkpoint["results"][0]
+        self.assertTrue(persisted_row["url_present"])
+        self.assertTrue(persisted_row["provider_redirect_url_present"])
+        self.assertTrue(persisted_row["details"]["fallback_url_present"])
+        self.assertTrue(persisted_row["details"]["qr_data_present"])
+        self.assertTrue(persisted_row["details"]["qr_path_present"])
+        serialized = json.dumps(checkpoint)
+        for artifact in (
+            payment["url"], payment["provider_redirect_url"],
+            payment["details"]["fallback_url"], payment["details"]["qr_data"],
+            payment["details"]["qr_path"],
+        ):
+            self.assertNotIn(artifact, serialized)
+
+    def test_explicit_missing_matrix_path_fails_instead_of_using_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing-matrix.json"
+            with self.assertRaisesRegex(ValueError, "does not exist"):
+                payment_batch.load_payment_matrix(str(missing))
+
+    def test_explicit_matrix_file_with_bad_json_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad-matrix.json"
+            path.write_text("{not-json", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid payment matrix JSON"):
+                payment_batch.load_payment_matrix(path)
+
     def test_stage_proxies_rotate_sticky_session_for_each_account(self):
         base = "http://user-region-US-sid-Old12345-t-5:secret@proxy.example:443"
         values = {
@@ -55,12 +111,342 @@ class PaymentBatchTests(unittest.TestCase):
             "promotion_proxy": base,
             "stage_proxy_countries": {"checkout": "US", "promotion": "JP"},
         }
-        with patch("sms_tool.paypal_proxy._random_session_id", side_effect=["New11111", "New22222"]):
+        with patch("sms_tool.proxy_entry._random_session_id", side_effect=["New11111", "New22222"]):
             result = payment_batch._cell_payment_kwargs(values, {}, base)
 
         self.assertIn("region-US-sid-New11111", result["checkout_proxy"])
         self.assertIn("region-JP-sid-New22222", result["promotion_proxy"])
         self.assertNotEqual(result["checkout_proxy"], base)
+
+    def test_checkout_and_approve_proxy_pools_are_selected_independently_per_cell(self):
+        values = {
+            "checkout_proxy": "http://legacy-checkout:8080",
+            "approve_proxy": "http://legacy-approve:8080",
+            "checkout_proxy_pool": "http://checkout-a:8080,http://checkout-b:8080",
+            "approve_proxy_pool": ["http://approve-a:8080", "http://approve-b:8080"],
+            "stage_proxy_countries": {"checkout": "JP", "approve": "TR"},
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return f"http://selected-{stage}:8080", [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            result = payment_batch._cell_payment_kwargs(values, {}, "")
+
+        self.assertEqual(result["checkout_proxy"], "http://selected-checkout:8080")
+        self.assertEqual(result["approve_proxy"], "http://selected-approve:8080")
+        self.assertEqual(result["provider_proxy"], "http://selected-checkout:8080")
+        self.assertEqual(result["promotion_proxy"], "http://selected-approve:8080")
+        self.assertEqual([item[2] for item in seen], ["checkout", "approve"])
+        self.assertEqual(seen[0][1], "JP")
+        self.assertEqual(seen[1][1], "TR")
+        self.assertNotIn("checkout_proxy_pool", result)
+        self.assertNotIn("approve_proxy_pool", result)
+
+    def test_gopay_approve_pool_defaults_to_jp_but_matrix_country_wins(self):
+        values = {
+            "checkout_proxy_pool": ["http://checkout-a:8080"],
+            "approve_proxy_pool": ["http://approve-a:8080"],
+            "target_country": "ID",
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            payment_batch._cell_payment_kwargs(
+                values,
+                {"checkout_country": "ID"},
+                "",
+                payment_method="gopay",
+            )
+
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+        seen.clear()
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            payment_batch._cell_payment_kwargs(
+                values,
+                {"checkout_country": "ID", "approve_country": "TR"},
+                "",
+                payment_method="gopay",
+            )
+        self.assertEqual([item[1] for item in seen], ["ID", "TR"])
+
+    def test_gopay_matrix_approve_country_outside_allowlist_is_coerced_to_jp(self):
+        values = {
+            "checkout_proxy_pool": ["http://checkout-a:8080"],
+            "approve_proxy_pool": ["http://approve-a:8080"],
+            "target_country": "ID",
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            result = payment_batch._cell_payment_kwargs(
+                values,
+                {"checkout_country": "ID", "approve_country": "US"},
+                "",
+                payment_method="gopay",
+            )
+
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+        self.assertEqual(result["stage_proxy_countries"]["approve"], "JP")
+
+    def test_gopay_base_approve_country_kwarg_is_coerced_to_jp(self):
+        values = {
+            "checkout_proxy_pool": ["http://checkout-a:8080"],
+            "approve_proxy_pool": ["http://approve-a:8080"],
+            "target_country": "ID",
+            "approve_country": "US",
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            result = payment_batch._cell_payment_kwargs(
+                values,
+                {"checkout_country": "ID"},
+                "",
+                payment_method="gopay",
+            )
+
+        self.assertEqual([item[1] for item in seen], ["ID", "JP"])
+        self.assertEqual(result["approve_country"], "JP")
+
+    def test_non_gopay_matrix_approve_country_is_not_coerced(self):
+        values = {
+            "checkout_proxy_pool": ["http://checkout-a:8080"],
+            "approve_proxy_pool": ["http://approve-a:8080"],
+            "target_country": "PH",
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            result = payment_batch._cell_payment_kwargs(
+                values,
+                {"checkout_country": "PH", "approve_country": "US"},
+                "",
+                payment_method="grabpay",
+            )
+
+        self.assertEqual([item[1] for item in seen], ["PH", "US"])
+        self.assertEqual(result["stage_proxy_countries"]["approve"], "US")
+
+    def test_gopay_batch_forwards_coerced_approve_country_to_payment_link(self):
+        auth = {
+            "ok": True,
+            "access_token": "secret",
+            "auth_context": {"registration_country": "ID"},
+            "probed": 1,
+        }
+        matrix = {"cells": [{
+            "name": "us-approve",
+            "payment_method": "gopay",
+            "checkout_country": "ID",
+            "approve_country": "US",
+        }]}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}) as generate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "coerce.json"):
+            report = payment_batch.run_payment_batch(
+                ["coerce@example.com"],
+                payment_method="gopay",
+                matrix=matrix,
+                retries=0,
+            )
+
+        self.assertTrue(report["results"][0]["ok"])
+        self.assertEqual(
+            generate.call_args.kwargs["stage_proxy_countries"]["approve"],
+            "JP",
+        )
+
+    def test_proxy_pool_start_rotates_by_account_index(self):
+        values = {
+            "checkout_proxy_pool": ["http://checkout-a:8080", "http://checkout-b:8080"],
+            "approve_proxy_pool": ["http://approve-a:8080", "http://approve-b:8080"],
+            "stage_proxy_countries": {"checkout": "ID", "approve": "JP"},
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return pool[0], [{"ok": True}]
+
+        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            payment_batch._cell_payment_kwargs(values, {}, "", pool_index=1)
+
+        self.assertEqual(seen[0][0], ["http://checkout-b:8080", "http://checkout-a:8080"])
+        self.assertEqual(seen[1][0], ["http://approve-b:8080", "http://approve-a:8080"])
+
+    def test_batch_reads_method_proxy_pools_from_protocol_config(self):
+        auth = {
+            "ok": True,
+            "access_token": "secret",
+            "auth_context": {"registration_country": "ID"},
+            "probed": 1,
+        }
+        config = {
+            "protocol_payments": {
+                "methods": {
+                    "gopay": {
+                        "checkout_proxy": "http://legacy-checkout:8080",
+                        "approve_proxy": "http://legacy-approve:8080",
+                        "checkout_proxy_pool": ["http://checkout-a:8080"],
+                        "approve_proxy_pool": ["http://approve-a:8080"],
+                    },
+                },
+            },
+        }
+        seen = []
+
+        def choose(pool, expected_country, stage, **_kwargs):
+            seen.append((list(pool), expected_country, stage))
+            return f"http://selected-{stage}:8080", [{"ok": True}]
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "CFG", config), \
+             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}) as generate, \
+             patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "pool.json"):
+            report = payment_batch.run_payment_batch(
+                ["pool@example.com"],
+                payment_method="gopay",
+                payment_kwargs={
+                    "checkout_proxy": "http://legacy-checkout:8080",
+                    "approve_proxy": "http://legacy-approve:8080",
+                    "stage_proxy_countries": {"checkout": "ID", "approve": "TR"},
+                },
+                retries=0,
+            )
+
+        self.assertTrue(report["results"][0]["ok"])
+        self.assertEqual([item[2] for item in seen], ["checkout", "approve"])
+        self.assertEqual(seen[0][1], "ID")
+        self.assertEqual(seen[1][1], "TR")
+        self.assertEqual(generate.call_args.kwargs["checkout_proxy"], "http://selected-checkout:8080")
+
+    def test_matrix_checkout_route_is_resolved_once_before_jit_and_reused_for_payment(self):
+        base = "http://user-region-US-sid-Old12345-t-5:secret@proxy.example:443"
+        resolved = "http://user-region-ID-sid-New11111-t-5:secret@proxy.example:443"
+        events = []
+        payment_results = [
+            {
+                "ok": False,
+                "status": "timed_out",
+                "decision": "transport_failed",
+                "retryable": True,
+            },
+            {"ok": True, "decision": "ready", "url": "https://example.test/pay"},
+        ]
+
+        def load_seed(**_kwargs):
+            events.append("seed")
+            return {"registration_country": "ID"}, ""
+
+        def rotate_proxy(value, country):
+            events.append(("rotate", value, country))
+            return resolved
+
+        def ensure_auth(**kwargs):
+            events.append(("auth", kwargs["proxy"]))
+            return {
+                "ok": True,
+                "access_token": "secret",
+                "auth_context": {"registration_country": "ID"},
+                "probed": 1,
+            }
+
+        def generate(**kwargs):
+            events.append(("payment", kwargs["proxy"], kwargs["checkout_proxy"]))
+            return payment_results.pop(0)
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "load_account_seed", side_effect=load_seed), \
+             patch.object(payment_batch, "ensure_payment_access_token", side_effect=ensure_auth), \
+             patch.object(payment_batch, "generate_payment_link", side_effect=generate) as payment, \
+             patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy) as rotate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "route.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"],
+                payment_method="gopay",
+                proxy=base,
+                matrix={"cells": [{
+                    "name": "id_gopay",
+                    "payment_method": "gopay",
+                    "registration_country": "ID",
+                    "checkout_country": "ID",
+                }]},
+                retries=1,
+            )
+
+        self.assertEqual(events[0], "seed")
+        self.assertEqual(events[1], ("rotate", base, "ID"))
+        self.assertEqual(events[2], ("auth", resolved))
+        self.assertEqual(events[3:], [
+            ("payment", resolved, resolved),
+            ("payment", resolved, resolved),
+        ])
+        rotate.assert_called_once_with(base, "ID")
+        self.assertEqual(payment.call_count, 2)
+        self.assertTrue(report["results"][0]["ok"])
+        self.assertEqual(report["results"][0]["matrix_cell"], "id_gopay")
+
+    def test_probe_and_jit_share_explicit_checkout_route_without_rotation(self):
+        batch_proxy = "http://batch.example:8080"
+        checkout_route = "http://checkout.example:8080"
+        auth = {
+            "ok": True,
+            "access_token": "secret",
+            "auth_context": {},
+            "probed": 1,
+        }
+        capability = {
+            "ok": True,
+            "status": "completed",
+            "classification": "eligible",
+            "eligible": True,
+            "conclusive": True,
+            "decision": "payment_method_available",
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
+             patch("sms_tool.paypal_proxy.rotate_proxy_session") as rotate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-route.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"],
+                payment_method="gcash",
+                proxy=batch_proxy,
+                payment_kwargs={"checkout_proxy": checkout_route},
+                probe_only=True,
+                retries=0,
+            )
+
+        self.assertEqual(ensure.call_args.kwargs["proxy"], checkout_route)
+        self.assertEqual(probe.call_args.kwargs["proxy"], checkout_route)
+        self.assertEqual(probe.call_args.kwargs["checkout_proxy"], checkout_route)
+        rotate.assert_not_called()
+        self.assertEqual(report["results"][0]["decision"], "payment_method_available")
 
     def test_conclusive_ineligible_result_is_not_retried(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
@@ -136,11 +522,69 @@ class PaymentBatchTests(unittest.TestCase):
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
              patch.object(payment_batch, "generate_payment_link", return_value=payment), \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"):
-            payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", batch_id="resume")
+            first = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="momo", batch_id="resume",
+            )
+            checkpoint = json.loads((Path(tmp) / "resume.json").read_text(encoding="utf-8"))
             report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", batch_id="resume")
+        self.assertEqual(first["results"][0]["url"], payment["url"])
+        self.assertNotIn("url", checkpoint["results"][0])
+        self.assertTrue(checkpoint["results"][0]["url_present"])
         self.assertEqual(ensure.call_count, 1)
         self.assertEqual(report["status"], "finished")
         self.assertEqual(report["resumed"], 1)
+        self.assertEqual(report["counts"]["link_ready"], 1)
+        self.assertEqual(report["counts"]["qr_ready"], 1)
+
+    def test_retryable_checkpoint_row_is_executed_again(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        retryable = {
+            "ok": False,
+            "status": "timed_out",
+            "decision": "transport_failed",
+            "error_stage": "checkout",
+            "retryable": True,
+        }
+        success = {"ok": True, "url": "https://example.test/pay"}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "generate_payment_link", side_effect=[retryable, success]) as generate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "retry.json"):
+            payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+            )
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+            )
+
+        self.assertEqual(ensure.call_count, 2)
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(report["resumed"], 0)
+        self.assertTrue(report["results"][0]["ok"])
+
+    def test_explicit_non_retryable_checkpoint_row_is_resumed(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        terminal = {
+            "ok": False,
+            "status": "failed",
+            "decision": "payment_method_unavailable",
+            "retryable": False,
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "generate_payment_link", return_value=terminal) as generate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "terminal.json"):
+            payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+            )
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+            )
+
+        self.assertEqual(ensure.call_count, 1)
+        self.assertEqual(generate.call_count, 1)
+        self.assertEqual(report["resumed"], 1)
+        self.assertFalse(report["results"][0]["ok"])
 
     def test_probe_only_runs_checkout_capability_without_payment_link_generation(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
@@ -154,7 +598,7 @@ class PaymentBatchTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "payment_method_capability_probe", return_value=capability) as probe, \
+             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
              patch.object(payment_batch, "generate_payment_link") as generate, \
              patch.object(payment_batch, "_active_canary_pause") as active_pause, \
              patch.object(payment_batch, "_record_canary_state") as record_canary, \
@@ -191,7 +635,7 @@ class PaymentBatchTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "payment_method_capability_probe", side_effect=[transient, completed]) as probe, \
+             patch.object(payment_batch, "probe_payment_method", side_effect=[transient, completed]) as probe, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-retry.json"):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="gcash", probe_only=True, retries=1,
@@ -214,7 +658,7 @@ class PaymentBatchTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "payment_method_capability_probe", return_value=capability), \
+             patch.object(payment_batch, "probe_payment_method", return_value=capability), \
              patch.object(payment_batch, "generate_payment_link") as generate, \
              patch.object(payment_batch, "_record_canary_state", return_value={"paused": True}) as record_canary, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-canary.json"):
@@ -230,7 +674,7 @@ class PaymentBatchTests(unittest.TestCase):
         payment = {"ok": True, "url": "https://example.test/pay"}
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "payment_method_capability_probe", return_value={
+             patch.object(payment_batch, "probe_payment_method", return_value={
                  "ok": True, "status": "completed", "classification": "eligible",
                  "eligible": True, "conclusive": True, "decision": "payment_method_available",
              }), \

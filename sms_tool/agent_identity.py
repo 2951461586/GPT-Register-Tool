@@ -275,7 +275,6 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
             email=email,
             session_file=json_path if json_path and Path(json_path).is_file() else "",
             timeout=max(30, int(timeout or 30)),
-            browser=False,
             proxy=proxy,
         )
         if not refreshed.get("ok"):

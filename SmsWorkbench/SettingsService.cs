@@ -8,6 +8,9 @@ namespace SmsWorkbench
         string ConfigPath { get; }
         IReadOnlyList<SettingsCategoryViewModel> Load();
         SettingsSaveResult Save(IEnumerable<SettingsCategoryViewModel> categories);
+        string GetString(string path, string fallback = "");
+        IReadOnlyList<string> GetStringList(string path);
+        void UpdateConfig(Action<JsonObject> mutate);
     }
 
     public sealed class SettingsService : ISettingsService
@@ -81,16 +84,24 @@ namespace SmsWorkbench
                 SetPath(root, "mailbox_proxy", mailboxProxy);
                 SetPath(root, "phone_reuse.proxy", registrationProxy);
 
-                SetPath(root, "protocol_payments.proxy_pool", ToArray(ParseList(Find(fields, "protocol_proxy_pool").Value)));
+                // The shared protocol proxy pool is intentionally no longer
+                // editable from Settings.  Batch protocol payment owns its
+                // checkout/approve pools; preserve any legacy global value.
                 SetPath(root, "protocol_payments.enabled_methods", ToArray(ParseList(Find(fields, "protocol_enabled_methods").Value)));
                 SetPath(root, "protocol_payments.matrix", matrix);
                 SetPath(root, "paypal.proxies", ToArray(new[] { Find(fields, "paypal_proxy").Value.Trim() }));
                 SetPath(root, "paypal.billing_regions", ToArray(new[] { Find(fields, "paypal_billing_region").Value.Trim().ToUpperInvariant() }));
 
+                // Python's mailbox_remail falls back to service_mode "code" when the key is
+                // absent, but every desktop-driven ReMail acquisition runs in "purchase"
+                // mode; keep pinning it so saving unrelated settings cannot silently
+                // switch the purchase flow back to code mode.
                 SetPath(root, "email_registration.remail.service_mode", "purchase");
+                // phone_reuse.py defaults source to "auto", which falls back to the static
+                // phone pool when no SMSBower key is configured.  The desktop surface
+                // intentionally dropped static phone-pool editing, so keep pinning the
+                // SMSBower seam here.
                 SetPath(root, "phone_reuse.source", "smsbower");
-                SetPath(root, "phone_reuse.smsbower.service", "dr");
-                SetPath(root, "phone_reuse.smsbower.service_name", "OpenAI (ChatGPT)");
                 RemovePath(root, "phone_reuse.smsbower.pool_size");
                 RemovePath(root, "phone_reuse.phone_pool");
                 RemovePath(root, "protocol_payments.methods.blik.blik_code");
@@ -105,6 +116,56 @@ namespace SmsWorkbench
             {
                 return new SettingsSaveResult(false, "配置保存失败：" + exception.Message);
             }
+        }
+
+        public string GetString(string path, string fallback = "")
+        {
+            try
+            {
+                JsonObject root = ReadRootIfExists();
+                string value = root == null ? "" : Text(root, path);
+                return string.IsNullOrWhiteSpace(value) ? fallback : value;
+            }
+            catch
+            {
+                return fallback;
+            }
+        }
+
+        public IReadOnlyList<string> GetStringList(string path)
+        {
+            try
+            {
+                JsonObject root = ReadRootIfExists();
+                if (root == null) return Array.Empty<string>();
+                JsonNode value = GetPath(root, path);
+                if (value is JsonArray array)
+                    return array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0).ToArray();
+                string single = value?.ToString() ?? "";
+                return single.Length > 0 ? new[] { single } : Array.Empty<string>();
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        public void UpdateConfig(Action<JsonObject> mutate)
+        {
+            JsonObject root = ReadRoot();
+            mutate(root);
+            WriteAtomic(root);
+        }
+
+        // Read-only access used by MainWindow helpers.  Unlike Load/Save this never
+        // creates config.json and parses case-insensitively, matching the legacy
+        // dictionary-based readers it replaces; any failure yields the fallback.
+        private JsonObject ReadRootIfExists()
+        {
+            if (!File.Exists(ConfigPath)) return null;
+            return JsonNode.Parse(
+                File.ReadAllText(ConfigPath, Encoding.UTF8),
+                new JsonNodeOptions { PropertyNameCaseInsensitive = true }) as JsonObject;
         }
 
         private static string ReadValue(JsonObject root, SettingDefinition definition)
@@ -123,6 +184,9 @@ namespace SmsWorkbench
                     Text(root, "email_registration.mailbox_proxy"),
                     Text(root, "proxy.mailbox"),
                     LocalProxy),
+                "smailr_api_key" => First(
+                    Text(root, definition.JsonPath),
+                    Environment.GetEnvironmentVariable("SMAILR_API_KEY")),
                 "protocol_proxy_pool" => ListText(root, "protocol_payments.proxy_pool"),
                 "protocol_enabled_methods" => ArrayText(root, "protocol_payments.enabled_methods"),
                 "protocol_payment_matrix" => GetPath(root, "protocol_payments.matrix")?.ToJsonString(IndentedJson)

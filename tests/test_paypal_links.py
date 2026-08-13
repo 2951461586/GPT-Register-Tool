@@ -12,6 +12,32 @@ from sms_tool import paypal_links, paypal_protocol
 
 
 class PayPalLinksTests(unittest.TestCase):
+    def test_non_paypal_regeneration_forwards_all_wallet_stage_options(self):
+        with patch.object(
+            paypal_links,
+            "generate_payment_link",
+            return_value={"ok": True, "url": "https://app.midtrans.com/fixture"},
+        ) as generate:
+            result = paypal_links._generate_link(
+                "fixture-access-token",
+                proxy="http://default.test:80",
+                payment_method="gopay",
+                seed_data={"email": "user@example.com"},
+                checkout_proxy="http://checkout-id.test:80",
+                provider_proxy="http://provider-id.test:80",
+                approve_proxy="http://approve-id.test:80",
+                promotion_proxy="http://promotion-th.test:80",
+                require_zero=True,
+            )
+
+        self.assertTrue(result["ok"])
+        kwargs = generate.call_args.kwargs
+        self.assertEqual(kwargs["checkout_proxy"], "http://checkout-id.test:80")
+        self.assertEqual(kwargs["provider_proxy"], "http://provider-id.test:80")
+        self.assertEqual(kwargs["approve_proxy"], "http://approve-id.test:80")
+        self.assertEqual(kwargs["promotion_proxy"], "http://promotion-th.test:80")
+        self.assertTrue(kwargs["require_zero"])
+
     def test_checkout_unauthorized_recognizes_token_401_without_checkout_word(self):
         self.assertTrue(
             paypal_links._is_checkout_unauthorized(

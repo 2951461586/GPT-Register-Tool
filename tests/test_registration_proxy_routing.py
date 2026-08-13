@@ -3,7 +3,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import cli, registration, sentinel_tokens
+from sms_tool import cli, registration, registration_preflight, sentinel_tokens
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,13 +116,13 @@ def test_registration_preflight_checks_chatgpt_auth_and_sentinel_before_mailbox(
             urls.append(url)
             return SimpleNamespace(status_code=200)
 
-    with patch.object(registration.curl_requests, "Session", Session), \
-         patch.object(registration, "auth_fingerprint_capabilities", return_value={
+    with patch.object(registration_preflight.curl_requests, "Session", Session), \
+         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
              "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
          }), \
-         patch.object(registration, "_sentinel_frame_version", return_value="sv-test"), \
-         patch.object(registration, "auth_impersonate", return_value="chrome146"), \
-         patch.object(registration, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
+         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
+         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
         result = registration.registration_network_preflight("http://proxy.example:8080")
 
     assert result == {"ok": True, "profile": "chrome146"}
@@ -187,8 +187,9 @@ def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
         "private List<string> GetRegistrationProxyPool()", 1
     )[0]
 
-    assert 'GetString(proxy, "registration")' in method
-    assert 'GetString(config, "registration_proxy")' in method
-    assert 'GetString(proxy, "default")' in method
-    assert 'GetSection(config, "paypal")' not in method
-    assert "FirstListValue" not in method
+    registration = method.index('settingsService.GetString("proxy.registration")')
+    legacy = method.index('settingsService.GetString("registration_proxy")')
+    default = method.index('settingsService.GetString("proxy.default")')
+    assert registration < legacy < default
+    assert "paypal" not in method.lower()
+    assert "LocalNonPaymentProxy" in method

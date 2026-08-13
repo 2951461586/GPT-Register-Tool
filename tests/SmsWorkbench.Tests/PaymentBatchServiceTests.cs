@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text;
 using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
@@ -36,7 +38,10 @@ public sealed class PaymentBatchServiceTests
             1,
             0,
             "probe-batch",
-            "http://proxy.example:8080",
+            "http://checkout-one\nhttp://checkout-two",
+            "http://approve-jp",
+            "ID",
+            "JP",
             true,
             true,
             true,
@@ -52,6 +57,10 @@ public sealed class PaymentBatchServiceTests
         Assert.Contains("--payment-probe-only", backend.LastCommand.Arguments);
         Assert.DoesNotContain("--no-require-zero", backend.LastCommand.Arguments);
         Assert.Equal("probe-batch", ArgumentAfter(backend.LastCommand.Arguments, "--payment-batch-id"));
+        Assert.Equal("http://checkout-one" + Environment.NewLine + "http://checkout-two", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-pool"));
+        Assert.Equal("http://approve-jp", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-pool"));
+        Assert.Equal("ID", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-country"));
+        Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
         Assert.False(File.Exists(emailFile));
         Assert.False(File.Exists(matrixFile));
     }
@@ -86,6 +95,9 @@ public sealed class PaymentBatchServiceTests
             1,
             "formal-batch",
             "",
+            "",
+            "",
+            "JP",
             false,
             false,
             false,
@@ -106,12 +118,14 @@ public sealed class PaymentBatchServiceTests
     }
 
     [Theory]
-    [InlineData("gopay", "ID")]
-    [InlineData("gcash", "PH")]
-    [InlineData("grabpay", "PH")]
-    public void WalletDefaultMatrixUsesProviderCountryForEveryStage(
+    [InlineData("gopay", "ID", "TH", "JP")]
+    [InlineData("gcash", "PH", "PH", "PH")]
+    [InlineData("grabpay", "PH", "PH", "PH")]
+    public void WalletDefaultMatrixUsesMethodSpecificPromotionCountry(
         string paymentMethod,
-        string expectedCountry)
+        string expectedCountry,
+        string expectedPromotionCountry,
+        string expectedApproveCountry)
     {
         using var fixture = new TemporaryDirectory();
         File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
@@ -120,13 +134,107 @@ public sealed class PaymentBatchServiceTests
         PaymentMatrixRow row = service.CreateDefaultMatrixRow(paymentMethod);
 
         Assert.Equal(expectedCountry.ToLowerInvariant() + "_" + paymentMethod, row.Name);
-        Assert.Equal(expectedCountry, row.RegistrationCountry);
+        Assert.Equal(paymentMethod == "gopay" ? "" : expectedCountry, row.RegistrationCountry);
         Assert.Equal(expectedCountry, row.CheckoutCountry);
-        Assert.Equal(expectedCountry, row.PromotionCountry);
+        Assert.Equal(expectedPromotionCountry, row.PromotionCountry);
         Assert.Equal(expectedCountry, row.ProviderCountry);
-        Assert.Equal(expectedCountry, row.ApproveCountry);
+        Assert.Equal(expectedApproveCountry, row.ApproveCountry);
         Assert.Equal(expectedCountry, row.RedirectCountry);
         Assert.Equal(1, row.SampleSize);
+    }
+
+    [Fact]
+    public void LoadMatrixPreservesConfiguredApproveCountryWithoutCoercion()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
+            {
+              "protocol_payments": {
+                "matrix": {
+                  "cells": [
+                    { "name": "gopay_custom", "payment_method": "gopay", "checkout_country": "ID", "approve_country": "US", "sample_size": 2 },
+                    { "name": "momo_cell", "payment_method": "momo", "checkout_country": "JP", "approve_country": "VN" }
+                  ]
+                }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        IReadOnlyList<PaymentMatrixRow> rows = service.LoadMatrix("gopay");
+
+        // The GoPay approve-country rule is owned by the Python backend
+        // (payment_link_manager.coerce_approve_country); the desktop must pass
+        // the configured value through unchanged.
+        PaymentMatrixRow row = Assert.Single(rows);
+        Assert.Equal("gopay_custom", row.Name);
+        Assert.Equal("US", row.ApproveCountry);
+        Assert.Equal(2, row.SampleSize);
+    }
+
+    [Fact]
+    public void ProxyPoolsLoadAndSaveUnderMethodWithoutTouchingLegacyGlobalPool()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        File.WriteAllText(configPath, """
+            {
+              "protocol_payments": {
+                "proxy_pool": ["http://legacy"],
+                "methods": {
+                  "gopay": {
+                    "checkout_proxy_pool": ["http://checkout-old"],
+                    "approve_proxy_pool": ["http://approve-old"],
+                    "stage_proxy_countries": { "checkout": "ID", "approve": "TR" }
+                  }
+                }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("gopay");
+        Assert.Equal("http://checkout-old", loaded.CheckoutProxyPool);
+        Assert.Equal("http://approve-old", loaded.ApproveProxyPool);
+        Assert.Equal("ID", loaded.CheckoutCountry);
+        Assert.Equal("TR", loaded.ApproveCountry);
+
+        SettingsSaveResult saved = service.SaveProxyConfiguration(
+            "gopay",
+            new PaymentBatchProxyConfiguration(
+                "http://checkout-one\nhttp://checkout-two",
+                "http://approve-jp\nhttp://approve-tr",
+                "ID",
+                "JP"));
+
+        Assert.True(saved.Ok, saved.Error);
+        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject method = root["protocol_payments"]!["methods"]!["gopay"]!.AsObject();
+        Assert.Equal(
+            new[] { "http://checkout-one", "http://checkout-two" },
+            method["checkout_proxy_pool"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            new[] { "http://approve-jp", "http://approve-tr" },
+            method["approve_proxy_pool"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+        Assert.Equal("ID", method["stage_proxy_countries"]!["checkout"]!.GetValue<string>());
+        Assert.Equal("JP", method["stage_proxy_countries"]!["approve"]!.GetValue<string>());
+        Assert.Equal("http://legacy", root["protocol_payments"]!["proxy_pool"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void LegacyGlobalPoolIsParsedAsEntriesWhenMethodPoolIsAbsent()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(
+            Path.Combine(fixture.Path, "config.json"),
+            "{\"protocol_payments\":{\"proxy_pool\":[\"http://legacy-one\",\"http://legacy-two\"]}}",
+            new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("gopay");
+
+        Assert.Equal("http://legacy-one" + Environment.NewLine + "http://legacy-two", loaded.CheckoutProxyPool);
+        Assert.Equal(loaded.CheckoutProxyPool, loaded.ApproveProxyPool);
     }
 
     private static string ArgumentAfter(IReadOnlyList<string> arguments, string option)

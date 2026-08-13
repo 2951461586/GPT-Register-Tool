@@ -84,21 +84,33 @@ async def _run(
         "--no-default-browser-check",
     ]
 
-    browser = await uc.start(
-        headless=False,
-        proxy=proxy or None,
-        lang="en-US",
-        browser_args=browser_args,
-    )
+    # Bridge the upstream proxy to a local socks5h endpoint when the browser
+    # cannot consume it directly (embedded credentials, or http(s)). This also
+    # restores socks5h remote-DNS semantics that Chromium drops.
+    from .proxy_bridge import async_proxy_for_browser
 
+    browser_proxy, close_bridge = await async_proxy_for_browser(proxy)
+    browser = None
     try:
+        browser = await uc.start(
+            headless=False,
+            proxy=browser_proxy or None,
+            lang="en-US",
+            browser_args=browser_args,
+        )
+
         return await _do_pay(
             browser, paypal_url, card, address,
             first_name, last_name, alias_email, password,
             phone, sms_cfg, timeout,
         )
     finally:
-        browser.stop()
+        if browser is not None:
+            try:
+                browser.stop()
+            except Exception:
+                pass
+        await close_bridge()
 
 
 async def _do_pay(

@@ -191,6 +191,15 @@ def _nested(data, key):
     return value if isinstance(value, Mapping) else {}
 
 
+def _nested_field(data, *keys):
+    current = data
+    for key in keys:
+        if not isinstance(current, Mapping):
+            return ""
+        current = current.get(key)
+    return current
+
+
 def _normalize_account_email(email):
     value = str(email or "").strip().lstrip("\ufeff")
     if "@+" in value:
@@ -313,7 +322,73 @@ def _oauth_refresh_token(data, auth_session):
 
 
 def _looks_codex_refresh_token(token):
-    return str(token or "").strip().startswith("rt_")
+    value = str(token or "").strip()
+    if not value or value == "[REDACTED]":
+        return False
+    # OpenAI has issued both the legacy rt_* form and opaque, URL-safe OAuth
+    # refresh tokens.  The latter are JWT-shaped; do not confuse mailbox
+    # provider tokens (for example M.C_...) with an OAuth credential.
+    if value.startswith("rt_"):
+        return True
+    if value.startswith(("M.C_", "M.R_")):
+        return False
+    return (
+        len(value) >= 64
+        and value.count(".") == 2
+        and not any(char.isspace() for char in value)
+        and all(char.isalnum() or char in "._~-" for char in value)
+    )
+
+
+def _normalize_account_type(value):
+    text = str(value or "").strip().lower()
+    if "team" in text or "business" in text or "enterprise" in text:
+        return "team"
+    if "plus" in text or "pro" in text:
+        return "plus"
+    if "k12" in text or "edu" in text:
+        return "k12"
+    if "free" in text:
+        return "free"
+    return ""
+
+
+def _jwt_account_type(access_token):
+    try:
+        parts = str(access_token or "").split(".")
+        if len(parts) >= 2:
+            import base64
+            payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+            auth = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else {}
+            value = auth.get("chatgpt_plan_type") or auth.get("plan_type") if isinstance(auth, dict) else ""
+            return _normalize_account_type(value)
+    except Exception:
+        pass
+    return ""
+
+
+def _account_type(data, auth_session, workspace, access_token):
+    # The refreshed OAuth access token is newer than the web auth_session.
+    # One-click SMS can upgrade the token to Plus while auth_session still says
+    # Free, so its claim is the authoritative subscription type.
+    token_type = _jwt_account_type(access_token)
+    if token_type:
+        return token_type
+    for value in (
+        _get(data, "account_type"),
+        _get(data, "plan_type"),
+        _get(data, "planType"),
+        _nested_field(data, "account", "plan_type"),
+        _nested_field(data, "account", "planType"),
+        _get(workspace, "account_type_after"),
+        _nested_field(auth_session, "account", "plan_type"),
+        _nested_field(auth_session, "account", "planType"),
+    ):
+        normalized = _normalize_account_type(value)
+        if normalized:
+            return normalized
+    return ""
 
 
 def _refresh_token_status(data, auth_session):
@@ -475,7 +550,7 @@ def upsert_account(
         "workspace_name": "" if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free" else str(_get(data, "workspace_name") or _get(workspace, "workspace_name") or _get(workspace, "actual_workspace_name")),
         "workspace_switch_result": str(_get(data, "workspace_switch_result") or _get(workspace, "switch_status") or _get(workspace, "switch_error")),
         "workspace_updated_at": _as_int(_get(data, "workspace_updated_at")) or _as_int(_get(workspace, "updated_at")),
-        "account_type": str(_get(data, "account_type") or _get(workspace, "account_type_after")),
+        "account_type": _account_type(data, auth_session, workspace, access_token),
         "quota_status": str(_get(data, "quota_status") or quota.get("status", "")),
         "batch_id": str(_get(data, "batch_id")),
         "registration_state": str(_get(data, "registration_state") or ("active" if _get(data, "success") else "failed")),
@@ -858,6 +933,64 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
             WHERE lower(email)=lower(?)
             """,
             (str(quota_status or ""), now, raw_json, lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
+
+
+def mark_promotion_status(email, promotion_status="", promotion_result=None, *, runtime_config: ConfigInput = None):
+    """Persist the account plan/promotion (优惠) probe result into raw_json + session.
+
+    Stored alongside the account without a dedicated DB column; ``desktop_read``
+    surfaces ``promotion_status`` from raw_json for the 优惠状态 list column.
+    """
+    init_database(runtime_config=runtime_config)
+    now = int(time.time())
+    conn = _connect(runtime_config=runtime_config)
+    json_path = ""
+    data = {}
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            data = json.loads(row["raw_json"] or "{}")
+        except Exception:
+            data = {}
+        json_path = str(row["json_path"] or "").strip()
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+        promotion["status"] = str(promotion_status or "")
+        promotion["updated_at"] = now
+        if isinstance(promotion_result, dict):
+            promotion["last_result"] = {
+                key: value
+                for key, value in promotion_result.items()
+                if key not in {"access_token", "authorization", "cookie", "cookie_header"}
+            }
+        data["promotion"] = promotion
+        data["promotion_status"] = str(promotion_status or "")
+        data["promotion_updated_at"] = now
+        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE lower(email)=lower(?)",
+            (now, raw_json, lookup_email),
         )
         conn.commit()
     finally:

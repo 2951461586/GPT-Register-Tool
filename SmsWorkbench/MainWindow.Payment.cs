@@ -2,7 +2,11 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Payment-link actions and unified protocol extractor
+        // Payment-link actions and unified protocol extractor.
+        // CLI argument construction is delegated to BackendCommandPlanner;
+        // backend JSON interpretation is delegated to ProtocolPaymentResultPresenter
+        // and BackendResultInterpreter.
+
         private void OpenSessions_Click(object sender, RoutedEventArgs e) => OpenPath(GetSessionsDir());
 
         private void OpenDatabase_Click(object sender, RoutedEventArgs e) => OpenPath(GetDatabasePath());
@@ -31,20 +35,18 @@ namespace SmsWorkbench
             if (rows.Count == 1)
             {
                 PoolRow row = rows[0];
-                var singleArgs = new List<string> { "--email", row.Identifier, "--regenerate-paypal-link", "--workers", "4" };
-                AddSessionFileArg(singleArgs, row);
-                singleArgs.Add("--payment-method");
-                singleArgs.Add(paymentMethod);
-                RunBackend("重新生成支付链接", singleArgs);
+                var plan = BackendCommandPlanner.CreateRegeneratePaymentLink(
+                    row.Identifier,
+                    SessionFileFor(row),
+                    paymentMethod);
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
-            string emailFile = Path.Combine(Path.GetTempPath(), "paypal_regen_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-            File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-            var args = new List<string> { "--regenerate-paypal-link", "--email-file", emailFile, "--workers", "4" };
-            args.Add("--payment-method");
-            args.Add(paymentMethod);
-            RunBackend("批量重新生成支付链接 (" + rows.Count + ")", args);
+            var batchPlan = BackendCommandPlanner.CreateRegeneratePaymentLinkBatch(
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                paymentMethod);
+            RunBackend(batchPlan.TaskName, batchPlan.Arguments.ToList());
         }
 
         private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
@@ -75,16 +77,16 @@ namespace SmsWorkbench
             if (rows.Count == 1)
             {
                 PoolRow row = rows[0];
-                var singleArgs = new List<string> { "--email", row.Identifier, "--mark-paypal-status", "completed", "--workers", "4" };
-                AddSessionFileArg(singleArgs, row);
-                RunBackend("标记支付完成", singleArgs);
+                var plan = BackendCommandPlanner.CreateMarkPaymentComplete(
+                    row.Identifier,
+                    SessionFileFor(row));
+                RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
 
-            string emailFile = Path.Combine(Path.GetTempPath(), "paypal_completed_emails_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
-            File.WriteAllLines(emailFile, rows.Select(r => r.Identifier.Trim()), new UTF8Encoding(false));
-            var args = new List<string> { "--mark-paypal-status", "completed", "--email-file", emailFile, "--workers", "4" };
-            RunBackend("批量标记支付完成 (" + rows.Count + ")", args);
+            var batchPlan = BackendCommandPlanner.CreateMarkPaymentCompleteBatch(
+                rows.Select(r => r.Identifier.Trim()).ToList());
+            RunBackend(batchPlan.TaskName, batchPlan.Arguments.ToList());
         }
 
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
@@ -104,6 +106,9 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Unified protocol payment-link extractor.
+        /// Uses ProtocolPaymentExecutionPlanner for CLI construction and
+        /// ProtocolPaymentResultPresenter for JSON interpretation.
+        /// Error handling is unified via BackendResultInterpreter.
         /// </summary>
         private void ShowProtocolPaymentDialog(PoolRow selectedAccount = null)
         {
@@ -126,34 +131,7 @@ namespace SmsWorkbench
             };
             var mainPanel = new StackPanel { Margin = new Thickness(24) };
 
-            // ── 标题 ──────────────────────────────────────────────────────
-            mainPanel.Children.Add(new TextBlock
-            {
-                Text = "协议支付",
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 16),
-            });
-
-            if (selectedAccount != null)
-            {
-                mainPanel.Children.Add(new Border
-                {
-                    Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                    BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                    BorderThickness = new Thickness(1),
-                    Padding = new Thickness(12, 9, 12, 9),
-                    Margin = new Thickness(0, 0, 0, 14),
-                    CornerRadius = new CornerRadius(6),
-                    Child = new TextBlock
-                    {
-                        Text = "选中账号：" + selectedAccount.Identifier + "\n请选择需要提取的支付链接方式。",
-                        Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                });
-            }
+            AddProtocolDialogHeader(mainPanel, selectedAccount);
 
             // ── 支付方式选择 ──────────────────────────────────────────────
             mainPanel.Children.Add(new TextBlock
@@ -217,15 +195,8 @@ namespace SmsWorkbench
                 SelectedIndex = 0,
                 Margin = new Thickness(0, 0, 0, 12),
             };
-            var countries = new[] {
-                "US - 美国", "ID - 印度尼西亚", "IN - 印度", "NL - 荷兰",
-                "BR - 巴西", "KR - 韩国", "PL - 波兰", "CH - 瑞士",
-                "VN - 越南", "PH - 菲律宾",
-                "DE - 德国", "GB - 英国", "JP - 日本", "FR - 法国",
-                "AU - 澳大利亚", "SG - 新加坡", "CA - 加拿大", "NZ - 新西兰", "IE - 爱尔兰",
-            };
-            foreach (var c in countries)
-                countryCombo.Items.Add(new ComboBoxItem { Content = c });
+            foreach (PaymentProxyCountryOption country in PaymentMethods.BillingCountryOptions)
+                countryCombo.Items.Add(new ComboBoxItem { Content = country.DisplayName });
             mainPanel.Children.Add(countryCombo);
 
             // ── 代理配置 ──────────────────────────────────────────────────
@@ -252,15 +223,9 @@ namespace SmsWorkbench
             ComboBox CreateStageCountryCombo(string selectedCountry)
             {
                 var combo = new ComboBox { MinWidth = 145 };
-                foreach (var item in new[] {
-                    ("US", "美国 US"), ("GB", "英国 GB"), ("DE", "德国 DE"),
-                    ("JP", "日本 JP"), ("BR", "巴西 BR"), ("TR", "土耳其 TR"),
-                    ("VN", "越南 VN"), ("ID", "印度尼西亚 ID"), ("IN", "印度 IN"),
-                    ("NL", "荷兰 NL"), ("KR", "韩国 KR"), ("PL", "波兰 PL"),
-                    ("CH", "瑞士 CH"), ("PH", "菲律宾 PH"),
-                })
+                foreach (PaymentProxyCountryOption item in PaymentMethods.StageCountryOptions)
                 {
-                    combo.Items.Add(new ComboBoxItem { Content = item.Item2, Tag = item.Item1 });
+                    combo.Items.Add(new ComboBoxItem { Content = item.DisplayName, Tag = item.Code });
                 }
                 string wanted = (selectedCountry ?? "").Trim().ToUpperInvariant();
                 combo.SelectedIndex = 0;
@@ -398,66 +363,12 @@ namespace SmsWorkbench
 
             // ── 按钮面板 ──────────────────────────────────────────────────
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var extractBtn = new Button
-            {
-                Content = "提取",
-                Height = 32,
-                MinWidth = 100,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            var testProxyBtn = new Button
-            {
-                Content = "测试出口",
-                Height = 32,
-                MinWidth = 88,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            var copyBtn = new Button
-            {
-                Content = "复制链接",
-                Height = 32,
-                MinWidth = 80,
-                IsEnabled = false,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            var openQrBtn = new Button
-            {
-                Content = "打开二维码",
-                Height = 32,
-                MinWidth = 80,
-                IsEnabled = false,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            var cancelBtn = new Button
-            {
-                Content = "取消",
-                Height = 32,
-                MinWidth = 60,
-                IsEnabled = false,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            var closeBtn = new Button
-            {
-                Content = "关闭",
-                Height = 32,
-                MinWidth = 60,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-            };
+            var extractBtn = BuildProtocolDialogButton("提取", 100, primary: true);
+            var testProxyBtn = BuildProtocolDialogButton("测试出口", 88);
+            var copyBtn = BuildProtocolDialogButton("复制链接", 80, enabled: false);
+            var openQrBtn = BuildProtocolDialogButton("打开二维码", 80, enabled: false);
+            var cancelBtn = BuildProtocolDialogButton("取消", 60, enabled: false);
+            var closeBtn = BuildProtocolDialogButton("关闭", 60, rightMargin: 0);
             btnPanel.Children.Add(testProxyBtn);
             btnPanel.Children.Add(extractBtn);
             btnPanel.Children.Add(copyBtn);
@@ -551,12 +462,12 @@ namespace SmsWorkbench
                 {
                     SelectComboCode(checkoutCountryCombo, defaultCountry);
                     SelectComboCode(approveCountryCombo, defaultCountry);
-                    SelectComboCode(updateCountryCombo, defaultCountry);
+                    SelectComboCode(updateCountryCombo, PaymentMethods.DefaultUpdateCountry(method, defaultCountry));
                 }
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
                 stageProxyPanel.Visibility = method == "paypal" || method == "gopay" || method == "gcash" || method == "grabpay" || method == "upi" || method == "direct_card" || method == "momo" ? Visibility.Visible : Visibility.Collapsed;
-                updateCountryCombo.IsEnabled = method == "paypal" || method == "direct_card";
+                updateCountryCombo.IsEnabled = method == "paypal" || method == "gopay" || method == "direct_card";
                 zeroCheck.IsChecked = true;
                 zeroCheck.IsEnabled = probeOnlyCheck.IsChecked != true;
                 UpdateActionButton();
@@ -610,23 +521,17 @@ namespace SmsWorkbench
                 extractBtn.IsEnabled = false;
                 try
                 {
-                    string result = await Task.Run(() => RunBackendWithResult("测试协议支付代理", args));
-                    using JsonDocument json = JsonDocument.Parse(result);
-                    JsonElement root = json.RootElement;
-                    var lines = new List<string>();
-                    bool allOk = root.TryGetProperty("ok", out JsonElement okEl) && okEl.GetBoolean();
-                    lines.Add(allOk ? "[成功] 代理出口符合选择" : "[失败] 存在不可用或地区不匹配的代理");
-                    if (root.TryGetProperty("stages", out JsonElement stagesEl) && stagesEl.ValueKind == JsonValueKind.Object)
+                    string rawResult = await Task.Run(() => RunBackendWithResult("测试协议支付代理", args));
+                    ProxyTestResult proxyResult = BackendResultInterpreter.ParseProxyTestResult(rawResult);
+                    var lines = new List<string>
                     {
-                        foreach (string stage in new[] { "checkout", "approve", "update" })
-                        {
-                            if (!stagesEl.TryGetProperty(stage, out JsonElement stageEl)) continue;
-                            string ip = stageEl.TryGetProperty("ip", out JsonElement ipEl) ? ipEl.GetString() ?? "" : "";
-                            string actual = stageEl.TryGetProperty("country_code", out JsonElement ccEl) ? ccEl.GetString() ?? "" : "";
-                            string expected = stageEl.TryGetProperty("expected_country", out JsonElement expectedEl) ? expectedEl.GetString() ?? "" : "";
-                            string error = stageEl.TryGetProperty("error", out JsonElement errorEl) ? errorEl.GetString() ?? "" : "";
-                            lines.Add($"{stage}: {ip} / {actual} (目标 {expected})" + (error.Length > 0 ? $" - {error}" : ""));
-                        }
+                        proxyResult.AllOk ? "[成功] 代理出口符合选择" : "[失败] 存在不可用或地区不匹配的代理"
+                    };
+                    foreach (ProxyTestStageResult stage in proxyResult.Stages)
+                    {
+                        string detail = $"{stage.Stage}: {stage.Ip} / {stage.ActualCountry} (目标 {stage.ExpectedCountry})";
+                        if (stage.Error.Length > 0) detail += $" - {stage.Error}";
+                        lines.Add(detail);
                     }
                     resultBox.Text = string.Join(Environment.NewLine, lines);
                 }
@@ -717,23 +622,30 @@ namespace SmsWorkbench
                     BackendCommandResult backendResult = await backendClient.RunAsync(
                         BackendCommand.Create(plan.TaskName, args, timeoutMs),
                         cancellationToken: cancellation.Token);
-                    string result;
-                    if (backendResult.Payload.HasValue)
-                        result = backendResult.Payload.Value.GetRawText();
-                    else if (backendResult.TimedOut)
+
+                    // Use BackendResultInterpreter for timeout detection
+                    BackendExecutionResult execution = BackendResultInterpreter.Interpret(
+                        backendResult, plan.TaskName, timeoutMs / 1000);
+
+                    if (!execution.IsSuccess || execution.State != "completed")
                     {
-                        ProtocolPaymentResultPresentation timedOut = ProtocolPaymentResultPresenter.Aborted(plan, "timed_out");
-                        resultBox.Text = timedOut.Text;
-                        lastUrl = timedOut.Url;
-                        lastQrPath = timedOut.QrPath;
+                        string resultText = execution.State switch
+                        {
+                            "timed_out" => ProtocolPaymentResultPresenter.Aborted(plan, "timed_out").Text,
+                            "cancelled" => ProtocolPaymentResultPresenter.Aborted(plan, "cancelled").Text,
+                            _ => execution.DisplayText
+                        };
+                        resultBox.Text = resultText;
+                        lastUrl = "";
+                        lastQrPath = "";
                         copyBtn.IsEnabled = false;
                         openQrBtn.IsEnabled = false;
                         return;
                     }
-                    else if (!string.IsNullOrWhiteSpace(backendResult.StandardError))
-                        throw new InvalidOperationException(backendResult.StandardError);
-                    else
-                        result = backendResult.StandardOutput;
+
+                    string result = execution.Payload.HasValue
+                        ? execution.Payload.Value.GetRawText()
+                        : execution.DisplayText;
 
                     ProtocolPaymentResultPresentation presentation = ProtocolPaymentResultPresenter.Parse(result);
                     resultBox.Text = presentation.Text;
@@ -840,6 +752,70 @@ namespace SmsWorkbench
             win.ShowDialog();
         }
 
+        // Title plus the optional selected-account banner. Extracted from
+        // ShowProtocolPaymentDialog: it only appends to the panel and captures
+        // nothing the dialog's event handlers depend on.
+        private void AddProtocolDialogHeader(StackPanel mainPanel, PoolRow selectedAccount)
+        {
+            mainPanel.Children.Add(new TextBlock
+            {
+                Text = "协议支付",
+                FontSize = 18,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                Margin = new Thickness(0, 0, 0, 16),
+            });
+
+            if (selectedAccount == null) return;
+            mainPanel.Children.Add(new Border
+            {
+                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12, 9, 12, 9),
+                Margin = new Thickness(0, 0, 0, 14),
+                CornerRadius = new CornerRadius(6),
+                Child = new TextBlock
+                {
+                    Text = "选中账号：" + selectedAccount.Identifier + "\n请选择需要提取的支付链接方式。",
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            });
+        }
+
+        // Shared factory for the dialog's action buttons. The caller keeps each
+        // returned instance in its own local, so event wiring and closures are
+        // unchanged; only the repeated styling moves here. ``primary`` keeps the
+        // default accent button chrome; others take the flat panel styling.
+        private Button BuildProtocolDialogButton(
+            string content,
+            double minWidth,
+            bool primary = false,
+            bool enabled = true,
+            double rightMargin = 8)
+        {
+            var button = new Button
+            {
+                Content = content,
+                Height = 32,
+                MinWidth = minWidth,
+                IsEnabled = enabled,
+                Margin = new Thickness(0, 0, rightMargin, 0),
+            };
+            if (primary)
+            {
+                button.FontWeight = FontWeights.SemiBold;
+            }
+            else
+            {
+                button.Background = (System.Windows.Media.Brush)FindResource("PanelBg");
+                button.Foreground = (System.Windows.Media.Brush)FindResource("TextMain");
+                button.BorderBrush = (System.Windows.Media.Brush)FindResource("Line");
+            }
+            return button;
+        }
+
         private ProtocolPaymentPreferences LoadProtocolPaymentPreferences()
         {
             string path = ProtocolPaymentPreferencesPath();
@@ -864,19 +840,10 @@ namespace SmsWorkbench
             }
 
             var defaults = new ProtocolPaymentPreferences();
-            try
-            {
-                Dictionary<string, object> config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
-                Dictionary<string, object> paypal = GetSection(config, "paypal");
-                Dictionary<string, object> countries = GetSection(paypal, "stage_proxy_countries");
-                defaults.CheckoutCountry = FirstNonEmpty(GetString(countries, "checkout"), "US");
-                defaults.ApproveCountry = FirstNonEmpty(GetString(countries, "approve"), "TR");
-                defaults.UpdateCountry = FirstNonEmpty(GetString(countries, "promotion"), "TR");
-                defaults.TargetCountry = FirstNonEmpty(GetString(paypal, "target_country"), "US");
-            }
-            catch
-            {
-            }
+            defaults.CheckoutCountry = FirstNonEmpty(settingsService.GetString("paypal.stage_proxy_countries.checkout"), "US");
+            defaults.ApproveCountry = FirstNonEmpty(settingsService.GetString("paypal.stage_proxy_countries.approve"), "TR");
+            defaults.UpdateCountry = FirstNonEmpty(settingsService.GetString("paypal.stage_proxy_countries.promotion"), "TR");
+            defaults.TargetCountry = FirstNonEmpty(settingsService.GetString("paypal.target_country"), "US");
             return defaults;
         }
 
@@ -952,18 +919,11 @@ namespace SmsWorkbench
         private int ProtocolPaymentBackendTimeoutMs(string paymentMethod)
         {
             int seconds = 900;
-            try
-            {
-                Dictionary<string, object> config = ReadJsonObject(Path.Combine(rootDir, "config.json"));
-                Dictionary<string, object> protocol = GetSection(config, "protocol_payments");
-                if (int.TryParse(GetString(protocol, "timeout_seconds"), out int configured))
-                    seconds = configured;
-                Dictionary<string, object> methods = GetChildSection(protocol, "methods");
-                Dictionary<string, object> method = GetChildSection(methods, NormalizePaymentMethod(paymentMethod));
-                if (int.TryParse(GetString(method, "timeout_seconds"), out int methodConfigured))
-                    seconds = methodConfigured;
-            }
-            catch { }
+            if (int.TryParse(settingsService.GetString("protocol_payments.timeout_seconds"), out int configured))
+                seconds = configured;
+            string methodPath = "protocol_payments.methods." + NormalizePaymentMethod(paymentMethod) + ".timeout_seconds";
+            if (int.TryParse(settingsService.GetString(methodPath), out int methodConfigured))
+                seconds = methodConfigured;
             seconds = Math.Max(30, Math.Min(3600, seconds));
             return (seconds + 30) * 1000;
         }

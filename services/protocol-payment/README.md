@@ -16,9 +16,10 @@ This directory vendors the protocol-only extractors used by
   `run_momo.py` is the thin runner the manager drives (single normalized JSON,
   decodes the `data:image` QR to a PNG under `--qr-out-dir`).
 
-GoPay, GCash, and GrabPay are not vendored subprocess extractors. Their shared
-Python adapter lives in `sms_tool/wallet_provider.py`, with production HTTP and
-stage-proxy routing in `sms_tool/wallet_transport.py`. The shared ChatGPT
+GoPay, GCash, and GrabPay are not vendored subprocess extractors. GoPay and
+GrabPay share `sms_tool/wallet_provider.py` and `sms_tool/wallet_transport.py`;
+GCash owns the separate `sms_tool/gcash_provider.py` and
+`sms_tool/gcash_transport.py` custom-payment-method path. The shared ChatGPT
 Checkout/Stripe init request contract lives in `sms_tool/checkout_contract.py`;
 vendored and native adapters should reuse that contract instead of introducing
 another payload shape.
@@ -56,16 +57,22 @@ does. Reusing the same `--payment-batch-id` resumes the atomic checkpoint only
 when the hashed execution mode, matrix, proxy, retry, and JIT settings still
 match. Reports never include access tokens or authenticated proxy URLs.
 
-The three wallet profiles use one adapter contract:
+The manager exposes three wallet methods through two adapter contracts:
 
-- GoPay: ID checkout, IDR, provider hosts owned by GoPay/Gojek/Midtrans.
-- GCash: PH checkout, PHP, provider hosts owned by GCash/Mynt.
-- GrabPay: PH checkout, PHP, provider hosts owned by Grab/GrabPay.
+- GoPay: shared-wallet adapter, ID Checkout, TH Promotion/Update, IDR, and
+  provider hosts owned by GoPay/Gojek/Midtrans.
+- GrabPay: shared-wallet adapter, PH checkout, PHP, and provider hosts owned by
+  Grab/GrabPay.
+- GCash: custom-payment-method adapter, PH checkout, PHP, and provider hosts
+  owned by GCash/Mynt.
 
-Their full flow is Checkout → Stripe init → wallet PM → confirm → ChatGPT
-approve → poll → validated provider redirect. The adapter's `probe_only` mode
-stops after Stripe init and is covered by request/response fixtures under
-`tests/fixtures/wallet_provider/`; it performs no wallet authorization. Start a
+The GoPay/GrabPay flow is Checkout → optional GoPay Promotion/Update → Stripe
+init → wallet PM → confirm → ChatGPT approve → poll → validated provider
+redirect. GCash has an independent custom-method sequence and tests. Capability
+probes reuse each method's real pre-side-effect preparation: the GoPay probe
+runs Checkout → Promotion/Update → Stripe init, while GrabPay stops after
+Checkout → Stripe init. Both stop before wallet-PM creation or authorization
+and are covered by fixtures under `tests/fixtures/wallet_provider/`. Start a
 new profile with a one-account capability Canary before enabling a full cohort:
 
 ```powershell
@@ -85,11 +92,19 @@ completed the remote wallet payment.
 
 Each worker runs the JIT AT gate immediately before checkout. HTTP 401 enters the
 shared recovery order: OAuth refresh token, existing ChatGPT session cookie,
-isolated-browser email OTP, then Codex OAuth. A replacement AT is persisted only
-after a second HTTP 200 probe. `account_deactivated` is permanent and is not
-retried.
-MoMo accepts
-separate checkout, promotion, provider, approve, and redirect proxies. Kakao
+protocol email-OTP login (curl_cffi), then Codex OAuth PKCE. Browser-based
+re-login has been removed; recovery is protocol-only. A replacement AT is
+persisted only after a second HTTP 200 probe. `account_deactivated` is permanent
+and is not retried.
+The desktop batch protocol-payment flow exposes two payment-owned pools:
+`checkout_proxy_pool` (Checkout/JIT, normally the billing country) and
+`approve_proxy_pool` (the discount/Approve country, JP or TR by default).
+The pool owner, rather than a per-stage setting, selects the route: Checkout
+owns Stripe/provider/confirm/redirect, while Approve also supplies the GoPay
+promotion/update request. GoPay keeps its internal TH promotion default and
+ID billing/provider defaults; the matrix may select JP or TR for final
+Approve. MoMo may accept separate checkout, promotion, provider, approve, and
+redirect proxies. Kakao
 prints a final structured JSON object for both success and conclusive failures;
 the manager no longer infers Kakao state from free-form log URLs.
 

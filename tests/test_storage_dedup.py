@@ -1,3 +1,5 @@
+import base64
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +9,13 @@ from sms_tool import storage
 
 
 class StorageDedupTests(unittest.TestCase):
+    @staticmethod
+    def _access_token(plan_type):
+        payload = base64.urlsafe_b64encode(json.dumps({
+            "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
+        }).encode()).decode().rstrip("=")
+        return "header." + payload + ".signature"
+
     def test_registration_failure_is_audited_without_entering_accounts(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
@@ -130,6 +139,67 @@ class StorageDedupTests(unittest.TestCase):
         self.assertEqual(row["refresh_token_status"], "no_rt")
         self.assertEqual(row["oauth_refresh_token"], "")
         self.assertEqual(row["refresh_token"], "M.C_FAKE_MAILBOX_TOKEN")
+
+    def test_upsert_persists_opaque_oauth_refresh_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            opaque = "ab." + "A" * 96 + "." + "B" * 96
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.upsert_account({
+                    "email": "opaque-rt@example.com",
+                    "success": True,
+                    "access_token": "at",
+                    "oauth_refresh_token": opaque,
+                    "refresh_token_status": "oauth_present",
+                }))
+                conn = storage._connect()
+                try:
+                    row = conn.execute(
+                        "SELECT refresh_token_status,oauth_refresh_token,refresh_token FROM accounts WHERE email=?",
+                        ("opaque-rt@example.com",),
+                    ).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["refresh_token_status"], "oauth_present")
+        self.assertEqual(row["oauth_refresh_token"], opaque)
+        self.assertEqual(row["refresh_token"], opaque)
+
+    def test_upsert_derives_account_type_from_auth_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.upsert_account({
+                    "email": "plan@example.com",
+                    "success": True,
+                    "access_token": "at",
+                    "auth_session": {"account": {"planType": "plus"}},
+                }))
+                conn = storage._connect()
+                try:
+                    row = conn.execute("SELECT account_type FROM accounts WHERE email=?", ("plan@example.com",)).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["account_type"], "plus")
+
+    def test_upsert_prefers_refreshed_token_plan_over_stale_auth_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.upsert_account({
+                    "email": "upgraded@example.com",
+                    "success": True,
+                    "access_token": self._access_token("plus"),
+                    "auth_session": {"account": {"planType": "free"}},
+                }))
+                conn = storage._connect()
+                try:
+                    row = conn.execute("SELECT account_type FROM accounts WHERE email=?", ("upgraded@example.com",)).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["account_type"], "plus")
 
     def test_upsert_repairs_misplaced_alias_plus(self):
         with tempfile.TemporaryDirectory() as tmp:

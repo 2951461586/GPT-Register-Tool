@@ -152,18 +152,101 @@ namespace SmsWorkbench
 
         private void LoadMailboxPool()
         {
-            foreach (string path in GetKnownMailboxPoolFiles())
+            if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
+            try
             {
-                LoadMailboxTokenFile(path);
+                JsonElement payload = desktopRead.ReadMailboxPoolAsync(chataiMailboxFilePath).GetAwaiter().GetResult();
+                if (!payload.TryGetProperty("files", out JsonElement files) || files.ValueKind != JsonValueKind.Array)
+                {
+                    Log("读取邮箱池 backend 失败：响应缺少 files 数组。");
+                    return;
+                }
+                foreach (JsonElement file in files.EnumerateArray())
+                {
+                    AddMailboxPoolFileRows(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("读取邮箱池 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
             }
         }
 
-        private IReadOnlyList<string> GetKnownMailboxPoolFiles()
+        private void AddMailboxPoolFileRows(JsonElement file)
         {
-            return MailboxPoolFileStore.DiscoverKnownFiles(
-                rootDir,
-                GetMailboxTokenFile(),
-                chataiMailboxFilePath);
+            string path = JsonString(file, "path");
+            if (path.Length == 0 || !File.Exists(path)) return;
+            if (!file.TryGetProperty("lines", out JsonElement lines) || lines.ValueKind != JsonValueKind.Array) return;
+            string fileTime = SafeTime(File.GetLastWriteTime(path));
+            int index = 0;
+            foreach (JsonElement line in lines.EnumerateArray())
+            {
+                AddMailboxPoolLineRow(path, fileTime, index, line);
+                index++;
+            }
+        }
+
+        private void AddMailboxPoolLineRow(string path, string fileTime, int index, JsonElement line)
+        {
+            string provider = JsonString(line, "provider").ToLowerInvariant();
+            string email = JsonString(line, "email");
+            if (email.Length == 0) return;
+            string authMode = JsonString(line, "auth_mode");
+            string rawLine = JsonString(line, "raw_line");
+            string mailboxLine = provider == "cfworker" && !rawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
+                ? "cfworker://" + email
+                : rawLine;
+            string refreshToken = JsonString(line, "refresh_token");
+            string token = JsonString(line, "token");
+            allRows.Add(new PoolRow
+            {
+                Id = "M" + (index + 1),
+                CreatedAt = fileTime,
+                CompletedAt = fileTime,
+                Identifier = email,
+                AccountType = MailboxPoolAccountType(provider),
+                Status = MailboxPoolStatus(provider, authMode),
+                RefreshToken = MailboxPoolRefreshDisplay(provider, refreshToken),
+                Notes = path,
+                SourcePath = path,
+                RawLine = mailboxLine,
+                MailboxLine = mailboxLine,
+                MailboxProvider = provider,
+                MailboxToken = provider is "remail" or "smailr" or "icloud_url" ? token : "",
+                ClientId = JsonString(line, "client_id"),
+                RawRefreshToken = provider is "gmail" or "chatai" ? refreshToken : ""
+            });
+        }
+
+        private static string MailboxPoolAccountType(string provider) => provider switch
+        {
+            "cfworker" => "CFWorker邮箱池",
+            "remail" => "ReMail邮箱池",
+            "smailr" => "Smailr邮箱池",
+            "icloud_url" => "iCloud邮箱池",
+            "gmail" => "Gmail邮箱池",
+            "chatai" => "Chatai邮箱池",
+            _ => "邮箱池",
+        };
+
+        private static string MailboxPoolStatus(string provider, string authMode)
+        {
+            if (provider == "gmail") return authMode == "oauth_refresh" ? "已授权" : "可收信";
+            if (provider is "chatai" or "graph" or "chongzhi") return "已授权";
+            return "可收信";
+        }
+
+        private string MailboxPoolRefreshDisplay(string provider, string refreshToken)
+        {
+            switch (provider)
+            {
+                case "cfworker": return "CFWorker";
+                case "remail": return "ReMail";
+                case "smailr": return "Smailr";
+                case "icloud_url": return "接码链接";
+                case "gmail": return refreshToken.Length > 0 ? Mask(refreshToken) : "AppPassword";
+                default: return refreshToken.Length > 0 ? Mask(refreshToken) : "";
+            }
         }
 
         private string GetChataiMailboxFilePath()
@@ -186,207 +269,26 @@ namespace SmsWorkbench
             return "";
         }
 
-        private void LoadMailboxTokenFile(string path)
-        {
-            if (!File.Exists(path)) return;
-            string[] lines = File.ReadAllLines(path, Encoding.UTF8);
-            for (int i = 0; i < lines.Length; i++)
-            {
-                string line = lines[i].Trim();
-                if (line.Length == 0 || line.StartsWith("#")) continue;
-
-                if (line.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
-                    || line.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
-                    || line.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase))
-                {
-                    string email = line.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
-                        ? line.Substring("cfworker://".Length).Trim()
-                        : line;
-                    allRows.Add(new PoolRow
-                    {
-                        Id = "M" + (i + 1),
-                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                        Identifier = email,
-                        AccountType = "CFWorker邮箱池",
-                        Status = "可收信",
-                        RefreshToken = "CFWorker",
-                        Notes = path,
-                        SourcePath = path,
-                        RawLine = "cfworker://" + email,
-                        MailboxLine = "cfworker://" + email,
-                        MailboxProvider = "cfworker"
-                    });
-                    continue;
-                }
-
-                if (line.StartsWith("remail://", StringComparison.OrdinalIgnoreCase))
-                {
-                    string[] remailParts = line.Substring("remail://".Length).Split(new[] { "---" }, 4, StringSplitOptions.None);
-                    if (remailParts.Length < 3 || string.IsNullOrWhiteSpace(remailParts[0]) || string.IsNullOrWhiteSpace(remailParts[1]) || string.IsNullOrWhiteSpace(remailParts[2])) continue;
-                    allRows.Add(new PoolRow
-                    {
-                        Id = "M" + (i + 1),
-                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                        Identifier = remailParts[0].Trim(),
-                        AccountType = "ReMail邮箱池",
-                        Status = "可收信",
-                        RefreshToken = "ReMail",
-                        Notes = path,
-                        SourcePath = path,
-                        RawLine = line,
-                        MailboxLine = line,
-                        MailboxProvider = "remail",
-                        MailboxToken = remailParts[1].Trim()
-                    });
-                    continue;
-                }
-
-                if (MailboxPoolFileStore.TryParseICloudUrlLine(line, out string icloudEmail, out string receiveUrl))
-                {
-                    allRows.Add(new PoolRow
-                    {
-                        Id = "M" + (i + 1),
-                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                        Identifier = icloudEmail,
-                        AccountType = "iCloud邮箱池",
-                        Status = "可收信",
-                        RefreshToken = "接码链接",
-                        Notes = path,
-                        SourcePath = path,
-                        RawLine = line,
-                        MailboxLine = line,
-                        MailboxProvider = "icloud_url",
-                        MailboxToken = receiveUrl
-                    });
-                    continue;
-                }
-
-                if (line.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase))
-                {
-                    string payload = line.Substring("gmail://".Length).Trim();
-                    string email = "";
-                    string refreshToken = "";
-                    string clientId = "";
-                    string accountType = "Gmail邮箱池";
-                    string status = "可收信";
-                    if (payload.Contains("----"))
-                    {
-                        string[] gmailParts = payload.Split(new[] { "----" }, StringSplitOptions.None);
-                        if (gmailParts.Length >= 2)
-                        {
-                            email = gmailParts[0].Trim();
-                            if (gmailParts.Length >= 4)
-                            {
-                                clientId = gmailParts[1].Trim();
-                                refreshToken = gmailParts[3].Trim();
-                                status = "已授权";
-                            }
-                        }
-                    }
-                    else
-                    {
-                        string[] gmailParts = payload.Split(new[] { "---" }, StringSplitOptions.None);
-                        if (gmailParts.Length >= 2)
-                        {
-                            email = gmailParts[0].Trim();
-                        }
-                    }
-                    if (email.Length == 0) continue;
-                    string refreshTokenDisplay = refreshToken.Length > 0 ? Mask(refreshToken) : "AppPassword";
-                    allRows.Add(new PoolRow
-                    {
-                        Id = "M" + (i + 1),
-                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                        Identifier = email,
-                        AccountType = accountType,
-                        Status = status,
-                        RefreshToken = refreshTokenDisplay,
-                        Notes = path,
-                        SourcePath = path,
-                        RawLine = line,
-                        MailboxLine = line,
-                        ClientId = clientId,
-                        RawRefreshToken = refreshToken,
-                        MailboxProvider = "gmail"
-                    });
-                    continue;
-                }
-
-                if (line.Contains("----"))
-                {
-                    string[] parts = line.Split(new[] { "----" }, 4, StringSplitOptions.None);
-                    if (parts.Length < 4) continue;
-                    string p2 = parts[2].Trim();
-                    string p3 = parts[3].Trim();
-                    string clientId = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p2 : p3;
-                    string refreshToken = LooksMicrosoftClientId(p2) || !LooksMicrosoftClientId(p3) ? p3 : p2;
-                    allRows.Add(new PoolRow
-                    {
-                        Id = "M" + (i + 1),
-                        CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                        CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                        Identifier = parts[0].Trim(),
-                        AccountType = "Chatai邮箱池",
-                        Status = "已授权",
-                        RefreshToken = Mask(refreshToken),
-                        Notes = path,
-                        SourcePath = path,
-                        RawLine = line,
-                        MailboxLine = line,
-                        ClientId = clientId,
-                        RawRefreshToken = refreshToken,
-                        MailboxProvider = "chatai"
-                    });
-                    continue;
-                }
-
-                string[] stdParts = line.Split(new[] { "---" }, StringSplitOptions.None);
-                if (stdParts.Length < 3) continue;
-                allRows.Add(new PoolRow
-                {
-                    Id = "M" + (i + 1),
-                    CreatedAt = SafeTime(File.GetLastWriteTime(path)),
-                    CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                    Identifier = stdParts[0].Trim(),
-                    AccountType = "邮箱池",
-                    Status = "已授权",
-                    RefreshToken = Mask(stdParts[2]),
-                    Notes = path,
-                    SourcePath = path,
-                    RawLine = line,
-                    MailboxLine = line,
-                    MailboxProvider = "graph"
-                });
-            }
-        }
-
         private void LoadSessionPool()
         {
-            if (!LoadSessionPoolFromBackend()) LoadSessionJsonPool();
-        }
-
-        private bool LoadSessionPoolFromBackend()
-        {
-            if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return true;
+            if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
             try
             {
                 JsonElement payload = desktopRead.ReadAccountsAsync().GetAwaiter().GetResult();
-                if (!payload.TryGetProperty("accounts", out JsonElement accounts) || accounts.ValueKind != JsonValueKind.Array) return false;
+                if (!payload.TryGetProperty("accounts", out JsonElement accounts) || accounts.ValueKind != JsonValueKind.Array)
+                {
+                    Log("读取账号 backend 失败：响应缺少 accounts 数组。");
+                    return;
+                }
                 foreach (JsonElement account in accounts.EnumerateArray())
                 {
                     Dictionary<string, object> data = JsonElementToDictionary(account);
                     AddBackendAccountRow(data);
                 }
-                return accounts.GetArrayLength() > 0;
             }
             catch (Exception ex)
             {
                 Log("读取账号 backend 失败：" + SensitiveDataSanitizer.Redact(ex.Message));
-                return false;
             }
         }
 
@@ -394,16 +296,25 @@ namespace SmsWorkbench
         {
             string rawJson = data.TryGetValue("session", out object session) ? JsonSerializer.Serialize(session) : "{}";
             string status = GetString(data, "status");
-            bool hasAccess = GetString(data, "has_access_token").Equals("True", StringComparison.OrdinalIgnoreCase)
-                || GetString(data, "has_access_token") == "1";
-            bool hasPaymentUrl = GetString(data, "has_payment_url").Equals("True", StringComparison.OrdinalIgnoreCase)
-                || GetString(data, "has_payment_url") == "1";
+            bool hasAccess = ParseBoolean(FirstNonEmpty(
+                GetString(data, "access_token_present"),
+                GetString(data, "has_access_token")));
+            bool hasPaymentUrl = ParseBoolean(FirstNonEmpty(
+                GetString(data, "payment_url_present"),
+                GetString(data, "has_payment_url")));
             string accessState = hasAccess ? "present" : "";
             string paymentMethod = GetString(data, "payment_method");
             string paypalUrl = hasPaymentUrl ? "backend://payment-url" : "";
             string paypalStatus = GetString(data, "paypal_status");
             string paypalOk = GetString(data, "paypal_ok");
             string refreshStatus = GetString(data, "refresh_token_status");
+            if (ParseBoolean(FirstNonEmpty(
+                    GetString(data, "refresh_token_present"),
+                    GetString(data, "has_refresh_token")))
+                && (refreshStatus.Length == 0 || refreshStatus.Equals("no_rt", StringComparison.OrdinalIgnoreCase)))
+            {
+                refreshStatus = "oauth_present";
+            }
             string provider = GetString(data, "mailbox_provider");
             var row = new PoolRow
             {
@@ -412,14 +323,20 @@ namespace SmsWorkbench
                 CompletedAt = UnixTimeText(GetString(data, "updated_at")),
                 Identifier = GetString(data, "email"),
                 AccountType = "SQLite" + (provider.Length > 0 ? "/" + provider : ""),
-                AccountPlanType = GetAccountPlanType(data),
+                AccountPlanType = AccountStatusInterpreter.GetAccountPlanType(data),
                 RegistrationCountry = GetString(data, "registration_country"),
-                QuotaStatus = GetQuotaStatus(data),
-                Status = DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, GetImportedStatus(rawJson)),
-                PayPalStatus = DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
-                PayPalAmount = GetPaypalAmount(rawJson),
-                RefreshTokenStatus = DisplayRtStatus(refreshStatus),
+                QuotaStatus = AccountStatusInterpreter.GetQuotaStatus(data),
+                Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, AccountStatusInterpreter.GetImportedStatus(rawJson)),
+                PayPalStatus = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
+                PayPalAmount = AccountStatusInterpreter.GetPaypalAmount(rawJson),
+                PromotionStatus = AccountStatusInterpreter.DisplayPromotionStatus(
+                    GetString(data, "promotion_status"),
+                    AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
+                    AccountStatusInterpreter.GetPaypalAmount(rawJson)),
+                RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
+                TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? "已设置" : "未设置",
                 HasAccessToken = hasAccess,
+                AccessTokenProbeStatusCode = AccountStatusInterpreter.GetAccessTokenProbeStatusCode(data),
                 PayPalUrl = paypalUrl,
                 RefreshToken = provider == "remail" ? "ReMail" : hasAccess ? "AT" : "",
                 Proxy = DbTimingText(new Dictionary<string, string>(data.ToDictionary(pair => pair.Key, pair => Convert.ToString(pair.Value) ?? ""))),
@@ -428,78 +345,16 @@ namespace SmsWorkbench
                 RawLine = GetString(data, "id"),
                 MailboxProvider = provider
             };
-            PopulateQuotaFields(row, data);
+            WhamQuotaFields quotaFields = AccountStatusInterpreter.ExtractWhamQuotaFields(data);
+            row.Quota5hUsed = quotaFields.Quota5hUsed;
+            row.Quota5hLimit = quotaFields.Quota5hLimit;
+            row.Quota5hRemaining = quotaFields.Quota5hRemaining;
+            row.Quota5hPercent = quotaFields.Quota5hPercent;
+            row.Quota7dUsed = quotaFields.Quota7dUsed;
+            row.Quota7dLimit = quotaFields.Quota7dLimit;
+            row.Quota7dRemaining = quotaFields.Quota7dRemaining;
+            row.Quota7dPercent = quotaFields.Quota7dPercent;
             allRows.Add(row);
         }
-
-        private void LoadSessionJsonPool()
-        {
-            var dirs = new List<string>();
-            string sessionsDir = GetSessionsDir();
-            if (Directory.Exists(sessionsDir)) dirs.Add(sessionsDir);
-            dirs.Add(rootDir);
-
-            foreach (string dir in dirs.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                foreach (string path in Directory.GetFiles(dir, "session_*.json", SearchOption.TopDirectoryOnly))
-                {
-                    try
-                    {
-                        Dictionary<string, object> data = ReadJsonObject(path);
-                        string email = GetString(data, "email");
-                        string access = GetString(data, "access_token");
-                        string paypalStatus = GetPaypalStatus(data);
-                        string paypalUrl = GetPaypalUrl(data);
-                        string paypalAmount = GetPaypalAmount(data);
-                        string refreshTokenStatus = GetString(data, "refresh_token_status");
-                        string importedStatus = GetImportedStatus(data);
-                        string verifiedPhone = GetVerifiedPhone(data);
-                        TryReadMailboxFromRawJson(JsonSerializer.Serialize(data), out string mailboxProvider, out string mailboxClientId, out string mailboxRefreshToken, out string mailboxToken, out string mailboxLine);
-                        string timing = GetTimingText(data);
-                        bool isGmailMailbox = mailboxProvider.Equals("gmail", StringComparison.OrdinalIgnoreCase);
-                        bool isReMailMailbox = mailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase);
-                        var sessionRow = new PoolRow
-                        {
-                            Id = "S" + (allRows.Count + 1),
-                            CreatedAt = SafeTime(File.GetCreationTime(path)),
-                            CompletedAt = SafeTime(File.GetLastWriteTime(path)),
-                            Identifier = email,
-                            AccountType = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "Session/CFWorker" : isReMailMailbox ? "Session/ReMail" : isGmailMailbox ? "Session/Gmail" : "Session",
-                            AccountPlanType = GetAccountPlanType(data),
-                            RegistrationCountry = GetString(data, "registration_country"),
-                            QuotaStatus = GetQuotaStatus(data),
-                            Status = importedStatus.Length > 0
-                                ? importedStatus
-                                : DisplayAccountStatus(GetString(data, "status"), "", access, GetString(data, "error"), paypalStatus, refreshTokenStatus, importedStatus),
-                            PayPalStatus = paypalStatus,
-                            PayPalAmount = paypalAmount,
-                            RefreshTokenStatus = DisplayRtStatus(refreshTokenStatus),
-                            Phone = verifiedPhone,
-                            HasAccessToken = !string.IsNullOrWhiteSpace(access),
-                            AccessTokenProbeStatusCode = GetAccessTokenProbeStatusCode(data),
-                            PayPalUrl = paypalUrl,
-                            RefreshToken = mailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase) ? "CFWorker" : isReMailMailbox ? "ReMail" : isGmailMailbox ? (mailboxRefreshToken.Length > 0 ? Mask(mailboxRefreshToken) : "AppPassword") : Mask(access),
-                            Proxy = timing,
-                            Notes = path,
-                            SourcePath = path,
-                            ClientId = mailboxClientId,
-                            RawRefreshToken = mailboxRefreshToken,
-                            MailboxLine = mailboxLine,
-                            MailboxProvider = mailboxProvider,
-                            MailboxToken = mailboxToken
-                        };
-                        PopulateQuotaFields(sessionRow, data);
-                        allRows.Add(sessionRow);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log("读取 session 失败：" + path + " " + ex.Message);
-                    }
-                }
-            }
-        }
-
-
-
     }
 }

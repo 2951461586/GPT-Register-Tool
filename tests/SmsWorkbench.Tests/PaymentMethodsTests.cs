@@ -43,6 +43,158 @@ public sealed class PaymentMethodsTests
         => Assert.Equal(expectedCountry, PaymentMethods.Find(paymentMethod).DefaultCountry);
 
     [Fact]
+    public void GoPayUsesThailandForCheckoutUpdate()
+    {
+        Assert.Equal("TH", PaymentMethods.DefaultUpdateCountry("gopay", "ID"));
+        Assert.Equal("PH", PaymentMethods.DefaultUpdateCountry("gcash", "PH"));
+    }
+
+    [Fact]
     public void UnknownPaymentMethodDoesNotSilentlyBecomePaypal()
         => Assert.Equal("", PaymentMethods.Normalize("not-a-method"));
+
+    [Fact]
+    public void CountryOptionsComeFromTheTopLevelCatalogDefaults()
+    {
+        Assert.Equal(11, PaymentMethods.CheckoutCountryOptions("momo").Count);
+        Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.CheckoutCountryOptions("momo")[0]);
+        Assert.Equal(new PaymentProxyCountryOption("BR", "巴西 BR"), PaymentMethods.CheckoutCountryOptions("momo")[10]);
+        Assert.Equal(
+            new[]
+            {
+                new PaymentProxyCountryOption("JP", "日本 JP（优惠区）"),
+                new PaymentProxyCountryOption("TR", "土耳其 TR（优惠区）")
+            },
+            PaymentMethods.ApproveCountryOptions("momo").ToArray());
+        Assert.Equal(15, PaymentMethods.StageCountryOptions.Count);
+        Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.StageCountryOptions[0]);
+        Assert.Equal(19, PaymentMethods.BillingCountryOptions.Count);
+        Assert.Equal(new PaymentProxyCountryOption("US", "US - 美国"), PaymentMethods.BillingCountryOptions[0]);
+        Assert.Equal(new PaymentProxyCountryOption("IE", "IE - 爱尔兰"), PaymentMethods.BillingCountryOptions[18]);
+    }
+
+    [Fact]
+    public void CountryOptionsFallBackToTopLevelDefaultsForUnknownMethods()
+    {
+        Assert.Equal(
+            PaymentMethods.CheckoutCountryOptions("momo"),
+            PaymentMethods.CheckoutCountryOptions("not-a-method"));
+        Assert.Equal(
+            PaymentMethods.ApproveCountryOptions("momo"),
+            PaymentMethods.ApproveCountryOptions("not-a-method"));
+    }
+
+    [Fact]
+    public void MethodLevelCountryOverridesWinOverTopLevelDefaults()
+    {
+        PaymentMethodCatalogDocument catalog = PaymentMethods.ParseCatalog("""
+            {
+              "schema": "payment_methods.v1",
+              "default_method": "paypal",
+              "checkout_countries": [{"code":"US","label":"美国 US"}],
+              "approve_countries": [{"code":"JP","label":"日本 JP"}],
+              "stage_countries": [{"code":"US","label":"美国 US"}],
+              "billing_countries": [{"code":"US","label":"US - 美国"}],
+              "methods": [
+                {"id":"paypal","display_name":"PayPal","country":"US","currency":"USD","adapter":"native_paypal"},
+                {
+                  "id":"gopay","display_name":"GoPay","country":"ID","currency":"IDR","adapter":"wallet",
+                  "checkout_countries": [{"code":"ID","label":"印度尼西亚 ID"}],
+                  "approve_countries": [{"code":"TR","label":"土耳其 TR"}]
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal(
+            new[] { new PaymentProxyCountryOption("ID", "印度尼西亚 ID") },
+            PaymentMethods.ResolveCheckoutCountryOptions(catalog, "gopay"));
+        Assert.Equal(
+            new[] { new PaymentProxyCountryOption("TR", "土耳其 TR") },
+            PaymentMethods.ResolveApproveCountryOptions(catalog, "gopay"));
+        Assert.Equal(
+            new[] { new PaymentProxyCountryOption("US", "美国 US") },
+            PaymentMethods.ResolveCheckoutCountryOptions(catalog, "paypal"));
+        Assert.Equal(
+            new[] { new PaymentProxyCountryOption("JP", "日本 JP") },
+            PaymentMethods.ResolveApproveCountryOptions(catalog, "paypal"));
+        Assert.Equal(
+            new[] { new PaymentProxyCountryOption("US", "美国 US") },
+            PaymentMethods.ResolveCheckoutCountryOptions(catalog, "missing"));
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("USA")]
+    [InlineData("1P")]
+    public void InvalidMethodCountryCodeNamesTheMethod(string badCode)
+    {
+        string json = $$"""
+            {
+              "schema": "payment_methods.v1",
+              "default_method": "paypal",
+              "checkout_countries": [{"code":"US","label":"美国 US"}],
+              "approve_countries": [{"code":"JP","label":"日本 JP"}],
+              "stage_countries": [{"code":"US","label":"美国 US"}],
+              "billing_countries": [{"code":"US","label":"US - 美国"}],
+              "methods": [
+                {"id":"paypal","display_name":"PayPal","country":"US","currency":"USD","adapter":"native_paypal"},
+                {
+                  "id":"gopay","display_name":"GoPay","country":"ID","currency":"IDR","adapter":"wallet",
+                  "approve_countries": [{"code":"{{badCode}}","label":"bad"}]
+                }
+              ]
+            }
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => PaymentMethods.ParseCatalog(json));
+        Assert.Contains("gopay", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(badCode, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InvalidTopLevelCountryCodeNamesTheList()
+    {
+        string json = """
+            {
+              "schema": "payment_methods.v1",
+              "default_method": "paypal",
+              "checkout_countries": [{"code":"usa","label":"bad"}],
+              "approve_countries": [{"code":"JP","label":"日本 JP"}],
+              "stage_countries": [{"code":"US","label":"美国 US"}],
+              "billing_countries": [{"code":"US","label":"US - 美国"}],
+              "methods": [
+                {"id":"paypal","display_name":"PayPal","country":"US","currency":"USD","adapter":"native_paypal"}
+              ]
+            }
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => PaymentMethods.ParseCatalog(json));
+        Assert.Contains("checkout_countries", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("usa", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmptyMethodCountryOverrideIsRejected()
+    {
+        string json = """
+            {
+              "schema": "payment_methods.v1",
+              "default_method": "paypal",
+              "checkout_countries": [{"code":"US","label":"美国 US"}],
+              "approve_countries": [{"code":"JP","label":"日本 JP"}],
+              "stage_countries": [{"code":"US","label":"美国 US"}],
+              "billing_countries": [{"code":"US","label":"US - 美国"}],
+              "methods": [
+                {"id":"paypal","display_name":"PayPal","country":"US","currency":"USD","adapter":"native_paypal","checkout_countries":[]}
+              ]
+            }
+            """;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => PaymentMethods.ParseCatalog(json));
+        Assert.Contains("paypal", exception.Message, StringComparison.Ordinal);
+    }
 }

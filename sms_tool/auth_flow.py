@@ -1,9 +1,13 @@
 import json
+import time
 from urllib.parse import quote, urlencode, urlparse
 
+from .account_creation import _validate_email_otp
 from .auth_headers import auth_impersonate, openai_auth_headers
+from .config import current_config_data
 from .http_client import request_with_retry
 from .http_utils import _absolute_url, _follow_continue_url, _json_or_raw
+from .mailbox import _poll_email_otp
 
 
 def _is_existing_login_redirect(url):
@@ -288,3 +292,320 @@ def _prepare_signup_auth_state(
 
     return last_state
 
+
+# ==========================================
+# Existing-account login flow (email OTP + TOTP challenge)
+# ==========================================
+LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
+
+
+def _auth_request_headers(base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None):
+    return {
+        **(base_headers or {}),
+        **openai_auth_headers(
+            did,
+            referer=referer,
+            origin=origin,
+            sentinel_token=sentinel_token,
+            sentinel_so_token=sentinel_so_token,
+            extra=extra or {},
+        ),
+    }
+
+
+def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
+    headers = _auth_request_headers(
+        base_headers,
+        did=did,
+        referer=current_url or f"{auth_base}/email-verification",
+        origin=auth_base,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+        extra={"Content-Type": "application/json"},
+    )
+    last_response = None
+    for endpoint in (
+        "/api/accounts/passwordless/send-otp",
+        "/api/accounts/email-otp/send",
+        "/api/accounts/email-otp/resend",
+    ):
+        response = request_with_retry(
+            session,
+            "post",
+            _absolute_url(auth_base, endpoint),
+            label=f"Existing account OTP send {endpoint}",
+            json={},
+            headers=headers,
+            impersonate=auth_impersonate(),
+        )
+        last_response = response
+        body_preview = ""
+        try:
+            body_preview = json.dumps(response.json(), ensure_ascii=False)[:200]
+        except Exception:
+            body_preview = (response.text or "")[:200]
+        print(f"  Existing account OTP send: {endpoint} {response.status_code} {body_preview}")
+        if response.status_code in (200, 202, 204):
+            return True, response
+        # 409 may mean "OTP already sent recently" — treat as success but
+        # only when the response body confirms a pending OTP. Otherwise keep
+        # trying alternate endpoints.
+        if response.status_code == 409:
+            body_lower = body_preview.lower()
+            if "already" in body_lower or "pending" in body_lower or "rate" in body_lower or "too_many" in body_lower:
+                return True, response
+            # Ambiguous 409: try next endpoint
+            continue
+        if response.status_code not in (400, 404, 405):
+            return False, response
+    # All endpoints exhausted; return last response so caller can decide
+    if last_response is not None:
+        return False, last_response
+    return False, None
+
+
+def _login_existing_account_with_email_otp(
+    session,
+    username,
+    mailbox,
+    did,
+    session_logging_id,
+    auth_base,
+    chat_base,
+    base_headers,
+    csrf_token,
+    proxy=None,
+    sentinel_token="",
+    sentinel_so_token="",
+    totp_secret="",
+):
+    print("  Existing account login: starting email OTP flow")
+    signin_url = (
+        f"{chat_base}/api/auth/signin/openai"
+        f"?prompt=login&ext-oai-did={did}"
+        f"&auth_session_logging_id={session_logging_id}"
+        f"&screen_hint=login"
+        f"&login_hint={quote(username, safe='')}"
+    )
+    signin_payload = {
+        "csrfToken": csrf_token,
+        "callbackUrl": f"{chat_base}/",
+        "json": "true",
+    }
+    signin_resp = request_with_retry(
+        session,
+        "post",
+        signin_url,
+        label="Existing account signin",
+        data=urlencode(signin_payload),
+        headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded", "Origin": chat_base, "Referer": f"{chat_base}/"},
+        impersonate=auth_impersonate(),
+    )
+    signin_body = _json_or_raw(signin_resp, limit=1000)
+    auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
+    auth_session_url = _with_query_param(auth_session_url, "device_id", did)
+    authorize_resp = request_with_retry(
+        session,
+        "get",
+        auth_session_url,
+        label="Existing account authorize",
+        headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
+        impersonate=auth_impersonate(),
+    )
+    current_url = str(authorize_resp.url or "")
+    print(f"  Existing account authorize: {authorize_resp.status_code} {current_url}")
+
+    current_lower = current_url.lower()
+    if "chatgpt.com" in current_lower and ("/api/auth/callback/openai" in current_lower or current_lower.rstrip("/") == chat_base.lower().rstrip("/")):
+        return {"ok": True}
+
+    # Always call authorize/continue to ensure the auth session transitions
+    # from signup state to login state.  Previously this was skipped when the
+    # authorize redirect landed on /email-verification, which left the session
+    # in a signup state and caused OTP send to return 409.
+    continue_resp = request_with_retry(
+        session,
+        "post",
+        f"{auth_base}/api/accounts/authorize/continue",
+        label="Existing account continue",
+        json={"username": {"value": username, "kind": "email"}},
+        headers=_auth_request_headers(
+            base_headers,
+            did=did,
+            referer=current_url or f"{auth_base}/log-in",
+            origin=auth_base,
+            sentinel_token=sentinel_token,
+            sentinel_so_token=sentinel_so_token,
+            extra={"Content-Type": "application/json"},
+        ),
+        impersonate=auth_impersonate(),
+    )
+    print(f"  Existing account continue: {continue_resp.status_code}")
+    if continue_resp.status_code == 200:
+        next_url = _response_next_url(continue_resp, auth_base)
+        if next_url:
+            try:
+                follow_resp = _follow_continue_url(
+                    session,
+                    next_url,
+                    base_headers,
+                    referer=next_url,
+                    label="Existing account continue follow",
+                )
+                current_url = str(getattr(follow_resp, "url", "") or next_url)
+            except Exception as e:
+                print(f"  Existing account continue follow transport warning: {e}")
+    elif continue_resp.status_code not in (409, 400):
+        return {"ok": False, "error": f"existing_login_continue_failed:{continue_resp.status_code}"}
+
+    otp_send_started = int(time.time())
+    ok, otp_send_response = _send_existing_login_otp(
+        session,
+        auth_base,
+        base_headers,
+        current_url,
+        did,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+    )
+    if not ok:
+        status = getattr(otp_send_response, "status_code", 0)
+        return {"ok": False, "error": f"existing_login_otp_send_failed:{status}"}
+
+    email_cfg = current_config_data().get("email_registration", {})
+    code = _poll_email_otp(
+        mailbox,
+        subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
+        timeout=int(email_cfg.get("otp_timeout", 300)),
+        issued_after_unix=otp_send_started,
+        proxy=proxy,
+    )
+    if not code:
+        return {"ok": False, "error": "existing_login_otp_poll_timeout"}
+
+    otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code,
+        sentinel_data={"sentinel_token": sentinel_token, "sentinel_so_token": sentinel_so_token})
+    if not otp_ok:
+        return {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}
+    mfa_result = _complete_existing_login_totp(
+        session,
+        auth_base,
+        base_headers,
+        otp_data,
+        did=did,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+        totp_secret=totp_secret,
+    )
+    if not mfa_result.get("ok"):
+        return mfa_result
+    otp_data = mfa_result.get("data") if isinstance(mfa_result.get("data"), dict) else otp_data
+    try:
+        _follow_continue_url(
+            session,
+            otp_data.get("continue_url", ""),
+            base_headers,
+            referer=f"{auth_base}/email-verification",
+            label="Existing account OTP continue",
+        )
+    except Exception as e:
+        print(f"  Existing account OTP continue transport warning: {e}")
+    return {"ok": True}
+
+
+def _complete_existing_login_totp(
+    session,
+    auth_base,
+    base_headers,
+    payload,
+    *,
+    did,
+    sentinel_token="",
+    sentinel_so_token="",
+    totp_secret="",
+):
+    """Complete a saved TOTP challenge after email OTP verification."""
+    if not _is_mfa_challenge_payload(payload):
+        return {"ok": True, "data": payload}
+    secret = str(totp_secret or "").strip()
+    if not secret:
+        return {"ok": False, "error": "existing_login_totp_secret_missing"}
+    factor_id = _totp_factor_id(payload)
+    if not factor_id:
+        return {"ok": False, "error": "existing_login_totp_factor_missing"}
+    try:
+        import pyotp
+
+        code = pyotp.TOTP(secret).now()
+    except Exception:
+        return {"ok": False, "error": "existing_login_totp_code_failed"}
+
+    referer = _response_next_url_from_data(payload, auth_base) or f"{auth_base}/mfa-challenge/{factor_id}"
+    headers = _auth_request_headers(
+        base_headers,
+        did=did,
+        referer=referer,
+        origin=auth_base,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+        extra={"Content-Type": "application/json"},
+    )
+    issue = request_with_retry(
+        session,
+        "post",
+        f"{auth_base}/api/accounts/mfa/issue_challenge",
+        label="Existing account TOTP challenge",
+        json={"type": "totp", "id": factor_id, "force_fresh_challenge": False},
+        headers=headers,
+        impersonate=auth_impersonate(),
+    )
+    if issue.status_code not in (200, 201, 202, 204):
+        return {"ok": False, "error": f"existing_login_totp_issue_failed:{issue.status_code}"}
+    verify = request_with_retry(
+        session,
+        "post",
+        f"{auth_base}/api/accounts/mfa/verify",
+        label="Existing account TOTP verify",
+        json={"type": "totp", "id": factor_id, "code": code},
+        headers=headers,
+        impersonate=auth_impersonate(),
+    )
+    verify_data = _json_or_raw(verify, limit=1000)
+    if verify.status_code != 200:
+        return {"ok": False, "error": f"existing_login_totp_verify_failed:{verify.status_code}"}
+    return {"ok": True, "data": verify_data}
+
+
+def _is_mfa_challenge_payload(payload):
+    if not isinstance(payload, dict):
+        return False
+    page = payload.get("page") if isinstance(payload.get("page"), dict) else {}
+    if str(page.get("type") or "").strip().lower() == "mfa_challenge":
+        return True
+    return "/mfa-challenge/" in str(_response_next_url_from_data(payload, "") or "").lower()
+
+
+def _totp_factor_id(payload):
+    auth_session = payload.get("oai-client-auth-session") if isinstance(payload, dict) else {}
+    if not isinstance(auth_session, dict):
+        return ""
+    factors = []
+    for key in ("mfa_challenge_factors", "mfa_factors"):
+        values = auth_session.get(key)
+        if isinstance(values, list):
+            factors.extend(item for item in values if isinstance(item, dict))
+    for factor in factors:
+        if str(factor.get("factor_type") or "").strip().lower() == "totp":
+            factor_id = str(factor.get("id") or "").strip()
+            if factor_id:
+                return factor_id
+    return ""
+
+
+def _response_next_url_from_data(payload, auth_base):
+    if not isinstance(payload, dict):
+        return ""
+    page = payload.get("page") if isinstance(payload.get("page"), dict) else {}
+    page_payload = page.get("payload") if isinstance(page.get("payload"), dict) else {}
+    value = str(payload.get("continue_url") or page_payload.get("url") or "").strip()
+    return _absolute_url(auth_base, value) if value and auth_base else value

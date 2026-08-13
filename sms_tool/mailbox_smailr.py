@@ -43,7 +43,8 @@ def _smailr_api_key() -> str:
 
 
 def _smailr_base_url() -> str:
-    return str(_smailr_cfg().get("base_url") or "https://smailr.com").strip().rstrip("/")
+    from .providers.smailr_mailbox import _normalize_base_url
+    return _normalize_base_url(str(_smailr_cfg().get("base_url") or "https://smailr.com"))
 
 
 def _smailr_timeout() -> int:
@@ -87,6 +88,14 @@ def _smailr_extract_id_and_email(response: Any) -> tuple[str, str]:
     """Given a Smailr ``POST /mailboxes`` response, return ``(id, email)``."""
     if not isinstance(response, dict):
         return "", ""
+    nested = response.get("data")
+    if isinstance(nested, dict):
+        response = {**response, **nested}
+    elif isinstance(nested, list):
+        for item in nested:
+            mb_id, email = _smailr_extract_id_and_email(item)
+            if mb_id or email:
+                return mb_id, email
     mb_id = str(response.get("id") or response.get("mailbox_id") or "").strip()
     email = (
         response.get("email")

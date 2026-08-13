@@ -104,7 +104,7 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 打开桌面端的 **设置** 页面，至少完成以下配置：
 
-1. 在 **网络与支付** 中分别配置注册代理池、邮箱收件代理和协议支付代理池。
+1. 在 **网络与支付** 中配置注册代理池和邮箱收件代理；协议支付的 Checkout / Approve 两个代理池在“批量协议支付”窗口中按支付方式保存。
 2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
 3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
 4. 保存后重新打开对应功能即可使用新配置。
@@ -182,15 +182,15 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
-- GoPay（印尼 ID/IDR）、GCash 和 GrabPay（菲律宾 PH/PHP）复用同一个钱包适配器：Checkout → Stripe init → 建钱包 PM → Confirm → Approve → Poll → 校验 Provider Redirect。三者只在地区、币种、locale 和最终域名白名单上分型。
+- GoPay（印尼 ID/IDR）和 GrabPay（菲律宾 PH/PHP）复用钱包适配器；GoPay 在 Checkout 后通过独立 Promotion/Update 阶段校验 0 元，再执行 Stripe init → 建钱包 PM → Confirm → Approve → Poll → Provider Redirect。GCash 使用独立的 custom-payment-method adapter 和 transport，不走共享钱包 Provider。
 - PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
 - PayPal 回跳对账由独立 `paypal_reconciliation.py` 处理，只跟踪白名单内的 Stripe Return → OpenAI Pay → Checkout Verify，并输出脱敏的 `conclusive`/`unknown`/`failed` 证据；它不改变提链接口，也不生成或覆盖支付链接。
-- 支持 `checkout`、`approve`、`update` 分段代理。
+- 批量协议支付使用两个相互独立的支付出口池：Checkout 池默认跟随账单区，Approve 池默认日本 JP（可切换土耳其 TR）；Promotion、Provider、Confirm 和 Redirect 继续使用各适配器的内部阶段国家契约。
 - 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
 - 协议支付代理池按顺序探测，当前代理不可用或出口国家不匹配时自动切换下一条。
 - 地区和代理选择保存为历史记录。
 - 支持实际测试代理出口 IP、国家及预期地区是否匹配。
-- 严格区分 Checkout、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
+- 严格区分 Checkout、Promotion/Update、PM 创建、Confirm、首次 Poll、最终 Provider Redirect 等阶段。
 - 通用提链终态为 `completed`、`failed`、`cancelled`、`unknown`、`timed_out`，每条结果都有 `retryable` 和 `error_stage`。`unknown` 会额外标记 `requires_reconciliation=true`，在完成对账前禁止自动重试；`cancelled` 不重试，普通 `timed_out` 可按策略重试。
 - 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
 - MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
@@ -221,9 +221,9 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 ### 桌面端批量支付操作
 
 1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
-2. 选择 MoMo、Kakao、直卡 Checkout 等提链方式，设置并发、瞬态重试、Canary 数量、批次 ID 和代理 Seed。
+2. 选择 MoMo、Kakao、直卡 Checkout 等提链方式，设置并发、瞬态重试、Canary 数量、批次 ID，并分别填写 Checkout / Approve 代理池（每行一条）。可在窗口底部保存当前支付方式的池和出口国家配置。
 3. 默认开启“401 自动恢复”；勾选“仅探测资格”后会完成 JIT AT、注册地区矩阵、ChatGPT Checkout 和 Stripe init，然后在创建 PM、Confirm、Approve 和 Provider Redirect 前停止。结果会明确记录金额、币种、支付方式可见性和 `eligible`/`ineligible`/`unknown` 分类。
-4. 通过“账号地区 / 支付资格矩阵”确认注册区、Checkout、Promotion、Provider、Approve 和 Redirect 的地区组合。
+4. 通过“账号地区 / 支付资格矩阵”确认注册区、账单区（Checkout）和优惠区（Approve）；Promotion、Provider、Redirect 等内部阶段仍会按适配器配置执行。
 5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。系统性的 `unknown` Canary 会暂停该方法后续完整批次，明确的支付方式不可用或非零报价不会误判为协议故障。报告会分开显示 AT 200、JIT 刷新、能力探测、资格、链接、二维码和失败计数。
 
 ### 手机接码
@@ -272,8 +272,12 @@ sms_tool/checkout_contract.py / payment_capability.py
   -> 地区/币种/locale、Stripe init、金额与支付方式目录归一化
 
 sms_tool/wallet_provider.py / wallet_transport.py
-  GoPay、GCash、GrabPay 共用钱包适配器
-  -> PM、Confirm、Approve、Poll、Provider Redirect 与分阶段代理
+  GoPay、GrabPay 共用钱包适配器
+  -> GoPay Promotion/Update、PM、Confirm、Approve、Poll、Provider Redirect 与分阶段代理
+
+sms_tool/gcash_provider.py / gcash_transport.py
+  GCash 独立 custom-payment-method 适配器
+  -> Checkout 更新、Custom PM 创建、确认和 Provider Redirect
 
 sms_tool/mailbox.py
   邮箱统一路由
@@ -315,8 +319,9 @@ services/
 | `sms_tool/payment_link_manager.py` | 支付方法注册、状态机与统一结果 |
 | `sms_tool/checkout_contract.py` | ChatGPT Checkout、Stripe init 请求/响应与支付方式能力证据契约 |
 | `sms_tool/payment_capability.py` | 只到 Checkout + Stripe init 的通用能力探测 |
-| `sms_tool/wallet_provider.py` | GoPay、GCash、GrabPay 共用编排与结构化结果 |
-| `sms_tool/wallet_transport.py` | 钱包真实 HTTP、分阶段代理和 Provider Redirect 校验 |
+| `sms_tool/wallet_provider.py` | GoPay、GrabPay 共用编排与结构化结果 |
+| `sms_tool/wallet_transport.py` | GoPay、GrabPay HTTP、分阶段代理和 Provider Redirect 校验 |
+| `sms_tool/gcash_provider.py` / `gcash_transport.py` | GCash custom-payment-method 编排与 HTTP transport |
 | `sms_tool/gen_pp_link.py` | PayPal/Stripe Checkout 与链接生成 |
 | `sms_tool/paypal_proxy.py` | 分段代理、地区轮换和出口探测 |
 | `sms_tool/paypal_reconciliation.py` | 与提链独立的 PayPal 商户回跳对账和脱敏证据 |
@@ -370,22 +375,31 @@ services/
 }
 ```
 
-注册流量走 JP 动态代理（`proxy.registration` / `proxy.pool`），worker 会刷新动态 Session 使各并发出口 IP 不同；邮箱 OTP 收取固定走 `mailbox_proxy`（默认 `http://127.0.0.1:7897`），不会继承注册代理；支付流量走独立的 `paypal.stage_proxies` / `protocol_payments.proxy_pool`。三者互不覆盖，详情可在桌面端 **设置 → 网络与支付** 的网络代理配置中查看和修改。
+注册流量走 JP 动态代理（`proxy.registration` / `proxy.pool`），worker 会刷新动态 Session 使各并发出口 IP 不同；邮箱 OTP 收取固定走 `mailbox_proxy`（默认 `http://127.0.0.1:7897`），不会继承注册代理；支付流量走各支付方式自己的 Checkout / Approve 池。三者互不覆盖，支付池在桌面端“批量协议支付”窗口显示和保存。
 
 ### 协议支付代理池
 
 ```json
 {
   "protocol_payments": {
-    "proxy_pool": [
-      "http://user-region-JP-sid-session-t-5:pass@gateway-a:port",
-      "http://user-region-JP-sid-session-t-10:pass@gateway-b:port"
-    ]
+    "methods": {
+      "gopay": {
+        "checkout_proxy_pool": [
+          "http://user-region-ID-sid-session-t-5:pass@gateway-a:port",
+          "http://user-region-ID-sid-session-t-10:pass@gateway-b:port"
+        ],
+        "approve_proxy_pool": [
+          "http://user-region-JP-sid-session-t-5:pass@gateway-c:port",
+          "http://user-region-TR-sid-session-t-10:pass@gateway-d:port"
+        ],
+        "stage_proxy_countries": { "checkout": "ID", "approve": "JP" }
+      }
+    }
   }
 }
 ```
 
-协议支付池与注册代理池相互独立。提链时会按支付地区改写 `region-XX` 或密码中的国家和动态 Session；显式传入 `--proxy` 或分段代理时才覆盖协议池。
+`checkout_proxy_pool` 与 `approve_proxy_pool` 按支付方式独立保存，值为代理数组；批量 CLI 对应 `--checkout-proxy-pool` 和 `--approve-proxy-pool`（换行分隔）。旧的 `protocol_payments.proxy_pool` 仍可被读取作兼容回退，但不再出现在设置弹窗，也不会覆盖已配置的方法池。提链时会按阶段国家改写 `region-XX` 或密码中的国家和动态 Session。
 
 ### JIT AT 与批量支付
 
@@ -490,11 +504,11 @@ python chatgpt_phone_reg.py --extract-payment-link --payment-method momo --email
 python chatgpt_phone_reg.py --extract-payment-link --payment-method direct_card --email user@example.com --proxy "http://proxy"
 ```
 
-以 GoPay 单账号 Canary 执行 JIT AT、ID 矩阵、Checkout 和 Stripe init
+以 GoPay 单账号 Canary 执行 JIT AT、ID 矩阵、Checkout、TH Promotion/Update 和 Stripe init
 能力探测；不会创建支付方式或发送 Confirm/Approve：
 
 ```powershell
-python chatgpt_phone_reg.py --extract-payment-link --payment-method gopay --email-file runtime\canary.txt --payment-probe-only --payment-canary 1 --payment-batch-id gopay_id_probe --workers 1
+python chatgpt_phone_reg.py --extract-payment-link --payment-method gopay --email-file runtime\canary.txt --payment-probe-only --payment-canary 1 --payment-batch-id gopay_id_probe --workers 1 --checkout-proxy-pool "http://checkout" --approve-proxy-pool "http://approve-jp`nhttp://approve-tr"
 ```
 
 ### 注册并自动导入 SUB2API

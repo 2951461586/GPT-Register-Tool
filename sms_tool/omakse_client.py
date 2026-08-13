@@ -574,3 +574,51 @@ def extract_links_for_account(
         promotion_proxies=promotion_proxies,
         **kwargs,
     )
+
+
+# ─── Authorization-result normalization ──────────────────────────────────────
+#
+# The omakse US-payment job returns a free-form ``result`` dict.  This helper
+# normalizes it through the read-only ``paypal_authorization`` parser so callers
+# get a stable, PaymentResult-compatible view (ok/status/error_code/retryable)
+# without changing any existing return structure.
+
+
+def normalize_us_payment_result(
+    job_result: dict[str, Any] | None,
+    *,
+    payment_method: str = "paypal",
+    operation: str = "execute_payment",
+    ba_token: str = "",
+) -> dict[str, Any]:
+    """Normalize an omakse US-payment job result into a PaymentResult-compatible dict.
+
+    ``job_result`` may be the ``result`` field of ``run_us_payment_and_wait`` /
+    ``get_us_payment_status``, or a full run/status dict (its ``result`` / ``raw``
+    sub-dict is then used).  The returned dict feeds directly into
+    ``PaymentResult.from_mapping`` / ``payment_retry_allowed``.
+    """
+    from .paypal_authorization import parse_authorization_context, to_payment_result
+
+    payload: Any = job_result or {}
+    if isinstance(payload, dict):
+        # unwrap common wrappers
+        for key in ("result", "raw", "data", "authorization"):
+            nested = payload.get(key)
+            if isinstance(nested, dict) and nested:
+                payload = nested
+                break
+
+    ctx = parse_authorization_context(payload, ba_token=ba_token)
+    normalized = to_payment_result(
+        ctx,
+        payment_method=payment_method,
+        operation=operation,
+    )
+    # If the job already carried a URL, keep it.
+    url = ""
+    if isinstance(job_result, dict):
+        url = str(job_result.get("url") or job_result.get("return_url") or "").strip()
+    if url:
+        normalized["url"] = url
+    return normalized

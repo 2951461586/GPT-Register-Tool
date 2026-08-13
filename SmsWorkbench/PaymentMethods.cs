@@ -24,6 +24,15 @@ namespace SmsWorkbench
         public string SingleAccountDescription => RegistrationDisplayName;
     }
 
+    internal sealed class PaymentCountryDocument
+    {
+        [JsonPropertyName("code")]
+        public string Code { get; init; } = "";
+
+        [JsonPropertyName("label")]
+        public string Label { get; init; } = "";
+    }
+
     internal sealed class PaymentMethodCatalogDocument
     {
         [JsonPropertyName("schema")]
@@ -31,6 +40,18 @@ namespace SmsWorkbench
 
         [JsonPropertyName("default_method")]
         public string DefaultMethod { get; init; } = "";
+
+        [JsonPropertyName("checkout_countries")]
+        public List<PaymentCountryDocument> CheckoutCountries { get; init; } = [];
+
+        [JsonPropertyName("approve_countries")]
+        public List<PaymentCountryDocument> ApproveCountries { get; init; } = [];
+
+        [JsonPropertyName("stage_countries")]
+        public List<PaymentCountryDocument> StageCountries { get; init; } = [];
+
+        [JsonPropertyName("billing_countries")]
+        public List<PaymentCountryDocument> BillingCountries { get; init; } = [];
 
         [JsonPropertyName("methods")]
         public List<PaymentMethodDocument> Methods { get; init; } = [];
@@ -58,6 +79,12 @@ namespace SmsWorkbench
 
         [JsonPropertyName("aliases")]
         public List<string> Aliases { get; init; } = [];
+
+        [JsonPropertyName("checkout_countries")]
+        public List<PaymentCountryDocument>? CheckoutCountries { get; init; }
+
+        [JsonPropertyName("approve_countries")]
+        public List<PaymentCountryDocument>? ApproveCountries { get; init; }
 
         [JsonPropertyName("batch_enabled")]
         public bool BatchEnabled { get; init; } = true;
@@ -96,6 +123,20 @@ namespace SmsWorkbench
             .Select(method => new PaymentMethodOption(method.Id, method.RegistrationDisplayName))
             .ToArray();
 
+        public static IReadOnlyList<PaymentProxyCountryOption> StageCountryOptions { get; } = Catalog.StageCountries
+            .Select(country => new PaymentProxyCountryOption(country.Code, country.Label))
+            .ToArray();
+
+        public static IReadOnlyList<PaymentProxyCountryOption> BillingCountryOptions { get; } = Catalog.BillingCountries
+            .Select(country => new PaymentProxyCountryOption(country.Code, country.Label))
+            .ToArray();
+
+        public static IReadOnlyList<PaymentProxyCountryOption> CheckoutCountryOptions(string? paymentMethod)
+            => ResolveCheckoutCountryOptions(Catalog, Normalize(paymentMethod));
+
+        public static IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions(string? paymentMethod)
+            => ResolveApproveCountryOptions(Catalog, Normalize(paymentMethod));
+
         public static string Normalize(string? paymentMethod)
         {
             string value = NormalizeKey(paymentMethod);
@@ -107,11 +148,65 @@ namespace SmsWorkbench
         public static string DisplayName(string? paymentMethod)
             => Find(paymentMethod).DisplayName;
 
+        public static string DefaultUpdateCountry(string? paymentMethod, string? fallbackCountry = null)
+        {
+            string normalized = Normalize(paymentMethod);
+            if (normalized == "gopay")
+                return "TH";
+            string fallback = (fallbackCountry ?? "").Trim().ToUpperInvariant();
+            return fallback.Length > 0 ? fallback : Find(normalized).DefaultCountry;
+        }
+
         public static PaymentMethodDefinition Find(string? paymentMethod)
         {
             string normalized = Normalize(paymentMethod);
             return All.FirstOrDefault(method => method.Id == normalized)
                 ?? throw new ArgumentException($"Unsupported payment method: {paymentMethod}", nameof(paymentMethod));
+        }
+
+        internal static PaymentMethodCatalogDocument ParseCatalog(string json)
+        {
+            PaymentMethodCatalogDocument catalog = JsonSerializer.Deserialize<PaymentMethodCatalogDocument>(json)
+                ?? throw new InvalidOperationException("Payment catalog is empty");
+            ValidateCatalog(catalog);
+            return catalog;
+        }
+
+        internal static IReadOnlyList<PaymentProxyCountryOption> ResolveCheckoutCountryOptions(
+            PaymentMethodCatalogDocument catalog,
+            string? paymentMethod)
+            => ResolveCountryOptions(
+                catalog,
+                paymentMethod,
+                method => method.CheckoutCountries,
+                catalog.CheckoutCountries);
+
+        internal static IReadOnlyList<PaymentProxyCountryOption> ResolveApproveCountryOptions(
+            PaymentMethodCatalogDocument catalog,
+            string? paymentMethod)
+            => ResolveCountryOptions(
+                catalog,
+                paymentMethod,
+                method => method.ApproveCountries,
+                catalog.ApproveCountries);
+
+        private static PaymentProxyCountryOption[] ResolveCountryOptions(
+            PaymentMethodCatalogDocument catalog,
+            string? paymentMethod,
+            Func<PaymentMethodDocument, List<PaymentCountryDocument>?> methodOverride,
+            IReadOnlyList<PaymentCountryDocument> topLevelDefault)
+        {
+            string normalized = NormalizeKey(paymentMethod);
+            PaymentMethodDocument? method = normalized.Length == 0
+                ? null
+                : catalog.Methods.FirstOrDefault(candidate => candidate.Id == normalized);
+            IReadOnlyList<PaymentCountryDocument> source = method != null
+                && methodOverride(method) is { Count: > 0 } overrideCountries
+                ? overrideCountries
+                : topLevelDefault;
+            return source
+                .Select(country => new PaymentProxyCountryOption(country.Code, country.Label))
+                .ToArray();
         }
 
         private static PaymentMethodCatalogDocument LoadCatalog()
@@ -121,6 +216,12 @@ namespace SmsWorkbench
                 ?? throw new InvalidOperationException($"Embedded payment catalog not found: {CatalogResource}");
             PaymentMethodCatalogDocument catalog = JsonSerializer.Deserialize<PaymentMethodCatalogDocument>(stream)
                 ?? throw new InvalidOperationException("Payment catalog is empty");
+            ValidateCatalog(catalog);
+            return catalog;
+        }
+
+        private static void ValidateCatalog(PaymentMethodCatalogDocument catalog)
+        {
             if (!string.Equals(catalog.Schema, CatalogSchema, StringComparison.Ordinal))
                 throw new InvalidOperationException($"Unsupported payment catalog schema: {catalog.Schema}");
             if (catalog.Methods.Count == 0)
@@ -129,7 +230,36 @@ namespace SmsWorkbench
                 throw new InvalidOperationException($"Payment catalog default is invalid: {catalog.DefaultMethod}");
             if (catalog.Methods.Select(method => method.Id).Distinct(StringComparer.Ordinal).Count() != catalog.Methods.Count)
                 throw new InvalidOperationException("Payment catalog contains duplicate method ids");
-            return catalog;
+            ValidateCountryOptions(catalog.CheckoutCountries, "checkout_countries", null);
+            ValidateCountryOptions(catalog.ApproveCountries, "approve_countries", null);
+            ValidateCountryOptions(catalog.StageCountries, "stage_countries", null);
+            ValidateCountryOptions(catalog.BillingCountries, "billing_countries", null);
+            foreach (PaymentMethodDocument method in catalog.Methods)
+            {
+                if (method.CheckoutCountries != null)
+                    ValidateCountryOptions(method.CheckoutCountries, "checkout_countries", method.Id);
+                if (method.ApproveCountries != null)
+                    ValidateCountryOptions(method.ApproveCountries, "approve_countries", method.Id);
+            }
+        }
+
+        private static void ValidateCountryOptions(
+            List<PaymentCountryDocument> countries,
+            string listName,
+            string? methodId)
+        {
+            string owner = methodId == null
+                ? $"top-level {listName}"
+                : $"method '{methodId}' {listName}";
+            if (countries.Count == 0)
+                throw new InvalidOperationException($"Payment catalog {owner} must contain at least one country");
+            foreach (PaymentCountryDocument country in countries)
+            {
+                if (!Regex.IsMatch(country.Code ?? "", "^[A-Z]{2}$", RegexOptions.CultureInvariant))
+                    throw new InvalidOperationException($"Payment catalog {owner} has invalid country code: '{country.Code}'");
+                if (string.IsNullOrWhiteSpace(country.Label))
+                    throw new InvalidOperationException($"Payment catalog {owner} entry '{country.Code}' is missing a label");
+            }
         }
 
         private static Dictionary<string, string> BuildAliasMap()

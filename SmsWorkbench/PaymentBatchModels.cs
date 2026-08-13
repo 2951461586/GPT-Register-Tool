@@ -4,6 +4,31 @@ namespace SmsWorkbench
 {
     public sealed record PaymentBatchAccount(string Email, bool HasAccessToken);
 
+    /// <summary>
+    /// Payment-owned egress pools used by the batch extractor.  The UI keeps
+    /// one proxy per line while the backend receives the same newline-delimited
+    /// value and selects/rotates an entry per account and stage.
+    /// </summary>
+    public sealed record PaymentBatchProxyConfiguration(
+        string CheckoutProxyPool = "",
+        string ApproveProxyPool = "",
+        string CheckoutCountry = "",
+        string ApproveCountry = "");
+
+    public sealed record PaymentProxyCountryOption(string Code, string DisplayName);
+
+    /// <summary>
+    /// Test seam for the batch window's catalog-driven country options.  The
+    /// production view model passes null and resolves through
+    /// <see cref="PaymentMethods"/>; tests supply per-method overrides without
+    /// mutating the embedded catalog.
+    /// </summary>
+    internal interface IPaymentCountryCatalog
+    {
+        IReadOnlyList<PaymentProxyCountryOption> CheckoutCountryOptions(string paymentMethod);
+        IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions(string paymentMethod);
+    }
+
     public sealed partial class PaymentMatrixRow : ObservableObject
     {
         [ObservableProperty] private string name = "default";
@@ -44,9 +69,14 @@ namespace SmsWorkbench
         public bool Retryable { get; init; }
         public string ResultKind { get; init; } = "";
         public string ResultValue { get; init; } = "";
-        public string ResultDisplay => ResultValue.Length > 0 ? ResultValue : Decision;
+        public bool ResultPresent { get; init; }
+        public string ResultDisplay => ResultValue.Length > 0
+            ? ResultValue
+            : ResultPresent ? "已生成（报告仅保留存在状态）" : Decision;
         public bool HasCopyableResult => ResultValue.Length > 0;
-        public string CopyToolTip => HasCopyableResult ? $"复制{ResultKind}" : "没有可复制的支付结果";
+        public string CopyToolTip => HasCopyableResult
+            ? $"复制{ResultKind}"
+            : ResultPresent ? "报告仅保留支付结果存在状态" : "没有可复制的支付结果";
         public int Attempts { get; init; }
     }
 
@@ -57,7 +87,10 @@ namespace SmsWorkbench
         int Retries,
         int Canary,
         string BatchId,
-        string Proxy,
+        string CheckoutProxyPool,
+        string ApproveProxyPool,
+        string CheckoutCountry,
+        string ApproveCountry,
         bool JitRefresh,
         bool ProbeOnly,
         bool RequireZero,

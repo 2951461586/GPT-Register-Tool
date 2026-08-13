@@ -8,6 +8,7 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -17,9 +18,14 @@ from .config import CFG
 from .sanitizer import sanitize as _canonical_sanitize
 from .paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
-from .payment_capability import payment_method_capability_probe
-from .payment_link_manager import generate_payment_link, normalize_payment_method
-from .payment_contracts import payment_retry_allowed
+from .payment_link_manager import (
+    coerce_approve_country,
+    generate_payment_link,
+    normalize_payment_method,
+    parse_proxy_pool,
+    probe_payment_method,
+)
+from .payment_contracts import payment_history_metadata, payment_retry_allowed
 
 
 def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
@@ -28,15 +34,29 @@ def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
     if raw in (None, "", False):
         protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
         raw = protocol.get("matrix") or []
-    if isinstance(raw, str):
-        text = raw.strip()
+    if isinstance(raw, (str, Path)):
+        explicit_path = isinstance(raw, Path)
+        text = str(raw).strip()
         if not text:
             return []
-        path = Path(text)
+        source = text
+        if explicit_path or text[:1] not in {"[", "{"}:
+            path = Path(text)
+            try:
+                is_file = path.is_file()
+            except OSError as exc:
+                raise ValueError(f"payment matrix path is invalid: {path}") from exc
+            if not is_file:
+                raise ValueError(f"payment matrix file does not exist: {path}")
+            try:
+                source = path.read_text(encoding="utf-8-sig")
+            except OSError as exc:
+                raise ValueError(f"payment matrix file could not be read: {path}") from exc
         try:
-            raw = json.loads(path.read_text(encoding="utf-8-sig") if path.is_file() else text)
-        except (OSError, ValueError, TypeError):
-            return []
+            raw = json.loads(source)
+        except (ValueError, TypeError) as exc:
+            location = f"file {path}" if explicit_path or text[:1] not in {"[", "{"} else "inline JSON"
+            raise ValueError(f"invalid payment matrix JSON in {location}") from exc
     if isinstance(raw, dict):
         raw = raw.get("cells") if isinstance(raw.get("cells"), list) else [raw]
     cells = []
@@ -86,6 +106,28 @@ def run_payment_batch(
     max_workers = max(1, min(int(workers or 1), cap, len(selected) or 1))
     retry_count = max(0, min(int(retries or 0), 2))
     base_kwargs = dict(payment_kwargs or {})
+    method_configs = protocol_cfg.get("methods") if isinstance(protocol_cfg.get("methods"), Mapping) else {}
+    canonical_method_cfg = method_configs.get(method) if isinstance(method_configs.get(method), Mapping) else {}
+    legacy_method_cfg = CFG.get(method) if isinstance(CFG.get(method), Mapping) else {}
+    for stage in ("checkout", "approve"):
+        pool_key = f"{stage}_proxy_pool"
+        # Custom transports (used by local adapters/tests) provide their own
+        # routing contract; do not silently replace their explicit stage proxy
+        # with the process-wide configured pool.
+        if base_kwargs.get("transport") is not None:
+            continue
+        if parse_proxy_pool(base_kwargs.get(pool_key)) or str(base_kwargs.get(f"{stage}_proxy") or "").strip():
+            # An explicit pool is authoritative.  Legacy single-proxy values
+            # remain supported, but the configured two-pool contract is used
+            # for ordinary batch runs when no explicit pool was supplied.
+            if parse_proxy_pool(base_kwargs.get(pool_key)):
+                continue
+        configured_pool = (
+            canonical_method_cfg.get(pool_key)
+            or legacy_method_cfg.get(pool_key)
+        )
+        if parse_proxy_pool(configured_pool):
+            base_kwargs[pool_key] = configured_pool
     run_signature = _batch_run_signature(
         method=method,
         probe_only=probe_only,
@@ -101,7 +143,11 @@ def run_payment_batch(
     existing_by_ref = {
         str(row.get("account_ref") or ""): row
         for row in (existing.get("results") or [])
-        if isinstance(row, dict) and row.get("account_ref")
+        if (
+            isinstance(row, dict)
+            and row.get("account_ref")
+            and _checkpoint_row_resumable(row)
+        )
     }
     ordered: list[dict[str, Any] | None] = [
         existing_by_ref.get(_account_ref(email)) for email in selected
@@ -110,15 +156,28 @@ def run_payment_batch(
     checkpoint_lock = threading.Lock()
 
     def run_one(index: int, email: str) -> tuple[int, dict[str, Any]]:
+        seed_context, _ = load_account_seed(email=email)
+        seed_country = _registration_country(seed_context)
+        cell = _matrix_cell_for(index, cells, method, seed_country)
+        kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy, payment_method=method, pool_index=index)
+        kwargs.pop("proxy", None)
+        checkout_route = kwargs.get("checkout_proxy") or proxy
+        if checkout_route:
+            kwargs["checkout_proxy"] = checkout_route
+
         auth = ensure_payment_access_token(
             email=email,
-            proxy=proxy,
+            proxy=checkout_route,
             timeout=timeout,
             relogin_on_401=jit_refresh,
             stabilization_probes=1,
         )
-        registration_country = str((auth.get("auth_context") or {}).get("registration_country") or "").upper()
-        cell = _matrix_cell_for(index, cells, method, registration_country)
+        auth_country = _registration_country(auth.get("auth_context"))
+        registration_country = auth_country or seed_country
+        expected_cell = _matrix_cell_for(index, cells, method, registration_country)
+        matrix_route_mismatch = expected_cell != cell
+        if matrix_route_mismatch:
+            cell = expected_cell
         public_auth = public_payment_auth_result(auth)
         public_auth.pop("email", None)
         row: dict[str, Any] = {
@@ -140,6 +199,8 @@ def run_payment_batch(
         if not auth.get("ok"):
             row["decision"] = str(auth.get("error") or "jit_auth_failed")
             row["error"] = row["decision"]
+            if auth.get("terminal"):
+                row["retryable"] = False
             # account_deactivated 是永久终态。ensure_payment_access_token 已经把终态
             # 探测出来，但以前只写进 row["decision"] 就返回了，SQLite accounts 表
             # 不会被更新 —— 下次批量还会把这个 deactivated 账号选进来再 JIT 一次，
@@ -156,21 +217,20 @@ def run_payment_batch(
                     row["terminal_persisted"] = False
                     row["terminal_persist_error"] = str(exc)
             return index, row
-        if cell.get("matrix_mismatch"):
+        if cell.get("matrix_mismatch") or matrix_route_mismatch:
             row["eligible"] = False
             row["decision"] = "matrix_registration_country_mismatch"
             row["error"] = row["decision"]
+            row["retryable"] = False
             return index, row
-        kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy)
         if probe_only:
-            kwargs.pop("proxy", None)
             capability: dict[str, Any] = {}
             for probe_attempt in range(1, retry_count + 2):
-                capability = payment_method_capability_probe(
+                capability = probe_payment_method(
                     access_token=str(auth.get("access_token") or ""),
                     payment_method=method,
                     auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
-                    proxy=proxy,
+                    proxy=checkout_route,
                     timeout=max(5, int(timeout or 30)),
                     **kwargs,
                 )
@@ -193,7 +253,7 @@ def run_payment_batch(
             row["attempted"] = True
             last = generate_payment_link(
                 access_token=str(auth.get("access_token") or ""),
-                proxy=proxy,
+                proxy=checkout_route,
                 payment_method=method,
                 auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
                 **kwargs,
@@ -253,6 +313,7 @@ def run_payment_batch(
                     "ok": False,
                     "decision": "payment_worker_exception",
                     "error": f"{type(exc).__name__}: {exc}",
+                    "retryable": True,
                 }
             ordered[index] = row
             checkpoint("running")
@@ -310,7 +371,10 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
         "trial_ineligible": sum("trial_ineligible" in value for value in decisions),
         "card_only": sum("card_only" in value or "promo_nonzero" in value for value in decisions),
         "approve_blocked": sum("approve" in value and "ready" not in value for value in decisions),
-        "link_ready": sum(bool(row.get("ok") and row.get("url")) for row in results),
+        "link_ready": sum(
+            bool(row.get("ok") and (row.get("url") or row.get("url_present")))
+            for row in results
+        ),
         "qr_ready": sum(_is_qr_ready(row) for row in results),
         "terminal": sum(bool((row.get("auth") or {}).get("terminal")) for row in results),
         "failed": sum(not bool(row.get("ok")) for row in results),
@@ -348,6 +412,12 @@ def _matrix_cell_for(index: int, cells: list[dict[str, Any]], method: str,
     return dict(schedule[index % len(schedule)])
 
 
+def _registration_country(context: Any) -> str:
+    if not isinstance(context, dict):
+        return ""
+    return str(context.get("registration_country") or "").strip().upper()
+
+
 def _matrix_summary(results: list[dict[str, Any]], cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
     names = list(dict.fromkeys(str(cell.get("name") or "") for cell in cells)) or ["default"]
     for row in results:
@@ -365,7 +435,14 @@ def _matrix_summary(results: list[dict[str, Any]], cells: list[dict[str, Any]]) 
     return output
 
 
-def _cell_payment_kwargs(base: dict[str, Any], cell: dict[str, Any], proxy: Any) -> dict[str, Any]:
+def _cell_payment_kwargs(
+    base: dict[str, Any],
+    cell: dict[str, Any],
+    proxy: Any,
+    *,
+    payment_method: str = "",
+    pool_index: int = 0,
+) -> dict[str, Any]:
     values = dict(base)
     countries = dict(values.get("stage_proxy_countries") or {})
     mapping = {
@@ -379,20 +456,117 @@ def _cell_payment_kwargs(base: dict[str, Any], cell: dict[str, Any], proxy: Any)
         country = str(cell.get(field) or "").strip().upper()
         if country:
             countries[stage] = country
+    # GoPay approve-country protocol rule, shared with the payment-link
+    # manager chokepoint.  The batch pre-routing below consumes the approve
+    # country for pool selection and sticky-session rotation before the
+    # manager runs, so the coercion must be applied here as well.
+    coerced_cell_approve, cell_approve_changed = coerce_approve_country(
+        payment_method, countries.get("approve")
+    )
+    if cell_approve_changed:
+        countries["approve"] = coerced_cell_approve
+    coerced_base_approve, base_approve_changed = coerce_approve_country(
+        payment_method, values.get("approve_country")
+    )
+    if base_approve_changed:
+        values["approve_country"] = coerced_base_approve
     values["stage_proxy_countries"] = countries
     for key in ("strategy", "checkout_country", "target_country"):
         if cell.get(key) not in (None, ""):
             values[key] = cell[key]
-    seed = str(proxy or values.get("checkout_proxy") or "").strip()
+
+    # Checkout and Approve pools are independent: each cell gets a healthy
+    # candidate for each stage, then the existing country/session rotation is
+    # applied below.  Remove the pool after selection so the manager does not
+    # probe the same pool a second time for this already-routed attempt.
+    from .paypal_proxy import proxy_state_from_config, select_proxy_from_pool
+
+    # One process-shared health/geo cache for the whole batch: the first account
+    # probes each pool proxy, the rest reuse the cached country and the health
+    # ranking (cooldown-skipped) instead of re-probing per cell.
+    proxy_state = proxy_state_from_config(CFG)
+
+    selected_stages: set[str] = set()
+    for stage in ("checkout", "approve"):
+        pool_key = f"{stage}_proxy_pool"
+        pool = parse_proxy_pool(values.get(pool_key))
+        if not pool:
+            continue
+        # Rotate the starting candidate per account.  The selector still
+        # health-checks every candidate, but a healthy static pool is no
+        # longer pinned to its first entry for the whole batch.
+        offset = int(pool_index or 0) % len(pool)
+        if offset:
+            pool = pool[offset:] + pool[:offset]
+        expected = str(
+            countries.get(stage)
+            or values.get(f"{stage}_country")
+            or (
+                "JP"
+                if normalize_payment_method(payment_method) == "gopay" and stage == "approve"
+                else values.get("target_country")
+            )
+            or ""
+        ).strip().upper()
+        selected, _attempts = select_proxy_from_pool(pool, expected, stage, state=proxy_state)
+        if not selected:
+            raise RuntimeError(f"payment_{stage}_proxy_pool_unavailable")
+        values[f"{stage}_proxy"] = selected
+        values.pop(pool_key, None)
+        selected_stages.add(stage)
+
+    checkout_seed = str(values.get("checkout_proxy") or proxy or "").strip()
+    approve_seed = str(values.get("approve_proxy") or checkout_seed or "").strip()
+
+    # The simplified two-pool contract owns the internal adapter stages too:
+    # Checkout pool covers checkout/Stripe/provider/confirm/redirect, while
+    # Approve pool covers promotion/update and final approval.  Explicit
+    # per-stage values remain untouched when no corresponding pool is present.
+    if "checkout" in selected_stages:
+        for key in (
+            "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
+            "confirm_proxy", "redirect_proxy",
+        ):
+            values[key] = checkout_seed
+    if "approve" in selected_stages:
+        for key in ("promotion_proxy", "update_proxy", "final_review_proxy"):
+            values[key] = approve_seed
+
+    seed = checkout_seed
     if seed and countries:
         from .paypal_proxy import rotate_proxy_session
 
         for stage in ("checkout", "promotion", "provider", "approve", "redirect"):
             country = countries.get(stage)
-            stage_key = f"{stage}_proxy"
-            stage_seed = str(values.get(stage_key) or seed).strip()
-            if country and stage_seed:
-                values[stage_key] = rotate_proxy_session(stage_seed, country)
+            if not country:
+                continue
+            stage_keys = {
+                "checkout": ("checkout_proxy",),
+                "promotion": (
+                    ("promotion_proxy", "update_proxy")
+                    if "approve" in selected_stages
+                    else tuple(key for key in ("promotion_proxy", "update_proxy") if values.get(key))
+                ),
+                "provider": (
+                    ("provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
+                    if "checkout" in selected_stages
+                    else tuple(
+                        key for key in ("provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
+                        if values.get(key)
+                    )
+                ),
+                "approve": (
+                    ("approve_proxy", "final_review_proxy")
+                    if "approve" in selected_stages
+                    else tuple(key for key in ("approve_proxy", "final_review_proxy") if values.get(key))
+                ),
+                "redirect": ("redirect_proxy",) if values.get("redirect_proxy") else (),
+            }[stage]
+            fallback = approve_seed if stage == "promotion" or stage == "approve" else seed
+            for stage_key in stage_keys:
+                stage_seed = str(values.get(stage_key) or fallback).strip()
+                if stage_seed:
+                    values[stage_key] = rotate_proxy_session(stage_seed, country)
     return values
 
 
@@ -417,7 +591,12 @@ def _is_qr_ready(row: dict[str, Any]) -> bool:
     return bool(
         row.get("ok")
         and str(row.get("decision") or "") == "ready_with_qr"
-        and (row.get("qr_path") or "payment.momo.vn" in str(row.get("url") or "").lower())
+        and (
+            row.get("qr_path")
+            or row.get("qr_path_present")
+            or row.get("url_present")
+            or "payment.momo.vn" in str(row.get("url") or "").lower()
+        )
     )
 
 
@@ -487,6 +666,13 @@ def _load_checkpoint(path: Path, method: str, run_signature: str) -> dict[str, A
     return value
 
 
+def _checkpoint_row_resumable(row: dict[str, Any]) -> bool:
+    """Resume only completed success or an explicitly non-retryable failure."""
+    if row.get("ok") is True:
+        return True
+    return row.get("ok") is False and row.get("retryable") is False
+
+
 def _batch_run_signature(
     *,
     method: str,
@@ -513,7 +699,8 @@ def _batch_run_signature(
 
 def _write_checkpoint(path: Path, report: dict[str, Any]) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    persisted = payment_history_metadata(report)
+    temporary.write_text(json.dumps(persisted, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
 
 

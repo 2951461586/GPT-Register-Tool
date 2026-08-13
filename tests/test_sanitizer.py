@@ -22,6 +22,17 @@ def test_shared_sensitive_policy_schema_is_loaded():
     assert any(item["name"] == "named_secret" for item in SENSITIVE_POLICY["text_patterns"])
 
 
+def test_sanitizer_redacts_named_stripe_session_and_intent_fields_without_corrupting_urls():
+    checkout_id = "cs_live_fixtureSession123"
+    intent_id = "pi_test_fixtureIntent123"
+    assert sanitize({"checkout_session_id": checkout_id, "payment_intent_id": intent_id}) == {
+        "checkout_session_id": "[REDACTED]",
+        "payment_intent_id": "[REDACTED]",
+    }
+    payment_url = f"https://pay.openai.com/c/pay/{checkout_id}"
+    assert sanitize_text(payment_url) == payment_url
+
+
 def test_command_arguments_use_shared_sensitive_option_policy():
     assert sanitize_command_args(["--proxy", "http://user:pass@example:80", "--count", "2"]) == [
         "--proxy", "[REDACTED]", "--count", "2",

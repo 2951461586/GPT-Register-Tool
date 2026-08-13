@@ -36,6 +36,12 @@ def _timing_summary():
     }
 
 
+def _safe_tock():
+    timings = _tl()
+    if timings and timings[-1][1] > 1_000_000:
+        _tock()
+
+
 # ==========================================
 # Random Generators
 # ==========================================
@@ -58,21 +64,67 @@ def _generate_password():
     return "".join(secrets.choice(charset) for _ in range(base_len)) + suffix
 
 
+# Default per-stage humanized dwell ranges in milliseconds (min, max). Modeled on
+# real browser pacing (page settle, reading, OTP hand-off) so the protocol flow
+# does not complete a multi-stage OAuth in a fixed sub-second cadence. Overridable
+# via ``registration.humanize_delays``.
+_THINK_STAGE_RANGES_MS = {
+    "post_sentinel": (600, 1800),
+    "post_create_account": (900, 2600),
+    "pre_at_probe": (700, 2200),
+    "access_token_stability_wait": (0, 0),
+    "default": (500, 1600),
+}
+
+
 def think_stage(stage_label: str = "", cfg: dict | None = None):
-    """Insert human-like dwell time between registration stages.
+    """Insert a randomized human-like dwell between registration stages.
 
-    Configured via ``registration.think_time_ms`` in config.json.
-    Disabled (0) by default. Typical values: 800–3000 ms.
+    A fixed dwell is itself a detectable cadence, so the delay is jittered:
 
-    This defeats OpenAI's bot-timing detection, which flags accounts that
-    complete multi-stage OAuth flows in sub-second total time.
+    - ``registration.humanize_delays`` (``{stage: [min_ms, max_ms]}``) — when set,
+      the stage (or ``default``) range is sampled uniformly.
+    - ``registration.think_time_ms`` (legacy fixed value) — still honored, but now
+      sampled in a ±35% band around it instead of a constant.
+    - Otherwise the built-in per-stage ranges apply only when
+      ``registration.humanize`` is enabled; disabled by default for parity.
+
+    ``registration.humanize_factor`` scales all dwell times (e.g. 0.5 for faster
+    batches). This defeats OpenAI's bot-timing detection that flags accounts
+    completing multi-stage OAuth flows in near-constant time.
     """
     cfg = cfg or CFG
     registration_cfg = cfg.get("registration", {}) if isinstance(cfg, dict) else {}
-    ms = 0
+    if not stage_label:
+        return
     try:
-        ms = int(registration_cfg.get("think_time_ms", 0))
+        factor = float(registration_cfg.get("humanize_factor", 1.0) or 1.0)
     except (TypeError, ValueError):
-        ms = 0
-    if ms > 0 and stage_label:
-        time.sleep(ms / 1000.0)
+        factor = 1.0
+
+    configured = registration_cfg.get("humanize_delays")
+    configured = configured if isinstance(configured, dict) else {}
+    rng = configured.get(stage_label) or configured.get("default")
+
+    seconds = 0.0
+    if isinstance(rng, (list, tuple)) and len(rng) == 2:
+        try:
+            lo, hi = float(rng[0]), float(rng[1])
+            seconds = random.uniform(min(lo, hi), max(lo, hi)) / 1000.0
+        except (TypeError, ValueError):
+            seconds = 0.0
+    else:
+        try:
+            ms = int(registration_cfg.get("think_time_ms", 0))
+        except (TypeError, ValueError):
+            ms = 0
+        if ms > 0:
+            seconds = random.uniform(ms * 0.65, ms * 1.35) / 1000.0
+        elif registration_cfg.get("humanize"):
+            lo, hi = _THINK_STAGE_RANGES_MS.get(stage_label, _THINK_STAGE_RANGES_MS["default"])
+            if hi > 0:
+                seconds = random.uniform(lo, hi) / 1000.0
+
+    seconds = max(0.0, seconds * (factor if factor > 0 else 1.0))
+    if seconds > 0:
+        time.sleep(min(seconds, 30.0))

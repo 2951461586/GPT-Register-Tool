@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import random
 import threading
+import time
 import uuid
 from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlparse
@@ -46,6 +48,85 @@ def set_fingerprint_geo(country: str = "") -> dict[str, str]:
     profile = dict(_GEO_PROFILES.get(code) or {"timezone": "UTC", "lang": "en-US", "lang_full": "en-US,en;q=0.9"})
     _AUTH_FINGERPRINT_LOCAL.geo_profile = profile
     _AUTH_FINGERPRINT_LOCAL.geo_country = code
+    return profile
+
+
+# ──────────────────── Per-account device profile (anti-correlation) ──────────
+#
+# The screen/hardware/heap readings reported to Sentinel used to be one hard-
+# coded desktop shared by every account, so a whole batch looked like the exact
+# same machine (only DID/session differed) — a trivial cluster signal. These are
+# now derived deterministically from the account's device id: the same account
+# always reports the same device, but different accounts differ. Values stay
+# within realistic Windows-desktop Chrome ranges (deviceMemory is capped at 8 as
+# Chrome does; touch points stay 0 for a desktop profile).
+_SCREEN_CHOICES = (
+    "1920x1080", "1536x864", "1366x768", "1600x900", "2560x1440",
+    "1440x900", "1680x1050", "1920x1200", "2048x1152", "2560x1080",
+)
+_DPR_CHOICES = (1.0, 1.0, 1.25, 1.5)
+_CPU_CHOICES = (4, 6, 8, 8, 12, 16)
+_MEM_CHOICES = (4, 8, 8)
+_HEAP_CHOICES = (2172649472, 3221225472, 4294705152, 4395630592)
+
+
+def set_fingerprint_device(device_id: str = "") -> str:
+    """Bind the per-account device id so the Sentinel device profile is stable.
+
+    Registration calls this once the account's ``oai-device-id`` is known so the
+    derived screen/hardware/heap readings are reproducible for that account (and
+    reproducible again on relogin/recovery) yet distinct from other accounts.
+    """
+    seed = str(device_id or "").strip()
+    _AUTH_FINGERPRINT_LOCAL.device_seed = seed
+    # A newly bound account starts a fresh browsing context, so drop any cached
+    # device profile: the next build recomputes a stable time_origin for it.
+    _AUTH_FINGERPRINT_LOCAL.device_profiles = {}
+    return seed
+
+
+def _device_seed() -> str:
+    for attr in ("device_seed", "session_id"):
+        value = str(getattr(_AUTH_FINGERPRINT_LOCAL, attr, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _device_profile(seed: str) -> dict[str, object]:
+    """Deterministically derive a device profile from ``seed`` (device id).
+
+    The profile is memoized per seed on the thread. A real browsing context has a
+    single ``performance.timeOrigin``; recomputing it on every header build would
+    both drift the value per request and call ``time.time`` repeatedly, so the
+    first build anchors it and later builds for the same account reuse it.
+    """
+    cache = getattr(_AUTH_FINGERPRINT_LOCAL, "device_profiles", None)
+    if not isinstance(cache, dict):
+        cache = {}
+        _AUTH_FINGERPRINT_LOCAL.device_profiles = cache
+    cached = cache.get(seed)
+    if isinstance(cached, dict):
+        return cached
+    digest = hashlib.sha256(seed.encode("utf-8")).digest() if seed else b"\x00" * 8
+    rng = random.Random(int.from_bytes(digest[:8], "big"))
+    screen = rng.choice(_SCREEN_CHOICES)
+    profile = {
+        "screen": screen,
+        "device_pixel_ratio": rng.choice(_DPR_CHOICES),
+        "hardware_concurrency": rng.choice(_CPU_CHOICES),
+        "device_memory": rng.choice(_MEM_CHOICES),
+        "js_heap_size_limit": rng.choice(_HEAP_CHOICES),
+    }
+    # performance.timeOrigin is "when this page/context was created": a static
+    # 2024 constant across every account is itself a tell, so anchor it to now
+    # minus a seeded jitter (a few seconds to ~15 min of prior browsing).
+    now_ms = int(time.time() * 1000)
+    profile["time_origin"] = now_ms - rng.randint(2_000, 900_000)
+    # performance.now() is ms elapsed since time_origin; a shared 12345.67 across
+    # every account is another constant tell, so jitter it per account too.
+    profile["performance_now"] = round(rng.uniform(500.0, 60_000.0), 3)
+    cache[seed] = profile
     return profile
 
 
@@ -190,21 +271,23 @@ def sentinel_fingerprint() -> dict[str, object]:
     geo = getattr(_AUTH_FINGERPRINT_LOCAL, "geo_profile", None) or set_fingerprint_geo("")
     session_id = str(getattr(_AUTH_FINGERPRINT_LOCAL, "session_id", "") or uuid.uuid4())
     _AUTH_FINGERPRINT_LOCAL.session_id = session_id
+    device = _device_profile(_device_seed() or session_id)
     return {
         **fingerprint,
-        "screen": "1920x1080",
+        "screen": device["screen"],
         "lang": geo["lang"],
         "lang_full": geo["lang_full"],
         "navigator_platform": "Win32",
         "navigator_vendor": "Google Inc.",
-        "hardware_concurrency": 8,
-        "device_memory": 8,
+        "hardware_concurrency": device["hardware_concurrency"],
+        "device_memory": device["device_memory"],
         "max_touch_points": 0,
-        "device_pixel_ratio": 1.0,
+        "device_pixel_ratio": device["device_pixel_ratio"],
         "timezone": geo["timezone"],
         "session_id": session_id,
-        "js_heap_size_limit": 4395630592,
-        "time_origin": 1710000000000,
+        "js_heap_size_limit": device["js_heap_size_limit"],
+        "time_origin": device["time_origin"],
+        "performance_now": device["performance_now"],
         "sec_ch_ua_full_version_list": (
             f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"'
         ),

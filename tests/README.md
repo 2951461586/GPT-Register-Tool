@@ -28,9 +28,9 @@ payment requests are never part of the default suite.
 - `test_storage_dedup.py` covers SQLite account upsert and email normalization behavior.
 - `test_gen_pp_link.py` covers hosted Stripe/PayPal link generation error handling.
 - `test_checkout_contract.py` covers the canonical Checkout/Stripe init payloads, response normalization, and payment-method evidence extraction.
-- `test_payment_capability.py` and `test_payment_capability_batch.py` cover the Checkout + Stripe init probe boundary, matrix forwarding, and capability-aware Canary decisions.
+- `test_payment_capability.py` and `test_payment_capability_batch.py` cover the generic Checkout + Stripe init boundary, provider-aware GoPay Promotion/Update probes, matrix routing, and capability-aware Canary decisions.
 - `test_payment_result_contract.py` covers `cancelled`, `unknown`, and `timed_out` terminal states plus normalized `retryable`/`error_stage` fields.
-- `test_wallet_provider.py`, `test_wallet_transport.py`, and `test_wallet_manager_integration.py` cover the shared GoPay/GCash/GrabPay adapter, production transport seams, and manager registration. Wire contracts use offline fixtures under `fixtures/wallet_provider/`.
+- `test_wallet_provider.py`, `test_wallet_transport.py`, and `test_wallet_manager_integration.py` cover the shared GoPay/GrabPay adapter, production transport seams, and manager registration. GCash has separate `test_gcash_provider.py` and `test_gcash_transport.py` coverage. Wire contracts use offline fixtures under `fixtures/wallet_provider/`.
 - `test_codex_oauth.py` covers OAuth/passwordless/add-phone routing decisions.
 - `test_paypal_links.py` covers PayPal link regeneration and persistence.
 - Account/session seed loading is centralized in `sms_tool.account_seed`; payment tests should patch that seam or the adapter-specific alias instead of duplicating SQLite/session setup.
@@ -41,6 +41,7 @@ payment requests are never part of the default suite.
 - `test_cpa_import.py` covers CPA payload normalization and import routing.
 - `SmsWorkbench.Tests/PaymentMethodsTests.cs` covers the desktop payment-method catalog, aliases, country defaults, and single/batch availability.
 - `SmsWorkbench.Tests/ProtocolPaymentExecutionTests.cs` covers deterministic single-account command planning and backend-result presentation without constructing a WPF window.
+- `SmsWorkbench.Tests/PaymentBatchServiceTests.cs` and `PaymentBatchViewModelTests.cs` cover method-owned Checkout/Approve proxy pools, country defaults, config persistence, and CLI argument mapping; the Settings tests verify legacy protocol pool fields remain hidden and preserved.
 
 ## Test ownership rules
 

@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
+from .mailbox_parsers import parse_mailbox_pool_line
+from .paths import PROJECT_ROOT
 from .sanitizer import sanitize
-from .storage import get_account_record_by_id, list_account_records
+from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, list_account_records
 
 
 _PUBLIC_COLUMNS = (
@@ -29,23 +31,124 @@ _PUBLIC_COLUMNS = (
 )
 
 
+def _nested_value(data: Any, *keys: str) -> Any:
+    current = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _access_token_probe_status_code(data: dict[str, Any]) -> str:
+    # Both account scans and quota refreshes persist probe results. Pick the
+    # newest result so a successful relogin (quota HTTP 200) is not hidden by
+    # an older account-scan HTTP 401.
+    sources = (
+        (("account_scan", "token_probe"), ("account_scan_updated_at",), ("account_scan", "updated_at"), 4),
+        (("token_probe",), ("token_probe", "updated_at"), (), 3),
+        (("scan", "token_probe"), ("scan_updated_at",), ("scan", "updated_at"), 2),
+        (("quota", "last_result"), ("quota_updated_at",), ("quota", "updated_at"), 1),
+    )
+    candidates: list[tuple[float, int, str]] = []
+    for probe_path, primary_time_path, fallback_time_path, priority in sources:
+        probe = _nested_value(data, *probe_path)
+        if not isinstance(probe, dict):
+            continue
+        code = str(probe.get("status_code") or "").strip()
+        if not code and str(probe.get("status") or "").strip().lower() == "token_invalid":
+            code = "401"
+        if not code:
+            continue
+        timestamp = _numeric_timestamp(_nested_value(data, *primary_time_path))
+        if not timestamp and fallback_time_path:
+            timestamp = _numeric_timestamp(_nested_value(data, *fallback_time_path))
+        candidates.append((timestamp, priority, code))
+    if not candidates:
+        return ""
+    return max(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def _numeric_timestamp(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
     result = {key: record.get(key) for key in _PUBLIC_COLUMNS}
+    file_state = _session_file_state(record)
+    has_access = bool(str(record.get("access_token") or "").strip()) or file_state["has_access_token"]
+    stored_oauth_refresh = str(record.get("oauth_refresh_token") or "").strip()
+    stored_legacy_refresh = str(record.get("refresh_token") or "").strip()
+    has_refresh = bool(stored_oauth_refresh) or _looks_codex_refresh_token(stored_legacy_refresh) or file_state["has_refresh_token"]
     result.update({
-        "has_access_token": bool(str(record.get("access_token") or "").strip()),
-        "has_refresh_token": bool(str(record.get("refresh_token") or record.get("oauth_refresh_token") or "").strip()),
+        "has_access_token": has_access,
+        "has_refresh_token": has_refresh,
         "has_payment_url": bool(str(record.get("paypal_url") or "").strip()),
         "has_totp": bool(str(record.get("totp_secret") or "").strip()),
+        # These names intentionally end in `_present`: the shared redaction
+        # policy preserves presence metadata while redacting token-bearing
+        # fields such as `has_access_token`.
+        "access_token_present": has_access,
+        "refresh_token_present": has_refresh,
+        "payment_url_present": bool(str(record.get("paypal_url") or "").strip()),
+        "totp_present": bool(str(record.get("totp_secret") or "").strip()),
+        "at_probe_status_code": file_state["at_probe_status_code"],
     })
+    if has_refresh and str(result.get("refresh_token_status") or "").strip().lower() in {"", "no_rt"}:
+        result["refresh_token_status"] = "oauth_present"
+    if file_state["account_type"]:
+        result["account_type"] = file_state["account_type"]
     raw_json = record.get("raw_json")
     if isinstance(raw_json, str) and raw_json.strip():
         try:
-            result["session"] = sanitize(json.loads(raw_json))
+            session = json.loads(raw_json)
+            result["at_probe_status_code"] = (
+                result["at_probe_status_code"]
+                or _access_token_probe_status_code(session)
+            )
+            # 优惠状态 (plan/promotion) lives in raw_json, not a dedicated column.
+            promotion_status = str(session.get("promotion_status") or "").strip()
+            if not promotion_status and isinstance(session.get("promotion"), dict):
+                promotion_status = str(session["promotion"].get("status") or "").strip()
+            if promotion_status:
+                result["promotion_status"] = promotion_status
+            result["session"] = sanitize(session)
         except (TypeError, ValueError):
             result["session"] = {}
     else:
         result["session"] = {}
     return result
+
+
+def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
+    """Recover non-secret presence metadata when SQLite lags the session file."""
+    state = {
+        "has_access_token": False,
+        "has_refresh_token": False,
+        "account_type": "",
+        "at_probe_status_code": "",
+    }
+    path = Path(str(record.get("json_path") or "").strip())
+    if not path.is_file():
+        return state
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, TypeError, ValueError):
+        return state
+    if not isinstance(data, dict):
+        return state
+    state["has_access_token"] = bool(str(data.get("access_token") or "").strip())
+    oauth_refresh = str(data.get("oauth_refresh_token") or "").strip()
+    legacy_refresh = str(data.get("refresh_token") or "").strip()
+    state["has_refresh_token"] = bool(oauth_refresh and _looks_codex_refresh_token(oauth_refresh)) or _looks_codex_refresh_token(legacy_refresh)
+    state["at_probe_status_code"] = _access_token_probe_status_code(data)
+    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    workspace = data.get("workspace_scan") if isinstance(data.get("workspace_scan"), dict) else {}
+    state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
+    return state
 
 
 def read_accounts(runtime_config: ConfigInput = None) -> list[dict[str, Any]]:
@@ -60,6 +163,106 @@ def read_account(account_id: str = "", email: str = "", runtime_config: ConfigIn
         from .storage import get_account_record
         row = get_account_record(email, runtime_config=config)
     return _record_payload(row) if row else {}
+
+
+_MAILBOX_POOL_CANDIDATE_NAMES = ("hotmail.txt", "chatai_mailbox.txt", "chatai.txt")
+_MAILBOX_POOL_GLOB = "*chatai*.txt"
+
+
+def read_mailbox_pool(
+    runtime_config: ConfigInput = None,
+    extra_files: tuple[str, ...] = (),
+    root_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Enumerate the known mailbox-pool files and parse every line.
+
+    Owns the pool-file storage layout (config token file plus the well-known
+    chatai/hotmail candidates under the project root). Missing files are
+    tolerated and malformed lines are skipped by the canonical line parser.
+    """
+    config = resolve_runtime_config(runtime_config, workflow="mailbox")
+    root = Path(root_dir) if root_dir is not None else PROJECT_ROOT
+    files = []
+    for path in _known_mailbox_pool_files(config, extra_files, root):
+        files.append({
+            "path": str(path),
+            "name": path.name,
+            "lines": _read_pool_lines(path),
+        })
+    return {"files": files}
+
+
+def _known_mailbox_pool_files(config: RuntimeConfig, extra_files, root: Path) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+
+    def add(candidate) -> None:
+        raw = str(candidate or "").strip()
+        if not raw:
+            return
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        if path.suffix.lower() != ".txt" or not path.is_file():
+            return
+        key = str(path).lower()
+        if key not in seen:
+            seen.add(key)
+            paths.append(path)
+
+    for candidate in extra_files or ():
+        add(candidate)
+    token_file = str((config.data.get("email_registration") or {}).get("token_file") or "").strip()
+    add(token_file or "mailbox_tokens.txt")
+    for name in _MAILBOX_POOL_CANDIDATE_NAMES:
+        add(root / name)
+    if root.is_dir():
+        for path in sorted(root.glob(_MAILBOX_POOL_GLOB)):
+            add(path)
+    return paths
+
+
+def _read_pool_lines(path: Path) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return lines
+    for line_no, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip().lstrip("\ufeff")
+        if not line or line.startswith("#"):
+            continue
+        account = parse_mailbox_pool_line(line, path, line_no)
+        if account is None:
+            continue
+        lines.append({"line_no": line_no, **_pool_line_payload(account, line)})
+    return lines
+
+
+def _pool_line_payload(account, raw_line: str) -> dict[str, Any]:
+    provider = str(account.provider or "").strip().lower()
+    # chatai/chongzhi and Gmail-OAuth lines store the OAuth client id in the
+    # generic token slot; surface it explicitly so callers need no format
+    # knowledge.
+    client_id = account.token if provider in {"chatai", "chongzhi"} or (
+        provider == "gmail" and account.auth_mode == "oauth_refresh"
+    ) else ""
+    return {
+        "raw_line": raw_line,
+        "email": account.email,
+        "provider": provider,
+        "token": account.token,
+        "client_id": client_id,
+        "password": account.password,
+        "login_password": account.login_password,
+        "refresh_token": account.refresh_token,
+        "access_token": account.access_token,
+        "client_secret": account.client_secret,
+        "auth_mode": account.auth_mode,
+        "order_no": account.order_no,
+        "purchase_id": account.purchase_id,
+        "sender_name": account.sender_name,
+    }
 
 
 def create_mailbox_file(account_id: str = "", email: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
@@ -188,12 +391,14 @@ def _mailbox_line(mailbox: dict[str, Any]) -> str:
     if provider == "cfworker":
         return f"cfworker://{email}"
     if provider == "smailr":
-        return f"smailr://{email}"
+        token = str(mailbox.get("token") or "").strip()
+        return f"smailr://{email}---{token}" if token else ""
     if provider == "remail":
         token = str(mailbox.get("token") or "").strip()
         order = str(mailbox.get("order_no") or "").strip()
         purchase = str(mailbox.get("purchase_id") or "").strip()
-        return "remail://" + "|".join(filter(None, (email, token, order, purchase)))
+        # Keep the canonical ReMail line format used by mailbox_parsers.
+        return "remail://" + "---".join(filter(None, (email, token, order, purchase)))
     if provider == "gmail":
         client = str(mailbox.get("client_id") or mailbox.get("token") or "").strip()
         secret = str(mailbox.get("client_secret") or "").strip()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -11,6 +12,30 @@ from typing import Any, Mapping
 
 
 CATALOG_SCHEMA = "payment_methods.v1"
+
+_COUNTRY_CODE_RE = re.compile(r"^[A-Z]{2}$")
+
+
+def _country_code_tuple(value: Any, *, owner: str) -> tuple[str, ...]:
+    """Normalize an optional country-code allowlist from the catalog JSON.
+
+    Entries may be plain ISO codes or ``{"code": "JP", "label": ...}`` objects
+    (the desktop display shape); only the code is kept.  Codes are uppercased
+    and must be 2-letter ISO country codes; anything else is a catalog error
+    naming the owning method id (or the top-level default).
+    """
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"payment catalog country list for {owner} must be an array")
+    codes: list[str] = []
+    for item in value:
+        raw_code = item.get("code") if isinstance(item, Mapping) else item
+        code = str(raw_code or "").strip().upper()
+        if not _COUNTRY_CODE_RE.fullmatch(code):
+            raise ValueError(f"invalid country code {item!r} in payment catalog for {owner}")
+        codes.append(code)
+    return tuple(dict.fromkeys(codes))
 
 
 @dataclass(frozen=True)
@@ -25,6 +50,10 @@ class PaymentMethodDefinition:
     aliases: tuple[str, ...] = ()
     batch_enabled: bool = True
     registration_enabled: bool = True
+    # Optional stage-country allowlists.  A non-empty per-method list overrides
+    # the top-level catalog default; when neither is present these are empty.
+    checkout_countries: tuple[str, ...] = ()
+    approve_countries: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -33,6 +62,8 @@ class PaymentMethodCatalog:
     default_method: str
     methods: Mapping[str, PaymentMethodDefinition]
     aliases: Mapping[str, str]
+    checkout_countries: tuple[str, ...] = ()
+    approve_countries: tuple[str, ...] = ()
 
     def normalize(self, value: Any, *, default_for_blank: bool = True) -> str:
         raw = str(value or "").strip().lower().replace(" ", "_")
@@ -55,6 +86,12 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
     entries = raw.get("methods")
     if not isinstance(entries, list) or not entries:
         raise ValueError("payment catalog methods must be a non-empty array")
+    default_checkout_countries = _country_code_tuple(
+        raw.get("checkout_countries"), owner="catalog default checkout_countries"
+    )
+    default_approve_countries = _country_code_tuple(
+        raw.get("approve_countries"), owner="catalog default approve_countries"
+    )
     methods: dict[str, PaymentMethodDefinition] = {}
     aliases: dict[str, str] = {}
     for index, item in enumerate(entries):
@@ -63,6 +100,8 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
         key = str(item.get("id") or "").strip().lower()
         if not key or key in methods:
             raise ValueError(f"invalid or duplicate payment method id: {key}")
+        method_checkout_countries = _country_code_tuple(item.get("checkout_countries"), owner=f"payment method {key}")
+        method_approve_countries = _country_code_tuple(item.get("approve_countries"), owner=f"payment method {key}")
         definition = PaymentMethodDefinition(
             key=key,
             label=str(item.get("display_name") or key),
@@ -74,6 +113,8 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             aliases=tuple(str(alias).strip().lower().replace(" ", "_") for alias in item.get("aliases") or ()),
             batch_enabled=bool(item.get("batch_enabled", True)),
             registration_enabled=bool(item.get("registration_enabled", True)),
+            checkout_countries=method_checkout_countries or default_checkout_countries,
+            approve_countries=method_approve_countries or default_approve_countries,
         )
         if len(definition.country) != 2 or len(definition.currency) != 3 or not definition.adapter:
             raise ValueError(f"invalid payment catalog definition: {key}")
@@ -91,6 +132,8 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
         default_method=default_method,
         methods=MappingProxyType(methods),
         aliases=MappingProxyType(aliases),
+        checkout_countries=default_checkout_countries,
+        approve_countries=default_approve_countries,
     )
 
 
