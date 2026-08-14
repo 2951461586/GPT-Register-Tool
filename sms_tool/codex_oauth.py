@@ -350,6 +350,14 @@ def _passwordless_login_and_exchange(
         }
 
     attempts = max(1, min(int((CFG.get("email_registration") or {}).get("max_otp_retries") or 3), 5))
+    excluded_otps = {
+        str(value or "").strip()
+        for value in (
+            data.get("registration_email_otp"),
+            *((data.get("excluded_email_otps") or ()) if isinstance(data.get("excluded_email_otps"), (list, tuple, set)) else ()),
+        )
+        if str(value or "").strip()
+    }
     last_error = ""
     last_validate_body = ""
     for attempt in range(attempts):
@@ -367,6 +375,7 @@ def _passwordless_login_and_exchange(
                 timeout=min(max(int(timeout or 180), 30), 300),
                 issued_after_unix=issued_after,
                 proxy=proxy,
+                excluded_otps=excluded_otps,
             )
         except MailboxTokenExpiredError:
             return {
@@ -392,6 +401,7 @@ def _passwordless_login_and_exchange(
             impersonate=auth_impersonate(),
         )
         if validate.status_code != 200:
+            excluded_otps.add(str(code))
             last_error = f"email_otp_validate_failed:{validate.status_code}"
             last_validate_body = validate.text[:300]
             print(f"[*] Email OTP validate failed: {validate.status_code} {last_validate_body}")

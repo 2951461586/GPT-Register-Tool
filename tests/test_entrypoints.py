@@ -19,7 +19,6 @@ class EntrypointTests(unittest.TestCase):
             "export_codex_sessions",
             "import_cpa_session",
             "import_cpa_sessions",
-            "regenerate_paypal_link",
             "refresh_session",
             "auto_pay",
         )

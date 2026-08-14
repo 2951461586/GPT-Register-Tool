@@ -35,7 +35,6 @@
       "base_url": "https://remail.aishop6.com",
       "api_key": "",
       "project_id": 2,
-      "product_id": 5,
       "service_mode": "purchase",
       "supply": "private_first",
         "email_suffix": "outlook.com",
@@ -49,7 +48,10 @@
       "enabled": false,
       "base_url": "https://smailr.com",
       "api_key": "",
+      "domains": ["smailr.com", "loc.cc", "mail.nodeloc.cc", "nodeloc.cc"],
       "default_domain": "smailr.com",
+      "domain_ids": {},
+      "reuse_existing_on_level_error": true,
       "timeout": 30
     },
     "otp_poll_interval": 2,
@@ -60,6 +62,7 @@
     "sentinel_circuit_cooldown_seconds": 60,
     "remail_otp_issued_after_grace_seconds": 90,
     "remail_otp_resend_after_seconds": 30,
+    "smailr_otp_issued_after_grace_seconds": 10,
     "cfworker_otp_settle_seconds": 3,
     "cfworker_timeout_seconds": 30,
     "cfworker_otp_issued_after_grace_seconds": 10,
@@ -194,7 +197,11 @@
     "stage_proxy_api_urls": {}
   },
   "protocol_payments": {
-    "proxy_pool": [],
+      "proxy_pool": [],
+      "proxy_pools": {
+        "checkout": [],
+        "approve": []
+      },
     "enabled_methods": [
       "paypal",
       "gopay",
@@ -230,7 +237,7 @@
     "methods": {
       "ideal": { "proxy": "", "timeout_seconds": 900 },
       "pix": { "proxy": "", "timeout_seconds": 900 },
-      "gopay": { "proxy": "", "checkout_proxy_pool": [], "approve_proxy_pool": [], "promotion_proxy": "", "promotion_update": true, "stage_proxy_countries": { "checkout": "ID", "promotion": "TH", "provider": "ID", "approve": "JP", "redirect": "ID" }, "timeout_seconds": 900, "require_zero": true, "rotate_proxy_sessions": true, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
+        "gopay": { "flow_profile": "wallet_redirect", "stage_routes": { "auth_gate": { "pool": "checkout", "country": "ID" }, "checkout": { "pool": "checkout", "country": "ID" }, "promotion": { "pool": "approve", "country": "TH" }, "stripe_init": { "pool": "checkout", "country": "ID" }, "payment_method": { "pool": "checkout", "country": "ID" }, "confirm": { "pool": "checkout", "country": "ID" }, "approve": { "pool": "approve", "country": "JP" }, "poll": { "pool": "checkout", "country": "ID" }, "redirect": { "pool": "checkout", "country": "ID" } }, "checkout_proxy_pool": [], "approve_proxy_pool": [], "promotion_proxy": "", "promotion_update": true, "stage_proxy_countries": { "checkout": "ID", "promotion": "TH", "provider": "ID", "approve": "JP", "redirect": "ID" }, "timeout_seconds": 900, "require_zero": true, "rotate_proxy_sessions": true, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
       "gcash": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
       "grabpay": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
       "kakao": { "proxy": "", "timeout_seconds": 900 },
@@ -315,38 +322,6 @@
   "output": {
     "directory": "sessions",
     "filename_pattern": "session_{email}_{timestamp}.json"
-  },
-  "paypal_auto": {
-    "phone_number": "",
-    "sms_api_url": "",
-    "sms_poll_interval": 5,
-    "sms_timeout": 120,
-    "reverse_engineering": true,
-    "reverse_timeout": 60,
-    "browser_fallback": true,
-    "browser_engine": "camoufox",
-    "geoip": true,
-    "captcha_solver": "passive",
-    "cards": [
-      {
-        "number": "CARD_NUMBER",
-        "exp_month": "MM",
-        "exp_year": "YYYY",
-        "cvv": "CVV"
-      }
-    ],
-    "addresses": [
-      {
-        "line1": "ADDRESS_LINE_1",
-        "city": "CITY",
-        "state": "ST",
-        "postal_code": "ZIP"
-      }
-    ],
-    "card_index_file": "runtime/paypal_card_index.txt",
-    "headless": false,
-    "debug_screenshots": true,
-    "debug_dir": "runtime/paypal_debug"
   },
   "paypal_browser": {
     "enabled": true,

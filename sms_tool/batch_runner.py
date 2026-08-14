@@ -55,7 +55,7 @@ def run_batch_impl(
     mailboxes=None,
     workers=4,
     phone_pool=None,
-    codex_oauth=True,
+    codex_oauth=False,
     registration_mode=None,
     max_attempts=2,
     retry_delay_seconds=1.0,

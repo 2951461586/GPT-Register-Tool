@@ -198,6 +198,7 @@ public sealed class DesktopWindowSmokeTests
             new BackendTaskCoordinator(backendClient),
             new DesktopReadClient(new BackendTaskCoordinator(backendClient)),
             new WindowPaymentBatchDialogService(),
+            new PaymentBatchService(new TestApplicationPaths(rootDirectory), backendClient),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
             new SettingsService(new TestApplicationPaths(rootDirectory)),
@@ -210,9 +211,17 @@ public sealed class DesktopWindowSmokeTests
             VerifyAccountScanSummary(main);
 
             var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
+            Assert.DoesNotContain(
+                FindVisualChildren<TextBlock>(main),
+                textBlock => textBlock.Text == "重新生成支付链接");
             string[] headers = accountGrid.Columns.Select(column => column.Header?.ToString() ?? "").ToArray();
             Assert.DoesNotContain("注册批次", headers);
             Assert.DoesNotContain("入库", headers);
+            DataGridColumn promotionColumn = Assert.Single(
+                accountGrid.Columns,
+                column => (column.Header?.ToString() ?? "") == "优惠状态");
+            Assert.True(promotionColumn.CanUserSort);
+            Assert.Equal("PromotionStatus", promotionColumn.SortMemberPath);
 
             var contextMenu = Assert.IsType<ContextMenu>(accountGrid.ContextMenu);
             contextMenu.PlacementTarget = accountGrid;
@@ -285,7 +294,15 @@ public sealed class DesktopWindowSmokeTests
             Assert.NotNull(method);
             Assert.Null(method.Invoke(main, null));
             Assert.Null(captureFailure);
-            Assert.Contains("CF Woker Mail", sourceOptions);
+            Assert.Equal(new[]
+            {
+                "ReMail 邮箱",
+                "Smailr 邮箱",
+                "Outlook/Hotmail/iCloud 邮箱池",
+                "CF Worker 域名邮箱",
+                "手机号注册"
+            }, sourceOptions);
+            Assert.DoesNotContain(sourceOptions, option => option.Contains("📱", StringComparison.Ordinal));
             Assert.DoesNotContain("liziai.cloud (CFWorker)", sourceOptions);
             Assert.DoesNotContain("邮箱采购上限", fieldLabels);
             Assert.DoesNotContain("最大采购成本", fieldLabels);
@@ -293,6 +310,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.DoesNotContain("生链方式", fieldLabels);
             Assert.DoesNotContain("只注册，不生成支付链接", checkBoxLabels);
             Assert.Contains("关闭 2FA（不注册 TOTP）", checkBoxLabels);
+            Assert.Contains("注册完成后查询试用优惠", checkBoxLabels);
             Assert.Equal(1, comboBoxCount);
 
             int selectedComboBoxCount = -1;
@@ -327,7 +345,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.Null(method.Invoke(main, new object[] { 1 }));
             Assert.Null(captureFailure);
             Assert.Equal(0, selectedComboBoxCount);
-            Assert.Equal(1, selectedCheckBoxCount);
+            Assert.Equal(2, selectedCheckBoxCount);
             VerifyMailboxSelectionFileRouting(main);
         }
         finally

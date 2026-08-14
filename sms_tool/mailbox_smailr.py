@@ -29,6 +29,14 @@ from .config import CFG
 from .mailbox_types import MailboxAccount
 
 
+SMAILR_LV1_DOMAINS = (
+    "smailr.com",
+    "loc.cc",
+    "mail.nodeloc.cc",
+    "nodeloc.cc",
+)
+
+
 def _email_cfg() -> dict:
     return CFG.get("email_registration") or {}
 
@@ -55,18 +63,80 @@ def _smailr_timeout() -> int:
 
 
 def _smailr_default_domain() -> str:
-    domains = _smailr_cfg().get("domains") or []
-    if isinstance(domains, str):
-        domains = [domains]
-    for domain in domains:
-        domain = str(domain or "").strip().lstrip("@").lower()
-        if "." in domain:
-            return domain
-    return str(_smailr_cfg().get("default_domain") or "").strip().lstrip("@").lower() or "smailr.com"
+    domain = str(_smailr_cfg().get("default_domain") or "smailr.com").strip().lstrip("@").lower()
+    if domain not in SMAILR_LV1_DOMAINS:
+        raise ValueError(
+            "smailr.default_domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS)
+        )
+    return domain
+
+
+def _smailr_domain_id(domain: str) -> str:
+    configured = _smailr_cfg().get("domain_ids") or {}
+    if isinstance(configured, dict):
+        domain_id = str(configured.get(domain) or "").strip()
+        if domain_id:
+            return domain_id
+
+    # Smailr's API-key OpenAPI surface does not expose /domains.  The documented
+    # mailbox create contract makes domain_id optional and uses the account's
+    # default domain when omitted.
+    if domain == _smailr_default_domain():
+        return ""
+    raise RuntimeError(
+        f"smailr domain @{domain} requires email_registration.smailr.domain_ids.{domain}"
+    )
 
 
 def _smailr_proxy() -> str:
     return str(_smailr_cfg().get("proxy") or "").strip()
+
+
+def _smailr_reuse_existing_on_level_error() -> bool:
+    return _smailr_cfg().get("reuse_existing_on_level_error", True) is not False
+
+
+def _smailr_domain_level_restricted(exc: Exception) -> bool:
+    if int(getattr(exc, "status_code", 0) or 0) != 403:
+        return False
+    body = json.dumps(getattr(exc, "body", None), ensure_ascii=False, default=str).lower()
+    return "api key access not allowed" not in body and "missing scope" not in body
+
+
+def _take_reusable_smailr_mailbox(client: Any, domain: str, reserved: set[str]) -> dict:
+    from .storage import get_account_record
+
+    candidates: list[dict] = []
+    for item in client.list_mailboxes():
+        if not isinstance(item, dict):
+            continue
+        mb_id, email = _smailr_extract_id_and_email(item)
+        if not mb_id or not email or email in reserved:
+            continue
+        if email.rsplit("@", 1)[-1].lower() != domain:
+            continue
+        if item.get("is_archived") or item.get("receiveEnabled") is False:
+            continue
+        try:
+            mail_count = int(item.get("mail_count") or 0)
+        except (TypeError, ValueError):
+            mail_count = 0
+        if get_account_record(email):
+            continue
+        candidate = dict(item)
+        candidate["_reuse_mail_count"] = mail_count
+        candidates.append(candidate)
+
+    if not candidates:
+        raise RuntimeError(
+            f"smailr @{domain} requires a higher account level and no reusable mailbox is available; "
+            f"configure email_registration.smailr.domain_ids.{domain} or create an allowed mailbox in Smailr"
+        )
+    selected = dict(sorted(candidates, key=lambda item: int(item.get("_reuse_mail_count") or 0))[0])
+    selected.pop("_reuse_mail_count", None)
+    selected["reused_existing"] = True
+    selected["reuse_reason"] = "domain_level_restricted"
+    return selected
 
 
 def _smailr_client(proxy: str | None = None):
@@ -144,23 +214,42 @@ def create_smailr_mailboxes(
         base_url = _smailr_base_url()
     cfg_domain = _smailr_default_domain()
     domain = str(domain or cfg_domain or "smailr.com").strip().lstrip("@").lower()
+    if domain not in SMAILR_LV1_DOMAINS:
+        raise ValueError("smailr domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS))
 
     from .providers.smailr_mailbox import SmailrClient
     client = SmailrClient(
         api_key=api_key,
         base_url=base_url,
-        proxy=proxy,
+        timeout=_smailr_timeout(),
+        proxy=proxy or _smailr_proxy() or None,
     )
+    reuse_existing = False
+    try:
+        domain_id = _smailr_domain_id(domain)
+    except RuntimeError:
+        if not _smailr_reuse_existing_on_level_error():
+            raise
+        domain_id = ""
+        reuse_existing = True
 
     local_part_hint = str(local_part or "").strip().lower().split("@")[0]
 
     accounts: list[MailboxAccount] = []
+    reserved_emails: set[str] = set()
     for _index in range(count):
         hint = local_part_hint or _random_local_part()
-        try:
-            resp = client.create_mailbox(local_part=hint)
-        except Exception as exc:
-            raise RuntimeError(f"smailr.create_mailbox failed: {exc}") from exc
+        if reuse_existing:
+            resp = _take_reusable_smailr_mailbox(client, domain, reserved_emails)
+        else:
+            try:
+                resp = client.create_mailbox(local_part=hint, domain_id=domain_id)
+            except Exception as exc:
+                if _smailr_reuse_existing_on_level_error() and _smailr_domain_level_restricted(exc):
+                    reuse_existing = True
+                    resp = _take_reusable_smailr_mailbox(client, domain, reserved_emails)
+                else:
+                    raise RuntimeError(f"smailr.create_mailbox failed: {exc}") from exc
 
         mb_id, email = _smailr_extract_id_and_email(resp)
         if not email:
@@ -177,6 +266,8 @@ def create_smailr_mailboxes(
                 pass
         if not mb_id:
             raise RuntimeError(f"smailr.create_mailbox: missing id in response {json.dumps(resp, default=str)[:300]}")
+
+        reserved_emails.add(email)
 
         accounts.append(MailboxAccount(
             email=email,

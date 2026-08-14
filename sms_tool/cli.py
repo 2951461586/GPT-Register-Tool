@@ -29,14 +29,6 @@ from .commands.helpers import (
 from .commands import payment as payment_commands
 
 
-def _payment_regenerate_workers(args, payment_method: str, total: int) -> int:
-    return payment_commands.regenerate_workers(args, payment_method, total, CFG)
-
-
-def _payment_regenerate_delay_seconds(payment_method: str) -> float:
-    return payment_commands.regenerate_delay_seconds(payment_method, CFG)
-
-
 def _configured_registration_proxy() -> str:
     proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
     return str(
@@ -199,7 +191,7 @@ def main():
     parser.add_argument("--proxy", default=None)
     parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
     parser.add_argument("--count", type=int, default=1)
-    parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration/link regeneration")
+    parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration and account operations")
     parser.add_argument("--target-at200", type=int, default=0, help="Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved")
     parser.add_argument("--max-mailbox-purchases", type=int, default=0, help="Hard mailbox purchase cap for --target-at200 (default: target x 2)")
     parser.add_argument("--max-remail-cost", type=float, default=0.0, help="Optional total ReMail purchase-cost cap for --target-at200")
@@ -218,7 +210,7 @@ def main():
     parser.add_argument("--remail-supply", choices=["private_first", "public_only"], default=None, help="ReMail inventory policy")
     parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
     parser.add_argument("--remail-project-id", type=int, default=None, help="ReMail project ID")
-    parser.add_argument("--remail-product-id", type=int, default=None, help="ReMail product ID")
+    parser.add_argument("--remail-product-id", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--mailbox-file", default=None, help="Unified mailbox file: Graph, Gmail, ReMail, CFWorker, or iCloud receive URL")
     parser.add_argument("--chatai-mailbox-file", default=None, help="Legacy mixed mailbox file: Chatai plus all unified mailbox formats")
     parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
@@ -246,6 +238,7 @@ def main():
     parser.add_argument("--refresh-local-quota", action="store_true", help="Refresh quota status locally with saved access_token and update SQLite")
     parser.add_argument("--quota-usage", action="store_true", help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)")
     parser.add_argument("--check-promotion", action="store_true", help="Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status")
+    parser.add_argument("--check-promotion-after-registration", action="store_true", help="After registration, probe saved successful accounts for Plus trial/discount eligibility")
     parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
     parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
     parser.add_argument("--quota-relogin-timeout", type=int, default=180, help="Timeout in seconds for --quota-auto-relogin")
@@ -263,7 +256,6 @@ def main():
     parser.add_argument("--sub2api-auth-mode", choices=["auto", "oauth", "agent_identity"], default="", help="SUB2API credential mode; auto prefers Agent Identity for free accounts")
     parser.add_argument("--sub2api-no-verify", dest="sub2api_verify_after_import", action="store_false", default=None, help="Skip the SUB2API post-import connectivity test")
     parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
-    parser.add_argument("--regenerate-paypal-link", action="store_true", help="Regenerate PayPal link for --email and update SQLite/session JSON")
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
     parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
     parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
@@ -320,8 +312,8 @@ def main():
     parser.add_argument("--omakse-send-otp", action="store_true", help="Send phone OTP in US payment flow")
     parser.add_argument("--omakse-load-return-url", action="store_true", help="Load return URL in US payment flow")
     parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
-    parser.add_argument("--session-file", default=None, help="Session JSON path for --refresh-session or --regenerate-paypal-link")
-    parser.add_argument("--email-file", default=None, help="One email per line for batch PayPal link regeneration")
+    parser.add_argument("--session-file", default=None, help="Session JSON path for account and payment operations")
+    parser.add_argument("--email-file", default=None, help="One email per line for batch operations")
     parser.add_argument("--refresh-timeout", type=int, default=300, help="Seconds to wait for interactive auth refresh")
     parser.add_argument("--view-inbox", action="store_true", help="Fetch recent mailbox messages for --email/--session-file and print JSON")
     parser.add_argument("--inbox-limit", type=int, default=20, help="Max messages for --view-inbox")
@@ -348,7 +340,7 @@ def main():
     parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
     parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
     parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
-    parser.add_argument("--registration-at-only", action="store_true", help="Registration stores ChatGPT AT only; skip Codex OAuth RT and phone verification")
+    parser.add_argument("--registration-at-only", action="store_true", default=True, help="Compatibility flag; protocol registration is AT-only by default")
     parser.add_argument("--no-2fa", action="store_true", help="Skip TOTP 2FA enrollment after a successful registration")
     parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
     parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
@@ -427,9 +419,6 @@ def main():
         return
     if args.export_codex_json:
         _export_codex_json(args)
-        return
-    if args.regenerate_paypal_link:
-        _regenerate_paypal_link(args)
         return
     if args.list_payment_methods:
         _list_payment_methods()
@@ -553,7 +542,7 @@ def main():
             result = run_phone_register(
                 proxy=registration_proxy,
                 password=args.password,
-                codex_oauth=not args.registration_at_only,
+                codex_oauth=False,
                 smsbower_country=args.smsbower_country,
             )
             results.append(result)
@@ -578,7 +567,7 @@ def main():
             mailboxes=mailboxes,
             workers=args.workers,
             phone_pool=phone_pool,
-            codex_oauth=not args.registration_at_only,
+            codex_oauth=False,
             registration_mode=args.registration_mode,
             browser_headless=bool(getattr(args, "browser_headless", False)),
             enroll_2fa=not getattr(args, "no_2fa", False),
@@ -596,7 +585,7 @@ def main():
             password=args.password,
             mailbox=mailbox,
             phone_pool=phone_pool,
-            codex_oauth=not args.registration_at_only,
+            codex_oauth=False,
             registration_mode=args.registration_mode,
             enroll_2fa=not getattr(args, "no_2fa", False),
         )]
@@ -694,6 +683,15 @@ def _save_registration_results(
             f"{quality['requested']} halt={quality['halt_replenishment']}"
         )
 
+    promotion_report = None
+    if getattr(args, "check_promotion_after_registration", False):
+        promotion_report = _check_registered_promotions(
+            import_emails,
+            workers=max(1, int(getattr(args, "workers", 4) or 4)),
+            proxy=getattr(args, "proxy", None),
+            timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+        )
+
     if getattr(args, "import_cpa", False):
         _import_registered_accounts(args, import_emails)
     return {
@@ -702,7 +700,62 @@ def _save_registration_results(
         "session_saved": saved_count,
         "db_saved": db_saved_count,
         "quality": quality,
+        "promotion": promotion_report,
     }
+
+
+def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20):
+    from .account_promotion import refresh_promotion_statuses
+    from .sanitizer import sanitize
+
+    targets = _unique_emails(emails)
+    if not targets:
+        report = {"ok": True, "total": 0, "success": 0, "failed": 0, "trial_eligible": 0, "results": []}
+        print("[*] Promotion check: no saved successful account to probe.")
+        return report
+
+    print(f"[*] Promotion check: probing {len(targets)} saved successful account(s)...")
+    try:
+        report = refresh_promotion_statuses(
+            emails=targets,
+            workers=max(1, int(workers or 1)),
+            proxy=proxy,
+            timeout=max(5, int(timeout or 20)),
+        )
+    except Exception as exc:
+        report = {
+            "ok": False,
+            "total": len(targets),
+            "success": 0,
+            "failed": len(targets),
+            "trial_eligible": 0,
+            "results": [],
+            "error": str(sanitize(exc)),
+        }
+        print(f"[!] Promotion check failed: {report['error']}")
+        return report
+
+    results = report.get("results") if isinstance(report.get("results"), list) else []
+    trial_eligible = sum(
+        1
+        for item in results
+        if isinstance(item, dict)
+        and isinstance(item.get("probe"), dict)
+        and bool(item["probe"].get("plus_trial_eligible"))
+    )
+    report["trial_eligible"] = trial_eligible
+    print(
+        "[*] Promotion check: "
+        f"success={int(report.get('success') or 0)}/{int(report.get('total') or 0)} "
+        f"trial_eligible={trial_eligible}"
+    )
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        email = str(item.get("email") or "").strip()
+        label = str(item.get("promotion_status") or "检测失败").strip()
+        print(f"    {email}: {label}")
+    return report
 
 
 def _run_target_at200(args, base_dir):
@@ -721,6 +774,9 @@ def _run_target_at200(args, base_dir):
     spent = 0.0
     rounds = []
     halted = False
+    promotion_total = 0
+    promotion_success = 0
+    trial_eligible = 0
     started = time.time()
     phone_pool = _registration_phone_pool(args)
     try:
@@ -747,7 +803,7 @@ def _run_target_at200(args, base_dir):
                 mailboxes=mailboxes,
                 workers=args.workers,
                 phone_pool=phone_pool,
-                codex_oauth=not args.registration_at_only,
+                codex_oauth=False,
                 registration_mode=args.registration_mode,
                 enroll_2fa=not getattr(args, "no_2fa", False),
                 run_email_func=run_email,
@@ -764,12 +820,19 @@ def _run_target_at200(args, base_dir):
             gained = int(saved.get("success") or 0)
             active += gained
             quality = saved.get("quality") if isinstance(saved.get("quality"), dict) else {}
+            promotion = saved.get("promotion") if isinstance(saved.get("promotion"), dict) else {}
+            promotion_total += int(promotion.get("total") or 0)
+            promotion_success += int(promotion.get("success") or 0)
+            trial_eligible += int(promotion.get("trial_eligible") or 0)
             halted = bool(quality.get("halt_replenishment"))
             rounds.append({
                 "requested": quantity,
                 "mailboxes": len(mailboxes),
                 "active": gained,
                 "deactivated": int(quality.get("account_deactivated") or 0),
+                "promotion_total": int(promotion.get("total") or 0),
+                "promotion_success": int(promotion.get("success") or 0),
+                "trial_eligible": int(promotion.get("trial_eligible") or 0),
                 "halted": halted,
             })
     finally:
@@ -784,6 +847,9 @@ def _run_target_at200(args, base_dir):
         "estimated_cost": round(spent, 4),
         "max_cost": max_cost,
         "supplier_halted": halted,
+        "promotion_total": promotion_total,
+        "promotion_success": promotion_success,
+        "trial_eligible": trial_eligible,
         "elapsed_seconds": round(time.time() - started, 2),
         "rounds": rounds,
     }
@@ -1444,6 +1510,7 @@ def _payment_command_context():
         protocol_proxy_pool=_protocol_proxy_pool,
         has_explicit_payment_proxy=_has_explicit_payment_proxy,
         payment_proxy_pools=_payment_proxy_pools,
+        runtime_config=CFG,
     )
 
 
@@ -1481,121 +1548,6 @@ def _resolve_cli_payment_route(args, payment_method):
         print(json.dumps(route, ensure_ascii=False, indent=2))
         raise SystemExit(3)
     return route
-
-
-def _regenerate_paypal_link(args):
-    from .paypal_links import regenerate_paypal_link
-
-    email = (args.email or "").strip()
-    emails = _read_email_file(args.email_file)
-    payment_method = _payment_method(args)
-    if not emails and not email and not args.session_file:
-        print("[Error] --email or --session-file is required with --regenerate-paypal-link")
-        return
-    route = _resolve_cli_payment_route(args, payment_method)
-    if emails:
-        workers = _payment_regenerate_workers(args, payment_method, len(emails))
-        delay_seconds = _payment_regenerate_delay_seconds(payment_method)
-        print(
-            f"[*] Batch regenerate PayPal links: {len(emails)} account(s), "
-            f"workers={workers} requested={int(args.workers or 1)} delay={delay_seconds:g}s"
-        )
-        results = []
-        ordered = [None] * len(emails)
-
-        def _run_one(index, item_email):
-            if index > 0 and delay_seconds > 0:
-                time.sleep(delay_seconds * index if workers > 1 else delay_seconds)
-            print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-            return index, regenerate_paypal_link(
-                email=item_email,
-                session_file="",
-                proxy=route["proxy"],
-                payment_method=payment_method,
-                paypal_generation_type=args.paypal_generation_type,
-                checkout_proxy=route["checkout_proxy"],
-                provider_proxy=route["provider_proxy"],
-                approve_proxy=route["approve_proxy"],
-                promotion_proxy=route["promotion_proxy"],
-                require_zero=not getattr(args, "no_require_zero", False),
-            )
-
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
-            for future in as_completed(futures):
-                index, result = future.result()
-                ordered[index] = result
-
-        results.extend(result for result in ordered if result is not None)
-        ok_count = sum(1 for result in results if result.get("ok"))
-        print(json.dumps({"ok": ok_count == len(emails), "total": len(emails), "success": ok_count, "failed": len(emails) - ok_count, "results": results}, ensure_ascii=False, indent=2))
-        if ok_count != len(emails):
-            raise SystemExit(3)
-        return
-
-    result = regenerate_paypal_link(
-        email=email,
-        session_file=args.session_file or "",
-        proxy=route["proxy"],
-        payment_method=payment_method,
-        paypal_generation_type=args.paypal_generation_type,
-        checkout_proxy=route["checkout_proxy"],
-        provider_proxy=route["provider_proxy"],
-        approve_proxy=route["approve_proxy"],
-        promotion_proxy=route["promotion_proxy"],
-        require_zero=not getattr(args, "no_require_zero", False),
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    if not result.get("ok"):
-        raise SystemExit(3)
-
-
-
-
-def _regenerate_paypal_link_fallback(args, emails):
-    """网关不可用时的回退：ThreadPoolExecutor 逐个调用。"""
-    from .paypal_links import regenerate_paypal_link
-
-    payment_method = _payment_method(args)
-    route = _resolve_cli_payment_route(args, payment_method)
-    workers = _payment_regenerate_workers(args, payment_method, len(emails))
-    delay_seconds = _payment_regenerate_delay_seconds(payment_method)
-    print(f"[*] Fallback: {len(emails)} account(s), workers={workers} delay={delay_seconds:g}s")
-    ordered = [None] * len(emails)
-
-    def _run_one(index, item_email):
-        if index > 0 and delay_seconds > 0:
-            time.sleep(delay_seconds * index if workers > 1 else delay_seconds)
-        print(f"[{index + 1}/{len(emails)}] Regenerating PayPal link: {item_email}")
-        return index, regenerate_paypal_link(
-            email=item_email,
-            session_file="",
-            proxy=route["proxy"],
-            payment_method=payment_method,
-            paypal_generation_type=args.paypal_generation_type,
-            checkout_proxy=route["checkout_proxy"],
-            provider_proxy=route["provider_proxy"],
-            approve_proxy=route["approve_proxy"],
-            promotion_proxy=route["promotion_proxy"],
-            require_zero=not getattr(args, "no_require_zero", False),
-        )
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_run_one, i, item_email) for i, item_email in enumerate(emails)]
-        for future in as_completed(futures):
-            index, result = future.result()
-            ordered[index] = result
-
-    results = [r for r in ordered if r is not None]
-    ok_count = sum(1 for r in results if r.get("ok"))
-    print(json.dumps({"ok": ok_count == len(emails), "total": len(emails), "success": ok_count, "failed": len(emails) - ok_count, "results": results}, ensure_ascii=False, indent=2))
-    if ok_count != len(emails):
-        raise SystemExit(3)
-
-
-
-
-
 
 
 def _convert_session_json(args):

@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 import pytest
 from sms_tool.config import ConfigError, current_config_data, load_runtime_config, runtime_config_scope
 from sms_tool import storage
@@ -25,6 +26,12 @@ def test_config_import_performs_no_file_io():
         capture_output=True,
         text=True,
     )
+
+
+def test_example_config_omits_retired_paypal_auto_section():
+    root = Path(__file__).resolve().parent.parent
+    example = json.loads((root / "config.example.json").read_text(encoding="utf-8"))
+    assert "paypal_auto" not in example
 
 
 def test_explicit_config_is_immutable_and_independent_of_cwd(tmp_path, monkeypatch):

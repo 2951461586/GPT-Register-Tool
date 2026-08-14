@@ -90,6 +90,23 @@ def _probe_registration_access_token(
     return result
 
 
+def _retain_registration_checkpoint(success, access_token, at_probe):
+    """Keep a post-create checkpoint when only the AT transport probe failed.
+
+    The account and token already exist at this point.  Clearing the checkpoint
+    forces the batch retry to submit the signup flow a second time, which turns
+    a transient proxy failure into ``invalid_state`` or a duplicate signup.
+    """
+    if success or not str(access_token or "").strip():
+        return False
+    probe = at_probe if isinstance(at_probe, Mapping) else {}
+    try:
+        status_code = int(probe.get("status_code") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    return status_code == 0
+
+
 def _registration_requires_refresh_token(runtime_cfg=None):
     """协议注册链路是否要求最终产出的 session 必须包含 refresh_token。"""
     source = runtime_cfg if isinstance(runtime_cfg, Mapping) else CFG

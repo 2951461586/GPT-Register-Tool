@@ -268,7 +268,12 @@ def _resolve_mailbox_proxy(proxy=None, runtime_config: ConfigInput = None):
 def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: ConfigInput = None):
     issued_after_unix = int(issued_after_unix or 0)
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    defaults = {"remail": 90, "cfworker": 10, mailbox_icloud_url.PROVIDER: 90}
+    defaults = {
+        "remail": 90,
+        "smailr": 10,
+        "cfworker": 10,
+        mailbox_icloud_url.PROVIDER: 90,
+    }
     if provider not in defaults:
         return issued_after_unix
     try:

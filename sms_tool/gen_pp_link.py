@@ -240,7 +240,7 @@ DEFAULT_TARGET_COUNTRIES = ("AU", "TH", "US", "GB", "DE", "JP", "SG", "NZ", "CA"
 DEFAULT_CHECKOUT_COUNTRIES = ("JP", "TH")
 
 
-# ─── 兼容函数 (供 paypal_links.py 和 cli.py 调用) ──────────────────────────────
+# ─── 兼容函数 (供 CLI 和旧集成调用) ──────────────────────────────────────────
 
 
 def _load_json(path: str) -> dict:

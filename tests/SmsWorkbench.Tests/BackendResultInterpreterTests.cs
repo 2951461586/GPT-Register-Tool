@@ -313,6 +313,20 @@ public sealed class BackendResultInterpreterTests
     }
 
     [Fact]
+    public void Interpret_NonZeroExitCodeRetainsStructuredPayload()
+    {
+        var payload = JsonDocument.Parse(
+            "{\"ok\": false, \"decision_text\": \"account is not eligible\"}").RootElement;
+        var result = new BackendCommandResult(3, payload.GetRawText(), "", payload, false);
+
+        BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(result, "payment");
+
+        Assert.False(interpreted.IsSuccess);
+        Assert.True(interpreted.Payload.HasValue);
+        Assert.Equal("account is not eligible", interpreted.Payload.Value.GetProperty("decision_text").GetString());
+    }
+
+    [Fact]
     public void Interpret_ReturnsPayloadJson()
     {
         var payload = JsonDocument.Parse("{\"ok\": true, \"url\": \"https://example.com\"}").RootElement;

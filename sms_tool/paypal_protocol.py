@@ -1,4 +1,4 @@
-"""PayPal redirect parsing and transport helpers used by ``paypal_links``."""
+"""PayPal redirect parsing and transport helpers used by payment adapters."""
 
 from __future__ import annotations
 

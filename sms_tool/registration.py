@@ -87,6 +87,7 @@ from .registration_outcome import (
     _registration_outcome,
     _registration_requires_phone_verification,
     _registration_requires_refresh_token,
+    _retain_registration_checkpoint as _retain_registration_checkpoint_impl,
 )
 from .registration_preflight import _resolve_proxy_scheme, registration_network_preflight
 from .registration_progress import registration_stage, track_registration
@@ -130,7 +131,7 @@ def run_email(
     sentinel_data=None,
     mailbox=None,
     phone_pool=None,
-    codex_oauth=True,
+    codex_oauth=False,
     registration_mode=None,
     browser_headless: bool | None = None,
     enroll_2fa=True,
@@ -165,7 +166,7 @@ def run_phone(*args, **kwargs):
         sentinel_data=kwargs.get("sentinel_data"),
         mailbox=kwargs.get("mailbox"),
         phone_pool=kwargs.get("phone_pool"),
-        codex_oauth=kwargs.get("codex_oauth", True),
+        codex_oauth=kwargs.get("codex_oauth", False),
         registration_mode=kwargs.get("registration_mode"),
         browser_headless=kwargs.get("browser_headless"),
         runtime_config=kwargs.get("runtime_config"),
@@ -176,7 +177,7 @@ def run_phone_register(
     proxy=None,
     password=None,
     sentinel_data=None,
-    codex_oauth=True,
+    codex_oauth=False,
     smsbower_country=None,
     smsbower_api_key=None,
     bind_email=None,
@@ -205,6 +206,10 @@ def _probe_registration_access_token(access_token, auth_session, proxy=None, cfg
     )
 
 
+def _retain_registration_checkpoint(success, access_token, at_probe):
+    return _retain_registration_checkpoint_impl(success, access_token, at_probe)
+
+
 def run_batch(
     count=1,
     proxy=None,
@@ -212,7 +217,7 @@ def run_batch(
     mailboxes=None,
     workers=4,
     phone_pool=None,
-    codex_oauth=True,
+    codex_oauth=False,
     registration_mode=None,
     max_attempts=2,
     retry_delay_seconds=1.0,

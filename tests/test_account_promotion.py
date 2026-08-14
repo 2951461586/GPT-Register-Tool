@@ -1,5 +1,9 @@
 """Tests for accounts/check plan + promotion (优惠) parsing and labels."""
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from sms_tool import cli
 from sms_tool.account_promotion import parse_accounts_check, promotion_status_label
 
 
@@ -56,3 +60,66 @@ def test_labels_for_failures():
 
 def test_parse_missing_accounts():
     assert parse_accounts_check({})["ok"] is False
+
+
+def test_post_registration_promotion_stage_deduplicates_and_counts_trials():
+    result = {
+        "ok": True,
+        "total": 2,
+        "success": 2,
+        "failed": 0,
+        "results": [
+            {"email": "one@example.com", "promotion_status": "可试用Plus", "probe": {"plus_trial_eligible": True}},
+            {"email": "two@example.com", "promotion_status": "Free·无优惠", "probe": {"plus_trial_eligible": False}},
+        ],
+    }
+    with patch("sms_tool.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
+        report = cli._check_registered_promotions(
+            ["ONE@example.com", "one@example.com", "two@example.com"],
+            workers=3,
+            proxy="http://proxy.example:8080",
+            timeout=17,
+        )
+
+    assert report["trial_eligible"] == 1
+    assert refresh.call_args.kwargs["emails"] == ["one@example.com", "two@example.com"]
+    assert refresh.call_args.kwargs["workers"] == 3
+    assert refresh.call_args.kwargs["timeout"] == 17
+
+
+def test_registration_save_invokes_optional_promotion_stage(tmp_path):
+    args = SimpleNamespace(
+        registration_batch_id="batch-test",
+        buy_remail_mailbox=False,
+        remail_service_mode=None,
+        check_promotion_after_registration=True,
+        import_cpa=False,
+        workers=4,
+        proxy=None,
+        refresh_timeout=20,
+    )
+    registration = {
+        "success": True,
+        "email": "new@example.com",
+        "access_token": "test-access-token",
+    }
+    promotion = {"ok": True, "total": 1, "success": 1, "failed": 0, "trial_eligible": 1, "results": []}
+
+    with patch.object(cli, "CFG", {"output": {"filename_pattern": "session_{email}_{timestamp}.json"}}), \
+         patch.object(cli, "upsert_account", return_value=True), \
+         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"), \
+         patch("sms_tool.storage.record_registration_audit"), \
+         patch.object(cli, "_check_registered_promotions", return_value=promotion) as check:
+        report = cli._save_registration_results(
+            args,
+            [registration],
+            effective_count=1,
+            base_dir=tmp_path,
+            pipeline_started=0,
+            mailbox_seconds=0,
+            register_seconds=1,
+        )
+
+    check.assert_called_once()
+    assert check.call_args.args[0] == ["new@example.com"]
+    assert report["promotion"] == promotion

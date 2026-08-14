@@ -253,6 +253,42 @@ class CodexOauthTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(issued_after_values, [1000, 1000])
 
+    def test_passwordless_oauth_excludes_registration_and_rejected_otps(self):
+        send = Mock(status_code=200, text="{}")
+        validate1 = Mock(status_code=401, text='{"error":{"code":"login_failed"}}')
+        resend = Mock(status_code=200, text="{}")
+        validate2 = Mock(status_code=200, text="{}")
+        session = Mock()
+        session.post.side_effect = [send, validate1, resend, validate2]
+        excluded_values = []
+
+        def poll(*args, **kwargs):
+            excluded_values.append(set(kwargs.get("excluded_otps") or ()))
+            return "111111" if len(excluded_values) == 1 else "222222"
+
+        with patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False), \
+             patch("sms_tool.codex_oauth._poll_email_otp", side_effect=poll), \
+             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}), \
+             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"), \
+             patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")), \
+             patch("sms_tool.codex_oauth._finish_authorization", return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt"}}):
+            result = codex_oauth._passwordless_login_and_exchange(
+                session=session,
+                oauth={"state": "s", "code_verifier": "v", "redirect_uri": "http://localhost"},
+                data={
+                    "email": "user@example.com",
+                    "registration_email_otp": "000000",
+                    "mailbox": {"email": "user@example.com", "refresh_token": "mail-rt", "token": "cid"},
+                },
+                did="did",
+                current_url="https://auth.openai.com/email-verification",
+                timeout=30,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(excluded_values[0], {"000000"})
+        self.assertEqual(excluded_values[1], {"000000", "111111"})
+
     def test_single_phone_oauth_lane_stays_locked_until_token_exchange(self):
         class TrackingLock:
             def __init__(self):

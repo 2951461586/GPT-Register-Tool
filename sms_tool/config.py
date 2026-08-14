@@ -242,6 +242,7 @@ def _validate_positive_numbers(section: Mapping[str, Any], keys: tuple[str, ...]
 
 def _validate_payment_config(section: Mapping[str, Any], errors: list[str]) -> None:
     from .payment_catalog import PAYMENT_CATALOG, normalize_payment_method
+    from .payment_flow import normalize_payment_stage
     supported = set(PAYMENT_CATALOG.methods)
     enabled = section.get("enabled_methods", [])
     if enabled is not None and not isinstance(enabled, (list, tuple)):
@@ -251,12 +252,53 @@ def _validate_payment_config(section: Mapping[str, Any], errors: list[str]) -> N
         if unknown:
             errors.append(f"unsupported protocol payment methods: {', '.join(unknown)}")
     methods = section.get("methods", {})
+    proxy_pools = section.get("proxy_pools", {})
+    if proxy_pools is not None and not isinstance(proxy_pools, Mapping):
+        errors.append("protocol_payments.proxy_pools must be an object")
+        proxy_pools = {}
+    elif isinstance(proxy_pools, Mapping):
+        for name, value in proxy_pools.items():
+            if not str(name or "").strip():
+                errors.append("protocol_payments.proxy_pools names must not be blank")
+            if not isinstance(value, (str, list, tuple, Mapping)):
+                errors.append(f"protocol_payments.proxy_pools.{name} must be a proxy list")
     if methods is not None and not isinstance(methods, Mapping):
         errors.append("protocol_payments.methods must be an object")
     elif isinstance(methods, Mapping):
         unknown = sorted(set(methods) - supported)
         if unknown:
             errors.append(f"unsupported protocol payment method config: {', '.join(unknown)}")
+        known_pools = set(proxy_pools) if isinstance(proxy_pools, Mapping) else set()
+        for method, raw in methods.items():
+            if not isinstance(raw, Mapping):
+                errors.append(f"protocol_payments.methods.{method} must be an object")
+                continue
+            flow_profile = raw.get("flow_profile")
+            if flow_profile is not None and not str(flow_profile or "").strip():
+                errors.append(f"protocol_payments.methods.{method}.flow_profile must not be blank")
+            stages = raw.get("stages")
+            if stages is not None and not isinstance(stages, (list, tuple)):
+                errors.append(f"protocol_payments.methods.{method}.stages must be an array")
+            elif isinstance(stages, (list, tuple)):
+                invalid = [str(stage) for stage in stages if not normalize_payment_stage(stage)]
+                if invalid:
+                    errors.append(f"protocol_payments.methods.{method}.stages contains unsupported stages: {', '.join(invalid)}")
+            routes = raw.get("stage_routes")
+            if routes is not None and not isinstance(routes, Mapping):
+                errors.append(f"protocol_payments.methods.{method}.stage_routes must be an object")
+            elif isinstance(routes, Mapping):
+                for stage, route in routes.items():
+                    prefix = f"protocol_payments.methods.{method}.stage_routes.{stage}"
+                    if not normalize_payment_stage(stage):
+                        errors.append(f"{prefix} uses an unsupported stage")
+                        continue
+                    route_value = route if isinstance(route, Mapping) else {"pool": route}
+                    pool = str(route_value.get("pool") or "").strip()
+                    if pool and pool not in known_pools and pool not in {"checkout", "approve", "default"}:
+                        errors.append(f"{prefix}.pool references unknown proxy pool: {pool}")
+                    country = str(route_value.get("country") or "").strip()
+                    if country and (len(country) != 2 or not country.isalpha()):
+                        errors.append(f"{prefix}.country must be ISO alpha-2")
     _validate_positive_numbers(section, ("timeout_seconds",), "protocol_payments", errors)
     matrix = section.get("matrix", {})
     if matrix is not None and not isinstance(matrix, Mapping):

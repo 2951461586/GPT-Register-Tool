@@ -13,6 +13,7 @@ namespace SmsWorkbench
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
+        private readonly IPaymentBatchService paymentBatchService;
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
         private int taskSeq = 1;
@@ -30,6 +31,8 @@ namespace SmsWorkbench
         private string attentionCountText = "0";
         private int currentPage = 1;
         private int filteredCount;
+        private string accountSortMember = "";
+        private ListSortDirection? accountSortDirection;
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
         private Geometry sidebarToggleGeometry = Geometry.Parse("M15 18l-6-6 6-6");
@@ -189,6 +192,7 @@ namespace SmsWorkbench
             IBackendTaskCoordinator backendTasks,
             IDesktopReadClient desktopRead,
             IPaymentBatchDialogService paymentBatchDialogs,
+            IPaymentBatchService paymentBatchService,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
@@ -198,6 +202,7 @@ namespace SmsWorkbench
             this.backendTasks = backendTasks;
             this.desktopRead = desktopRead;
             this.paymentBatchDialogs = paymentBatchDialogs;
+            this.paymentBatchService = paymentBatchService;
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;
             this.settingsService = settingsService;
@@ -285,6 +290,7 @@ namespace SmsWorkbench
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
         public bool Disable2fa { get; set; } = true;
+        public bool CheckPromotion { get; set; }
     }
 
     public sealed class ScanOptions
@@ -310,48 +316,6 @@ namespace SmsWorkbench
         {
             var label = parameter?.ToString() ?? string.Empty;
             return value is bool collapsed && collapsed ? string.Empty : label;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    /// <summary>
-    /// Converts a status string (e.g. "支付完成✅", "AT失效", "待处理") into a
-    /// severity keyword ("success", "warn", "danger", "info", "neutral") that
-    /// the StatusBadge style uses to pick the correct colour palette.
-    /// </summary>
-    public sealed class StatusSeverityConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            string s = (value as string ?? "").Trim();
-            if (s.Length == 0) return "neutral";
-
-            // Success states (green)
-            if (s.Contains("✅") || s.Contains("完成") || s.Contains("已注册")
-                || s.Contains("已获取") || s.Contains("已导入") || s.Contains("K12已进入")
-                || s.Contains("PM已创建") || s.Contains("已设置"))
-                return "success";
-
-            // Danger states (red)
-            if (s.Contains("失败") || s.Contains("失效") || s.Contains("掉号")
-                || s.Contains("异常") || s.Contains("无RT") || s.Contains("缺失")
-                || s.Contains("未获取") || s.Contains("K12未切换") || s.Contains("K12已退出"))
-                return "danger";
-
-            // Warning states (amber)
-            if (s.Contains("待") || s.Contains("缺") || s.Contains("OTP")
-                || s.Contains("K12已申请") || s.Contains("旧token"))
-                return "warn";
-
-            // Info states (grey-blue)
-            if (s.Contains("已保存") || s.Contains("待刷新") || s.Contains("未知"))
-                return "info";
-
-            return "neutral";
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

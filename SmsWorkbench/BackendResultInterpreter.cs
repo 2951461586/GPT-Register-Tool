@@ -215,7 +215,7 @@ public static class BackendResultInterpreter
                 false,
                 $"[失败] {errorText}".TrimEnd(),
                 "failed",
-                null);
+                result.Payload);
         }
 
         if (result.Payload.HasValue)

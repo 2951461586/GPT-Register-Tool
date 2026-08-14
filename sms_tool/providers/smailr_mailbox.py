@@ -22,7 +22,7 @@ API key outside source control (``SMAILR_API_KEY`` is preferred)::
         "smailr": {
           "api_key": "",
           "base_url": "https://smailr.com",
-          "domains": ["smailr.com", "smail-pro.com"],
+          "domains": ["smailr.com", "loc.cc", "mail.nodeloc.cc", "nodeloc.cc"],
           "default_domain": "smailr.com",
           "timeout": 30
         }
@@ -46,6 +46,9 @@ from ..phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_prox
 
 DEFAULT_BASE_URL = "https://smailr.com"
 DEFAULT_TIMEOUT = 30
+DEFAULT_RETRY_ATTEMPTS = 3
+DEFAULT_RETRY_BACKOFF_SECONDS = 1.0
+_RETRYABLE_CONNECT_ERROR_CODES = frozenset({5, 6, 7, 35})
 
 
 def _normalize_base_url(value: str) -> str:
@@ -85,7 +88,15 @@ class SmailrClient:
     :class:`MailboxAccountSmailr`-compatible errors and redact secrets.
     """
 
-    def __init__(self, api_key: str, base_url: str = DEFAULT_BASE_URL, timeout: int = DEFAULT_TIMEOUT, proxy: str | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = DEFAULT_BASE_URL,
+        timeout: int = DEFAULT_TIMEOUT,
+        proxy: str | None = None,
+        retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
+        retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
+    ):
         self.api_key = str(api_key or "").strip()
         if not self.api_key:
             raise RuntimeError("smailr.api_key is required")
@@ -93,6 +104,8 @@ class SmailrClient:
         self.timeout = max(1, int(timeout or DEFAULT_TIMEOUT))
         self.proxy = normalize_proxy_url(proxy)
         self._proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
+        self.retry_attempts = max(1, int(retry_attempts or DEFAULT_RETRY_ATTEMPTS))
+        self.retry_backoff_seconds = max(0.0, float(retry_backoff_seconds))
 
     # ── REST verbs ──────────────────────────────────────────────────────────
 
@@ -114,11 +127,21 @@ class SmailrClient:
             kwargs["proxies"] = self._proxies
         if json_body is not None:
             kwargs["json"] = json_body
-        try:
-            response = curl_requests.request(method, url, **kwargs)
-        except Exception as exc:
-            message = _redact_secret(_redact_proxy_text(exc, self.proxy), self.api_key)
-            raise SmailrError(f"smailr request failed: {message}", body=message) from exc
+        for attempt in range(self.retry_attempts):
+            try:
+                response = curl_requests.request(method, url, **kwargs)
+                break
+            except Exception as exc:
+                error_code = int(getattr(exc, "code", 0) or 0)
+                should_retry = (
+                    error_code in _RETRYABLE_CONNECT_ERROR_CODES
+                    and attempt + 1 < self.retry_attempts
+                )
+                if should_retry:
+                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    continue
+                message = _redact_secret(_redact_proxy_text(exc, self.proxy), self.api_key)
+                raise SmailrError(f"smailr request failed: {message}", body=message) from exc
         if response.status_code < 200 or response.status_code >= 300:
             body: Any
             try:
@@ -248,15 +271,15 @@ def _normalize_message(raw: dict, mailbox_email: str = "") -> dict:
         return ""
 
     subject = str(_first("subject", "title") or "")
-    body_raw = _first("body", "body_text", "body_html", "content", "text", "html")
+    body_raw = _first("body", "body_html", "body_text", "content", "html", "text")
     body_text = str(body_raw or "")
-    sender = _first("from", "sender", "from_email", "sender_email", "from_address")
+    sender = _first("from", "sender", "from_email", "sender_email", "from_address", "from_addr")
     if isinstance(sender, dict):
         sender = sender.get("address") or sender.get("email") or sender.get("name") or ""
         if isinstance(sender, dict):
             sender = sender.get("address") or ""
     recipients: list[str] = []
-    for recipient_key in ("to", "toRecipients", "recipients"):
+    for recipient_key in ("to", "toRecipients", "recipients", "to_addrs"):
         raw_list = raw.get(recipient_key)
         if not raw_list:
             continue
@@ -313,8 +336,17 @@ def fetch_messages(client: SmailrClient, mailbox_id: str, mailbox_email: str, li
             break
         for item in items:
             # The list endpoint may return only headers.  Fetch the detail so
-            # OTP extraction still works when the body is not in the summary.
-            if isinstance(item, dict) and not any(item.get(key) for key in ("body", "body_text", "body_html", "content", "text", "html")):
+            # OTP extraction still works when the body is missing or is the
+            # provider's 200-character preview instead of the full message.
+            body_value = ""
+            if isinstance(item, dict):
+                for key in ("body", "body_text", "body_html", "content", "text", "html"):
+                    value = item.get(key)
+                    if value:
+                        body_value = value.get("content") if isinstance(value, dict) else value
+                        break
+            needs_detail = not body_value or len(str(body_value)) <= 500
+            if isinstance(item, dict) and needs_detail:
                 message_id = str(item.get("id") or item.get("mail_id") or item.get("message_id") or "").strip()
                 if message_id:
                     try:
@@ -343,8 +375,8 @@ def poll_otp(
     log_prefix: str = "smailr",
 ) -> str | None:
     """Settle-stability OTP polling."""
-    from .mailbox_poll import _poll_otp_with_settle
-    from .mail_otp import _email_otp_candidate
+    from ..mailbox_poll import _poll_otp_with_settle
+    from ..mail_otp import _email_otp_candidate
 
     keyword = (subject_keyword or "").lower()
     excluded = {str(value or "").strip() for value in (excluded_otps or ())}
@@ -352,11 +384,21 @@ def poll_otp(
     def _fetch_candidate():
         for msg in fetch_messages(client, mailbox_id, mailbox_email, limit=10):
             candidate = _email_otp_candidate(
-                type("FakeMB", (), {"email": mailbox_email})(),
+                type("FakeMB", (), {"email": mailbox_email, "provider": "smailr"})(),
                 msg,
                 keyword=keyword,
                 issued_after_unix=issued_after_unix,
             )
+            if not candidate and keyword:
+                # Smailr currently stores some CJK OpenAI subjects as mojibake.
+                # Keep timestamp/sender/recipient checks, but allow the body OTP
+                # parser to decide when the subject cannot carry the keyword.
+                candidate = _email_otp_candidate(
+                    type("FakeMB", (), {"email": mailbox_email, "provider": "smailr"})(),
+                    msg,
+                    keyword="",
+                    issued_after_unix=issued_after_unix,
+                )
             if candidate and candidate.get("otp") not in excluded:
                 return candidate
         return None

@@ -1,7 +1,9 @@
 import unittest
 import time
 import ast
+from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import Mock
 
 from sms_tool.registration_state import (
     RegistrationState,
@@ -22,6 +24,50 @@ class Mailbox:
 
 
 class RegistrationStateTests(unittest.TestCase):
+    def test_email_registration_defaults_to_at_only_and_omits_codex_oauth_stage(self):
+        operations = Mock()
+        operations._tl.return_value = []
+        operations.runtime_config_scope.return_value = nullcontext()
+        workflow = RegistrationEmailWorkflow(
+            RegistrationStateMachine(lambda *_: None),
+            config={"registration": {}},
+            operations=operations,
+        )
+        workflow._bootstrap = Mock()
+        workflow._resume_post_create = Mock(return_value=None)
+        workflow._run_stage = Mock(return_value={"success": True})
+        workflow._set_outcome = Mock()
+        workflow._close_sessions = Mock()
+
+        workflow.run()
+
+        self.assertFalse(workflow.codex_oauth)
+        states = [call.args[0] for call in workflow._run_stage.call_args_list]
+        self.assertNotIn(RegistrationState.CODEX_OAUTH, states)
+        self.assertIn(RegistrationState.ACCESS_TOKEN_PROBE, states)
+
+    def test_email_registration_ignores_legacy_codex_oauth_true_flag(self):
+        operations = Mock()
+        operations._tl.return_value = []
+        operations.runtime_config_scope.return_value = nullcontext()
+        operations.select_auth_fingerprint.return_value = None
+        machine = RegistrationStateMachine(lambda *_: None)
+        workflow = RegistrationEmailWorkflow(
+            machine,
+            codex_oauth=True,
+            operations=operations,
+        )
+        workflow._bootstrap = Mock()
+        workflow._resume_post_create = Mock(return_value=None)
+        workflow._run_stage = Mock(return_value={"ok": True})
+        workflow._set_outcome = Mock()
+
+        workflow.run()
+
+        self.assertFalse(workflow.codex_oauth)
+        states = [call.args[0] for call in workflow._run_stage.call_args_list]
+        self.assertNotIn(RegistrationState.CODEX_OAUTH, states)
+
     def test_stage_runner_shares_state_and_runs_cleanup(self):
         events = []
         machine = RegistrationStateMachine(lambda *event: events.append(event))

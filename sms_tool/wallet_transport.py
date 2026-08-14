@@ -221,6 +221,15 @@ class ChatGPTStripeWalletTransport:
 
     def _stage_proxy(self, request: WalletTransportRequest) -> str:
         context = request.transport_context
+        plan = context.get("payment_route_plan")
+        if plan is not None and hasattr(plan, "proxy_for"):
+            canonical_stage = {
+                "final_review": "approve",
+                "follow_redirect": "redirect",
+            }.get(request.stage, request.stage)
+            planned = str(plan.proxy_for(canonical_stage) or "").strip()
+            if planned:
+                return self._attempt_proxy(request, planned, planned=True)
         stage_keys = {
             "checkout": ("checkout_proxy",),
             "promotion": ("promotion_proxy", "update_proxy"),
@@ -241,7 +250,7 @@ class ChatGPTStripeWalletTransport:
         return ""
 
     @staticmethod
-    def _attempt_proxy(request: WalletTransportRequest, proxy: str) -> str:
+    def _attempt_proxy(request: WalletTransportRequest, proxy: str, *, planned: bool = False) -> str:
         context = request.transport_context
         resolver = (
             context.get(f"{request.stage}_proxy_resolver")
@@ -259,6 +268,8 @@ class ChatGPTStripeWalletTransport:
             value = str(resolved or "").strip()
             if value:
                 return value
+        if planned:
+            return proxy
         rotate = context.get("rotate_proxy_sessions")
         if isinstance(rotate, str):
             rotate = rotate.strip().lower() in {"1", "true", "yes", "on"}

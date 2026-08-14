@@ -21,7 +21,7 @@ namespace SmsWorkbench
     /// <summary>
     /// Window-independent planner for every desktop backend command family
     /// (registration, SMS, liveness, deletion, import, export, refresh,
-    /// payment-link maintenance, inbox). It generalizes the
+    /// protocol payment, inbox). It generalizes the
     /// <see cref="ProtocolPaymentExecutionPlanner"/> pattern so the CLI
     /// contract lives in exactly one module that can be unit tested without
     /// WPF. Settings resolution stays with the caller; this class only shapes
@@ -60,7 +60,8 @@ namespace SmsWorkbench
             int workers,
             bool registrationAtOnly,
             IReadOnlyList<string> proxyPool,
-            bool disable2fa = false)
+            bool disable2fa = false,
+            bool checkPromotion = false)
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
             RequireArgument(mailboxFile, nameof(mailboxFile));
@@ -73,6 +74,7 @@ namespace SmsWorkbench
             if (registrationAtOnly) args.Add("--registration-at-only");
             AppendNoPhoneReuse(args);
             AppendNo2fa(args, disable2fa);
+            AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
             return new BackendCommandPlan(taskName, args);
         }
@@ -96,10 +98,12 @@ namespace SmsWorkbench
         public static BackendCommandPlan CreatePhoneRegistration(
             int count,
             IReadOnlyList<string> proxyPool,
-            bool disable2fa = false)
+            bool disable2fa = false,
+            bool checkPromotion = false)
         {
             var args = new List<string> { "--phone-register", "--count", Count(count) };
             AppendNo2fa(args, disable2fa);
+            AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
             return new BackendCommandPlan("手机号注册 (SMSBower)", args);
         }
@@ -109,7 +113,8 @@ namespace SmsWorkbench
             int count,
             int workers,
             IReadOnlyList<string> proxyPool,
-            bool disable2fa = false)
+            bool disable2fa = false,
+            bool checkPromotion = false)
         {
             var args = new List<string>
             {
@@ -120,6 +125,7 @@ namespace SmsWorkbench
             };
             AppendRegistrationAtOnly(args);
             AppendNo2fa(args, disable2fa);
+            AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
             return new BackendCommandPlan("CFWorker邮箱注册", args);
         }
@@ -128,7 +134,8 @@ namespace SmsWorkbench
             int count,
             int workers,
             IReadOnlyList<string> proxyPool,
-            bool disable2fa = false)
+            bool disable2fa = false,
+            bool checkPromotion = false)
         {
             var args = new List<string>
             {
@@ -139,6 +146,7 @@ namespace SmsWorkbench
             };
             AppendNoPhoneReuse(args);
             AppendNo2fa(args, disable2fa);
+            AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
             return new BackendCommandPlan("ReMail 长效邮箱注册 (" + Count(count) + ")", args);
         }
@@ -148,7 +156,8 @@ namespace SmsWorkbench
             int count,
             int workers,
             IReadOnlyList<string> proxyPool,
-            bool disable2fa = false)
+            bool disable2fa = false,
+            bool checkPromotion = false)
         {
             var args = new List<string>
             {
@@ -159,8 +168,9 @@ namespace SmsWorkbench
             };
             AppendRegistrationAtOnly(args);
             AppendNo2fa(args, disable2fa);
+            AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
-            return new BackendCommandPlan("Smailr 临时邮箱注册", args);
+            return new BackendCommandPlan("Smailr 邮箱注册", args);
         }
 
         // ── One-click SMS (接码) ────────────────────────────────────────
@@ -427,45 +437,6 @@ namespace SmsWorkbench
             return new BackendCommandPlan("重建SQLite索引", new List<string> { "--rebuild-sqlite" });
         }
 
-        // ── Payment-link maintenance ────────────────────────────────────
-
-        public static BackendCommandPlan CreateRegeneratePaymentLink(
-            string email,
-            string sessionFile,
-            string paymentMethod)
-        {
-            var args = new List<string>
-            {
-                "--email", RequireEmail(email),
-                "--regenerate-paypal-link",
-                "--workers", "4",
-            };
-            AppendSessionFile(args, sessionFile);
-            args.Add("--payment-method");
-            args.Add(PaymentMethods.Normalize(paymentMethod));
-            return new BackendCommandPlan("重新生成支付链接", args);
-        }
-
-        public static BackendCommandPlan CreateRegeneratePaymentLinkBatch(
-            IReadOnlyList<string> emails,
-            string paymentMethod,
-            string tempDirectory = null)
-        {
-            IReadOnlyList<string> targets = RequireEmails(emails);
-            string emailFile = WriteEmailFile(tempDirectory, "paypal_regen_emails_", targets);
-            var args = new List<string>
-            {
-                "--regenerate-paypal-link",
-                "--email-file", emailFile,
-                "--workers", "4",
-                "--payment-method", PaymentMethods.Normalize(paymentMethod),
-            };
-            return new BackendCommandPlan(
-                "批量重新生成支付链接 (" + Count(targets.Count) + ")",
-                args,
-                TemporaryFiles: new[] { emailFile });
-        }
-
         public static BackendCommandPlan CreateMarkPaymentComplete(string email, string sessionFile)
         {
             var args = new List<string>
@@ -612,6 +583,11 @@ namespace SmsWorkbench
         private static void AppendNo2fa(List<string> args, bool disable2fa)
         {
             if (disable2fa) args.Add("--no-2fa");
+        }
+
+        private static void AppendCheckPromotion(List<string> args, bool checkPromotion)
+        {
+            if (checkPromotion) args.Add("--check-promotion-after-registration");
         }
 
         private static string WriteEmailFile(string tempDirectory, string prefix, IReadOnlyList<string> emails)

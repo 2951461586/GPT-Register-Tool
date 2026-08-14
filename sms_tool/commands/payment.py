@@ -16,6 +16,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..payment_routing import (
+    PaymentRoutePlanner,
+    method_payment_config as canonical_method_payment_config,
+    parse_proxy_pool as canonical_parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
+
 
 @dataclass(frozen=True)
 class PaymentCommandContext:
@@ -31,34 +38,7 @@ class PaymentCommandContext:
     protocol_proxy_pool: Callable[[], list[str]]
     has_explicit_payment_proxy: Callable[[Any], bool]
     payment_proxy_pools: Callable[[str], Mapping[str, Any]] | None = None
-
-
-def regenerate_workers(
-    args: Any,
-    payment_method: str,
-    total: int,
-    config: Mapping[str, Any],
-) -> int:
-    requested = max(1, int(getattr(args, "workers", 1) or 1))
-    cfg = config.get(payment_method) if isinstance(config.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = config.get("paypal") if isinstance(config.get("paypal"), dict) else {}
-    configured = cfg.get("max_regenerate_workers", cfg.get("regenerate_workers"))
-    try:
-        cap = int(configured)
-    except (TypeError, ValueError):
-        cap = 4
-    return max(1, min(requested, max(1, cap), total))
-
-
-def regenerate_delay_seconds(payment_method: str, config: Mapping[str, Any]) -> float:
-    cfg = config.get(payment_method) if isinstance(config.get(payment_method), dict) else {}
-    if payment_method == "paypal":
-        cfg = config.get("paypal") if isinstance(config.get("paypal"), dict) else {}
-    try:
-        return max(0.0, float(cfg.get("regenerate_delay_seconds", 0) or 0))
-    except (TypeError, ValueError):
-        return 0.0
+    runtime_config: Mapping[str, Any] | None = None
 
 
 def protocol_proxy_pool(config: Mapping[str, Any]) -> list[str]:
@@ -69,21 +49,7 @@ def protocol_proxy_pool(config: Mapping[str, Any]) -> list[str]:
 
 def parse_proxy_pool(value: Any) -> list[str]:
     """Normalize a proxy-pool option from comma/newline text or a sequence."""
-    if value in (None, "", False):
-        return []
-    if isinstance(value, str):
-        values = re.split(r"[\r\n,;]+", value)
-    elif isinstance(value, Mapping):
-        values = value.get("proxies") or value.get("pool") or value.get("values") or []
-    elif isinstance(value, (list, tuple, set)):
-        values = value
-    else:
-        values = [value]
-    return list(dict.fromkeys(
-        str(item or "").strip()
-        for item in values
-        if str(item or "").strip()
-    ))
+    return canonical_parse_proxy_pool(value)
 
 
 def payment_proxy_pools(config: Mapping[str, Any], payment_method: str) -> dict[str, list[str]]:
@@ -93,11 +59,7 @@ def payment_proxy_pools(config: Mapping[str, Any], payment_method: str) -> dict[
     legacy top-level method section is merged first so existing single-value
     configurations continue to work without inheriting another method's pool.
     """
-    method_cfg, _ = _method_payment_config(config, payment_method)
-    return {
-        "checkout": parse_proxy_pool(method_cfg.get("checkout_proxy_pool")),
-        "approve": parse_proxy_pool(method_cfg.get("approve_proxy_pool")),
-    }
+    return canonical_payment_proxy_pools(config, payment_method)
 
 
 def has_explicit_payment_proxy(args: Any) -> bool:
@@ -132,38 +94,9 @@ def _method_payment_config(
     top-level section remains a compatibility source for that same method, but
     a non-PayPal method must never inherit PayPal's stage routes.
     """
-    method = str(payment_method or "paypal").strip().lower().replace("-", "_")
-    legacy = config.get(method) if isinstance(config.get(method), Mapping) else {}
-    protocol = (
-        config.get("protocol_payments")
-        if isinstance(config.get("protocol_payments"), Mapping)
-        else {}
-    )
-    methods = protocol.get("methods") if isinstance(protocol.get("methods"), Mapping) else {}
-    canonical = methods.get(method) if isinstance(methods.get(method), Mapping) else {}
-
-    method_cfg = {**dict(legacy), **dict(canonical)}
-    legacy_stages = legacy.get("stage_proxies") if isinstance(legacy.get("stage_proxies"), Mapping) else {}
-    canonical_stages = (
-        canonical.get("stage_proxies")
-        if isinstance(canonical.get("stage_proxies"), Mapping)
-        else {}
-    )
-    legacy_countries = (
-        legacy.get("stage_proxy_countries")
-        if isinstance(legacy.get("stage_proxy_countries"), Mapping)
-        else {}
-    )
-    canonical_countries = (
-        canonical.get("stage_proxy_countries")
-        if isinstance(canonical.get("stage_proxy_countries"), Mapping)
-        else {}
-    )
-    method_cfg["stage_proxy_countries"] = {
-        **dict(legacy_countries),
-        **dict(canonical_countries),
-    }
-    return method_cfg, {**dict(legacy_stages), **dict(canonical_stages)}
+    method_cfg = canonical_method_payment_config(config, payment_method)
+    stages = method_cfg.get("stage_proxies")
+    return method_cfg, dict(stages) if isinstance(stages, Mapping) else {}
 
 
 def _explicit_proxy_arg(args: Any) -> str | None:
@@ -327,168 +260,121 @@ def resolve_payment_route(
     payment_method: str,
     context: PaymentCommandContext,
 ) -> dict[str, Any]:
-    """Resolve one checkout-owned route before authentication starts."""
-    proxy, checkout_proxy, provider_proxy, approve_proxy = context.payment_stage_args(
-        args,
-        payment_method,
-    )
+    """Compile one immutable route plan before authentication starts."""
+    proxy, checkout_proxy, provider_proxy, approve_proxy = context.payment_stage_args(args, payment_method)
     countries = context.stage_country_overrides(args, payment_method)
-    target_country = context.payment_country(
-        payment_method,
-        getattr(args, "target_country", ""),
-    )
-    checkout_country = str(
-        getattr(args, "checkout_country", "") or target_country
-    ).strip().upper()
-    approve_country = str(
-        countries.get("approve")
-        or ("JP" if str(payment_method or "").strip().lower() == "gopay" else target_country)
-    ).strip().upper()
+    target_country = context.payment_country(payment_method, getattr(args, "target_country", ""))
+    checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
     promotion_proxy = context.promotion_proxy_arg(args, payment_method)
-    used_pool = False
-    attempts: list[dict[str, Any]] = []
-    stage_pool_attempts: dict[str, list[dict[str, Any]]] = {}
-
-    configured_pools = (
-        context.payment_proxy_pools(payment_method)
-        if callable(context.payment_proxy_pools)
-        else {}
-    )
+    configured_pools = context.payment_proxy_pools(payment_method) if callable(context.payment_proxy_pools) else {}
     configured_pools = configured_pools if isinstance(configured_pools, Mapping) else {}
+    explicit_checkout_route = any(
+        str(getattr(args, name, None) or "").strip()
+        for name in ("checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
+    )
+    explicit_approve_route = any(
+        str(getattr(args, name, None) or "").strip()
+        for name in ("approve_proxy", "promotion_proxy")
+    )
     stage_pools = {
-        "checkout": parse_proxy_pool(
-            getattr(args, "checkout_proxy_pool", None)
-        ) or parse_proxy_pool(configured_pools.get("checkout")),
-        "approve": parse_proxy_pool(
-            getattr(args, "approve_proxy_pool", None)
-        ) or parse_proxy_pool(configured_pools.get("approve")),
+        "checkout": parse_proxy_pool(getattr(args, "checkout_proxy_pool", None))
+        or ([] if explicit_checkout_route else parse_proxy_pool(configured_pools.get("checkout"))),
+        "approve": parse_proxy_pool(getattr(args, "approve_proxy_pool", None))
+        or ([] if explicit_approve_route else parse_proxy_pool(configured_pools.get("approve"))),
     }
 
-    # A shared explicit --proxy remains authoritative for backwards
-    # compatibility.  Otherwise each stage pool is selected independently;
-    # a configured single-value stage proxy still wins over its pool.
-    if any(stage_pools.values()) or not bool(getattr(args, "proxy_explicit", False)):
-        from ..paypal_proxy import select_proxy_from_pool
+    source = dict(context.runtime_config or {})
+    protocol = source.get("protocol_payments") if isinstance(source.get("protocol_payments"), Mapping) else {}
+    source["protocol_payments"] = {**dict(protocol), "proxy_pool": context.protocol_proxy_pool()}
+    options: dict[str, Any] = {
+        "target_country": target_country,
+        "checkout_country": checkout_country,
+        "approve_country": countries.get("approve") or "",
+        "stage_proxy_countries": countries,
+        "checkout_proxy_pool": stage_pools["checkout"],
+        "approve_proxy_pool": stage_pools["approve"],
+        "use_protocol_proxy_pool": True,
+    }
+    explicit_stages: dict[str, Any] = {}
+    if not stage_pools["checkout"] and checkout_proxy:
+        options["checkout_proxy"] = checkout_proxy
+        explicit_stages.update({"auth_gate": checkout_proxy, "checkout": checkout_proxy})
+    if not stage_pools["checkout"] and provider_proxy:
+        options["provider_proxy"] = provider_proxy
+        explicit_stages.update({
+            "stripe_init": provider_proxy,
+            "payment_method": provider_proxy,
+            "confirm": provider_proxy,
+            "redirect": provider_proxy,
+            "poll": provider_proxy,
+        })
+    if not stage_pools["approve"] and approve_proxy:
+        options["approve_proxy"] = approve_proxy
+        explicit_stages["approve"] = approve_proxy
+    if not stage_pools["approve"] and promotion_proxy:
+        options["promotion_proxy"] = promotion_proxy
+        explicit_stages["promotion"] = promotion_proxy
+    elif not stage_pools["approve"] and approve_proxy:
+        explicit_stages["promotion"] = approve_proxy
+    if explicit_stages:
+        options["stage_proxies"] = explicit_stages
+    if bool(getattr(args, "proxy_explicit", False)) and proxy:
+        options["proxy"] = proxy
+        options["checkout_proxy_pool"] = []
+        options["approve_proxy_pool"] = []
 
-        for stage, current, expected in (
-            (
-                "checkout",
-                checkout_proxy,
-                countries.get("checkout") or checkout_country or target_country,
-            ),
-            (
-                "approve",
-                approve_proxy,
-                approve_country,
-            ),
-        ):
-            pool = stage_pools[stage]
-            if not pool:
-                continue
-            selected, pool_attempts = select_proxy_from_pool(
-                pool,
-                expected,
-                stage,
-            )
-            stage_pool_attempts[stage] = pool_attempts
-            if not selected:
-                return {
-                    "ok": False,
-                    "error": "payment_proxy_pool_unavailable",
-                    "error_stage": f"{stage}_proxy_pool",
-                    "pool_stage": stage,
-                    "target_country": target_country,
-                    "attempts": pool_attempts,
-                    "stage_pool_attempts": stage_pool_attempts,
-                }
-            if stage == "checkout":
-                checkout_proxy = selected
-            else:
-                approve_proxy = selected
-            used_pool = True
+    try:
+        plan = PaymentRoutePlanner(source).plan(
+            payment_method,
+            options=options,
+            default_proxy=proxy,
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+        stage = "approve" if "approve" in message else "checkout" if "checkout" in message else "payment"
+        return {
+            "ok": False,
+            "error": "payment_proxy_pool_unavailable",
+            "error_stage": f"{stage}_proxy_pool",
+            "pool_stage": stage,
+            "target_country": target_country,
+            "attempts": [],
+            "stage_pool_attempts": {},
+        }
 
-        # The two canonical pools also own the formerly independent internal
-        # stages. Preserve an explicitly supplied CLI stage proxy, but do not
-        # let legacy method config silently bypass a configured pool.
-        if stage_pools["checkout"] and not parse_proxy_pool(getattr(args, "provider_proxy", None)):
-            provider_proxy = checkout_proxy
-        if stage_pools["approve"] and not parse_proxy_pool(getattr(args, "promotion_proxy", None)):
-            promotion_proxy = approve_proxy
+    adapter = plan.to_adapter_options()
+    if provider_proxy and not stage_pools["checkout"]:
+        adapter["provider_proxy"] = provider_proxy
+    if promotion_proxy and not stage_pools["approve"]:
+        promotion_country = str(countries.get("promotion") or "").strip().upper()
+        if promotion_country:
+            from ..paypal_proxy import rotate_proxy_session
 
-    # A configured method checkout is already an owned payment route.  Use the
-    # health-checked shared pool only when no CLI or method checkout route was
-    # resolved.
-    if not (proxy or checkout_proxy):
-        defaults = context.protocol_proxy_pool()
-        if defaults:
-            from ..paypal_proxy import rotate_proxy_session, select_proxy_from_pool
-
-            seed_proxy, attempts = select_proxy_from_pool(
-                defaults,
-                target_country,
-                "payment",
-            )
-            if not seed_proxy:
-                return {
-                    "ok": False,
-                    "error": "payment_proxy_pool_unavailable",
-                    "target_country": target_country,
-                    "attempts": attempts,
-                }
-            checkout_proxy = rotate_proxy_session(
-                seed_proxy,
-                countries.get("checkout") or checkout_country,
-            )
-            provider_proxy = provider_proxy or rotate_proxy_session(seed_proxy, target_country)
-            approve_proxy = approve_proxy or rotate_proxy_session(
-                seed_proxy,
-                countries.get("approve") or approve_country,
-            )
-            promotion_proxy = promotion_proxy or seed_proxy
-            proxy = seed_proxy
-            used_pool = True
-
-    route_seed = proxy or checkout_proxy
-    if route_seed and countries:
-        from ..paypal_proxy import rotate_proxy_session
-
-        if countries.get("checkout"):
-            checkout_proxy = rotate_proxy_session(
-                checkout_proxy or route_seed,
-                countries["checkout"],
-            )
-        if provider_proxy and countries.get("provider"):
-            provider_proxy = rotate_proxy_session(provider_proxy, countries["provider"])
-        if countries.get("approve"):
-            approve_proxy = rotate_proxy_session(
-                approve_proxy or route_seed,
-                countries["approve"],
-            )
-        if countries.get("promotion"):
-            promotion_proxy = rotate_proxy_session(
-                promotion_proxy or route_seed,
-                countries["promotion"],
-            )
-
-    # JIT refresh and Checkout must use the same payment-owned exit.  Passing
-    # the checkout route as the adapter default also prevents an unrelated
-    # registration default from being reintroduced downstream.
-    payment_proxy = checkout_proxy or proxy
+            promotion_proxy = rotate_proxy_session(promotion_proxy, promotion_country)
+        adapter["promotion_proxy"] = promotion_proxy
+    stage_pool_attempts = {
+        stage: [dict(item) for item in attempts]
+        for stage, attempts in plan.attempts.items()
+        if attempts
+    }
+    attempts = [item for values in stage_pool_attempts.values() for item in values]
     return {
         "ok": True,
-        "proxy": payment_proxy,
-        "checkout_proxy": checkout_proxy,
-        "provider_proxy": provider_proxy,
-        "approve_proxy": approve_proxy,
-        "promotion_proxy": promotion_proxy,
+        "proxy": plan.proxy_for("auth_gate") or plan.checkout_proxy,
+        "checkout_proxy": adapter.get("checkout_proxy"),
+        "provider_proxy": adapter.get("provider_proxy"),
+        "approve_proxy": adapter.get("approve_proxy"),
+        "promotion_proxy": adapter.get("promotion_proxy"),
         "stage_countries": countries,
         "checkout_proxy_pool": stage_pools["checkout"],
         "approve_proxy_pool": stage_pools["approve"],
         "target_country": target_country,
         "checkout_country": checkout_country,
-        "used_pool": used_pool,
+        "used_pool": any(stage_pools.values()) or bool(context.protocol_proxy_pool()),
         "attempts": attempts,
         "stage_pool_attempts": stage_pool_attempts,
+        "payment_route_plan": plan,
+        "route_plan": plan.public_dict(),
     }
 
 
@@ -756,6 +642,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         route = selected_route()
 
     kwargs = {
+        "payment_route_plan": route.get("payment_route_plan"),
         "checkout_proxy": route["checkout_proxy"],
         "checkout_proxy_pool": route.get("checkout_proxy_pool") or [],
         "provider_proxy": route["provider_proxy"],

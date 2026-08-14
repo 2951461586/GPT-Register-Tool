@@ -68,6 +68,12 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
         self.assertEqual(adjusted, 1779933914)
 
+    def test_smailr_registration_otp_issued_after_has_small_grace(self):
+        mailbox = MailboxAccount(email="target@smailr.com", provider="smailr")
+        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
+
+        self.assertEqual(adjusted, 1779933994)
+
     def test_login_keyword_is_separate_from_registration_keyword(self):
         self.assertEqual(codex_oauth.LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, LOGIN_EMAIL_OTP_SUBJECT_KEYWORD)
         self.assertNotEqual(LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD)

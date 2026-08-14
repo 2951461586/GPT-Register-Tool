@@ -4,6 +4,8 @@ namespace SmsWorkbench
         string PaymentMethod,
         string TargetCountry,
         string Proxy,
+        string CheckoutProxyPool,
+        string ApproveProxyPool,
         bool JitRefresh,
         bool ProbeOnly,
         bool RequireZero,
@@ -55,6 +57,11 @@ namespace SmsWorkbench
             string proxy = (request.Proxy ?? "").Trim();
             if (proxy.Length > 0)
                 arguments.AddRange(new[] { "--proxy", proxy });
+            else
+            {
+                AddPoolArgument(arguments, "--checkout-proxy-pool", request.CheckoutProxyPool);
+                AddPoolArgument(arguments, "--approve-proxy-pool", request.ApproveProxyPool);
+            }
 
             if (accountEmail.Length > 0 && !request.JitRefresh)
                 arguments.Add("--no-jit-at-refresh");
@@ -104,6 +111,8 @@ namespace SmsWorkbench
         public static IReadOnlyList<string> CreateProxyTestArguments(
             string paymentMethod,
             string proxy,
+            string checkoutProxyPool,
+            string approveProxyPool,
             string checkoutCountry,
             string approveCountry,
             string updateCountry)
@@ -118,6 +127,11 @@ namespace SmsWorkbench
             string proxyValue = (proxy ?? "").Trim();
             if (proxyValue.Length > 0)
                 arguments.AddRange(new[] { "--proxy", proxyValue });
+            else
+            {
+                AddPoolArgument(arguments, "--checkout-proxy-pool", checkoutProxyPool);
+                AddPoolArgument(arguments, "--approve-proxy-pool", approveProxyPool);
+            }
             AddCountryArgument(arguments, "--checkout-proxy-country", checkoutCountry);
             AddCountryArgument(arguments, "--approve-proxy-country", approveCountry);
             AddCountryArgument(arguments, "--update-proxy-country", updateCountry);
@@ -127,6 +141,19 @@ namespace SmsWorkbench
         private static void AddCountryArgument(List<string> arguments, string option, string country)
         {
             string normalized = Country(country, "");
+            if (normalized.Length > 0)
+                arguments.AddRange(new[] { option, normalized });
+        }
+
+        private static void AddPoolArgument(List<string> arguments, string option, string value)
+        {
+            string normalized = string.Join(
+                Environment.NewLine,
+                (value ?? "")
+                    .Split(new[] { "\r\n", "\n", ",", ";" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(item => item.Trim())
+                    .Where(item => item.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
             if (normalized.Length > 0)
                 arguments.AddRange(new[] { option, normalized });
         }
@@ -305,6 +332,9 @@ namespace SmsWorkbench
         private static ProtocolPaymentResultPresentation Failed(JsonElement root, string operation)
         {
             string error = SensitiveDataSanitizer.Redact(StringValue(root, "error"));
+            string decisionText = SensitiveDataSanitizer.Redact(StringValue(root, "decision_text"));
+            string message = SensitiveDataSanitizer.Redact(StringValue(root, "message"));
+            string decision = StringValue(root, "decision");
             string errorCode = StringValue(root, "error_code");
             string state = TerminalState(root);
             if (state.Length == 0)
@@ -322,17 +352,35 @@ namespace SmsWorkbench
                 "timed_out" => "[已超时]",
                 _ => "[失败]"
             };
-            string text = $"{prefix} {error}".TrimEnd()
-                + (errorCode.Length == 0 ? "" : $"\n错误代码: {errorCode}");
+            string summary = FirstNonEmpty(decisionText, error, message, decision, "协议支付未完成");
+            var text = new StringBuilder($"{prefix} {summary}".TrimEnd());
+            if (decision.Length > 0 && !string.Equals(decision, summary, StringComparison.Ordinal))
+                text.AppendLine().Append("判定: ").Append(SensitiveDataSanitizer.Redact(decision));
+            if (errorCode.Length > 0)
+                text.AppendLine().Append("错误代码: ").Append(SensitiveDataSanitizer.Redact(errorCode));
             string errorStage = StringValue(root, "error_stage");
             if (errorStage.Length > 0)
-                text += $"\n错误阶段: {errorStage}";
+                text.AppendLine().Append("错误阶段: ").Append(SensitiveDataSanitizer.Redact(errorStage));
+            string paymentMethod = StringValue(root, "payment_method");
+            if (paymentMethod.Length > 0)
+                text.AppendLine().Append("支付方式: ").Append(SensitiveDataSanitizer.Redact(paymentMethod));
+            string subscriptionPlan = StringValue(root, "subscription_plan");
+            if (subscriptionPlan.Length > 0)
+                text.AppendLine().Append("订阅状态: ").Append(SensitiveDataSanitizer.Redact(subscriptionPlan));
+            if (root.TryGetProperty("amount_due", out JsonElement amountDue)
+                && amountDue.ValueKind is JsonValueKind.Number or JsonValueKind.String)
+            {
+                text.AppendLine().Append("应付金额: ").Append(amountDue.ToString());
+                string currency = StringValue(root, "currency");
+                if (currency.Length > 0)
+                    text.Append(' ').Append(SensitiveDataSanitizer.Redact(currency.ToUpperInvariant()));
+            }
             if (requiresReconciliation)
-                text += "\n需要对账：请求可能已到达支付服务。";
+                text.AppendLine().Append("需要对账：请求可能已到达支付服务。");
             else if (retryable)
-                text += "\n可重试: 是";
+                text.AppendLine().Append("可重试: 是");
             return new ProtocolPaymentResultPresentation(
-                text,
+                text.ToString(),
                 "",
                 "",
                 state,
@@ -375,6 +423,11 @@ namespace SmsWorkbench
             if (!root.TryGetProperty(propertyName, out JsonElement value))
                 return "";
             return value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : value.ToString();
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
         }
 
         private static bool BoolValue(JsonElement root, string propertyName)

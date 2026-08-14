@@ -34,6 +34,17 @@ class FunctionPaymentAdapter:
             return raw
         return PaymentResult.from_mapping(raw, payment_method=request.payment_method)
 
+    def run_mapping(self, request: PaymentRequest) -> Mapping[str, Any]:
+        raw = self.runner(
+            access_token=request.access_token,
+            proxy=request.proxy,
+            auth_context=dict(request.auth_context),
+            payment_method=request.payment_method,
+            runtime_config=dict(request.runtime_config),
+            **dict(request.options),
+        )
+        return raw.to_dict() if isinstance(raw, PaymentResult) else dict(raw or {})
+
 
 class PaymentAdapterRegistry:
     def __init__(self) -> None:
@@ -58,6 +69,14 @@ class PaymentAdapterRegistry:
         if not request.access_token.strip():
             raise ValueError("access_token is required")
         return self.get(request.payment_method).run(request)
+
+    def execute_mapping(self, request: PaymentRequest) -> Mapping[str, Any]:
+        if not request.access_token.strip():
+            raise ValueError("access_token is required")
+        adapter = self.get(request.payment_method)
+        if isinstance(adapter, FunctionPaymentAdapter):
+            return adapter.run_mapping(request)
+        return adapter.run(request).to_dict()
 
     def validate_methods(self, expected: set[str]) -> None:
         registered = set(self._by_method)

@@ -237,6 +237,49 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal(loaded.CheckoutProxyPool, loaded.ApproveProxyPool);
     }
 
+    [Fact]
+    public void CanonicalNamedPoolsAndRoutesAreSharedBySingleAndBatchSurfaces()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        File.WriteAllText(configPath, """
+            {
+              "proxy": {
+                "registration": "http://registration-jp",
+                "pool": ["http://registration-jp"]
+              },
+              "protocol_payments": {
+                "proxy_pools": {
+                  "paypal_checkout": ["http://payment-us-one", "http://payment-us-two"],
+                  "paypal_approve": ["http://payment-jp"]
+                },
+                "methods": {
+                  "paypal": {
+                    "stage_routes": {
+                      "checkout": { "pool": "paypal_checkout", "country": "US" },
+                      "approve": { "pool": "paypal_approve", "country": "JP" }
+                    },
+                    "stage_proxy_countries": { "checkout": "US", "approve": "JP" }
+                  }
+                }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("paypal");
+
+        Assert.Equal("http://payment-us-one" + Environment.NewLine + "http://payment-us-two", loaded.CheckoutProxyPool);
+        Assert.Equal("http://payment-jp", loaded.ApproveProxyPool);
+        Assert.Equal("US", loaded.CheckoutCountry);
+        Assert.Equal("JP", loaded.ApproveCountry);
+        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        Assert.Equal("http://registration-jp", root["proxy"]!["registration"]!.GetValue<string>());
+        Assert.DoesNotContain(
+            root["proxy"]!["pool"]!.AsArray().Select(node => node!.GetValue<string>()),
+            value => value.Contains("payment-", StringComparison.Ordinal));
+    }
+
     private static string ArgumentAfter(IReadOnlyList<string> arguments, string option)
     {
         int index = arguments.ToList().IndexOf(option);

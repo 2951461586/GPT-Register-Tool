@@ -23,11 +23,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .config import current_config_data, resolve_runtime_config, validate_config
+from .config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from .paths import project_path, runtime_file
 from .payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
 from .payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method
 from .payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from .payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
+from .payment_routing import (
+    PaymentRoutePlan,
+    PaymentRoutePlanner,
+    coerce_approve_country as canonical_coerce_approve_country,
+    parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
 from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 
 
@@ -177,56 +185,9 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
 PAYMENT_ADAPTERS = build_default_payment_registry()
 
 
-class PaymentLinkRun:
-    def __init__(self, method: str):
-        self.run_id = uuid.uuid4().hex
-        self.method = method
-        self.state = "created"
-        self.history: list[dict[str, Any]] = []
-        self._record("created", "任务已创建")
-
-    def move(self, state: str, message: str = "") -> None:
-        allowed = _TRANSITIONS.get(self.state, set())
-        if state not in allowed:
-            raise RuntimeError(f"invalid payment state transition: {self.state} -> {state}")
-        self.state = state
-        self._record(state, message)
-
-    def fail(self, message: str) -> None:
-        self.terminate("failed", message)
-
-    def terminate(self, state: str, message: str) -> None:
-        if state not in _TERMINAL_STATES:
-            raise ValueError(f"not a terminal payment state: {state}")
-        if self.state not in _TERMINAL_STATES:
-            self.move(state, message)
-
-    def _record(self, state: str, message: str) -> None:
-        self.history.append({"state": state, "at": int(time.time()), "message": message})
-
-
 def normalize_payment_method(value: Any) -> str:
     method = normalize_catalog_payment_method(value)
     return method if method in PAYMENT_METHODS else ""
-
-
-def parse_proxy_pool(value: Any) -> list[str]:
-    """Normalize comma/newline-separated or sequence proxy-pool values."""
-    if value in (None, "", False):
-        return []
-    if isinstance(value, str):
-        values = re.split(r"[\r\n,;]+", value)
-    elif isinstance(value, Mapping):
-        values = value.get("proxies") or value.get("pool") or value.get("values") or []
-    elif isinstance(value, (list, tuple, set)):
-        values = value
-    else:
-        values = [value]
-    return list(dict.fromkeys(
-        str(item or "").strip()
-        for item in values
-        if str(item or "").strip()
-    ))
 
 
 def payment_proxy_pools(
@@ -234,17 +195,7 @@ def payment_proxy_pools(
     runtime_config: Mapping[str, Any] | None = None,
 ) -> dict[str, list[str]]:
     """Read method-owned Checkout and Approve proxy pools from configuration."""
-    method = normalize_payment_method(payment_method)
-    source = _config_data(runtime_config)
-    protocol = source.get("protocol_payments") if isinstance(source.get("protocol_payments"), Mapping) else {}
-    methods = protocol.get("methods") if isinstance(protocol.get("methods"), Mapping) else {}
-    canonical = methods.get(method) if isinstance(methods.get(method), Mapping) else {}
-    legacy = source.get(method) if isinstance(source.get(method), Mapping) else {}
-    method_cfg = {**dict(legacy), **dict(canonical)}
-    return {
-        "checkout": parse_proxy_pool(method_cfg.get("checkout_proxy_pool")),
-        "approve": parse_proxy_pool(method_cfg.get("approve_proxy_pool")),
-    }
+    return canonical_payment_proxy_pools(_config_data(runtime_config), payment_method)
 
 
 def payment_method_label(value: Any) -> str:
@@ -275,7 +226,7 @@ def register_payment_adapter(adapter: Any) -> Any:
     return adapter
 
 
-def generate_payment_link(
+def _generate_payment_link_legacy(
     access_token: str,
     proxy: Any = None,
     payment_method: Any = "paypal",
@@ -391,7 +342,113 @@ def generate_payment_link(
         return _finish_run(run, failed, terminal_state, error)
 
 
-def probe_payment_method(
+def generate_payment_link(
+    access_token: str,
+    proxy: Any = None,
+    payment_method: Any = "paypal",
+    auth_context: dict[str, Any] | None = None,
+    paypal_generation_type: str | None = None,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Execute one protocol-payment flow through the common router and state machine."""
+    source = _config_data(runtime_config)
+    method = normalize_payment_method(payment_method)
+    method_name = method or str(payment_method or "").strip().lower()
+    options = dict(kwargs)
+    supplied_plan = options.pop("payment_route_plan", None)
+    planning_error: Exception | None = None
+    plan = supplied_plan if isinstance(supplied_plan, PaymentRoutePlan) else None
+
+    try:
+        validate_config(source, workflow="protocol_payments")
+        if not method:
+            raise ValueError(f"unsupported payment method: {payment_method}")
+        if method not in _enabled_methods(source):
+            raise ValueError(
+                f"payment method disabled by protocol_payments.enabled_methods: {method}"
+            )
+        if plan is not None and plan.payment_method != method:
+            raise ValueError(
+                f"payment route plan method mismatch: {plan.payment_method} != {method}"
+            )
+        if plan is None:
+            plan = PaymentRoutePlanner(source).plan(
+                method,
+                options=options,
+                default_proxy=proxy,
+            )
+    except Exception as exc:
+        if not getattr(exc, "error_stage", ""):
+            try:
+                exc.error_stage = "validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"
+            except Exception:
+                pass
+        planning_error = exc
+        plan = PaymentRoutePlan.empty(method_name)
+
+    assert plan is not None
+    spec = PAYMENT_METHODS.get(method)
+    routed_options = {**options, **plan.to_adapter_options()}
+    if isinstance(options.get("stage_proxy_countries"), Mapping):
+        routed_options["stage_proxy_countries"] = dict(options["stage_proxy_countries"])
+    routed_options["payment_route_plan"] = plan
+    routed_options["paypal_generation_type"] = paypal_generation_type
+
+    for record in plan.coercions:
+        _LOGGER.warning(
+            "payment method %s approve country %s is not in the allowed set; coerced to %s",
+            method,
+            record.get("original"),
+            record.get("coerced"),
+        )
+
+    def run_adapter(request: PaymentExecutionRequest) -> Mapping[str, Any]:
+        if planning_error is not None:
+            raise planning_error
+        if spec is None:
+            raise ValueError(f"unsupported payment method: {payment_method}")
+        if bool(request.options.get("probe_only")):
+            return probe_payment_method(
+                access_token=request.access_token,
+                payment_method=request.payment_method,
+                auth_context=dict(request.auth_context),
+                proxy=request.route_plan.checkout_proxy,
+                runtime_config=request.runtime_config,
+                **dict(request.options),
+            )
+        adapter_request = PaymentRequest.create(
+            payment_method=request.payment_method,
+            access_token=request.access_token,
+            proxy=request.route_plan.checkout_proxy,
+            auth_context=request.auth_context,
+            runtime_config=request.runtime_config,
+            options=request.options,
+        )
+        return PAYMENT_ADAPTERS.execute_mapping(adapter_request)
+
+    executor = PaymentFlowExecutor(
+        run_adapter,
+        normalizer=(lambda result: _normalize_result(spec, result)) if spec else None,
+        exception_classifier=_classify_exception,
+        error_sanitizer=_redact_sensitive_text,
+        progress=progress,
+    )
+    result = executor.run(PaymentExecutionRequest(
+        payment_method=method_name,
+        access_token=str(access_token or ""),
+        route_plan=plan,
+        auth_context=dict(auth_context or {}),
+        runtime_config=source,
+        options=routed_options,
+        operation="payment_method_capability_probe" if bool(options.get("probe_only")) else "extract_link",
+    ))
+    _safe_persist_run(result)
+    return result
+
+
+def _probe_payment_method_legacy(
     access_token: str,
     payment_method: Any,
     *,
@@ -428,6 +485,60 @@ def probe_payment_method(
         payment_method=method,
         auth_context=auth_context,
         proxy=proxy,
+        **options,
+    )
+
+
+def probe_payment_method(
+    access_token: str,
+    payment_method: Any,
+    *,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Run the real pre-side-effect path using one precomputed route plan."""
+    method = normalize_payment_method(payment_method)
+    if not method:
+        raise ValueError(f"unsupported payment method: {payment_method}")
+
+    source = _config_data(runtime_config)
+    options = dict(kwargs)
+    plan = options.pop("payment_route_plan", None)
+    if not isinstance(plan, PaymentRoutePlan):
+        plan = PaymentRoutePlanner(source).plan(
+            method,
+            options=options,
+            default_proxy=proxy,
+        )
+    elif plan.payment_method != method:
+        raise ValueError(
+            f"payment route plan method mismatch: {plan.payment_method} != {method}"
+        )
+    options.update(plan.to_adapter_options())
+    options.pop("probe_only", None)
+
+    if method == "gopay":
+        if "timeout_seconds" not in options and options.get("timeout") is not None:
+            options["timeout_seconds"] = options["timeout"]
+        return _run_wallet_adapter(
+            PAYMENT_METHODS[method],
+            access_token,
+            proxy=plan.checkout_proxy,
+            auth_context=auth_context,
+            runtime_config=source,
+            probe_only=True,
+            **options,
+        )
+
+    from .payment_capability import payment_method_capability_probe
+
+    return payment_method_capability_probe(
+        access_token=access_token,
+        payment_method=method,
+        auth_context=auth_context,
+        proxy=plan.checkout_proxy,
         **options,
     )
 
@@ -666,6 +777,8 @@ def _run_wallet_adapter(
         for key in stage_keys
     }
     transport_context["default_proxy"] = proxy or method_cfg.get("proxy") or ""
+    transport_context["payment_route_plan"] = kwargs.get("payment_route_plan")
+    transport_context["stage_proxies"] = kwargs.get("stage_proxies")
     transport_context["stage_proxy_countries"] = (
         kwargs.get("stage_proxy_countries")
         if isinstance(kwargs.get("stage_proxy_countries"), Mapping)
@@ -766,6 +879,8 @@ def _run_gcash_adapter(
         ),
     }
     transport_context["default_proxy"] = proxy or method_cfg.get("proxy") or ""
+    transport_context["payment_route_plan"] = kwargs.get("payment_route_plan")
+    transport_context["stage_proxies"] = kwargs.get("stage_proxies")
     return run_gcash_provider(
         access_token,
         ChatGPTGCashTransport(timeout=timeout),
@@ -1350,6 +1465,77 @@ def _resolve_proxy_pool_routes(
     values.pop("checkout_proxy_pool", None)
     values.pop("approve_proxy_pool", None)
     return proxy, values
+
+
+def _resolve_proxy_pool_routes(
+    method: str,
+    proxy: Any,
+    kwargs: Mapping[str, Any],
+    runtime_config: Mapping[str, Any] | None = None,
+    *,
+    coercion_records: list[dict[str, Any]] | None = None,
+) -> tuple[Any, dict[str, Any]]:
+    """Compatibility wrapper around the canonical payment route planner."""
+    values = dict(kwargs)
+    source = _config_data(runtime_config)
+    configured_countries = values.get("stage_proxy_countries")
+    configured_countries = dict(configured_countries) if isinstance(configured_countries, Mapping) else {}
+    approve_input = str(
+        configured_countries.get("approve") or values.get("approve_country") or ""
+    ).strip().upper()
+    pre_coercions: list[dict[str, Any]] = []
+    if approve_input:
+        approve_country, changed = coerce_approve_country(method, approve_input)
+        if changed:
+            configured_countries["approve"] = approve_country
+            values["stage_proxy_countries"] = configured_countries
+            if str(values.get("approve_country") or "").strip():
+                values["approve_country"] = approve_country
+            pre_coercions.append({
+                "field": "approve_country",
+                "original": approve_input,
+                "coerced": approve_country,
+            })
+    supplied = values.get("payment_route_plan")
+    if isinstance(supplied, PaymentRoutePlan):
+        plan = supplied
+    else:
+        plan = PaymentRoutePlanner(source).plan(
+            method,
+            options=values,
+            default_proxy=proxy,
+        )
+    if plan.payment_method != method:
+        raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
+
+    countries_supplied = isinstance(values.get("stage_proxy_countries"), Mapping)
+    routed = {**values, **plan.to_adapter_options()}
+    routed.pop("checkout_proxy_pool", None)
+    routed.pop("approve_proxy_pool", None)
+    routed.pop("stage_proxy_pools", None)
+    routed.pop("stage_routes", None)
+    if not countries_supplied and not plan.coercions:
+        routed.pop("stage_proxy_countries", None)
+
+    records = [*pre_coercions, *plan.coercions]
+    for record in records:
+        if coercion_records is not None:
+            coercion_records.append(dict(record))
+        original = str(record.get("original") or "")
+        coerced = str(record.get("coerced") or "")
+        if record not in pre_coercions:
+            _LOGGER.warning(
+                "payment method %s approve country %s is not in the allowed set; coerced to %s",
+                method,
+                original,
+                coerced,
+            )
+        countries = dict(routed.get("stage_proxy_countries") or {})
+        countries["approve"] = coerced
+        routed["stage_proxy_countries"] = countries
+        if str(values.get("approve_country") or "").strip():
+            routed["approve_country"] = coerced
+    return plan.checkout_proxy or proxy, routed
 
 
 def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str]:

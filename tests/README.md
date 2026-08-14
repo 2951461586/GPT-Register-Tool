@@ -32,7 +32,6 @@ payment requests are never part of the default suite.
 - `test_payment_result_contract.py` covers `cancelled`, `unknown`, and `timed_out` terminal states plus normalized `retryable`/`error_stage` fields.
 - `test_wallet_provider.py`, `test_wallet_transport.py`, and `test_wallet_manager_integration.py` cover the shared GoPay/GrabPay adapter, production transport seams, and manager registration. GCash has separate `test_gcash_provider.py` and `test_gcash_transport.py` coverage. Wire contracts use offline fixtures under `fixtures/wallet_provider/`.
 - `test_codex_oauth.py` covers OAuth/passwordless/add-phone routing decisions.
-- `test_paypal_links.py` covers PayPal link regeneration and persistence.
 - Account/session seed loading is centralized in `sms_tool.account_seed`; payment tests should patch that seam or the adapter-specific alias instead of duplicating SQLite/session setup.
 - `test_paypal_protocol.py` covers BA/EC extraction and Stripe redirect parsing.
 - `test_paypal_reconciliation.py` covers the independent PayPal merchant-return allowlist, redirect state machine, outcome classification, retryability, and secret-free output.
