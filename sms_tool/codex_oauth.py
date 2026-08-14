@@ -153,11 +153,27 @@ def _login_and_exchange(
             allow_redirects=False,
         )
         if start_resp.status_code != 200:
+            body = start_resp.text[:300]
+            if (
+                start_resp.status_code == 409
+                and "invalid_state" in body
+                and restart_attempt < max_restarts
+            ):
+                print(f"[*] OAuth state invalid, restarting auth flow (attempt {restart_attempt + 1}/{max_restarts})")
+                try:
+                    session.cookies.clear(domain="auth.openai.com")
+                except Exception:
+                    pass
+                oauth = _new_oauth_request()
+                _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
+                if _has_callback_code(current_url):
+                    return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
+                continue
             return {
                 "ok": False,
                 "mode": "codex_oauth_pkce",
                 "error": f"authorize_continue_failed:{start_resp.status_code}",
-                "body": start_resp.text[:300],
+                "body": body,
             }
         next_url = _next_url(start_resp)
         _, current_url = _follow_redirects(session, next_url, proxy=proxy)
@@ -185,6 +201,10 @@ def _login_and_exchange(
             session.cookies.clear(domain="auth.openai.com")
         except Exception:
             pass
+        oauth = _new_oauth_request()
+        _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
+        if _has_callback_code(current_url):
+            return {"ok": True, "tokens": _exchange_callback(current_url, oauth, proxy=proxy)}
     return result
 
 
@@ -914,9 +934,13 @@ def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
 def _mailbox_from_data(data):
     mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
     email = str(mailbox.get("email") or data.get("email") or "").strip()
-    refresh_token = str(mailbox.get("refresh_token") or "").strip()
+    # SQLite account rows flatten sensitive mailbox fields while token-free
+    # session snapshots retain only the public mailbox metadata. Rehydrate
+    # from either shape so recovery does not report a false missing_mailbox.
+    refresh_token = str(mailbox.get("refresh_token") or data.get("mailbox_refresh_token") or "").strip()
     provider = str(mailbox.get("provider") or data.get("mailbox_provider") or "").strip()
     source = str(mailbox.get("source") or data.get("mailbox_source") or "").strip()
+    mailbox_token = str(mailbox.get("token") or data.get("mailbox_token") or "").strip()
     if not email:
         return None
     mailbox_password = mailbox.get("password") if "password" in mailbox else data.get("password")
@@ -926,7 +950,7 @@ def _mailbox_from_data(data):
         login_password=str(mailbox.get("login_password") or "").strip(),
         refresh_token=refresh_token,
         access_token=str(mailbox.get("access_token") or "").strip(),
-        token=str(mailbox.get("token") or "").strip(),
+        token=mailbox_token,
         client_secret=str(mailbox.get("client_secret") or "").strip(),
         auth_mode=str(mailbox.get("auth_mode") or "").strip(),
         sender_name=str(mailbox.get("sender_name") or "").strip(),
