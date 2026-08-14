@@ -414,3 +414,98 @@ def test_recovery_proxy_uses_registration_country_and_pool():
     assert attempts[0]["ok"]
     assert select.call_args.args[1:] == ("JP", "account_recovery")
     assert select.call_args.args[0][0] == "http://explicit.example:8080"
+
+
+
+def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogin():
+    cleared = {"called": False}
+
+    def fake_clear(email):
+        cleared["called"] = True
+        return True
+
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "stale@example.com", "access_token": "old_at"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "quota_status": "401SHIXIAO"},
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_codex_account",
+            return_value={"ok": True, "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"}},
+        ),
+        patch.object(account_recovery, "clear_stale_promotion_at_marker", side_effect=fake_clear),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["stale@example.com"],
+            relogin_on_401=True,
+            relogin_mode="codex_oauth",
+        )
+
+    assert result["relogin_success"] == 1
+    assert cleared["called"]
+
+
+def test_refresh_local_quota_statuses_skips_promotion_clear_without_relogin():
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "ok@example.com", "access_token": "at_123"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": True, "quota_status": "active"},
+        ),
+        patch.object(account_recovery, "clear_stale_promotion_at_marker") as clear_marker,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
+
+    assert result["ok"]
+    clear_marker.assert_not_called()
+
+
+def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():
+    import json as json_mod
+    from sms_tool.desktop_read import _record_payload
+
+    stale_label = "AT" + chr(0x5931) + chr(0x6548)
+
+    def record_with(probe_state):
+        return {
+            "id": "1",
+            "email": "stale@example.com",
+            "json_path": "",
+            "raw_json": json_mod.dumps({
+                "email": "stale@example.com",
+                "promotion_status": stale_label,
+                "promotion": {"status": stale_label, "last_result": {"status_code": 401}},
+                **probe_state,
+            }),
+        }
+
+    fresh_probe = {
+        "quota": {"last_result": {"status_code": 200}, "status": "ok"},
+        "quota_updated_at": 200,
+        "account_scan": {"token_probe": {"status_code": 401}},
+        "account_scan_updated_at": 100,
+    }
+    payload = _record_payload(record_with(fresh_probe))
+    assert "promotion_status" not in payload
+    assert payload["at_probe_status_code"] == "200"
+
+    still_401 = {
+        "quota": {"last_result": {"status_code": 401}, "status": "bad"},
+        "quota_updated_at": 200,
+    }
+    payload_401 = _record_payload(record_with(still_401))
+    assert payload_401["promotion_status"] == stale_label

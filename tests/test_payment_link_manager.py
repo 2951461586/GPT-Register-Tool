@@ -539,7 +539,13 @@ class PaymentLinkManagerTests(unittest.TestCase):
             with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
-                        "token", payment_method="momo", checkout_proxy="socks5h://127.0.0.1:1080"
+                        "token",
+                        payment_method="momo",
+                        checkout_proxy="socks5h://127.0.0.1:1080",
+                        runtime_config={
+                            "chatgpt": {},
+                            "protocol_payments": {"enabled_methods": ["momo"]},
+                        },
                     )
         self.assertTrue(result["ok"])
         self.assertIn("payment.momo.vn", result["url"])

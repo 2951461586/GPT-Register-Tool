@@ -69,8 +69,12 @@ public sealed class PaymentBatchViewModelTests
         Assert.Equal("http://approve-jp\nhttp://approve-tr", service.LastRequest.ApproveProxyPool);
         Assert.Equal("ID", service.LastRequest.CheckoutCountry);
         Assert.Equal("JP", service.LastRequest.ApproveCountry);
-        Assert.Equal("ID", service.LastRequest.MatrixRows[0].CheckoutCountry);
-        Assert.Equal("TR", service.LastRequest.MatrixRows[0].ApproveCountry);
+        // The matrix UI is hidden: the single neutral cell carries no stage
+        // countries so every account follows the shared proxy settings above.
+        Assert.Equal("", service.LastRequest.MatrixRows[0].CheckoutCountry);
+        Assert.Equal("", service.LastRequest.MatrixRows[0].ApproveCountry);
+        Assert.Equal("", service.LastRequest.MatrixRows[0].RegistrationCountry);
+        Assert.Equal(1, service.LastRequest.MatrixRows[0].SampleSize);
 
         viewModel.SaveProxyConfigurationCommand.Execute(null);
         Assert.Equal("http://checkout-one\nhttp://checkout-two", service.LastSaved!.CheckoutProxyPool);
@@ -248,20 +252,22 @@ public sealed class PaymentBatchViewModelTests
     }
 
     [Fact]
-    public async Task InvalidMatrixStopsBeforeBackendExecution()
+    public async Task NeutralMatrixCellAllowsBatchRunWithoutCohorts()
     {
         var service = new StubPaymentBatchService();
         var viewModel = new PaymentBatchViewModel(
             service,
             new StubFileLauncher(),
             new[] { new PaymentBatchAccount("user@example.com", true) });
-        viewModel.MatrixRows[0].RegistrationCountry = "USA";
 
         await viewModel.RunCommand.ExecuteAsync(null);
 
-        Assert.Null(service.LastRequest);
-        Assert.Contains("两位字母", viewModel.Status, StringComparison.Ordinal);
-        Assert.False(viewModel.HasRun);
+        // The hidden matrix is replaced by one neutral cell that must always
+        // be valid, so the backend request is still created.
+        Assert.NotNull(service.LastRequest);
+        Assert.Single(service.LastRequest!.MatrixRows);
+        Assert.Equal("", service.LastRequest.MatrixRows[0].RegistrationCountry);
+        Assert.True(viewModel.HasRun);
     }
 
     private sealed class StubCountryCatalog : IPaymentCountryCatalog

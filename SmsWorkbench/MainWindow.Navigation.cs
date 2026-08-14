@@ -80,6 +80,26 @@ namespace SmsWorkbench
             RefreshPagedRows();
         }
 
+        private void AccountGrid_Sorting(object sender, DataGridSortingEventArgs e)
+        {
+            string member = (e.Column.SortMemberPath ?? "").Trim();
+            if (member.Length == 0) return;
+
+            e.Handled = true;
+            ListSortDirection next = e.Column.SortDirection == ListSortDirection.Ascending
+                ? ListSortDirection.Descending
+                : ListSortDirection.Ascending;
+            foreach (DataGridColumn column in AccountGrid.Columns)
+            {
+                column.SortDirection = null;
+            }
+            e.Column.SortDirection = next;
+            accountSortMember = member;
+            accountSortDirection = next;
+            currentPage = 1;
+            RefreshPagedRows();
+        }
+
         private void ShowAll_Click(object sender, RoutedEventArgs e) => SetScope("全部");
 
         private void ShowMailboxPool_Click(object sender, RoutedEventArgs e) => SetScope("邮箱池");

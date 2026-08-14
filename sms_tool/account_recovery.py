@@ -17,7 +17,13 @@ from typing import Any
 
 from .account_liveness import probe_account_liveness
 from .config import CFG
-from .storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
+from .storage import (
+    clear_stale_promotion_at_marker,
+    get_account_record,
+    list_paypal_accounts,
+    mark_quota_status,
+    upsert_account,
+)
 
 
 def refresh_local_quota_statuses(
@@ -58,6 +64,14 @@ def refresh_local_quota_statuses(
             )
             if relogin.get("ok"):
                 probe = dict(relogin.get("probe") or {})
+                # The verified replacement AT invalidates a stale promotion
+                # "AT失效" label; clear it before the quota write-back merges
+                # the older raw_json over the refreshed session file.
+                if email:
+                    try:
+                        clear_stale_promotion_at_marker(email)
+                    except Exception:
+                        pass
         status = str(probe.get("quota_status") or probe.get("status") or "未知")
         if relogin and not relogin.get("ok"):
             status = _relogin_failure_quota_status(relogin)

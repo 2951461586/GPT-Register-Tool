@@ -1000,6 +1000,65 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
     return True
 
 
+def clear_stale_promotion_at_marker(email, *, runtime_config: ConfigInput = None):
+    """Clear a stale ``AT失效`` promotion marker after a verified relogin.
+
+    The promotion (优惠) probe label predates the replacement access token.
+    Keep ``promotion.last_result`` for later inspection but stop surfacing the
+    stale authentication failure in the desktop 优惠状态 column. Returns True
+    when a stale marker was found and cleared.
+    """
+    init_database(runtime_config=runtime_config)
+    now = int(time.time())
+    conn = _connect(runtime_config=runtime_config)
+    json_path = ""
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            data = json.loads(row["raw_json"] or "{}")
+        except Exception:
+            data = {}
+        json_path = str(row["json_path"] or "").strip()
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        changed = False
+        if str(data.get("promotion_status") or "").strip() == "AT失效":
+            data["promotion_status"] = ""
+            changed = True
+        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else None
+        if isinstance(promotion, dict) and str(promotion.get("status") or "").strip() == "AT失效":
+            promotion["status"] = ""
+            data["promotion"] = promotion
+            changed = True
+        if not changed:
+            return False
+        data["promotion_updated_at"] = now
+        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE lower(email)=lower(?)",
+            (now, raw_json, lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
+
+
 # ── Session File & Rebuild ───────────────────────────────────────────────────
 
 def _mark_plan_type_plus(data):
