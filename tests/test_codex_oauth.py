@@ -53,6 +53,19 @@ class CodexOauthTests(unittest.TestCase):
         self.assertIsNone(result)
         from_config.assert_not_called()
 
+    def test_mailbox_from_data_rehydrates_flat_smailr_storage_fields(self):
+        result = codex_oauth._mailbox_from_data({
+            "email": "user@smailr.com",
+            "mailbox_provider": "smailr",
+            "mailbox_source": "purchase",
+            "mailbox_token": "mailbox-id",
+        })
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.provider, "smailr")
+        self.assertEqual(result.source, "purchase")
+        self.assertEqual(result.token, "mailbox-id")
+
     def test_cfworker_mailbox_does_not_inherit_chatgpt_account_password(self):
         data = {
             "email": "target@liziai.cloud",
@@ -130,6 +143,39 @@ class CodexOauthTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         finish.assert_called_once()
         passwordless.assert_not_called()
+
+    def test_authorize_invalid_state_restarts_with_fresh_oauth_request(self):
+        session = Mock()
+        session.cookies.set = Mock()
+        session.post.side_effect = [
+            Mock(status_code=409, text='{"error":{"code":"invalid_state"}}'),
+            Mock(status_code=200, text="{}"),
+        ]
+        fresh_oauth = {
+            "auth_url": "https://auth.openai.com/oauth/authorize?fresh=1",
+            "state": "fresh",
+            "code_verifier": "v2",
+            "redirect_uri": "http://localhost",
+        }
+
+        with patch("sms_tool.codex_oauth._new_oauth_request", return_value=fresh_oauth) as new_oauth, \
+             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}), \
+             patch("sms_tool.codex_oauth.attach_sentinel"), \
+             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"), \
+             patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")) as follow, \
+             patch("sms_tool.codex_oauth._finish_authorization", return_value={"ok": True, "tokens": {"access_token": "at"}}):
+            result = codex_oauth._login_and_exchange(
+                session=session,
+                oauth={"auth_url": "https://auth.openai.com/oauth/authorize?stale=1", "state": "stale"},
+                email="user@example.com",
+                data={"device_id": "did"},
+                current_url="https://auth.openai.com/authorize",
+            )
+
+        self.assertTrue(result["ok"])
+        new_oauth.assert_called_once()
+        self.assertGreaterEqual(follow.call_count, 1)
+        self.assertEqual(session.post.call_count, 2)
 
     def test_password_login_uses_password_verify_endpoint(self):
         session = Mock()
