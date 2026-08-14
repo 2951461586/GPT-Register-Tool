@@ -45,7 +45,10 @@ namespace SmsWorkbench
         private void RefreshPagedRows()
         {
             if (PagedRows == null) return;
-            var filtered = allRows.Where(FilterRow).ToList();
+            var filtered = AccountGridOrdering.Apply(
+                allRows.Where(FilterRow),
+                accountSortMember,
+                accountSortDirection).ToList();
             filteredCount = filtered.Count;
             int pageSize = PageSizeValue();
             int pageCount = Math.Max(1, (int)Math.Ceiling(filteredCount / (double)pageSize));

@@ -28,7 +28,6 @@ namespace SmsWorkbench
         [ObservableProperty] private bool jitRefresh = true;
         [ObservableProperty] private bool probeOnly;
         [ObservableProperty] private bool requireZero = true;
-        [ObservableProperty] private PaymentMatrixRow selectedMatrixRow;
         [ObservableProperty] private string status = "就绪";
         [ObservableProperty] private string reportPath = "";
         [ObservableProperty] private bool isRunning;
@@ -64,7 +63,6 @@ namespace SmsWorkbench
             batchId = _automaticBatchId;
             ReloadCountryOptions();
             ReloadProxyConfiguration();
-            ReloadMatrix();
         }
 
         public IReadOnlyList<PaymentMethodOption> PaymentMethodOptions { get; }
@@ -79,8 +77,6 @@ namespace SmsWorkbench
         public IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions { get; private set; } =
             Array.Empty<PaymentProxyCountryOption>();
 
-        public ObservableCollection<PaymentMatrixRow> MatrixRows { get; } = new();
-
         public ObservableCollection<PaymentBatchResultRow> Results { get; } = new();
 
         public string AccountSummary => $"账号 {_accounts.Length}  ·  AT 已获取 {_accounts.Count(account => account.HasAccessToken)}";
@@ -88,8 +84,6 @@ namespace SmsWorkbench
         public bool RequireZeroEnabled => !ProbeOnly;
 
         private bool CanRun() => !IsRunning && _accounts.Length > 0;
-
-        private bool CanDeleteMatrixRow() => !IsRunning && SelectedMatrixRow != null && MatrixRows.Count > 1;
 
         private bool CanOpenReport() => !IsRunning && _fileLauncher.Exists(ReportPath);
 
@@ -104,7 +98,6 @@ namespace SmsWorkbench
             OnPropertyChanged(nameof(RequireZeroEnabled));
             ReloadCountryOptions();
             ReloadProxyConfiguration();
-            ReloadMatrix();
             SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
         }
 
@@ -113,8 +106,6 @@ namespace SmsWorkbench
             OnPropertyChanged(nameof(RequireZeroEnabled));
         }
 
-        partial void OnSelectedMatrixRowChanged(PaymentMatrixRow value) => DeleteMatrixRowCommand.NotifyCanExecuteChanged();
-
         partial void OnReportPathChanged(string value) => OpenReportCommand.NotifyCanExecuteChanged();
 
         partial void OnIsRunningChanged(bool value)
@@ -122,26 +113,7 @@ namespace SmsWorkbench
             RunCommand.NotifyCanExecuteChanged();
             SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
             TestProxiesCommand.NotifyCanExecuteChanged();
-            DeleteMatrixRowCommand.NotifyCanExecuteChanged();
             OpenReportCommand.NotifyCanExecuteChanged();
-        }
-
-        [RelayCommand]
-        private void AddMatrixRow()
-        {
-            PaymentMatrixRow row = _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod?.Id ?? "paypal");
-            ApplyProxyCountryDefaults(row);
-            MatrixRows.Add(row);
-            DeleteMatrixRowCommand.NotifyCanExecuteChanged();
-        }
-
-        [RelayCommand(CanExecute = nameof(CanDeleteMatrixRow))]
-        private void DeleteMatrixRow()
-        {
-            if (SelectedMatrixRow == null || MatrixRows.Count <= 1) return;
-            MatrixRows.Remove(SelectedMatrixRow);
-            SelectedMatrixRow = null;
-            DeleteMatrixRowCommand.NotifyCanExecuteChanged();
         }
 
         [RelayCommand(CanExecute = nameof(CanOpenReport))]
@@ -301,13 +273,7 @@ namespace SmsWorkbench
             string normalizedBatchId = Regex.Replace((BatchId ?? "").Trim(), @"[^A-Za-z0-9_.-]+", "_");
             if (normalizedBatchId.Length == 0)
             {
-                Status = "请输入批次 ID。";
-                return false;
-            }
-            if (MatrixRows.Any(cell => !cell.IsValid()))
-            {
-                Status = "矩阵国家代码必须为空或两位字母，样本数必须大于 0。";
-                return false;
+                normalizedBatchId = CreateBatchId(SelectedMethod?.Id ?? "paypal");
             }
             BatchId = normalizedBatchId;
             request = new PaymentBatchRequest(
@@ -324,34 +290,28 @@ namespace SmsWorkbench
                 JitRefresh,
                 ProbeOnly,
                 RequireZero,
-                MatrixRows.ToArray());
+                new[] { CreateNeutralMatrixRow() });
             return true;
         }
 
-        private void ReloadMatrix()
+        /// <summary>
+        /// Single neutral matrix cell: no registration-country cohort and no
+        /// per-cell stage countries, so every account follows the shared
+        /// Checkout / Approve proxy settings configured above. Only the
+        /// method-owned strategy default (e.g. MoMo custom promo) is kept.
+        /// </summary>
+        private PaymentMatrixRow CreateNeutralMatrixRow()
         {
-            if (_paymentBatchService == null || SelectedMethod == null) return;
-            MatrixRows.Clear();
-            IReadOnlyList<PaymentMatrixRow> configured = _paymentBatchService.LoadMatrix(SelectedMethod.Id);
-            IEnumerable<PaymentMatrixRow> rows = configured.Count > 0
-                ? configured
-                : new[] { _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod.Id) };
-            foreach (PaymentMatrixRow row in rows)
-            {
-                if (configured.Count == 0)
-                    ApplyProxyCountryDefaults(row);
-                MatrixRows.Add(row);
-            }
-            DeleteMatrixRowCommand.NotifyCanExecuteChanged();
-        }
-
-        private void ApplyProxyCountryDefaults(PaymentMatrixRow row)
-        {
-            if (row == null) return;
-            if (!string.IsNullOrWhiteSpace(CheckoutProxyCountry))
-                row.CheckoutCountry = CheckoutProxyCountry.Trim().ToUpperInvariant();
-            if (!string.IsNullOrWhiteSpace(ApproveProxyCountry))
-                row.ApproveCountry = ApproveProxyCountry.Trim().ToUpperInvariant();
+            PaymentMatrixRow row = _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod?.Id ?? "paypal");
+            row.Name = "default";
+            row.RegistrationCountry = "";
+            row.CheckoutCountry = "";
+            row.PromotionCountry = "";
+            row.ProviderCountry = "";
+            row.ApproveCountry = "";
+            row.RedirectCountry = "";
+            row.SampleSize = 1;
+            return row;
         }
 
         private void ReloadCountryOptions()

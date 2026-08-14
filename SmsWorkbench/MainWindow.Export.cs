@@ -430,8 +430,8 @@ namespace SmsWorkbench
             {
                 Title = "账号测活结果",
                 Owner = this,
-                Width = 600,
-                MinWidth = 560,
+                Width = 740,
+                MinWidth = 740,
                 SizeToContent = SizeToContent.Height,
                 MaxHeight = 760,
                 ResizeMode = ResizeMode.CanResize,

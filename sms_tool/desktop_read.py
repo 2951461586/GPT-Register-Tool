@@ -113,6 +113,11 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
             promotion_status = str(session.get("promotion_status") or "").strip()
             if not promotion_status and isinstance(session.get("promotion"), dict):
                 promotion_status = str(session["promotion"].get("status") or "").strip()
+            # A promotion probe that recorded "AT失效" predates a later verified
+            # relogin (quota/account-scan token probe HTTP 200). The stale auth
+            # failure must not surface in the 优惠状态 column anymore.
+            if promotion_status == "AT失效" and str(result.get("at_probe_status_code") or "").strip() == "200":
+                promotion_status = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
             result["session"] = sanitize(session)
