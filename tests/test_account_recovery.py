@@ -293,6 +293,26 @@ def test_successful_relogin_replaces_stale_quota_401_metadata():
     assert "access_token" not in data["quota"]["last_result"]
 
 
+def test_successful_relogin_clears_stale_promotion_at_marker():
+    data = {
+        "status": "at_invalid",
+        "promotion_status": "AT失效",
+        "promotion": {"status": "AT失效", "last_result": {"status_code": 401}},
+    }
+    probe = {
+        "ok": True,
+        "status": "active",
+        "status_code": 200,
+        "quota_status": "可用",
+    }
+
+    account_recovery._mark_successful_relogin(data, probe, now=123)
+
+    assert data["promotion_status"] == ""
+    assert data["promotion"]["status"] == ""
+    assert data["promotion"]["last_result"]["status_code"] == 401
+
+
 def test_refresh_token_recovery_verifies_before_persisting():
     account = {
         "email": "ok@example.com",
