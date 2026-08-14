@@ -34,7 +34,7 @@ $actualParts = $version -split '\.'
 $compatibleFeatureBand = $requiredParts.Length -ge 3 -and $actualParts.Length -ge 3 -and
     $requiredParts[0] -eq $actualParts[0] -and
     $requiredParts[1] -eq $actualParts[1] -and
-    $requiredParts[2].Substring(0, 2) -eq $actualParts[2].Substring(0, 2)
+    [int]$actualParts[2] -ge [int]$requiredParts[2]
 if (-not $compatibleFeatureBand) {
     throw "Required .NET SDK feature band $requiredSdk, found $version at $dotnet"
 }

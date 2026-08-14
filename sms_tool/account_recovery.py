@@ -528,6 +528,15 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
         "oauth_refresh_http_401",
     )):
         data.pop("error", None)
+    # A previous promotion probe can persist "AT失效". A verified replacement
+    # AT makes that marker stale; keep its detailed result for later inspection
+    # but stop surfacing the authentication failure in the account list.
+    if str(data.get("promotion_status") or "").strip() == "AT失效":
+        data["promotion_status"] = ""
+    promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+    if str(promotion.get("status") or "").strip() == "AT失效":
+        promotion["status"] = ""
+        data["promotion"] = promotion
     account_scan = data.get("account_scan") if isinstance(data.get("account_scan"), dict) else {}
     account_scan.update({
         "ok": True,

@@ -268,8 +268,8 @@ namespace SmsWorkbench
             {
                 Title = "账号测活设置",
                 Owner = this,
-                Width = 770,
-                MinWidth = 720,
+                Width = 740,
+                MinWidth = 740,
                 SizeToContent = SizeToContent.Height,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
