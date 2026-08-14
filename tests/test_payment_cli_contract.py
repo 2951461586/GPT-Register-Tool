@@ -587,95 +587,13 @@ def test_cli_payment_method_choices_follow_catalog_and_accept_alias_and_th(monke
     assert generate.call_args.kwargs["stage_proxy_countries"]["promotion"] == "TH"
 
 
-def _regenerate_args(**overrides):
-    values = {
-        "email": "regen@example.com",
-        "email_file": "",
-        "session_file": "",
-        "payment_method": "gopay",
-        "proxy": "http://registration.example:8080",
-        "proxy_explicit": False,
-        "checkout_proxy": None,
-        "provider_proxy": None,
-        "approve_proxy": None,
-        "promotion_proxy": None,
-        "checkout_proxy_country": "",
-        "approve_proxy_country": "",
-        "promotion_proxy_country": "",
-        "target_country": "",
-        "checkout_country": "",
-        "paypal_generation_type": None,
-        "no_require_zero": False,
-        "workers": 1,
-    }
-    values.update(overrides)
-    return SimpleNamespace(**values)
+def test_cli_rejects_removed_regenerate_paypal_link_option(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["chatgpt_phone_reg.py", "--regenerate-paypal-link"],
+    )
 
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
 
-def _gopay_route_config():
-    return {
-        "proxy": {"default": "http://registration.example:8080"},
-        "paypal": {
-            "stage_proxies": {"checkout": "http://paypal.example:8080"},
-        },
-        "protocol_payments": {
-            "methods": {
-                "gopay": {
-                    "stage_proxies": {
-                        "checkout": "http://checkout.example:8080",
-                        "provider": "http://provider.example:8080",
-                        "approve": "http://approve.example:8080",
-                        "promotion": "http://promotion.example:8080",
-                    },
-                    "stage_proxy_countries": {"promotion": "TH"},
-                },
-            },
-        },
-    }
-
-
-def _assert_regenerate_route(call):
-    assert call.kwargs["proxy"] == "http://checkout.example:8080"
-    assert call.kwargs["checkout_proxy"] == "http://checkout.example:8080"
-    assert call.kwargs["provider_proxy"] == "http://provider.example:8080"
-    assert call.kwargs["approve_proxy"] == "http://approve.example:8080"
-    assert call.kwargs["promotion_proxy"] == "http://promotion.example:8080"
-    assert call.kwargs["require_zero"] is True
-
-
-def test_single_regenerate_uses_method_owned_payment_route():
-    args = _regenerate_args()
-
-    with patch.object(cli, "CFG", _gopay_route_config()), patch(
-        "sms_tool.paypal_links.regenerate_paypal_link",
-        return_value={"ok": True},
-    ) as regenerate:
-        cli._regenerate_paypal_link(args)
-
-    _assert_regenerate_route(regenerate.call_args)
-
-
-def test_batch_regenerate_uses_method_owned_payment_route():
-    args = _regenerate_args(email="", email_file="accounts.txt")
-
-    with patch.object(cli, "CFG", _gopay_route_config()), \
-         patch.object(cli, "_read_email_file", return_value=["batch@example.com"]), \
-         patch(
-             "sms_tool.paypal_links.regenerate_paypal_link",
-             return_value={"ok": True},
-         ) as regenerate:
-        cli._regenerate_paypal_link(args)
-
-    _assert_regenerate_route(regenerate.call_args)
-
-
-def test_fallback_regenerate_uses_method_owned_payment_route():
-    args = _regenerate_args(email="")
-
-    with patch.object(cli, "CFG", _gopay_route_config()), patch(
-        "sms_tool.paypal_links.regenerate_paypal_link",
-        return_value={"ok": True},
-    ) as regenerate:
-        cli._regenerate_paypal_link_fallback(args, ["fallback@example.com"])
-
-    _assert_regenerate_route(regenerate.call_args)
+    assert exc.value.code == 2

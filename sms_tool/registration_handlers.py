@@ -167,7 +167,7 @@ class RegistrationEmailWorkflow:
         sentinel_data: Mapping[str, Any] | None = None,
         mailbox: Any = None,
         phone_pool: Any = None,
-        codex_oauth: bool = True,
+        codex_oauth: bool = False,
         registration_mode: Any = None,
         browser_headless: bool | None = None,
         enroll_2fa: bool = True,
@@ -180,7 +180,9 @@ class RegistrationEmailWorkflow:
         self.input_sentinel = sentinel_data
         self.input_mailbox = mailbox
         self.phone_pool = phone_pool
-        self.codex_oauth = codex_oauth
+        # Kept in the signature for compatibility with older callers. Protocol
+        # registration no longer performs the Codex OAuth refresh-token stage.
+        self.codex_oauth = False
         self.input_registration_mode = registration_mode
         self.browser_headless = browser_headless
         self.enroll_2fa = bool(enroll_2fa)
@@ -212,7 +214,6 @@ class RegistrationEmailWorkflow:
             self._run_stage(RegistrationState.EMAIL_OTP_VALIDATE, "6-Validate email OTP", self.validate_email_otp)
             self._run_stage(RegistrationState.CREATE_ACCOUNT, "7-Create account", self.create_account)
             self._run_stage(RegistrationState.AUTH_SESSION, "8-Fetch auth session", self.fetch_auth_session)
-            self._run_stage(RegistrationState.CODEX_OAUTH, "8c-Codex OAuth refresh token", self.collect_codex_oauth)
             self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Validate access token", self.probe_access_token)
             self._set_outcome()
             self._run_stage(RegistrationState.TOTP_ENROLL, "9-Enroll TOTP", self.enroll_totp)
@@ -816,6 +817,7 @@ class RegistrationEmailWorkflow:
                 "cookie_header": r._cookie_header(s.session),
                 "auth_session": s.auth_body,
                 "mailbox": r._mailbox_snapshot(s.mailbox),
+                "registration_email_otp": s.email_code,
             }
             s.oauth_result = collect_codex_oauth_tokens(
                 data=oauth_seed,
@@ -1003,12 +1005,15 @@ class RegistrationEmailWorkflow:
             "mailbox": r._mailbox_snapshot(s.mailbox),
         }
         self.machine.transition(RegistrationState.COMPLETED)
-        try:
-            from .storage import clear_registration_checkpoint
+        if r._retain_registration_checkpoint(s.success, s.access_token, s.at_probe):
+            print("  [Checkpoint] Retaining post-create state for AT probe retry")
+        else:
+            try:
+                from .storage import clear_registration_checkpoint
 
-            clear_registration_checkpoint(s.username, runtime_config=self.config)
-        except Exception:
-            pass
+                clear_registration_checkpoint(s.username, runtime_config=self.config)
+            except Exception:
+                pass
         result["registration_machine"] = self.machine.snapshot()
         return result
 

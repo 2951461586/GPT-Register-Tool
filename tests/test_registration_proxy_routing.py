@@ -130,7 +130,29 @@ def test_registration_preflight_checks_chatgpt_auth_and_sentinel_before_mailbox(
         "https://chatgpt.com/login",
         "https://auth.openai.com/log-in",
         "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=sv-test",
+        "https://chatgpt.com/backend-api/wham/usage",
     ]
+
+
+def test_registration_preflight_accepts_unauthorized_backend_probe_response():
+    class Session:
+        def __init__(self):
+            self.proxies = {}
+
+        def get(self, url, **_kwargs):
+            status = 401 if url.endswith("/backend-api/wham/usage") else 200
+            return SimpleNamespace(status_code=status)
+
+    with patch.object(registration_preflight.curl_requests, "Session", Session), \
+         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
+             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
+         }), \
+         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
+         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
+         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+        result = registration.registration_network_preflight("http://proxy.example:8080")
+
+    assert result["ok"] is True
 
 
 def test_sentinel_proxy_errors_redact_standard_and_provider_proxy_forms():

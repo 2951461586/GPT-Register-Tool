@@ -25,30 +25,6 @@ namespace SmsWorkbench
             OpenPayPalUrl(row.PayPalUrl, row.Identifier);
         }
 
-        private void RegeneratePayPalLink_Click(object sender, RoutedEventArgs e)
-        {
-            var rows = SelectedEmailRowsOrNotify("重新生成支付链接");
-            if (rows.Count == 0) return;
-            string paymentMethod = ShowPaymentMethodDialog("重新生成链接", "生链方式");
-            if (paymentMethod.Length == 0) return;
-
-            if (rows.Count == 1)
-            {
-                PoolRow row = rows[0];
-                var plan = BackendCommandPlanner.CreateRegeneratePaymentLink(
-                    row.Identifier,
-                    SessionFileFor(row),
-                    paymentMethod);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
-                return;
-            }
-
-            var batchPlan = BackendCommandPlanner.CreateRegeneratePaymentLinkBatch(
-                rows.Select(r => r.Identifier.Trim()).ToList(),
-                paymentMethod);
-            RunBackend(batchPlan.TaskName, batchPlan.Arguments.ToList());
-        }
-
         private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
         {
             var rows = SelectedEmailRowsOrNotify("标记支付完成");
@@ -116,8 +92,8 @@ namespace SmsWorkbench
             var win = new Window
             {
                 Title = "协议支付",
-                Width = 620,
-                Height = 820,
+                Width = 760,
+                Height = 940,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
                 ResizeMode = ResizeMode.CanResize,
@@ -200,25 +176,52 @@ namespace SmsWorkbench
             mainPanel.Children.Add(countryCombo);
 
             // ── 代理配置 ──────────────────────────────────────────────────
-            mainPanel.Children.Add(new TextBlock
+            var proxyPoolGrid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            proxyPoolGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            proxyPoolGrid.ColumnDefinitions.Add(new ColumnDefinition());
+
+            TextBox CreateProxyPoolBox()
+                => new TextBox
+                {
+                    Height = 84,
+                    AcceptsReturn = true,
+                    TextWrapping = TextWrapping.NoWrap,
+                    VerticalContentAlignment = VerticalAlignment.Top,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(8, 6, 8, 6),
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                    FontSize = 12,
+                    Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
+                    BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                };
+
+            var checkoutProxyPoolBox = CreateProxyPoolBox();
+            var approveProxyPoolBox = CreateProxyPoolBox();
+            var checkoutProxyColumn = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+            checkoutProxyColumn.Children.Add(new TextBlock
             {
-                Text = "单代理覆盖（留空使用设置中的协议支付代理池）",
+                Text = "Checkout 代理池（每行一条）",
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
             });
-            var proxyBox = new TextBox
+            checkoutProxyColumn.Children.Add(checkoutProxyPoolBox);
+            var approveProxyColumn = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
+            approveProxyColumn.Children.Add(new TextBlock
             {
-                Text = preferences.Proxy,
-                Height = 28,
-                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-                FontSize = 12,
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
+                Text = "Approve / Update 代理池（每行一条）",
+                FontSize = 13,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
-            };
-            mainPanel.Children.Add(proxyBox);
+            });
+            approveProxyColumn.Children.Add(approveProxyPoolBox);
+            Grid.SetColumn(approveProxyColumn, 1);
+            proxyPoolGrid.Children.Add(checkoutProxyColumn);
+            proxyPoolGrid.Children.Add(approveProxyColumn);
+            mainPanel.Children.Add(proxyPoolGrid);
 
             ComboBox CreateStageCountryCombo(string selectedCountry)
             {
@@ -365,11 +368,13 @@ namespace SmsWorkbench
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             var extractBtn = BuildProtocolDialogButton("提取", 100, primary: true);
             var testProxyBtn = BuildProtocolDialogButton("测试出口", 88);
+            var saveProxyBtn = BuildProtocolDialogButton("保存代理", 88);
             var copyBtn = BuildProtocolDialogButton("复制链接", 80, enabled: false);
             var openQrBtn = BuildProtocolDialogButton("打开二维码", 80, enabled: false);
             var cancelBtn = BuildProtocolDialogButton("取消", 60, enabled: false);
             var closeBtn = BuildProtocolDialogButton("关闭", 60, rightMargin: 0);
             btnPanel.Children.Add(testProxyBtn);
+            btnPanel.Children.Add(saveProxyBtn);
             btnPanel.Children.Add(extractBtn);
             btnPanel.Children.Add(copyBtn);
             btnPanel.Children.Add(openQrBtn);
@@ -428,12 +433,30 @@ namespace SmsWorkbench
                 }
             }
 
+            void LoadMethodProxyConfiguration(bool loadCountries)
+            {
+                PaymentBatchProxyConfiguration configured = paymentBatchService.LoadProxyConfiguration(SelectedMethod());
+                checkoutProxyPoolBox.Text = configured.CheckoutProxyPool ?? "";
+                approveProxyPoolBox.Text = configured.ApproveProxyPool ?? "";
+                if (!loadCountries) return;
+                SelectComboCode(checkoutCountryCombo, configured.CheckoutCountry);
+                SelectComboCode(approveCountryCombo, configured.ApproveCountry);
+            }
+
+            SettingsSaveResult SaveMethodProxyConfiguration()
+                => paymentBatchService.SaveProxyConfiguration(
+                    SelectedMethod(),
+                    new PaymentBatchProxyConfiguration(
+                        checkoutProxyPoolBox.Text,
+                        approveProxyPoolBox.Text,
+                        ComboCode(checkoutCountryCombo),
+                        ComboCode(approveCountryCombo)));
+
             void SaveSelection()
             {
                 SaveProtocolPaymentPreferences(new ProtocolPaymentPreferences
                 {
                     Method = SelectedMethod(),
-                    Proxy = proxyBox.Text.Trim(),
                     TargetCountry = countryCombo.SelectedItem is ComboBoxItem targetItem
                         ? (Convert.ToString(targetItem.Content) ?? "").Substring(0, 2)
                         : "US",
@@ -464,6 +487,7 @@ namespace SmsWorkbench
                     SelectComboCode(approveCountryCombo, defaultCountry);
                     SelectComboCode(updateCountryCombo, PaymentMethods.DefaultUpdateCountry(method, defaultCountry));
                 }
+                LoadMethodProxyConfiguration(loadCountries: true);
                 requireBaCheck.IsEnabled = method == "paypal";
                 blikCodePanel.Visibility = method == "blik" ? Visibility.Visible : Visibility.Collapsed;
                 stageProxyPanel.Visibility = method == "paypal" || method == "gopay" || method == "gcash" || method == "grabpay" || method == "upi" || method == "direct_card" || method == "momo" ? Visibility.Visible : Visibility.Collapsed;
@@ -505,13 +529,24 @@ namespace SmsWorkbench
                     }
                 }
             }
+            LoadMethodProxyConfiguration(loadCountries: true);
+
+            saveProxyBtn.Click += (_, __) =>
+            {
+                SettingsSaveResult saved = SaveMethodProxyConfiguration();
+                resultBox.Text = saved.Ok
+                    ? "[成功] 已保存当前支付方式的 Checkout / Approve-Update 代理池。"
+                    : "[失败] " + saved.Error;
+            };
 
             testProxyBtn.Click += async (_, __) =>
             {
                 SaveSelection();
                 var args = ProtocolPaymentExecutionPlanner.CreateProxyTestArguments(
                     SelectedMethod(),
-                    proxyBox.Text,
+                    "",
+                    checkoutProxyPoolBox.Text,
+                    approveProxyPoolBox.Text,
                     ComboCode(checkoutCountryCombo),
                     ComboCode(approveCountryCombo),
                     ComboCode(updateCountryCombo)).ToList();
@@ -568,7 +603,6 @@ namespace SmsWorkbench
                 if (countryCombo.SelectedItem is ComboBoxItem ci && ci.Content.ToString().Length >= 2)
                     country = ci.Content.ToString().Substring(0, 2);
 
-                string proxy = proxyBox.Text.Trim();
                 bool requireZero = zeroCheck.IsChecked == true;
                 bool requireBaToken = requireBaCheck.IsChecked == true;
                 SaveSelection();
@@ -604,7 +638,9 @@ namespace SmsWorkbench
                         new ProtocolPaymentExecutionRequest(
                             method,
                             country,
-                            proxy,
+                            "",
+                            checkoutProxyPoolBox.Text,
+                            approveProxyPoolBox.Text,
                             jitRefreshCheck.IsChecked == true,
                             probeOnlyCheck.IsChecked == true,
                             requireZero,
@@ -629,17 +665,19 @@ namespace SmsWorkbench
 
                     if (!execution.IsSuccess || execution.State != "completed")
                     {
-                        string resultText = execution.State switch
+                        ProtocolPaymentResultPresentation failedPresentation = execution.State switch
                         {
-                            "timed_out" => ProtocolPaymentResultPresenter.Aborted(plan, "timed_out").Text,
-                            "cancelled" => ProtocolPaymentResultPresenter.Aborted(plan, "cancelled").Text,
-                            _ => execution.DisplayText
+                            "timed_out" => ProtocolPaymentResultPresenter.Aborted(plan, "timed_out"),
+                            "cancelled" => ProtocolPaymentResultPresenter.Aborted(plan, "cancelled"),
+                            _ when execution.Payload.HasValue => ProtocolPaymentResultPresenter.Parse(
+                                execution.Payload.Value.GetRawText()),
+                            _ => ProtocolPaymentResultPresenter.Parse(execution.DisplayText)
                         };
-                        resultBox.Text = resultText;
-                        lastUrl = "";
-                        lastQrPath = "";
-                        copyBtn.IsEnabled = false;
-                        openQrBtn.IsEnabled = false;
+                        resultBox.Text = failedPresentation.Text;
+                        lastUrl = failedPresentation.Url;
+                        lastQrPath = failedPresentation.QrPath;
+                        copyBtn.IsEnabled = lastUrl.Length > 0;
+                        openQrBtn.IsEnabled = lastQrPath.Length > 0 && File.Exists(lastQrPath);
                         return;
                     }
 

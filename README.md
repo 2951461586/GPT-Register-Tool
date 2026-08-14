@@ -12,7 +12,7 @@
 邮箱源
   -> ChatGPT 邮箱 OTP 注册
   -> 获取 Access Token / Session，并以稳定 HTTP 200 AT 作为入库边界
-  -> 可选手机验证与 Codex OAuth
+  -> 可选手机验证与优惠资格查询；协议注册保持 AT-only
   -> JIT AT 探测/刷新与可选协议支付链接提取
   -> Session JSON + SQLite 索引
   -> WPF 桌面端统一管理
@@ -128,7 +128,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - 注册成功判定以 AT 探测 HTTP 200 为准；稳定探测窗口内未持续返回 200 的候选不会进入 active 账号库。
 - 注册流程不再执行 Agent Identity 阶段；需要 Agent Identity 时必须通过显式 SUB2API 导入路径处理。
 - 选中邮箱记录时优先注册所选邮箱；未选中邮箱时显示邮箱源选择器。
-- 注册、OTP、Session 获取和 Codex OAuth 分别记录阶段结果，避免把中间状态误报为成功；支付提链只由独立支付操作触发。
+- 注册、OTP、Session 获取和 AT HTTP 200 探活分别记录阶段结果，避免把中间状态误报为成功；支付提链只由独立支付操作触发。
 
 ### 协议一致性与恢复
 
@@ -142,7 +142,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 ### ReMail 邮箱源
 
-- 一键注册来源中提供 `ReMail 长效邮箱`，统一使用 `purchase` 长效邮箱模式。
+- 一键注册来源中提供 `ReMail 邮箱`，默认统一使用 `purchase` 长效邮箱模式。
 - 支持单笔或批量创建邮箱订单。
 - 百账号批量下单默认按每个邮箱 2 秒扩展 HTTP 等待时间（至少 30 秒），可通过 `email_registration.remail.batch_timeout` 覆盖。
 - 支持 `private_first`、`public_only` 库存策略。
@@ -159,14 +159,15 @@ $env:REMAIL_API_KEY = "rk-your-key"
 - ReMail 收件时间允许默认 90s 的服务端时钟偏差；消息 ID 快照仍会阻止旧验证码被重复使用。
 - ReMail 在 30s 内仍未收到验证码时会重发一次，剩余时间继续接受本次事务中的最新验证码。
 - 已有 ReMail 订单可按 `remail://email---serviceToken---orderNo---purchaseId` 写入邮箱 Token 文件恢复使用，无需重复购买。
-- 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、产品和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
-- `ReMail 长效邮箱` 会按注册数量补足稳定 HTTP 200 AT，桌面端使用默认采购上限并自动管理注册批次；该模式默认启用 SMSBower 手机验证。CLI 仍可通过 `--max-mailbox-purchases` 和 `--max-remail-cost` 设置额外限制。
+- 批量购买遇到超时或可重试 5xx 时，会先按请求时间窗、项目、邮箱后缀和数量严格匹配新订单；仅在恰好匹配时自动恢复，避免响应丢失后重复购买。
+- `ReMail 邮箱` 默认使用长效 `purchase` 模式，并按注册数量补足稳定 HTTP 200 AT。CLI 仍可通过 `--max-mailbox-purchases` 和 `--max-remail-cost` 设置额外限制。
 
 ### 统一邮箱与 OTP
 
 统一 mailbox seam 支持：
 
 - ReMail。
+- Smailr（`smailr.com`、`loc.cc`、`mail.nodeloc.cc`、`nodeloc.cc`），支持受等级限制时复用已有未绑定邮箱、详情正文补取和 10 秒服务端时钟偏差。
 - CFWorker 域名邮箱。
 - Microsoft Graph/OAuth。
 - Outlook/Hotmail IMAP 回退。
@@ -213,9 +214,9 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - Session JSON 与 SQLite 双层索引。
 - 账号状态、AT（已获取/未获取/401失效）、RT、支付链接和手机号验证结果集中展示。
 - 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在显式恢复或支付 JIT 流程中依次尝试 RT、Cookie、隔离浏览器邮箱 OTP 和 Codex OAuth。
-- 支持复制 AT、查看邮箱、重新注册和重新生成支付链接。
+- 支持复制 AT、查看邮箱和重新注册；协议支付链接统一从协议提链入口生成。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
-- 账号列表保留注册地区、注册批次和入库状态，便于按 cohort 选择批量支付账号。
+- 账号列表展示优惠状态；“可试用 Plus”使用绿色成功状态，并支持在筛选后的完整账号集合上排序后再分页。
 - 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
 
 ### 桌面端批量支付操作
@@ -253,7 +254,7 @@ sms_tool/cli.py
 
 sms_tool/registration.py
   注册主流程
-  -> 邮箱 OTP、账号创建、Session、Codex OAuth
+  -> 邮箱 OTP、账号创建、AT-only Session、AT HTTP 200 验证
 
 sms_tool/registration_concurrency.py
   注册阶段资源门控
@@ -287,6 +288,10 @@ sms_tool/payment_link_manager.py
   协议支付管理器
   -> 方法注册、分段代理、五种终态、retryable/error_stage 统一结果
 
+sms_tool/payment_flow.py / payment_routing.py / payment_executor.py
+  公共协议支付执行层
+  -> 阶段词汇、方法流程、代理计划、状态机与统一终态
+
 sms_tool/paypal_reconciliation.py
   独立 PayPal 回跳对账
   -> 白名单跳转状态机、秘密脱敏、结论/未知分类
@@ -305,6 +310,7 @@ services/
 | 模块 | 职责 |
 | --- | --- |
 | `SmsWorkbench/` | WPF 桌面界面、设置页、任务入口和本地状态展示 |
+| `SmsWorkbench/AccountGridPresentation.cs` | 账号列表优惠状态颜色、全量排序和分页前排序规则 |
 | `sms_tool/cli.py` | CLI 参数与高层任务编排 |
 | `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
 | `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
@@ -317,6 +323,9 @@ services/
 | `sms_tool/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
 | `sms_tool/mailbox_icloud_url.py` | iCloud 接码链接收件、HTML/API 正文解析与 OTP 归一化 |
 | `sms_tool/payment_link_manager.py` | 支付方法注册、状态机与统一结果 |
+| `sms_tool/payment_flow.py` | 支付阶段词汇与各支付方式流程 profile |
+| `sms_tool/payment_routing.py` | 支付方式独立代理池、阶段路由和脱敏执行计划 |
+| `sms_tool/payment_executor.py` | 公共执行状态机、取消/未知终态和结果归一化 |
 | `sms_tool/checkout_contract.py` | ChatGPT Checkout、Stripe init 请求/响应与支付方式能力证据契约 |
 | `sms_tool/payment_capability.py` | 只到 Checkout + Stripe init 的通用能力探测 |
 | `sms_tool/wallet_provider.py` | GoPay、GrabPay 共用编排与结构化结果 |
@@ -348,7 +357,6 @@ services/
       "base_url": "https://remail.aishop6.com",
       "api_key": "",
       "project_id": 2,
-      "product_id": 5,
       "service_mode": "purchase",
       "supply": "private_first",
       "email_suffix": "outlook.com",

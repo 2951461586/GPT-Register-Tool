@@ -38,6 +38,7 @@ sms_tool/
   mailbox_types.py          Shared mailbox dataclass and type definitions.
   mailbox_parsers.py        Mailbox import format parsing.
   mailbox_remail.py         ReMail order, pickup, adaptive OTP polling, and message normalization.
+  mailbox_smailr.py         Smailr mailbox creation/reuse and OTP polling facade.
   mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
   mailbox_graph.py          Microsoft OAuth refresh boundary.
   mailbox_gmail.py          Gmail IMAP receive + SMTP send adapter.
@@ -76,12 +77,14 @@ sms_tool/
   payment_capability.py     Checkout + Stripe init capability probe; no PM creation or confirm.
   payment_catalog.py        Versioned shared payment-method catalog loader and alias normalization.
   payment_adapters.py       Typed adapter protocol and complete registry validation.
+  payment_flow.py           Canonical payment stages and per-method flow profiles.
+  payment_routing.py        Named proxy pools, stage routes, one-time selection, and redacted plans.
+  payment_executor.py       Common payment execution state machine and terminal-result normalization.
   payment_link_manager.py   Payment state machine, adapter composition, and redacted run history.
   wallet_provider.py        Shared GoPay/GrabPay orchestration and structured outcomes.
   wallet_transport.py       GoPay/GrabPay HTTP transport, stage proxies, Stripe metadata, and redirect validation.
   gcash_provider.py         GCash custom-payment-method orchestration and structured outcomes.
   gcash_transport.py        GCash-specific Checkout update and custom-method HTTP transport.
-  paypal_links.py           Regenerate PayPal links without clobbering old links and preserve the configured PayPal generation type.
   paypal_reconciliation.py  Independent, secret-free PayPal merchant-return reconciliation.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
@@ -138,7 +141,10 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Account liveness | `sms_tool.account_liveness` | account seed data, `/backend-api/wham/usage` | Persistence, OAuth relogin, payment creation |
 | Account recovery | `sms_tool.account_recovery` | account liveness, Codex OAuth/session refresh, storage | CPA API calls, payment creation |
 | JIT payment authentication | `sms_tool.payment_auth` | account seed, account liveness/recovery | Registration success classification, payment-method creation |
-| Payment link generation | `payment_methods.json`, `sms_tool.payment_catalog`, `sms_tool.payment_adapters`, `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.wallet_provider`, `sms_tool.wallet_transport`, `sms_tool.paypal_links` | immutable runtime config, account seed, shared Checkout contract, Stripe init, protocol adapters | duplicate method/alias registries, PayPal account signup, final customer authorization |
+| Payment link generation | `payment_methods.json`, `sms_tool.payment_catalog`, `sms_tool.payment_adapters`, `sms_tool.payment_link_manager`, `sms_tool.gen_pp_link`, `sms_tool.wallet_provider`, `sms_tool.wallet_transport` | immutable runtime config, account seed, shared Checkout contract, Stripe init, protocol adapters | duplicate method/alias registries, PayPal account signup, final customer authorization |
+| Payment flow vocabulary | `sms_tool.payment_flow` | canonical stages and per-method profiles | proxy selection, provider HTTP |
+| Payment route planning | `sms_tool.payment_routing` | method config, named pools, stage policy | registration/mailbox proxies, provider execution |
+| Payment execution state | `sms_tool.payment_executor` | immutable request, adapter result, terminal state | CLI parsing, persistence, provider protocol details |
 | Checkout capability probing | `sms_tool.checkout_contract`, `sms_tool.payment_capability` | ChatGPT Checkout, Stripe init, matrix-selected country/proxy context | payment-method creation, confirm, approve, provider redirect |
 | Batch payment execution | `sms_tool.payment_batch` | JIT auth, capability probe/payment manager, eligibility matrix, proxy stages, atomic reports | Registration/mailbox procurement, token-bearing public reports |
 | PayPal return reconciliation | `sms_tool.paypal_reconciliation` | caller-supplied authenticated transport, allowlisted merchant return hosts | payment-link extraction, link persistence, payment authorization |
@@ -628,6 +634,13 @@ normalizes the result, and appends a redacted record to
 are returned to the caller but are not written to run history; persistence keeps
 only `*_present` metadata for those artifacts.
 
+Routing is compiled before JIT authentication by `PaymentRoutePlanner`. One
+`PaymentRoutePlan` is reused by CLI, batch retries, manager adapters, and wallet
+transports, so proxy pools are selected once rather than independently at every
+stage boundary. Canonical configuration uses
+`protocol_payments.proxy_pools.<name>` plus per-method `stage_routes`; legacy
+`checkout_proxy_pool` and `approve_proxy_pool` remain compatibility presets.
+
 Every normalized result carries `retryable` and `error_stage`. A successful
 result forces `retryable=false` and an empty error stage. `cancelled` is a
 non-retryable terminal state. `unknown` sets `requires_reconciliation=true` and
@@ -636,8 +649,8 @@ may already have taken effect. `timed_out` is distinct from a generic failure
 and defaults to retryable. Callers must use these fields instead of retrying by
 matching free-form error text.
 
-1. **Create checkout/link**: `sms_tool.payment_link_manager`,
-   `sms_tool.gen_pp_link`, and `sms_tool.paypal_links`.
+1. **Create checkout/link**: `sms_tool.payment_link_manager` and
+   `sms_tool.gen_pp_link`.
    They read an access token and return/store a hosted checkout URL or explicit
    failure details. They do not complete payment. The BLIK adapter is the explicit
    exception: when a six-digit BLIK code is supplied, its operation is
@@ -761,9 +774,10 @@ transaction.
 
 `sms_tool/paypal_auto.py` owns browser page mechanics: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
 
-`sms_tool/paypal_links.py` owns link regeneration and persistence. `sms_tool/paypal_protocol.py`
-is the narrow redirect-parsing and transport module used by that flow; the removed
-no-card signup implementation is not part of the supported payment surface.
+The retired `sms_tool/paypal_links.py` regeneration wrapper has been removed.
+New and repeated PayPal links use the unified `payment_link_manager` interface;
+`sms_tool/paypal_protocol.py` remains the narrow redirect-parsing and transport
+module used by the PayPal adapter.
 
 `sms_tool/paypal_reconciliation.py` is a separate merchant-return accounting
 API. It accepts an observed return URL or return payload plus a caller-supplied

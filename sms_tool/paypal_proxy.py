@@ -443,6 +443,9 @@ class PayPalProxyState:
 
         A cached *mismatch* is honoured too: within the TTL a wrong-country proxy
         stays skipped instead of being re-probed for every account in a batch.
+        A cached verdict is only reused when it still answers the country being
+        asked about, because the same proxy template is probed for different
+        countries across methods and stages.
         """
         if not self.enabled or not proxy or self.probe_cache_ttl_seconds <= 0:
             return None
@@ -456,6 +459,13 @@ class PayPalProxyState:
         cached_country = str(record.get("country_code") or "").upper()
         # Only trust an OK cache entry whose exit country still matches the ask.
         if record.get("ok") and expected and cached_country and cached_country != expected:
+            return None
+        # A recorded country mismatch was judged against a *different* expected
+        # country. Once the ask matches the exit the proxy actually reached, the
+        # old verdict no longer applies and replaying it would fail a working
+        # proxy, so re-probe instead. Transport failures keep no country and are
+        # still honoured, which is what keeps a dead proxy skipped.
+        if not record.get("ok") and expected and cached_country and cached_country == expected:
             return None
         return ProxyProbeResult(
             ok=bool(record.get("ok")),

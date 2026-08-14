@@ -13,6 +13,7 @@ from .auth_headers import (
     openai_auth_headers,
 )
 from .config import CFG
+from .account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
 from .sentinel_tokens import _sentinel_frame_version
 
@@ -106,9 +107,13 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
     auth_base = str((CFG.get("chatgpt") or {}).get("auth_base_url") or "https://auth.openai.com").rstrip("/")
     sentinel_url = "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=" + _sentinel_frame_version()
     checks = (
-        ("chatgpt-login", f"{chat_base}/login", f"{chat_base}/"),
-        ("auth-login", f"{auth_base}/log-in", f"{chat_base}/login"),
-        ("sentinel-frame", sentinel_url, f"{auth_base}/log-in"),
+        ("chatgpt-login", f"{chat_base}/login", f"{chat_base}/", False),
+        ("auth-login", f"{auth_base}/log-in", f"{chat_base}/login", False),
+        ("sentinel-frame", sentinel_url, f"{auth_base}/log-in", False),
+        # The endpoint requires an AT, so an HTTP 401/403 is expected here.  A
+        # transport failure is not: it would discard an already-created account
+        # later when the registration AT is validated.
+        ("chatgpt-backend", CODEX_USAGE_URL, f"{chat_base}/", True),
     )
     candidate = normalize_proxy_url(proxy) or None
     last_error = None
@@ -120,7 +125,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
             pass
         session.proxies = {"http": candidate, "https": candidate} if candidate else {"http": "", "https": ""}
         try:
-            for label, url, referer in checks:
+            for label, url, referer, allow_http_error in checks:
                 headers = openai_auth_headers(
                     referer=referer,
                     origin=url.split("/", 3)[0] + "//" + url.split("/", 3)[2],
@@ -134,7 +139,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
                     },
                 )
                 response = session.get(url, headers=headers, timeout=15, impersonate=auth_impersonate())
-                if int(getattr(response, "status_code", 0) or 0) >= 400:
+                if not allow_http_error and int(getattr(response, "status_code", 0) or 0) >= 400:
                     raise RuntimeError(f"registration_preflight_failed:{label}:http_{response.status_code}")
             result = {"ok": True, "profile": current_auth_fingerprint()["impersonate"]}
             original = normalize_proxy_url(proxy) or ""

@@ -84,12 +84,36 @@ public sealed class BackendCommandPlannerTests
     }
 
     [Fact]
+    public void CreateMailboxFileRegistration_WithPromotionCheck_AddsPostRegistrationFlag()
+    {
+        var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
+            "测试", "--mailbox-file", "C:\\test.txt", 2, 2,
+            registrationAtOnly: true,
+            proxyPool: Array.Empty<string>(),
+            checkPromotion: true);
+
+        Assert.Contains("--check-promotion-after-registration", plan.Arguments);
+    }
+
+    [Fact]
     public void CreateRemailTargetRegistration_WithDisable2fa_AddsNo2faFlag()
     {
         var plan = BackendCommandPlanner.CreateRemailTargetRegistration(
             count: 5, workers: 5, proxyPool: Array.Empty<string>(), disable2fa: true);
 
         Assert.Contains("--no-2fa", plan.Arguments);
+    }
+
+    [Fact]
+    public void CreateRemailTargetRegistration_WithPromotionCheck_AddsPostRegistrationFlag()
+    {
+        var plan = BackendCommandPlanner.CreateRemailTargetRegistration(
+            count: 5,
+            workers: 5,
+            proxyPool: Array.Empty<string>(),
+            checkPromotion: true);
+
+        Assert.Contains("--check-promotion-after-registration", plan.Arguments);
     }
 
     [Fact]
@@ -350,30 +374,6 @@ public sealed class BackendCommandPlannerTests
         Assert.Equal("重建SQLite索引", plan.TaskName);
         Assert.Contains("--rebuild-sqlite", plan.Arguments);
         Assert.Single(plan.Arguments);
-    }
-
-    // ── Payment-link maintenance ────────────────────────────────────────
-
-    [Fact]
-    public void CreateRegeneratePaymentLink_IncludesPaymentMethod()
-    {
-        var plan = BackendCommandPlanner.CreateRegeneratePaymentLink(
-            "user@example.com",
-            "C:\\session.json",
-            "paypal");
-        Assert.Contains("--regenerate-paypal-link", plan.Arguments);
-        Assert.Contains("--payment-method", plan.Arguments);
-        Assert.Contains("paypal", plan.Arguments);
-    }
-
-    [Fact]
-    public void CreateRegeneratePaymentLinkBatch_WritesTempFile()
-    {
-        var plan = BackendCommandPlanner.CreateRegeneratePaymentLinkBatch(
-            new[] { "a@b.com", "c@d.com" },
-            "paypal");
-        Assert.Contains("--email-file", plan.Arguments);
-        Assert.Single(plan.TempFiles);
     }
 
     [Fact]

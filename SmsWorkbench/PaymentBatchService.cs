@@ -80,6 +80,8 @@ namespace SmsWorkbench
                 JsonObject methods = protocol?["methods"] as JsonObject;
                 JsonObject legacy = root?[method] as JsonObject;
                 JsonObject configured = methods?[method] as JsonObject;
+                JsonObject namedPools = protocol?["proxy_pools"] as JsonObject;
+                JsonObject routes = configured?["stage_routes"] as JsonObject;
                 JsonObject stages = configured?["stage_proxies"] as JsonObject;
                 JsonObject countries = configured?["stage_proxy_countries"] as JsonObject;
                 JsonObject legacyStages = legacy?["stage_proxies"] as JsonObject;
@@ -87,6 +89,7 @@ namespace SmsWorkbench
 
                 string[] fallbackPool = ParseList(FirstPool(protocol?["proxy_pool"]));
                 string checkoutPool = FirstPool(
+                    NamedRoutePool(routes, "checkout", namedPools),
                     configured?["checkout_proxy_pool"],
                     configured?["checkout_proxy"],
                     stages?["checkout"],
@@ -97,6 +100,7 @@ namespace SmsWorkbench
                     legacy?["proxy"],
                     fallbackPool);
                 string approvePool = FirstPool(
+                    NamedRoutePool(routes, "approve", namedPools),
                     configured?["approve_proxy_pool"],
                     configured?["approve_proxy"],
                     stages?["approve"],
@@ -148,9 +152,20 @@ namespace SmsWorkbench
             {
                 JsonObject root = ReadConfigRoot();
                 JsonObject methods = EnsureObject(root, "protocol_payments", "methods");
+                JsonObject proxyPools = EnsureObject(root, "protocol_payments", "proxy_pools");
                 JsonObject methodConfig = EnsureObject(methods, method);
-                SetArray(methodConfig, "checkout_proxy_pool", ParseList(configuration?.CheckoutProxyPool));
-                SetArray(methodConfig, "approve_proxy_pool", ParseList(configuration?.ApproveProxyPool));
+                string[] checkoutPool = ParseList(configuration?.CheckoutProxyPool);
+                string[] approvePool = ParseList(configuration?.ApproveProxyPool);
+                string checkoutPoolName = method + "_checkout";
+                string approvePoolName = method + "_approve";
+                SetArray(proxyPools, checkoutPoolName, checkoutPool);
+                SetArray(proxyPools, approvePoolName, approvePool);
+                SetArray(methodConfig, "checkout_proxy_pool", checkoutPool);
+                SetArray(methodConfig, "approve_proxy_pool", approvePool);
+
+                JsonObject routes = EnsureObject(methodConfig, "stage_routes");
+                routes["checkout"] = new JsonObject { ["pool"] = checkoutPoolName, ["country"] = checkoutCountry };
+                routes["approve"] = new JsonObject { ["pool"] = approvePoolName, ["country"] = approveCountry };
 
                 JsonObject countries = EnsureObject(methodConfig, "stage_proxy_countries");
                 if (checkoutCountry.Length > 0)
@@ -164,8 +179,8 @@ namespace SmsWorkbench
 
                 // Keep the first entry in the legacy singular keys for older
                 // workers; the *_proxy_pool arrays remain authoritative.
-                SetOptionalString(methodConfig, "checkout_proxy", ParseList(configuration?.CheckoutProxyPool).FirstOrDefault());
-                SetOptionalString(methodConfig, "approve_proxy", ParseList(configuration?.ApproveProxyPool).FirstOrDefault());
+                SetOptionalString(methodConfig, "checkout_proxy", checkoutPool.FirstOrDefault());
+                SetOptionalString(methodConfig, "approve_proxy", approvePool.FirstOrDefault());
                 WriteConfigRoot(root);
                 return new SettingsSaveResult(true);
             }
@@ -368,6 +383,15 @@ namespace SmsWorkbench
                     return string.Join(Environment.NewLine, parsed);
             }
             return "";
+        }
+
+        private static JsonNode NamedRoutePool(JsonObject routes, string stage, JsonObject namedPools)
+        {
+            JsonNode route = routes?[stage];
+            string poolName = route is JsonObject routeObject
+                ? routeObject["pool"]?.ToString() ?? ""
+                : route?.ToString() ?? "";
+            return poolName.Length > 0 ? namedPools?[poolName] : null;
         }
 
         private static string[] ParseList(string value)

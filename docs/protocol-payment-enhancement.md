@@ -225,3 +225,15 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
    - `tests/test_paypal_authorization.py`：纯解析——mock 的 GraphQL/JSON 响应 → `PayPalAuthorizationContext` → `classify_authorization_outcome` → `to_payment_result` 与 `PaymentResult.from_mapping` 对齐。
 2. 既有测试回归：`tests/test_phone_proxy.py`、`tests/test_proxy_pool.py`、`tests/test_paypal_proxy.py`、`tests/test_paypal_protocol.py`、`tests/test_payment_*` 需保持通过。
 3. 语法/导入检查：`python -c "import sms_tool.proxy_entry, sms_tool.proxy_bridge, sms_tool.paypal_authorization"`。
+# Shared Flow Executor And Routing
+
+Protocol-payment extraction now uses three common modules:
+
+- `payment_flow.py` defines the canonical stage vocabulary and method profiles.
+- `payment_routing.py` compiles named pools and stage routes into one immutable, redacted `PaymentRoutePlan`.
+- `payment_executor.py` owns execution states, cancellation/unknown outcomes, normalization, and progress history.
+
+CLI and batch paths compile the route plan before JIT authentication and pass
+the same object through probes, retries, adapters, and transports. Checkout and
+Approve legacy pools are still accepted, but selection and country-session
+rotation are centralized in the planner.

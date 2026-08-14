@@ -25,6 +25,7 @@ from .payment_link_manager import (
     parse_proxy_pool,
     probe_payment_method,
 )
+from .payment_routing import PaymentRoutePlanner
 from .payment_contracts import payment_history_metadata, payment_retry_allowed
 
 
@@ -126,8 +127,9 @@ def run_payment_batch(
             canonical_method_cfg.get(pool_key)
             or legacy_method_cfg.get(pool_key)
         )
-        if parse_proxy_pool(configured_pool):
+        if not proxy and parse_proxy_pool(configured_pool):
             base_kwargs[pool_key] = configured_pool
+            base_kwargs.pop(f"{stage}_proxy", None)
     run_signature = _batch_run_signature(
         method=method,
         probe_only=probe_only,
@@ -161,7 +163,16 @@ def run_payment_batch(
         cell = _matrix_cell_for(index, cells, method, seed_country)
         kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy, payment_method=method, pool_index=index)
         kwargs.pop("proxy", None)
-        checkout_route = kwargs.get("checkout_proxy") or proxy
+        plan = kwargs.get("payment_route_plan")
+        if plan is None:
+            plan = PaymentRoutePlanner(CFG).plan(
+                method,
+                options=kwargs,
+                default_proxy=proxy,
+                pool_offset=index,
+            )
+            kwargs = {**kwargs, **plan.to_adapter_options(), "payment_route_plan": plan}
+        checkout_route = plan.proxy_for("auth_gate") or plan.checkout_proxy or proxy
         if checkout_route:
             kwargs["checkout_proxy"] = checkout_route
 
@@ -443,6 +454,7 @@ def _cell_payment_kwargs(
     payment_method: str = "",
     pool_index: int = 0,
 ) -> dict[str, Any]:
+    """Overlay matrix values and compile the cell's reusable route plan."""
     values = dict(base)
     countries = dict(values.get("stage_proxy_countries") or {})
     mapping = {
@@ -456,10 +468,6 @@ def _cell_payment_kwargs(
         country = str(cell.get(field) or "").strip().upper()
         if country:
             countries[stage] = country
-    # GoPay approve-country protocol rule, shared with the payment-link
-    # manager chokepoint.  The batch pre-routing below consumes the approve
-    # country for pool selection and sticky-session rotation before the
-    # manager runs, so the coercion must be applied here as well.
     coerced_cell_approve, cell_approve_changed = coerce_approve_country(
         payment_method, countries.get("approve")
     )
@@ -474,100 +482,21 @@ def _cell_payment_kwargs(
     for key in ("strategy", "checkout_country", "target_country"):
         if cell.get(key) not in (None, ""):
             values[key] = cell[key]
-
-    # Checkout and Approve pools are independent: each cell gets a healthy
-    # candidate for each stage, then the existing country/session rotation is
-    # applied below.  Remove the pool after selection so the manager does not
-    # probe the same pool a second time for this already-routed attempt.
-    from .paypal_proxy import proxy_state_from_config, select_proxy_from_pool
-
-    # One process-shared health/geo cache for the whole batch: the first account
-    # probes each pool proxy, the rest reuse the cached country and the health
-    # ranking (cooldown-skipped) instead of re-probing per cell.
-    proxy_state = proxy_state_from_config(CFG)
-
-    selected_stages: set[str] = set()
-    for stage in ("checkout", "approve"):
-        pool_key = f"{stage}_proxy_pool"
-        pool = parse_proxy_pool(values.get(pool_key))
-        if not pool:
-            continue
-        # Rotate the starting candidate per account.  The selector still
-        # health-checks every candidate, but a healthy static pool is no
-        # longer pinned to its first entry for the whole batch.
-        offset = int(pool_index or 0) % len(pool)
-        if offset:
-            pool = pool[offset:] + pool[:offset]
-        expected = str(
-            countries.get(stage)
-            or values.get(f"{stage}_country")
-            or (
-                "JP"
-                if normalize_payment_method(payment_method) == "gopay" and stage == "approve"
-                else values.get("target_country")
-            )
-            or ""
-        ).strip().upper()
-        selected, _attempts = select_proxy_from_pool(pool, expected, stage, state=proxy_state)
-        if not selected:
-            raise RuntimeError(f"payment_{stage}_proxy_pool_unavailable")
-        values[f"{stage}_proxy"] = selected
-        values.pop(pool_key, None)
-        selected_stages.add(stage)
-
-    checkout_seed = str(values.get("checkout_proxy") or proxy or "").strip()
-    approve_seed = str(values.get("approve_proxy") or checkout_seed or "").strip()
-
-    # The simplified two-pool contract owns the internal adapter stages too:
-    # Checkout pool covers checkout/Stripe/provider/confirm/redirect, while
-    # Approve pool covers promotion/update and final approval.  Explicit
-    # per-stage values remain untouched when no corresponding pool is present.
-    if "checkout" in selected_stages:
-        for key in (
-            "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
-            "confirm_proxy", "redirect_proxy",
-        ):
-            values[key] = checkout_seed
-    if "approve" in selected_stages:
-        for key in ("promotion_proxy", "update_proxy", "final_review_proxy"):
-            values[key] = approve_seed
-
-    seed = checkout_seed
-    if seed and countries:
-        from .paypal_proxy import rotate_proxy_session
-
-        for stage in ("checkout", "promotion", "provider", "approve", "redirect"):
-            country = countries.get(stage)
-            if not country:
-                continue
-            stage_keys = {
-                "checkout": ("checkout_proxy",),
-                "promotion": (
-                    ("promotion_proxy", "update_proxy")
-                    if "approve" in selected_stages
-                    else tuple(key for key in ("promotion_proxy", "update_proxy") if values.get(key))
-                ),
-                "provider": (
-                    ("provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
-                    if "checkout" in selected_stages
-                    else tuple(
-                        key for key in ("provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
-                        if values.get(key)
-                    )
-                ),
-                "approve": (
-                    ("approve_proxy", "final_review_proxy")
-                    if "approve" in selected_stages
-                    else tuple(key for key in ("approve_proxy", "final_review_proxy") if values.get(key))
-                ),
-                "redirect": ("redirect_proxy",) if values.get("redirect_proxy") else (),
-            }[stage]
-            fallback = approve_seed if stage == "promotion" or stage == "approve" else seed
-            for stage_key in stage_keys:
-                stage_seed = str(values.get(stage_key) or fallback).strip()
-                if stage_seed:
-                    values[stage_key] = rotate_proxy_session(stage_seed, country)
-    return values
+    method = normalize_payment_method(payment_method) if str(payment_method or "").strip() else "gopay"
+    if proxy:
+        values["proxy"] = proxy
+    elif values.get("checkout_proxy") and not parse_proxy_pool(values.get("checkout_proxy_pool")):
+        values["proxy"] = values["checkout_proxy"]
+    plan = PaymentRoutePlanner(CFG).plan(
+        method,
+        options=values,
+        default_proxy=proxy,
+        pool_offset=pool_index,
+    )
+    routed = {**values, **plan.to_adapter_options(), "payment_route_plan": plan}
+    routed.pop("checkout_proxy_pool", None)
+    routed.pop("approve_proxy_pool", None)
+    return routed
 
 
 def _eligible_from_result(method: str, result: dict[str, Any]) -> bool | None:

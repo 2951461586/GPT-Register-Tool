@@ -477,17 +477,6 @@
                     <TextBlock Grid.Column="1" Text="批量协议支付" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="RegeneratePayPalLink_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="重新生成支付链接" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
-
                 <TextBlock Text="邮箱管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <Button Style="{StaticResource SidebarNavButtonStyle}" Click="ImportChataiMailbox_Click">
                   <Grid>
@@ -755,6 +744,7 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       VirtualizingPanel.ScrollUnit="Pixel"
                       EnableColumnVirtualization="True"
+                      Sorting="AccountGrid_Sorting"
                       SelectionChanged="AccountGrid_SelectionChanged">
               <DataGrid.ContextMenu>
                 <ContextMenu Style="{StaticResource AccountContextMenuStyle}">
@@ -862,7 +852,7 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="优惠状态" Width="150" IsReadOnly="True">
+                <DataGridTemplateColumn Header="优惠状态" Width="150" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionStatus, Converter={StaticResource StatusSeverityConverter}}">

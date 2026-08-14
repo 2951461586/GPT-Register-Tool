@@ -19,7 +19,6 @@ from .paths import project_path, runtime_file
 
 DEFAULT_BASE_URL = "https://remail.aishop6.com"
 DEFAULT_PROJECT_ID = 2
-DEFAULT_PRODUCT_ID = 5
 _DEAD_REMAIL_LOCK = threading.Lock()
 _OPENAI_REMAIL_SENDERS = re.compile(
     r"(?i)(?:otp@tm1\.openai\.com|noreply@tm\.openai\.com|(?:otp|noreply)@openai\.com)"
@@ -338,13 +337,12 @@ def _order_options(args=None, service_mode=None):
         raise ValueError("ReMail supply must be private_first or public_only")
     try:
         project_id = int(_arg_or_config(args, "remail_project_id", "project_id", DEFAULT_PROJECT_ID))
-        product_id = int(_arg_or_config(args, "remail_product_id", "product_id", DEFAULT_PRODUCT_ID))
     except (TypeError, ValueError) as exc:
-        raise ValueError("ReMail project_id and product_id must be integers") from exc
-    suffix = str(_arg_or_config(args, "remail_email_suffix", "email_suffix", "") or "").strip().lstrip("@")
-    payload = {"projectId": project_id, "productId": product_id}
-    if suffix:
-        payload["emailSuffix"] = suffix
+        raise ValueError("ReMail project_id must be an integer") from exc
+    suffix = str(
+        _arg_or_config(args, "remail_email_suffix", "email_suffix", "outlook.com") or "outlook.com"
+    ).strip().lstrip("@")
+    payload = {"projectId": project_id, "emailSuffix": suffix}
     return mode, supply, payload
 
 
@@ -443,8 +441,11 @@ def _recover_recent_remail_batch(*, started_at, quantity, mode, payload):
             continue
         if int(item.get("projectId") or 0) != int(payload.get("projectId") or 0):
             continue
-        if int(item.get("projectProductId") or 0) != int(payload.get("productId") or 0):
-            continue
+        requested_suffix = str(payload.get("emailSuffix") or "").strip().lower()
+        if requested_suffix and requested_suffix not in {"outlook", "domain"}:
+            delivery_domain = str(item.get("deliveryEmail") or "").strip().lower().rpartition("@")[2]
+            if delivery_domain != requested_suffix:
+                continue
         candidates.append(item)
 
     if len(candidates) != quantity:

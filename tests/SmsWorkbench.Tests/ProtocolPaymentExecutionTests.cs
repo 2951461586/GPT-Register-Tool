@@ -27,7 +27,8 @@ public sealed class ProtocolPaymentExecutionPlannerTests
             "--target-country", "US",
             "--email", "user@example.com",
             "--session-file", "C:\\sessions\\user.json",
-            "--proxy", "http://proxy.example:8080",
+            "--checkout-proxy-pool", "http://checkout-one" + Environment.NewLine + "http://checkout-two",
+            "--approve-proxy-pool", "http://approve-one",
             "--no-jit-at-refresh",
             "--checkout-proxy-country", "US",
             "--approve-proxy-country", "TR",
@@ -43,13 +44,16 @@ public sealed class ProtocolPaymentExecutionPlannerTests
     {
         IReadOnlyList<string> arguments = ProtocolPaymentExecutionPlanner.CreateProxyTestArguments(
             "direct-card",
-            " http://proxy.example:8080 ",
+            "",
+            " http://checkout-one\nhttp://checkout-two ",
+            "http://approve-one",
             "us",
             "ph",
             "tr");
 
         Assert.Equal("direct_card", ArgumentAfter(arguments, "--payment-method"));
-        Assert.Equal("http://proxy.example:8080", ArgumentAfter(arguments, "--proxy"));
+        Assert.Equal("http://checkout-one" + Environment.NewLine + "http://checkout-two", ArgumentAfter(arguments, "--checkout-proxy-pool"));
+        Assert.Equal("http://approve-one", ArgumentAfter(arguments, "--approve-proxy-pool"));
         Assert.Equal("US", ArgumentAfter(arguments, "--checkout-proxy-country"));
         Assert.Equal("PH", ArgumentAfter(arguments, "--approve-proxy-country"));
         Assert.Equal("TR", ArgumentAfter(arguments, "--update-proxy-country"));
@@ -103,7 +107,9 @@ public sealed class ProtocolPaymentExecutionPlannerTests
         => new(
             paymentMethod,
             "US",
-            "http://proxy.example:8080",
+            "",
+            "http://checkout-one\nhttp://checkout-two",
+            "http://approve-one",
             jitRefresh,
             probeOnly,
             requireZero,
@@ -178,6 +184,33 @@ public sealed class ProtocolPaymentResultPresenterTests
     }
 
     [Fact]
+    public void IneligiblePaymentFailureShowsKeyFieldsInsteadOfRawJson()
+    {
+        ProtocolPaymentResultPresentation result = ProtocolPaymentResultPresenter.Parse(
+            """
+            {
+              "ok": false,
+              "decision": "account_trial_ineligible",
+              "decision_text": "账号没有真正试用资格，且未检测到 MoMo",
+              "payment_method": "momo",
+              "subscription_plan": "chatgptfreeplan",
+              "amount_due": 0,
+              "currency": "usd",
+              "has_qr": false,
+              "qr_path": ""
+            }
+            """);
+
+        Assert.Contains("[失败] 账号没有真正试用资格，且未检测到 MoMo", result.Text, StringComparison.Ordinal);
+        Assert.Contains("判定: account_trial_ineligible", result.Text, StringComparison.Ordinal);
+        Assert.Contains("支付方式: momo", result.Text, StringComparison.Ordinal);
+        Assert.Contains("订阅状态: chatgptfreeplan", result.Text, StringComparison.Ordinal);
+        Assert.Contains("应付金额: 0 USD", result.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("{", result.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"decision\"", result.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CompletedExecutePaymentIsShownAsPaymentOnlyWhenOperationSaysSo()
     {
         ProtocolPaymentResultPresentation result = ProtocolPaymentResultPresenter.Parse(
@@ -195,6 +228,8 @@ public sealed class ProtocolPaymentResultPresenterTests
                 "momo",
                 "VN",
                 "http://proxy.example:8080",
+                "http://checkout-ignored",
+                "http://approve-ignored",
                 true,
                 false,
                 true,

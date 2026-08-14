@@ -81,7 +81,7 @@ class RegistrationPhonePoolTests(unittest.TestCase):
             cli._run_target_at200(args, Path(tmp))
 
         self.assertIs(run_batch.call_args.kwargs["phone_pool"], phone_pool)
-        self.assertTrue(run_batch.call_args.kwargs["codex_oauth"])
+        self.assertFalse(run_batch.call_args.kwargs["codex_oauth"])
 
 
 def order_payload(index=1, mode="code"):
@@ -122,7 +122,7 @@ class ReMailOrderTests(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer rk-secret-key")
         self.assertTrue(kwargs["headers"]["Idempotency-Key"])
         self.assertEqual(kwargs["params"], {"serviceMode": "code", "supply": "private_first"})
-        self.assertEqual(kwargs["json"], {"projectId": 2, "productId": 5, "emailSuffix": "outlook.com"})
+        self.assertEqual(kwargs["json"], {"projectId": 2, "emailSuffix": "outlook.com"})
 
     def test_create_order_retries_transient_5xx_with_stable_idempotency_key(self):
         responses = [

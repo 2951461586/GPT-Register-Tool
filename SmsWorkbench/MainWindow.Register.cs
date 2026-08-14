@@ -71,7 +71,8 @@ namespace SmsWorkbench
                     selectedOptions.Workers,
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
-                    disable2fa: selectedOptions.Disable2fa);
+                    disable2fa: selectedOptions.Disable2fa,
+                    checkPromotion: selectedOptions.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -93,7 +94,8 @@ namespace SmsWorkbench
                     selectedOptions.Workers,
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
-                    disable2fa: selectedOptions.Disable2fa);
+                    disable2fa: selectedOptions.Disable2fa,
+                    checkPromotion: selectedOptions.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -106,7 +108,8 @@ namespace SmsWorkbench
                 var plan = BackendCommandPlanner.CreatePhoneRegistration(
                     options.Count,
                     GetRegistrationProxyPool(),
-                    disable2fa: options.Disable2fa);
+                    disable2fa: options.Disable2fa,
+                    checkPromotion: options.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -118,7 +121,8 @@ namespace SmsWorkbench
                     options.Count,
                     options.Workers,
                     GetRegistrationProxyPool(),
-                    disable2fa: options.Disable2fa);
+                    disable2fa: options.Disable2fa,
+                    checkPromotion: options.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -129,7 +133,8 @@ namespace SmsWorkbench
                     options.Count,
                     options.Workers,
                     GetRegistrationProxyPool(),
-                    disable2fa: options.Disable2fa);
+                    disable2fa: options.Disable2fa,
+                    checkPromotion: options.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -141,7 +146,8 @@ namespace SmsWorkbench
                     options.Count,
                     options.Workers,
                     GetRegistrationProxyPool(),
-                    disable2fa: options.Disable2fa);
+                    disable2fa: options.Disable2fa,
+                    checkPromotion: options.CheckPromotion);
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
@@ -161,7 +167,8 @@ namespace SmsWorkbench
                 options.Workers,
                 registrationAtOnly: true,
                 GetRegistrationProxyPool(),
-                disable2fa: options.Disable2fa);
+                disable2fa: options.Disable2fa,
+                checkPromotion: options.CheckPromotion);
             RunBackend(defaultPlan.TaskName, defaultPlan.Arguments.ToList());
         }
 
@@ -395,14 +402,16 @@ namespace SmsWorkbench
                 Title = "选中邮箱注册",
                 Owner = this,
                 Width = 560,
-                Height = 238,
+                Height = 278,
                 MinWidth = 480,
-                MinHeight = 220,
+                MinHeight = 260,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
 
             var root = new Grid { Margin = new Thickness(14) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -439,12 +448,23 @@ namespace SmsWorkbench
             Grid.SetColumn(no2faBox, 1);
             root.Children.Add(no2faBox);
 
+            var promotionBox = new CheckBox
+            {
+                Content = "注册完成后查询试用优惠",
+                IsChecked = false,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(promotionBox, 3);
+            Grid.SetColumn(promotionBox, 1);
+            root.Children.Add(promotionBox);
+
             var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 3);
+            Grid.SetRow(actions, 4);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -456,7 +476,8 @@ namespace SmsWorkbench
                     Source = "pool",
                     Count = Math.Max(1, selectedCount),
                     Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount()),
-                    Disable2fa = no2faBox.IsChecked == true
+                    Disable2fa = no2faBox.IsChecked == true,
+                    CheckPromotion = promotionBox.IsChecked == true
                 };
                 dialog.DialogResult = true;
                 dialog.Close();
@@ -473,9 +494,9 @@ namespace SmsWorkbench
                 Title = "一键注册",
                 Owner = this,
                 Width = 560,
-                Height = 292,
+                Height = 332,
                 MinWidth = 480,
-                MinHeight = 272,
+                MinHeight = 312,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Background = (System.Windows.Media.Brush)FindResource("AppBg")
             };
@@ -486,16 +507,17 @@ namespace SmsWorkbench
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var sourceLabel = new TextBlock { Text = "注册方式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            sourceBox.Items.Add(new ComboBoxItem { Content = "Chatai/邮箱池", Tag = "pool" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail 长效邮箱", Tag = "remail_target" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "CF Woker Mail", Tag = "cfworker" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "Smailr 临时邮箱", Tag = "smailr" });
-            sourceBox.Items.Add(new ComboBoxItem { Content = "📱 手机号注册 (SMSBower)", Tag = "phone" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "ReMail 邮箱", Tag = "remail_target" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "Smailr 邮箱", Tag = "smailr" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "Outlook/Hotmail/iCloud 邮箱池", Tag = "pool" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "CF Worker 域名邮箱", Tag = "cfworker" });
+            sourceBox.Items.Add(new ComboBoxItem { Content = "手机号注册", Tag = "phone" });
             sourceBox.SelectedIndex = 0;
             Grid.SetRow(sourceLabel, 0);
             Grid.SetColumn(sourceLabel, 0);
@@ -533,6 +555,17 @@ namespace SmsWorkbench
             Grid.SetColumn(no2faBox, 1);
             root.Children.Add(no2faBox);
 
+            var promotionBox = new CheckBox
+            {
+                Content = "注册完成后查询试用优惠",
+                IsChecked = false,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
+            };
+            Grid.SetRow(promotionBox, 4);
+            Grid.SetColumn(promotionBox, 1);
+            root.Children.Add(promotionBox);
+
             void UpdateTargetControls()
             {
                 bool targetMode = string.Equals((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string, "remail_target", StringComparison.OrdinalIgnoreCase);
@@ -546,7 +579,7 @@ namespace SmsWorkbench
             var cancel = new Button { Content = "取消", Width = 72 };
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 4);
+            Grid.SetRow(actions, 5);
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
@@ -561,7 +594,8 @@ namespace SmsWorkbench
                     Source = selectedSource,
                     Count = count,
                     Workers = workers,
-                    Disable2fa = no2faBox.IsChecked == true
+                    Disable2fa = no2faBox.IsChecked == true,
+                    CheckPromotion = promotionBox.IsChecked == true
                 };
                 CountText = count.ToString();
                 dialog.DialogResult = true;

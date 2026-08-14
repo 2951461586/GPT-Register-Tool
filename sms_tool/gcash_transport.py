@@ -163,6 +163,18 @@ class ChatGPTGCashTransport:
         return self._json_response(response, request.stage)
 
     def _stage_proxy(self, request: GCashTransportRequest) -> str:
+        plan = request.transport_context.get("payment_route_plan")
+        if plan is not None and hasattr(plan, "proxy_for"):
+            canonical_stage = {
+                "update": "promotion",
+                "taxes": "stripe_init",
+                "resolve": "stripe_init",
+                "custom_capability": "payment_method",
+                "start": "redirect",
+            }.get(request.stage, request.stage)
+            planned = str(plan.proxy_for(canonical_stage) or "").strip()
+            if planned:
+                return normalize_proxy_url(planned)
         keys = {
             "checkout": ("checkout_proxy",),
             "update": ("promotion_proxy", "update_proxy"),

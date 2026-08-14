@@ -81,6 +81,11 @@ public sealed class SettingsServiceTests
         SettingDefinition apiKey = SettingsCatalog.AllFields.Single(field => field.Key == "smailr_api_key");
         Assert.Equal(SettingFieldKind.Secret, apiKey.Kind);
         Assert.Equal("email_registration.smailr.api_key", apiKey.JsonPath);
+
+        SettingDefinition domain = SettingsCatalog.AllFields.Single(field => field.Key == "smailr_default_domain");
+        Assert.Equal(SettingFieldKind.Options, domain.Kind);
+        Assert.Equal(new[] { "smailr.com", "loc.cc", "mail.nodeloc.cc", "nodeloc.cc" }, domain.Options);
+        Assert.DoesNotContain(SettingsCatalog.AllFields, field => field.Key == "remail_product_id");
     }
 
     [Fact]
