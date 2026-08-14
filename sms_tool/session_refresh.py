@@ -109,7 +109,29 @@ def _save_refreshed(refreshed, json_path):
 def _load_seed_session(email="", session_file=""):
     if session_file:
         path = Path(session_file)
-        return _read_json(path), str(path)
+        data = _read_json(path)
+        if not isinstance(data, dict):
+            data = {}
+        # Session snapshots intentionally omit mailbox credentials.  When a
+        # caller supplies an explicit snapshot path, rehydrate the missing
+        # mailbox columns from the canonical SQLite account record so recovery
+        # can still use the configured mailbox provider.
+        lookup_email = str(data.get("email") or email or "").strip().lower()
+        if lookup_email:
+            record = get_account_record(lookup_email)
+            if record:
+                data.setdefault("email", record.get("email", lookup_email))
+                for key in (
+                    "mailbox_provider",
+                    "mailbox_source",
+                    "mailbox_token",
+                    "mailbox_refresh_token",
+                ):
+                    if not str(data.get(key) or "").strip() and str(record.get(key) or "").strip():
+                        data[key] = record[key]
+                if not str(data.get("password") or "").strip() and str(record.get("password") or "").strip():
+                    data["password"] = record["password"]
+        return data, str(path)
     if email:
         record = get_account_record(email)
         json_path = str(record.get("json_path") or "").strip()

@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from sms_tool import session_refresh
@@ -38,3 +39,26 @@ def test_browser_refresh_paths_are_removed():
     assert not hasattr(session_refresh, "_refresh_session_browser")
     assert not hasattr(session_refresh, "_complete_browser_email_login")
     assert "browser" not in session_refresh.refresh_session.__doc__.lower() or "removed" in session_refresh.refresh_session.__doc__.lower()
+
+
+def test_explicit_session_file_rehydrates_flattened_mailbox_credentials(tmp_path):
+    path = tmp_path / "session.json"
+    path.write_text(json.dumps({
+        "email": "liziai@smailr.com",
+        "mailbox": {"email": "liziai@smailr.com", "provider": "smailr"},
+    }), encoding="utf-8")
+    record = {
+        "email": "liziai@smailr.com",
+        "mailbox_provider": "smailr",
+        "mailbox_source": "purchase",
+        "mailbox_token": "mailbox-token",
+        "mailbox_refresh_token": "",
+    }
+
+    with patch.object(session_refresh, "get_account_record", return_value=record):
+        data, json_path = session_refresh._load_seed_session(session_file=str(path))
+
+    assert json_path == str(path)
+    assert data["mailbox_provider"] == "smailr"
+    assert data["mailbox_source"] == "purchase"
+    assert data["mailbox_token"] == "mailbox-token"
