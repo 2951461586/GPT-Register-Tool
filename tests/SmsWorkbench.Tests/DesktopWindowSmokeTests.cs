@@ -205,7 +205,6 @@ public sealed class DesktopWindowSmokeTests
         {
             main.Show();
             main.UpdateLayout();
-            FlushDispatcher();
             Assert.DoesNotContain(
                 backendClient.Commands,
                 command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));
@@ -232,7 +231,8 @@ public sealed class DesktopWindowSmokeTests
             contextMenu.PlacementTarget = accountGrid;
             contextMenu.Placement = PlacementMode.Center;
             contextMenu.IsOpen = true;
-            FlushDispatcher();
+            contextMenu.ApplyTemplate();
+            contextMenu.UpdateLayout();
 
             Assert.NotNull(contextMenu.Template.FindName("MenuChrome", contextMenu));
             MenuItem[] menuItems = contextMenu.Items.OfType<MenuItem>().ToArray();
