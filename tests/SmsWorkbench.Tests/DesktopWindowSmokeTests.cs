@@ -256,7 +256,7 @@ public sealed class DesktopWindowSmokeTests
             string[] checkBoxLabels = Array.Empty<string>();
             int comboBoxCount = 0;
             Exception? captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
             {
                 try
                 {
@@ -321,7 +321,7 @@ public sealed class DesktopWindowSmokeTests
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
             {
                 try
                 {
