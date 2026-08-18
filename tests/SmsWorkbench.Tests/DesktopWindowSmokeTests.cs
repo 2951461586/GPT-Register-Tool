@@ -258,7 +258,7 @@ public sealed class DesktopWindowSmokeTests
             string[] checkBoxLabels = Array.Empty<string>();
             int comboBoxCount = 0;
             Exception? captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
             {
                 try
                 {
@@ -323,7 +323,7 @@ public sealed class DesktopWindowSmokeTests
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
             {
                 try
                 {
@@ -531,7 +531,7 @@ public sealed class DesktopWindowSmokeTests
     }
 
     private static void FlushDispatcher()
-        => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+        => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
     {
