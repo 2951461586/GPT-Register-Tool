@@ -219,6 +219,7 @@ namespace SmsWorkbench
 
             ScopeFilter = "全部";
             RefreshPools();
+            Loaded += (_, _) => RunStartupDoctorProbe();
             ApplySidebarCompact(false);
         }
 

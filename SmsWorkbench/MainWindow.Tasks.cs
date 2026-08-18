@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -7,6 +9,75 @@ namespace SmsWorkbench
         // CLI argument construction is delegated to BackendCommandPlanner;
         // backend JSON business interpretation is delegated to
         // BackendResultInterpreter.
+
+        private bool doctorProbeStarted;
+
+        // Long-running backend tasks (registration / payment batches) share one
+        // timeout budget; keep it a named constant instead of inline math.
+        private const int BackendTaskTimeoutMs = 12 * 60 * 60 * 1000;
+        private const int BackendTaskTimeoutSeconds = 12 * 60 * 60;
+        private DateTime lastHotPersistenceRefreshUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// One-shot background environment probe (`python -m sms_tool --doctor --json`)
+        /// run straight through the backend client so the single-active-task
+        /// invariant is untouched. Surfaces missing interpreter/dependencies
+        /// with fix hints instead of letting them surface as per-task failures.
+        /// </summary>
+        private async void RunStartupDoctorProbe()
+        {
+            if (doctorProbeStarted)
+                return;
+            doctorProbeStarted = true;
+            try
+            {
+                var command = BackendCommand.Create("doctor", new[] { "--doctor", "--json" }, 90 * 1000);
+                BackendCommandResult result = await backendClient.RunAsync(command).ConfigureAwait(true);
+                if (!result.Payload.HasValue)
+                {
+                    Log("[doctor] 环境自检未返回结构化结果(退出码 " + result.ExitCode + ")");
+                    return;
+                }
+                var fails = new List<string>();
+                int warned = 0;
+                foreach (JsonElement check in result.Payload.Value.GetProperty("checks").EnumerateArray())
+                {
+                    string status = check.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() : "";
+                    string name = check.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() : "";
+                    string hint = check.TryGetProperty("hint", out JsonElement hintElement) ? hintElement.GetString() : "";
+                    if (status == "fail")
+                        fails.Add(string.IsNullOrEmpty(hint) ? name : $"{name}: {hint}");
+                    else if (status == "warn")
+                        warned++;
+                }
+                if (fails.Count == 0)
+                {
+                    Log($"[doctor] 环境自检通过{(warned > 0 ? $"({warned} 项警告,详见设置与代理配置)" : "")}");
+                    return;
+                }
+                var detail = string.Join("\n  - ", fails);
+                Log("[doctor] 环境自检发现 " + fails.Count + " 项缺失依赖");
+                MessageBox.Show(
+                    this,
+                    $"环境自检发现 {fails.Count} 项必需依赖缺失:\n  - {detail}\n\n" +
+                    "可先运行: python -m pip install -r requirements.txt\n" +
+                    "或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
+                    "环境自检",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                Log("[doctor] 环境自检失败: " + ex.Message);
+                MessageBox.Show(
+                    this,
+                    ex.Message + "\n\n桌面端依赖 Python 3.10+ 与 requirements.txt 中的依赖包。" +
+                    "\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
+                    "无法启动 Python 后端",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
 
         private void RerunFailed_Click(object sender, RoutedEventArgs e)
         {
@@ -88,18 +159,19 @@ namespace SmsWorkbench
             {
                 CaptureBackendLine(line.Text);
                 UiLog(line.Text);
+                RefreshPoolsAfterHotPersistence(line.Text);
             });
             try
             {
                 Log("启动：python " + safeArgs);
                 StatusText = taskName + " 运行中";
                 BackendCommandResult result = await backendTasks.RunAsync(
-                    BackendCommand.Create(taskName, args, 12 * 60 * 60 * 1000),
+                    BackendCommand.Create(taskName, args, BackendTaskTimeoutMs),
                     progress);
 
                 // Use BackendResultInterpreter to normalize the outcome
                 BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(
-                    result, taskName, 12 * 60 * 60);
+                    result, taskName, BackendTaskTimeoutSeconds);
 
                 task.Status = interpreted.IsSuccess ? "完成" : "失败";
                 task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
@@ -137,16 +209,29 @@ namespace SmsWorkbench
             }
         }
 
-        private string RunBackendWithResult(string taskName, List<string> args, int timeoutMs = 120000)
+        private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000)
         {
             Log("启动：python " + FormatBackendArgsForDisplay(args));
-            return backendTasks.RunForResultAsync(
-                BackendCommand.Create(taskName, args, timeoutMs)).GetAwaiter().GetResult();
+            return await backendTasks.RunForResultAsync(
+                BackendCommand.Create(taskName, args, timeoutMs));
         }
 
         private static string FormatBackendArgsForDisplay(List<string> args)
         {
             return SensitiveDataSanitizer.RedactArguments(args);
+        }
+
+        private void RefreshPoolsAfterHotPersistence(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)
+                || !line.Contains("Saved session:", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            DateTime now = DateTime.UtcNow;
+            if ((now - lastHotPersistenceRefreshUtc).TotalMilliseconds < 750)
+                return;
+            lastHotPersistenceRefreshUtc = now;
+            RefreshPools();
         }
 
         private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();
@@ -167,19 +252,49 @@ namespace SmsWorkbench
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
-            int failed = 0;
-            foreach (PoolRow row in selected)
+            BackendCommandPlan plan = null;
+            try
             {
-                if (!await DeleteRowAsync(row)) failed++;
+                plan = BackendCommandPlanner.CreateBatchDeleteAccounts(
+                    selected.Select(row => NormalizeEmailKey(row.Identifier)).ToArray(),
+                    workers: Math.Min(8, Math.Max(1, selected.Count)));
+                BackendCommandResult backend = await backendTasks.RunAsync(
+                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000));
+                int failed = CountBatchDeleteFailures(backend, selected.Count);
+                if (failed > 0)
+                {
+                    await DialogFactory.ShowInfoAsync(
+                        this,
+                        "删除未完成",
+                        failed + " 条记录未能完整删除。请查看运行日志。");
+                }
             }
-            RefreshPools();
-            if (failed > 0)
+            catch (Exception ex)
             {
-                await DialogFactory.ShowInfoAsync(
-                    this,
-                    "删除未完成",
-                    failed + " 条记录未能完整删除。请查看运行日志。");
+                Log("批量删除失败：" + SensitiveDataSanitizer.Redact(ex.Message));
+                await DialogFactory.ShowInfoAsync(this, "删除失败", "批量删除未完成，请查看运行日志。");
             }
+            finally
+            {
+                if (plan != null)
+                {
+                    foreach (string path in plan.TempFiles)
+                        TryDeleteFile(path);
+                }
+                RefreshPools();
+            }
+        }
+
+        private static int CountBatchDeleteFailures(BackendCommandResult backend, int expected)
+        {
+            if (backend.ExitCode != 0 || !backend.Payload.HasValue)
+                return expected;
+            JsonElement payload = backend.Payload.Value;
+            if (payload.TryGetProperty("failed", out JsonElement failed) && failed.ValueKind == JsonValueKind.Number)
+                return Math.Max(0, failed.GetInt32());
+            return payload.TryGetProperty("ok", out JsonElement ok) && ok.ValueKind == JsonValueKind.True
+                ? 0
+                : expected;
         }
 
         private async Task<bool> ShowDeleteConfirmDialog(int count)
@@ -190,30 +305,6 @@ namespace SmsWorkbench
                 "将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
                 "删除",
                 isDanger: true);
-        }
-
-        private async Task<bool> DeleteRowAsync(PoolRow row)
-        {
-            try
-            {
-                string emailKey = NormalizeEmailKey(row.Identifier);
-                if (emailKey.Length == 0) return false;
-                var plan = BackendCommandPlanner.CreateDeleteAccount(emailKey);
-                BackendCommandResult backend = await backendTasks.RunAsync(
-                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000));
-                if (backend.ExitCode != 0 || !backend.Payload.HasValue)
-                {
-                    Log("删除失败：" + SensitiveDataSanitizer.Redact(emailKey));
-                    return false;
-                }
-                Log("删除账号完成：" + SensitiveDataSanitizer.Redact(emailKey));
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Log("删除失败：" + SensitiveDataSanitizer.Redact(row.Identifier) + " " + SensitiveDataSanitizer.Redact(ex.Message));
-                return false;
-            }
         }
 
         private bool TryDeleteFile(string path)

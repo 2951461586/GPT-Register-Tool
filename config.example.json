@@ -6,8 +6,8 @@
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
-    "registration": "",
-    "default": "",
+    "registration": "http://127.0.0.1:7897",
+    "default": "http://127.0.0.1:7897",
     "pool": []
   },
   "registration": {
@@ -193,8 +193,7 @@
     "hosted_usd_fallback_on_422": false,
     "allow_chatgpt_checkout_fallback": true,
     "hosted_usd_fallback_on_non_hosted": false,
-    "link_generation_type": "hosted_long_url",
-    "stage_proxy_api_urls": {}
+    "link_generation_type": "hosted_long_url"
   },
   "protocol_payments": {
       "proxy_pool": [],
@@ -202,6 +201,11 @@
         "checkout": [],
         "approve": []
       },
+    "egress_check": {
+      "enabled": true,
+      "timeout_seconds": 12,
+      "cache_ttl_seconds": 600
+    },
     "enabled_methods": [
       "paypal",
       "gopay",

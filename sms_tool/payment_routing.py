@@ -111,11 +111,30 @@ def method_payment_config(config: Mapping[str, Any], payment_method: Any) -> dic
     methods = protocol.get("methods") if isinstance(protocol.get("methods"), Mapping) else {}
     canonical = methods.get(method) if isinstance(methods.get(method), Mapping) else {}
     merged = {**dict(legacy), **dict(canonical)}
-    for key in ("stage_proxies", "stage_proxy_pools", "stage_routes", "stage_proxy_countries"):
+    routing_keys = ("stage_proxies", "stage_proxy_pools", "stage_routes", "stage_proxy_countries")
+    canonical_owns_routing = any(isinstance(canonical.get(key), Mapping) for key in routing_keys)
+    for key in ("stage_proxies", "stage_proxy_pools", "stage_routes"):
         old = legacy.get(key) if isinstance(legacy.get(key), Mapping) else {}
         new = canonical.get(key) if isinstance(canonical.get(key), Mapping) else {}
-        if old or new:
-            merged[key] = {**dict(old), **dict(new)}
+        if canonical_owns_routing:
+            # The canonical method section owns routing maps.  Keeping old
+            # entries here can silently select a proxy for a stage that the
+            # canonical route intentionally leaves to its named pool.
+            merged[key] = dict(new)
+        elif old:
+            merged[key] = dict(old)
+    # Country expectations are an executable routing contract.  Once the
+    # canonical protocol section declares them, do not resurrect stale values
+    # from the legacy top-level section for stages it intentionally omits: the
+    # planner will derive those stages from target/checkout country instead.
+    legacy_countries = legacy.get("stage_proxy_countries")
+    canonical_countries = canonical.get("stage_proxy_countries")
+    if canonical_owns_routing:
+        merged["stage_proxy_countries"] = (
+            dict(canonical_countries) if isinstance(canonical_countries, Mapping) else {}
+        )
+    elif isinstance(legacy_countries, Mapping):
+        merged["stage_proxy_countries"] = dict(legacy_countries)
     return merged
 
 
@@ -237,6 +256,7 @@ class PaymentRoutePlanner:
         if not method:
             raise ValueError(f"unsupported payment method: {payment_method}")
         values = dict(options or {})
+        automatic_country = bool(values.get("auto_proxy_country"))
         method_cfg = method_payment_config(self.config, method)
         profile = payment_flow_profile(method, method_cfg)
         shared_override = self._proxy_value(values.get("proxy"))
@@ -245,6 +265,16 @@ class PaymentRoutePlanner:
             or values.get("proxy")
         )
         countries = self._countries(method, method_cfg, values)
+        raw_explicit_countries = (
+            values.get("stage_proxy_countries")
+            if not automatic_country and isinstance(values.get("stage_proxy_countries"), Mapping)
+            else {}
+        )
+        explicit_countries = {
+            normalize_payment_stage(key): str(value or "").strip().upper()
+            for key, value in raw_explicit_countries.items()
+            if normalize_payment_stage(key) and str(value or "").strip()
+        }
         coercions: list[dict[str, Any]] = []
         if method == "gopay":
             original = countries.get("approve") or "JP"
@@ -329,7 +359,12 @@ class PaymentRoutePlanner:
             if not pool and default:
                 pool = [default]
                 group_name = "default"
-            expected = str(route_cfg.get("country") or countries.get(stage) or "").strip().upper()
+            expected = str(
+                explicit_countries.get(stage)
+                or ("" if automatic_country else route_cfg.get("country"))
+                or countries.get(stage)
+                or ""
+            ).strip().upper()
             session_policy = str(route_cfg.get("session_policy") or "sticky_flow").strip()
             failure_policy = str(route_cfg.get("failure_policy") or "rotate_before_side_effect").strip()
             route = StageRoute(stage, group_name, tuple(pool), expected, session_policy, failure_policy)
@@ -457,8 +492,9 @@ class PaymentRoutePlanner:
         }
 
     def _countries(self, method: str, method_cfg: Mapping[str, Any], values: Mapping[str, Any]) -> dict[str, str]:
-        configured = method_cfg.get("stage_proxy_countries") if isinstance(method_cfg.get("stage_proxy_countries"), Mapping) else {}
-        explicit = values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {}
+        automatic = bool(values.get("auto_proxy_country"))
+        configured = {} if automatic else (method_cfg.get("stage_proxy_countries") if isinstance(method_cfg.get("stage_proxy_countries"), Mapping) else {})
+        explicit = {} if automatic else (values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {})
         countries = {
             normalize_payment_stage(key): str(value or "").strip().upper()
             for key, value in {**dict(configured), **dict(explicit)}.items()

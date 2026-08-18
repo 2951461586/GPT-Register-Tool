@@ -19,13 +19,19 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
     candidates = _registration_proxy_candidates(proxy_pool, fallback)
     if len(candidates) <= 1:
         return candidates
-    healthy = []
-    for base in candidates:
+
+    def check(base: str) -> bool:
         candidate = refresh_proxy_sid(base)
         expected = infer_proxy_country(candidate)
         checked = probe_proxy_with_scheme_detection(candidate, expected, use_cache=True)
-        if checked.get("ok"):
-            healthy.append(base)
+        return bool(checked.get("ok"))
+
+    # Serial probing made batch start-up delay grow linearly with pool size;
+    # probe concurrently instead. executor.map preserves candidate order and
+    # the probe cache is lock-guarded for concurrent workers.
+    with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as executor:
+        outcomes = list(executor.map(check, candidates))
+    healthy = [base for base, ok in zip(candidates, outcomes) if ok]
     return healthy or candidates
 
 
@@ -62,6 +68,7 @@ def run_batch_impl(
     run_email_func=None,
     browser_headless: bool | None = None,
     enroll_2fa: bool = True,
+    on_result=None,
 ):
     if run_email_func is None:
         raise ValueError("run_email_func is required")
@@ -168,10 +175,22 @@ def run_batch_impl(
                 time.sleep(retry_delay_seconds)
         return i, result
 
+    def _notify_result(index, result):
+        if on_result is None:
+            return
+        try:
+            on_result(index, result)
+        except Exception as exc:
+            print(
+                f"[!] Result callback failed for account {index + 1}: "
+                f"{type(exc).__name__}; batch continues."
+            )
+
     if workers <= 1:
         for i in range(count):
             _, result = _run_one(i)
             results.append(result)
+            _notify_result(i, result)
         if prewarm_executor is not None:
             prewarm_executor.shutdown(wait=True)
         return results
@@ -182,6 +201,7 @@ def run_batch_impl(
         for future in as_completed(futures):
             i, result = future.result()
             ordered[i] = result
+            _notify_result(i, result)
     results.extend(result for result in ordered if result is not None)
     if prewarm_executor is not None:
         prewarm_executor.shutdown(wait=True)

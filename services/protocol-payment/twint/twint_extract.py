@@ -73,7 +73,7 @@ PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 from common.protocol_core import (
-    ProtocolResult,
+    ProtocolResultReporter,
     amount_from_payload as common_amount_from_payload,
     collect_strings as common_collect_strings,
     collect_urls as common_collect_urls,
@@ -90,14 +90,31 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 DUMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+_result_reporter = ProtocolResultReporter("twint")
+
+
 def print_result_url(url: str) -> None:
-    print(ProtocolResult(
-        payment_method="twint",
-        ok=True,
-        status="completed",
-        url=url,
-        link_type="twint_protocol",
-    ).to_json())
+    _result_reporter.success(url)
+
+
+def print_failure_result(
+    error: Any,
+    *,
+    status: str = "failed",
+    error_code: str = "extractor_failed",
+    retryable: bool = False,
+) -> None:
+    """Print the terminal failure contract so the manager never scrapes logs."""
+    _result_reporter.failure(
+        error,
+        status=status,
+        error_code=error_code,
+        retryable=retryable,
+    )
+
+
+def print_already_paid_result() -> None:
+    _result_reporter.already_paid()
 
 DEFAULT_TIMEOUT = 30
 CHATGPT_TIMEOUT = 45
@@ -2976,6 +2993,7 @@ def run_single_link_parallel_mode(
             last_error = error or last_error
             if is_user_already_paid_error(error):
                 log("检测到 User is already paid：用户已支付，任务正常结束")
+                print_already_paid_result()
                 stop_event.set()
                 for pending in futures:
                     pending.cancel()
@@ -2993,6 +3011,7 @@ def run_single_link_parallel_mode(
         executor.shutdown(wait=True, cancel_futures=stop_event.is_set())
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3081,6 +3100,7 @@ def run_single_link_mode(
                 last_error = error
                 if is_user_already_paid_error(error):
                     log("检测到 User is already paid：用户已支付，任务正常结束")
+                    print_already_paid_result()
                     return 0
                 if not is_checkout_not_active_error(error):
                     record_failure_by_stage(
@@ -3143,6 +3163,7 @@ def run_single_link_mode(
         log(f"第 {attempt}/{twint_retry} 次提链结束，未拿到最终 URL", "[WARN] ")
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3150,6 +3171,7 @@ def main() -> int:
     access_token, session_token = load_token()
     if not access_token:
         log("access_token 为空", "[ERROR] ")
+        print_failure_result("access_token 为空", error_code="missing_token", retryable=False)
         return 1
 
     proxy_seeds = load_proxy_seeds()
@@ -3160,4 +3182,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_code = main()
+    _result_reporter.ensure_terminal(_exit_code)
+    sys.exit(_exit_code)

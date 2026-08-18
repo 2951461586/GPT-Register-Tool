@@ -82,6 +82,9 @@ namespace SmsWorkbench
         {
             try
             {
+                // Kill the resident desktop-read python process before the
+                // host tears down so it never outlives the workbench.
+                (_host?.Services.GetService(typeof(IDesktopReadClient)) as IDisposable)?.Dispose();
                 _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
                 _host?.Dispose();
             }

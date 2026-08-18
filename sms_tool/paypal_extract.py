@@ -63,9 +63,17 @@ except ImportError:  # pragma: no cover - direct script execution
     )
 
 try:
-    from .checkout_contract import CheckoutRequestContract, browser_profile_for_country
+    from .checkout_contract import (
+        CheckoutRequestContract,
+        CheckoutSessionContract,
+        browser_profile_for_country,
+    )
 except ImportError:  # pragma: no cover - direct script execution
-    from checkout_contract import CheckoutRequestContract, browser_profile_for_country  # type: ignore
+    from checkout_contract import (  # type: ignore
+        CheckoutRequestContract,
+        CheckoutSessionContract,
+        browser_profile_for_country,
+    )
 
 try:
     from .paypal_proxy import (
@@ -361,10 +369,14 @@ class PPLinkExtractor:
                     raise Exception(f"请求频率限制 (429), retry-after={r.headers.get('Retry-After', '')}")
                 r.raise_for_status()
                 data = r.json()
-                cs_id = data.get("checkout_session_id") or data.get("id", "")
-                if not cs_id or not cs_id.startswith("cs_"):
-                    raise Exception(f"checkout 响应异常: {json.dumps(data, ensure_ascii=False)[:200]}")
-                pk = data.get("publishable_key") or ""
+                session = CheckoutSessionContract.from_payload(
+                    data,
+                    billing_country=self.checkout_country,
+                    fallback_publishable_key=self.stripe_pk,
+                )
+                cs_id = session.checkout_session_id
+                processor_entity = session.processor_entity
+                pk = session.publishable_key
                 if pk.startswith("pk_"):
                     self.stripe_pk = pk
                 else:
@@ -374,7 +386,7 @@ class PPLinkExtractor:
                 self._log("checkout", f"checkout 成功: cs_id={cs_id}")
                 return {
                     "cs_id": cs_id,
-                    "processor_entity": data.get("processor_entity") or ("openai_llc" if self.checkout_country == "US" else "openai_ie"),
+                    "processor_entity": processor_entity,
                     "stripe_publishable_key": self.stripe_pk,
                     "billing_country": self.checkout_country,
                     "currency": self.checkout_currency,
@@ -825,6 +837,31 @@ class PPLinkExtractor:
             self._checkout_update_promotion(cs_id, processor_entity)
             if self.promotion_taxes:
                 self._checkout_update_taxes(cs_id, processor_entity)
+
+        # ``oaics_`` is ChatGPT's native Checkout contract, not a Stripe
+        # payment-page session. It is already a usable checkout link and must
+        # never be sent to Stripe's /payment_pages/{id}/init endpoint.
+        if cs_id.startswith("oaics_"):
+            return {
+                "ok": True,
+                "link_type": "chatgpt_checkout_link",
+                "url": self._checkout_page_url(cs_id, processor_entity),
+                "ba_token": "",
+                "cs_id": cs_id,
+                "amount": None,
+                "currency": self.checkout_currency,
+                "target_country": self.target_country,
+                "checkout_country": self.checkout_country,
+                "side_effect_started": False,
+                "checkout_proxy": redact_proxy_url(self.checkout_proxy),
+                "promotion_proxy": redact_proxy_url(self.promotion_proxy),
+                "provider_proxy": "",
+                "stripe_init_proxy": "",
+                "payment_method_proxy": "",
+                "confirm_proxy": "",
+                "approve_proxy": "",
+                "proxy_exits": self.proxy_exits,
+            }
 
         # Stage 2: Stripe init + create PM + confirm. Each stage can use its own
         # egress while the Stripe session keeps its cookies and identifiers.

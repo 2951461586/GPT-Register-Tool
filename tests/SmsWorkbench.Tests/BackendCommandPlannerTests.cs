@@ -300,8 +300,10 @@ public sealed class BackendCommandPlannerTests
     public void CreateBatchDeleteAccounts_WritesTempFile()
     {
         var plan = BackendCommandPlanner.CreateBatchDeleteAccounts(
-            new[] { "a@b.com", "c@d.com" });
+            new[] { "a@b.com", "c@d.com" }, workers: 6);
         Assert.Contains("--email-file", plan.Arguments);
+        Assert.Contains("--workers", plan.Arguments);
+        Assert.Contains("6", plan.Arguments);
         Assert.Single(plan.TempFiles);
         Assert.Equal(120000, plan.TimeoutMilliseconds);
     }

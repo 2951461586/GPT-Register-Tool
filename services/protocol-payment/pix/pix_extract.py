@@ -580,9 +580,11 @@ def run_pix_provider_attempt(
         f"(PIX 可能在税务同步后才出现)",
     )
 
-    # promotion 优先 VN；失败则回退 BR（bootstrap 金额已是 0 时仍可继续拿 PIX）
+    # promotion 优先 BR（checkout 同地域，连接稳定）；失败则回退 VN。
+    # 之前 VN 优先，但实测 VN kookeey 节点存在间歇性 SSL_connect 中断，
+    # 会造成 checkout/update 反复失败，故改为 BR 优先。
     promo_candidates = []
-    for item in (promotion_proxy, provider_proxy):
+    for item in (provider_proxy, promotion_proxy):
         item = str(item or "").strip()
         if item and item not in promo_candidates:
             promo_candidates.append(item)
@@ -592,7 +594,7 @@ def run_pix_provider_attempt(
     promo_used = promo_candidates[0]
     last_promo_error = ""
     for idx, candidate in enumerate(promo_candidates, start=1):
-        label = "VN/promo" if idx == 1 else "fallback"
+        label = "BR/provider" if idx == 1 else "VN/promo fallback"
         _log(log_cb, f"[PIX] checkout/update promotion via {label} proxy…")
         try:
             core.opll_update_checkout_promotion(access_token, checkout, candidate)

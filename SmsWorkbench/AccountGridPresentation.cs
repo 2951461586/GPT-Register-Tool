@@ -1,3 +1,6 @@
+using System.Linq.Expressions;
+using Expr = System.Linq.Expressions.Expression;
+
 namespace SmsWorkbench
 {
     public sealed class StatusSeverityConverter : IValueConverter
@@ -53,6 +56,24 @@ namespace SmsWorkbench
 
     public static class AccountGridOrdering
     {
+        // Compiled property getters: sorting several hundred rows used to do a
+        // TypeDescriptor property lookup (reflection) per row per keystroke.
+        private static readonly Dictionary<string, Func<PoolRow, object>> PropertyGetters = BuildGetters();
+
+        private static Dictionary<string, Func<PoolRow, object>> BuildGetters()
+        {
+            var getters = new Dictionary<string, Func<PoolRow, object>>(StringComparer.Ordinal);
+            ParameterExpression parameter = Expr.Parameter(typeof(PoolRow), "row");
+            foreach (System.Reflection.PropertyInfo property in typeof(PoolRow).GetProperties())
+            {
+                if (!property.CanRead || property.GetMethod == null) continue;
+                System.Linq.Expressions.Expression body = Expr.Convert(
+                    Expr.Property(parameter, property), typeof(object));
+                getters[property.Name] = Expr.Lambda<Func<PoolRow, object>>(body, parameter).Compile();
+            }
+            return getters;
+        }
+
         public static IEnumerable<PoolRow> Apply(
             IEnumerable<PoolRow> rows,
             string sortMember,
@@ -76,9 +97,12 @@ namespace SmsWorkbench
                 return new AccountSortValue(PromotionStatusPresentation.SortRank(promotion), promotion);
             }
 
-            PropertyDescriptor property = TypeDescriptor.GetProperties(typeof(PoolRow))[member];
-            object value = property?.GetValue(row);
-            return new AccountSortValue(value == null ? 1 : 0, Convert.ToString(value, CultureInfo.CurrentCulture) ?? "");
+            if (PropertyGetters.TryGetValue(member, out Func<PoolRow, object> getter))
+            {
+                object value = row == null ? null : getter(row);
+                return new AccountSortValue(value == null ? 1 : 0, Convert.ToString(value, CultureInfo.CurrentCulture) ?? "");
+            }
+            return new AccountSortValue(1, "");
         }
 
         private readonly record struct AccountSortValue(int Rank, string Text) : IComparable<AccountSortValue>

@@ -217,6 +217,46 @@ class CheckoutContractReuseTests(unittest.TestCase):
         self.assertEqual(seen["body"]["billing_details"], {"country": "US", "currency": "USD"})
         self.assertEqual(seen["body"]["checkout_ui_mode"], "custom")
 
+    def test_checkout_accepts_oaics_session(self):
+        extractor = _extractor()
+
+        def fake_post(url, body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
+            return _Resp(200, {
+                "checkout_session_id": "oaics_live_X",
+                "processor_entity": "openai_llc",
+                "publishable_key": "pk_live_x",
+            })
+
+        with patch.object(extractor, "_prepare_stage_proxy", return_value=""):
+            with patch.object(paypal_extract, "_checkout_post", side_effect=fake_post):
+                checkout = extractor._create_checkout()
+
+        self.assertEqual(checkout["cs_id"], "oaics_live_X")
+        self.assertEqual(checkout["processor_entity"], "openai_llc")
+
+    def test_extract_returns_oaics_checkout_link_without_provider_side_effects(self):
+        extractor = _extractor(promotion_proxy="http://promotion")
+        checkout = {
+            "cs_id": "oaics_live_X",
+            "processor_entity": "openai_ie",
+            "stripe_publishable_key": "",
+            "billing_country": "US",
+            "currency": "USD",
+        }
+
+        with patch.object(extractor, "_create_checkout", return_value=checkout):
+            with patch.object(extractor, "_checkout_update_promotion", return_value=True) as promotion:
+                with patch.object(extractor, "_run_provider_stages") as provider:
+                    result = extractor.extract()
+
+        promotion.assert_called_once_with("oaics_live_X", "openai_ie")
+        provider.assert_not_called()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "chatgpt_checkout_link")
+        self.assertEqual(result["url"], "https://chatgpt.com/checkout/openai_ie/oaics_live_X")
+        self.assertEqual(result["cs_id"], "oaics_live_X")
+        self.assertFalse(result["side_effect_started"])
+
     def test_stripe_init_fingerprint_follows_checkout_country(self):
         extractor = _extractor(target_country="JP", checkout_country="JP")
         seen = {}

@@ -13,7 +13,8 @@ namespace SmsWorkbench
         string CheckoutProxyPool = "",
         string ApproveProxyPool = "",
         string CheckoutCountry = "",
-        string ApproveCountry = "");
+        string ApproveCountry = "",
+        string UpdateCountry = "");
 
     public sealed record PaymentProxyCountryOption(string Code, string DisplayName);
 

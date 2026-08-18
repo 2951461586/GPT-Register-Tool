@@ -73,6 +73,8 @@ namespace SmsWorkbench
 
             string checkoutCountry = PaymentMethods.Find(method).DefaultCountry;
             string approveCountry = method == "gopay" ? "JP" : checkoutCountry;
+            string updateCountry = PaymentMethods.DefaultUpdateCountry(method, approveCountry);
+
             try
             {
                 JsonNode root = JsonNode.Parse(File.ReadAllText(Path.Combine(_paths.RootDirectory, "config.json"), Encoding.UTF8));
@@ -119,11 +121,18 @@ namespace SmsWorkbench
                     Text(countries, "approve"),
                     Text(legacyCountries, "approve"),
                     approveCountry).ToUpperInvariant();
+                updateCountry = First(
+                    Text(countries, "promotion"),
+                    Text(countries, "update"),
+                    Text(legacyCountries, "promotion"),
+                    Text(legacyCountries, "update"),
+                    updateCountry).ToUpperInvariant();
                 return new PaymentBatchProxyConfiguration(
                     checkoutPool,
                     approvePool,
                     checkoutCountry,
-                    approveCountry);
+                    approveCountry,
+                    updateCountry);
             }
             catch
             {
@@ -131,7 +140,8 @@ namespace SmsWorkbench
                     "",
                     "",
                     checkoutCountry,
-                    approveCountry);
+                    approveCountry,
+                    updateCountry);
             }
         }
 
@@ -145,7 +155,8 @@ namespace SmsWorkbench
 
             string checkoutCountry = (configuration?.CheckoutCountry ?? "").Trim().ToUpperInvariant();
             string approveCountry = (configuration?.ApproveCountry ?? "").Trim().ToUpperInvariant();
-            if (!ValidCountry(checkoutCountry) || !ValidCountry(approveCountry))
+            string updateCountry = (configuration?.UpdateCountry ?? "").Trim().ToUpperInvariant();
+            if (!ValidCountry(checkoutCountry) || !ValidCountry(approveCountry) || !ValidCountry(updateCountry))
                 return new SettingsSaveResult(false, "代理出口国家必须为空或两位字母代码。");
 
             try
@@ -166,6 +177,7 @@ namespace SmsWorkbench
                 JsonObject routes = EnsureObject(methodConfig, "stage_routes");
                 routes["checkout"] = new JsonObject { ["pool"] = checkoutPoolName, ["country"] = checkoutCountry };
                 routes["approve"] = new JsonObject { ["pool"] = approvePoolName, ["country"] = approveCountry };
+                routes["promotion"] = new JsonObject { ["pool"] = approvePoolName, ["country"] = updateCountry };
 
                 JsonObject countries = EnsureObject(methodConfig, "stage_proxy_countries");
                 if (checkoutCountry.Length > 0)
@@ -176,6 +188,10 @@ namespace SmsWorkbench
                     countries["approve"] = approveCountry;
                 else
                     countries.Remove("approve");
+                if (updateCountry.Length > 0)
+                    countries["promotion"] = updateCountry;
+                else
+                    countries.Remove("promotion");
 
                 // Keep the first entry in the legacy singular keys for older
                 // workers; the *_proxy_pool arrays remain authoritative.
@@ -250,6 +266,7 @@ namespace SmsWorkbench
                 AddPoolArgument(arguments, "--approve-proxy-pool", request.ApproveProxyPool);
                 AddCountryArgument(arguments, "--checkout-proxy-country", request.CheckoutCountry);
                 AddCountryArgument(arguments, "--approve-proxy-country", request.ApproveCountry);
+                AddCountryArgument(arguments, "--update-proxy-country", request.ApproveCountry);
 
                 int waveSize = request.Canary > 0 ? Math.Min(request.Canary, request.Accounts.Count) : request.Accounts.Count;
                 int waves = Math.Max(1, (int)Math.Ceiling(waveSize / (double)Math.Max(1, request.Workers)));
@@ -292,6 +309,7 @@ namespace SmsWorkbench
             AddPoolArgument(arguments, "--approve-proxy-pool", approveProxyPool);
             AddCountryArgument(arguments, "--checkout-proxy-country", checkoutCountry);
             AddCountryArgument(arguments, "--approve-proxy-country", approveCountry);
+            AddCountryArgument(arguments, "--update-proxy-country", approveCountry);
 
             BackendCommandResult result = await _backendClient.RunAsync(
                 BackendCommand.Create("测试代理", arguments, 120000),

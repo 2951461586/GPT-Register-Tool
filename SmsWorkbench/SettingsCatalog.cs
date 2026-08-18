@@ -114,11 +114,13 @@ namespace SmsWorkbench
                     Integer("protocol_batch_canary_pause_seconds", "暂停秒数", "protocol_payments.batch.canary_pause_seconds", "21600"),
                     Multiline("protocol_payment_matrix", "地区资格矩阵 JSON", "")),
                 Section("PayPal",
-                    Text("paypal_proxy", "PayPal代理", ""),
+                    Multiline("paypal_proxy", "PayPal代理池", ""),
                     Options("paypal_billing_region", "订单生成地区", "", "DE", "JP", "US", "AU", "DE", "FR", "GB", "IN", "BR"),
                     Options("paypal_link_generation_type", "PayPal直链生成模式", "paypal.link_generation_type", "hosted_long_url", "hosted_long_url", "paypal_direct", "paypal_direct_zero_due"))),
 
             Category("数据与文件",
+                Section("运行环境",
+                    Text("python_path", "Python解释器路径", "runtime.python_path", "python")),
                 Section("本地存储",
                     Text("output_directory", "Session目录", "output.directory"),
                     Text("sqlite_path", "SQLite路径", "storage.sqlite_path")))

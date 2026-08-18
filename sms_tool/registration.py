@@ -223,6 +223,7 @@ def run_batch(
     retry_delay_seconds=1.0,
     browser_headless=None,
     enroll_2fa=True,
+    on_result=None,
 ):
     """Compatibility entry point for callers importing ``registration.run_batch``."""
     from .batch_runner import run_batch_impl
@@ -238,6 +239,7 @@ def run_batch(
         registration_mode=registration_mode,
         max_attempts=max_attempts,
         retry_delay_seconds=retry_delay_seconds,
+        on_result=on_result,
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
         run_email_func=run_email,

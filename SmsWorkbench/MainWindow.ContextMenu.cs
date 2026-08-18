@@ -125,7 +125,7 @@ namespace SmsWorkbench
                 Log($"正在进行账号测活：{row.Identifier}");
                 var args = new List<string> { "--quota-usage", "--email", row.Identifier, "--refresh-timeout", "45" };
                 AddRegistrationProxy(args);
-                string json = await Task.Run(() => RunBackendWithResult("账号测活", args));
+                string json = await RunBackendWithResultAsync("账号测活", args);
 
                 if (string.IsNullOrWhiteSpace(json))
                 {

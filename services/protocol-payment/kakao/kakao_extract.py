@@ -1432,8 +1432,6 @@ def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
                 raise RuntimeError(f"not kakao/nicepay redirect: {final_url[:180]}")
             record_seed_success(proxy_seed)
             log("Kakao/Nicepay 跳转链接已获取")
-            print("\nKakao/Nicepay 最终跳转 URL:", flush=True)
-            print(final_url, flush=True)
             print_kakao_result(kakao_result_contract(ok=True, attempts=attempt, result=result))
             return 0
         except TaskStopped:

@@ -37,8 +37,14 @@ namespace SmsWorkbench
         private static JsonElement? ExtractLegacyPayload(string standardOutput)
         {
             string value = (standardOutput ?? "").Trim();
+            // The trailing JSON (if any) parses on the first attempt; the loop
+            // only keeps scanning when the tail holds no complete object, so
+            // bound the attempts to avoid quadratic parsing on brace-heavy logs.
+            const int maxAttempts = 200;
+            int attempts = 0;
             for (int start = value.LastIndexOf('{'); start >= 0; start = value.LastIndexOf('{', start - 1))
             {
+                if (++attempts > maxAttempts) break;
                 try
                 {
                     using JsonDocument document = JsonDocument.Parse(value.Substring(start));

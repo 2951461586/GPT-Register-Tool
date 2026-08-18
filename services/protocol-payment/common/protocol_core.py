@@ -11,14 +11,22 @@ from typing import Any, Callable
 
 RESULT_SCHEMA = "protocol_payment.v1"
 
+# Rule set mirrors sms_tool/sanitizer.py + sensitive_policy.json so subprocess
+# extractors and the manager redact the same secret shapes.
 _SENSITIVE_RE = re.compile(
     r"(?is)(access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|"
+    r"oauth[_-]?refresh[_-]?token|service[_-]?token|"
     r"client[_-]?secret|api[_-]?key|ba[_-]?token|totp(?:[_-]?secret)?|"
-    r"card(?:[_-]?(?:number|cvv|cvc))?|blik[_-]?code)(\s*[=:]\s*)['\"]?[^\s,}\"']+"
+    r"card(?:[_-]?(?:number|cvv|cvc|last4))?|blik[_-]?code|"
+    r"authorization|password|checkout[_-]?session[_-]?id|payment[_-]?intent[_-]?id)"
+    r"(\s*[=:]\s*)['\"]?[^\s,}\"']+"
 )
 _BEARER_RE = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b")
 _BA_RE = re.compile(r"\bBA-[A-Za-z0-9_.-]+\b")
+_PROXY_AUTH_RE = re.compile(r"(?i)\b(https?|socks5h?)://[^\s/@]+@")
+_STRIPE_KEY_RE = re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]+")
+_RT_PREFIX_RE = re.compile(r"\brt_[A-Za-z0-9._-]{8,}\b")
 
 
 def sanitize_text(value: Any) -> str:
@@ -26,12 +34,15 @@ def sanitize_text(value: Any) -> str:
     text = _BEARER_RE.sub(r"\1[REDACTED]", text)
     text = _JWT_RE.sub("[REDACTED]", text)
     text = _BA_RE.sub("[REDACTED]", text)
+    text = _PROXY_AUTH_RE.sub(r"\1://[REDACTED]@", text)
+    text = _STRIPE_KEY_RE.sub("[REDACTED]", text)
+    text = _RT_PREFIX_RE.sub("[REDACTED]", text)
     return _SENSITIVE_RE.sub(r"\1\2[REDACTED]", text)
 
 
 def sanitize_payload(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: "[REDACTED]" if any(part in str(key).lower() for part in ("token", "secret", "card", "cvv", "blik_code")) else sanitize_payload(item) for key, item in value.items()}
+        return {key: "[REDACTED]" if any(part in str(key).lower() for part in ("token", "secret", "password", "authorization", "card_number", "cardnumber", "card_last4", "cvv", "blik_code")) else sanitize_payload(item) for key, item in value.items()}
     if isinstance(value, list):
         return [sanitize_payload(item) for item in value]
     if isinstance(value, str):
@@ -58,6 +69,109 @@ class ProtocolResult:
 
     def to_json(self) -> str:
         return json.dumps(sanitize_payload(asdict(self)), ensure_ascii=False, separators=(",", ":"))
+
+
+class ProtocolResultReporter:
+    """Emit exactly one terminal ``protocol_payment.v1`` result.
+
+    Extractors keep provider decisions local while this module owns the result
+    schema, redaction, emitted-once invariant, and missing-output fallback.
+    ``payment_method`` may be a callable for compatibility scripts whose method
+    is selected from the environment at runtime.
+    """
+
+    def __init__(
+        self,
+        payment_method: str | Callable[[], str],
+        link_type: str | Callable[[], str] = "",
+        *,
+        writer: Callable[[str], Any] = print,
+    ) -> None:
+        self._payment_method = payment_method
+        self._link_type = link_type
+        self._writer = writer
+        self._emitted = False
+
+    @property
+    def emitted(self) -> bool:
+        return self._emitted
+
+    def _resolve(self, value: str | Callable[[], str]) -> str:
+        return str(value() if callable(value) else value or "").strip()
+
+    def _emit(self, result: ProtocolResult, *, prefix: str = "") -> bool:
+        if self._emitted:
+            return False
+        self._emitted = True
+        self._writer(f"{prefix}{result.to_json()}")
+        return True
+
+    def success(
+        self,
+        url: str,
+        *,
+        operation: str = "extract_link",
+        link_type: str = "",
+        message: str = "",
+        side_effect_started: bool = False,
+        prefix: str = "",
+    ) -> bool:
+        method = self._resolve(self._payment_method)
+        resolved_link_type = link_type or self._resolve(self._link_type) or f"{method}_protocol"
+        return self._emit(
+            ProtocolResult(
+                payment_method=method,
+                ok=True,
+                status="completed",
+                operation=operation,
+                url=str(url or ""),
+                link_type=resolved_link_type,
+                message=str(message or ""),
+                side_effect_started=bool(side_effect_started),
+            ),
+            prefix=prefix,
+        )
+
+    def failure(
+        self,
+        error: Any,
+        *,
+        status: str = "failed",
+        error_code: str = "extractor_failed",
+        error_stage: str = "",
+        retryable: bool = False,
+        side_effect_started: bool = False,
+        requires_reconciliation: bool = False,
+    ) -> bool:
+        method = self._resolve(self._payment_method)
+        link_type = self._resolve(self._link_type) or f"{method}_protocol"
+        return self._emit(ProtocolResult(
+            payment_method=method,
+            ok=False,
+            status=status,
+            url="",
+            link_type=link_type,
+            error=str(error or "extraction failed")[:600],
+            error_code=error_code,
+            error_stage=error_stage,
+            retryable=bool(retryable),
+            side_effect_started=bool(side_effect_started),
+            requires_reconciliation=bool(requires_reconciliation),
+        ))
+
+    def already_paid(self) -> bool:
+        return self.failure(
+            "User is already paid",
+            status="already_paid",
+            error_code="account_already_paid",
+            retryable=False,
+        )
+
+    def ensure_terminal(self, exit_code: int) -> bool:
+        return self.failure(
+            f"extractor exited {exit_code} without a structured result",
+            error_code="extractor_output_missing",
+        )
 
 
 def env_bool(name: str, default: bool = False) -> bool:

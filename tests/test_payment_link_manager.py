@@ -9,6 +9,15 @@ from sms_tool.payment_catalog import PAYMENT_CATALOG
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
+    def setUp(self):
+        self._config_patch = patch.object(
+            manager,
+            "current_config_data",
+            return_value={"chatgpt": {}, "protocol_payments": {}},
+        )
+        self._config_patch.start()
+        self.addCleanup(self._config_patch.stop)
+
     def test_payment_manager_uses_versioned_catalog(self):
         self.assertEqual(set(manager.PAYMENT_METHODS), set(PAYMENT_CATALOG.methods))
         self.assertEqual(manager.normalize_payment_method("go-pay"), "gopay")
@@ -446,10 +455,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="direct_card", checkout_proxy="socks5h://127.0.0.1:1080"
-                    )
+                with patch.object(manager.payment_egress, "assert_egress_countries"):
+                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                        result = manager.generate_payment_link(
+                            "token", payment_method="direct_card", checkout_proxy="socks5h://127.0.0.1:1080"
+                        )
         self.assertTrue(result["ok"])
         self.assertEqual(result["url"], "https://chatgpt.com/checkout/openai_llc/oaics_test")
         self.assertEqual(result["link_type"], "direct_card_protocol")
@@ -480,10 +490,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="direct_card", checkout_proxy=secret
-                    )
+                with patch.object(manager.payment_egress, "assert_egress_countries"):
+                    with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
+                        result = manager.generate_payment_link(
+                            "token", payment_method="direct_card", checkout_proxy=secret
+                        )
         self.assertTrue(result["ok"])
         self.assertNotIn(secret, captured["command"])
         self.assertNotIn("--checkout-proxy", captured["command"])
@@ -544,7 +555,10 @@ class PaymentLinkManagerTests(unittest.TestCase):
                         checkout_proxy="socks5h://127.0.0.1:1080",
                         runtime_config={
                             "chatgpt": {},
-                            "protocol_payments": {"enabled_methods": ["momo"]},
+                            "protocol_payments": {
+                                "enabled_methods": ["momo"],
+                                "egress_check": {"enabled": False},
+                            },
                         },
                     )
         self.assertTrue(result["ok"])
@@ -590,13 +604,58 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("disabled", result["error"])
 
-    def test_labeled_payment_url_wins_over_later_diagnostic_url(self):
-        output = (
-            "iDEAL 最终扫码/授权 URL:\n"
-            "https://bank.example.test/authorize\n"
-            "cleanup docs: https://docs.example.test/troubleshooting\n"
+    def test_labeled_log_lines_are_no_longer_scraped_for_urls(self):
+        # Extractors must emit a trailing structured JSON; labeled log lines
+        # (historically scraped via _RESULT_URL_RE) are deliberately ignored so
+        # a diagnostic URL can never be reported as a payment link.
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=(
+                "iDEAL 最终扫码/授权 URL:\n"
+                "https://bank.example.test/authorize\n"
+                "cleanup docs: https://docs.example.test/troubleshooting\n"
+            ),
+            stderr="",
         )
-        self.assertEqual(manager._last_payment_url(output), "https://bank.example.test/authorize")
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+                with patch.object(manager.payment_egress, "assert_egress_countries"):
+                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                        result = manager.generate_payment_link(
+                            "token",
+                            payment_method="ideal",
+                            checkout_proxy="socks5h://127.0.0.1:1080",
+                        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result.get("error_code"), "extractor_output_missing")
+        self.assertEqual(result.get("url"), "")
+
+    def test_already_paid_v1_failure_contract_survives_zero_exit(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=(
+                '检测到 User is already paid：用户已支付，任务正常结束\n'
+                '{"payment_method": "ideal", "ok": false, "status": "already_paid", '
+                '"url": "", "link_type": "ideal_protocol", "error": "User is already paid", '
+                '"error_code": "account_already_paid", "retryable": false, '
+                '"schema": "protocol_payment.v1"}\n'
+            ),
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+                with patch.object(manager.payment_egress, "assert_egress_countries"):
+                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                        result = manager.generate_payment_link(
+                            "token",
+                            payment_method="ideal",
+                            checkout_proxy="socks5h://127.0.0.1:1080",
+                        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result.get("status"), "already_paid")
+        self.assertEqual(result.get("error_code"), "account_already_paid")
 
     def test_persist_run_stores_url_presence_without_the_payment_link(self):
         approve_url = "https://www.paypal.com/agreements/approve?ba_token=BA-1AB23456CD789012E"

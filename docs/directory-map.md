@@ -40,15 +40,16 @@ These directories are runtime state and are ignored by Git:
 | `.pytest_cache/`, `TestResults/`, `*.trx`, coverage output | Test-run output | Delete or ignore; never use as release evidence. |
 | `SmsWorkbench/**/bin/`, `SmsWorkbench/**/obj/`, `tests/**/bin/`, `tests/**/obj/` | .NET build intermediates | Rebuild from source; never commit. |
 | `.workbuddy-ai/`, IDE metadata | Tool-local metadata | Delete or ignore; project decisions belong in source-owned docs. |
+| `.zcode/`, root `gates/` | Obsolete generated state | Delete or ignore. Active process-lock slots are generated only under ignored `runtime/gates/`. |
 
 ## `sms_tool/` module groups
 
 | Group | Files | Boundary |
 | --- | --- | --- |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config.py`, `paths.py`, `commands/helpers.py` | Parse global options and resolve config/paths; no vendor protocol implementation. |
-| Payment command adapters | `commands/payment.py` | Translate parsed CLI arguments into payment-link requests and process exit codes; no provider wire protocol or persistence implementation. `cli.py` may retain thin compatibility wrappers only. |
+| CLI command adapters | `commands/payment.py`, `commands/payment_links.py`, `commands/registration.py`, `commands/accounts.py`, `commands/mailbox_ops.py`, `commands/one_click.py`, `commands/omakse.py` | Translate parsed CLI arguments into domain workflow requests and process exit codes; replaceable hooks arrive through explicit frozen context dataclasses. No provider wire protocol or persistence implementation. `cli.py` may retain thin compatibility wrappers only. |
 | Mailbox and phone inventory | `mailbox.py`, `mailbox_types.py`, `mailbox_parsers.py`, `mailbox_remail.py`, `mailbox_smailr.py`, `mailbox_cfworker.py`, `mailbox_graph.py`, `mailbox_gmail.py`, `mailbox_icloud_url.py`, `mailbox_chongzhi.py`, `outlook_imap.py`, `mail_otp.py`, `providers/`, `smsbower.py`, `phone_reuse.py`, `phone_proxy.py`, `sms_provider.py` | Acquire/poll mailboxes or phone activations; ReMail uses API-key-authenticated ordering and service-token pickup with adaptive OTP polling; Smailr supports configured domain IDs, restricted-domain mailbox reuse, detail-body fetch and clock-skew tolerance; Gmail receive/send and iCloud OTP-URL decoding stay inside the mailbox seam; no account persistence except through explicit callers. |
-| Registration/auth | `registration.py`, `registration_progress.py`, `registration_concurrency.py`, `registration_outcome.py`, `session_builder.py`, `account_2fa.py`, `auth_flow.py`, `auth_headers.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `error_classification.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification, progress persistence, independent stage resource gates, result judgment (registration_outcome), canonical session assembly (session_builder), TOTP 2FA enrollment (account_2fa). |
+| Registration/auth | `registration.py`, `registration_progress.py`, `registration_concurrency.py`, `cross_process_gate.py`, `registration_outcome.py`, `session_builder.py`, `account_2fa.py`, `auth_flow.py`, `auth_headers.py`, `account_creation.py`, `batch_runner.py`, `sentinel_tokens.py`, `sentinel_quickjs.py`, `otp_strategy.py`, `auth_state.py`, `error_classification.py`, `codex_oauth.py`, `codex_sentinel.py`, `codex_phone.py`, `session_refresh.py` | ChatGPT/OpenAI auth, OTP, Sentinel, session refresh, optional phone verification, progress persistence, in-process stage resource gates plus OS file-lock slots shared by desktop/CLI processes, result judgment, canonical session assembly, and TOTP 2FA enrollment. |
 | Agent Identity / explicit import | `agent_identity.py`, `sub2api_import.py` | Ed25519 credential conversion for explicit SUB2API import; not called by the registration pipeline. Keys are persisted under `sessions/agent_identities/`. |
 | Workspace compatibility | `k12_client.py`, `k12_identity.py`, `workspace_scan.py` | Legacy explicit Workspace helpers retained for Python callers; the CLI account scan no longer enables this path. |
 | Account liveness and recovery | `account_liveness.py`, `account_recovery.py`, `account_scan.py` | Canonical side-effect-free quota probe, explicit OAuth recovery/persistence, and batch account scan; does not switch Workspace state. |
@@ -57,7 +58,8 @@ These directories are runtime state and are ignored by Git:
 | Payment batch execution | `payment_batch.py` | Stable email cohorts, JIT refresh, capability-aware eligibility matrix, method concurrency, canary pause, classified retry, and atomic token-free checkpoints under `runtime/payment_batches/`. |
 | Payment execution and reconciliation | `paypal_auto.py`, `paypal_protocol.py`, `paypal_reconciliation.py`, `nodriver_paypal.py`, `omakse_client.py` | Execute explicit payment commands or independently reconcile an allowlisted PayPal merchant return; reconciliation does not alter the payment-link interface. |
 | Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `session_converter.py`, `import_targets.py` | Normalize account/session state, convert between formats, and upload to external import targets (CPA, SUB2API); CPA import does not own local liveness or recovery. |
-| Shared utilities | `http_client.py`, `captcha_solver.py`, `nodriver_captcha.py`, `proxy_pool.py`, `utils.py` | Reusable transport/browser/helper logic with minimal state ownership. |
+| Desktop read transport | `desktop_read.py`, `desktop_serve.py` and `SmsWorkbench/DesktopReadClient.cs` | Sanitized account/mailbox read contracts, resident request-ID-correlated JSONL transport, one-shot fallback, process restart, and file-metadata caches. No registration or payment mutation. |
+| Shared utilities | `http_client.py`, `captcha_solver.py`, `nodriver_captcha.py`, `proxy_pool.py`, `doctor.py`, `utils.py` | Reusable transport/browser/helper logic and offline environment diagnostics with minimal state ownership. |
 
 ## `SmsWorkbench/` payment command boundary
 
@@ -88,7 +90,7 @@ partials call them and only apply the returned view state.
 
 | Path | Boundary |
 | --- | --- |
-| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo subprocess extractors. GoPay/GrabPay share a Python adapter under `sms_tool/`; GCash uses its own Python custom-payment adapter under `sms_tool/`. |
+| `services/protocol-payment/` | Vendored iDEAL/PIX/Kakao Pay/BLIK/TWINT/直卡 Checkout/MoMo subprocess extractors. `common/protocol_core.py` owns the exactly-once, redacted `protocol_payment.v1` terminal reporter used by iDEAL/BLIK/TWINT. GoPay/GrabPay share a Python adapter under `sms_tool/`; GCash uses its own Python custom-payment adapter under `sms_tool/`. |
 | `services/mail-otp-web/` | Standalone Microsoft Graph inbox/OTP helper UI; operator diagnostic service, not the main registration mailbox owner. |
 
 ## Placement rules for new work

@@ -203,7 +203,8 @@ namespace SmsWorkbench
             var checkoutProxyColumn = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
             checkoutProxyColumn.Children.Add(new TextBlock
             {
-                Text = "Checkout 代理池（每行一条）",
+                Text = "Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）",
+                TextWrapping = TextWrapping.Wrap,
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
@@ -212,7 +213,8 @@ namespace SmsWorkbench
             var approveProxyColumn = new StackPanel { Margin = new Thickness(6, 0, 0, 0) };
             approveProxyColumn.Children.Add(new TextBlock
             {
-                Text = "Approve / Update 代理池（每行一条）",
+                Text = "Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）",
+                TextWrapping = TextWrapping.Wrap,
                 FontSize = 13,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 4),
@@ -226,7 +228,7 @@ namespace SmsWorkbench
             ComboBox CreateStageCountryCombo(string selectedCountry)
             {
                 var combo = new ComboBox { MinWidth = 145 };
-                foreach (PaymentProxyCountryOption item in PaymentMethods.StageCountryOptions)
+                foreach (PaymentProxyCountryOption item in PaymentMethods.BillingCountryOptions)
                 {
                     combo.Items.Add(new ComboBoxItem { Content = item.DisplayName, Tag = item.Code });
                 }
@@ -441,6 +443,7 @@ namespace SmsWorkbench
                 if (!loadCountries) return;
                 SelectComboCode(checkoutCountryCombo, configured.CheckoutCountry);
                 SelectComboCode(approveCountryCombo, configured.ApproveCountry);
+                SelectComboCode(updateCountryCombo, configured.UpdateCountry);
             }
 
             SettingsSaveResult SaveMethodProxyConfiguration()
@@ -450,7 +453,8 @@ namespace SmsWorkbench
                         checkoutProxyPoolBox.Text,
                         approveProxyPoolBox.Text,
                         ComboCode(checkoutCountryCombo),
-                        ComboCode(approveCountryCombo)));
+                        ComboCode(approveCountryCombo),
+                        ComboCode(updateCountryCombo)));
 
             void SaveSelection()
             {
@@ -556,7 +560,7 @@ namespace SmsWorkbench
                 extractBtn.IsEnabled = false;
                 try
                 {
-                    string rawResult = await Task.Run(() => RunBackendWithResult("测试协议支付代理", args));
+                    string rawResult = await RunBackendWithResultAsync("测试协议支付代理", args);
                     ProxyTestResult proxyResult = BackendResultInterpreter.ParseProxyTestResult(rawResult);
                     var lines = new List<string>
                     {

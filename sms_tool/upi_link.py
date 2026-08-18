@@ -343,27 +343,19 @@ def _payment_stage_proxies_from_config(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
     method_cfg = _method_cfg(cfg, method)
     method_stage = method_cfg.get("stage_proxies") if isinstance(method_cfg.get("stage_proxies"), dict) else {}
-    method_api = method_cfg.get("stage_proxy_api_urls") if isinstance(method_cfg.get("stage_proxy_api_urls"), dict) else {}
     paypal_cfg = cfg.get("paypal") if isinstance(cfg.get("paypal"), dict) else {}
     paypal_stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
-    paypal_api = paypal_cfg.get("stage_proxy_api_urls") if isinstance(paypal_cfg.get("stage_proxy_api_urls"), dict) else {}
     proxy_default = (cfg.get("proxy") or {}).get("default") or ""
 
     def pick(key: str, fallback: str = "") -> str:
-        value = _stage_proxy_value(method_stage, method_api, key)
+        value = _stage_proxy_value(method_stage, key)
         if value:
             return value
-        return _stage_proxy_value(paypal_stage, paypal_api, key, fallback)
+        return _stage_proxy_value(paypal_stage, key, fallback)
 
     checkout = pick("checkout", proxy_default)
-    provider = pick("provider") or pick("stripe_init")
-    if method == "upi" and not provider:
-        provider = "http://107.150.109.49:11001"
-    provider = provider or proxy_default
-    approve = pick("approve") or pick("confirm")
-    if method == "upi" and not approve:
-        approve = provider or "http://107.150.109.49:11001"
-    approve = approve or provider or proxy_default
+    provider = pick("provider") or pick("stripe_init") or proxy_default
+    approve = pick("approve") or pick("confirm") or provider or proxy_default
     return {"checkout": checkout, "provider": provider, "approve": approve}
 
 

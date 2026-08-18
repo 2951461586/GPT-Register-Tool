@@ -209,6 +209,10 @@ class TestResolveProxyValue(unittest.TestCase):
             "http://user:pass-JP@gate.kookeey.info:1000",
         )
 
+    def test_bare_credential_accepts_full_width_colons(self):
+        entry = parse_proxy("gate.example:8080：user：pass")
+        self.assertEqual(entry.url, "http://user:pass@gate.example:8080")
+
     def test_pool_picks_first_usable(self):
         self.assertEqual(
             resolve_proxy_value("bad,h1:1:u:p,socks5://h2:1080"),

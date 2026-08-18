@@ -137,6 +137,34 @@ def test_public_read_exposes_latest_access_token_probe_status_code(tmp_path):
     assert row["at_probe_status_code"] == "401"
 
 
+def test_smailr_mailbox_line_falls_back_to_source_id(tmp_path):
+    source = json.dumps({
+        "address": "reuse@smailr.com",
+        "id": "b2432eb0-2bd2-43a3-93ac-20c57ff4f76e",
+        "user_id": "ffcaec5b-5e12-4bbc-9ec4-000000000000",
+        "mail_count": 4,
+    })
+    session = {
+        "email": "reuse@smailr.com",
+        "password": "account-password",
+        "success": True,
+        "status": "registered",
+        "mailbox": {
+            "email": "reuse@smailr.com",
+            "provider": "smailr",
+            "source": source,
+        },
+    }
+    session_path = tmp_path / "session_reuse.json"
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(session, json_path=str(session_path), runtime_config=_config(tmp_path))
+
+    result = create_mailbox_file(email="reuse@smailr.com", runtime_config=_config(tmp_path))
+    assert result["ok"] is True
+    line = Path(result["path"]).read_text(encoding="utf-8").strip()
+    assert line == "smailr://reuse@smailr.com---b2432eb0-2bd2-43a3-93ac-20c57ff4f76e"
+
+
 def test_public_read_prefers_newer_relogin_probe_over_stale_401(tmp_path):
     session = {
         "email": "relogin@example.test",

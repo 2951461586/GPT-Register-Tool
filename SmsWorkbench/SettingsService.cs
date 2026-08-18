@@ -70,13 +70,15 @@ namespace SmsWorkbench
                 foreach (SettingFieldViewModel field in fields.Where(field => field.Definition.JsonPath.Length > 0))
                     SetPath(root, field.Definition.JsonPath, ToJsonValue(field));
 
-                string registrationProxy = Find(fields, "registration_proxy").Value.Trim();
+                // Registration must never silently fall back to a direct
+                // connection when the settings box is left blank.
+                string registrationProxy = First(Find(fields, "registration_proxy").Value.Trim(), LocalProxy);
                 string mailboxProxy = First(Find(fields, "mailbox_proxy").Value.Trim(), LocalProxy);
                 string[] registrationPool = ParseList(Find(fields, "registration_proxy_pool").Value)
                     .Where(value => !string.Equals(value, registrationProxy, StringComparison.OrdinalIgnoreCase))
                     .ToArray();
                 var orderedRegistrationPool = new List<string>();
-                if (registrationProxy.Length > 0) orderedRegistrationPool.Add(registrationProxy);
+                orderedRegistrationPool.Add(registrationProxy);
                 orderedRegistrationPool.AddRange(registrationPool);
                 SetPath(root, "proxy.registration", registrationProxy);
                 SetPath(root, "proxy.default", registrationProxy);
@@ -89,7 +91,7 @@ namespace SmsWorkbench
                 // checkout/approve pools; preserve any legacy global value.
                 SetPath(root, "protocol_payments.enabled_methods", ToArray(ParseList(Find(fields, "protocol_enabled_methods").Value)));
                 SetPath(root, "protocol_payments.matrix", matrix);
-                SetPath(root, "paypal.proxies", ToArray(new[] { Find(fields, "paypal_proxy").Value.Trim() }));
+                SetPath(root, "paypal.proxies", ToArray(ParseList(Find(fields, "paypal_proxy").Value)));
                 SetPath(root, "paypal.billing_regions", ToArray(new[] { Find(fields, "paypal_billing_region").Value.Trim().ToUpperInvariant() }));
 
                 // Python's mailbox_remail falls back to service_mode "code" when the key is
@@ -160,12 +162,38 @@ namespace SmsWorkbench
         // Read-only access used by MainWindow helpers.  Unlike Load/Save this never
         // creates config.json and parses case-insensitively, matching the legacy
         // dictionary-based readers it replaces; any failure yields the fallback.
+        // The parsed root is cached on (mtime, size) so hot loops reading settings
+        // (account-grid refresh reads the file once per row) no longer re-read and
+        // re-parse config.json on every GetString.
+        private JsonObject cachedRoot;
+        private DateTime cachedRootWriteUtc;
+        private long cachedRootSize = -1;
+        private readonly object rootCacheLock = new();
+
         private JsonObject ReadRootIfExists()
         {
-            if (!File.Exists(ConfigPath)) return null;
-            return JsonNode.Parse(
-                File.ReadAllText(ConfigPath, Encoding.UTF8),
-                new JsonNodeOptions { PropertyNameCaseInsensitive = true }) as JsonObject;
+            lock (rootCacheLock)
+            {
+                if (!File.Exists(ConfigPath))
+                {
+                    cachedRoot = null;
+                    cachedRootSize = -1;
+                    return null;
+                }
+                FileInfo info = new(ConfigPath);
+                if (cachedRoot != null
+                    && cachedRootWriteUtc == info.LastWriteTimeUtc
+                    && cachedRootSize == info.Length)
+                {
+                    return cachedRoot;
+                }
+                cachedRoot = JsonNode.Parse(
+                    File.ReadAllText(ConfigPath, Encoding.UTF8),
+                    new JsonNodeOptions { PropertyNameCaseInsensitive = true }) as JsonObject;
+                cachedRootWriteUtc = info.LastWriteTimeUtc;
+                cachedRootSize = info.Length;
+                return cachedRoot;
+            }
         }
 
         private static string ReadValue(JsonObject root, SettingDefinition definition)
@@ -191,7 +219,7 @@ namespace SmsWorkbench
                 "protocol_enabled_methods" => ArrayText(root, "protocol_payments.enabled_methods"),
                 "protocol_payment_matrix" => GetPath(root, "protocol_payments.matrix")?.ToJsonString(IndentedJson)
                     ?? "{\n  \"cells\": []\n}",
-                "paypal_proxy" => FirstArray(root, "paypal.proxies"),
+                "paypal_proxy" => ListText(root, "paypal.proxies"),
                 "paypal_billing_region" => First(
                     FirstArray(root, "paypal.billing_regions"),
                     Text(root, "paypal.billing_region"),
@@ -226,6 +254,11 @@ namespace SmsWorkbench
                     root.ToJsonString(IndentedJson),
                     new UTF8Encoding(false));
                 File.Move(temporary, ConfigPath, overwrite: true);
+                lock (rootCacheLock)
+                {
+                    cachedRoot = null; // force re-parse on next read
+                    cachedRootSize = -1;
+                }
             }
             finally
             {

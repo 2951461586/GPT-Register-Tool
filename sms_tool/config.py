@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -149,6 +150,15 @@ def load_runtime_config(path: str | Path | None = None, *, validate: bool = True
         raise ConfigError("config root must be a JSON object")
     if validate:
         validate_config(raw)
+    if path is None and source == Path(__file__).resolve().parent / "config.json":
+        # The bundled package config is a minimal safe fallback (endpoints and
+        # paths only). Running on it means the project-root config.json is
+        # missing, so say so loudly instead of silently flipping behavior.
+        print(
+            f"[!] Using the bundled fallback config {source}; "
+            f"create a project-root config.json (see config.example.json) for full behavior",
+            file=sys.stderr,
+        )
     return RuntimeConfig(data=_freeze(raw), source=source)
 
 
