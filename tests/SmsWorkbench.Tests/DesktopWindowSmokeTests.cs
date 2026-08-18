@@ -262,14 +262,14 @@ public sealed class DesktopWindowSmokeTests
             string[] fieldLabels = Array.Empty<string>();
             string[] checkBoxLabels = Array.Empty<string>();
             int comboBoxCount = 0;
-            Exception? captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-            {
-                try
+            var method = typeof(MainWindow).GetMethod(
+                "ShowRegisterOptionsDialog",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            InspectModalDialog(
+                "一键注册",
+                dialog =>
                 {
-                    Window dialog = Application.Current.Windows
-                        .Cast<Window>()
-                        .Single(window => window.Title == "一键注册");
                     dialog.UpdateLayout();
                     ComboBox[] comboBoxes = FindVisualChildren<ComboBox>(dialog).ToArray();
                     comboBoxCount = comboBoxes.Length;
@@ -288,24 +288,8 @@ public sealed class DesktopWindowSmokeTests
                         .Select(checkBox => checkBox.Content?.ToString() ?? "")
                         .Where(text => !string.IsNullOrWhiteSpace(text))
                         .ToArray();
-                    dialog.Close();
-                }
-                catch (Exception exception)
-                {
-                    captureFailure = exception;
-                    Application.Current.Windows
-                        .Cast<Window>()
-                        .FirstOrDefault(window => window.Title == "一键注册")
-                        ?.Close();
-                }
-            }));
-
-            var method = typeof(MainWindow).GetMethod(
-                "ShowRegisterOptionsDialog",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(method);
-            Assert.Null(method.Invoke(main, null));
-            Assert.Null(captureFailure);
+                },
+                () => Assert.Null(method.Invoke(main, null)));
             Assert.Equal(new[]
             {
                 "ReMail 邮箱",
@@ -328,35 +312,19 @@ public sealed class DesktopWindowSmokeTests
             stage("show selected registration dialog");
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
-            captureFailure = null;
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-            {
-                try
-                {
-                    Window dialog = Application.Current.Windows
-                        .Cast<Window>()
-                        .Single(window => window.Title == "选中邮箱注册");
-                    dialog.UpdateLayout();
-                    selectedComboBoxCount = FindVisualChildren<ComboBox>(dialog).Count();
-                    selectedCheckBoxCount = FindVisualChildren<CheckBox>(dialog).Count();
-                    dialog.Close();
-                }
-                catch (Exception exception)
-                {
-                    captureFailure = exception;
-                    Application.Current.Windows
-                        .Cast<Window>()
-                        .FirstOrDefault(window => window.Title == "选中邮箱注册")
-                        ?.Close();
-                }
-            }));
-
             method = typeof(MainWindow).GetMethod(
                 "ShowSelectedRegisterOptionsDialog",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(method);
-            Assert.Null(method.Invoke(main, new object[] { 1 }));
-            Assert.Null(captureFailure);
+            InspectModalDialog(
+                "选中邮箱注册",
+                dialog =>
+                {
+                    dialog.UpdateLayout();
+                    selectedComboBoxCount = FindVisualChildren<ComboBox>(dialog).Count();
+                    selectedCheckBoxCount = FindVisualChildren<CheckBox>(dialog).Count();
+                },
+                () => Assert.Null(method.Invoke(main, new object[] { 1 })));
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(2, selectedCheckBoxCount);
             stage("verify mailbox selection routing");
@@ -549,6 +517,47 @@ public sealed class DesktopWindowSmokeTests
 
     private static void FlushDispatcher()
         => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);
+
+    private static void InspectModalDialog(string title, Action<Window> inspect, Action showDialog)
+    {
+        Exception? inspectionFailure = null;
+        var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher.CurrentDispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(20)
+        };
+        timer.Tick += (_, __) =>
+        {
+            Window? dialog = Application.Current.Windows
+                .Cast<Window>()
+                .FirstOrDefault(window => window.Title == title);
+            if (dialog == null) return;
+
+            timer.Stop();
+            try
+            {
+                inspect(dialog);
+            }
+            catch (Exception exception)
+            {
+                inspectionFailure = exception;
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        };
+
+        timer.Start();
+        try
+        {
+            showDialog();
+        }
+        finally
+        {
+            timer.Stop();
+        }
+        Assert.Null(inspectionFailure);
+    }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
     {
