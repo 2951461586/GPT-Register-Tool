@@ -462,8 +462,9 @@ public sealed class DesktopWindowSmokeTests
     [Fact]
     public void SettingsPaymentAndSharedControlsLoadOnStaThread()
     {
-        RunOnSta(() =>
+        RunOnSta(stage =>
         {
+            stage("create application");
             using var fixture = new TemporaryDirectory();
             File.WriteAllText(
                 Path.Combine(fixture.Path, "config.json"),
@@ -471,9 +472,12 @@ public sealed class DesktopWindowSmokeTests
             var application = CreateApplication();
             var launcher = new StubFileLauncher();
 
+            stage("verify combo box popup");
             VerifyComboBoxPopup();
+            stage("verify scrollable controls");
             VerifyScrollableEditorsAndTables();
 
+            stage("show settings window");
             var settingsViewModel = new SettingsViewModel(
                 new SettingsService(new TestApplicationPaths(fixture.Path)),
                 launcher);
@@ -497,9 +501,11 @@ public sealed class DesktopWindowSmokeTests
             secretBox.Password = "second-edit";
             Assert.Equal("second-edit", secretField.Value);
             Assert.NotNull(secretBox.GetBindingExpression(PasswordBoxBinding.BoundPasswordProperty));
+            stage("verify settings layout");
             VerifySettingsLayout(settings, settingsViewModel);
             settings.Close();
 
+            stage("show payment window");
             var paymentViewModel = new PaymentBatchViewModel(
                 new WindowPaymentBatchService(),
                 launcher,
@@ -517,8 +523,11 @@ public sealed class DesktopWindowSmokeTests
                 option => option.Id == "direct_card");
             Assert.IsType<DataGrid>(payment.FindName("ResultsGrid"));
             payment.Close();
+            stage("verify main window dialogs");
             VerifyMainWindowRegistrationAndContextMenu(fixture.Path);
+            stage("shutdown application");
             application.Shutdown();
+            stage("complete");
         });
     }
 
@@ -546,14 +555,15 @@ public sealed class DesktopWindowSmokeTests
         }
     }
 
-    private static void RunOnSta(Action action)
+    private static void RunOnSta(Action<Action<string>> action)
     {
         Exception? failure = null;
+        string stage = "thread startup";
         var thread = new Thread(() =>
         {
             try
             {
-                action();
+                action(value => stage = value);
             }
             catch (Exception exception)
             {
@@ -563,7 +573,9 @@ public sealed class DesktopWindowSmokeTests
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
 
-        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "WPF smoke test did not finish in time.");
+        Assert.True(
+            thread.Join(TimeSpan.FromSeconds(20)),
+            "WPF smoke test did not finish in time. Last stage: " + stage);
         Assert.Null(failure);
     }
 
