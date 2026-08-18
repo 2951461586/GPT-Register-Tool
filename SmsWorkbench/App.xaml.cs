@@ -36,6 +36,7 @@ namespace SmsWorkbench
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             MainWindow = mainWindow;
             mainWindow.Show();
+            _ = mainWindow.RunStartupDoctorProbeAsync();
         }
 
         private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)

@@ -24,7 +24,7 @@ namespace SmsWorkbench
         /// invariant is untouched. Surfaces missing interpreter/dependencies
         /// with fix hints instead of letting them surface as per-task failures.
         /// </summary>
-        private async void RunStartupDoctorProbe()
+        internal async Task RunStartupDoctorProbeAsync()
         {
             if (doctorProbeStarted)
                 return;
