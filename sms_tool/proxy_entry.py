@@ -134,6 +134,9 @@ def parse_proxy(raw: Any, default_scheme: str = "http") -> ProxyEntry | None:
     value = str(raw or "").strip()
     if not value:
         return None
+    # The desktop field is commonly filled with Chinese punctuation; accept
+    # a full-width colon for the provider's four-part form as well.
+    value = value.replace("：", ":")
 
     default = _normalize_scheme(default_scheme) or "http"
     scheme: str = default

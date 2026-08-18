@@ -84,7 +84,7 @@ PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 from common.protocol_core import (
-    ProtocolResult,
+    ProtocolResultReporter,
     amount_from_payload as common_amount_from_payload,
     collect_strings as common_collect_strings,
     collect_urls as common_collect_urls,
@@ -331,29 +331,47 @@ def provider_country_label() -> str:
     return default_provider_proxy_countries()
 
 
+_result_reporter = ProtocolResultReporter(payment_method_type)
+
+
 def print_result_url(url: str) -> None:
+    if _result_reporter.emitted:
+        return
     if payment_method_type() == "blik" and os.environ.get("IDEAL_BLIK_CODE", "").strip():
         print("BLIK 自动提交完成")
         # 结构化完成哨兵：BLIK 自动提交模式直接向 Stripe 提交 6 位码完成支付，产物是
         # “支付已完成”状态而非可分享 URL。payment_link_manager 依赖此行判定成功，
         # 避免从截断日志里误抓/误判 URL。
-        print("BLIK_RESULT:" + ProtocolResult(
-            payment_method="blik",
-            ok=True,
-            status="completed",
+        _result_reporter.success(
+            "",
             operation="execute_payment",
             link_type="blik_protocol_completed",
             message="BLIK 自动提交完成",
             side_effect_started=True,
-        ).to_json())
+            prefix="BLIK_RESULT:",
+        )
         return
-    print(ProtocolResult(
-        payment_method=payment_method_type(),
-        ok=True,
-        status="completed",
-        url=url,
-        link_type=f"{payment_method_type()}_protocol",
-    ).to_json())
+    _result_reporter.success(url)
+
+
+def print_failure_result(
+    error: Any,
+    *,
+    status: str = "failed",
+    error_code: str = "extractor_failed",
+    retryable: bool = False,
+) -> None:
+    """Print the terminal failure contract so the manager never scrapes logs."""
+    _result_reporter.failure(
+        error,
+        status=status,
+        error_code=error_code,
+        retryable=retryable,
+    )
+
+
+def print_already_paid_result() -> None:
+    _result_reporter.already_paid()
 
 
 def validate_blik_code_before_start() -> bool:
@@ -3374,6 +3392,7 @@ def run_single_link_parallel_mode(access_token: str, session_token: str, checkou
             last_error = error or last_error
             if is_user_already_paid_error(error):
                 log("检测到 User is already paid：用户已支付，任务正常结束")
+                print_already_paid_result()
                 stop_event.set()
                 for pending in futures:
                     pending.cancel()
@@ -3391,6 +3410,7 @@ def run_single_link_parallel_mode(access_token: str, session_token: str, checkou
         executor.shutdown(wait=True, cancel_futures=stop_event.is_set())
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3457,6 +3477,7 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
                 last_error = error
                 if is_user_already_paid_error(error):
                     log("检测到 User is already paid：用户已支付，任务正常结束")
+                    print_already_paid_result()
                     return 0
                 if not is_checkout_not_active_error(error):
                     record_failure_by_stage(f"checkout 阶段失败: {error}", checkout_proxy, "")
@@ -3530,6 +3551,7 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
         log(f"第 {attempt}/{ideal_retry} 次提链结束，未拿到最终 URL", "[WARN] ")
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3596,6 +3618,7 @@ def run_single_seed_mode(access_token: str, session_token: str, proxy_seeds: lis
                 last_error = error
                 if is_user_already_paid_error(error):
                     log("检测到 User is already paid：用户已支付，任务正常结束")
+                    print_already_paid_result()
                     return 0
                 record_seed_failure(proxy_seed, error)
                 if is_checkout_not_active_error(error):
@@ -3617,6 +3640,7 @@ def run_single_seed_mode(access_token: str, session_token: str, proxy_seeds: lis
         log(f"第 {attempt}/{max_retry} 次 BLIK 提交结束，未完成", "[WARN] ")
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3626,6 +3650,7 @@ def run_legacy_two_pool_mode() -> int:
     access_token, session_token = load_token()
     if not access_token:
         log("access_token 为空", "[ERROR] ")
+        print_failure_result("access_token 为空", error_code="missing_token", retryable=False)
         return 1
 
     checkout_proxies, provider_proxies = load_proxy_groups()
@@ -3718,6 +3743,7 @@ def run_legacy_two_pool_mode() -> int:
                 last_error = error or last_error
                 if is_user_already_paid_error(error):
                     log("检测到 User is already paid：用户已支付，任务正常结束")
+                    print_already_paid_result()
                     stop_event.set()
                     return 0
                 if "当前 checkout 不支持" in (error or ""):
@@ -3742,6 +3768,7 @@ def run_legacy_two_pool_mode() -> int:
         log(f"第 {batch_no}/{len(attempt_batches)} 批结束，未拿到最终 URL", "[WARN] ")
 
     log(f"全部失败: {last_error}", "[ERROR] ")
+    print_failure_result(last_error or "all attempts failed")
     return 1
 
 
@@ -3751,6 +3778,7 @@ def main() -> int:
     access_token, session_token = load_token()
     if not access_token:
         log("access_token 为空", "[ERROR] ")
+        print_failure_result("access_token 为空", error_code="missing_token", retryable=False)
         return 1
 
     proxy_seeds = load_proxy_seeds()
@@ -3762,4 +3790,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_code = main()
+    _result_reporter.ensure_terminal(_exit_code)
+    sys.exit(_exit_code)

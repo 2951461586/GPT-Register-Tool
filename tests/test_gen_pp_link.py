@@ -7,6 +7,30 @@ from sms_tool import upi_link
 
 
 class GeneratePpLinkContractTests(unittest.TestCase):
+    def test_runtime_config_uses_canonical_paypal_stage_countries(self):
+        cfg = {
+            "paypal": {
+                "stage_proxy_countries": {
+                    "checkout": "JP",
+                    "provider": "JP",
+                    "stripe_init": "JP",
+                    "approve": "JP",
+                }
+            },
+            "protocol_payments": {
+                "methods": {
+                    "paypal": {
+                        "stage_proxy_countries": {"checkout": "US", "approve": "US"}
+                    }
+                }
+            },
+        }
+
+        self.assertEqual(
+            gen_pp_link._paypal_config(cfg)["stage_proxy_countries"],
+            {"checkout": "US", "approve": "US"},
+        )
+
     def test_strict_zero_due_rejects_unknown_amount(self):
         class FakeResponse:
             status_code = 200
@@ -286,6 +310,36 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["url"], "https://checkout.stripe.com/c/pay/cs_test")
         self.assertEqual(result["link_type"], "stripe_hosted")
+
+    def test_oaics_checkout_link_preserves_no_side_effect_contract(self):
+        class FakeExtractor:
+            def __init__(self, **kwargs):
+                pass
+
+            def extract(self):
+                return {
+                    "ok": True,
+                    "url": "https://chatgpt.com/checkout/openai_ie/oaics_fixture",
+                    "ba_token": "",
+                    "cs_id": "oaics_fixture",
+                    "link_type": "chatgpt_checkout_link",
+                    "currency": "GBP",
+                    "target_country": "GB",
+                    "checkout_country": "GB",
+                    "side_effect_started": False,
+                }
+
+        config = {"paypal": {"require_zero_due": True, "require_ba_token": False}}
+        with patch.object(gen_pp_link, "_load_json", return_value=config):
+            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+                with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
+                    result = gen_pp_link.generate_pp_link(
+                        "at", target_country="GB", checkout_country="GB"
+                    )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "chatgpt_checkout_link")
+        self.assertFalse(result["side_effect_started"])
 
 
 

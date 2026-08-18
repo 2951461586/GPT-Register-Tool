@@ -623,7 +623,7 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
         "registration_attempts": _as_int(data.get("registration_attempts")),
         "terminal": "account_deactivated" in error.lower(),
     }
-    init_database()
+    init_database(runtime_config=runtime_config)
     conn = _connect(runtime_config=runtime_config)
     try:
         conn.execute(

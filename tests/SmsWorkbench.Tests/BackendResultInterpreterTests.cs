@@ -300,6 +300,7 @@ public sealed class BackendResultInterpreterTests
         Assert.False(interpreted.IsSuccess);
         Assert.Equal("failed", interpreted.State);
         Assert.Contains("something went wrong", interpreted.DisplayText);
+        Assert.Contains("参数", interpreted.DisplayText);
     }
 
     [Fact]
@@ -310,6 +311,62 @@ public sealed class BackendResultInterpreterTests
 
         Assert.False(interpreted.IsSuccess);
         Assert.Equal("failed", interpreted.State);
+    }
+
+    [Fact]
+    public void Interpret_ExitTwoSurfacesPreconditionCategory()
+    {
+        var result = new BackendCommandResult(2, "", "no mailbox account was found", null, false);
+        var interpreted = BackendResultInterpreter.Interpret(result, "test");
+
+        Assert.False(interpreted.IsSuccess);
+        Assert.Equal("failed", interpreted.State);
+        Assert.Contains("前置检查", interpreted.DisplayText);
+        Assert.Contains("no mailbox account was found", interpreted.DisplayText);
+    }
+
+    [Fact]
+    public void Interpret_ExitThreeSurfacesRuntimeCategory()
+    {
+        var result = new BackendCommandResult(3, "", "extraction failed", null, false);
+        var interpreted = BackendResultInterpreter.Interpret(result, "test");
+
+        Assert.False(interpreted.IsSuccess);
+        Assert.Equal("failed", interpreted.State);
+        Assert.Contains("运行时", interpreted.DisplayText);
+    }
+
+    [Fact]
+    public void Interpret_ExitZeroWithStderrRemainsSuccess()
+    {
+        // Progress/diagnostics on stderr are normal for successful backend
+        // runs (e.g. --view-inbox redirects progress output to stderr).
+        var payload = JsonDocument.Parse("{\"ok\": true}").RootElement;
+        var result = new BackendCommandResult(0, "", "[*] fetching messages", payload, false);
+        var interpreted = BackendResultInterpreter.Interpret(result, "test");
+
+        Assert.True(interpreted.IsSuccess);
+        Assert.Equal("completed", interpreted.State);
+    }
+
+    [Fact]
+    public void Interpret_ExitZeroPlainOutputWithStderrRemainsSuccess()
+    {
+        var result = new BackendCommandResult(0, "plain output", "diagnostic line", null, false);
+        var interpreted = BackendResultInterpreter.Interpret(result, "test");
+
+        Assert.True(interpreted.IsSuccess);
+        Assert.Equal("plain output", interpreted.DisplayText);
+    }
+
+    [Fact]
+    public void Interpret_ExitZeroWithoutOutputFallsBackToStderrText()
+    {
+        var result = new BackendCommandResult(0, "", "only diagnostics", null, false);
+        var interpreted = BackendResultInterpreter.Interpret(result, "test");
+
+        Assert.True(interpreted.IsSuccess);
+        Assert.Equal("only diagnostics", interpreted.DisplayText);
     }
 
     [Fact]

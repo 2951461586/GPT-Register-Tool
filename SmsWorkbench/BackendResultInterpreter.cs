@@ -207,17 +207,28 @@ public static class BackendResultInterpreter
                 "timed_out",
                 null);
 
-        if (result.ExitCode != 0 || !string.IsNullOrEmpty(result.StandardError))
+        if (result.ExitCode != 0)
         {
+            // The Python CLI contract distinguishes exit codes: 1 = missing
+            // argument, 2 = precondition/preflight failure, 3 = runtime
+            // failure. Keep the "failed" state (UI depends on it) but surface
+            // the category in the message.
+            string prefix = result.ExitCode == 1 ? "[失败·参数]"
+                : result.ExitCode == 2 ? "[失败·前置检查]"
+                : "[失败·运行时]";
             string errorText = SensitiveDataSanitizer.Redact(
                 string.IsNullOrEmpty(result.StandardError) ? result.StandardOutput : result.StandardError);
             return new BackendExecutionResult(
                 false,
-                $"[失败] {errorText}".TrimEnd(),
+                $"{prefix} {errorText}".TrimEnd(),
                 "failed",
                 result.Payload);
         }
 
+        // Exit code 0 means success. The backend CLI deliberately writes
+        // progress and diagnostics to stderr on success paths (for example
+        // --view-inbox/--gmail-send redirect progress output there), so
+        // stderr content alone must not flip a completed run to failure.
         if (result.Payload.HasValue)
         {
             return new BackendExecutionResult(
@@ -228,6 +239,8 @@ public static class BackendResultInterpreter
         }
 
         string output = SensitiveDataSanitizer.Redact(result.StandardOutput ?? "");
+        if (output.Length == 0 && !string.IsNullOrEmpty(result.StandardError))
+            output = SensitiveDataSanitizer.Redact(result.StandardError);
         return new BackendExecutionResult(
             output.Length > 0,
             output.Length > 0 ? output : "[完成] 后端任务已结束",

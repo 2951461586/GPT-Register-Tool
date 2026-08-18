@@ -8,6 +8,15 @@ from sms_tool import payment_link_manager as manager
 
 
 class PaymentResultContractTests(unittest.TestCase):
+    def setUp(self):
+        self._config_patch = patch.object(
+            manager,
+            "current_config_data",
+            return_value={"chatgpt": {}, "protocol_payments": {}},
+        )
+        self._config_patch.start()
+        self.addCleanup(self._config_patch.stop)
+
     def _state_file(self, directory: str) -> Path:
         return Path(directory) / "payment-runs.jsonl"
 

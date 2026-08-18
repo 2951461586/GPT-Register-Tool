@@ -37,6 +37,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from .auth_headers import auth_impersonate
+from .http_client import request_with_retry
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,8 +79,11 @@ def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
     if sdk_file.exists() and sdk_file.stat().st_size > 0:
         return sdk_file
 
-    resp = session.get(
+    resp = request_with_retry(
+        session,
+        "get",
         f"https://sentinel.openai.com/sentinel/{version}/sdk.js",
+        label="sentinel-sdk",
         headers={
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9",
@@ -87,6 +93,7 @@ def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
             "sec-fetch-site": "same-site",
         },
         timeout=max(10, int(timeout_ms / 1000)),
+        impersonate=auth_impersonate(),
     )
     status = getattr(resp, "status_code", 0)
     if status != 200:
@@ -190,8 +197,11 @@ def _fetch_sentinel_challenge(
     timeout_ms: int,
 ) -> dict:
     body = {"p": request_p, "id": device_id, "flow": flow}
-    resp = session.post(
+    resp = request_with_retry(
+        session,
+        "post",
         SENTINEL_REQ_URL,
+        label="sentinel-req",
         data=json.dumps(body, separators=(",", ":")),
         headers={
             "origin": "https://sentinel.openai.com",
@@ -205,6 +215,7 @@ def _fetch_sentinel_challenge(
             "sec-fetch-site": "same-origin",
         },
         timeout=max(10, int(timeout_ms / 1000)),
+        impersonate=auth_impersonate(),
     )
     if getattr(resp, "status_code", 0) != 200:
         raise RuntimeError(f"/sentinel/req HTTP {resp.status_code}")

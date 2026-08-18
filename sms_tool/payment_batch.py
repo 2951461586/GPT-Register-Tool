@@ -28,6 +28,10 @@ from .payment_link_manager import (
 from .payment_routing import PaymentRoutePlanner
 from .payment_contracts import payment_history_metadata, payment_retry_allowed
 
+# Minimum spacing between "running" checkpoint rewrites of the batch report
+# (terminal states always persist immediately).
+_CHECKPOINT_MIN_INTERVAL_SECONDS = 2.0
+
 
 def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
     """Load matrix cells from a JSON string/path or protocol_payments config."""
@@ -284,7 +288,21 @@ def run_payment_batch(
         })
         return index, row
 
-    def checkpoint(status: str) -> dict[str, Any]:
+    last_checkpoint_write = [0.0]
+
+    def checkpoint(status: str, *, force: bool = False) -> dict[str, Any]:
+        # Rebuilding + rewriting the full report on every future completion made
+        # batch IO O(n²); running checkpoints are throttled to one write per
+        # interval while terminal states always persist. A crash can lose at
+        # most one interval of progress, which resume re-runs by signature.
+        now = time.monotonic()
+        if (
+            status == "running"
+            and not force
+            and now - last_checkpoint_write[0] < _CHECKPOINT_MIN_INTERVAL_SECONDS
+        ):
+            return None
+        last_checkpoint_write[0] = now
         results = [_sanitize_report_value(row) for row in ordered if row is not None]
         report = _build_report(
             batch_id=batch_id,
@@ -305,7 +323,7 @@ def run_payment_batch(
         return report
 
     if pending:
-        checkpoint("running")
+        checkpoint("running", force=True)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(run_one, index, email): (index, email) for index, email in pending}
         for future in as_completed(futures):

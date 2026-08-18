@@ -146,6 +146,7 @@ namespace SmsWorkbench
                     CheckoutProxyPool,
                     ApproveProxyPool,
                     CheckoutProxyCountry,
+                    ApproveProxyCountry,
                     ApproveProxyCountry));
             Status = result.Ok
                 ? $"{PaymentMethods.DisplayName(method)} Checkout / Approve 代理配置已保存。"

@@ -135,7 +135,9 @@ namespace SmsWorkbench
             => ResolveCheckoutCountryOptions(Catalog, Normalize(paymentMethod));
 
         public static IReadOnlyList<PaymentProxyCountryOption> ApproveCountryOptions(string? paymentMethod)
-            => ResolveApproveCountryOptions(Catalog, Normalize(paymentMethod));
+            // Approve / Update must expose the same selectable region universe
+            // as Checkout; routing still validates the chosen country per stage.
+            => ResolveCheckoutCountryOptions(Catalog, Normalize(paymentMethod));
 
         public static string Normalize(string? paymentMethod)
         {

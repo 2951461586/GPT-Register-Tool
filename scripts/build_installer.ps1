@@ -211,9 +211,17 @@ Start the desktop UI with:
   dist\net10\SmsWorkbench.exe
 
 First-run setup:
-  1. Install Python and run: python -m pip install -r requirements.txt
-  2. Copy config.example.json to config.json if the installer did not create it.
-  3. Edit config.json with local mailbox, proxy, SMS, and payment settings.
+  1. Install Python 3.10+ (Add to PATH), then run:
+     python -m pip install -r requirements.txt
+  2. config.json is created from config.example.json on install; edit it with
+     local mailbox, proxy, SMS, and payment settings (the desktop Settings
+     window can edit most of them).
+  3. Verify the environment any time with the built-in self-check:
+     python chatgpt_phone_reg.py --doctor          (human-readable)
+     python chatgpt_phone_reg.py --doctor --json   (machine-readable)
+     The desktop app runs the same probe automatically on first launch and
+     points at missing dependencies; the Python interpreter can be configured
+     in Settings when it is not on PATH.
 
 Local runtime data is written under runtime\ and sessions\.
 "@ | Set-Content -Path (Join-Path $packageDir "INSTALL-README.txt") -Encoding UTF8

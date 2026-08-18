@@ -104,7 +104,7 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
     raw_json = record.get("raw_json")
     if isinstance(raw_json, str) and raw_json.strip():
         try:
-            session = json.loads(raw_json)
+            session = _parsed_session(raw_json)
             result["at_probe_status_code"] = (
                 result["at_probe_status_code"]
                 or _access_token_probe_status_code(session)
@@ -120,7 +120,7 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
                 promotion_status = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
-            result["session"] = sanitize(session)
+            result["session"] = _sanitized_session(raw_json, session)
         except (TypeError, ValueError):
             result["session"] = {}
     else:
@@ -128,23 +128,64 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
-    """Recover non-secret presence metadata when SQLite lags the session file."""
-    state = {
+# raw_json strings repeat verbatim between refreshes; sanitize is deterministic
+# and dominates the per-row cost, so cache parse + sanitize on the exact text.
+_SESSION_PARSE_CACHE: dict[str, Any] = {}
+_SESSION_SANITIZE_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def _parsed_session(raw_json: str) -> Any:
+    cached = _SESSION_PARSE_CACHE.get(raw_json)
+    if cached is None:
+        cached = json.loads(raw_json)
+        if len(_SESSION_PARSE_CACHE) > 4096:
+            _SESSION_PARSE_CACHE.clear()
+        _SESSION_PARSE_CACHE[raw_json] = cached
+    return cached
+
+
+def _sanitized_session(raw_json: str, session: Any) -> Any:
+    cached = _SESSION_SANITIZE_CACHE.get(raw_json)
+    if cached is None:
+        cached = sanitize(session)
+        if len(_SESSION_SANITIZE_CACHE) > 4096:
+            _SESSION_SANITIZE_CACHE.clear()
+        _SESSION_SANITIZE_CACHE[raw_json] = cached
+    return dict(cached) if isinstance(cached, dict) else cached
+
+
+def _empty_session_state() -> dict[str, Any]:
+    return {
         "has_access_token": False,
         "has_refresh_token": False,
         "account_type": "",
         "at_probe_status_code": "",
     }
-    path = Path(str(record.get("json_path") or "").strip())
-    if not path.is_file():
-        return state
+
+
+# (mtime, size) keyed cache for parsed session-file states. A several-hundred
+# account pool refresh reparses every session JSON on each call; unchanged
+# files hit the cache, which the resident desktop channel relies on.
+_SESSION_STATE_CACHE: dict[str, tuple[float, int, dict[str, Any]]] = {}
+
+
+def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
+    """Recover non-secret presence metadata when SQLite lags the session file."""
+    path_text = str(record.get("json_path") or "").strip()
+    path = Path(path_text)
+    if not path_text or not path.is_file():
+        return _empty_session_state()
     try:
+        stat = path.stat()
+        cached = _SESSION_STATE_CACHE.get(str(path))
+        if cached and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
+            return dict(cached[2])
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, TypeError, ValueError):
-        return state
+        return _empty_session_state()
     if not isinstance(data, dict):
-        return state
+        return _empty_session_state()
+    state = _empty_session_state()
     state["has_access_token"] = bool(str(data.get("access_token") or "").strip())
     oauth_refresh = str(data.get("oauth_refresh_token") or "").strip()
     legacy_refresh = str(data.get("refresh_token") or "").strip()
@@ -153,7 +194,8 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
     workspace = data.get("workspace_scan") if isinstance(data.get("workspace_scan"), dict) else {}
     state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
-    return state
+    _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
+    return dict(state)
 
 
 def read_accounts(runtime_config: ConfigInput = None) -> list[dict[str, Any]]:
@@ -388,6 +430,33 @@ def _write_temp_text(prefix: str, content: str, *, suffix: str) -> Path:
     return Path(handle.name)
 
 
+def _smailr_token_from_source(source: Any) -> str:
+    """Recover the smailr mailbox id from the stored create/list response.
+
+    Reused-mailbox snapshots (reuse_reason=domain_level_restricted) carried the
+    mailbox id only inside ``source``; ``token`` stayed empty, which made
+    create_mailbox_file report mailbox_credentials_missing.
+    """
+    if isinstance(source, dict):
+        candidate = source
+    elif isinstance(source, str) and source.strip():
+        try:
+            parsed = json.loads(source)
+        except (TypeError, ValueError):
+            return ""
+        candidate = parsed if isinstance(parsed, dict) else {}
+    else:
+        return ""
+    nested = candidate.get("data")
+    if isinstance(nested, dict):
+        candidate = nested
+    value = str(candidate.get("id") or candidate.get("mailbox_id") or "").strip()
+    # Mailbox ids are UUID-ish; guard against accidentally reusing e.g. user ids.
+    if value and "@" not in value:
+        return value
+    return ""
+
+
 def _mailbox_line(mailbox: dict[str, Any]) -> str:
     email = str(mailbox.get("email") or "").strip()
     provider = str(mailbox.get("provider") or "").strip().lower()
@@ -397,6 +466,8 @@ def _mailbox_line(mailbox: dict[str, Any]) -> str:
         return f"cfworker://{email}"
     if provider == "smailr":
         token = str(mailbox.get("token") or "").strip()
+        if not token:
+            token = _smailr_token_from_source(mailbox.get("source"))
         return f"smailr://{email}---{token}" if token else ""
     if provider == "remail":
         token = str(mailbox.get("token") or "").strip()

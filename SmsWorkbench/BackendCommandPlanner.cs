@@ -318,6 +318,7 @@ namespace SmsWorkbench
         /// </summary>
         public static BackendCommandPlan CreateBatchDeleteAccounts(
             IReadOnlyList<string> emails,
+            int workers = 4,
             string tempDirectory = null)
         {
             IReadOnlyList<string> targets = RequireEmails(emails);
@@ -326,6 +327,7 @@ namespace SmsWorkbench
             {
                 "--delete-account",
                 "--email-file", emailFile,
+                "--workers", Count(workers),
                 "--desktop-ipc",
             };
             return new BackendCommandPlan(

@@ -144,10 +144,11 @@ def probe_region(access_token: str, region: str, checkout_proxy: str,
 
 
 def _region_proxy(template: str, region: str) -> str:
-    """Build a per-region egress proxy from a cliproxy-style template.
+    """Build a per-region egress proxy from a provider credential template.
 
-    Swaps ``region-XX`` to the target country AND rotates the sticky ``sid`` so
-    each region gets a fresh IP (a fixed sid pins every region to one exit IP).
+    Swaps the template's country code (kookeey password tail ``-CC`` or a
+    ``region-XX`` username) to the target country AND rotates the sticky session
+    id so each region gets a fresh IP (a fixed sid pins every region to one exit).
     """
     return rotate_proxy_session(proxy_for_country_template(template, region))
 
@@ -178,7 +179,7 @@ def main() -> int:
     parser.add_argument("--regions", default="", help="Comma-separated regions (default: built-in set)")
     parser.add_argument("--json", dest="json_out", default="", help="Write full JSON results to this path")
     parser.add_argument("--no-promo", action="store_true", help="Omit the plus-1-month-free promo (elicits non-zero amount / PayPal)")
-    parser.add_argument("--proxy-template", default="", help="cliproxy-style template with region-XX; routes each region through its own egress IP")
+    parser.add_argument("--proxy-template", default="", help="proxy credential template (kookeey password tail -CC or region-XX username); routes each region through its own egress IP")
     args = parser.parse_args()
 
     emails = [e.strip() for e in args.emails.split(",") if e.strip()]

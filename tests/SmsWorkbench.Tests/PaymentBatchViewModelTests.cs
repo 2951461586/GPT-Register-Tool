@@ -79,6 +79,13 @@ public sealed class PaymentBatchViewModelTests
         viewModel.SaveProxyConfigurationCommand.Execute(null);
         Assert.Equal("http://checkout-one\nhttp://checkout-two", service.LastSaved!.CheckoutProxyPool);
         Assert.Equal("http://approve-jp\nhttp://approve-tr", service.LastSaved.ApproveProxyPool);
+        Assert.Equal("ID", service.LastSaved.CheckoutCountry);
+        Assert.Equal("JP", service.LastSaved.ApproveCountry);
+        Assert.Equal("JP", service.LastSaved.UpdateCountry);
+
+        await viewModel.TestProxiesCommand.ExecuteAsync(null);
+        Assert.Equal("ID", service.LastProbeCheckoutCountry);
+        Assert.Equal("JP", service.LastProbeApproveCountry);
     }
 
     [Fact]
@@ -364,6 +371,8 @@ public sealed class PaymentBatchViewModelTests
         }
 
         public string? LastProbeMethod { get; private set; }
+        public string? LastProbeCheckoutCountry { get; private set; }
+        public string? LastProbeApproveCountry { get; private set; }
 
         public Task<JsonElement> ProbeProxiesAsync(
             string paymentMethod,
@@ -374,6 +383,8 @@ public sealed class PaymentBatchViewModelTests
             CancellationToken cancellationToken)
         {
             LastProbeMethod = paymentMethod;
+            LastProbeCheckoutCountry = checkoutCountry;
+            LastProbeApproveCountry = approveCountry;
             const string probe = """
                 {
                   "ok": true,

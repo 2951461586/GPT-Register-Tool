@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 from typing import Any, Mapping, Iterable
 
 from .config import ConfigInput, resolve_runtime_config
@@ -36,6 +38,34 @@ class AccountDeleteResult:
 class AccountLifecycle:
     def __init__(self, runtime_config: ConfigInput = None) -> None:
         self.config = resolve_runtime_config(runtime_config)
+        self._database_lock = Lock()
+        self._mailbox_locks: dict[str, Lock] = {}
+        self._mailbox_locks_lock = Lock()
+
+    def delete_many(
+        self,
+        requests: Iterable[AccountDeleteRequest],
+        *,
+        workers: int = 4,
+    ) -> list[AccountDeleteResult | Exception]:
+        unique: dict[str, AccountDeleteRequest] = {}
+        for request in requests:
+            email = str(request.email or "").strip()
+            if email:
+                unique.setdefault(email.casefold(), request)
+        if not unique:
+            return []
+        ordered = list(unique.values())
+        results: list[AccountDeleteResult | Exception | None] = [None] * len(ordered)
+        with ThreadPoolExecutor(max_workers=max(1, min(int(workers), len(ordered)))) as executor:
+            pending = {executor.submit(self.delete, request): index for index, request in enumerate(ordered)}
+            for future in as_completed(pending):
+                index = pending[future]
+                try:
+                    results[index] = future.result()
+                except Exception as exc:
+                    results[index] = exc
+        return [result for result in results if result is not None]
 
     def delete(self, request: AccountDeleteRequest) -> AccountDeleteResult:
         email = str(request.email or "").strip()
@@ -45,20 +75,23 @@ class AccountLifecycle:
         removed_rows = 0
         if db.exists():
             import sqlite3
-            with sqlite3.connect(db) as conn:
-                cursor = conn.execute("DELETE FROM accounts WHERE lower(email)=lower(?)", (email,))
-                removed_rows = max(0, int(cursor.rowcount or 0))
+            with self._database_lock:
+                with sqlite3.connect(db) as conn:
+                    cursor = conn.execute("DELETE FROM accounts WHERE lower(email)=lower(?)", (email,))
+                    removed_rows = max(0, int(cursor.rowcount or 0))
         removed_lines = 0
         mailbox_files = tuple(request.mailbox_files) or self._configured_mailbox_files()
         for raw_path in mailbox_files:
             path = Path(raw_path)
-            if not path.is_file():
-                continue
-            lines = path.read_text(encoding="utf-8-sig").splitlines(keepends=True)
-            kept = [line for line in lines if not self._mailbox_line_matches(line, email)]
-            removed_lines += len(lines) - len(kept)
-            if len(kept) != len(lines):
-                path.write_text("".join(kept), encoding="utf-8")
+            lock = self._mailbox_lock(path)
+            with lock:
+                if not path.is_file():
+                    continue
+                lines = path.read_text(encoding="utf-8-sig").splitlines(keepends=True)
+                kept = [line for line in lines if not self._mailbox_line_matches(line, email)]
+                removed_lines += len(lines) - len(kept)
+                if len(kept) != len(lines):
+                    path.write_text("".join(kept), encoding="utf-8")
         archived: list[str] = []
         if request.include_session:
             sessions = Path(self.config.workflow("output").get("directory") or "sessions")
@@ -77,6 +110,11 @@ class AccountLifecycle:
                 except Exception:
                     continue
         return AccountDeleteResult(email, removed_lines, removed_rows, tuple(archived))
+
+    def _mailbox_lock(self, path: Path) -> Lock:
+        key = str(path.resolve()).casefold()
+        with self._mailbox_locks_lock:
+            return self._mailbox_locks.setdefault(key, Lock())
 
     def _configured_mailbox_files(self) -> tuple[str, ...]:
         email_cfg = self.config.workflow("email_registration")

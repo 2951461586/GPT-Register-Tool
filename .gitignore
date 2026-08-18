@@ -36,6 +36,8 @@ tests/**/obj/
 .idea/
 .vscode/
 .workbuddy-ai/
+/.zcode/
+/gates/
 TestResults/
 *.trx
 .coverage

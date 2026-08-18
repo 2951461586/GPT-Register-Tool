@@ -921,7 +921,7 @@ Loaded="TaskGrid_Loaded">
                     <TextBlock Text="清空" Margin="6,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Button>
-                <TextBox Text="{Binding LogText}" Background="{DynamicResource LogBg}" Foreground="{DynamicResource LogText}" BorderThickness="0"
+                <TextBox x:Name="LogTextBox" Text="{Binding LogText, Mode=OneWay}" Background="{DynamicResource LogBg}" Foreground="{DynamicResource LogText}" BorderThickness="0"
                          FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                          TextWrapping="NoWrap"

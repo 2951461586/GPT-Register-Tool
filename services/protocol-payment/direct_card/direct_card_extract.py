@@ -9,7 +9,7 @@ Default flow:
 * checkout proxy country: US
 * promotion update proxy country: TR
 * payment locale: English
-* proxy provider: Cliproxy-compatible username routing
+* proxy provider: kookeey password-template routing (``<base>-<CC>[-<session>[-<ttl>]]``)
 * output: https://chatgpt.com/checkout/<processor_entity>/<oaics_id>
 
 The script creates the checkout without a promotion, applies the promotion to
@@ -24,10 +24,9 @@ Only ``curl_cffi`` is required::
 
 Recommended usage keeps credentials out of the process list::
 
-    export CLIPROXY_HOST=proxy.example:8080
-    export CLIPROXY_USERNAME=your-user
-    export CLIPROXY_PASSWORD=your-password
-    python checkout_link_extractor_standalone.py --credential-file session.json --pretty
+    export DIRECT_CARD_CHECKOUT_PROXY='http://user:pass-CC-session-ttl@gate.kookeey.info:1000'
+    export DIRECT_CARD_UPDATE_PROXY='http://user:pass-CC-session-ttl@gate.kookeey.info:1000'
+    python direct_card_extract.py --credential-file session.json --pretty
 
 Use ``--credential-file -`` to read a token or session JSON from stdin.
 """
@@ -126,9 +125,6 @@ class ExtractorConfig:
     payment_locale: str = "en"
     checkout_proxy_country: str = "US"
     update_proxy_country: str = "TR"
-    cliproxy_host: str = "127.0.0.1:19010"
-    cliproxy_username: str = ""
-    cliproxy_password: str = ""
     checkout_proxy: str = ""
     update_proxy: str = ""
     plan_name: str = "chatgptplusplan"
@@ -328,38 +324,21 @@ def normalize_proxy_url(proxy: str) -> str:
     return f"http://{proxy}"
 
 
-def new_proxy_session_id() -> str:
-    return str(random.randint(10_000_000, 99_999_999))
-
-
-def cliproxy_proxy_url(
-    host: str,
-    username: str,
-    password: str,
-    country: str,
-    session_id: str = "",
-) -> str:
-    host = re.sub(r"^https?://", "", str(host or "").strip()).strip("/")
-    username = str(username or "").strip()
-    password = str(password or "").strip()
-    country = str(country or "").strip().upper()
-    if not host or not username or not password:
-        raise ExtractorError(
-            "Cliproxy host, username and password are required unless both stage proxies are supplied"
-        )
-    if not re.fullmatch(r"[A-Z]{2}", country):
-        raise ExtractorError("Cliproxy country must be a two-letter code")
-    username_base = re.split(r"-region-[A-Za-z]{2}", username, maxsplit=1)[0]
-    routed_username = (
-        f"{username_base}-region-{country}-sid-{session_id or new_proxy_session_id()}"
-    )
-    return (
-        f"http://{quote(routed_username, safe='-._~')}:"
-        f"{quote(password, safe='-._~')}@{host}"
-    )
+def new_proxy_session_id(length: int = 8) -> str:
+    """Random numeric session id preserving the original id length (min 1)."""
+    size = max(1, int(length or 8))
+    return "".join(str(random.randint(0, 9)) for _ in range(size))
 
 
 def rotate_proxy_session(proxy: str, country: str) -> str:
+    """Rotate a kookeey sticky proxy to a fresh session for ``country``.
+
+    Password template: ``<base>-<CC>-<session>-<ttl>`` (TTL like ``5m``/``30s``/
+    ``1h``/``1d``), mirroring ``sms_tool.proxy_entry.rotate_session``: the country
+    code is rewritten, the session id replaced with a same-length numeric id,
+    and the TTL preserved. Non-sticky or TTL-less passwords are returned
+    unchanged so rotation stays a no-op instead of corrupting credentials.
+    """
     proxy = normalize_proxy_url(proxy)
     if not proxy:
         return proxy
@@ -367,25 +346,23 @@ def rotate_proxy_session(proxy: str, country: str) -> str:
     username = unquote(parsed.username or "")
     password = unquote(parsed.password or "")
     hostname = parsed.hostname or ""
-    if not username or not password or not hostname:
+    if not password or not hostname:
         return proxy
-    rotated_username = re.sub(
-        r"region-[A-Za-z]{2}", f"region-{country.upper()}", username
+    match = re.fullmatch(
+        r"(.+?)-([A-Za-z]{2})-([A-Za-z0-9]+)-(\d+[smhd])",
+        password,
     )
-    if re.search(r"sid-[A-Za-z0-9]+", rotated_username):
-        rotated_username = re.sub(
-            r"sid-[A-Za-z0-9]+", f"sid-{new_proxy_session_id()}", rotated_username
-        )
-    elif re.search(r"region-[A-Za-z]{2}", rotated_username):
-        rotated_username += f"-sid-{new_proxy_session_id()}"
-    else:
+    if not match:
         return proxy
+    base, _cc, session, ttl = match.groups()
+    replacement = new_proxy_session_id(len(session)) if session.isdigit() else session
+    rotated_password = f"{base}-{country.upper()}-{replacement}-{ttl}"
     host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
     if parsed.port:
         host = f"{host}:{parsed.port}"
     netloc = (
-        f"{quote(rotated_username, safe='-._~')}:"
-        f"{quote(password, safe='-._~')}@{host}"
+        f"{quote(username, safe='-._~')}:"
+        f"{quote(rotated_password, safe='-._~')}@{host}"
     )
     return urlunsplit((parsed.scheme or "http", netloc, parsed.path, parsed.query, parsed.fragment))
 
@@ -777,19 +754,10 @@ class CheckoutExtractor:
     def _stage_proxies(self) -> tuple[str, str]:
         checkout_proxy = normalize_proxy_url(self.config.checkout_proxy)
         update_proxy = normalize_proxy_url(self.config.update_proxy)
-        if not checkout_proxy:
-            checkout_proxy = cliproxy_proxy_url(
-                self.config.cliproxy_host,
-                self.config.cliproxy_username,
-                self.config.cliproxy_password,
-                self.config.checkout_proxy_country,
-            )
-        if not update_proxy:
-            update_proxy = cliproxy_proxy_url(
-                self.config.cliproxy_host,
-                self.config.cliproxy_username,
-                self.config.cliproxy_password,
-                self.config.update_proxy_country,
+        if not checkout_proxy or not update_proxy:
+            raise ExtractorError(
+                "checkout and update proxies are required; pass --checkout-proxy/--update-proxy "
+                "or set DIRECT_CARD_CHECKOUT_PROXY/DIRECT_CARD_UPDATE_PROXY"
             )
         return checkout_proxy, update_proxy
 
@@ -1120,20 +1088,14 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--session-cookie", default="", help="optional ChatGPT payment cookie header")
     parser.add_argument(
-        "--cliproxy-host",
-        default=os.getenv("CLIPROXY_HOST", os.getenv("OPENAI_PAY_CLIPROXY_HOST", "127.0.0.1:19010")),
-    )
-    parser.add_argument("--cliproxy-username", default=os.getenv("CLIPROXY_USERNAME", ""))
-    parser.add_argument("--cliproxy-password", default=os.getenv("CLIPROXY_PASSWORD", ""))
-    parser.add_argument(
         "--checkout-proxy",
         default=os.getenv("DIRECT_CARD_CHECKOUT_PROXY", ""),
-        help="explicit proxy; overrides Cliproxy for checkout (env: DIRECT_CARD_CHECKOUT_PROXY)",
+        help="kookeey-format checkout proxy URL (env: DIRECT_CARD_CHECKOUT_PROXY)",
     )
     parser.add_argument(
         "--update-proxy",
         default=os.getenv("DIRECT_CARD_UPDATE_PROXY", ""),
-        help="explicit proxy; overrides Cliproxy for update (env: DIRECT_CARD_UPDATE_PROXY)",
+        help="kookeey-format update proxy URL (env: DIRECT_CARD_UPDATE_PROXY)",
     )
     parser.add_argument("--billing-country", default="PH")
     parser.add_argument("--currency", default="PHP")
@@ -1160,9 +1122,6 @@ def config_from_args(args: argparse.Namespace) -> ExtractorConfig:
         payment_locale=str(args.payment_locale),
         checkout_proxy_country=str(args.checkout_proxy_country).upper(),
         update_proxy_country=str(args.update_proxy_country).upper(),
-        cliproxy_host=str(args.cliproxy_host),
-        cliproxy_username=str(args.cliproxy_username),
-        cliproxy_password=str(args.cliproxy_password),
         checkout_proxy=str(args.checkout_proxy),
         update_proxy=str(args.update_proxy),
         plan_name=str(args.plan_name),

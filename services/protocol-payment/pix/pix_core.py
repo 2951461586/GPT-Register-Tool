@@ -11,9 +11,9 @@ from urllib.parse import parse_qs, parse_qsl, quote, urlencode, unquote, urljoin
 import requests
 
 try:
-    from curl_cffi import requests as curl_requests
+    from curl_cffi.requests import Session as CurlCffiSession
 except Exception:  # pragma: no cover
-    curl_requests = None
+    CurlCffiSession = None
 
 
 CHATGPT_BASE_URL = "https://chatgpt.com"

@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing;
@@ -25,6 +27,105 @@ internal static class Program
         using var form = new InstallerForm(options);
         Application.Run(form);
         return form.ExitCode;
+    }
+
+    // ── Post-install environment checks (dependency detection + config alignment) ──
+
+    private sealed record EnvironmentCheck(bool PythonFound, string PythonDetail, int Failed, int Warned, List<string> FailItems);
+
+    /// <summary>
+    /// Runs `python chatgpt_phone_reg.py --doctor --json` in the install dir so the
+    /// installer and the desktop first-launch probe share one health view.
+    /// </summary>
+    private static EnvironmentCheck RunDoctor(string installDir)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "python",
+                WorkingDirectory = installDir,
+                Arguments = "chatgpt_phone_reg.py --doctor --json",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("python did not start");
+            string stdout = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(120_000);
+            return ParseDoctorReport(stdout, pythonFound: true, pythonDetail: "");
+        }
+        catch (Exception ex)
+        {
+            return new EnvironmentCheck(
+                PythonFound: false,
+                PythonDetail: ex.Message,
+                Failed: 0,
+                Warned: 0,
+                FailItems: new List<string>());
+        }
+    }
+
+    private static EnvironmentCheck ParseDoctorReport(string stdout, bool pythonFound, string pythonDetail)
+    {
+        var failItems = new List<string>();
+        int failed = 0;
+        int warned = 0;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(stdout);
+            JsonElement root = document.RootElement;
+            failed = root.TryGetProperty("failed", out JsonElement failedElement) ? failedElement.GetInt32() : 0;
+            warned = root.TryGetProperty("warned", out JsonElement warnedElement) ? warnedElement.GetInt32() : 0;
+            if (root.TryGetProperty("checks", out JsonElement checks) && checks.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement check in checks.EnumerateArray())
+                {
+                    string status = (check.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() : "") ?? "";
+                    if (status != "fail")
+                    {
+                        continue;
+                    }
+                    string name = (check.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() : "") ?? "";
+                    string hint = (check.TryGetProperty("hint", out JsonElement hintElement) ? hintElement.GetString() : "") ?? "";
+                    failItems.Add(string.IsNullOrEmpty(hint) ? name : $"{name}: {hint}");
+                }
+            }
+        }
+        catch
+        {
+            // Unparseable output still counts as "cannot verify", not install failure.
+        }
+        return new EnvironmentCheck(pythonFound, pythonDetail, failed, warned, failItems);
+    }
+
+    /// <summary>Offers/proxies `python -m pip install -r requirements.txt` in the install dir.</summary>
+    private static string RunPipInstall(string installDir)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "python",
+            WorkingDirectory = installDir,
+            Arguments = "-m pip install -r requirements.txt",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("python did not start");
+        string output = process.StandardOutput.ReadToEnd();
+        string error = process.StandardError.ReadToEnd();
+        process.WaitForExit(600_000);
+        return (output + Environment.NewLine + error).Trim();
+    }
+
+    private static string TruncateLines(string value, int limit)
+    {
+        string text = (value ?? "").Trim();
+        return text.Length <= limit ? text : text[^limit..];
     }
 
     private static int RunSilentInstall(InstallOptions options)
@@ -375,9 +476,72 @@ internal static class Program
                 InstallResult result = await Task.Run(() => Install(runOptions, progress));
                 progressBar.Style = ProgressBarStyle.Continuous;
                 progressBar.Value = 100;
-                statusLabel.Text = "Install complete.";
                 ExitCode = 0;
-                MessageBox.Show(this, $"GPT-Register-Tool was installed successfully.\n\n{result.InstallDir}", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                statusLabel.Text = "Checking environment...";
+                EnvironmentCheck check = await Task.Run(() => RunDoctor(result.InstallDir));
+                string configPath = Path.Combine(result.InstallDir, "config.json");
+                string configNote = File.Exists(configPath)
+                    ? $"配置文件已就绪: {configPath}\n首次使用前请填入代理/邮箱/SMS 等本地设置(桌面端“设置”窗口也可编辑)。"
+                    : "未找到 config.json:请从 config.example.json 复制一份并填写。";
+
+                if (!check.PythonFound)
+                {
+                    statusLabel.Text = "Install complete (Python missing).";
+                    MessageBox.Show(this,
+                        "GPT-Register-Tool 已安装到:\n" + result.InstallDir + "\n\n" +
+                        "⚠ 未检测到可用的 Python 解释器。\n" +
+                        "桌面端依赖 Python 3.10+:请从 python.org 安装(勾选 Add to PATH),\n" +
+                        "再运行 python -m pip install -r requirements.txt,然后重新打开 SmsWorkbench。\n\n" +
+                        configNote,
+                        Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Close();
+                    return;
+                }
+
+                if (check.Failed > 0)
+                {
+                    string missing = string.Join("\n  - ", check.FailItems);
+                    DialogResult choice = MessageBox.Show(this,
+                        "已安装到: " + result.InstallDir + "\n\n环境自检发现 " + check.Failed + " 项缺失依赖:\n  - " + missing +
+                        "\n\n是否现在运行 python -m pip install -r requirements.txt 自动安装?(需要联网,约几分钟)",
+                        Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (choice == DialogResult.Yes)
+                    {
+                        statusLabel.Text = "Installing Python dependencies...";
+                        string pipOutput = await Task.Run(() => RunPipInstall(result.InstallDir));
+                        statusLabel.Text = "Re-checking environment...";
+                        check = await Task.Run(() => RunDoctor(result.InstallDir));
+                        if (check.Failed == 0)
+                        {
+                            MessageBox.Show(this,
+                                "依赖安装完成,环境自检通过" + (check.Warned > 0 ? $"({check.Warned} 项警告)" : "") + "。\n\n" + configNote,
+                                Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show(this,
+                                "依赖安装后仍有 " + check.Failed + " 项缺失:\n  - " + string.Join("\n  - ", check.FailItems) +
+                                "\n\npip 输出末尾:\n" + TruncateLines(pipOutput, 800) +
+                                "\n\n可稍后运行 python chatgpt_phone_reg.py --doctor 查看完整报告。",
+                                Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show(this,
+                            "已安装。稍后可手动安装依赖并自检:\n  python -m pip install -r requirements.txt\n  python chatgpt_phone_reg.py --doctor\n\n" + configNote,
+                            Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                else
+                {
+                    statusLabel.Text = "Install complete.";
+                    MessageBox.Show(this,
+                        "GPT-Register-Tool 已安装到:\n" + result.InstallDir + "\n\n环境自检通过" +
+                        (check.Warned > 0 ? $"({check.Warned} 项警告,可运行 --doctor 查看)" : "") + "。\n\n" + configNote,
+                        Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
                 Close();
             }
             catch (Exception ex)

@@ -60,12 +60,8 @@ public sealed class PaymentMethodsTests
         Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.CheckoutCountryOptions("momo")[0]);
         Assert.Equal(new PaymentProxyCountryOption("BR", "巴西 BR"), PaymentMethods.CheckoutCountryOptions("momo")[10]);
         Assert.Equal(
-            new[]
-            {
-                new PaymentProxyCountryOption("JP", "日本 JP（优惠区）"),
-                new PaymentProxyCountryOption("TR", "土耳其 TR（优惠区）")
-            },
-            PaymentMethods.ApproveCountryOptions("momo").ToArray());
+            PaymentMethods.CheckoutCountryOptions("momo"),
+            PaymentMethods.ApproveCountryOptions("momo"));
         Assert.Equal(15, PaymentMethods.StageCountryOptions.Count);
         Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.StageCountryOptions[0]);
         Assert.Equal(19, PaymentMethods.BillingCountryOptions.Count);

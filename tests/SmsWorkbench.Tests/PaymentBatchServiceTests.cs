@@ -61,8 +61,40 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal("http://approve-jp", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-pool"));
         Assert.Equal("ID", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-country"));
         Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
+        Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
+        Assert.DoesNotContain("--auto-proxy-country", backend.LastCommand.Arguments);
         Assert.False(File.Exists(emailFile));
         Assert.False(File.Exists(matrixFile));
+    }
+
+    [Fact]
+    public async Task ProxyProbeUsesSelectedCountryForApproveAndSharedUpdatePool()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
+        var backend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(
+                0,
+                "",
+                "",
+                JsonElementOf("{\"ok\":true,\"stages\":{}}"),
+                false)
+        };
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+
+        await service.ProbeProxiesAsync(
+            "momo",
+            "http://checkout.example",
+            "http://approve.example",
+            "VN",
+            "TR",
+            CancellationToken.None);
+
+        Assert.NotNull(backend.LastCommand);
+        Assert.Equal("TR", ArgumentAfter(backend.LastCommand!.Arguments, "--approve-proxy-country"));
+        Assert.Equal("TR", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
+        Assert.DoesNotContain("--auto-proxy-country", backend.LastCommand.Arguments);
     }
 
     [Fact]
@@ -198,6 +230,7 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal("http://approve-old", loaded.ApproveProxyPool);
         Assert.Equal("ID", loaded.CheckoutCountry);
         Assert.Equal("TR", loaded.ApproveCountry);
+        Assert.Equal("TH", loaded.UpdateCountry);
 
         SettingsSaveResult saved = service.SaveProxyConfiguration(
             "gopay",
@@ -205,7 +238,8 @@ public sealed class PaymentBatchServiceTests
                 "http://checkout-one\nhttp://checkout-two",
                 "http://approve-jp\nhttp://approve-tr",
                 "ID",
-                "JP"));
+                "JP",
+                "TR"));
 
         Assert.True(saved.Ok, saved.Error);
         JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
@@ -218,7 +252,13 @@ public sealed class PaymentBatchServiceTests
             method["approve_proxy_pool"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
         Assert.Equal("ID", method["stage_proxy_countries"]!["checkout"]!.GetValue<string>());
         Assert.Equal("JP", method["stage_proxy_countries"]!["approve"]!.GetValue<string>());
+        Assert.Equal("TR", method["stage_proxy_countries"]!["promotion"]!.GetValue<string>());
+        Assert.Equal("gopay_approve", method["stage_routes"]!["promotion"]!["pool"]!.GetValue<string>());
+        Assert.Equal("TR", method["stage_routes"]!["promotion"]!["country"]!.GetValue<string>());
         Assert.Equal("http://legacy", root["protocol_payments"]!["proxy_pool"]![0]!.GetValue<string>());
+
+        PaymentBatchProxyConfiguration reloaded = service.LoadProxyConfiguration("gopay");
+        Assert.Equal("TR", reloaded.UpdateCountry);
     }
 
     [Fact]
