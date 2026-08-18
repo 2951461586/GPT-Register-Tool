@@ -263,14 +263,16 @@ public sealed class DesktopWindowSmokeTests
             string[] checkBoxLabels = Array.Empty<string>();
             int comboBoxCount = 0;
             var method = typeof(MainWindow).GetMethod(
-                "ShowRegisterOptionsDialog",
+                "CreateRegisterOptionsDialog",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(method);
-            InspectModalDialog(
-                "一键注册",
+            var registerDialog = Assert.IsType<Window>(method.Invoke(
+                main,
+                new object[] { new Action<RegisterOptions>(_ => { }) }));
+            InspectWindow(
+                registerDialog,
                 dialog =>
                 {
-                    dialog.UpdateLayout();
                     ComboBox[] comboBoxes = FindVisualChildren<ComboBox>(dialog).ToArray();
                     comboBoxCount = comboBoxes.Length;
                     ComboBox sourceBox = comboBoxes.First();
@@ -288,8 +290,7 @@ public sealed class DesktopWindowSmokeTests
                         .Select(checkBox => checkBox.Content?.ToString() ?? "")
                         .Where(text => !string.IsNullOrWhiteSpace(text))
                         .ToArray();
-                },
-                () => Assert.Null(method.Invoke(main, null)));
+                });
             Assert.Equal(new[]
             {
                 "ReMail 邮箱",
@@ -313,18 +314,19 @@ public sealed class DesktopWindowSmokeTests
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             method = typeof(MainWindow).GetMethod(
-                "ShowSelectedRegisterOptionsDialog",
+                "CreateSelectedRegisterOptionsDialog",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(method);
-            InspectModalDialog(
-                "选中邮箱注册",
+            var selectedRegisterDialog = Assert.IsType<Window>(method.Invoke(
+                main,
+                new object[] { 1, new Action<RegisterOptions>(_ => { }) }));
+            InspectWindow(
+                selectedRegisterDialog,
                 dialog =>
                 {
-                    dialog.UpdateLayout();
                     selectedComboBoxCount = FindVisualChildren<ComboBox>(dialog).Count();
                     selectedCheckBoxCount = FindVisualChildren<CheckBox>(dialog).Count();
-                },
-                () => Assert.Null(method.Invoke(main, new object[] { 1 })));
+                });
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(2, selectedCheckBoxCount);
             stage("verify mailbox selection routing");
@@ -518,45 +520,18 @@ public sealed class DesktopWindowSmokeTests
     private static void FlushDispatcher()
         => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);
 
-    private static void InspectModalDialog(string title, Action<Window> inspect, Action showDialog)
+    private static void InspectWindow(Window dialog, Action<Window> inspect)
     {
-        Exception? inspectionFailure = null;
-        var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher.CurrentDispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(20)
-        };
-        timer.Tick += (_, __) =>
-        {
-            Window? dialog = Application.Current.Windows
-                .Cast<Window>()
-                .FirstOrDefault(window => window.Title == title);
-            if (dialog == null) return;
-
-            timer.Stop();
-            try
-            {
-                inspect(dialog);
-            }
-            catch (Exception exception)
-            {
-                inspectionFailure = exception;
-            }
-            finally
-            {
-                dialog.Close();
-            }
-        };
-
-        timer.Start();
         try
         {
-            showDialog();
+            dialog.Show();
+            dialog.UpdateLayout();
+            inspect(dialog);
         }
         finally
         {
-            timer.Stop();
+            dialog.Close();
         }
-        Assert.Null(inspectionFailure);
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject

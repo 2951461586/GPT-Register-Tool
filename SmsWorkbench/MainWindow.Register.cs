@@ -397,6 +397,13 @@ namespace SmsWorkbench
 
         private RegisterOptions ShowSelectedRegisterOptionsDialog(int selectedCount)
         {
+            RegisterOptions selected = null;
+            Window dialog = CreateSelectedRegisterOptionsDialog(selectedCount, options => selected = options);
+            return dialog.ShowDialog() == true ? selected : null;
+        }
+
+        private Window CreateSelectedRegisterOptionsDialog(int selectedCount, Action<RegisterOptions> accept)
+        {
             var dialog = new Window
             {
                 Title = "选中邮箱注册",
@@ -468,10 +475,9 @@ namespace SmsWorkbench
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
-            RegisterOptions selected = null;
             ok.Click += (_, __) =>
             {
-                selected = new RegisterOptions
+                var selected = new RegisterOptions
                 {
                     Source = "pool",
                     Count = Math.Max(1, selectedCount),
@@ -479,15 +485,23 @@ namespace SmsWorkbench
                     Disable2fa = no2faBox.IsChecked == true,
                     CheckPromotion = promotionBox.IsChecked == true
                 };
+                accept(selected);
                 dialog.DialogResult = true;
                 dialog.Close();
             };
             cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
             dialog.Content = root;
-            return dialog.ShowDialog() == true ? selected : null;
+            return dialog;
         }
 
         private RegisterOptions ShowRegisterOptionsDialog()
+        {
+            RegisterOptions selected = null;
+            Window dialog = CreateRegisterOptionsDialog(options => selected = options);
+            return dialog.ShowDialog() == true ? selected : null;
+        }
+
+        private Window CreateRegisterOptionsDialog(Action<RegisterOptions> accept)
         {
             var dialog = new Window
             {
@@ -583,13 +597,12 @@ namespace SmsWorkbench
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
-            RegisterOptions selected = null;
             ok.Click += (_, __) =>
             {
                 int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
                 int workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount());
                 string selectedSource = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool";
-                selected = new RegisterOptions
+                var selected = new RegisterOptions
                 {
                     Source = selectedSource,
                     Count = count,
@@ -597,13 +610,14 @@ namespace SmsWorkbench
                     Disable2fa = no2faBox.IsChecked == true,
                     CheckPromotion = promotionBox.IsChecked == true
                 };
+                accept(selected);
                 CountText = count.ToString();
                 dialog.DialogResult = true;
                 dialog.Close();
             };
             cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
             dialog.Content = root;
-            return dialog.ShowDialog() == true ? selected : null;
+            return dialog;
         }
 
         private int ParsePositiveInt(string text, int min, int max, int fallback)
