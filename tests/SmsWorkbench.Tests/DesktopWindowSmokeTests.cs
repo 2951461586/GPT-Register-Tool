@@ -208,6 +208,13 @@ public sealed class DesktopWindowSmokeTests
             main.Show();
             main.UpdateLayout();
             FlushDispatcher();
+            Assert.DoesNotContain(
+                backendClient.Commands,
+                command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));
+            main.RunStartupDoctorProbeAsync().GetAwaiter().GetResult();
+            Assert.Contains(
+                backendClient.Commands,
+                command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));
             VerifyAccountScanSummary(main);
 
             var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
