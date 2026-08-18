@@ -186,8 +186,11 @@ public sealed class DesktopWindowSmokeTests
         return new Rect(topLeft, new Size(element.ActualWidth, element.ActualHeight));
     }
 
-    private static void VerifyMainWindowRegistrationAndContextMenu(string rootDirectory)
+    private static void VerifyMainWindowRegistrationAndContextMenu(
+        string rootDirectory,
+        Action<string> stage)
     {
+        stage("construct main window");
         using var logger = new Serilog.LoggerConfiguration().CreateLogger();
         var backendClient = new StubBackendClient();
         var main = new MainWindow(
@@ -203,6 +206,7 @@ public sealed class DesktopWindowSmokeTests
             logger);
         try
         {
+            stage("show main window");
             main.Show();
             main.UpdateLayout();
             Assert.DoesNotContain(
@@ -212,6 +216,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.Contains(
                 backendClient.Commands,
                 command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));
+            stage("verify account grid");
             VerifyAccountScanSummary(main);
 
             var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
@@ -230,6 +235,7 @@ public sealed class DesktopWindowSmokeTests
             var contextMenu = Assert.IsType<ContextMenu>(accountGrid.ContextMenu);
             contextMenu.PlacementTarget = accountGrid;
             contextMenu.Placement = PlacementMode.Center;
+            stage("open account context menu");
             contextMenu.IsOpen = true;
             contextMenu.ApplyTemplate();
             contextMenu.UpdateLayout();
@@ -251,6 +257,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.True(headerLeftEdges.Max() - headerLeftEdges.Min() <= 0.5);
             contextMenu.IsOpen = false;
 
+            stage("show general registration dialog");
             string[] sourceOptions = Array.Empty<string>();
             string[] fieldLabels = Array.Empty<string>();
             string[] checkBoxLabels = Array.Empty<string>();
@@ -318,6 +325,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.Contains("注册完成后查询试用优惠", checkBoxLabels);
             Assert.Equal(1, comboBoxCount);
 
+            stage("show selected registration dialog");
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             captureFailure = null;
@@ -351,10 +359,12 @@ public sealed class DesktopWindowSmokeTests
             Assert.Null(captureFailure);
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(2, selectedCheckBoxCount);
+            stage("verify mailbox selection routing");
             VerifyMailboxSelectionFileRouting(main);
         }
         finally
         {
+            stage("close main window");
             main.Close();
         }
     }
@@ -522,7 +532,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.IsType<DataGrid>(payment.FindName("ResultsGrid"));
             payment.Close();
             stage("verify main window dialogs");
-            VerifyMainWindowRegistrationAndContextMenu(fixture.Path);
+            VerifyMainWindowRegistrationAndContextMenu(fixture.Path, stage);
             stage("shutdown application");
             application.Shutdown();
             stage("complete");
