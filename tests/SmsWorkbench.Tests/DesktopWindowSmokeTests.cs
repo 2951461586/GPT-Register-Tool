@@ -131,9 +131,7 @@ public sealed class DesktopWindowSmokeTests
         }
 
         viewModel.SelectedCategory = networkCategory;
-        FlushDispatcher();
         settings.UpdateLayout();
-        FlushDispatcher();
 
         FrameworkElement[] editors = FindVisualChildren<FrameworkElement>(settings)
             .Where(element => element.IsVisible
