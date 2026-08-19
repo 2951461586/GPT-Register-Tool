@@ -16,7 +16,7 @@
 ## Validation
 
 - Python focused registration/payment/proxy suite: 101 passed.
-- Python full suite: recorded in the GitHub release after final packaging.
-- .NET suite: recorded in the GitHub release after final packaging.
+- Python full suite: 987 passed, 28 subtests passed.
+- .NET suite: 210 passed.
 - Desktop publish: `dist/net10/SmsWorkbench.exe`.
 - Sensitive-field scan, architecture scan, Python compileall, and `git diff --check` passed.
