@@ -2,7 +2,7 @@ using System.Windows.Input;
 
 namespace SmsWorkbench
 {
-    public sealed partial class ProtocolPaymentViewModel : ObservableObject
+    public sealed partial class ProtocolPaymentViewModel : ObservableObject, IDisposable
     {
         private readonly IProtocolPaymentService _service;
         private CancellationTokenSource _cancellation;
@@ -12,11 +12,13 @@ namespace SmsWorkbench
         public ProtocolPaymentViewModel(
             IProtocolPaymentService service,
             IFileLauncher fileLauncher,
-            ProtocolPaymentAccount account)
+            ProtocolPaymentAccount account,
+            IStageMatrixStore stageMatrixStore = null)
         {
             _service = service;
             FileLauncher = fileLauncher;
             Account = account;
+            StageMatrix = new StageMatrixViewModel(stageMatrixStore);
             ProtocolPaymentPreferences preferences = service.LoadPreferences();
             Methods = PaymentMethods.All.ToArray();
             BillingCountries = PaymentMethods.BillingCountryOptions;
@@ -40,7 +42,7 @@ namespace SmsWorkbench
         public IReadOnlyList<PaymentProxyCountryOption> BillingCountries { get; }
         public IReadOnlyList<PaymentProxyCountryOption> CheckoutCountries { get; private set; } = Array.Empty<PaymentProxyCountryOption>();
         public IReadOnlyList<PaymentProxyCountryOption> ApproveCountries { get; private set; } = Array.Empty<PaymentProxyCountryOption>();
-        public StageMatrixViewModel StageMatrix { get; } = new();
+        public StageMatrixViewModel StageMatrix { get; }
         public ICommand RunCommand { get; }
         public ICommand TestProxyCommand { get; }
         public ICommand SaveProxyCommand { get; }
@@ -238,6 +240,14 @@ namespace SmsWorkbench
             _cancellation.Cancel();
         }
 
+        public void Dispose()
+        {
+            _cancellation?.Cancel();
+            _cancellation?.Dispose();
+            _cancellation = null;
+            GC.SuppressFinalize(this);
+        }
+
         private void CopyResult()
         {
             if (!HasUrl) return;
@@ -270,7 +280,7 @@ namespace SmsWorkbench
 
         private static string SelectCountry(string wanted, IReadOnlyList<PaymentProxyCountryOption> options, string fallback)
             => options.FirstOrDefault(option => option.Code.Equals((wanted ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Code
-                ?? options.FirstOrDefault(option => option.Code.Equals(fallback, StringComparison.OrdinalIgnoreCase))?.Code
+                ?? (options.Count > 0 && options[0].Code.Equals(fallback, StringComparison.OrdinalIgnoreCase) ? options[0].Code : null)
                 ?? options.FirstOrDefault()?.Code
                 ?? "";
     }

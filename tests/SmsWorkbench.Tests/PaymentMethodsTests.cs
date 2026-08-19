@@ -28,8 +28,8 @@ public sealed class PaymentMethodsTests
         Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == "blik");
         Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>
         {
-            Assert.Contains(PaymentMethods.All, method => method.Id == id && !method.BatchEnabled && !method.RegistrationEnabled);
-            Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == id);
+            Assert.Contains(PaymentMethods.All, method => method.Id == id && method.BatchEnabled && !method.RegistrationEnabled);
+            Assert.Contains(PaymentMethods.BatchOptions, method => method.Id == id);
             Assert.DoesNotContain(PaymentMethods.RegistrationOptions, method => method.Id == id);
         });
         Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>

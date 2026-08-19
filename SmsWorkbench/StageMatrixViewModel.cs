@@ -44,6 +44,9 @@ namespace SmsWorkbench
 
     public sealed partial class StageMatrixViewModel : ObservableObject
     {
+        private const int MaxRuns = 200;
+        private readonly IStageMatrixStore _store;
+        private readonly Dictionary<string, int> _lastSequences = new(StringComparer.Ordinal);
         private static readonly string[] RegistrationStages =
         {
             "started", "mailbox_ready", "sentinel", "identity_ready", "auth_flow",
@@ -60,13 +63,29 @@ namespace SmsWorkbench
         public ObservableCollection<StageMatrixRun> Runs { get; } = new();
         [ObservableProperty] private string summary = "等待后端阶段事件";
 
+        public StageMatrixViewModel(IStageMatrixStore store = null)
+        {
+            _store = store;
+            foreach (BackendProgressEvent progress in store?.Load() ?? Array.Empty<BackendProgressEvent>())
+                ApplyCore(progress, persist: false);
+        }
+
         public void Apply(BackendProgressEvent progress)
+            => ApplyCore(progress, persist: true);
+
+        private void ApplyCore(BackendProgressEvent progress, bool persist)
         {
             ArgumentNullException.ThrowIfNull(progress);
             string domain = string.IsNullOrWhiteSpace(progress.Domain) ? "backend" : progress.Domain;
             string key = progress.RunId.Length > 0
                 ? $"{domain}:{progress.RunId}"
                 : $"{domain}:{progress.AccountRef}";
+            if (progress.Sequence > 0
+                && _lastSequences.TryGetValue(key, out int lastSequence)
+                && progress.Sequence <= lastSequence)
+                return;
+            if (progress.Sequence > 0)
+                _lastSequences[key] = progress.Sequence;
             StageMatrixRun run = Runs.FirstOrDefault(item => item.Key == key);
             if (run == null)
             {
@@ -78,6 +97,8 @@ namespace SmsWorkbench
                     progress.Method,
                     domain == "registration" ? RegistrationStages : PaymentStages);
                 Runs.Add(run);
+                while (Runs.Count > MaxRuns)
+                    Runs.RemoveAt(0);
             }
             if (progress.AccountRef.Length > 0)
                 run.AccountRef = progress.AccountRef;
@@ -104,12 +125,21 @@ namespace SmsWorkbench
                 : terminalCompleted ? "completed" : "running";
             run.Elapsed = FormatElapsed(DateTimeOffset.Now - run.StartedAt);
             Summary = $"运行 {Runs.Count(item => item.Status == "running")}  完成 {Runs.Count(item => item.Status == "completed")}  失败 {Runs.Count(item => item.Status == "failed")}";
+            if (persist)
+                _store?.Append(progress);
         }
 
         public void Reset()
         {
             Runs.Clear();
+            _lastSequences.Clear();
             Summary = "等待后端阶段事件";
+        }
+
+        public void ClearHistory()
+        {
+            Reset();
+            _store?.Clear();
         }
 
         private static string NormalizeStatus(string value)

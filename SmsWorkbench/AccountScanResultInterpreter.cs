@@ -76,7 +76,13 @@ namespace SmsWorkbench
                 !ProbeDeactivated(row)
                 && ProbeReturned401(row));
             int directFailed = Math.Max(0, results.Count - directOk - direct401 - directDeactivated);
-            int.TryParse(BackendJson.GetString(summary, "relogin_attempted"), out int reloginAttempted);
+            int reloginAttempted = int.TryParse(
+                BackendJson.GetString(summary, "relogin_attempted"),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int parsedReloginAttempted)
+                ? parsedReloginAttempted
+                : 0;
             string directSummary = "总数：" + results.Count
                 + "    AT有效：" + directOk
                 + "    AT失效：" + direct401

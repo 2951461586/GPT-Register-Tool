@@ -147,7 +147,7 @@ namespace SmsWorkbench
 
             var backendOutput = new StringBuilder();
             object backendOutputLock = new object();
-            var stageMatrix = new StageMatrixViewModel();
+            var stageMatrix = new StageMatrixViewModel(stageMatrixStore);
             StageMatrixWindow stageMatrixWindow = null;
             bool stageMatrixDismissed = false;
             void CaptureBackendLine(string line)

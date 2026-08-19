@@ -529,7 +529,7 @@ namespace SmsWorkbench
         public static string MailboxArgumentForLine(string line)
         {
             string value = (line ?? "").Trim().TrimStart('﻿');
-            if (value.Length == 0 || value.StartsWith("#")) return "";
+            if (value.Length == 0 || value.StartsWith('#')) return "";
             if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
                 || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
@@ -622,7 +622,7 @@ namespace SmsWorkbench
             return trimmed;
         }
 
-        private static IReadOnlyList<string> RequireEmails(IReadOnlyList<string> emails)
+        private static List<string> RequireEmails(IReadOnlyList<string> emails)
         {
             var targets = (emails ?? Array.Empty<string>())
                 .Select(email => (email ?? "").Trim())

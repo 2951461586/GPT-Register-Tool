@@ -181,14 +181,14 @@ namespace SmsWorkbench
                     quota5hUsed = FmtTokenCount(used);
                     quota5hLimit = FmtTokenCount(limit);
                     quota5hRemaining = FmtTokenCount(remaining);
-                    quota5hPercent = percent.ToString("F0") + "%";
+                    quota5hPercent = percent.ToString("F0", CultureInfo.InvariantCulture) + "%";
                 }
                 else
                 {
                     quota7dUsed = FmtTokenCount(used);
                     quota7dLimit = FmtTokenCount(limit);
                     quota7dRemaining = FmtTokenCount(remaining);
-                    quota7dPercent = percent.ToString("F0") + "%";
+                    quota7dPercent = percent.ToString("F0", CultureInfo.InvariantCulture) + "%";
                 }
             }
             return new WhamQuotaFields(
@@ -200,7 +200,7 @@ namespace SmsWorkbench
         {
             if (n >= 1_000_000) return $"{n / 1_000_000.0:F1}M";
             if (n >= 1_000) return $"{n / 1_000.0:F1}K";
-            return n.ToString();
+            return n.ToString(CultureInfo.InvariantCulture);
         }
 
         public static bool IsPaymentLinkMethodMismatch(string rawJson, string paymentMethod)
@@ -267,9 +267,9 @@ namespace SmsWorkbench
             string target = expected.Trim().ToLowerInvariant();
             if (raw is List<object> items)
             {
-                return items.Any(item => string.Equals(Convert.ToString(item)?.Trim(), target, StringComparison.OrdinalIgnoreCase));
+                return items.Any(item => string.Equals(Convert.ToString(item, CultureInfo.InvariantCulture)?.Trim(), target, StringComparison.OrdinalIgnoreCase));
             }
-            return Convert.ToString(raw)?.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0;
+            return Convert.ToString(raw, CultureInfo.InvariantCulture)?.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus, string importedStatus)
@@ -429,7 +429,7 @@ namespace SmsWorkbench
             if (rawAmount.Length == 0) return "";
             if (!decimal.TryParse(rawAmount, out decimal amount)) return currency.Length > 0 ? rawAmount + " " + currency : rawAmount;
             decimal displayAmount = amount / 100m;
-            string text = displayAmount.ToString("0.00");
+            string text = displayAmount.ToString("0.00", CultureInfo.InvariantCulture);
             return currency.Length > 0 ? text + " " + currency : text;
         }
 

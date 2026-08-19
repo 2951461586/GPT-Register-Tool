@@ -6,7 +6,7 @@ namespace SmsWorkbench
     {
         private static readonly string[] LineSeparators = { "\r\n", "\n" };
 
-        public const string Prefix = "@@SMSWORKBENCH_IPC_V1@@";
+        public const string Prefix = "@@SMSWORKBENCH_V2@@";
 
         public static JsonElement? ExtractPayload(string standardOutput)
         {
@@ -21,7 +21,9 @@ namespace SmsWorkbench
                 using JsonDocument envelope = JsonDocument.Parse(envelopeJson);
                 JsonElement root = envelope.RootElement;
                 if (root.TryGetProperty("version", out JsonElement version)
-                    && version.GetInt32() == 1
+                    && version.GetInt32() == 2
+                    && root.TryGetProperty("schema", out JsonElement schema)
+                    && string.Equals(schema.GetString(), "smsworkbench.ipc.v2", StringComparison.Ordinal)
                     && root.TryGetProperty("type", out JsonElement type)
                     && string.Equals(type.GetString(), "result", StringComparison.Ordinal)
                     && root.TryGetProperty("payload", out JsonElement payload))

@@ -9,7 +9,7 @@ public sealed class BackendJsonProtocolTests
     public void ExtractPayloadReadsVersionedResultEnvelope()
     {
         string output = "log line\n" + BackendJsonProtocol.Prefix
-            + "{\"version\":1,\"type\":\"result\",\"payload\":{\"ok\":true,\"count\":2}}";
+            + "{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"result\",\"run_id\":\"r1\",\"sequence\":1,\"timestamp_ms\":123,\"terminal\":true,\"payload\":{\"ok\":true,\"count\":2}}";
 
         JsonElement? payload = BackendJsonProtocol.ExtractPayload(output);
 
@@ -30,7 +30,7 @@ public sealed class BackendJsonProtocolTests
     public void ExtractPayloadRejectsUnknownEnvelopeVersion()
     {
         string output = BackendJsonProtocol.Prefix
-            + "{\"version\":2,\"type\":\"result\",\"payload\":{\"ok\":true}}";
+            + "{\"version\":3,\"type\":\"result\",\"payload\":{\"ok\":true}}";
 
         Assert.Null(BackendJsonProtocol.ExtractPayload(output));
     }

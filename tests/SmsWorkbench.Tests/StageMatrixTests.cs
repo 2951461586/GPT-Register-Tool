@@ -3,14 +3,15 @@ namespace SmsWorkbench.Tests;
 public sealed class StageMatrixTests
 {
     [Fact]
-    public void Parser_ParsesVersionOneEventAndRejectsPlainOutput()
+    public void ParserParsesVersionTwoEventAndRejectsPlainOutput()
     {
-        const string line = "@@SMSWORKBENCH_EVENT_V1@@{\"version\":1,\"type\":\"event\",\"payload\":{\"domain\":\"registration\",\"run_id\":\"r1\",\"account_ref\":\"a@example.test\",\"stage\":\"email_otp_wait\",\"status\":\"running\",\"detail\":\"waiting\",\"attempt\":2,\"max_attempts\":3,\"country\":\"US\"}}";
+        const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"r1\",\"sequence\":7,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"registration\",\"run_id\":\"r1\",\"account_ref\":\"a@example.test\",\"stage\":\"email_otp_wait\",\"status\":\"running\",\"detail\":\"waiting\",\"attempt\":2,\"max_attempts\":3,\"country\":\"US\"}}";
 
         Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent value));
         Assert.Equal("registration", value.Domain);
         Assert.Equal("email_otp_wait", value.Stage);
         Assert.Equal(2, value.Attempt);
+        Assert.Equal(7, value.Sequence);
         Assert.False(BackendProgressEventParser.TryParse("ordinary backend output", out _));
     }
 
@@ -31,7 +32,7 @@ public sealed class StageMatrixTests
     [Fact]
     public void Parser_UsesExecutorStateAndMessageFallbacks()
     {
-        const string line = "@@SMSWORKBENCH_EVENT_V1@@{\"version\":1,\"type\":\"event\",\"payload\":{\"domain\":\"payment\",\"run_id\":\"p1\",\"method\":\"bizum\",\"stage\":\"routing\",\"state\":\"preparing_proxy\",\"message\":\"payment routes prepared\"}}";
+        const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"p1\",\"sequence\":1,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"payment\",\"run_id\":\"p1\",\"method\":\"bizum\",\"stage\":\"routing\",\"state\":\"preparing_proxy\",\"message\":\"payment routes prepared\"}}";
 
         Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent value));
         Assert.Equal("preparing_proxy", value.Status);
@@ -46,5 +47,25 @@ public sealed class StageMatrixTests
         viewModel.Apply(new BackendProgressEvent("payment", "run-2", "same@example.test", "qris", "routing", "running", ""));
 
         Assert.Equal(2, viewModel.Runs.Count);
+    }
+
+    [Fact]
+    public void StoreReloadsAndRedactsAccountReference()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "sms-workbench-stage-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new JsonlStageMatrixStore(new TestApplicationPaths(root));
+            store.Append(new BackendProgressEvent("registration", "run-1", "secret@example.test", "", "started", "running", ""));
+            var restored = new StageMatrixViewModel(store);
+            StageMatrixRun run = Assert.Single(restored.Runs);
+            Assert.StartsWith("account-", run.AccountRef);
+            Assert.DoesNotContain("secret@example.test", File.ReadAllText(Path.Combine(root, "runtime", "stage_matrix.jsonl")));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 }
