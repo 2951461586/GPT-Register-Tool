@@ -66,7 +66,6 @@ public sealed class DesktopWindowSmokeTests
         var editorHost = new Window { Width = 360, Height = 180, Content = proxyEditor };
         editorHost.Show();
         editorHost.UpdateLayout();
-        FlushDispatcher();
 
         Assert.True(proxyEditor.Focusable);
         Assert.NotNull(proxyEditor.Template.FindName("PART_ContentHost", proxyEditor));
@@ -86,7 +85,6 @@ public sealed class DesktopWindowSmokeTests
         var gridHost = new Window { Width = 460, Height = 240, Content = dataGrid };
         gridHost.Show();
         gridHost.UpdateLayout();
-        FlushDispatcher();
 
         AssertStableScrollBars(dataGrid, expectVertical: false, expectHorizontal: true);
         gridHost.Close();
