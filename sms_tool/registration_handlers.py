@@ -951,7 +951,7 @@ class RegistrationEmailWorkflow:
         r = self.r
         s = self.runtime
         from .auth_headers import current_auth_fingerprint
-        from .payment_auth import access_token_telemetry
+        from .token_telemetry import access_token_telemetry
         from .paypal_proxy import infer_proxy_country
         from .sentinel_quickjs import sentinel_version
 

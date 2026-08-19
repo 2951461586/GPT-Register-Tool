@@ -426,10 +426,10 @@ translated into CLI flags and the protocol remains in `sms_tool.registration`.
 The C#/Python process boundary is `IBackendClient`. `PythonBackendClient` uses `ProcessStartInfo.ArgumentList`, supports per-command environment values for secrets, pumps stdout/stderr, observes cancellation and timeout, and terminates the whole child process tree. Structured desktop results use one versioned line:
 
 ```text
-@@SMSWORKBENCH_IPC_V1@@{"version":1,"type":"result","payload":{...}}
+@@SMSWORKBENCH_V2@@{"schema":"smsworkbench.ipc.v2","version":2,"type":"event|result","run_id":"...","sequence":1,"timestamp_ms":0,"terminal":false,"payload":{...}}
 ```
 
-New desktop commands should emit this envelope through `sms_tool.desktop_ipc.emit_result`. `BackendJsonProtocol` keeps legacy trailing-JSON parsing only while old commands are migrated.
+`sms_tool.desktop_ipc` is the sole writer for the v2 envelope. Events and results share one prefix, schema, run id, sequence, timestamp, terminal flag, and sanitized payload. WPF accepts v1 envelopes only as a bounded read-only migration path; no v1 writer remains.
 
 Read-heavy account/mailbox refreshes use `DesktopReadClient` as a separate
 transport seam. It prefers the resident `python -m sms_tool --desktop-serve`
@@ -443,6 +443,7 @@ keyed by file metadata rather than repeated for every row.
 MVVM migration is incremental rather than a rewrite:
 
 - `PaymentBatchWindow` + `PaymentBatchViewModel` + `PaymentBatchService` are the first complete vertical slice. The view binds commands and state; the service owns matrix serialization and backend invocation.
+- `StageMatrixViewModel` consumes the same v2 event stream for registration and payment. `JsonlStageMatrixStore` persists sanitized events under `runtime/stage_matrix.jsonl`, reloads recent runs at startup, bounds retention, and deduplicates by run sequence.
 - `SettingsWindow` + `SettingsViewModel` + `SettingsService` replace the dynamic code-built settings form. The catalog is data-driven, unknown JSON fields survive round trips, validation happens before persistence, and the replacement file is written in the configuration directory.
 - Existing `MainWindow.*.cs` handlers remain operational and move behind injected services one workflow at a time.
 - Registration progress lines containing `Saved session:` trigger a debounced

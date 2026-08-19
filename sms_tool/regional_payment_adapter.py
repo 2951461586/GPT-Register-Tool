@@ -11,7 +11,20 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from .checkout_contract import CheckoutContractError, CheckoutRequestContract, StripeCapabilityEvidence
+from .checkout_contract import (
+    CheckoutContractError,
+    CheckoutRequestContract,
+    CheckoutSessionContract,
+    StripeCapabilityEvidence,
+)
+from .wallet_provider import (
+    WalletFlowIdentifiers,
+    WalletTransportRequest,
+    build_confirm_payload,
+    build_payment_method_payload,
+)
+from .wallet_transport import ChatGPTStripeWalletTransport
+from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 
 
 @dataclass(frozen=True)
@@ -26,15 +39,17 @@ class RegionalPaymentProfile:
 
 
 REGIONAL_PAYMENT_PROFILES: dict[str, RegionalPaymentProfile] = {
-    "qris": RegionalPaymentProfile(
-        "qris", "gopay", "ID", "IDR", "midtrans", ("midtrans.com", "gopay.co.id"), "url_or_qr"
-    ),
-    "bizum": RegionalPaymentProfile(
-        "bizum", "bizum", "ES", "EUR", "bizum", ("bizum.es", "stripe.com"), "redirect"
-    ),
-    "naver_pay": RegionalPaymentProfile(
-        "naver_pay", "naver_pay", "KR", "KRW", "naver_nicepay", ("pay.naver.com", "naver.com", "nicepay.co.kr"), "redirect"
-    ),
+    key: RegionalPaymentProfile(
+        key,
+        definition.stripe_type,
+        definition.country,
+        definition.currency,
+        definition.provider,
+        definition.redirect_hosts,
+        definition.artifact_kind,
+    )
+    for key, definition in CATALOG_PAYMENT_METHODS.items()
+    if definition.adapter == "regional_wallet"
 }
 
 
@@ -44,6 +59,126 @@ class RegionalPaymentTransport(Protocol):
     def create_payment_method(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
     def confirm_payment(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
     def follow_redirect(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
+
+class ChatGPTStripeRegionalTransport:
+    """Production transport using the shared ChatGPT/Stripe wire client."""
+
+    def __init__(self, *, timeout: int = 45) -> None:
+        self._wallet = ChatGPTStripeWalletTransport(timeout=timeout)
+        self._states: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    def _context(request: Mapping[str, Any]) -> dict[str, Any]:
+        context = dict(request.get("transport_context") or {})
+        for key in (
+            "proxy", "checkout_proxy", "stripe_init_proxy", "provider_proxy",
+            "payment_method_proxy", "confirm_proxy", "redirect_proxy",
+        ):
+            value = request.get(key)
+            if value:
+                context[key] = value
+        return context
+
+    def _request(self, stage: str, request: Mapping[str, Any], payload: Mapping[str, Any]) -> WalletTransportRequest:
+        contract = CheckoutRequestContract.for_payment_method(
+            str(request.get("payment_method") or ""),
+            billing_country=str(request.get("billing_country") or ""),
+        )
+        return WalletTransportRequest(
+            stage=stage,
+            method=contract.payment_method,
+            contract=contract,
+            flow_id=str(request.get("flow_id") or "regional"),
+            access_token=str(request.get("access_token") or ""),
+            publishable_key=str(request.get("publishable_key") or ""),
+            payload=dict(payload),
+            auth_context=dict(request.get("auth_context") or {}),
+            transport_context=self._context(request),
+            checkout_session_id=str(request.get("checkout_session_id") or ""),
+            processor_entity=str(request.get("processor_entity") or ""),
+            redirect_url=str(request.get("redirect_url") or ""),
+        )
+
+    def create_checkout(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        contract = CheckoutRequestContract.for_payment_method(
+            str(request.get("payment_method") or ""),
+            billing_country=str(request.get("billing_country") or ""),
+        )
+        identifiers = WalletFlowIdentifiers.create()
+        response = dict(self._wallet.create_checkout(self._request("checkout", request, contract.checkout_payload())) or {})
+        checkout = CheckoutSessionContract.from_payload(response, billing_country=contract.billing_country)
+        self._states[checkout.checkout_session_id] = {
+            "contract": contract,
+            "checkout": checkout,
+            "identifiers": identifiers,
+            "init": {},
+        }
+        return response
+
+    def stripe_init(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        state = self._state(request)
+        contract = state["contract"]
+        checkout = state["checkout"]
+        identifiers = state["identifiers"]
+        wire_request = {**dict(request), "processor_entity": checkout.processor_entity}
+        response = dict(self._wallet.stripe_init(self._request(
+            "stripe_init",
+            wire_request,
+            contract.stripe_init_payload(checkout.publishable_key, stripe_js_id=identifiers.stripe_js_id),
+        )) or {})
+        state["init"] = response
+        return response
+
+    def create_payment_method(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        state = self._state(request)
+        contract = state["contract"]
+        checkout = state["checkout"]
+        payload = build_payment_method_payload(
+            contract,
+            checkout.checkout_session_id,
+            checkout.publishable_key,
+            state["identifiers"],
+            billing_details=request.get("billing_details") if isinstance(request.get("billing_details"), Mapping) else None,
+        )
+        return self._wallet.create_payment_method(self._request("payment_method", request, payload))
+
+    def confirm_payment(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        state = self._state(request)
+        checkout = state["checkout"]
+        payment_method_id = str(request.get("id") or request.get("payment_method_id") or "").strip()
+        if not payment_method_id.startswith("pm_"):
+            raise RegionalPaymentError(
+                "regional payment method response omitted its id",
+                error_code="regional_payment_method_id_missing",
+                error_stage="payment_method",
+                retryable=False,
+            )
+        payload = build_confirm_payload(
+            state["contract"],
+            checkout,
+            state["init"],
+            payment_method_id,
+            state["identifiers"],
+        )
+        wire_request = {**dict(request), "processor_entity": checkout.processor_entity}
+        return self._wallet.confirm_payment(self._request("confirm", wire_request, payload))
+
+    def follow_redirect(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        return self._wallet.follow_redirect(self._request("follow_redirect", request, {}))
+
+    def _state(self, request: Mapping[str, Any]) -> dict[str, Any]:
+        session_id = str(request.get("checkout_session_id") or "").strip()
+        state = self._states.get(session_id)
+        if state is None:
+            raise RegionalPaymentError(
+                "regional transport state is missing",
+                error_code="regional_transport_state_missing",
+                error_stage="transport",
+                retryable=False,
+                status="unknown",
+            )
+        return state
 
 
 class RegionalPaymentError(RuntimeError):
@@ -155,7 +290,14 @@ class RegionalPaymentAdapter:
                 retryable=False,
             )
         base = dict(checkout_request or {})
-        base.update({"access_token": access_token, "payment_method": self.profile.key, "billing_country": country})
+        base.update({
+            "access_token": access_token,
+            "payment_method": self.profile.key,
+            "billing_country": country,
+            "auth_context": dict((checkout_request or {}).get("auth_context") or {}),
+            "transport_context": dict((checkout_request or {}).get("transport_context") or {}),
+            "proxy": (checkout_request or {}).get("proxy") or "",
+        })
 
         def emit(stage: str, status: str = "running", detail: str = "") -> None:
             if callable(progress):
@@ -205,10 +347,22 @@ class RegionalPaymentAdapter:
                 billing_details=billing_details,
             )
             emit("payment_method")
-            payment_method = dict(self.transport.create_payment_method({**base, **payload}) or {})
+            payment_method = dict(self.transport.create_payment_method({
+                **base,
+                "checkout_session_id": session_id,
+                "publishable_key": publishable_key,
+                "billing_details": billing_details or {},
+                "payload": payload,
+            }) or {})
             emit("payment_method", "completed")
             emit("confirm")
-            confirmed = dict(self.transport.confirm_payment({**base, **payment_method, "checkout_session_id": session_id}) or {})
+            confirmed = dict(self.transport.confirm_payment({
+                **base,
+                **payment_method,
+                "checkout_session_id": session_id,
+                "publishable_key": publishable_key,
+                "payload": {},
+            }) or {})
             redirect_value = _redirect_value(confirmed)
             if not redirect_value:
                 raise RegionalPaymentError(
@@ -221,7 +375,7 @@ class RegionalPaymentAdapter:
             redirect_url = validate_provider_redirect(self.profile, redirect_value)
             emit("confirm", "completed")
             emit("redirect")
-            followed = dict(self.transport.follow_redirect({**base, "redirect_url": redirect_url}) or {})
+            followed = dict(self.transport.follow_redirect({**base, "redirect_url": redirect_url, "checkout_session_id": session_id}) or {})
             artifact = _redirect_value(followed) or redirect_url
             result.update({"ok": True, "url": validate_provider_redirect(self.profile, artifact), "side_effects": True, "status": "completed"})
             if self.profile.artifact_kind == "url_or_qr":

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping
 
+from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+
 
 class PaymentStage(str, Enum):
     AUTH_GATE = "auth_gate"
@@ -58,7 +60,7 @@ class PaymentFlowProfile:
         return normalize_payment_stage(stage) in self.stages
 
 
-FLOW_PROFILES: dict[str, PaymentFlowProfile] = {
+_LEGACY_FLOW_PROFILES: dict[str, PaymentFlowProfile] = {
     "paypal": PaymentFlowProfile(
         "paypal_agreement",
         (
@@ -205,6 +207,16 @@ FLOW_PROFILES: dict[str, PaymentFlowProfile] = {
         ),
         artifact_kind="completion",
     ),
+}
+
+FLOW_PROFILES: dict[str, PaymentFlowProfile] = {
+    key: PaymentFlowProfile(
+        definition.flow_profile,
+        tuple(definition.stages),
+        artifact_kind=definition.artifact_kind,
+        side_effect_stage=definition.side_effect_stage,
+    )
+    for key, definition in CATALOG_PAYMENT_METHODS.items()
 }
 
 _GENERIC_REDIRECT = PaymentFlowProfile(

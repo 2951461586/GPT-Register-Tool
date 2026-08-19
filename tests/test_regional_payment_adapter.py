@@ -48,7 +48,7 @@ def test_regional_contract_profiles(method, stripe_type, country, currency):
     contract = CheckoutRequestContract.for_payment_method(method)
     assert profile.stripe_type == stripe_type
     assert (contract.billing_country, contract.currency, contract.stripe_payment_method) == (country, currency, stripe_type)
-    assert PAYMENT_METHODS[method].batch_enabled is False
+    assert PAYMENT_METHODS[method].batch_enabled is True
     assert PAYMENT_METHODS[method].registration_enabled is False
 
 

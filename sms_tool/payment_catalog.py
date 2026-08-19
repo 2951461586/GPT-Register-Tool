@@ -46,6 +46,16 @@ class PaymentMethodDefinition:
     country: str
     currency: str
     adapter: str
+    stripe_type: str = ""
+    payment_locale: str = "en"
+    flow_profile: str = "protocol_redirect"
+    stages: tuple[str, ...] = ("auth_gate", "checkout", "artifact")
+    artifact_kind: str = "url"
+    side_effect_stage: str = "confirm"
+    provider: str = ""
+    redirect_hosts: tuple[str, ...] = ()
+    transport: str = ""
+    release_tier: str = "production"
     script: str = ""
     aliases: tuple[str, ...] = ()
     batch_enabled: bool = True
@@ -109,6 +119,22 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             country=str(item.get("country") or "").upper(),
             currency=str(item.get("currency") or "").upper(),
             adapter=str(item.get("adapter") or "").strip(),
+            stripe_type=str(item.get("stripe_type") or key).strip().lower(),
+            payment_locale=str(item.get("payment_locale") or "en").strip(),
+            flow_profile=str(item.get("flow_profile") or "protocol_redirect").strip(),
+            stages=tuple(
+                str(stage or "").strip().lower()
+                for stage in item.get("stages") or ("auth_gate", "checkout", "artifact")
+            ),
+            artifact_kind=str(item.get("artifact_kind") or "url").strip(),
+            side_effect_stage=str(item.get("side_effect_stage") or "confirm").strip(),
+            provider=str(item.get("provider") or "").strip(),
+            redirect_hosts=tuple(str(host or "").strip().lower() for host in item.get("redirect_hosts") or ()),
+            transport=str(item.get("transport") or "").strip(),
+            release_tier=str(
+                item.get("release_tier")
+                or ("offline" if str(item.get("adapter") or "").strip() == "regional_wallet" else "production")
+            ).strip().lower(),
             script=str(item.get("script") or "").strip(),
             aliases=tuple(str(alias).strip().lower().replace(" ", "_") for alias in item.get("aliases") or ()),
             batch_enabled=bool(item.get("batch_enabled", True)),
@@ -116,7 +142,15 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             checkout_countries=method_checkout_countries or default_checkout_countries,
             approve_countries=method_approve_countries or default_approve_countries,
         )
-        if len(definition.country) != 2 or len(definition.currency) != 3 or not definition.adapter:
+        if (
+            len(definition.country) != 2
+            or len(definition.currency) != 3
+            or not definition.adapter
+            or not definition.stripe_type
+            or not definition.stages
+            or definition.artifact_kind not in {"url", "url_or_qr", "completion"}
+            or definition.release_tier not in {"production", "canary", "offline"}
+        ):
             raise ValueError(f"invalid payment catalog definition: {key}")
         methods[key] = definition
         aliases[key] = key
@@ -143,3 +177,29 @@ PAYMENT_METHODS = PAYMENT_CATALOG.methods
 
 def normalize_payment_method(value: Any, *, default_for_blank: bool = True) -> str:
     return PAYMENT_CATALOG.normalize(value, default_for_blank=default_for_blank)
+
+
+def validate_catalog_consistency(*, adapter_methods: set[str] | None = None) -> None:
+    """Fail fast when the canonical catalog drifts from executable contracts."""
+    from .checkout_contract import PAYMENT_METHOD_PROFILES
+    from .payment_flow import FLOW_PROFILES
+
+    errors: list[str] = []
+    for key, definition in PAYMENT_CATALOG.methods.items():
+        profile = PAYMENT_METHOD_PROFILES.get(key)
+        if profile is None:
+            errors.append(f"{key}: missing checkout contract profile")
+        else:
+            if profile.country != definition.country or profile.currency != definition.currency:
+                errors.append(f"{key}: catalog country/currency disagrees with checkout contract")
+            if definition.stripe_type != profile.stripe_type:
+                errors.append(f"{key}: catalog stripe_type disagrees with checkout contract")
+        flow = FLOW_PROFILES.get(key)
+        if flow is None:
+            errors.append(f"{key}: missing payment flow profile")
+        elif definition.stages and tuple(definition.stages) != tuple(flow.stages):
+            errors.append(f"{key}: catalog stages disagree with payment flow profile")
+        if adapter_methods is not None and key not in adapter_methods:
+            errors.append(f"{key}: missing registered payment adapter")
+    if errors:
+        raise ValueError("payment catalog consistency failure: " + "; ".join(errors))

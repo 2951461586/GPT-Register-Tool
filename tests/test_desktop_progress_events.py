@@ -14,6 +14,9 @@ def test_emit_event_is_opt_in_and_sanitized(monkeypatch, capsys):
     line = capsys.readouterr().out.strip()
     assert line.startswith(desktop_ipc.EVENT_PREFIX)
     envelope = json.loads(line[len(desktop_ipc.EVENT_PREFIX):])
+    assert envelope["schema"] == "smsworkbench.ipc.v2"
+    assert envelope["version"] == 2
+    assert envelope["type"] == "event"
     assert envelope["payload"]["stage"] == "checkout"
     assert envelope["payload"]["access_token"] == "[REDACTED]"
 
