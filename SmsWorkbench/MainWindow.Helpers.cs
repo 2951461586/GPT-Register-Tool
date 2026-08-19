@@ -2,6 +2,25 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
+        private void RunUiTask(Func<Task> operation)
+            => _ = RunUiTaskAsync(operation);
+
+        private async Task RunUiTaskAsync(Func<Task> operation)
+        {
+            try
+            {
+                await operation();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Log("界面异步操作失败：" + SensitiveDataSanitizer.Redact(ex.Message));
+                NotifyWarning("操作未完成，请查看运行日志。");
+            }
+        }
+
         // Path/config helpers, status formatting, external open/copy/log helpers.
         //
         // CLI argument construction lives in BackendCommandPlanner (window-independent,
@@ -281,7 +300,10 @@ namespace SmsWorkbench
             }
         }
 
-        private async void OpenPayPalUrl(string url, string accountEmail = "")
+        private void OpenPayPalUrl(string url, string accountEmail = "")
+            => RunUiTask(() => OpenPayPalUrlAsync(url, accountEmail));
+
+        private async Task OpenPayPalUrlAsync(string url, string accountEmail = "")
         {
             url = await ResolveBackendPaymentUrlAsync(url, accountEmail);
             if (!IsHttpUrl(url))
@@ -316,7 +338,10 @@ namespace SmsWorkbench
             }
         }
 
-        private async void CopyPayPalUrl(string url, string accountEmail = "")
+        private void CopyPayPalUrl(string url, string accountEmail = "")
+            => RunUiTask(() => CopyPayPalUrlAsync(url, accountEmail));
+
+        private async Task CopyPayPalUrlAsync(string url, string accountEmail = "")
         {
             url = await ResolveBackendPaymentUrlAsync(url, accountEmail);
             if (!IsHttpUrl(url))

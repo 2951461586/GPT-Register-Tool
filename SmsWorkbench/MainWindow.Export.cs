@@ -106,7 +106,10 @@ namespace SmsWorkbench
             ShowExportCompleteDialog(outputPath, lines.Count, skipped, "TXT", "账号----密码----客户端ID----刷新令牌");
         }
 
-        private async void ExportAccountsJson(List<PoolRow> rows)
+        private void ExportAccountsJson(List<PoolRow> rows)
+            => RunUiTask(() => ExportAccountsJsonAsync(rows));
+
+        private async Task ExportAccountsJsonAsync(List<PoolRow> rows)
         {
             var collected = await CollectAccountExportJsonAsync(rows);
             if (collected.Items.Count == 0)
@@ -151,7 +154,10 @@ namespace SmsWorkbench
             return new CollectedAccountExport(items, skipped);
         }
 
-        private async void ExportAccountsConvertedJson(List<PoolRow> rows, string format)
+        private void ExportAccountsConvertedJson(List<PoolRow> rows, string format)
+            => RunUiTask(() => ExportAccountsConvertedJsonAsync(rows, format));
+
+        private async Task ExportAccountsConvertedJsonAsync(List<PoolRow> rows, string format)
         {
             var collected = await CollectAccountExportJsonAsync(rows);
             if (collected.Items.Count == 0)

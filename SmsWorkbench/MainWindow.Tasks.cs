@@ -131,7 +131,10 @@ namespace SmsWorkbench
             }
         }
 
-        private async void RunBackend(string taskName, List<string> args)
+        private void RunBackend(string taskName, List<string> args)
+            => RunUiTask(() => RunBackendAsync(taskName, args));
+
+        private async Task RunBackendAsync(string taskName, List<string> args)
         {
             if (backendTasks.IsRunning)
             {
@@ -269,7 +272,10 @@ namespace SmsWorkbench
             }), DispatcherPriority.Background);
         }
 
-        private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+            => RunUiTask(DeleteSelectedAsync);
+
+        private async Task DeleteSelectedAsync()
         {
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;

@@ -410,7 +410,7 @@ public sealed class BackendCommandPlannerTests
             sessionFile: "C:\\session.json",
             mailboxProxy: "http://proxy:8080",
             remailToken: "abc123",
-            tempDirectory: null);
+            tempDirectory: null!);
 
         Assert.Contains("--view-inbox", plan.Arguments);
         Assert.Contains("--email", plan.Arguments);

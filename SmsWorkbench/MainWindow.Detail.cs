@@ -3,7 +3,10 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Account detail dialog and detail formatting
-        private async void ShowAccountDetail(PoolRow row)
+        private void ShowAccountDetail(PoolRow row)
+            => RunUiTask(() => ShowAccountDetailAsync(row));
+
+        private async Task ShowAccountDetailAsync(PoolRow row)
         {
             if (row == null) return;
             string detail = await BuildAccountDetailAsync(row);
@@ -201,22 +204,22 @@ namespace SmsWorkbench
             leftActions.Children.Add(openButton);
 
             var copyAtButton = new Button { Content = "一键复制AT", MinWidth = 100, IsEnabled = hasAccessToken, Margin = new Thickness(0, 0, 8, 0) };
-            copyAtButton.Click += async (_, __) =>
+            copyAtButton.Click += (_, __) => RunUiTask(async () =>
             {
                 if (!hasAccessToken) return;
                 Clipboard.SetText(accessToken);
                 copyAtButton.Content = "已复制";
                 await Task.Delay(1200);
                 copyAtButton.Content = "一键复制AT";
-            };
+            });
             leftActions.Children.Add(copyAtButton);
 
             var checkAliveButton = new Button { Content = "账号测活", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
-            checkAliveButton.Click += async (_, __) =>
+            checkAliveButton.Click += (_, __) => RunUiTask(async () =>
             {
                 dialog.Close();
                 await CheckAccountAliveAsync(row);
-            };
+            });
             leftActions.Children.Add(checkAliveButton);
 
             // Right: primary actions
@@ -266,7 +269,10 @@ namespace SmsWorkbench
             );
         }
 
-        private async void OpenAccountJson(PoolRow row)
+        private void OpenAccountJson(PoolRow row)
+            => RunUiTask(() => OpenAccountJsonAsync(row));
+
+        private async Task OpenAccountJsonAsync(PoolRow row)
         {
             string path = await ResolveAccountJsonPathAsync(row);
             if (string.IsNullOrWhiteSpace(path))

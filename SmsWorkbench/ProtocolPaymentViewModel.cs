@@ -279,9 +279,10 @@ namespace SmsWorkbench
                 : fallback;
 
         private static string SelectCountry(string wanted, IReadOnlyList<PaymentProxyCountryOption> options, string fallback)
-            => options.FirstOrDefault(option => option.Code.Equals((wanted ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Code
-                ?? (options.Count > 0 && options[0].Code.Equals(fallback, StringComparison.OrdinalIgnoreCase) ? options[0].Code : null)
-                ?? options.FirstOrDefault()?.Code
-                ?? "";
+        {
+            string selected = options.FirstOrDefault(option => option.Code.Equals((wanted ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Code
+                ?? options.FirstOrDefault(option => option.Code.Equals(fallback, StringComparison.OrdinalIgnoreCase))?.Code;
+            return selected ?? (options.Count > 0 ? options[0].Code : "");
+        }
     }
 }

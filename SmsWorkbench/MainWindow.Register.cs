@@ -183,7 +183,10 @@ namespace SmsWorkbench
             args.Add("--no-phone-reuse");
         }
 
-        private async void OneClickSms_Click(object sender, RoutedEventArgs e)
+        private void OneClickSms_Click(object sender, RoutedEventArgs e)
+            => RunUiTask(OneClickSmsAsync);
+
+        private async Task OneClickSmsAsync()
         {
             var rows = SelectedEmailRowsOrNotify("接码");
             if (rows.Count == 0) return;

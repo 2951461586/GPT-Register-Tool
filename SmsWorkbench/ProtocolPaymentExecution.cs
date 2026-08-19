@@ -26,6 +26,7 @@ namespace SmsWorkbench
 
     public static class ProtocolPaymentExecutionPlanner
     {
+        private static readonly string[] ListSeparators = ["\r\n", "\n", ",", ";"];
         public static ProtocolPaymentExecutionPlan Create(ProtocolPaymentExecutionRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
@@ -150,7 +151,7 @@ namespace SmsWorkbench
             string normalized = string.Join(
                 Environment.NewLine,
                 (value ?? "")
-                    .Split(new[] { "\r\n", "\n", ",", ";" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Split(ListSeparators, StringSplitOptions.RemoveEmptyEntries)
                     .Select(item => item.Trim())
                     .Where(item => item.Length > 0)
                     .Distinct(StringComparer.OrdinalIgnoreCase));

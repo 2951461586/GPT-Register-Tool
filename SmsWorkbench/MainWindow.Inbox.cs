@@ -3,7 +3,10 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Inbox view and mail detail dialog
-        private async void ShowInboxDialog(PoolRow row)
+        private void ShowInboxDialog(PoolRow row)
+            => RunUiTask(() => ShowInboxDialogAsync(row));
+
+        private async Task ShowInboxDialogAsync(PoolRow row)
         {
             var dialog = new Window
             {
@@ -113,7 +116,7 @@ namespace SmsWorkbench
                 }
             }
 
-            refreshBtn.Click += async (_, __) => await LoadEmails();
+            refreshBtn.Click += (_, __) => RunUiTask(LoadEmails);
             mailGrid.MouseDoubleClick += (_, __) =>
             {
                 if (mailGrid.SelectedItem is MailItem item)
