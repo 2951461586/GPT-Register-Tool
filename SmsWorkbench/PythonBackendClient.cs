@@ -117,7 +117,14 @@ namespace SmsWorkbench
             while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
             {
                 target.AppendLine(line);
-                progress?.Report(new BackendOutputLine(channel, SensitiveDataSanitizer.Redact(line)));
+                // Parseable desktop events are already sanitized by the Python
+                // IPC boundary. Redacting the serialized envelope again would
+                // replace fields such as payment_method with "[REDACTED]" and
+                // make the live stage matrix lose its method identity.
+                string displayLine = line.StartsWith(BackendProgressEventParser.Prefix, StringComparison.Ordinal)
+                    ? line
+                    : SensitiveDataSanitizer.Redact(line);
+                progress?.Report(new BackendOutputLine(channel, displayLine));
             }
         }
 

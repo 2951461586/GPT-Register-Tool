@@ -157,6 +157,16 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     def momo_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         return _run_momo(PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs)
 
+    def regional_wallet_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        method = str(kwargs.pop("payment_method"))
+        return _run_regional_wallet_adapter(
+            PAYMENT_METHODS[method],
+            access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            **kwargs,
+        )
+
     registry.register(FunctionPaymentAdapter("native_paypal", methods_for("native_paypal"), paypal_runner))
     registry.register(FunctionPaymentAdapter("native_upi", methods_for("native_upi"), upi_runner))
     registry.register(FunctionPaymentAdapter("wallet", methods_for("wallet"), wallet_runner))
@@ -164,6 +174,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     registry.register(FunctionPaymentAdapter("script", methods_for("script"), script_runner))
     registry.register(FunctionPaymentAdapter("direct_card", methods_for("direct_card"), direct_runner))
     registry.register(FunctionPaymentAdapter("momo", methods_for("momo"), momo_runner))
+    registry.register(FunctionPaymentAdapter("regional_wallet", methods_for("regional_wallet"), regional_wallet_runner))
     registry.validate_methods(set(PAYMENT_METHODS))
     return registry
 
@@ -265,6 +276,7 @@ def generate_payment_link(
         routed_options["stage_proxy_countries"] = dict(options["stage_proxy_countries"])
     routed_options["payment_route_plan"] = plan
     routed_options["paypal_generation_type"] = paypal_generation_type
+    routed_options["adapter_progress"] = progress
 
     for record in plan.coercions:
         _LOGGER.warning(
@@ -352,6 +364,17 @@ def probe_payment_method(
         if "timeout_seconds" not in options and options.get("timeout") is not None:
             options["timeout_seconds"] = options["timeout"]
         return _run_wallet_adapter(
+            PAYMENT_METHODS[method],
+            access_token,
+            proxy=plan.checkout_proxy,
+            auth_context=auth_context,
+            runtime_config=source,
+            probe_only=True,
+            **options,
+        )
+
+    if method in {"qris", "bizum", "naver_pay"}:
+        return _run_regional_wallet_adapter(
             PAYMENT_METHODS[method],
             access_token,
             proxy=plan.checkout_proxy,
@@ -657,6 +680,42 @@ def _run_wallet_adapter(
         poll_interval_seconds=float(
             kwargs.get("poll_interval_seconds") or method_cfg.get("poll_interval_seconds") or 2.0
         ),
+    )
+
+
+def _run_regional_wallet_adapter(
+    spec: PaymentMethodSpec,
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Run a regional contract through its injected transport boundary.
+
+    No production transport is selected implicitly.  These catalog methods
+    remain disabled until a provider canary establishes the live wire contract.
+    """
+    from .regional_payment_adapter import RegionalPaymentAdapter, regional_profile
+
+    transport = kwargs.get("transport")
+    if transport is None:
+        error = RuntimeError("regional payment adapter requires an injected transport")
+        error.error_code = "regional_transport_unconfigured"
+        error.error_stage = "adapter_setup"
+        error.retryable = False
+        raise error
+    adapter = RegionalPaymentAdapter(regional_profile(spec.key), transport)
+    return adapter.run(
+        access_token=access_token,
+        billing_country=str(kwargs.get("target_country") or kwargs.get("checkout_country") or spec.country),
+        billing_details=kwargs.get("billing_details") if isinstance(kwargs.get("billing_details"), Mapping) else None,
+        checkout_request={
+            "proxy": proxy,
+            "auth_context": dict(auth_context or {}),
+            "runtime_config": kwargs.get("runtime_config"),
+        },
+        probe_only=bool(kwargs.get("probe_only")),
+        progress=kwargs.get("adapter_progress"),
     )
 
 

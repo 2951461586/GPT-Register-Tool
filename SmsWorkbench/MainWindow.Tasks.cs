@@ -147,6 +147,9 @@ namespace SmsWorkbench
 
             var backendOutput = new StringBuilder();
             object backendOutputLock = new object();
+            var stageMatrix = new StageMatrixViewModel();
+            StageMatrixWindow stageMatrixWindow = null;
+            bool stageMatrixDismissed = false;
             void CaptureBackendLine(string line)
             {
                 lock (backendOutputLock)
@@ -157,6 +160,21 @@ namespace SmsWorkbench
 
             var progress = new Progress<BackendOutputLine>(line =>
             {
+                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progressEvent))
+                {
+                    stageMatrix.Apply(progressEvent);
+                    if (stageMatrixWindow == null && !stageMatrixDismissed)
+                    {
+                        stageMatrixWindow = new StageMatrixWindow(stageMatrix) { Owner = this };
+                        stageMatrixWindow.Closed += (_, __) =>
+                        {
+                            stageMatrixDismissed = true;
+                            stageMatrixWindow = null;
+                        };
+                        stageMatrixWindow.Show();
+                    }
+                    return;
+                }
                 CaptureBackendLine(line.Text);
                 UiLog(line.Text);
                 RefreshPoolsAfterHotPersistence(line.Text);
@@ -166,7 +184,11 @@ namespace SmsWorkbench
                 Log("启动：python " + safeArgs);
                 StatusText = taskName + " 运行中";
                 BackendCommandResult result = await backendTasks.RunAsync(
-                    BackendCommand.Create(taskName, args, BackendTaskTimeoutMs),
+                    BackendCommand.Create(
+                        taskName,
+                        args,
+                        BackendTaskTimeoutMs,
+                        new Dictionary<string, string> { ["SMSWORKBENCH_EVENTS"] = "1" }),
                     progress);
 
                 // Use BackendResultInterpreter to normalize the outcome

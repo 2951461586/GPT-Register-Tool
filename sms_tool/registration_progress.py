@@ -44,6 +44,18 @@ class RegistrationProgress:
         if detail:
             event["detail"] = _sanitize_text(detail)[:240]
         self.events.append(event)
+        try:
+            from .desktop_ipc import emit_event
+
+            emit_event({
+                "domain": "registration",
+                "run_id": self.run_id,
+                "account_ref": self.email,
+                **event,
+            })
+        except Exception:
+            # A desktop observer must never affect registration behavior.
+            pass
 
     def snapshot(self) -> dict[str, Any]:
         return {

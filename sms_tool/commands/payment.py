@@ -570,13 +570,16 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
 
 def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     """Extract a supported protocol payment link from an AT or saved account."""
-    from ..desktop_ipc import emit_result
+    from ..desktop_ipc import emit_event, emit_result
     from ..payment_link_manager import generate_payment_link
 
     def output(payload: Any) -> None:
         emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
 
     method = context.payment_method(args)
+
+    def payment_progress(event: Mapping[str, Any]) -> None:
+        emit_event({"domain": "payment", **dict(event or {})})
 
     def selected_route() -> dict[str, Any]:
         try:
@@ -638,6 +641,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
                 canary=getattr(args, "payment_canary", 0),
                 retries=getattr(args, "payment_retries", 1),
                 timeout=getattr(args, "refresh_timeout", 30),
+                progress=payment_progress,
             )
         except RuntimeError as exc:
             output({"ok": False, "error": str(exc)})
@@ -726,6 +730,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         payment_method=method,
         auth_context=auth_context,
         paypal_generation_type=getattr(args, "paypal_generation_type", None),
+        progress=payment_progress,
         **kwargs,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))

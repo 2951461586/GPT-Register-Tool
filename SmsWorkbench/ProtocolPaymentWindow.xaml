@@ -1,0 +1,129 @@
+<Window x:Class="SmsWorkbench.ProtocolPaymentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="协议支付" Width="900" Height="900" MinWidth="760" MinHeight="620"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolVisibility"/>
+    <Style x:Key="FieldLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+    <Style x:Key="Input" TargetType="Control">
+      <Setter Property="Margin" Value="0,0,0,10"/>
+      <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    </Style>
+    <Style x:Key="MatrixCell" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="6,4"/>
+      <Setter Property="Margin" Value="0,0,4,0"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Status}" Value="running"><Setter Property="BorderBrush" Value="#D89B22"/></DataTrigger>
+        <DataTrigger Binding="{Binding Status}" Value="completed"><Setter Property="BorderBrush" Value="#2E9B63"/></DataTrigger>
+        <DataTrigger Binding="{Binding Status}" Value="failed"><Setter Property="BorderBrush" Value="#D25555"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+  <Grid Margin="20">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel>
+      <TextBlock Text="协议支付" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Text="{Binding AccountLabel}" Foreground="{DynamicResource TextSub}" Margin="0,3,0,14"/>
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <TextBlock Text="支付方式" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding Methods}" SelectedItem="{Binding SelectedMethod}" DisplayMemberPath="SingleAccountDescription" Style="{StaticResource Input}"/>
+        <TextBlock Text="区域适配器当前仅开放离线契约验证，生产 transport 未启用。"
+                   Foreground="#D89B22" Margin="0,-4,0,10" TextWrapping="Wrap"
+                   Visibility="{Binding IsOfflineValidationOnly, Converter={StaticResource BoolVisibility}}"/>
+
+        <StackPanel Visibility="{Binding ShowManualToken, Converter={StaticResource BoolVisibility}}">
+          <TextBlock Text="Access Token (JWT)" Style="{StaticResource FieldLabel}"/>
+          <TextBox Text="{Binding ManualAccessToken, UpdateSourceTrigger=PropertyChanged}" Height="70" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Style="{StaticResource Input}"/>
+        </StackPanel>
+
+        <TextBlock Text="结算国家（账单区域）" Style="{StaticResource FieldLabel}"/>
+        <ComboBox ItemsSource="{Binding BillingCountries}" SelectedValuePath="Code" DisplayMemberPath="DisplayName" SelectedValue="{Binding TargetCountry}" Style="{StaticResource Input}"/>
+
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Text="Checkout 代理池" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}" Height="75" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" Padding="8,6" Style="{StaticResource Input}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="6,0,0,0">
+            <TextBlock Text="Approve / Update 代理池" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}" Height="75" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" Padding="8,6" Style="{StaticResource Input}"/>
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Visibility="{Binding ShowStageCountries, Converter={StaticResource BoolVisibility}}">
+          <TextBlock Text="分段代理目标地区" Style="{StaticResource FieldLabel}"/>
+          <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <ComboBox ItemsSource="{Binding CheckoutCountries}" SelectedValuePath="Code" DisplayMemberPath="DisplayName" SelectedValue="{Binding CheckoutCountry}" Margin="0,0,5,0"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding ApproveCountries}" SelectedValuePath="Code" DisplayMemberPath="DisplayName" SelectedValue="{Binding ApproveCountry}" Margin="5,0"/>
+            <ComboBox Grid.Column="2" ItemsSource="{Binding ApproveCountries}" SelectedValuePath="Code" DisplayMemberPath="DisplayName" SelectedValue="{Binding UpdateCountry}" IsEnabled="{Binding CanEditUpdateCountry}" Margin="5,0,0,0"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel Visibility="{Binding ShowBlickCode, Converter={StaticResource BoolVisibility}}">
+          <TextBlock Text="BLIK 六位码" Style="{StaticResource FieldLabel}"/>
+          <TextBox Text="{Binding BlikCode, UpdateSourceTrigger=PropertyChanged}" MaxLength="6" FontFamily="Consolas" Style="{StaticResource Input}"/>
+        </StackPanel>
+
+        <StackPanel>
+          <CheckBox Content="AT 401 自动恢复（RT/Cookie/浏览器/OAuth）" IsChecked="{Binding JitRefresh}" Visibility="{Binding ShowJitAndProbe, Converter={StaticResource BoolVisibility}}" Margin="0,0,0,6"/>
+          <CheckBox Content="仅能力探测（Checkout + Stripe init）" IsChecked="{Binding ProbeOnly}" IsEnabled="{Binding CanToggleProbeOnly}" Visibility="{Binding ShowProbeOnly, Converter={StaticResource BoolVisibility}}" Margin="0,0,0,6"/>
+          <CheckBox Content="严格要求免费试用 / 0 元金额" IsChecked="{Binding RequireZero}" IsEnabled="{Binding CanRequireZero}" Margin="0,0,0,6"/>
+          <CheckBox Content="必须返回 PayPal BA 授权 URL" IsChecked="{Binding RequireBaToken}" IsEnabled="{Binding CanRequireBa}"/>
+        </StackPanel>
+
+        <TextBlock Text="结果" Style="{StaticResource FieldLabel}" Margin="0,14,0,4"/>
+        <TextBox Text="{Binding ResultText}" Height="125" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Style="{StaticResource Input}"/>
+
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+          <StackPanel>
+            <DockPanel>
+              <TextBlock Text="实时阶段矩阵" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding StageMatrix.Summary}" DockPanel.Dock="Right" Foreground="{DynamicResource TextSub}"/>
+            </DockPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" MaxHeight="190">
+              <ItemsControl ItemsSource="{Binding StageMatrix.Runs}">
+                <ItemsControl.ItemTemplate><DataTemplate>
+                  <StackPanel Margin="0,6,0,0">
+                    <TextBlock Text="{Binding AccountRef}" FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding Cells}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate>
+                        <Border Style="{StaticResource MatrixCell}" ToolTip="{Binding Detail}"><StackPanel>
+                          <TextBlock Text="{Binding Stage}" FontSize="10" FontFamily="Consolas"/>
+                          <TextBlock Text="{Binding Status}" FontSize="10"/>
+                        </StackPanel></Border>
+                      </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="测试出口" Command="{Binding TestProxyCommand}" Margin="0,0,6,0"/>
+      <Button Content="保存代理" Command="{Binding SaveProxyCommand}" Margin="0,0,6,0"/>
+      <Button Content="{Binding RunActionText}" Command="{Binding RunCommand}" Margin="0,0,6,0"/>
+      <Button Content="复制链接" Command="{Binding CopyCommand}" Margin="0,0,6,0"/>
+      <Button Content="打开二维码" Command="{Binding OpenQrCommand}" Margin="0,0,6,0"/>
+      <Button Content="取消" Command="{Binding CancelCommand}" Margin="0,0,6,0"/>
+      <Button Content="关闭" IsCancel="True" Click="Close_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

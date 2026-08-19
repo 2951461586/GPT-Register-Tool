@@ -102,6 +102,44 @@ FLOW_PROFILES: dict[str, PaymentFlowProfile] = {
             PaymentStage.ARTIFACT.value,
         ),
     ),
+    "qris": PaymentFlowProfile(
+        "regional_wallet_redirect",
+        (
+            PaymentStage.AUTH_GATE.value,
+            PaymentStage.CHECKOUT.value,
+            PaymentStage.PROMOTION.value,
+            PaymentStage.STRIPE_INIT.value,
+            PaymentStage.PAYMENT_METHOD.value,
+            PaymentStage.CONFIRM.value,
+            PaymentStage.REDIRECT.value,
+            PaymentStage.ARTIFACT.value,
+        ),
+        artifact_kind="url_or_qr",
+    ),
+    "bizum": PaymentFlowProfile(
+        "regional_hosted_redirect",
+        (
+            PaymentStage.AUTH_GATE.value,
+            PaymentStage.CHECKOUT.value,
+            PaymentStage.STRIPE_INIT.value,
+            PaymentStage.PAYMENT_METHOD.value,
+            PaymentStage.CONFIRM.value,
+            PaymentStage.REDIRECT.value,
+            PaymentStage.ARTIFACT.value,
+        ),
+    ),
+    "naver_pay": PaymentFlowProfile(
+        "regional_hosted_redirect",
+        (
+            PaymentStage.AUTH_GATE.value,
+            PaymentStage.CHECKOUT.value,
+            PaymentStage.STRIPE_INIT.value,
+            PaymentStage.PAYMENT_METHOD.value,
+            PaymentStage.CONFIRM.value,
+            PaymentStage.REDIRECT.value,
+            PaymentStage.ARTIFACT.value,
+        ),
+    ),
     "grabpay": PaymentFlowProfile(
         "wallet_redirect",
         (
