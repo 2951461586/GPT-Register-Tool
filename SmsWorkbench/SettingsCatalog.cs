@@ -96,8 +96,8 @@ namespace SmsWorkbench
 
             Category("网络与支付",
                 Section("基础网络",
-                    Text("registration_proxy", "注册代理（主）", "", "http://127.0.0.1:7897"),
-                    Multiline("registration_proxy_pool", "注册代理池", ""),
+                    Text("registration_proxy", "注册代理（主，支持 host:port:user:password / http / socks5 / socks5h）", "", "http://127.0.0.1:7897"),
+                    Multiline("registration_proxy_pool", "注册代理池（支持 host:port:user:password / http / socks5 / socks5h）", ""),
                     Text("mailbox_proxy", "邮箱收件代理", "", "http://127.0.0.1:7897")),
                 Section("协议管理",
                     Text("protocol_enabled_methods", "启用方式", "", "paypal,gopay,gcash,grabpay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"),

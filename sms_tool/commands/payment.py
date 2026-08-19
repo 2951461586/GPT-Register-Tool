@@ -471,7 +471,6 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
         select_proxy_from_pool,
     )
     from ..config import current_config_data
-    from ..payment_country_catalog import is_paypal_supported, paypal_country_requires_validation
 
     proxy_state = proxy_state_from_config(current_config_data())
     method = context.payment_method(args)
@@ -519,8 +518,6 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
         stage_pool = stage_pools.get("approve" if stage in {"approve", "update"} else "checkout") or (
             pool if use_pool else []
         )
-        paypal_country_checked = paypal_country_requires_validation(method)
-        expected_country_supported = (not paypal_country_checked) or (not expected) or is_paypal_supported(expected)
         if stage_pool:
             candidate, attempts = select_proxy_from_pool(stage_pool, expected, stage, state=proxy_state)
             if not candidate:
@@ -530,14 +527,12 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
                     "expected_country": expected,
                     "error": "payment_proxy_pool_unavailable",
                     "proxy": "DIRECT",
-                    "expected_country_paypal_supported": expected_country_supported,
                     "attempts": attempts,
                 }
                 continue
             stages[stage] = {
                 **attempts[-1],
                 "proxy": redact_proxy_url(candidate),
-                "expected_country_paypal_supported": expected_country_supported,
                 "attempts": attempts,
             }
             continue
@@ -551,7 +546,6 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
         stages[stage] = {
             **result.to_dict(),
             "proxy": redact_proxy_url(candidate),
-            "expected_country_paypal_supported": expected_country_supported,
             "attempts": attempts,
         }
     ok = all(bool(item.get("ok")) for item in stages.values())

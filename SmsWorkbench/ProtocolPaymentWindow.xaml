@@ -54,11 +54,11 @@
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
           <StackPanel Margin="0,0,6,0">
-            <TextBlock Text="Checkout 代理池" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
             <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}" Height="75" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" Padding="8,6" Style="{StaticResource Input}"/>
           </StackPanel>
           <StackPanel Grid.Column="1" Margin="6,0,0,0">
-            <TextBlock Text="Approve / Update 代理池" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
             <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}" Height="75" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" Padding="8,6" Style="{StaticResource Input}"/>
           </StackPanel>
         </Grid>

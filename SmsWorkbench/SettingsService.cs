@@ -72,9 +72,12 @@ namespace SmsWorkbench
 
                 // Registration must never silently fall back to a direct
                 // connection when the settings box is left blank.
-                string registrationProxy = First(Find(fields, "registration_proxy").Value.Trim(), LocalProxy);
-                string mailboxProxy = First(Find(fields, "mailbox_proxy").Value.Trim(), LocalProxy);
-                string[] registrationPool = ParseList(Find(fields, "registration_proxy_pool").Value)
+                string registrationProxy = ProxyInputNormalizer.Normalize(
+                    First(Find(fields, "registration_proxy").Value.Trim(), LocalProxy));
+                string mailboxProxy = ProxyInputNormalizer.Normalize(
+                    First(Find(fields, "mailbox_proxy").Value.Trim(), LocalProxy));
+                string[] registrationPool = ProxyInputNormalizer.NormalizeList(
+                        Find(fields, "registration_proxy_pool").Value)
                     .Where(value => !string.Equals(value, registrationProxy, StringComparison.OrdinalIgnoreCase))
                     .ToArray();
                 var orderedRegistrationPool = new List<string>();
@@ -91,7 +94,8 @@ namespace SmsWorkbench
                 // checkout/approve pools; preserve any legacy global value.
                 SetPath(root, "protocol_payments.enabled_methods", ToArray(ParseList(Find(fields, "protocol_enabled_methods").Value)));
                 SetPath(root, "protocol_payments.matrix", matrix);
-                SetPath(root, "paypal.proxies", ToArray(ParseList(Find(fields, "paypal_proxy").Value)));
+                SetPath(root, "paypal.proxies", ToArray(ProxyInputNormalizer.NormalizeList(
+                    Find(fields, "paypal_proxy").Value)));
                 SetPath(root, "paypal.billing_regions", ToArray(new[] { Find(fields, "paypal_billing_region").Value.Trim().ToUpperInvariant() }));
 
                 // Python's mailbox_remail falls back to service_mode "code" when the key is

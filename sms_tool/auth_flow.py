@@ -12,6 +12,9 @@ from .mailbox import _poll_email_otp
 
 def _is_existing_login_redirect(url):
     parsed = urlparse(url or "")
+    host = (parsed.netloc or "").lower()
+    if host and host != "auth.openai.com" and not host.endswith(".auth.openai.com"):
+        return False
     path = (parsed.path or url or "").lower()
     if not path:
         return False
@@ -256,11 +259,10 @@ def _prepare_signup_auth_state(
             or ""
         )
         current_url = _absolute_url(auth_base, location) if location else str(authorize_resp.url or "")
-        redirect_path = current_url.split("auth.openai.com")[-1]
+        redirect_path = urlparse(current_url).path or "/"
         print(f"  Redirect[{name}]: {authorize_resp.status_code} {redirect_path}")
 
-        if _is_existing_login_redirect(current_url):
-            return {"ok": False, "attempt": name, "existing_login_redirect": True, "url": current_url}
+        login_redirect_seen = _is_existing_login_redirect(current_url)
 
         if _is_chatgpt_auth_login_landing(current_url):
             last_state = {"ok": False, "attempt": name, "error": "redirected_to_chatgpt_login", "url": current_url}
@@ -280,6 +282,14 @@ def _prepare_signup_auth_state(
             sentinel_so_token=sentinel_so_token,
         )
         signup_state["attempt"] = name
+        signup_state["login_redirect_seen"] = login_redirect_seen
+        if login_redirect_seen and _is_existing_login_redirect(signup_state.get("url", "")):
+            last_state = {
+                **signup_state,
+                "ok": False,
+                "error": "login_redirect_not_advanced",
+            }
+            continue
         if signup_state.get("ok") and not _is_chatgpt_auth_login_landing(signup_state.get("url", "")):
             return signup_state
 

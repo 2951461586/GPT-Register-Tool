@@ -212,6 +212,48 @@ class PaymentRoutePlannerTests(unittest.TestCase):
         self.assertEqual(seen[0], ("checkout", "ID"))
         self.assertEqual(plan.routes["approve"].expected_country, "JP")
 
+    def test_ipwo_bare_pool_is_canonicalized_and_retargeted_to_stage_country(self):
+        config = {
+            "protocol_payments": {
+                "proxy_pools": {
+                    "checkout": [
+                        "us.ipwo.net:7878:account_custom_zone_US:password"
+                    ]
+                },
+                "methods": {
+                    "paypal": {
+                        "stage_routes": {
+                            "checkout": {"pool": "checkout", "country": "JP"}
+                        }
+                    }
+                },
+            }
+        }
+
+        with patch(
+            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            side_effect=lambda pool, *_args, **_kwargs: (pool[0], []),
+        ):
+            plan = PaymentRoutePlanner(config).plan("paypal")
+
+        self.assertTrue(plan.checkout_proxy.startswith("http://"))
+        self.assertIn("custom_zone_JP", plan.checkout_proxy)
+
+    def test_paypal_approve_accepts_general_country_list_region(self):
+        plan = PaymentRoutePlanner({}).plan(
+            "paypal",
+            options={
+                "checkout_country": "US",
+                "approve_country": "TR",
+                "stage_proxy_countries": {"checkout": "US", "approve": "TR"},
+                "checkout_proxy": "http://checkout.example:8080",
+                "approve_proxy": "http://approve.example:8080",
+            },
+            select_proxies=False,
+        )
+
+        self.assertEqual(plan.routes["approve"].expected_country, "TR")
+
 
 if __name__ == "__main__":
     unittest.main()

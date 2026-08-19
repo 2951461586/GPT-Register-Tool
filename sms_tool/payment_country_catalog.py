@@ -1,11 +1,8 @@
-"""PayPal-supported country catalog for early payment-country validation.
+"""Reference-only PayPal country catalog.
 
 Source: PayPal country codes reference
-(https://developer.paypal.com/reference/country-codes/). Used to fail fast when
-a PayPal agreement checkout/approve egress country is not one PayPal actually
-supports, instead of discovering it mid-protocol. Only the PayPal-family methods
-(``native_paypal`` / ``native_upi``) are constrained; wallet/script methods own
-their own country rules.
+(https://developer.paypal.com/reference/country-codes/). Proxy routing no longer
+gates Checkout or Approve egress against this catalog.
 """
 
 from __future__ import annotations
@@ -31,10 +28,6 @@ PAYPAL_SUPPORTED_COUNTRIES: frozenset[str] = frozenset({
     "YE", "YT", "ZA", "ZM", "ZW",
 })
 
-# Payment methods whose egress country must be a PayPal-supported country.
-_PAYPAL_FAMILY_METHODS: frozenset[str] = frozenset({"paypal", "paypal_ba", "upi"})
-
-
 def normalize_country(value: object) -> str:
     return str(value or "").strip().upper()
 
@@ -45,20 +38,10 @@ def is_paypal_supported(country: object) -> bool:
 
 
 def paypal_country_requires_validation(payment_method: object) -> bool:
-    """Whether the method routes through PayPal and must use a supported country."""
-    return normalize_country(payment_method).lower() in _PAYPAL_FAMILY_METHODS
+    """Deprecated compatibility hook; stage countries are no longer gated."""
+    return False
 
 
 def validate_paypal_country(payment_method: object, country: object, *, field: str = "country") -> None:
-    """Raise ``ValueError`` when a PayPal-family method targets an unsupported country.
-
-    Blank countries pass through (defaults apply downstream) and non-PayPal
-    methods are never constrained here.
-    """
-    code = normalize_country(country)
-    if not code:
-        return
-    if not paypal_country_requires_validation(payment_method):
-        return
-    if code not in PAYPAL_SUPPORTED_COUNTRIES:
-        raise ValueError(f"{field}_not_paypal_supported:{code}")
+    """Deprecated no-op retained for third-party import compatibility."""
+    return None

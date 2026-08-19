@@ -8,7 +8,11 @@
   "proxy": {
     "registration": "http://127.0.0.1:7897",
     "default": "http://127.0.0.1:7897",
-    "pool": []
+    "pool": [
+      "us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD",
+      "as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD",
+      "eu.ipwo.net:7878:YOUR_USER_custom_zone_GB:YOUR_PASSWORD"
+    ]
   },
   "registration": {
     "password_random_length": 12,
@@ -198,8 +202,8 @@
   "protocol_payments": {
       "proxy_pool": [],
       "proxy_pools": {
-        "checkout": [],
-        "approve": []
+        "checkout": ["us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"],
+        "approve": ["as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD"]
       },
     "egress_check": {
       "enabled": true,

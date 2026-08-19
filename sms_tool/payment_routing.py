@@ -281,12 +281,6 @@ class PaymentRoutePlanner:
             countries["approve"], changed = coerce_approve_country(method, original)
             if changed:
                 coercions.append({"field": "approve_country", "original": original, "coerced": countries["approve"]})
-        if method in {"paypal", "upi"}:
-            from .payment_country_catalog import validate_paypal_country
-
-            validate_paypal_country(method, countries.get("checkout", ""), field="checkout_country")
-            validate_paypal_country(method, countries.get("approve", ""), field="approve_country")
-
         injected_transport = values.get("transport") is not None
         ignore_configured_routes = injected_transport or bool(shared_override)
         routing_method_cfg = {} if ignore_configured_routes else method_cfg

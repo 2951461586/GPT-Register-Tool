@@ -49,6 +49,7 @@ class ProxyProbeResult:
     country: str = ""
     region: str = ""
     error: str = ""
+    scheme: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -130,10 +131,39 @@ def probe_proxy(
         if cached is not None:
             return cached
 
-    result = _probe_proxy_network(value, expected, stage, timeout)
+    results: list[ProxyProbeResult] = []
+    for candidate in _proxy_scheme_candidates(value):
+        result = _probe_proxy_network(candidate, expected, stage, timeout)
+        result.scheme = urlsplit(candidate).scheme.lower()
+        results.append(result)
+        if result.ok or result.error.startswith("country_mismatch:"):
+            break
+    result = results[-1]
+    if not result.ok and len(results) > 1:
+        errors = [item.error for item in results if item.error]
+        result.error = "proxy_scheme_detection_failed:" + " | ".join(errors[-3:])
     if state is not None:
         state.record_probe(value, result)
     return result
+
+
+def _proxy_scheme_candidates(proxy: str) -> list[str]:
+    """Try the declared scheme first, then compatible HTTP/SOCKS5 variants."""
+    value = normalize_proxy_url(proxy)
+    if not value:
+        return []
+    parsed = urlsplit(value)
+    scheme = parsed.scheme.lower()
+    candidates = [value]
+    alternates = {
+        "http": ("socks5h", "socks5"),
+        "https": ("http", "socks5h", "socks5"),
+        "socks5": ("socks5h", "http"),
+        "socks5h": ("socks5", "http"),
+    }.get(scheme, ())
+    suffix = value.split("://", 1)[1]
+    candidates.extend(f"{alternate}://{suffix}" for alternate in alternates)
+    return list(dict.fromkeys(candidates))
 
 
 def _probe_http_get_json(url: str, proxy: str, timeout: float) -> tuple[dict[str, Any], int]:
@@ -295,7 +325,10 @@ def select_proxy_from_pool(
         if state is not None:
             state.record_result(stage, candidate, result.ok, reason=result.error, country=result.country_code)
         if result.ok:
-            return candidate, attempts
+            selected = candidate
+            if result.scheme:
+                selected = result.scheme + "://" + candidate.split("://", 1)[1]
+            return selected, attempts
     return "", attempts
 
 

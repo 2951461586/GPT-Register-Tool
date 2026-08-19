@@ -150,9 +150,6 @@ namespace SmsWorkbench
 
             var backendOutput = new StringBuilder();
             object backendOutputLock = new object();
-            var stageMatrix = new StageMatrixViewModel(stageMatrixStore);
-            StageMatrixWindow stageMatrixWindow = null;
-            bool stageMatrixDismissed = false;
             void CaptureBackendLine(string line)
             {
                 lock (backendOutputLock)
@@ -165,17 +162,9 @@ namespace SmsWorkbench
             {
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progressEvent))
                 {
-                    stageMatrix.Apply(progressEvent);
-                    if (stageMatrixWindow == null && !stageMatrixDismissed)
-                    {
-                        stageMatrixWindow = new StageMatrixWindow(stageMatrix) { Owner = this };
-                        stageMatrixWindow.Closed += (_, __) =>
-                        {
-                            stageMatrixDismissed = true;
-                            stageMatrixWindow = null;
-                        };
-                        stageMatrixWindow.Show();
-                    }
+                    task.Info = progressEvent.Detail.Length > 0
+                        ? $"{progressEvent.Stage}: {progressEvent.Detail}"
+                        : progressEvent.Stage;
                     return;
                 }
                 CaptureBackendLine(line.Text);

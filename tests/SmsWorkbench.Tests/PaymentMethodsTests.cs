@@ -127,6 +127,17 @@ public sealed class PaymentMethodsTests
             PaymentMethods.ResolveCheckoutCountryOptions(catalog, "missing"));
     }
 
+    [Fact]
+    public void PayPalApproveCountrySelectorUsesTheGeneralCountryList()
+    {
+        Assert.Contains(
+            PaymentMethods.ApproveCountryOptions("paypal"),
+            country => country.Code == "TR");
+        Assert.Contains(
+            PaymentMethods.ApproveCountryOptions("gopay"),
+            country => country.Code == "TR");
+    }
+
     [Theory]
     [InlineData("id")]
     [InlineData("USA")]
