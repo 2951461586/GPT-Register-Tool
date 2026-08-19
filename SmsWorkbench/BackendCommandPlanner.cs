@@ -185,7 +185,7 @@ namespace SmsWorkbench
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
             RequireArgument(mailboxFile, nameof(mailboxFile));
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             var args = new List<string>
             {
                 "--one-click-sms",
@@ -223,7 +223,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> proxyPool,
             string tempDirectory = null)
         {
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             var args = new List<string>
             {
                 "--refresh-local-quota",
@@ -233,7 +233,8 @@ namespace SmsWorkbench
             if (autoRelogin)
             {
                 args.Add("--quota-auto-relogin");
-                args.AddRange(new[] { "--quota-relogin-timeout", "300" });
+                args.Add("--quota-relogin-timeout");
+                args.Add("300");
             }
             var tempFiles = new List<string>();
             if (targets.Count > 1)
@@ -260,7 +261,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> proxyPool,
             string tempDirectory = null)
         {
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             var args = new List<string>
             {
                 "--check-promotion",
@@ -321,7 +322,7 @@ namespace SmsWorkbench
             int workers = 4,
             string tempDirectory = null)
         {
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             string emailFile = WriteEmailFile(tempDirectory, "delete_emails_", targets);
             var args = new List<string>
             {
@@ -349,7 +350,7 @@ namespace SmsWorkbench
             int refreshTimeoutSeconds = 60,
             string tempDirectory = null)
         {
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             string normalized = NormalizeImportTarget(target);
             string emailFile = WriteEmailFile(tempDirectory, "oneclick_import_emails_", targets);
             var args = new List<string>
@@ -455,7 +456,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> emails,
             string tempDirectory = null)
         {
-            IReadOnlyList<string> targets = RequireEmails(emails);
+            List<string> targets = RequireEmails(emails);
             string emailFile = WriteEmailFile(tempDirectory, "paypal_completed_emails_", targets);
             var args = new List<string>
             {
@@ -537,8 +538,8 @@ namespace SmsWorkbench
             if (value.StartsWith("smailr://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (MailboxPoolFileStore.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
-            if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
-            if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
+            if (value.Contains("----", StringComparison.Ordinal) && value.Split("----", StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
+            if (value.Contains("---", StringComparison.Ordinal) && value.Split("---", StringSplitOptions.None).Length >= 3) return "--mailbox-file";
             return "";
         }
 

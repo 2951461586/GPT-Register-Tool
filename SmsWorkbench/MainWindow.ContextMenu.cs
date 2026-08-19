@@ -91,7 +91,10 @@ namespace SmsWorkbench
                 MarkPayPalComplete(row);
         }
 
-        private async void CtxCheckAccountAlive_Click(object sender, RoutedEventArgs e)
+        private void CtxCheckAccountAlive_Click(object sender, RoutedEventArgs e)
+            => RunUiTask(CtxCheckAccountAliveAsync);
+
+        private async Task CtxCheckAccountAliveAsync()
         {
             if (AccountGrid?.SelectedItem is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
             {

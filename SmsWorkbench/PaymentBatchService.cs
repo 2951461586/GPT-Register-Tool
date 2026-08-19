@@ -29,6 +29,7 @@ namespace SmsWorkbench
 
     public sealed class PaymentBatchService : IPaymentBatchService, IPaymentBatchProgressService
     {
+        private static readonly string[] ListSeparators = ["\r\n", "\n", ",", ";"];
         private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
         private readonly IApplicationPaths _paths;
         private readonly IBackendClient _backendClient;
@@ -433,7 +434,7 @@ namespace SmsWorkbench
 
         private static string[] ParseList(string value)
             => (value ?? "")
-                .Split(new[] { "\r\n", "\n", ",", ";" }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(ListSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
