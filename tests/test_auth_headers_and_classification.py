@@ -131,6 +131,12 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
     def test_cloudflare_page_wins_over_generic_signup_auth_state(self):
         self.assertEqual(classify_error("signup_auth_state: 403 Just a moment..."), "network")
 
+    def test_rate_limit_wins_over_generic_signup_auth_state(self):
+        self.assertEqual(
+            classify_error("signup_auth_state: status 429 rate_limit_exceeded Too many requests"),
+            "rate_limit",
+        )
+
     def test_sentinel_extraction_failure_is_retryable_network_error(self):
         self.assertEqual(classify_error("sentinel_extract_failed"), "network")
 

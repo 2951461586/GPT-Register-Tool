@@ -67,6 +67,7 @@ namespace SmsWorkbench
                     Integer("registration_at_stability_probe_delay", "探测间隔秒", "registration.at_stability_probe_delay_seconds", "10"),
                     Integer("registration_at_probe_timeout", "单次探测超时秒", "registration.at_probe_timeout_seconds", "30")),
                 Section("阶段并发",
+                    Integer("registration_auth_concurrency", "认证流并发", "registration.stage_concurrency.auth", "1"),
                     Integer("registration_network_concurrency", "注册网络并发", "registration.stage_concurrency.network", "4"),
                     Integer("registration_at_probe_concurrency", "AT探测并发", "registration.stage_concurrency.at_probe", "4")),
                 Section("Sentinel",

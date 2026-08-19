@@ -26,7 +26,7 @@ from .paths import runtime_file
 
 
 _STAGE_GROUPS = {
-    "auth_flow": "network",
+    "auth_flow": "auth",
     "user_register": "network",
     "email_otp_send": "network",
     "email_otp_resend": "network",
@@ -37,7 +37,7 @@ _STAGE_GROUPS = {
     "access_token_probe": "at_probe",
     "payment_link": "payment",
 }
-_DEFAULT_CAPS = {"network": 4, "at_probe": 4, "payment": 2}
+_DEFAULT_CAPS = {"auth": 1, "network": 4, "at_probe": 4, "payment": 2}
 _CROSS_GATE_TIMEOUT_SECONDS = 600.0
 
 _gate_lock = threading.Lock()
@@ -49,6 +49,36 @@ _held_gate: contextvars.ContextVar[tuple[str, threading.BoundedSemaphore, CrossP
 )
 _metrics_lock = threading.Lock()
 _metrics: dict[str, dict[str, float]] = {}
+_rate_limit_lock = threading.Lock()
+_rate_limit_blocked_until = 0.0
+
+
+def mark_registration_rate_limited(retry_after_seconds: float = 300.0) -> float:
+    """Pause new auth-flow admissions after an upstream HTTP 429."""
+    global _rate_limit_blocked_until
+    delay = max(1.0, min(float(retry_after_seconds or 300.0), 3600.0))
+    with _rate_limit_lock:
+        _rate_limit_blocked_until = max(_rate_limit_blocked_until, time.time() + delay)
+        return _rate_limit_blocked_until
+
+
+def clear_registration_rate_limit() -> None:
+    global _rate_limit_blocked_until
+    with _rate_limit_lock:
+        _rate_limit_blocked_until = 0.0
+
+
+def registration_rate_limit_remaining() -> float:
+    with _rate_limit_lock:
+        return max(0.0, _rate_limit_blocked_until - time.time())
+
+
+def _raise_if_registration_rate_limited(group: str) -> None:
+    if group != "auth":
+        return
+    remaining = registration_rate_limit_remaining()
+    if remaining > 0:
+        raise RuntimeError(f"registration_rate_limit_circuit_open:retry_after={remaining:.0f}s")
 
 
 def enter_registration_stage(stage: str) -> float:
@@ -61,10 +91,17 @@ def enter_registration_stage(stage: str) -> float:
     if not group:
         return 0.0
 
+    _raise_if_registration_rate_limited(group)
+
     gate = _gate_for(group)
     cross = _cross_gate_for(group)
     started = time.perf_counter()
     gate.acquire()
+    try:
+        _raise_if_registration_rate_limited(group)
+    except Exception:
+        gate.release()
+        raise
     if cross is not None:
         try:
             cross.acquire(timeout=_CROSS_GATE_TIMEOUT_SECONDS)

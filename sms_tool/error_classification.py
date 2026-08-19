@@ -65,6 +65,14 @@ AUTH_STATE_ERROR_MARKERS = (
     "signup_auth_state",
 )
 
+RATE_LIMIT_ERROR_MARKERS = (
+    "rate_limit_exceeded",
+    "registration_rate_limited",
+    "registration_rate_limit_circuit_open",
+    "too many requests",
+    "http_429",
+)
+
 
 def error_text(value) -> str:
     if isinstance(value, dict):
@@ -92,6 +100,8 @@ def classify_error(value) -> str:
         return "account"
     if any(marker in text for marker in MAILBOX_ERROR_MARKERS):
         return "mailbox"
+    if any(marker in text for marker in RATE_LIMIT_ERROR_MARKERS):
+        return "rate_limit"
     if any(marker in text for marker in NETWORK_ERROR_MARKERS):
         return "network"
     if any(marker in text for marker in AUTH_STATE_ERROR_MARKERS):

@@ -23,7 +23,7 @@
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
-    "stage_concurrency": { "network": 4, "at_probe": 4 }
+    "stage_concurrency": { "auth": 1, "network": 4, "at_probe": 4 }
   },
   "email_registration": {
     "registration_mode": "passwordless",
