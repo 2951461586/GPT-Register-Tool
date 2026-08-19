@@ -1,8 +1,21 @@
-# GPT-Register-Tool
+<div align="center">
+  <img src="./SmsWorkbench/Assets/black-kitten.png" width="140" alt="GPT-Register-Tool logo" />
+  <h1>GPT-Register-Tool</h1>
+  <p><strong>面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理与支付工作台</strong><br>
+  <em>A Windows desktop workbench for ChatGPT account registration, email OTP, account management, and payment workflows.</em></p>
+  <p>
+    <a href="./README.md">简体中文</a> · <a href="./README_EN.md">English</a>
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white" alt="Windows 10/11" />
+    <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
+    <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10+" />
+  </p>
+</div>
 
-面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理、协议支付链接提取与显式支付执行工具。
+## 中文简介
 
-项目采用 **WPF 桌面端 + Python 业务核心**：桌面端负责操作入口、配置和结果展示，Python 模块负责邮箱、注册、会话、支付、代理与外部服务协议。运行数据默认保存在本机，不写入 Git。
+GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 OTP 注册、账号与 Session 管理、代理配置、协议支付链接提取和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
 ## 赞助商
 <img width="5728" height="672" alt="F31720B0BE73735E400C05B8F165FF1C" src="https://github.com/user-attachments/assets/5f3b5b22-5132-4bc4-b8b8-3a0e92b47f37" />
