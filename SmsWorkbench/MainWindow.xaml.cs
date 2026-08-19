@@ -14,6 +14,7 @@ namespace SmsWorkbench
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
+        private readonly IStageMatrixStore stageMatrixStore;
         private readonly IPaymentBatchService paymentBatchService;
         private readonly string rootDir;
         private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
@@ -198,7 +199,8 @@ namespace SmsWorkbench
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
-            Serilog.ILogger logger)
+            Serilog.ILogger logger,
+            IStageMatrixStore matrixStore = null)
         {
             this.backendClient = backendClient;
             this.backendTasks = backendTasks;
@@ -210,6 +212,7 @@ namespace SmsWorkbench
             this.settingsDialogs = settingsDialogs;
             this.settingsService = settingsService;
             this.logger = logger;
+            this.stageMatrixStore = matrixStore;
             rootDir = paths.RootDirectory;
             InitializeComponent();
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
@@ -235,7 +238,8 @@ namespace SmsWorkbench
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
-            Serilog.ILogger logger)
+            Serilog.ILogger logger,
+            IStageMatrixStore matrixStore = null)
             : this(
                 paths,
                 backendClient,
@@ -247,7 +251,8 @@ namespace SmsWorkbench
                 snackbarService,
                 settingsDialogs,
                 settingsService,
-                logger)
+                logger,
+                matrixStore)
         {
         }
 

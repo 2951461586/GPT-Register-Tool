@@ -7,6 +7,7 @@ namespace SmsWorkbench
 {
     public sealed class PythonBackendClient : IBackendClient
     {
+        private const int MaxCapturedOutputChars = 2_000_000;
         private readonly IApplicationPaths _paths;
         private readonly ISettingsService _settings;
         private readonly Serilog.ILogger _logger;
@@ -116,7 +117,11 @@ namespace SmsWorkbench
         {
             while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
             {
-                target.AppendLine(line);
+                if (target.Length < MaxCapturedOutputChars)
+                {
+                    int remaining = MaxCapturedOutputChars - target.Length;
+                    target.AppendLine(line.Length <= remaining ? line : line[..remaining]);
+                }
                 // Parseable desktop events are already sanitized by the Python
                 // IPC boundary. Redacting the serialized envelope again would
                 // replace fields such as payment_method with "[REDACTED]" and
@@ -128,15 +133,20 @@ namespace SmsWorkbench
             }
         }
 
-        private static void KillProcessTree(Process process)
+        private void KillProcessTree(Process process)
         {
             try
             {
                 if (!process.HasExited)
+                {
                     process.Kill(entireProcessTree: true);
+                    if (!process.WaitForExit(5000))
+                        _logger.Warning("Backend process {ProcessId} did not exit after termination request", process.Id);
+                }
             }
-            catch
+            catch (Exception exception)
             {
+                _logger.Warning(exception, "Failed to terminate backend process tree");
             }
         }
     }

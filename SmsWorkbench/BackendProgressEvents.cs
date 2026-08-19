@@ -12,11 +12,15 @@ namespace SmsWorkbench
         string Detail,
         int Attempt = 0,
         int MaxAttempts = 0,
-        string Country = "");
+        string Country = "",
+        int Sequence = 0,
+        long TimestampMs = 0,
+        bool Terminal = false,
+        string Schema = "");
 
     public static class BackendProgressEventParser
     {
-        public const string Prefix = "@@SMSWORKBENCH_EVENT_V1@@";
+        public const string Prefix = "@@SMSWORKBENCH_V2@@";
 
         public static bool TryParse(string line, out BackendProgressEvent value)
         {
@@ -28,8 +32,9 @@ namespace SmsWorkbench
             {
                 using JsonDocument document = JsonDocument.Parse(text[Prefix.Length..]);
                 JsonElement root = document.RootElement;
-                if (root.GetProperty("version").GetInt32() != 1
+                if (root.GetProperty("version").GetInt32() != 2
                     || !string.Equals(Text(root, "type"), "event", StringComparison.Ordinal)
+                    || !string.Equals(Text(root, "schema"), "smsworkbench.ipc.v2", StringComparison.Ordinal)
                     || !root.TryGetProperty("payload", out JsonElement payload)
                     || payload.ValueKind != JsonValueKind.Object)
                     return false;
@@ -46,7 +51,11 @@ namespace SmsWorkbench
                     First(Text(payload, "detail"), Text(payload, "message")),
                     Number(payload, "attempt"),
                     Number(payload, "max_attempts"),
-                    Text(payload, "country"));
+                    Text(payload, "country"),
+                    Number(root, "sequence"),
+                    NumberLong(root, "timestamp_ms"),
+                    Bool(root, "terminal"),
+                    Text(root, "schema"));
                 return true;
             }
             catch (JsonException)
@@ -72,6 +81,14 @@ namespace SmsWorkbench
             => element.TryGetProperty(name, out JsonElement value) && value.TryGetInt32(out int number)
                 ? number
                 : 0;
+
+        private static long NumberLong(JsonElement element, string name)
+            => element.TryGetProperty(name, out JsonElement value) && value.TryGetInt64(out long number)
+                ? number
+                : 0;
+
+        private static bool Bool(JsonElement element, string name)
+            => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.True;
 
         private static string First(params string[] values)
             => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";

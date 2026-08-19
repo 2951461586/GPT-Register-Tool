@@ -52,7 +52,7 @@ namespace SmsWorkbench
         public static string GetString(Dictionary<string, object> data, string key)
         {
             return data != null && data.TryGetValue(key, out object value) && value != null
-                ? Convert.ToString(value) ?? ""
+                ? Convert.ToString(value, CultureInfo.InvariantCulture) ?? ""
                 : "";
         }
 
@@ -72,14 +72,14 @@ namespace SmsWorkbench
                 if (current is not Dictionary<string, object> map) return "";
                 if (!map.TryGetValue(key, out current)) return "";
             }
-            return Convert.ToString(current) ?? "";
+            return Convert.ToString(current, CultureInfo.InvariantCulture) ?? "";
         }
 
         public static bool GetBool(Dictionary<string, object> data, string key)
         {
             if (data == null || !data.TryGetValue(key, out object value) || value == null) return false;
             if (value is bool b) return b;
-            string text = Convert.ToString(value)?.Trim() ?? "";
+            string text = Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim() ?? "";
             return text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1";
         }
 
@@ -89,7 +89,7 @@ namespace SmsWorkbench
             if (val is long l) return l;
             if (val is int i) return i;
             if (val is double d) return (long)d;
-            if (long.TryParse(val.ToString(), out long parsed)) return parsed;
+            if (long.TryParse(val.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed)) return parsed;
             return 0;
         }
 
@@ -99,7 +99,7 @@ namespace SmsWorkbench
             if (val is double d) return d;
             if (val is long l) return l;
             if (val is int i) return i;
-            if (double.TryParse(val.ToString(), out double parsed)) return parsed;
+            if (double.TryParse(val.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed)) return parsed;
             return 0;
         }
 

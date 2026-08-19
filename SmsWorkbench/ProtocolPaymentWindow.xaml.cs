@@ -10,6 +10,7 @@ namespace SmsWorkbench
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             DataContext = viewModel;
             Closing += OnClosing;
+            Closed += (_, __) => _viewModel.Dispose();
         }
 
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
