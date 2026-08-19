@@ -331,6 +331,10 @@ _KOOKEEY_PW_RE = re.compile(
 _INFER_USER_REGION_RE = re.compile(r"region-([A-Za-z]{2})(?=$|[-_:])")
 _INFER_KOOKEEY_PW_RE = re.compile(r"^.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]$")
 _INFER_USER_TAIL_RE = re.compile(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?$")
+_IPWO_CUSTOM_ZONE_RE = re.compile(
+    r"(?P<prefix>(?:^|[_-])custom[_-]zone[_-])(?P<cc>[A-Za-z]{2})(?=$|[_-])",
+    re.IGNORECASE,
+)
 
 
 def _random_session_id(length: int, *, digits_only: bool = False) -> str:
@@ -364,9 +368,9 @@ def rebuild_proxy_credentials(parsed: Any, username: str, password: str) -> str:
 def retarget_region(proxy: str, iso_code: str) -> str:
     """Change only the exit region/country, preserving the sticky session id.
 
-    Handles both the Cliproxy ``region-XX`` username token and the Kookeey
-    ``BASE-CC-SESSION-TTL`` password shape.  Returns the input unchanged when no
-    known template matches.
+    Handles Cliproxy ``region-XX``, IPWO ``custom_zone_XX`` usernames, and the
+    Kookeey ``BASE-CC-SESSION-TTL`` password shape. Returns the input unchanged
+    when no known template matches.
     """
     value = str(proxy or "")
     iso = str(iso_code or "").strip().upper()
@@ -382,6 +386,12 @@ def retarget_region(proxy: str, iso_code: str) -> str:
         return value
     changed = False
     new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}region-{iso}", username, count=1)
+    if count:
+        username = new_user
+        changed = True
+    new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(
+        lambda match: f"{match.group('prefix')}{iso}", username, count=1
+    )
     if count:
         username = new_user
         changed = True
@@ -417,6 +427,12 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         if count:
             username = new_user
             changed = True
+        new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(
+            lambda match: f"{match.group('prefix')}{iso}", username, count=1
+        )
+        if count:
+            username = new_user
+            changed = True
     new_user, count = _USER_SID_RE.subn(lambda m: _random_session_id(len(m.group(0))), username, count=1)
     if count:
         username = new_user
@@ -444,6 +460,9 @@ def infer_region(proxy: str) -> str:
     match = _INFER_USER_REGION_RE.search(username)
     if match:
         return match.group(1).upper()
+    match = _IPWO_CUSTOM_ZONE_RE.search(username)
+    if match:
+        return match.group("cc").upper()
     match = _INFER_KOOKEEY_PW_RE.match(password)
     if match:
         return match.group(1).upper()

@@ -443,7 +443,7 @@ keyed by file metadata rather than repeated for every row.
 MVVM migration is incremental rather than a rewrite:
 
 - `PaymentBatchWindow` + `PaymentBatchViewModel` + `PaymentBatchService` are the first complete vertical slice. The view binds commands and state; the service owns matrix serialization and backend invocation.
-- `StageMatrixViewModel` consumes the same v2 event stream for registration and payment. `JsonlStageMatrixStore` persists sanitized events under `runtime/stage_matrix.jsonl`, reloads recent runs at startup, bounds retention, and deduplicates by run sequence.
+- `StageMatrixViewModel` is limited to the embedded protocol-payment view. `JsonlStageMatrixStore` persists sanitized payment events under `runtime/stage_matrix.jsonl`, reloads recent runs at startup, bounds retention, and deduplicates by run sequence. Protocol registration does not open or reload a matrix popup; its current v2 progress is rendered on the owning task row so historical runs cannot inflate the active batch counters.
 - `SettingsWindow` + `SettingsViewModel` + `SettingsService` replace the dynamic code-built settings form. The catalog is data-driven, unknown JSON fields survive round trips, validation happens before persistence, and the replacement file is written in the configuration directory.
 - Existing `MainWindow.*.cs` handlers remain operational and move behind injected services one workflow at a time.
 - Registration progress lines containing `Saved session:` trigger a debounced
@@ -575,6 +575,8 @@ normalized into the canonical message shape before OTP filtering.
 批量注册每条加载的 mailbox 最多使用一次：`--count` 超过已加载的唯一 mailbox 数时会被截断，不会用取模方式回绕重复复用。
 每个账号拥有独立的 Sentinel 事务与 `oai-did`，batch worker 不把 token 返回共享池；账号创建过程产生的新鲜 refresh token 不写入共享缓存，OAuth create 创建的 refresh token 保留账号既有的 device ID。
 Fresh 提取受可配置的有界信号量保护（`sentinel_max_concurrency` 默认 2，上限 4）；缓存路径调用方保留 single-flight 填充语义。
+
+`auth.openai.com/login` 与 `/log-in` 只表示当前 auth-state 的中间页面，不足以证明邮箱已经注册。`auth_flow.py` 必须继续提交 username，并以是否推进到邮箱验证或后续状态作为判定依据；只有 continue 后仍无法推进时，才记录一次有界的 `login_redirect_not_advanced` 失败并尝试下一条 auth 路径。注册进度的每次 attempt 只允许一个 terminal event，持久化层不得重复追加 `failed` / `completed`。
 
 If OTP validation succeeds but create-account returns
 `registration_disallowed`, the failure is treated as a provider/server-side

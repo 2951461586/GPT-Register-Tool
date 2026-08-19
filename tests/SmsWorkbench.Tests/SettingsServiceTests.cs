@@ -152,6 +152,37 @@ public sealed class SettingsServiceTests
     }
 
     [Fact]
+    public void SaveNormalizesBareProviderRegistrationPool()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        File.WriteAllText(configPath, "{}", new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Field(categories, "registration_proxy").Value = "us.ipwo.net:7878:account_custom_zone_US:password";
+        Field(categories, "registration_proxy_pool").Value =
+            "as.ipwo.net:7878:account_custom_zone_JP:password\n" +
+            "socks5h://account_custom_zone_GB:password@eu.ipwo.net:7878";
+        Field(categories, "protocol_payment_matrix").Value = "{\"cells\":[]}";
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        Assert.Equal(
+            "http://account_custom_zone_US:password@us.ipwo.net:7878",
+            root["proxy"]!["registration"]!.GetValue<string>());
+        Assert.Equal(
+            new[]
+            {
+                "http://account_custom_zone_US:password@us.ipwo.net:7878",
+                "http://account_custom_zone_JP:password@as.ipwo.net:7878",
+                "socks5h://account_custom_zone_GB:password@eu.ipwo.net:7878"
+            },
+            root["proxy"]!["pool"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
     public void CatalogOmitsLegacyProtocolProxyEditors()
     {
         Assert.DoesNotContain(SettingsCatalog.AllFields, field => field.Key == "protocol_proxy_pool");

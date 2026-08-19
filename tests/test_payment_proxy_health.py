@@ -82,11 +82,8 @@ def test_paypal_supported_country_catalog():
     assert not is_paypal_supported("")
 
 
-def test_validate_paypal_country_gates_paypal_family_only():
-    # Non-PayPal method: never constrained.
+def test_validate_paypal_country_is_compatibility_noop():
     validate_paypal_country("gopay", "TR")
-    # PayPal-family: blank passes, supported passes, unsupported raises.
     validate_paypal_country("paypal", "")
     validate_paypal_country("paypal", "US")
-    with pytest.raises(ValueError):
-        validate_paypal_country("paypal", "TR")
+    validate_paypal_country("paypal", "TR")

@@ -205,15 +205,10 @@ namespace SmsWorkbench
                     string region = JsonString(value, "region");
                     string ip = JsonString(value, "ip");
                     string error = JsonString(value, "error");
-                    string unsupported =
-                        value.TryGetProperty("expected_country_paypal_supported", out JsonElement supportedElement)
-                        && supportedElement.ValueKind == JsonValueKind.False
-                            ? "（非 PayPal 支持国）"
-                            : "";
                     string where = string.Join("/", new[] { cc, region }.Where(item => item.Length > 0));
                     parts.Add(stageOk
-                        ? $"{stage.Name}✓ {where} {ip}{unsupported}".Trim()
-                        : $"{stage.Name}✗ {error}{unsupported}".Trim());
+                        ? $"{stage.Name}✓ {where} {ip}".Trim()
+                        : $"{stage.Name}✗ {error}".Trim());
                 }
             }
             string prefix = ok ? "代理探测通过：" : "代理探测存在问题：";

@@ -544,8 +544,6 @@ class RegistrationEmailWorkflow:
             attempts=r._passwordless_signin_attempts() if s.registration_mode == "passwordless" else r._signup_signin_attempts(),
         )
         r._fetch_client_auth_session_dump(s.session, s.auth_base, s.base_headers, "after_signup_state")
-        if s.signup_state.get("existing_login_redirect"):
-            self._abort("email_already_registered_or_login_redirect")
         if not s.signup_state.get("ok"):
             self._abort(f"signup_auth_state:{json.dumps(s.signup_state, ensure_ascii=False)[:300]}")
         if r._is_chatgpt_auth_login_landing(s.signup_state.get("url", "")):

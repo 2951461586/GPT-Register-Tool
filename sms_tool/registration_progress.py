@@ -71,7 +71,11 @@ class RegistrationProgress:
     def persist(self, result: dict[str, Any] | None, error: str = "") -> None:
         success = bool((result or {}).get("success"))
         final_error = _sanitize_text(error or (result or {}).get("error") or "")[:300]
-        self.stage("completed" if success else "failed", "success" if success else "failed", final_error)
+        terminal_stage = "completed" if success else "failed"
+        terminal_status = "success" if success else "failed"
+        last_event = self.events[-1] if self.events else {}
+        if last_event.get("stage") != terminal_stage or last_event.get("status") != terminal_status:
+            self.stage(terminal_stage, terminal_status, final_error)
         row = _sanitize({
             "run_id": self.run_id,
             "email": self.email or str((result or {}).get("email") or ""),

@@ -278,6 +278,29 @@ public sealed class PaymentBatchServiceTests
     }
 
     [Fact]
+    public void PaymentProxyPoolsNormalizeBareProviderEntriesAndPreserveSchemes()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        File.WriteAllText(configPath, "{}", new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+
+        SettingsSaveResult saved = service.SaveProxyConfiguration(
+            "paypal",
+            new PaymentBatchProxyConfiguration(
+                "us.ipwo.net:7878:account_custom_zone_US:password",
+                "socks5h://account_custom_zone_JP:password@as.ipwo.net:7878",
+                "US",
+                "JP",
+                "GB"));
+
+        Assert.True(saved.Ok, saved.Error);
+        PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("paypal");
+        Assert.Equal("http://account_custom_zone_US:password@us.ipwo.net:7878", loaded.CheckoutProxyPool);
+        Assert.Equal("socks5h://account_custom_zone_JP:password@as.ipwo.net:7878", loaded.ApproveProxyPool);
+    }
+
+    [Fact]
     public void CanonicalNamedPoolsAndRoutesAreSharedBySingleAndBatchSurfaces()
     {
         using var fixture = new TemporaryDirectory();

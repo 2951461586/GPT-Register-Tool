@@ -9,6 +9,29 @@ from sms_tool import paypal_proxy
 
 
 class PayPalProxyTests(unittest.TestCase):
+    def test_probe_detects_socks5h_when_bare_entry_defaulted_to_http(self):
+        seen = []
+
+        def fake_probe(value, expected, stage, _timeout):
+            seen.append(value)
+            return paypal_proxy.ProxyProbeResult(
+                ok=value.startswith("socks5h://"),
+                stage=stage,
+                expected_country=expected,
+                country_code=expected if value.startswith("socks5h://") else "",
+                error="proxy_probe_failed" if value.startswith("http://") else "",
+            )
+
+        with patch.object(paypal_proxy, "_probe_proxy_network", side_effect=fake_probe):
+            result = paypal_proxy.probe_proxy("proxy.example:1080:user:pass", "US")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.scheme, "socks5h")
+        self.assertEqual(
+            [value.split("://", 1)[0] for value in seen],
+            ["http", "socks5h"],
+        )
+
     def test_proxy_probe_error_redacts_authenticated_proxy(self):
         class FailingSession:
             trust_env = True

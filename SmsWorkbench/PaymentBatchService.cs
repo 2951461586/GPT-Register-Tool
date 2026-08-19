@@ -98,7 +98,7 @@ namespace SmsWorkbench
                 JsonObject legacyStages = legacy?["stage_proxies"] as JsonObject;
                 JsonObject legacyCountries = legacy?["stage_proxy_countries"] as JsonObject;
 
-                string[] fallbackPool = ParseList(FirstPool(protocol?["proxy_pool"]));
+                string[] fallbackPool = NormalizePool(FirstPool(protocol?["proxy_pool"]));
                 string checkoutPool = FirstPool(
                     NamedRoutePool(routes, "checkout", namedPools),
                     configured?["checkout_proxy_pool"],
@@ -137,8 +137,8 @@ namespace SmsWorkbench
                     Text(legacyCountries, "update"),
                     updateCountry).ToUpperInvariant();
                 return new PaymentBatchProxyConfiguration(
-                    checkoutPool,
-                    approvePool,
+                    NormalizePoolText(checkoutPool),
+                    NormalizePoolText(approvePool),
                     checkoutCountry,
                     approveCountry,
                     updateCountry);
@@ -174,8 +174,8 @@ namespace SmsWorkbench
                 JsonObject methods = EnsureObject(root, "protocol_payments", "methods");
                 JsonObject proxyPools = EnsureObject(root, "protocol_payments", "proxy_pools");
                 JsonObject methodConfig = EnsureObject(methods, method);
-                string[] checkoutPool = ParseList(configuration?.CheckoutProxyPool);
-                string[] approvePool = ParseList(configuration?.ApproveProxyPool);
+                string[] checkoutPool = NormalizePool(configuration?.CheckoutProxyPool);
+                string[] approvePool = NormalizePool(configuration?.ApproveProxyPool);
                 string checkoutPoolName = method + "_checkout";
                 string approvePoolName = method + "_approve";
                 SetArray(proxyPools, checkoutPoolName, checkoutPool);
@@ -440,6 +440,12 @@ namespace SmsWorkbench
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+        private static string[] NormalizePool(string value)
+            => ProxyInputNormalizer.NormalizeList(value);
+
+        private static string NormalizePoolText(string value)
+            => string.Join(Environment.NewLine, NormalizePool(value));
+
         private static bool ValidCountry(string value)
             => value.Length == 0 || Regex.IsMatch(value, "^[A-Z]{2}$", RegexOptions.CultureInvariant);
 
@@ -499,7 +505,7 @@ namespace SmsWorkbench
 
         private static void AddPoolArgument(List<string> arguments, string option, string value)
         {
-            string normalized = string.Join(Environment.NewLine, ParseList(value));
+            string normalized = NormalizePoolText(value);
             if (normalized.Length > 0)
                 arguments.AddRange(new[] { option, normalized });
         }

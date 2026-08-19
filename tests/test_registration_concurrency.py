@@ -91,6 +91,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "/api/accounts/authorize?prompt=login&screen_hint=signup"
         ))
         self.assertTrue(_is_existing_login_redirect("https://auth.openai.com/log-in"))
+        self.assertFalse(_is_existing_login_redirect("https://example.com/login"))
         self.assertTrue(_is_chatgpt_auth_login_landing("https://chatgpt.com/auth/login?callbackUrl=https%3A%2F%2Fchatgpt.com%2F"))
         self.assertTrue(_is_signup_password_step("https://auth.openai.com/create-account/password"))
         self.assertFalse(_is_signup_password_step("https://chatgpt.com/auth/login"))
@@ -116,6 +117,44 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertIn("screen_hint=signup", url)
         self.assertIn("login_hint=a%2Boai01%40hotmail.com", url)
         self.assertNotIn("prompt=login", url)
+
+    def test_signup_login_redirect_advances_username_instead_of_aborting(self):
+        signin_response = Mock()
+        signin_response.status_code = 200
+        signin_response.json.return_value = {"url": "https://auth.openai.com/api/accounts/authorize"}
+        signin_response.headers = {}
+        signin_response.url = "https://chatgpt.com/api/auth/signin/openai"
+
+        authorize_response = Mock()
+        authorize_response.status_code = 302
+        authorize_response.headers = {"location": "/log-in"}
+        authorize_response.url = "https://auth.openai.com/api/accounts/authorize"
+
+        session = Mock()
+        session.post.return_value = signin_response
+        session.get.return_value = authorize_response
+        advanced = {
+            "ok": True,
+            "status": 200,
+            "url": "https://auth.openai.com/email-verification",
+        }
+
+        with patch.object(auth_flow, "_continue_signup_username", return_value=advanced) as continue_signup:
+            state = auth_flow._prepare_signup_auth_state(
+                session,
+                "user@example.com",
+                "device-id",
+                "logging-id",
+                "https://auth.openai.com",
+                "https://chatgpt.com",
+                {},
+                "csrf-token",
+                attempts=({"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},),
+            )
+
+        self.assertTrue(state["ok"])
+        self.assertTrue(state["login_redirect_seen"])
+        continue_signup.assert_called_once()
 
     def test_passwordless_signin_primary_attempt_matches_har_login_or_signup(self):
         attempts = _passwordless_signin_attempts()
