@@ -28,6 +28,8 @@ class PaymentResultDict(TypedDict, total=False):
     side_effect_started: bool
     requires_reconciliation: bool
     url: str
+    operation_id: str
+    idempotency_key_hash: str
 
 
 @dataclass(frozen=True)

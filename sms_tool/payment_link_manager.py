@@ -28,6 +28,11 @@ from .payment_contracts import PaymentRequest, PaymentResult, payment_history_me
 from .payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method
 from .payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from .payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
+from .payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
 from .payment_routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
@@ -238,6 +243,8 @@ def generate_payment_link(
     method = normalize_payment_method(payment_method)
     method_name = method or str(payment_method or "").strip().lower()
     options = dict(kwargs)
+    operation_id = str(options.pop("operation_id", "") or uuid.uuid4().hex).strip()
+    idempotency_key = str(options.pop("idempotency_key", "") or operation_id).strip()
     supplied_plan = options.pop("payment_route_plan", None)
     planning_error: Exception | None = None
     plan = supplied_plan if isinstance(supplied_plan, PaymentRoutePlan) else None
@@ -260,12 +267,12 @@ def generate_payment_link(
                 options=options,
                 default_proxy=proxy,
             )
-    except Exception as exc:
+    except (ConfigError, ValueError, TypeError, OSError, RuntimeError) as exc:
         if not getattr(exc, "error_stage", ""):
             try:
                 exc.error_stage = "validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"
-            except Exception:
-                pass
+            except (AttributeError, TypeError):
+                _LOGGER.debug("could not annotate payment planning error", exc_info=True)
         planning_error = exc
         plan = PaymentRoutePlan.empty(method_name)
 
@@ -276,7 +283,42 @@ def generate_payment_link(
         routed_options["stage_proxy_countries"] = dict(options["stage_proxy_countries"])
     routed_options["payment_route_plan"] = plan
     routed_options["paypal_generation_type"] = paypal_generation_type
-    routed_options["adapter_progress"] = progress
+    operation_name = "payment_method_capability_probe" if bool(options.get("probe_only")) else "extract_link"
+    try:
+        payment_operation = PaymentOperationStore.from_config(source).begin(
+            payment_method=method_name,
+            operation=operation_name,
+            idempotency_key=idempotency_key,
+            operation_id=operation_id,
+        )
+    except PaymentOperationConflict as exc:
+        result = payment_operation_conflict_result(exc)
+        result.update({
+            "payment_method": method_name,
+            "operation": operation_name,
+            "manager_state": result["status"],
+        })
+        _safe_persist_run(result)
+        return result
+
+    def transactional_progress(event: dict[str, Any]) -> None:
+        payload = dict(event or {})
+        stage = str(payload.get("stage") or "adapter")
+        state = str(payload.get("state") or payload.get("status") or "running")
+        potential_side_effect = operation_name != "payment_method_capability_probe" and (
+            stage == "adapter"
+            or stage in {"payment_method", "confirm", "approve", "poll", "redirect", "provider", "artifact"}
+        )
+        payment_operation.checkpoint(
+            stage,
+            state,
+            side_effect_started=True if potential_side_effect else None,
+            error_code=str(payload.get("error_code") or ""),
+        )
+        if progress is not None:
+            progress(payload)
+
+    routed_options["adapter_progress"] = transactional_progress
 
     for record in plan.coercions:
         _LOGGER.warning(
@@ -315,17 +357,24 @@ def generate_payment_link(
         normalizer=(lambda result: _normalize_result(spec, result)) if spec else None,
         exception_classifier=_classify_exception,
         error_sanitizer=_redact_sensitive_text,
-        progress=progress,
+        progress=transactional_progress,
     )
-    result = executor.run(PaymentExecutionRequest(
-        payment_method=method_name,
-        access_token=str(access_token or ""),
-        route_plan=plan,
-        auth_context=dict(auth_context or {}),
-        runtime_config=source,
-        options=routed_options,
-        operation="payment_method_capability_probe" if bool(options.get("probe_only")) else "extract_link",
-    ))
+    try:
+        result = executor.run(PaymentExecutionRequest(
+            payment_method=method_name,
+            access_token=str(access_token or ""),
+            route_plan=plan,
+            auth_context=dict(auth_context or {}),
+            runtime_config=source,
+            options=routed_options,
+            operation=operation_name,
+            operation_id=payment_operation.operation_id,
+            idempotency_key_hash=payment_operation.idempotency_key_hash,
+        ))
+        payment_operation.finish(result)
+    except BaseException:
+        payment_operation.fail_unknown("executor", "payment_executor_aborted")
+        raise
     _safe_persist_run(result)
     return result
 
@@ -437,8 +486,8 @@ def _run_extractor_subprocess(
             if path:
                 try:
                     Path(path).unlink(missing_ok=True)
-                except Exception:
-                    pass
+                except OSError:
+                    _LOGGER.warning("failed to remove temporary payment credential file", exc_info=True)
 
 
 def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
@@ -1359,7 +1408,7 @@ def _persist_run(result: dict[str, Any]) -> None:
 def _safe_persist_run(result: dict[str, Any]) -> None:
     try:
         _persist_run(result)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:
         result["persistence_warning"] = f"payment run state was not persisted: {type(exc).__name__}"
 
 
@@ -1368,7 +1417,7 @@ def _last_json_object(text: str) -> dict[str, Any]:
     for index in reversed([i for i, char in enumerate(text) if char == "{"]):
         try:
             value, end = decoder.raw_decode(text[index:])
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             continue
         if isinstance(value, dict) and not text[index + end :].strip():
             return value
@@ -1389,7 +1438,7 @@ def _blik_completion(stdout: str) -> dict[str, Any]:
     for raw in reversed(_BLIK_RESULT_RE.findall(stdout or "")):
         try:
             value = json.loads(raw)
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             continue
         if (
             isinstance(value, dict)
