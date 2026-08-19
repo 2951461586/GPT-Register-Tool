@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from .account_seed import load_account_seed
 from .config import CFG
+from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
@@ -26,7 +27,8 @@ from .payment_link_manager import (
     probe_payment_method,
 )
 from .payment_routing import PaymentRoutePlanner
-from .payment_contracts import payment_history_metadata, payment_retry_allowed
+from .payment_contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
+from .payment_catalog import PAYMENT_METHODS
 
 # Minimum spacing between "running" checkpoint rewrites of the batch report
 # (terminal states always persist immediately).
@@ -94,6 +96,11 @@ def run_payment_batch(
     method = normalize_payment_method(payment_method)
     if not method:
         raise ValueError(f"unsupported payment method: {payment_method}")
+    definition = PAYMENT_METHODS[method]
+    if not probe_only and not definition.batch_enabled:
+        raise ValueError(f"payment method is not enabled for batch execution: {method}")
+    if definition.release_tier == "canary" and not probe_only and not canary:
+        raise ValueError(f"payment method requires an explicit canary batch: {method}")
     selected = _unique_emails(emails)
     if canary:
         selected = selected[: max(1, int(canary))]
@@ -146,22 +153,38 @@ def run_payment_batch(
     )
     report_path = _report_path(batch_id)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    existing = _load_checkpoint(report_path, method, run_signature)
-    existing_by_ref = {
-        str(row.get("account_ref") or ""): row
-        for row in (existing.get("results") or [])
-        if (
-            isinstance(row, dict)
-            and row.get("account_ref")
-            and _checkpoint_row_resumable(row)
-        )
-    }
-    ordered: list[dict[str, Any] | None] = [
-        existing_by_ref.get(_account_ref(email)) for email in selected
-    ]
-    pending = [(index, email) for index, email in enumerate(selected) if ordered[index] is None]
     checkpoint_lock = threading.Lock()
-
+    process_gate = CrossProcessSemaphore(
+        f"payment-batch-{batch_id}",
+        1,
+        base_dir=runtime_file(CFG, "payment_batch_locks"),
+    )
+    try:
+        process_gate.acquire(timeout=30)
+    except GateTimeoutError as exc:
+        raise RuntimeError("payment batch is already running") from exc
+    try:
+        existing = _load_checkpoint(report_path, method, run_signature)
+    except Exception:
+        process_gate.release()
+        raise
+    try:
+        existing_by_ref = {
+            str(row.get("account_ref") or ""): row
+            for row in (existing.get("results") or [])
+            if (
+                isinstance(row, dict)
+                and row.get("account_ref")
+                and _checkpoint_row_resumable(row)
+            )
+        }
+        ordered: list[dict[str, Any] | None] = [
+            existing_by_ref.get(_account_ref(email)) for email in selected
+        ]
+        pending = [(index, email) for index, email in enumerate(selected) if ordered[index] is None]
+    except Exception:
+        process_gate.release()
+        raise
     def emit(account_ref: str, stage: str, status: str = "running", **extra: Any) -> None:
         if progress is None:
             return
@@ -357,35 +380,38 @@ def run_payment_batch(
             _write_checkpoint(report_path, report)
         return report
 
-    if pending:
-        checkpoint("running", force=True)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(run_one, index, email): (index, email) for index, email in pending}
-        for future in as_completed(futures):
-            fallback_index, fallback_email = futures[future]
-            try:
-                index, row = future.result()
-            except (OSError, ValueError, TypeError, RuntimeError) as exc:
-                index = fallback_index
-                row = {
-                    "index": index,
-                    "account_ref": _account_ref(fallback_email),
-                    "matrix_cell": "unassigned",
-                    "authenticated": False,
-                    "eligible": None,
-                    "attempted": False,
-                    "ok": False,
-                    "decision": "payment_worker_exception",
-                    "error": _canonical_sanitize_text(f"{type(exc).__name__}: {exc}"),
-                    "retryable": True,
-                }
-            ordered[index] = row
-            checkpoint("running")
-    report = checkpoint("finished")
-    if canary:
-        report["canary_state"] = _record_canary_state(method, report)
-        _write_checkpoint(report_path, report)
-    return report
+    try:
+        if pending:
+            checkpoint("running", force=True)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(run_one, index, email): (index, email) for index, email in pending}
+            for future in as_completed(futures):
+                fallback_index, fallback_email = futures[future]
+                try:
+                    index, row = future.result()
+                except (OSError, ValueError, TypeError, RuntimeError) as exc:
+                    index = fallback_index
+                    row = {
+                        "index": index,
+                        "account_ref": _account_ref(fallback_email),
+                        "matrix_cell": "unassigned",
+                        "authenticated": False,
+                        "eligible": None,
+                        "attempted": False,
+                        "ok": False,
+                        "decision": "payment_worker_exception",
+                        "error": _canonical_sanitize_text(f"{type(exc).__name__}: {exc}"),
+                        "retryable": True,
+                    }
+                ordered[index] = row
+                checkpoint("running")
+        report = checkpoint("finished")
+        if canary:
+            report["canary_state"] = _record_canary_state(method, report)
+            _write_checkpoint(report_path, report)
+        return report
+    finally:
+        process_gate.release()
 
 
 def _build_report(*, batch_id: str, method: str, started: float, workers: int,
@@ -650,6 +676,9 @@ def _load_checkpoint(path: Path, method: str, run_signature: str) -> dict[str, A
 
 def _checkpoint_row_resumable(row: dict[str, Any]) -> bool:
     """Resume only completed success or an explicitly non-retryable failure."""
+    contract = PaymentResult.from_mapping(row)
+    if contract.outcome.requires_reconciliation or contract.outcome.side_effect_started and not contract.ok:
+        return True
     if row.get("ok") is True:
         return True
     return row.get("ok") is False and row.get("retryable") is False

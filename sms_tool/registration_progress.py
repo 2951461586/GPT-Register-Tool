@@ -31,15 +31,18 @@ class RegistrationProgress:
         self.email = str(email or "")
         self.started_at = int(time.time())
         self.events: list[dict[str, Any]] = []
+        self.sequence = 0
         self.last_stage = "started"
         self.stage("started")
 
     def stage(self, name: str, status: str = "running", detail: str = "") -> None:
         self.last_stage = str(name or "unknown")
+        self.sequence += 1
         event = {
             "stage": self.last_stage,
             "status": str(status or "running"),
             "at": int(time.time()),
+            "sequence": self.sequence,
         }
         if detail:
             event["detail"] = _sanitize_text(detail)[:240]
@@ -53,9 +56,9 @@ class RegistrationProgress:
                 "account_ref": self.email,
                 **event,
             })
-        except Exception:
+        except (OSError, ValueError, TypeError, RuntimeError):
             # A desktop observer must never affect registration behavior.
-            pass
+            return
 
     def snapshot(self) -> dict[str, Any]:
         return {

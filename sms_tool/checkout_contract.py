@@ -7,6 +7,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+
 
 CHECKOUT_PATH = "/backend-api/payments/checkout"
 CHECKOUT_URL = f"https://chatgpt.com{CHECKOUT_PATH}"
@@ -86,23 +88,16 @@ def browser_profile_for_country(country: Any) -> BrowserProfile:
 
 
 PAYMENT_METHOD_PROFILES: dict[str, PaymentMethodProfile] = {
-    "paypal": PaymentMethodProfile("paypal", "paypal", "US", "USD", "en", "en-US", "America/New_York"),
-    "upi": PaymentMethodProfile("upi", "upi", "IN", "INR", "en", "en-IN", "Asia/Kolkata"),
-    "ideal": PaymentMethodProfile("ideal", "ideal", "NL", "EUR", "nl", "nl-NL", "Europe/Amsterdam"),
-    "pix": PaymentMethodProfile("pix", "pix", "BR", "BRL", "pt-BR", "pt-BR", "America/Sao_Paulo"),
-    "kakao": PaymentMethodProfile("kakao", "kakao_pay", "KR", "KRW", "ko", "ko-KR", "Asia/Seoul"),
-    "blik": PaymentMethodProfile("blik", "blik", "PL", "PLN", "pl", "pl-PL", "Europe/Warsaw"),
-    "twint": PaymentMethodProfile("twint", "twint", "CH", "CHF", "de", "de-CH", "Europe/Zurich"),
-    "direct_card": PaymentMethodProfile("direct_card", "card", "PH", "PHP", "en", "en-PH", "Asia/Manila"),
-    "momo": PaymentMethodProfile("momo", "momo", "VN", "VND", "vi", "vi-VN", "Asia/Ho_Chi_Minh"),
-    "gopay": PaymentMethodProfile("gopay", "gopay", "ID", "IDR", "id", "id-ID", "Asia/Jakarta"),
-    # Regional methods stay behind the independent adapter seam until a live
-    # canary proves provider contracts and redirect behavior.
-    "qris": PaymentMethodProfile("qris", "gopay", "ID", "IDR", "id", "id-ID", "Asia/Jakarta"),
-    "bizum": PaymentMethodProfile("bizum", "bizum", "ES", "EUR", "es", "es-ES", "Europe/Madrid"),
-    "naver_pay": PaymentMethodProfile("naver_pay", "naver_pay", "KR", "KRW", "ko", "ko-KR", "Asia/Seoul"),
-    "gcash": PaymentMethodProfile("gcash", "gcash", "PH", "PHP", "en-PH", "en-PH", "Asia/Manila"),
-    "grabpay": PaymentMethodProfile("grabpay", "grabpay", "PH", "PHP", "en-PH", "en-PH", "Asia/Manila"),
+    key: PaymentMethodProfile(
+        key,
+        definition.stripe_type,
+        definition.country,
+        definition.currency,
+        definition.payment_locale,
+        browser_profile_for_country(definition.country).browser_locale,
+        browser_profile_for_country(definition.country).browser_timezone,
+    )
+    for key, definition in CATALOG_PAYMENT_METHODS.items()
 }
 
 

@@ -13,11 +13,14 @@ def test_emit_result_uses_versioned_single_line_contract(capsys):
     line = capsys.readouterr().out.strip()
     assert line.startswith(IPC_PREFIX)
     envelope = json.loads(line[len(IPC_PREFIX):])
-    assert envelope == {
-        "version": 1,
-        "type": "result",
-        "payload": {"ok": True, "value": "中文"},
-    }
+    assert envelope["schema"] == "smsworkbench.ipc.v2"
+    assert envelope["version"] == 2
+    assert envelope["type"] == "result"
+    assert envelope["terminal"] is True
+    assert envelope["sequence"] == 1
+    assert envelope["run_id"]
+    assert envelope["timestamp_ms"] > 0
+    assert envelope["payload"] == {"ok": True, "value": "中文"}
 
 
 def test_emit_result_preserves_normal_cli_json(capsys):

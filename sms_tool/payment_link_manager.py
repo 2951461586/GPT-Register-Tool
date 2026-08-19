@@ -25,7 +25,11 @@ from typing import Any, Callable, Mapping
 from .config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from .paths import project_path, runtime_file
 from .payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from .payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method
+from .payment_catalog import (
+    PAYMENT_METHODS as CATALOG_METHODS,
+    normalize_payment_method as normalize_catalog_payment_method,
+    validate_catalog_consistency,
+)
 from .payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from .payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
 from .payment_operation import (
@@ -181,6 +185,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     registry.register(FunctionPaymentAdapter("momo", methods_for("momo"), momo_runner))
     registry.register(FunctionPaymentAdapter("regional_wallet", methods_for("regional_wallet"), regional_wallet_runner))
     registry.validate_methods(set(PAYMENT_METHODS))
+    validate_catalog_consistency(adapter_methods=set(registry.methods()))
     return registry
 
 
@@ -747,6 +752,11 @@ def _run_regional_wallet_adapter(
     from .regional_payment_adapter import RegionalPaymentAdapter, regional_profile
 
     transport = kwargs.get("transport")
+    if transport is None and bool(kwargs.get("regional_transport_enabled")):
+        from .regional_payment_adapter import ChatGPTStripeRegionalTransport
+        transport = ChatGPTStripeRegionalTransport(
+            timeout=max(5, int(kwargs.get("timeout_seconds") or 45)),
+        )
     if transport is None:
         error = RuntimeError("regional payment adapter requires an injected transport")
         error.error_code = "regional_transport_unconfigured"
