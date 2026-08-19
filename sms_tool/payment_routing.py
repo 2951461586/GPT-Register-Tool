@@ -10,7 +10,7 @@ from typing import Any
 
 from .payment_catalog import PAYMENT_METHODS, normalize_payment_method
 from .payment_flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
-from .proxy_entry import resolve_proxy_value
+from .proxy_entry import parse_proxy_list, resolve_proxy_value
 
 
 LEGACY_STAGE_KEYS: dict[str, tuple[str, ...]] = {
@@ -99,9 +99,9 @@ def parse_proxy_pool(value: Any) -> list[str]:
         values = value
     else:
         values = [value]
-    return list(dict.fromkeys(
-        str(item or "").strip() for item in values if str(item or "").strip()
-    ))
+    # Payment clients receive only canonical URLs. Invalid provider entries are
+    # rejected here instead of being interpreted differently by each adapter.
+    return list(dict.fromkeys(entry.url for entry in parse_proxy_list(values)))
 
 
 def method_payment_config(config: Mapping[str, Any], payment_method: Any) -> dict[str, Any]:

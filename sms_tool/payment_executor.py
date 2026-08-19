@@ -46,6 +46,8 @@ class PaymentExecutionRequest:
     runtime_config: Mapping[str, Any]
     options: Mapping[str, Any]
     operation: str = "extract_link"
+    operation_id: str = ""
+    idempotency_key_hash: str = ""
 
 
 class PaymentFlowExecutor:
@@ -66,10 +68,12 @@ class PaymentFlowExecutor:
 
     def run(self, request: PaymentExecutionRequest) -> dict[str, Any]:
         run_id = uuid.uuid4().hex
+        operation_id = str(request.operation_id or run_id).strip()
         history: list[dict[str, Any]] = []
 
         def move(state: str, stage: str, message: str = "") -> None:
             event = {
+                "operation_id": operation_id,
                 "state": state,
                 "stage": stage,
                 "at": int(time.time()),
@@ -138,6 +142,8 @@ class PaymentFlowExecutor:
         move(terminal, str(result.get("error_stage") or PaymentStage.ARTIFACT.value), "payment run finished")
         result.update({
             "run_id": run_id,
+            "operation_id": operation_id,
+            "idempotency_key_hash": request.idempotency_key_hash,
             "manager_state": terminal,
             "state_history": history,
             "flow_profile": request.route_plan.flow_profile,

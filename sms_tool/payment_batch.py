@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from .account_seed import load_account_seed
 from .config import CFG
-from .sanitizer import sanitize as _canonical_sanitize
+from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
 from .payment_link_manager import (
@@ -244,10 +244,10 @@ def run_payment_batch(
                     if seed_data is not None and is_permanently_deactivated(seed_data):
                         _persist_permanent_deactivation(seed_data)
                         row["terminal_persisted"] = True
-                except Exception as exc:
+                except (OSError, ValueError, TypeError, RuntimeError) as exc:
                     # 落库失败不影响批次主流程，只标记一下，避免拖垮整批。
                     row["terminal_persisted"] = False
-                    row["terminal_persist_error"] = str(exc)
+                    row["terminal_persist_error"] = _canonical_sanitize_text(str(exc))
             emit(account_ref, "auth_gate", "failed", detail=row["decision"])
             return index, row
         emit(account_ref, "auth_gate", "completed")
@@ -292,6 +292,8 @@ def run_payment_batch(
                 access_token=str(auth.get("access_token") or ""),
                 proxy=checkout_route,
                 payment_method=method,
+                operation_id=f"{batch_id}:{account_ref}",
+                idempotency_key=f"{batch_id}:{account_ref}",
                 auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
                 progress=(lambda event: progress({
                     "domain": "payment",
@@ -363,7 +365,7 @@ def run_payment_batch(
             fallback_index, fallback_email = futures[future]
             try:
                 index, row = future.result()
-            except Exception as exc:
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
                 index = fallback_index
                 row = {
                     "index": index,
@@ -374,7 +376,7 @@ def run_payment_batch(
                     "attempted": False,
                     "ok": False,
                     "decision": "payment_worker_exception",
-                    "error": f"{type(exc).__name__}: {exc}",
+                    "error": _canonical_sanitize_text(f"{type(exc).__name__}: {exc}"),
                     "retryable": True,
                 }
             ordered[index] = row
@@ -664,11 +666,13 @@ def _batch_run_signature(
     retries: int,
 ) -> str:
     payload = {
-        "version": 1,
+        "version": 2,
         "payment_method": method,
         "probe_only": bool(probe_only),
         "jit_refresh": bool(jit_refresh),
         "matrix": matrix,
+        # Values are hashed immediately and never persisted; retaining the raw
+        # material here ensures credential or route changes invalidate resume.
         "payment_kwargs": payment_kwargs,
         "proxy": proxy or "",
         "retries": int(retries),
