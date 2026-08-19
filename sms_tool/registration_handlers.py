@@ -544,6 +544,12 @@ class RegistrationEmailWorkflow:
             attempts=r._passwordless_signin_attempts() if s.registration_mode == "passwordless" else r._signup_signin_attempts(),
         )
         r._fetch_client_auth_session_dump(s.session, s.auth_base, s.base_headers, "after_signup_state")
+        if int(s.signup_state.get("status") or 0) == 429:
+            from .registration_concurrency import mark_registration_rate_limited
+
+            retry_after = float(s.signup_state.get("retry_after_seconds") or 300)
+            mark_registration_rate_limited(retry_after)
+            self._abort(f"registration_rate_limited:retry_after={retry_after:.0f}s")
         if not s.signup_state.get("ok"):
             self._abort(f"signup_auth_state:{json.dumps(s.signup_state, ensure_ascii=False)[:300]}")
         if r._is_chatgpt_auth_login_landing(s.signup_state.get("url", "")):

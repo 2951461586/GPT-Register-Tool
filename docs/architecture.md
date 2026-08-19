@@ -565,7 +565,7 @@ normalized into the canonical message shape before OTP filtering.
 - `otp_strategy.py`: 注册用 OTP 发送 / 重发 endpoint 选择。
 - `sentinel_tokens.py` / `sentinel_quickjs.py`: Sentinel 提取 / QuickJS SDK 路径 / PoW+浏览器回退 / 缓存。
 - `auth_state.py`: `client_auth_session_dump` 抓取与脱敏诊断摘要。
-- `batch_runner.py`: 并发注册 worker 调度 / 结果排序 / mailbox 数量上限 / 网络+auth-state 失败有界重试并换新鲜代理 session。
+- `batch_runner.py`: 并发注册 worker 调度 / 结果排序 / mailbox 数量上限 / 网络+auth-state 失败有界重试并换新鲜代理 session。HTTP 429 单独归类为 `rate_limit`，不得立即重试；首个 429 会打开进程内认证流冷却电路，阻止同批次等待中的账号继续冲击上游。
 - `registration_outcome.py`: 注册结果归一化 — 账号创建错误提炼 / 多轮 AT 稳定性探测 / `codex_oauth.require_registration_refresh_token`、`require_registration_phone_verification` 开关。
 - `session_builder.py`: 从注册最终态拼装 canonical session JSON（含 `mailbox` 嵌套、token 优先级链、profile/device/paypal 字段、`created_at`）。
 
@@ -575,6 +575,7 @@ normalized into the canonical message shape before OTP filtering.
 批量注册每条加载的 mailbox 最多使用一次：`--count` 超过已加载的唯一 mailbox 数时会被截断，不会用取模方式回绕重复复用。
 每个账号拥有独立的 Sentinel 事务与 `oai-did`，batch worker 不把 token 返回共享池；账号创建过程产生的新鲜 refresh token 不写入共享缓存，OAuth create 创建的 refresh token 保留账号既有的 device ID。
 Fresh 提取受可配置的有界信号量保护（`sentinel_max_concurrency` 默认 2，上限 4）；缓存路径调用方保留 single-flight 填充语义。
+认证流使用独立 `registration.stage_concurrency.auth` gate，默认并发为 1；OTP、create-account 和 session 拉取继续使用 `network` gate。这样批量 worker 可以并行准备 Sentinel/邮箱，但不会并发轰击 `/api/accounts/authorize/continue`。
 
 `auth.openai.com/login` 与 `/log-in` 只表示当前 auth-state 的中间页面，不足以证明邮箱已经注册。`auth_flow.py` 必须继续提交 username，并以是否推进到邮箱验证或后续状态作为判定依据；只有 continue 后仍无法推进时，才记录一次有界的 `login_redirect_not_advanced` 失败并尝试下一条 auth 路径。注册进度的每次 attempt 只允许一个 terminal event，持久化层不得重复追加 `failed` / `completed`。
 

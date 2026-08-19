@@ -141,7 +141,15 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
     next_url = _response_next_url(response, auth_base)
     print(f"  Signup username continue: {response.status_code}" + (f" {next_url}" if next_url else ""))
     if response.status_code != 200:
-        return {"ok": False, "status": response.status_code, "body": body, "url": next_url}
+        circuit = getattr(session, "_openai_registration_circuit", {})
+        retry_after = circuit.get("retry_after", 0) if isinstance(circuit, dict) else 0
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "body": body,
+            "url": next_url,
+            "retry_after_seconds": retry_after,
+        }
 
     final_url = next_url
     if next_url and not next_url.endswith("/api/accounts/authorize/continue"):

@@ -188,6 +188,29 @@ class BatchErrorClassificationTests(unittest.TestCase):
         self.assertEqual(results[0]["failure_class"], "auth_state")
         self.assertFalse(results[0]["dropped"])
 
+    def test_rate_limit_is_not_retried_or_marked_dropped(self):
+        calls = []
+
+        def run_email(**_):
+            calls.append(1)
+            return {
+                "success": False,
+                "error": "registration_rate_limited:retry_after=300s",
+                "failure_class": "rate_limit",
+            }
+
+        results = run_batch_impl(
+            count=1,
+            workers=1,
+            max_attempts=2,
+            retry_delay_seconds=0,
+            run_email_func=run_email,
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(results[0]["failure_class"], "rate_limit")
+        self.assertFalse(results[0]["dropped"])
+
     def test_storage_keeps_network_failures_separate_from_dead_accounts(self):
         status = _status(
             {"success": False, "failure_class": "network", "error": "proxy timeout"},
@@ -217,6 +240,16 @@ class BatchErrorClassificationTests(unittest.TestCase):
         )
 
         self.assertEqual(status, "auth_state_failed")
+
+    def test_storage_keeps_rate_limits_separate_from_dead_accounts(self):
+        status = _status(
+            {"success": False, "failure_class": "rate_limit", "error": "rate_limit_exceeded"},
+            {},
+            "",
+            has_refresh_token=False,
+        )
+
+        self.assertEqual(status, "rate_limited")
 
 
 if __name__ == "__main__":

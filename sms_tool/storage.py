@@ -417,6 +417,8 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "mailbox_failed"
     if failure_class == "auth_state" and data.get("success") is False:
         return "auth_state_failed"
+    if failure_class == "rate_limit" and data.get("success") is False:
+        return "rate_limited"
     if explicit in {"k12_joined", "k12_requested", "k12_left", "k12_verify_failed"}:
         return explicit
     if _looks_at_invalid(data, paypal):

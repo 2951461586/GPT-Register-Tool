@@ -160,7 +160,7 @@ def run_batch_impl(
             if result.get("success", False):
                 return i, result
             result.setdefault("failure_class", classify_error(result))
-            if result["failure_class"] in {"network", "mailbox", "auth_state"}:
+            if result["failure_class"] in {"network", "mailbox", "auth_state", "rate_limit"}:
                 result.setdefault("dropped", False)
             elif result["failure_class"] == "account":
                 result.setdefault("dropped", True)
