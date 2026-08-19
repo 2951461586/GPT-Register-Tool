@@ -12,6 +12,8 @@
     {"code":"IN","label":"印度 IN"},
     {"code":"GB","label":"英国 GB"},
     {"code":"DE","label":"德国 DE"},
+    {"code":"ES","label":"西班牙 ES"},
+    {"code":"KR","label":"韩国 KR"},
     {"code":"BR","label":"巴西 BR"}
   ],
   "approve_countries": [
@@ -22,6 +24,7 @@
     {"code":"US","label":"美国 US"},
     {"code":"GB","label":"英国 GB"},
     {"code":"DE","label":"德国 DE"},
+    {"code":"ES","label":"西班牙 ES"},
     {"code":"JP","label":"日本 JP"},
     {"code":"BR","label":"巴西 BR"},
     {"code":"TR","label":"土耳其 TR"},
@@ -47,6 +50,7 @@
     {"code":"VN","label":"VN - 越南"},
     {"code":"PH","label":"PH - 菲律宾"},
     {"code":"DE","label":"DE - 德国"},
+    {"code":"ES","label":"ES - 西班牙"},
     {"code":"GB","label":"GB - 英国"},
     {"code":"JP","label":"JP - 日本"},
     {"code":"FR","label":"FR - 法国"},
@@ -68,6 +72,9 @@
     {"id":"blik","display_name":"BLIK","registration_display_name":"BLIK Poland protocol","country":"PL","currency":"PLN","adapter":"script","script":"blik/blik_qr_extract.py","aliases":[],"batch_enabled":false,"registration_enabled":true},
     {"id":"twint","display_name":"TWINT","registration_display_name":"TWINT Switzerland protocol","country":"CH","currency":"CHF","adapter":"script","script":"twint/twint_extract.py","aliases":[],"batch_enabled":true,"registration_enabled":true},
     {"id":"direct_card","display_name":"Direct Card Checkout","registration_display_name":"Direct card checkout","country":"PH","currency":"PHP","adapter":"direct_card","script":"direct_card/direct_card_extract.py","aliases":["direct-card","directcard","direct","zhika","card","checkout"],"batch_enabled":true,"registration_enabled":true},
-    {"id":"momo","display_name":"MoMo","registration_display_name":"MoMo Vietnam QR","country":"VN","currency":"VND","adapter":"momo","script":"momo/run_momo.py","aliases":["momo_qr","momo-qr","momoqr"],"batch_enabled":true,"registration_enabled":true}
+    {"id":"momo","display_name":"MoMo","registration_display_name":"MoMo Vietnam QR","country":"VN","currency":"VND","adapter":"momo","script":"momo/run_momo.py","aliases":["momo_qr","momo-qr","momoqr"],"batch_enabled":true,"registration_enabled":true},
+    {"id":"qris","display_name":"QRIS","registration_display_name":"QRIS Indonesia (offline contract)","country":"ID","currency":"IDR","adapter":"regional_wallet","aliases":["qris_id"],"checkout_countries":[{"code":"ID","label":"印度尼西亚 ID"}],"approve_countries":[{"code":"ID","label":"印度尼西亚 ID"}],"batch_enabled":false,"registration_enabled":false},
+    {"id":"bizum","display_name":"Bizum","registration_display_name":"Bizum Spain (offline contract)","country":"ES","currency":"EUR","adapter":"regional_wallet","aliases":["bizum_es"],"checkout_countries":[{"code":"ES","label":"西班牙 ES"}],"approve_countries":[{"code":"ES","label":"西班牙 ES"}],"batch_enabled":false,"registration_enabled":false},
+    {"id":"naver_pay","display_name":"Naver Pay","registration_display_name":"Naver Pay Korea (offline contract)","country":"KR","currency":"KRW","adapter":"regional_wallet","aliases":["naverpay","naver-pay"],"checkout_countries":[{"code":"KR","label":"韩国 KR"}],"approve_countries":[{"code":"KR","label":"韩国 KR"}],"batch_enabled":false,"registration_enabled":false}
   ]
 }

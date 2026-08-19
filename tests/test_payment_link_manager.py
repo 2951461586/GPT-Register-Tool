@@ -27,9 +27,10 @@ class PaymentLinkManagerTests(unittest.TestCase):
         keys = set(methods)
         self.assertEqual(keys, {
             "paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao",
-            "blik", "twint", "direct_card", "momo",
+            "blik", "twint", "direct_card", "momo", "qris", "bizum", "naver_pay",
         })
         self.assertTrue(methods["gcash"]["available"])
+        self.assertTrue(all(methods[key]["adapter"] == "regional_wallet" for key in ("qris", "bizum", "naver_pay")))
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")

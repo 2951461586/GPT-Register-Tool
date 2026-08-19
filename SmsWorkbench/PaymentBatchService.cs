@@ -19,7 +19,15 @@ namespace SmsWorkbench
             CancellationToken cancellationToken);
     }
 
-    public sealed class PaymentBatchService : IPaymentBatchService
+    public interface IPaymentBatchProgressService
+    {
+        Task<JsonElement> RunAsync(
+            PaymentBatchRequest request,
+            IProgress<BackendOutputLine> progress,
+            CancellationToken cancellationToken);
+    }
+
+    public sealed class PaymentBatchService : IPaymentBatchService, IPaymentBatchProgressService
     {
         private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
         private readonly IApplicationPaths _paths;
@@ -238,7 +246,13 @@ namespace SmsWorkbench
             };
         }
 
-        public async Task<JsonElement> RunAsync(PaymentBatchRequest request, CancellationToken cancellationToken)
+        public Task<JsonElement> RunAsync(PaymentBatchRequest request, CancellationToken cancellationToken)
+            => RunAsync(request, null, cancellationToken);
+
+        public async Task<JsonElement> RunAsync(
+            PaymentBatchRequest request,
+            IProgress<BackendOutputLine> progress,
+            CancellationToken cancellationToken)
         {
             string emailFile = Path.Combine(Path.GetTempPath(), "payment_batch_" + Guid.NewGuid().ToString("N") + ".txt");
             string matrixFile = Path.Combine(Path.GetTempPath(), "payment_matrix_" + Guid.NewGuid().ToString("N") + ".json");
@@ -273,7 +287,12 @@ namespace SmsWorkbench
                 long timeout = Math.Max(120000L, (long)GetMethodTimeoutMilliseconds(request.PaymentMethod) * waves);
                 timeout = Math.Min(12L * 60 * 60 * 1000, timeout);
                 BackendCommandResult result = await _backendClient.RunAsync(
-                    BackendCommand.Create("批量协议支付", arguments, (int)timeout),
+                    BackendCommand.Create(
+                        "批量协议支付",
+                        arguments,
+                        (int)timeout,
+                        new Dictionary<string, string> { ["SMSWORKBENCH_EVENTS"] = "1" }),
+                    progress,
                     cancellationToken: cancellationToken);
 
                 if (result.TimedOut)

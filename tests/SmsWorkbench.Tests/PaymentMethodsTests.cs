@@ -19,13 +19,21 @@ public sealed class PaymentMethodsTests
     [Fact]
     public void SingleAccountAndBatchSurfacesUseOneCatalog()
     {
-        Assert.Equal(12, PaymentMethods.All.Count);
+        Assert.Equal(15, PaymentMethods.All.Count);
         Assert.Equal("USD", PaymentMethods.Find("paypal").Currency);
         Assert.Equal("wallet", PaymentMethods.Find("gopay").Adapter);
         Assert.Equal(3, PaymentMethods.All.Count(method => method.Id is "gopay" or "gcash" or "grabpay"));
         Assert.Contains(PaymentMethods.All, method => method.Id == "blik" && !method.BatchEnabled);
         Assert.Contains(PaymentMethods.All, method => method.Id == "direct_card");
         Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == "blik");
+        Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>
+        {
+            Assert.Contains(PaymentMethods.All, method => method.Id == id && !method.BatchEnabled && !method.RegistrationEnabled);
+            Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == id);
+            Assert.DoesNotContain(PaymentMethods.RegistrationOptions, method => method.Id == id);
+        });
+        Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>
+            Assert.Contains(PaymentMethods.All, method => method.Id == id && method.Adapter == "regional_wallet"));
         Assert.All(WalletIds, id =>
         {
             Assert.Contains(PaymentMethods.BatchOptions, method => method.Id == id);
@@ -56,17 +64,17 @@ public sealed class PaymentMethodsTests
     [Fact]
     public void CountryOptionsComeFromTheTopLevelCatalogDefaults()
     {
-        Assert.Equal(11, PaymentMethods.CheckoutCountryOptions("momo").Count);
+        Assert.Equal(13, PaymentMethods.CheckoutCountryOptions("momo").Count);
         Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.CheckoutCountryOptions("momo")[0]);
-        Assert.Equal(new PaymentProxyCountryOption("BR", "巴西 BR"), PaymentMethods.CheckoutCountryOptions("momo")[10]);
+        Assert.Equal(new PaymentProxyCountryOption("BR", "巴西 BR"), PaymentMethods.CheckoutCountryOptions("momo")[12]);
         Assert.Equal(
             PaymentMethods.CheckoutCountryOptions("momo"),
             PaymentMethods.ApproveCountryOptions("momo"));
-        Assert.Equal(15, PaymentMethods.StageCountryOptions.Count);
+        Assert.Equal(16, PaymentMethods.StageCountryOptions.Count);
         Assert.Equal(new PaymentProxyCountryOption("US", "美国 US"), PaymentMethods.StageCountryOptions[0]);
-        Assert.Equal(19, PaymentMethods.BillingCountryOptions.Count);
+        Assert.Equal(20, PaymentMethods.BillingCountryOptions.Count);
         Assert.Equal(new PaymentProxyCountryOption("US", "US - 美国"), PaymentMethods.BillingCountryOptions[0]);
-        Assert.Equal(new PaymentProxyCountryOption("IE", "IE - 爱尔兰"), PaymentMethods.BillingCountryOptions[18]);
+        Assert.Equal(new PaymentProxyCountryOption("IE", "IE - 爱尔兰"), PaymentMethods.BillingCountryOptions[19]);
     }
 
     [Fact]

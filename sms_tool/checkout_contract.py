@@ -68,6 +68,7 @@ COUNTRY_BROWSER_PROFILES: dict[str, BrowserProfile] = {
     "SG": BrowserProfile("en-SG", "Asia/Singapore"),
     "TH": BrowserProfile("th-TH", "Asia/Bangkok"),
     "ID": BrowserProfile("id-ID", "Asia/Jakarta"),
+    "ES": BrowserProfile("es-ES", "Europe/Madrid"),
     "PH": BrowserProfile("en-PH", "Asia/Manila"),
     "VN": BrowserProfile("vi-VN", "Asia/Ho_Chi_Minh"),
     "KR": BrowserProfile("ko-KR", "Asia/Seoul"),
@@ -95,6 +96,11 @@ PAYMENT_METHOD_PROFILES: dict[str, PaymentMethodProfile] = {
     "direct_card": PaymentMethodProfile("direct_card", "card", "PH", "PHP", "en", "en-PH", "Asia/Manila"),
     "momo": PaymentMethodProfile("momo", "momo", "VN", "VND", "vi", "vi-VN", "Asia/Ho_Chi_Minh"),
     "gopay": PaymentMethodProfile("gopay", "gopay", "ID", "IDR", "id", "id-ID", "Asia/Jakarta"),
+    # Regional methods stay behind the independent adapter seam until a live
+    # canary proves provider contracts and redirect behavior.
+    "qris": PaymentMethodProfile("qris", "gopay", "ID", "IDR", "id", "id-ID", "Asia/Jakarta"),
+    "bizum": PaymentMethodProfile("bizum", "bizum", "ES", "EUR", "es", "es-ES", "Europe/Madrid"),
+    "naver_pay": PaymentMethodProfile("naver_pay", "naver_pay", "KR", "KRW", "ko", "ko-KR", "Asia/Seoul"),
     "gcash": PaymentMethodProfile("gcash", "gcash", "PH", "PHP", "en-PH", "en-PH", "Asia/Manila"),
     "grabpay": PaymentMethodProfile("grabpay", "grabpay", "PH", "PHP", "en-PH", "en-PH", "Asia/Manila"),
 }

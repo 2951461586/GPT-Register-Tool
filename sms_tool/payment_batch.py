@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .account_seed import load_account_seed
 from .config import CFG
@@ -89,6 +89,7 @@ def run_payment_batch(
     canary: int = 0,
     retries: int = 1,
     timeout: int = 30,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     method = normalize_payment_method(payment_method)
     if not method:
@@ -161,7 +162,22 @@ def run_payment_batch(
     pending = [(index, email) for index, email in enumerate(selected) if ordered[index] is None]
     checkpoint_lock = threading.Lock()
 
+    def emit(account_ref: str, stage: str, status: str = "running", **extra: Any) -> None:
+        if progress is None:
+            return
+        progress({
+            "run_id": f"{batch_id}:{account_ref}",
+            "batch_id": batch_id,
+            "method": method,
+            "account_ref": account_ref,
+            "stage": stage,
+            "status": status,
+            **extra,
+        })
+
     def run_one(index: int, email: str) -> tuple[int, dict[str, Any]]:
+        account_ref = _account_ref(email)
+        emit(account_ref, "routing")
         seed_context, _ = load_account_seed(email=email)
         seed_country = _registration_country(seed_context)
         cell = _matrix_cell_for(index, cells, method, seed_country)
@@ -180,6 +196,7 @@ def run_payment_batch(
         if checkout_route:
             kwargs["checkout_proxy"] = checkout_route
 
+        emit(account_ref, "auth_gate")
         auth = ensure_payment_access_token(
             email=email,
             proxy=checkout_route,
@@ -231,7 +248,9 @@ def run_payment_batch(
                     # 落库失败不影响批次主流程，只标记一下，避免拖垮整批。
                     row["terminal_persisted"] = False
                     row["terminal_persist_error"] = str(exc)
+            emit(account_ref, "auth_gate", "failed", detail=row["decision"])
             return index, row
+        emit(account_ref, "auth_gate", "completed")
         if cell.get("matrix_mismatch") or matrix_route_mismatch:
             row["eligible"] = False
             row["decision"] = "matrix_registration_country_mismatch"
@@ -239,6 +258,7 @@ def run_payment_batch(
             row["retryable"] = False
             return index, row
         if probe_only:
+            emit(account_ref, "capability_probe")
             capability: dict[str, Any] = {}
             for probe_attempt in range(1, retry_count + 2):
                 capability = probe_payment_method(
@@ -262,15 +282,23 @@ def run_payment_batch(
                 "decision": decision,
                 "attempts": probe_attempt,
             })
+            emit(account_ref, "capability_probe", "completed" if row.get("capability_probed") else "failed")
             return index, row
         last: dict[str, Any] = {}
         for attempt in range(1, retry_count + 2):
             row["attempted"] = True
+            emit(account_ref, "provider", attempt=attempt, max_attempts=retry_count + 1)
             last = generate_payment_link(
                 access_token=str(auth.get("access_token") or ""),
                 proxy=checkout_route,
                 payment_method=method,
                 auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+                progress=(lambda event: progress({
+                    "domain": "payment",
+                    "account_ref": account_ref,
+                    "batch_id": batch_id,
+                    **dict(event or {}),
+                })) if progress else None,
                 **kwargs,
             )
             if last.get("ok") or not _is_transient(last) or attempt > retry_count:
@@ -286,6 +314,11 @@ def run_payment_batch(
             "decision": decision,
             "attempts": attempt,
         })
+        emit(
+            account_ref,
+            "completed" if row.get("ok") else str(row.get("error_stage") or "failed"),
+            "completed" if row.get("ok") else "failed",
+        )
         return index, row
 
     last_checkpoint_write = [0.0]
