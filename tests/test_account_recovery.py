@@ -51,6 +51,26 @@ def test_refresh_local_quota_statuses_persists_result():
     assert marked.call_args.args[:2] == ("ok@example.com", "active")
 
 
+def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypatch):
+    events = []
+    monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
+    monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
+    monkeypatch.setattr(account_recovery, "_local_quota_accounts", lambda emails: [
+        {"email": "a@example.com", "access_token": "at-a"},
+        {"email": "b@example.com", "access_token": "at-b"},
+    ])
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda account, **kwargs: {"ok": True, "quota_status": "active"})
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
+
+    result = account_recovery.refresh_local_quota_statuses(["a@example.com", "b@example.com"], workers=2)
+
+    terminal = [event for event in events if event.get("stage") == "account_completed"]
+    assert result["total"] == 2
+    assert len(terminal) == 2
+    assert {event["account_ref"] for event in terminal} == {"a@example.com", "b@example.com"}
+    assert all(event["total"] == 2 for event in terminal)
+
+
 def test_refresh_local_quota_statuses_recovers_401():
     with (
         patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "old_at"}),

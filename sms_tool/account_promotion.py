@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import uuid
 from typing import Any
 
 from curl_cffi import requests as curl_requests
@@ -200,13 +201,27 @@ def refresh_promotion_statuses(
 
     max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
     results: list[dict[str, Any]] = []
+    run_id = uuid.uuid4().hex
+    _emit_account_batch_event(run_id, "batch_started", "running", total=len(accounts), detail="账号优惠检测开始")
 
     def run(account: dict[str, Any]) -> dict[str, Any]:
         email = str(account.get("email") or "").strip().lower()
-        probe = check_account_promotion(account, proxy=proxy, timeout=timeout)
-        label = str(probe.get("promotion_status") or "")
-        persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
-        return {"email": email, "ok": bool(probe.get("ok")), "promotion_status": label, "persisted": bool(persisted), "probe": probe}
+        try:
+            probe = check_account_promotion(account, proxy=proxy, timeout=timeout)
+            label = str(probe.get("promotion_status") or "")
+            persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
+            result = {"email": email, "ok": bool(probe.get("ok")), "promotion_status": label, "persisted": bool(persisted), "probe": probe}
+        except Exception as exc:
+            result = {"email": email, "ok": False, "promotion_status": "检测失败", "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
+        _emit_account_batch_event(
+            run_id,
+            "account_completed",
+            "completed" if result.get("ok") else "failed",
+            account_ref=email,
+            total=len(accounts),
+            detail=str(result.get("promotion_status") or "检测完成"),
+        )
+        return result
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(run, account) for account in accounts]
@@ -214,6 +229,7 @@ def refresh_promotion_statuses(
             results.append(future.result())
 
     success = sum(1 for item in results if item.get("ok"))
+    _emit_account_batch_event(run_id, "batch_completed", "completed", total=len(results), detail=f"完成 {len(results)} 个账号")
     return {
         "ok": success == len(results) if results else False,
         "total": len(results),
@@ -221,3 +237,28 @@ def refresh_promotion_statuses(
         "failed": len(results) - success,
         "results": results,
     }
+
+
+def _emit_account_batch_event(
+    run_id: str,
+    stage: str,
+    status: str,
+    *,
+    account_ref: str = "",
+    total: int = 0,
+    detail: str = "",
+) -> None:
+    try:
+        from .desktop_ipc import emit_event
+
+        emit_event({
+            "domain": "account_promotion",
+            "run_id": run_id,
+            "account_ref": account_ref,
+            "stage": stage,
+            "status": status,
+            "total": int(total or 0),
+            "detail": detail,
+        })
+    except Exception:
+        pass

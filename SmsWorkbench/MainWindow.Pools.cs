@@ -15,7 +15,7 @@ namespace SmsWorkbench
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
             if (scope == "邮箱池" && !IsMailboxPoolLikeRow(row)) return false;
-            if (scope == "已注册" && !row.AccountType.Contains("Session") && !row.AccountType.Contains("SQLite")) return false;
+            if (scope == "已注册" && !IsRegisteredRow(row)) return false;
             if (scope == "待处理" && !row.Status.Contains("待") && !row.Status.Contains("缺") && !row.Status.Contains("失败")) return false;
             if (term.Length == 0) return true;
 
@@ -121,7 +121,7 @@ namespace SmsWorkbench
         private bool IsRegisteredRow(PoolRow row)
         {
             return row.AccountType.Contains("Session")
-                || row.AccountType.Contains("SQLite")
+                || row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
                 || row.Status.Contains("已注册")
                 || row.Status.Contains("PayPal");
         }
@@ -175,7 +175,7 @@ namespace SmsWorkbench
 
         private int RowPriority(PoolRow row)
         {
-            if (row.AccountType.Contains("SQLite")) return 30;
+            if (row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)) return 30;
             if (row.AccountType.Contains("Session")) return 20;
             if (row.PayPalUrl.Length > 0 || row.Status.Contains("PayPal")) return 15;
             return 10;
@@ -374,10 +374,13 @@ namespace SmsWorkbench
                 CreatedAt = UnixTimeText(GetString(data, "created_at")),
                 CompletedAt = UnixTimeText(GetString(data, "updated_at")),
                 Identifier = GetString(data, "email"),
-                AccountType = "SQLite" + (provider.Length > 0 ? "/" + provider : ""),
+                AccountType = MailboxTypeDisplay(provider, GetString(data, "email")),
                 AccountPlanType = AccountStatusInterpreter.GetAccountPlanType(data),
+                Source = GetString(data, "source"),
+                RegisterMethod = GetString(data, "register_method"),
+                SessionType = GetString(data, "session_type"),
+                PlanType = FirstNonEmpty(GetString(data, "plan_type"), GetString(data, "account_type")),
                 RegistrationCountry = GetString(data, "registration_country"),
-                QuotaStatus = AccountStatusInterpreter.GetQuotaStatus(data),
                 Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, AccountStatusInterpreter.GetImportedStatus(rawJson)),
                 PayPalStatus = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
                 PayPalAmount = AccountStatusInterpreter.GetPaypalAmount(rawJson),
@@ -397,16 +400,27 @@ namespace SmsWorkbench
                 RawLine = GetString(data, "id"),
                 MailboxProvider = provider
             };
-            WhamQuotaFields quotaFields = AccountStatusInterpreter.ExtractWhamQuotaFields(data);
-            row.Quota5hUsed = quotaFields.Quota5hUsed;
-            row.Quota5hLimit = quotaFields.Quota5hLimit;
-            row.Quota5hRemaining = quotaFields.Quota5hRemaining;
-            row.Quota5hPercent = quotaFields.Quota5hPercent;
-            row.Quota7dUsed = quotaFields.Quota7dUsed;
-            row.Quota7dLimit = quotaFields.Quota7dLimit;
-            row.Quota7dRemaining = quotaFields.Quota7dRemaining;
-            row.Quota7dPercent = quotaFields.Quota7dPercent;
             allRows.Add(row);
+        }
+
+        internal static string MailboxTypeDisplay(string provider, string email = "")
+        {
+            string normalized = (provider ?? "").Trim().ToLowerInvariant().Replace("-", "_");
+            string domain = (email ?? "").Split('@').LastOrDefault()?.ToLowerInvariant() ?? "";
+            return normalized switch
+            {
+                "remail" when domain is "outlook.com" or "hotmail.com" or "live.com" or "msn.com" => "remail/outlook",
+                "remail" => "remail",
+                "icloud_url" or "icloud" => "icloud",
+                "cf_worker" or "cfworker" => "cfworker",
+                "chongzhi" when domain is "outlook.com" or "hotmail.com" or "live.com" or "msn.com" => "outlook",
+                "microsoft" or "graph" or "outlook" => "outlook",
+                "gmail" => "gmail",
+                "smailr" => "smailr",
+                "chatai" => "chatai",
+                "" => "unknown",
+                _ => normalized,
+            };
         }
     }
 }

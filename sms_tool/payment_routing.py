@@ -265,6 +265,7 @@ class PaymentRoutePlanner:
             or values.get("proxy")
         )
         countries = self._countries(method, method_cfg, values)
+        self._validate_countries(method, countries, values)
         raw_explicit_countries = (
             values.get("stage_proxy_countries")
             if not automatic_country and isinstance(values.get("stage_proxy_countries"), Mapping)
@@ -513,6 +514,19 @@ class PaymentRoutePlanner:
         else:
             countries.setdefault(PaymentStage.PROMOTION.value, countries.get(PaymentStage.APPROVE.value, target))
         return countries
+
+    @staticmethod
+    def _validate_countries(method: str, countries: Mapping[str, str], values: Mapping[str, Any]) -> None:
+        invalid = {
+            stage: country
+            for stage, country in countries.items()
+            if country and not re.fullmatch(r"[A-Z]{2}", country)
+        }
+        if invalid:
+            rendered = ", ".join(f"{stage}={country}" for stage, country in sorted(invalid.items()))
+            raise ValueError(f"invalid payment route country: {rendered}")
+        if method != "paypal":
+            return
 
     @staticmethod
     def _proxy_value(value: Any) -> str:

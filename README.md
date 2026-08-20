@@ -204,7 +204,9 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
 - GoPay（印尼 ID/IDR）和 GrabPay（菲律宾 PH/PHP）复用钱包适配器；GoPay 在 Checkout 后通过独立 Promotion/Update 阶段校验 0 元，再执行 Stripe init → 建钱包 PM → Confirm → Approve → Poll → Provider Redirect。GCash 使用独立的 custom-payment-method adapter 和 transport，不走共享钱包 Provider。
-- PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。
+- PayPal 支持 Hosted 长链接、PP 直链和强制 0 元试用模式。PP 直链使用标准 `Checkout -> confirm -> approve -> 同 Checkout 应用优惠` 顺序；approval 明确返回 `blocked` 时会重建整个 Checkout，不在原提交上重复 approve。
+- PayPal 正式提链前执行支付方式能力与零元资格探测；探测报告和正式提链报告分开保存，非零报价归入资格/报价失败。
+- PayPal BA 提取成功后可进入持久化后续授权队列；该队列只属于 PayPal，不在其他支付方式界面显示。
 - PayPal 回跳对账由独立 `paypal_reconciliation.py` 处理，只跟踪白名单内的 Stripe Return → OpenAI Pay → Checkout Verify，并输出脱敏的 `conclusive`/`unknown`/`failed` 证据；它不改变提链接口，也不生成或覆盖支付链接。
 - 批量协议支付使用两个相互独立的支付出口池：Checkout 池默认跟随账单区，Approve / Update 与 Checkout 共用完整账单地区目录，不再限制为 JP/TR；Promotion、Provider、Confirm 和 Redirect 继续使用各适配器的内部阶段国家契约。
 - 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
@@ -216,7 +218,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 批量提链应先用本地额度接口筛出非 401 账号，再执行支付协议；报告必须分别统计 AT 可用、套餐/试用资格、支付方式可见、Approve 成功和最终链接/二维码产物。
 - MoMo 只有在返回 `ready_with_qr` 且产出 `payment.momo.vn` URL 或二维码文件时才算成功；`account_trial_ineligible`、`card_only_full_price` 和 `approve_result_blocked` 都是明确失败状态。
 
-- 批量支付执行器支持 JIT AT、HTTP 401 分层恢复（RT、Cookie、隔离浏览器邮箱 OTP、Codex OAuth）、资格探测、Canary 暂停、方法级并发、瞬态重试、原子断点和同批次续跑。
+- 批量支付执行器支持 JIT AT、HTTP 401 分层恢复（RT、Cookie、隔离浏览器邮箱 OTP、Codex OAuth）、资格探测、Canary 暂停、方法级并发、默认 3 次重试、原子断点和显式续跑。默认点击会创建新批次，只有勾选“恢复已有断点”才复用旧批次 ID。
 - MoMo 按 Checkout、Promotion、Stripe Provider、Approve、Redirect 分阶段使用代理；Kakao 输出结构化结果，只有明确的 Kakao/Nicepay Redirect 才算链接成功。
 - `oaics_*` 是原生 ChatGPT Checkout，会直接返回 Checkout 链接且不请求 Stripe；`cs_*` 继续进入 Stripe/PayPal 协议链。
 - iDEAL、BLIK、TWINT 通过公共 `ProtocolResultReporter` 输出一次且仅一次的脱敏 `protocol_payment.v1` 终态，并统一处理已支付和缺失输出兜底。
@@ -244,10 +246,10 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 ### 桌面端批量支付操作
 
 1. 在账号列表勾选要处理的账号，打开左侧“批量协议支付”或右键同名菜单。
-2. 选择 MoMo、Kakao、直卡 Checkout 等提链方式，设置并发、瞬态重试、Canary 数量、批次 ID，并分别填写 Checkout / Approve 代理池（每行一条）。可在窗口底部保存当前支付方式的池和出口国家配置。
+2. 选择支付方式，设置并发、瞬态重试、Canary 数量，并分别填写 Checkout / Approve 代理池（每行一条）。默认是“新执行”并自动生成批次 ID；需要续跑时显式勾选“恢复已有断点”并填写旧 ID。可在窗口底部保存当前支付方式的池和出口国家配置。
 3. 默认开启“401 自动恢复”；勾选“仅探测资格”后会完成 JIT AT、注册地区矩阵、ChatGPT Checkout 和 Stripe init，然后在创建 PM、Confirm、Approve 和 Provider Redirect 前停止。结果会明确记录金额、币种、支付方式可见性和 `eligible`/`ineligible`/`unknown` 分类。
 4. 通过“账号地区 / 支付资格矩阵”确认注册区、账单区（Checkout）和优惠区（Approve）；Promotion、Provider、Redirect 等内部阶段仍会按适配器配置执行。
-5. 相同模式、矩阵、代理与重试参数下重复使用同一批次 ID，可读取 `runtime/payment_batches/` 的原子断点并继续执行；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。系统性的 `unknown` Canary 会暂停该方法后续完整批次，明确的支付方式不可用或非零报价不会误判为协议故障。报告会分开显示 AT 200、JIT 刷新、能力探测、资格、链接、二维码和失败计数。
+5. 只有显式选择断点恢复时，相同模式、矩阵、代理与重试参数才会读取 `runtime/payment_batches/` 的原子断点；运行参数变化时签名失配会重新执行，探测结果不会被正式支付复用。系统性的 `unknown` Canary 会暂停该方法后续完整批次，明确的支付方式不可用或非零报价不会误判为协议故障。报告会分开显示 AT 200、JIT 刷新、能力探测、资格、链接、二维码、失败计数、阶段耗时和最后失败阶段。
 
 注册批次每次输出 `Saved session:` 后，桌面端会防抖异步刷新账号池，无需等整批结束。账号列表的多选删除会合并为一个后端批量命令并在后端并发处理，不再逐账号串行启动 Python。
 
@@ -622,7 +624,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.18.md)
+- [最新发布说明](docs/release-v2026.08.20.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

@@ -79,6 +79,7 @@ class PaymentMethodSpec:
     currency: str
     adapter: str
     script: str = ""
+    artifact_validator: str = "http_url"
 
 
 PAYMENT_METHODS = {
@@ -89,6 +90,7 @@ PAYMENT_METHODS = {
         definition.currency,
         {"native_paypal": "native", "native_upi": "native"}.get(definition.adapter, definition.adapter),
         definition.script,
+        definition.artifact_validator,
     )
     for key, definition in CATALOG_METHODS.items()
 }
@@ -131,6 +133,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
                 "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
                 "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
                 "checkout_country", "require_zero", "require_ba_token", "stage_proxy_countries",
+                "max_checkout_retries", "max_stage_retries",
             }),
         )
 
@@ -1074,11 +1077,19 @@ def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
             "timed_out": f"{spec.label} extraction timed out",
         }[explicit_terminal])
     capability_probe = data.get("operation") == "payment_method_capability_probe"
+    validator = spec.artifact_validator
+    artifact_ok = bool(data.get("url") or data.get("qr_data") or data.get("qr_path"))
+    if validator in {"http_url", "paypal_ba_url", "provider_redirect", "checkout_url"} and data.get("url"):
+        artifact_ok = str(data.get("url") or "").lower().startswith(("http://", "https://"))
+    elif validator == "url_or_qr":
+        artifact_ok = bool(data.get("url") or data.get("qr_data") or data.get("qr_path"))
+    elif validator == "completion":
+        artifact_ok = str(data.get("status") or "").lower() == "completed"
     if (
         data.get("ok")
         and not completed_payment
         and not capability_probe
-        and not (data.get("url") or data.get("qr_data") or data.get("qr_path"))
+        and not artifact_ok
     ):
         data["ok"] = False
         data["error"] = f"{spec.label} extractor returned no link or QR data"
@@ -1154,7 +1165,10 @@ def _normalize_error_contract(data: dict[str, Any]) -> None:
 
     terminal_state = _explicit_terminal_state(data) or "failed"
     stage = data.get("error_stage") or data.get("stage") or data.get("failed_step")
-    data["error_stage"] = str(stage or ("adapter_contract" if data.get("error_code") == "invalid_adapter_result" else "adapter")).strip() or "adapter"
+    default_stage = "adapter_contract" if data.get("error_code") == "invalid_adapter_result" else "adapter"
+    if data.get("error_code") in {"checkout_not_zero_due", "nonzero_offer", "paypal_payment_method_unavailable"}:
+        default_stage = "eligibility"
+    data["error_stage"] = str(stage or default_stage).strip() or default_stage
     data.setdefault("error", "payment-link extraction failed")
     data.setdefault("error_code", "payment_link_extraction_failed")
 

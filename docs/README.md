@@ -5,6 +5,10 @@ configuration, generated sessions, and debug output stay outside this directory.
 
 ## Core documents
 
+- [v2026.08.20 发布说明](release-v2026.08.20.md) - PayPal 标准 Checkout
+  顺序、blocked 重建、能力预检、显式断点恢复、持久事件和代理诊断。
+- [v2026.08.19 发布说明](release-v2026.08.19.md) - 注册认证状态修复、429
+  冷却、代理格式兼容和桌面发布验证。
 - [v2026.08.09 发布说明](release-v2026.08.09.md) - 注册 P0/P1 一致性与恢复、
   ReMail 本地化 OTP、配置/敏感数据边界、桌面任务生命周期和支付适配器整理。
 - [Architecture and Boundaries](architecture.md) - module ownership, command

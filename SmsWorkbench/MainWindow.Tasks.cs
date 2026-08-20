@@ -134,7 +134,10 @@ namespace SmsWorkbench
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args));
 
-        private async Task RunBackendAsync(string taskName, List<string> args)
+        private void RunAccountBatchBackend(string taskName, List<string> args, string domain, int total)
+            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total));
+
+        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0)
         {
             if (backendTasks.IsRunning)
             {
@@ -147,6 +150,13 @@ namespace SmsWorkbench
             Tasks.Add(task);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
+            AccountBatchProgressTracker accountProgress = string.IsNullOrWhiteSpace(progressDomain)
+                ? null
+                : new AccountBatchProgressTracker(progressDomain, progressTotal);
+            AccountBatchProgressDialog progressDialog = accountProgress == null
+                ? null
+                : new AccountBatchProgressDialog(this, taskName, progressTotal, () => backendTasks.Cancel());
+            progressDialog?.Show();
 
             var backendOutput = new StringBuilder();
             object backendOutputLock = new object();
@@ -162,6 +172,16 @@ namespace SmsWorkbench
             {
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progressEvent))
                 {
+                    if (accountProgress != null
+                        && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
+                    {
+                        accountProgress.Update(progressEvent);
+                        progressDialog?.Update(
+                            accountProgress.Completed,
+                            accountProgress.Total,
+                            progressEvent.AccountRef,
+                            progressEvent.Detail);
+                    }
                     task.Info = progressEvent.Detail.Length > 0
                         ? $"{progressEvent.Stage}: {progressEvent.Detail}"
                         : progressEvent.Stage;
@@ -220,6 +240,10 @@ namespace SmsWorkbench
             {
                 task.Status = "启动失败";
                 Log("启动失败：" + ex.Message);
+            }
+            finally
+            {
+                progressDialog?.Close();
             }
         }
 

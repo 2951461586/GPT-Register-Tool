@@ -94,6 +94,8 @@ sms_tool/
   gcash_provider.py         GCash custom-payment-method orchestration and structured outcomes.
   gcash_transport.py        GCash-specific Checkout update and custom-method HTTP transport.
   paypal_reconciliation.py  Independent, secret-free PayPal merchant-return reconciliation.
+  payment_reconciliation.py Method-neutral reconciliation facade and unknown-result contract.
+  paypal_authorization_queue.py Durable PayPal-only BA follow-up authorization queue.
   paypal_auto.py            Project-local PayPal browser page automation helper.
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
   nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
@@ -160,6 +162,8 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Checkout capability probing | `sms_tool.checkout_contract`, `sms_tool.payment_capability` | ChatGPT Checkout, Stripe init, matrix-selected country/proxy context | payment-method creation, confirm, approve, provider redirect |
 | Batch payment execution | `sms_tool.payment_batch` | JIT auth, capability probe/payment manager, eligibility matrix, proxy stages, atomic reports | Registration/mailbox procurement, token-bearing public reports |
 | PayPal return reconciliation | `sms_tool.paypal_reconciliation` | caller-supplied authenticated transport, allowlisted merchant return hosts | payment-link extraction, link persistence, payment authorization |
+| Payment reconciliation dispatch | `sms_tool.payment_reconciliation` | catalog reconciliation policy and method-owned reconciler | link generation, automatic retry of unknown side effects |
+| PayPal BA authorization queue | `sms_tool.paypal_authorization_queue` | completed PayPal BA extraction artifacts and explicit authorization handlers | non-PayPal methods, inline authorization during extraction |
 | Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
 | Explicit Agent Identity conversion | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
 | SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
@@ -388,9 +392,28 @@ native ChatGPT Checkout session and immediately returns its
 `/payment_pages/{id}/init`. A `cs_*` identifier remains on the Stripe/PayPal
 protocol path and is initialized before hosted-link or direct-approval handling.
 
+#### PayPal standard approval and promotion order
+
+The direct PayPal workflow uses one isolated Checkout transaction in this
+order: Checkout creation, Stripe init, PayPal PM creation, confirm, one ChatGPT
+approval submission, promotion/update on that same approved Checkout, then
+polling and redirect extraction. The implementation never sends a second
+approval request for the same Checkout. An HTTP 409 payload whose approval
+result is `blocked` is recorded as structured `last_retry_error` evidence and
+invalidates the Checkout; the bounded workflow retry starts again from a new
+Checkout. An ambiguous approve or post-approve poll failure becomes `unknown`
+with `requires_reconciliation`, because replaying the side effect could create
+a duplicate authorization.
+
+PayPal capability and zero-due eligibility are probed before full extraction.
+`checkout_not_zero_due` is an offer/eligibility conclusion, not a generic
+adapter transport failure. HTTP diagnostics retain status, a redacted endpoint,
+provider error code, and a bounded sanitized response summary.
+
 #### Promotion-update stage（0元 + PayPal 共存）
 
-Optional segmented stage between checkout creation and Stripe init. When
+The standard direct flow applies this optional segmented stage after confirm
+and successful approval, but before final polling. When
 `paypal.stage_proxies.promotion` is set, the extractor calls
 `POST /backend-api/payments/checkout/update` through a promo-eligible region
 egress to attach the `plus-1-month-free` promo to the **same** checkout that was
@@ -649,6 +672,15 @@ systemically unknown. Conclusive `payment_method_unavailable` and
 `nonzero_offer` results remain account/offer conclusions and do not pause the
 profile.
 
+Batch reports keep capability probes separate from formal extraction results.
+Each desktop click creates a fresh generated batch ID by default. Checkpoint
+loading and event replay occur only when the caller explicitly sets
+`resume_checkpoint`; the UI displays `新执行` or `断点恢复` and the number of
+restored accounts. Account events are appended to a JSONL stream with stable
+domain, operation, run, batch, account, stage, and status fields, so a desktop
+restart can reconstruct progress. Terminal rows also persist per-stage timing,
+total duration, and the last failed stage.
+
 ### Shared Wallet Provider Layer
 
 GoPay and GrabPay share `sms_tool.wallet_provider`; their production HTTP and
@@ -847,6 +879,18 @@ Reconciliation does not call or wrap `generate_payment_link()`, does not persist
 page may be retryable inside this independent API; that does not weaken the
 payment-link manager rule that an unknown side-effecting extraction outcome must
 be reconciled before retry.
+
+`sms_tool.payment_reconciliation.reconcile_payment_result` is the method-neutral
+dispatch boundary. Catalog policy selects a method-owned reconciler; unsupported
+or inconclusive outcomes remain `unknown` and require reconciliation rather
+than being retried as ordinary adapter failures.
+
+`sms_tool.paypal_authorization_queue` durably stores PayPal BA follow-up work
+after a BA approval artifact is extracted. Extraction never performs the final
+customer authorization inline. The queue is PayPal-only, deduplicates by the
+sensitive BA token internally, and exposes only presence booleans in public
+results. Other payment methods must not enqueue items or surface this queue in
+their desktop views.
 
 ### Local Provider Services
 

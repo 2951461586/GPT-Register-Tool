@@ -58,32 +58,14 @@ class MailboxService:
         proxy: str | None = None,
         excluded_otps: set[str] | None = None,
     ) -> str | None:
-        from . import mailbox_chongzhi
         from .mailbox import (
             _email_cfg,
-            _poll_chongzhi_otp,
             _provider_otp_issued_after,
             _resolve_mailbox_proxy,
         )
 
         with runtime_config_scope(self.config, workflow="mailbox"):
             config = _email_cfg(self.config)
-            provider = str(getattr(mailbox, "provider", "") or "")
-            if provider == "chongzhi" or (
-                mailbox_chongzhi.chongzhi_enabled(config) and getattr(mailbox, "password", "")
-            ):
-                email = str(getattr(mailbox, "email", "") or "").strip()
-                password = str(getattr(mailbox, "password", "") or "").strip()
-                if email and password:
-                    return _poll_chongzhi_otp(
-                        mailbox,
-                        email=email,
-                        password=password,
-                        subject_keyword=subject_keyword,
-                        timeout=timeout,
-                        issued_after_unix=issued_after_unix,
-                        proxy=proxy,
-                    )
             issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, self.config)
             resolved_proxy = _resolve_mailbox_proxy(proxy, self.config)
             adapter = self.providers.resolve_poller(mailbox, config)

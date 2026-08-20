@@ -72,6 +72,7 @@ from .account_creation import (
 from .http_utils import _follow_continue_url
 from .auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from .otp_strategy import (
+    SyntheticResponse,
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )

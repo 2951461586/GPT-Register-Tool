@@ -15,8 +15,15 @@ namespace SmsWorkbench
         string Country = "",
         int Sequence = 0,
         long TimestampMs = 0,
+        long DurationMs = 0,
+        string LastFailedStage = "",
         bool Terminal = false,
-        string Schema = "");
+        bool AccountTerminal = false,
+        bool BatchTerminal = false,
+        string Schema = "",
+        int Total = 0,
+        string BatchId = "",
+        string Operation = "");
 
     public static class BackendProgressEventParser
     {
@@ -54,8 +61,15 @@ namespace SmsWorkbench
                     Text(payload, "country"),
                     Number(root, "sequence"),
                     NumberLong(root, "timestamp_ms"),
+                    NumberLong(payload, "duration_ms"),
+                    Text(payload, "last_failed_stage"),
                     Bool(root, "terminal"),
-                    Text(root, "schema"));
+                    Bool(payload, "account_terminal"),
+                    Bool(payload, "batch_terminal"),
+                    Text(root, "schema"),
+                    Number(payload, "total"),
+                    Text(payload, "batch_id"),
+                    Text(payload, "operation"));
                 return true;
             }
             catch (JsonException)

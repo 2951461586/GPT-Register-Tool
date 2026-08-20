@@ -23,7 +23,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 
@@ -104,11 +104,80 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class CheckoutNotZeroDueError(Exception):
+    error_code = "checkout_not_zero_due"
+    error_stage = "eligibility"
+    status = "failed"
+    retryable = False
+
     def __init__(self, amount: int | None, currency: str = ""):
         self.amount = amount
         self.currency = str(currency or "").upper()
         amount_label = "unknown" if amount is None else str(amount)
         super().__init__(f"checkout_not_zero_due: amount={amount_label} {self.currency}".rstrip())
+
+
+class PayPalHttpError(Exception):
+    """Structured, redacted HTTP failure for the PayPal checkout workflow."""
+
+    def __init__(self, stage: str, endpoint: str, response: Any, *, retryable: bool = False):
+        self.error_stage = str(stage or "adapter")
+        self.http_status = int(getattr(response, "status_code", 0) or 0)
+        parts = urlsplit(str(endpoint or ""))
+        self.endpoint = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.netloc else parts.path
+        self.provider_error_code = ""
+        payload: Any = None
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            for key in ("code", "error_code", "type", "error", "detail"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    self.provider_error_code = value.strip()[:120]
+                    break
+                if isinstance(value, dict):
+                    nested = value.get("code") or value.get("type") or value.get("message")
+                    if nested:
+                        self.provider_error_code = str(nested).strip()[:120]
+                        break
+        raw = payload if payload is not None else str(getattr(response, "text", "") or "")
+        self.response_summary = _compact_diagnostic(json.dumps(raw, ensure_ascii=False) if not isinstance(raw, str) else raw)
+        self.retryable = bool(retryable)
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        code = f" code={self.provider_error_code}" if self.provider_error_code else ""
+        return f"{self.error_stage} HTTP {self.http_status}{code}: {self.response_summary}".rstrip()
+
+    def diagnostic(self) -> dict[str, Any]:
+        return {
+            "http_status": self.http_status,
+            "endpoint": self.endpoint,
+            "provider_error_code": self.provider_error_code,
+            "response_summary": self.response_summary,
+        }
+
+
+class CheckoutApprovalBlockedError(PayPalHttpError):
+    """Approval was explicitly blocked; rebuild the Checkout from scratch."""
+
+    rebuild_required = True
+
+    def __init__(self, endpoint: str, response: Any):
+        super().__init__("approve", endpoint, response, retryable=True)
+        self.error_code = "approve_blocked"
+        self.status = "failed"
+
+
+class PayPalCapabilityError(Exception):
+    error_stage = "eligibility"
+    status = "failed"
+    retryable = False
+
+    def __init__(self, message: str = "paypal_payment_method_unavailable"):
+        self.error_code = "paypal_payment_method_unavailable"
+        super().__init__(message)
 
 
 class PaymentOutcomeUnknownError(Exception):
@@ -230,8 +299,10 @@ class PPLinkExtractor:
         rotate_proxy_sessions: bool = False,
         proxy_probe_timeout: float = 12,
         max_stage_retries: int = RETRY_ATTEMPTS,
+        max_checkout_retries: int = RETRY_ATTEMPTS,
         proxy_state: PayPalProxyState | None = None,
         stage_proxy_countries: dict[str, str] | None = None,
+        device_id: str = "",
     ):
         self.access_token = access_token
         self.checkout_proxy = normalize_proxy_url(checkout_proxy)
@@ -266,6 +337,12 @@ class PPLinkExtractor:
         self.rotate_proxy_sessions = bool(rotate_proxy_sessions)
         self.proxy_probe_timeout = max(1.0, float(proxy_probe_timeout or 12))
         self.max_stage_retries = max(1, int(max_stage_retries or RETRY_ATTEMPTS))
+        self.max_checkout_retries = max(1, int(max_checkout_retries or RETRY_ATTEMPTS))
+        self.device_id = str(device_id or uuid.uuid4())
+        self.last_retry_error: dict[str, Any] = {}
+        self.workflow_attempt = 0
+        self.promotion_applied = False
+        self._chatgpt_session = None
         self.proxy_state = proxy_state or PayPalProxyState(
             Path(PROJECT_ROOT) / "runtime" / "paypal_proxy_state.json",
             enabled=False,
@@ -290,6 +367,83 @@ class PPLinkExtractor:
         self.stripe_js_id = str(uuid.uuid4())
         self.elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
         self.elements_session_config_id = str(uuid.uuid4())
+
+    def _reset_workflow_context(self) -> None:
+        self._reset_stripe_context()
+        self._stripe_session = None
+        self._chatgpt_session = None
+        self.proxy_exits = {}
+        self.promotion_applied = False
+        self._active_stage = ""
+
+    def _approve_session(self) -> Any:
+        session = self._chatgpt_session
+        if session is None:
+            session = _new_session(self.approve_proxy)
+            self._chatgpt_session = session
+        elif hasattr(session, "proxies"):
+            session.proxies = {"http": self.approve_proxy, "https": self.approve_proxy} if self.approve_proxy else {}
+        session.headers.update({
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": "https://chatgpt.com",
+            "oai-device-id": self.device_id,
+        })
+        if self.cookie_header:
+            session.headers["Cookie"] = self.cookie_header
+        return session
+
+    def _fresh_approval_sentinel(self, session: Any) -> dict[str, str]:
+        """Mint one checkout-approval Sentinel bound to this flow/session."""
+        try:
+            from .sentinel_quickjs import get_sentinel_token_via_quickjs
+            from .auth_headers import sentinel_fingerprint
+
+            fp = sentinel_fingerprint()
+            token = get_sentinel_token_via_quickjs(
+                session,
+                device_id=self.device_id,
+                flow="checkout_session_approval",
+                log=lambda message: self._log("sentinel", _compact_diagnostic(message)),
+                user_agent=str(fp.get("user_agent") or ""),
+                screen=str(fp.get("screen") or ""),
+                lang=str(fp.get("lang") or ""),
+                lang_full=str(fp.get("lang_full") or ""),
+                browser_type=str(fp.get("browser_type") or ""),
+                navigator_platform=str(fp.get("navigator_platform") or "Win32"),
+                navigator_vendor=str(fp.get("navigator_vendor") or "Google Inc."),
+                hardware_concurrency=int(fp.get("hardware_concurrency") or 8),
+                device_memory=fp.get("device_memory"),
+                max_touch_points=int(fp.get("max_touch_points") or 0),
+                device_pixel_ratio=float(fp.get("device_pixel_ratio") or 1.0),
+                timezone=str(fp.get("timezone") or "UTC"),
+                js_heap_size_limit=int(fp.get("js_heap_size_limit") or 4395630592),
+                time_origin=int(fp.get("time_origin") or 1710000000000),
+                performance_now=float(fp.get("performance_now") or 12345.67),
+                sec_ch_ua_full_version_list=str(fp.get("sec_ch_ua_full_version_list") or ""),
+                sec_ch_ua_arch=str(fp.get("sec_ch_ua_arch") or ""),
+                sec_ch_ua_bitness=str(fp.get("sec_ch_ua_bitness") or ""),
+                sec_ch_ua_model=str(fp.get("sec_ch_ua_model") or ""),
+                sec_ch_ua_platform_version=str(fp.get("sec_ch_ua_platform_version") or ""),
+            )
+            payload = json.loads(token or "{}")
+            if not token or str(payload.get("id") or "") != self.device_id:
+                return {}
+            so = payload.get("so") or payload.get("c") or ""
+            headers = {"OpenAI-Sentinel-Token": token}
+            if so:
+                headers["OpenAI-Sentinel-SO-Token"] = json.dumps({
+                    "so": so,
+                    "c": payload.get("c") or "",
+                    "id": self.device_id,
+                    "flow": "checkout_session_approval",
+                }, separators=(",", ":"), ensure_ascii=False)
+            self._log("sentinel", "checkout_session_approval Sentinel ready")
+            return headers
+        except Exception as exc:
+            self._log("sentinel", f"Sentinel unavailable: {_compact_diagnostic(exc)}")
+            return {}
 
     def _set_stripe_proxy(self, proxy: str) -> Any:
         stripe = getattr(self, "_stripe_session", None)
@@ -363,11 +517,13 @@ class PPLinkExtractor:
                     "https://chatgpt.com/backend-api/payments/checkout",
                     body, self.access_token, self.cookie_header, attempt_proxy, CHATGPT_TIMEOUT,
                 )
-                if r.status_code == 401:
-                    raise Exception("access_token 无效或已过期 (401)")
-                if r.status_code == 429:
-                    raise Exception(f"请求频率限制 (429), retry-after={r.headers.get('Retry-After', '')}")
-                r.raise_for_status()
+                if r.status_code >= 400:
+                    raise PayPalHttpError(
+                        "checkout",
+                        "https://chatgpt.com/backend-api/payments/checkout",
+                        r,
+                        retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
+                    )
                 data = r.json()
                 session = CheckoutSessionContract.from_payload(
                     data,
@@ -503,7 +659,7 @@ class PPLinkExtractor:
 
     # ─── Stage 2: Stripe init + create PM + confirm (目标国代理) ───────────
 
-    def _stripe_init(self, cs_id: str) -> dict:
+    def _stripe_init(self, cs_id: str, *, enforce_zero: bool | None = None) -> dict:
         self._active_stage = "stripe_init"
         self._log("stripe_init", f"Stage 2: proxy={redact_proxy_url(self.stripe_init_proxy)} Stripe init")
         stripe = self._set_stripe_proxy(self.stripe_init_proxy)
@@ -514,7 +670,12 @@ class PPLinkExtractor:
         )
         r = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code >= 400:
-            raise Exception(f"stripe init 失败: {r.status_code} {r.text[:300]}")
+            raise PayPalHttpError(
+                "stripe_init",
+                f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
+                r,
+                retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
+            )
         init = r.json()
         amount_info = stripe_amount_details(init)
         amount = amount_info.get("amount")
@@ -524,15 +685,17 @@ class PPLinkExtractor:
         # 不能用 `None != 0 == True` 误判成非零、误杀可能可用的 0 元 checkout；
         # 也不能当成 0 元放行（不知道真实金额）。归一为 not_zero_due 但带 unknown 标记，
         # 由上层交账/对账决定。
-        if self.require_zero and amount is not None and amount != 0:
+        if enforce_zero is None:
+            enforce_zero = self.require_zero
+        if enforce_zero and self.require_zero and amount is not None and amount != 0:
             raise CheckoutNotZeroDueError(amount, amount_info.get("currency", ""))
-        if self.require_zero and amount is None:
+        if enforce_zero and self.require_zero and amount is None:
             self._log("stripe_init", "amount not present in stripe init response; treating as inconclusive zero-due check")
             raise CheckoutNotZeroDueError(None, amount_info.get("currency", ""))
         # 检查 PayPal 是否可用
         pm_types = init.get("payment_method_types") or []
         if pm_types and "paypal" not in [str(t).lower() for t in pm_types]:
-            raise Exception(f"当前 checkout 不支持 PayPal, 可用: {pm_types}")
+            raise PayPalCapabilityError(f"当前 checkout 不支持 PayPal, 可用: {pm_types}")
         return init
 
     def _create_payment_method(self, cs_id: str) -> str:
@@ -568,7 +731,12 @@ class PPLinkExtractor:
         }
         r = stripe.post("https://api.stripe.com/v1/payment_methods", data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:
-            raise Exception(f"payment_method 创建失败: {r.status_code} {r.text[:200]}")
+            raise PayPalHttpError(
+                "payment_method",
+                "https://api.stripe.com/v1/payment_methods",
+                r,
+                retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
+            )
         pm_id = r.json().get("id", "")
         if not pm_id.startswith("pm_"):
             raise Exception(f"payment_method 响应异常: {r.text[:200]}")
@@ -631,7 +799,12 @@ class PPLinkExtractor:
         if r.status_code >= 400:
             diagnostics = stripe_confirm_error_diagnostics(r, cs_id, pm_id, init)
             self._log("confirm", diagnostics)
-            raise Exception(diagnostics)
+            raise PayPalHttpError(
+                "confirm",
+                f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
+                r,
+                retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
+            )
         return r.json()
 
     # ─── Stage 3: Approve (目标国代理) + 轮询 redirect ─────────────────────
@@ -639,28 +812,70 @@ class PPLinkExtractor:
     def _chatgpt_approve(self, cs_id: str, processor_entity: str):
         self._active_stage = "approve"
         self._log("approve", f"Stage 3: proxy={redact_proxy_url(self.approve_proxy)} ChatGPT approve")
-        cs = _new_session(self.approve_proxy)
+        cs = self._approve_session()
         cs.headers.update({
-            "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
             "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
         })
+        sentinel_headers = self._fresh_approval_sentinel(cs)
         # sentinel ping
         try:
-            cs.post("https://chatgpt.com/backend-api/sentinel/ping", json={}, timeout=CHATGPT_TIMEOUT)
+            cs.post(
+                "https://chatgpt.com/backend-api/sentinel/ping",
+                json={},
+                headers={
+                    **sentinel_headers,
+                    "x-openai-target-path": "/backend-api/sentinel/ping",
+                    "x-openai-target-route": "/backend-api/sentinel/ping",
+                },
+                timeout=CHATGPT_TIMEOUT,
+            )
         except Exception:
             pass
-        r = cs.post(
-            "https://chatgpt.com/backend-api/payments/checkout/approve",
-            json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
-            timeout=CHATGPT_TIMEOUT,
-        )
+        endpoint = "https://chatgpt.com/backend-api/payments/checkout/approve"
+        approval_headers = {
+            **sentinel_headers,
+            "x-openai-target-path": "/backend-api/payments/checkout/approve",
+            "x-openai-target-route": "/backend-api/payments/checkout/approve",
+        }
+        try:
+            r = cs.post(
+                endpoint,
+                json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                headers=approval_headers,
+                timeout=CHATGPT_TIMEOUT,
+            )
+        except TypeError as exc:
+            # Small injected transports used by integrations may not expose a
+            # per-request headers parameter. Preserve the same session-bound
+            # headers without weakening production requests.
+            if "headers" not in str(exc):
+                raise
+            cs.headers.update(approval_headers)
+            r = cs.post(
+                endpoint,
+                json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                timeout=CHATGPT_TIMEOUT,
+            )
+        if r.status_code == 409:
+            payload = {}
+            try:
+                payload = r.json() or {}
+            except Exception:
+                pass
+            if str(payload.get("result") or "").strip().lower() == "blocked" or "blocked" in str(getattr(r, "text", "") or "").lower():
+                raise CheckoutApprovalBlockedError(endpoint, r)
         if r.status_code >= 400:
-            raise Exception(f"approve 失败: {r.status_code} {r.text[:300]}")
+            raise PayPalHttpError(
+                "approve",
+                endpoint,
+                r,
+                retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
+            )
         result = (r.json() or {}).get("result")
+        if str(result or "").strip().lower() == "blocked":
+            raise CheckoutApprovalBlockedError(endpoint, r)
         if result != "approved":
-            raise Exception(f"approve 结果异常: {result}")
+            raise PayPalHttpError("approve", endpoint, r, retryable=False)
         self._log("approve", "ChatGPT approve 成功")
 
     def _poll_payment_page(self, cs_id: str, timeout_seconds: float = 45) -> str:
@@ -730,7 +945,15 @@ class PPLinkExtractor:
                 prep_stage = ""
                 self._reset_stripe_context()
                 self._stripe_session = _new_session(self.stripe_init_proxy)
-                init = self._stripe_init(cs_id)
+                try:
+                    init = self._stripe_init(cs_id, enforce_zero=False)
+                except TypeError as exc:
+                    # Preserve compatibility with lightweight injected stage
+                    # functions that still expose the pre-qualification
+                    # signature.
+                    if "enforce_zero" not in str(exc):
+                        raise
+                    init = self._stripe_init(cs_id)
                 stripe_hosted_url = str(init.get("stripe_hosted_url") or "")
                 self._log("stripe_init", f"stripe_hosted_url={stripe_hosted_url[:80]}...")
                 pm_id = self._create_payment_method(cs_id)
@@ -752,7 +975,7 @@ class PPLinkExtractor:
                 # 网络抖动返回 5xx/超时时重试会重复发起支付意图。
                 # 对齐 wallet_provider 的约定 —— 副作用阶段失败一律不重试，
                 # 由上层标记 unknown 并要求对账后再决定是否重试。
-                if not prep_stage and stage in _SIDE_EFFECT_STAGES:
+                if not prep_stage and stage in _SIDE_EFFECT_STAGES and not isinstance(exc, PayPalHttpError):
                     self._log(
                         stage,
                         f"side-effect stage '{stage}' failed after request was sent; "
@@ -763,7 +986,11 @@ class PPLinkExtractor:
                         stage=stage,
                         error_code=f"{stage}_outcome_unknown",
                     ) from exc
-                retryable = is_retryable_network_error(exc) or "proxy_preflight_failed" in str(exc)
+                retryable = (
+                    bool(getattr(exc, "retryable", False))
+                    or is_retryable_network_error(exc)
+                    or "proxy_preflight_failed" in str(exc)
+                )
                 self._log(stage, f"stage attempt {attempt}/{self.max_stage_retries} failed: {exc}")
                 if not retryable or attempt >= self.max_stage_retries:
                     raise
@@ -792,15 +1019,15 @@ class PPLinkExtractor:
     def _approve_and_poll(self, cs_id: str, processor_entity: str) -> str:
         """Approve once, then poll for the provider redirect URL.
 
-        ``approve`` and ``poll`` are side-effect stages, so this never re-drives
-        the approve POST: a duplicate approval cannot be undone, and a poll
-        failure happens *after* approve already succeeded. Anything that fails
-        once the request is in flight raises :class:`PaymentOutcomeUnknownError`
-        so the caller reconciles instead of retrying.
+        This never re-drives approval on the same Checkout. An explicit
+        ``blocked`` response is a known rejection and is handled by rebuilding
+        the complete workflow; ambiguous failures remain reconciliation cases.
         """
         self._prepare_approve_proxy()
         try:
             self._chatgpt_approve(cs_id, processor_entity)
+        except CheckoutApprovalBlockedError:
+            raise
         except Exception as exc:
             self._record_stage_result("approve", self.approve_proxy, False, str(exc))
             self._log("approve", f"approve 失败，不重试以避免重复授权: {exc}")
@@ -809,6 +1036,12 @@ class PPLinkExtractor:
                 stage="approve",
                 error_code="approve_outcome_unknown",
             ) from exc
+        if self.enable_promotion:
+            self.promotion_applied = self._checkout_update_promotion(cs_id, processor_entity)
+            if self.promotion_applied and self.promotion_taxes:
+                self._checkout_update_taxes(cs_id, processor_entity)
+            if self.require_zero:
+                self._stripe_init(cs_id, enforce_zero=True)
         try:
             redirect_url = self._poll_payment_page(cs_id, timeout_seconds=45)
         except Exception as exc:
@@ -824,24 +1057,18 @@ class PPLinkExtractor:
 
     # ─── 主流程 ────────────────────────────────────────────────────────────
 
-    def extract(self) -> dict:
-        """执行完整三段式提链流程。"""
-        # Stage 1: Checkout (JP/TH 代理)
+    def _extract_once(self) -> dict:
+        """Run one isolated Checkout -> confirm -> approve workflow."""
         checkout = self._create_checkout()
         cs_id = checkout["cs_id"]
         processor_entity = checkout["processor_entity"]
-
-        # Stage 1.5: 促销更新 (可选). 对已创建的 checkout 从促销可用区打 0元促销,
-        # 使 "PayPal 区 checkout + 0元" 能共存于同一会话.
-        if self.enable_promotion:
-            self._checkout_update_promotion(cs_id, processor_entity)
-            if self.promotion_taxes:
-                self._checkout_update_taxes(cs_id, processor_entity)
 
         # ``oaics_`` is ChatGPT's native Checkout contract, not a Stripe
         # payment-page session. It is already a usable checkout link and must
         # never be sent to Stripe's /payment_pages/{id}/init endpoint.
         if cs_id.startswith("oaics_"):
+            if self.enable_promotion:
+                self.promotion_applied = self._checkout_update_promotion(cs_id, processor_entity)
             return {
                 "ok": True,
                 "link_type": "chatgpt_checkout_link",
@@ -855,56 +1082,57 @@ class PPLinkExtractor:
                 "side_effect_started": False,
                 "checkout_proxy": redact_proxy_url(self.checkout_proxy),
                 "promotion_proxy": redact_proxy_url(self.promotion_proxy),
+                "promotion_applied": self.promotion_applied,
                 "provider_proxy": "",
                 "stripe_init_proxy": "",
                 "payment_method_proxy": "",
                 "confirm_proxy": "",
                 "approve_proxy": "",
                 "proxy_exits": self.proxy_exits,
+                "workflow_attempt": self.workflow_attempt,
             }
 
         # Stage 2: Stripe init + create PM + confirm. Each stage can use its own
         # egress while the Stripe session keeps its cookies and identifiers.
         init, stripe_hosted_url, confirm_data = self._run_provider_stages(cs_id)
 
-        # 尝试从 confirm 提取 redirect URL (仅真正的 PayPal/Stripe 授权链接)
-        redirect_url = extract_redirect_url(confirm_data)
-
-        # 如果 confirm 没有返回 redirect，走 approve 流程
-        if not redirect_url:
-            self._log("approve", "confirm 未返回 redirect，走 ChatGPT approve 流程")
-            try:
-                redirect_url = self._approve_and_poll(cs_id, processor_entity)
-            except PaymentOutcomeUnknownError:
-                # The approve request already left the process. A hosted-link
-                # fallback here would report success for an authorization whose
-                # real outcome is unresolved.
+        # Standard flow: confirm is followed by exactly one approval submission.
+        # A redirect returned by confirm is only a hint; approval remains the
+        # authoritative ChatGPT checkout transition.
+        self._log("approve", "confirm 完成，提交 ChatGPT checkout approval")
+        try:
+            redirect_url = self._approve_and_poll(cs_id, processor_entity)
+        except PaymentOutcomeUnknownError:
+            raise
+        except CheckoutApprovalBlockedError:
+            # A blocked approval invalidates this Checkout. Never downgrade it
+            # to a hosted link and never retry approval on the same session;
+            # the outer workflow rebuilds a fresh Checkout.
+            raise
+        except CheckoutNotZeroDueError:
+            raise
+        except Exception as e:
+            if not stripe_hosted_url:
                 raise
-            except Exception as e:
-                # Pre-side-effect failure: the approve egress was never usable,
-                # so nothing was submitted and the Stripe hosted link from init
-                # is still a valid artifact.
-                if not stripe_hosted_url:
-                    raise
-                self.proxy_state.record_pair_result(
-                    self.checkout_proxy,
-                    self.provider_proxy,
-                    self.approve_proxy,
-                    False,
-                    "approve_fallback_to_hosted",
-                )
-                self._log("approve", f"approve 前置失败，降级返回 stripe_hosted_url: {e}")
-                return {
-                    "ok": True,
-                    "link_type": "stripe_hosted",
-                    "url": stripe_hosted_url,
-                    "ba_token": "",
-                    "cs_id": cs_id,
-                    "amount": stripe_amount_details(init).get("amount"),
-                    "currency": self.currency,
-                    "target_country": self.target_country,
-                    "checkout_country": self.checkout_country,
-                }
+            self.proxy_state.record_pair_result(
+                self.checkout_proxy,
+                self.provider_proxy,
+                self.approve_proxy,
+                False,
+                "approve_fallback_to_hosted",
+            )
+            self._log("approve", f"approve 前置失败，降级返回 stripe_hosted_url: {e}")
+            return {
+                "ok": True,
+                "link_type": "stripe_hosted",
+                "url": stripe_hosted_url,
+                "ba_token": "",
+                "cs_id": cs_id,
+                "amount": stripe_amount_details(init).get("amount"),
+                "currency": self.currency,
+                "target_country": self.target_country,
+                "checkout_country": self.checkout_country,
+            }
 
         # Stage 3: 跟随 redirect 提取 PayPal BA approve URL
         # 复用 Stripe session 保持 cookies
@@ -948,4 +1176,34 @@ class PPLinkExtractor:
             "confirm_proxy": redact_proxy_url(self.confirm_proxy),
             "approve_proxy": redact_proxy_url(self.approve_proxy),
             "proxy_exits": self.proxy_exits,
+            "promotion_applied": self.promotion_applied,
+            "workflow_attempt": self.workflow_attempt,
+            "last_retry_error": self.last_retry_error,
         }
+
+    def extract(self) -> dict:
+        """Run the complete workflow, rebuilding Checkout after an explicit block."""
+        for attempt in range(1, self.max_checkout_retries + 1):
+            self.workflow_attempt = attempt
+            self._reset_workflow_context()
+            try:
+                result = self._extract_once()
+                result["workflow_attempt"] = self.workflow_attempt
+                result["last_retry_error"] = dict(self.last_retry_error or {})
+                return result
+            except CheckoutApprovalBlockedError as exc:
+                self.last_retry_error = {
+                    "error_code": exc.error_code,
+                    "error_stage": exc.error_stage,
+                    "retryable": True,
+                    **exc.diagnostic(),
+                }
+                self._log(
+                    "approve",
+                    f"checkout approval blocked; rebuilding OpenAI Checkout "
+                    f"({attempt}/{self.max_checkout_retries})",
+                    **self.last_retry_error,
+                )
+                if attempt >= self.max_checkout_retries:
+                    raise
+        raise RuntimeError("paypal checkout workflow exhausted")

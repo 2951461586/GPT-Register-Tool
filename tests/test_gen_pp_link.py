@@ -366,7 +366,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def __init__(self, proxy):
                 self.headers = {}
 
-            def post(self, url, json=None, data=None, timeout=None):
+            def post(self, url, json=None, data=None, timeout=None, headers=None):
                 posted.append((url, json, data))
                 raise AssertionError(f"unexpected Stripe call: {url}")
 
@@ -813,6 +813,10 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                             "redirect_to_url": {"url": "https://www.paypal.com/agreements/approve?ba_token=BA-TEST123"},
                         },
                     })
+                if url.endswith("/backend-api/sentinel/ping"):
+                    return FakeResponse(200, {})
+                if url.endswith("/backend-api/payments/checkout/approve"):
+                    return FakeResponse(200, {"result": "approved"})
                 raise AssertionError(url)
 
             def get(self, url, params=None, timeout=None, allow_redirects=True):
@@ -830,13 +834,14 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         with patch.object(paypal_extract, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
             with patch.object(paypal_extract, "_checkout_post", side_effect=fake_checkout_post):
-                extractor = gen_pp_link.PPLinkExtractor(
-                    access_token="at",
-                    target_country="US",
-                    checkout_country="JP",
-                    require_zero=True,
-                )
-                result = extractor.extract()
+                with patch.object(paypal_extract.PPLinkExtractor, "_poll_payment_page", return_value="https://www.paypal.com/agreements/approve?ba_token=BA-TEST123"):
+                    extractor = gen_pp_link.PPLinkExtractor(
+                        access_token="at",
+                        target_country="US",
+                        checkout_country="JP",
+                        require_zero=True,
+                    )
+                    result = extractor.extract()
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["target_country"], "US")

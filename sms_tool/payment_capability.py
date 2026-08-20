@@ -232,6 +232,7 @@ def payment_method_capability_probe(
     promo_campaign_id: str = "plus-1-month-free",
     checkout_ui_mode: str = "custom",
     require_zero: bool = True,
+    stage_proxy_countries: Mapping[str, str] | None = None,
     timeout: int = 45,
     transport: PaymentCapabilityTransport | None = None,
     custom_payment_method_type_id: str = "",
@@ -261,6 +262,24 @@ def payment_method_capability_probe(
             "error_code": "missing_access_token",
             "error_stage": "validation",
         }
+    if method == "paypal" and transport is None:
+        return _paypal_capability_probe(
+            access_token=str(access_token).strip(),
+            auth_context=auth_context if isinstance(auth_context, dict) else {},
+            checkout_proxy=_proxy_text(checkout_proxy or proxy),
+            provider_proxy=_proxy_text(provider_proxy or proxy),
+            stripe_init_proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
+            payment_method_proxy=_proxy_text(checkout_proxy or provider_proxy or proxy),
+            confirm_proxy=_proxy_text(confirm_proxy or provider_proxy or proxy),
+            approve_proxy=_proxy_text(approve_proxy or provider_proxy or proxy),
+            promotion_proxy=_proxy_text(promotion_proxy or provider_proxy or proxy),
+            target_country=billing_country or checkout_country or "US",
+            checkout_country=checkout_country or billing_country or "US",
+            promo_campaign_id=promo_campaign_id,
+            require_zero=require_zero,
+            stage_proxy_countries=stage_proxy_countries,
+            timeout=timeout,
+        )
     if method == "gcash" and transport is None:
         from .gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
         from .gcash_transport import ChatGPTGCashTransport
@@ -387,6 +406,150 @@ def _proxy_text(value: Any) -> str:
     if isinstance(value, dict):
         value = value.get("https") or value.get("http") or ""
     return str(value or "").strip()
+
+
+def _paypal_capability_probe(
+    *,
+    access_token: str,
+    auth_context: dict[str, Any],
+    checkout_proxy: str,
+    provider_proxy: str,
+    stripe_init_proxy: str,
+    payment_method_proxy: str,
+    confirm_proxy: str,
+    approve_proxy: str,
+    promotion_proxy: str,
+    target_country: str,
+    checkout_country: str,
+    promo_campaign_id: str,
+    require_zero: bool,
+    stage_proxy_countries: Mapping[str, str] | None,
+    timeout: int,
+) -> dict[str, Any]:
+    """Probe PayPal capability on a disposable Checkout before side effects.
+
+    The probe deliberately applies the promo to its own Checkout before
+    Stripe init. The production flow remains standard Checkout -> confirm ->
+    approve -> promo; this probe only answers whether the account can reach a
+    zero-due PayPal offer without creating a payment method or approval.
+    """
+    try:
+        from .paypal_extract import PPLinkExtractor
+
+        extractor = PPLinkExtractor(
+            access_token=access_token,
+            checkout_proxy=checkout_proxy,
+            provider_proxy=provider_proxy,
+            stripe_init_proxy=stripe_init_proxy,
+            payment_method_proxy=payment_method_proxy,
+            confirm_proxy=confirm_proxy,
+            approve_proxy=approve_proxy,
+            promotion_proxy=promotion_proxy,
+            target_country=str(target_country or "US").upper(),
+            checkout_country=str(checkout_country or target_country or "US").upper(),
+            require_zero=bool(require_zero),
+            promo_campaign_id=promo_campaign_id,
+            stage_proxy_countries=dict(stage_proxy_countries or {}),
+            max_stage_retries=1,
+            max_checkout_retries=1,
+            proxy_state=None,
+            cookie_header=str(auth_context.get("cookie_header") or ""),
+            device_id=str(auth_context.get("oai_did") or auth_context.get("device_id") or ""),
+        )
+        checkout = extractor._create_checkout()
+        cs_id = str(checkout.get("cs_id") or "")
+        entity = str(checkout.get("processor_entity") or "")
+        if cs_id.startswith("oaics_"):
+            return {
+                "ok": True,
+                "operation": "payment_method_capability_probe",
+                "payment_method": "paypal",
+                "status": "completed",
+                "classification": "eligible",
+                "decision": "paypal_capability_available",
+                "eligible": True,
+                "method_available": True,
+                "conclusive": True,
+                "checkout_country": extractor.checkout_country,
+                "checkout_session_present": True,
+                "probe_checkout_kind": "oaics",
+                "retryable": False,
+            }
+        if not extractor.enable_promotion or not extractor._checkout_update_promotion(cs_id, entity):
+            return {
+                "ok": True,
+                "operation": "payment_method_capability_probe",
+                "payment_method": "paypal",
+                "status": "completed",
+                "classification": "ineligible",
+                "decision": "promotion_unavailable",
+                "eligible": False,
+                "method_available": True,
+                "conclusive": True,
+                "checkout_country": extractor.checkout_country,
+                "checkout_session_present": True,
+                "retryable": False,
+            }
+        init = extractor._stripe_init(cs_id, enforce_zero=True)
+        methods = [str(item).lower() for item in (init.get("payment_method_types") or [])]
+        if methods and "paypal" not in methods:
+            return {
+                "ok": True,
+                "operation": "payment_method_capability_probe",
+                "payment_method": "paypal",
+                "status": "completed",
+                "classification": "ineligible",
+                "decision": "payment_method_unavailable",
+                "eligible": False,
+                "method_available": False,
+                "conclusive": True,
+                "payment_method_types": methods,
+                "checkout_country": extractor.checkout_country,
+                "checkout_session_present": True,
+                "retryable": False,
+            }
+        amount_info = _amount_from_init(init)
+        return {
+            "ok": True,
+            "operation": "payment_method_capability_probe",
+            "payment_method": "paypal",
+            "status": "completed",
+            "classification": "eligible",
+            "decision": "paypal_zero_due_available",
+            "eligible": True,
+            "method_available": True,
+            "conclusive": True,
+            "amount": amount_info.get("amount"),
+            "currency": amount_info.get("currency") or extractor.checkout_currency,
+            "payment_method_types": methods,
+            "checkout_country": extractor.checkout_country,
+            "checkout_session_present": True,
+            "retryable": False,
+        }
+    except Exception as exc:
+        error_code = str(getattr(exc, "error_code", "") or "paypal_capability_probe_failed")
+        error_stage = str(getattr(exc, "error_stage", "") or "capability_probe")
+        return {
+            "ok": False,
+            "operation": "payment_method_capability_probe",
+            "payment_method": "paypal",
+            "status": "unknown" if bool(getattr(exc, "retryable", False)) else "failed",
+            "classification": "unknown",
+            "decision": error_code,
+            "eligible": None,
+            "method_available": None,
+            "conclusive": False,
+            "error": _safe_error(exc),
+            "error_code": error_code,
+            "error_stage": error_stage,
+            "retryable": bool(getattr(exc, "retryable", False)),
+        }
+
+
+def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
+    from .pp_link_helpers import stripe_amount_details
+
+    return stripe_amount_details(dict(init or {}))
 
 
 def _safe_error(exc: BaseException) -> str:

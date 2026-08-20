@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SmsWorkbench
 {
-    public sealed record PaymentBatchAccount(string Email, bool HasAccessToken);
+    public sealed record PaymentBatchAccount(string Email, bool HasAccessToken, string AccessToken = "");
 
     /// <summary>
     /// Payment-owned egress pools used by the batch extractor.  The UI keeps
@@ -57,9 +57,13 @@ namespace SmsWorkbench
         }
     }
 
-    public sealed class PaymentBatchResultRow
+    public sealed partial class PaymentBatchResultRow : ObservableObject
     {
-        public string AccountRef { get; init; } = "";
+        [ObservableProperty] private string accountRef = "";
+        [ObservableProperty] private string progressText = "0%";
+        [ObservableProperty] private double progressPercent;
+        [ObservableProperty] private string currentStage = "等待";
+        [ObservableProperty] private string resultStatus = "等待";
         public string MatrixCell { get; init; } = "";
         public string AuthStatus { get; init; } = "";
         public string RefreshStatus { get; init; } = "";
@@ -71,6 +75,11 @@ namespace SmsWorkbench
         public string ResultKind { get; init; } = "";
         public string ResultValue { get; init; } = "";
         public bool ResultPresent { get; init; }
+        public bool AuthorizationQueued { get; init; }
+        public string AuthorizationStatus { get; init; } = "";
+        public string AuthorizationDisplay => AuthorizationQueued
+            ? AuthorizationStatus.Length > 0 ? AuthorizationStatus : "pending"
+            : "";
         public string ResultDisplay => ResultValue.Length > 0
             ? ResultValue
             : ResultPresent ? "已生成（报告仅保留存在状态）" : Decision;
@@ -95,5 +104,8 @@ namespace SmsWorkbench
         bool JitRefresh,
         bool ProbeOnly,
         bool RequireZero,
-        IReadOnlyList<PaymentMatrixRow> MatrixRows);
+        IReadOnlyList<PaymentMatrixRow> MatrixRows)
+    {
+        public bool ResumeCheckpoint { get; init; }
+    }
 }

@@ -31,6 +31,8 @@ Dynamic and static IP resources are available with free testing through the [IPW
 - Manage local accounts, Sessions, quota status, and payment links from a Windows desktop client.
 - Route registration, mailbox, Checkout, and Approve traffic through independently configured proxies.
 - Extract supported payment links and export account data for Codex, CPA, and SUB2API workflows.
+- Start fresh payment batches by default, or explicitly resume a matching persisted checkpoint with account-level stage progress.
+- Probe PayPal capability and zero-due eligibility before the full flow; rebuild Checkout after an explicit blocked approval instead of re-approving the same submission.
 
 ## Requirements
 
@@ -61,6 +63,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
+- [v2026.08.20 release notes](./docs/release-v2026.08.20.md)
 - [Directory map](./docs/directory-map.md)
 - [Proxy guide](./PROXY_GUIDE.md)
 
