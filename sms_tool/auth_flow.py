@@ -1,6 +1,6 @@
 import json
 import time
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from .account_creation import _validate_email_otp
 from .auth_headers import auth_impersonate, openai_auth_headers
@@ -8,6 +8,11 @@ from .config import current_config_data
 from .http_client import request_with_retry
 from .http_utils import _absolute_url, _follow_continue_url, _json_or_raw
 from .mailbox import _poll_email_otp
+from .phone_proxy import redact_proxy_url
+
+
+_PASSKEY_CLIENT_CAPABILITIES = "11111"
+_CC_CAPS = "login_methods"
 
 
 def _is_existing_login_redirect(url):
@@ -67,10 +72,36 @@ def _with_query_param(url, key, value):
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
 
 
+def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
+    parsed = urlparse(str(url or ""))
+    if not parsed.netloc.endswith("auth.openai.com"):
+        return str(url or "")
+    values = parse_qs(parsed.query, keep_blank_values=True)
+    required = {
+        "device_id": did,
+        "ext-oai-did": did,
+        "auth_session_logging_id": session_logging_id,
+        "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
+        "ccaps": _CC_CAPS,
+        "login_hint": login_hint,
+    }
+    if screen_hint:
+        required["screen_hint"] = screen_hint
+    if prompt:
+        required["prompt"] = prompt
+    for key, value in required.items():
+        if value and not values.get(key):
+            values[key] = [str(value)]
+    return parsed._replace(query=urlencode(values, doseq=True)).geturl()
+
+
 def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
     params = {
         "ext-oai-did": did,
+        "device_id": did,
         "auth_session_logging_id": session_logging_id,
+        "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
+        "ccaps": _CC_CAPS,
         "login_hint": login_hint,
     }
     if screen_hint:
@@ -78,6 +109,77 @@ def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen
     if prompt:
         params["prompt"] = prompt
     return f"{chat_base}/api/auth/signin/openai?{urlencode(params)}"
+
+
+def _cookie_presence(session):
+    names = set()
+    try:
+        names = {
+            str(getattr(cookie, "name", cookie) or "")
+            for cookie in session.cookies
+        }
+    except Exception:
+        try:
+            names = set(session.cookies.get_dict())
+        except Exception:
+            names = set()
+    names = {name for name in names if name}
+    return {
+        "oai_did": any(name.lower() == "oai-did" for name in names),
+        "oai_login_csrf": any("oai-login-csrf" in name.lower() for name in names),
+        "login_session": any("login_session" in name.lower() for name in names),
+        "client_auth_session": any("client_auth_session" in name.lower() for name in names),
+        "nextauth_state": any("next-auth.state" in name.lower() for name in names),
+        "cookie_count": len(names),
+    }
+
+
+def _protocol_diagnostic(*, response=None, final_url="", session=None, sentinel_source="", sentinel_flow="", proxy="", **extra):
+    status = int(getattr(response, "status_code", 0) or 0) if response is not None else 0
+    raw_url = str(final_url or getattr(response, "url", "") or "")
+    parsed_url = urlparse(raw_url)
+    safe_url = (
+        f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+        if parsed_url.scheme and parsed_url.netloc
+        else str(parsed_url.path or "")
+    )
+    return {
+        "final_url": safe_url,
+        "cookie_presence": _cookie_presence(session) if session is not None else {},
+        "sentinel_source": str(sentinel_source or ""),
+        "sentinel_flow": str(sentinel_flow or ""),
+        "http_status": status,
+        "proxy": redact_proxy_url(proxy),
+        **extra,
+    }
+
+
+def _print_protocol_diagnostic(stage, diagnostic):
+    safe = dict(diagnostic or {})
+    url = urlparse(str(safe.get("final_url") or ""))
+    safe["final_url"] = f"{url.scheme}://{url.netloc}{url.path}" if url.scheme and url.netloc else str(url.path or "")
+    print(f"  Protocol diagnostic[{stage}]: {json.dumps(safe, ensure_ascii=False, sort_keys=True)}")
+
+
+def _authorize_continue_sentinel(session, did, proxy=""):
+    """Fetch a fresh, same-flow Sentinel challenge for API continue calls."""
+    from .sentinel_tokens import _extract_sentinel
+
+    data = _extract_sentinel(proxy=proxy, force_fresh=True, persist=False, device_id=did)
+    if not isinstance(data, dict):
+        raise RuntimeError("sentinel_extract_failed: authorize_continue")
+    token = str(data.get("sentinel_authorize_continue_token") or "").strip()
+    so_token = str(data.get("sentinel_authorize_continue_so_token") or "").strip()
+    if not token or not so_token:
+        raise RuntimeError("sentinel_extract_failed: authorize_continue flow incomplete")
+    try:
+        token_flow = str(json.loads(token).get("flow") or "")
+        so_flow = str(json.loads(so_token).get("flow") or "")
+    except Exception as exc:
+        raise RuntimeError("sentinel_extract_failed: authorize_continue token malformed") from exc
+    if token_flow != "authorize_continue" or so_flow != "authorize_continue":
+        raise RuntimeError("sentinel_extract_failed: authorize_continue token flow mismatch")
+    return data, token, so_token
 
 
 def _signup_signin_attempts():
@@ -90,6 +192,9 @@ def _signup_signin_attempts():
 
 def _passwordless_signin_attempts():
     return (
+        # Match the stable browser signup entry. The prompt is intentionally
+        # omitted; prompt=login selects the existing-login password page for
+        # unregistered mailboxes on some exits.
         {"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},
         {"name": "login_or_signup_prompt_signup", "screen_hint": "login_or_signup", "prompt": "signup"},
         {"name": "signup_screen_hint", "screen_hint": "signup", "prompt": ""},
@@ -105,7 +210,7 @@ def _invalid_state_auth_response(data):
     return code == "invalid_state" or "session is no longer valid" in message
 
 
-def _continue_signup_username(session, username, did, auth_base, base_headers, current_url, sentinel_token="", sentinel_so_token=""):
+def _continue_signup_username(session, username, did, auth_base, base_headers, current_url, sentinel_token="", sentinel_so_token="", proxy=""):
     """Ensure auth.openai.com has an active signup state before user/register.
 
     Recent auth flows may bounce the initial NextAuth authorize request back to
@@ -115,6 +220,7 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
     if _is_signup_password_step(current_url) or _is_email_verification_step(current_url):
         return {"ok": True, "url": current_url, "skipped": True}
 
+    fresh_data, fresh_token, fresh_so = _authorize_continue_sentinel(session, did, proxy=proxy)
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/create-account"
     headers = {
         **base_headers,
@@ -122,8 +228,8 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
             did,
             referer=referer,
             origin=auth_base,
-            sentinel_token=sentinel_token,
-            sentinel_so_token=sentinel_so_token,
+            sentinel_token=fresh_token,
+            sentinel_so_token=fresh_so,
             extra={"Content-Type": "application/json"},
         ),
     }
@@ -140,6 +246,10 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
     body = _json_or_raw(response, limit=1000)
     next_url = _response_next_url(response, auth_base)
     print(f"  Signup username continue: {response.status_code}" + (f" {next_url}" if next_url else ""))
+    diagnostic = _protocol_diagnostic(response=response, final_url=next_url, session=session,
+                                      sentinel_source=fresh_data.get("sentinel_source", ""),
+                                      sentinel_flow="authorize_continue", proxy=proxy)
+    _print_protocol_diagnostic("authorize_continue", diagnostic)
     if response.status_code != 200:
         circuit = getattr(session, "_openai_registration_circuit", {})
         retry_after = circuit.get("retry_after", 0) if isinstance(circuit, dict) else 0
@@ -164,7 +274,9 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
             final_url = str(getattr(follow, "url", "") or next_url)
         except Exception as exc:
             return {"ok": False, "status": response.status_code, "body": body, "url": next_url, "error": f"continue_follow_failed:{exc}"}
-    return {"ok": True, "status": response.status_code, "body": body, "url": final_url}
+    diagnostic["final_url"] = final_url
+    return {"ok": True, "status": response.status_code, "body": body, "url": final_url,
+            "diagnostic": diagnostic}
 
 
 def _prime_email_verification_page(session, auth_base, base_headers, current_url):
@@ -216,6 +328,8 @@ def _prepare_signup_auth_state(
     sentinel_token="",
     authorize_sentinel_token="",
     sentinel_so_token="",
+    proxy="",
+    passwordless_web=False,
     attempts=None,
 ):
     signin_payload = {
@@ -247,7 +361,14 @@ def _prepare_signup_auth_state(
         )
         signin_body = _json_or_raw(signin_resp, limit=1000)
         auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
-        auth_session_url = _with_query_param(auth_session_url, "device_id", did)
+        auth_session_url = _ensure_authorize_context(
+            auth_session_url,
+            did,
+            session_logging_id,
+            username,
+            screen_hint=attempt.get("screen_hint", ""),
+            prompt=attempt.get("prompt", ""),
+        )
         if not auth_session_url:
             last_state = {"ok": False, "attempt": name, "error": "missing_auth_session_url", "body": signin_body}
             continue
@@ -258,17 +379,26 @@ def _prepare_signup_auth_state(
             auth_session_url,
             label=f"Auth authorize {name}",
             headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Referer": f"{chat_base}/"},
-            allow_redirects=False,
+            allow_redirects=True,
             impersonate=auth_impersonate(),
         )
+        current_url = str(authorize_resp.url or "")
         location = (
             getattr(authorize_resp, "headers", {}).get("location")
             or getattr(authorize_resp, "headers", {}).get("Location")
             or ""
         )
-        current_url = _absolute_url(auth_base, location) if location else str(authorize_resp.url or "")
+        # Some HTTP adapters retain the authorize URL even after a redirect;
+        # use Location as a compatibility fallback when no navigation occurred.
+        if location and urlparse(current_url).path.rstrip("/") in {"", "/api/accounts/authorize"}:
+            current_url = _absolute_url(auth_base, location)
         redirect_path = urlparse(current_url).path or "/"
-        print(f"  Redirect[{name}]: {authorize_resp.status_code} {redirect_path}")
+        diagnostic = _protocol_diagnostic(response=authorize_resp, final_url=current_url, session=session,
+                                          sentinel_source="", sentinel_flow="", proxy=proxy,
+                                          signin_attempt=name)
+        print(f"  Redirect[{name}]: {authorize_resp.status_code} {redirect_path} "
+              f"cookies={diagnostic['cookie_presence']}")
+        _print_protocol_diagnostic("authorize", diagnostic)
 
         login_redirect_seen = _is_existing_login_redirect(current_url)
 
@@ -277,7 +407,39 @@ def _prepare_signup_auth_state(
             continue
 
         if _is_signup_password_step(current_url) or _is_email_verification_step(current_url):
-            return {"ok": True, "attempt": name, "status": authorize_resp.status_code, "url": current_url, "skipped": True}
+            return {"ok": True, "attempt": name, "status": authorize_resp.status_code, "url": current_url,
+                    "skipped": True, "diagnostic": diagnostic}
+
+        # Passwordless Web/HAR flow is complete after authorize navigation.
+        # The browser sends the OTP from this state; do not POST authorize/continue.
+        if passwordless_web:
+            if _is_chatgpt_auth_login_landing(current_url):
+                last_state = {"ok": False, "attempt": name, "status": authorize_resp.status_code,
+                              "url": current_url, "error": "authorize_redirect_not_advanced",
+                              "diagnostic": diagnostic}
+                continue
+            if _is_existing_login_redirect(current_url):
+                # The server can explicitly disable passwordless signup for an
+                # exit (the client_auth_session dump reports
+                # passwordless_disabled=true) and route to /log-in/password.
+                # This is no longer the passwordless Web path; use the legacy
+                # username transition only for this explicit password fallback.
+                signup_state = _continue_signup_username(
+                    session, username, did, auth_base, base_headers, current_url,
+                    sentinel_token=authorize_sentinel_token or sentinel_token,
+                    sentinel_so_token=sentinel_so_token, proxy=proxy,
+                )
+                signup_state["attempt"] = name
+                signup_state["password_fallback"] = True
+                signup_state.setdefault("diagnostic", diagnostic)
+                if signup_state.get("ok") and not _is_chatgpt_auth_login_landing(signup_state.get("url", "")):
+                    return signup_state
+                last_state = {**signup_state, "error": "authorize_login_page"}
+                continue
+            # The normal Web path receives the OTP from authorize and proceeds
+            # via email verification without /authorize/continue.
+            return {"ok": True, "attempt": name, "status": authorize_resp.status_code,
+                    "url": current_url, "diagnostic": diagnostic}
 
         signup_state = _continue_signup_username(
             session,
@@ -288,9 +450,11 @@ def _prepare_signup_auth_state(
             current_url,
             sentinel_token=authorize_sentinel_token or sentinel_token,
             sentinel_so_token=sentinel_so_token,
+            proxy=proxy,
         )
         signup_state["attempt"] = name
         signup_state["login_redirect_seen"] = login_redirect_seen
+        signup_state.setdefault("diagnostic", diagnostic)
         if login_redirect_seen and _is_existing_login_redirect(signup_state.get("url", "")):
             last_state = {
                 **signup_state,
@@ -441,6 +605,7 @@ def _login_existing_account_with_email_otp(
     # from signup state to login state.  Previously this was skipped when the
     # authorize redirect landed on /email-verification, which left the session
     # in a signup state and caused OTP send to return 409.
+    fresh_data, fresh_token, fresh_so = _authorize_continue_sentinel(session, did, proxy=proxy)
     continue_resp = request_with_retry(
         session,
         "post",
@@ -452,13 +617,24 @@ def _login_existing_account_with_email_otp(
             did=did,
             referer=current_url or f"{auth_base}/log-in",
             origin=auth_base,
-            sentinel_token=sentinel_token,
-            sentinel_so_token=sentinel_so_token,
+            sentinel_token=fresh_token,
+            sentinel_so_token=fresh_so,
             extra={"Content-Type": "application/json"},
         ),
         impersonate=auth_impersonate(),
     )
     print(f"  Existing account continue: {continue_resp.status_code}")
+    _print_protocol_diagnostic(
+        "existing_authorize_continue",
+        _protocol_diagnostic(
+            response=continue_resp,
+            final_url=_response_next_url(continue_resp, auth_base),
+            session=session,
+            sentinel_source=fresh_data.get("sentinel_source", ""),
+            sentinel_flow="authorize_continue",
+            proxy=proxy,
+        ),
+    )
     if continue_resp.status_code == 200:
         next_url = _response_next_url(continue_resp, auth_base)
         if next_url:

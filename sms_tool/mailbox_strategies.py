@@ -240,6 +240,32 @@ def _graph_poll_otp(
     )
 
 
+def _chongzhi_matcher(mailbox: Any, cfg: Mapping[str, Any]) -> bool:
+    from .mailbox_chongzhi import chongzhi_enabled
+    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
+    return provider == "chongzhi" or (
+        chongzhi_enabled(dict(cfg)) and bool(str(getattr(mailbox, "password", "") or "").strip())
+    )
+
+
+def _chongzhi_poll_otp(mailbox: Any, **kwargs: Any) -> Optional[str]:
+    from .mailbox import _poll_chongzhi_otp
+    email = str(getattr(mailbox, "email", "") or "").strip()
+    password = str(getattr(mailbox, "password", "") or "").strip()
+    if not email or not password:
+        raise ValueError("chongzhi mailbox requires email and password")
+    return _poll_chongzhi_otp(
+        mailbox, email=email, password=password,
+        subject_keyword=str(kwargs.get("subject_keyword") or ""),
+        timeout=int(kwargs.get("timeout") or 300),
+        issued_after_unix=int(kwargs.get("issued_after_unix") or 0),
+        proxy=kwargs.get("proxy"),
+    )
+
+
+register_otp_poller("chongzhi", _chongzhi_matcher, _chongzhi_poll_otp)
+
+
 # Register Graph API as the final fallback
 register_message_fetcher("graph_api", _graph_matcher, _graph_fetch_messages)
 register_otp_poller("graph_api", _graph_matcher, _graph_poll_otp)

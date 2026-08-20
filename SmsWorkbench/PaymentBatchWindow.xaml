@@ -38,6 +38,8 @@
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
       <StackPanel Margin="0,0,7,10">
@@ -57,7 +59,7 @@
         <TextBox Text="{Binding CanaryText, UpdateSourceTrigger=PropertyChanged}"/>
       </StackPanel>
 
-      <!-- 批次 ID 自动生成；代理分阶段配置由上方统一设置，全部账号共用。 -->
+      <!-- 批次默认新建；勾选断点恢复后可复用下方输入的 ID。 -->
       <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,7,10">
         <TextBlock Text="Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
         <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}"
@@ -96,13 +98,31 @@
         <CheckBox Content="401 自动恢复（RT/Cookie/邮箱OTP/OAuth）" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
         <CheckBox Content="仅能力探测（Checkout + Stripe init）" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
         <CheckBox Content="要求 0 元金额" IsChecked="{Binding RequireZero}" IsEnabled="{Binding RequireZeroEnabled}"/>
+        <CheckBox Content="恢复已有断点" IsChecked="{Binding ResumeCheckpoint}" Margin="22,0,0,0"/>
+        <TextBlock Text="{Binding ExecutionModeSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+      </StackPanel>
+
+      <StackPanel Grid.Row="4" Grid.ColumnSpan="4" Margin="0,0,0,10">
+        <TextBlock Text="未选择邮箱时，可输入 Access Token（每行一个，最多 10 个）" Style="{StaticResource FieldLabel}"/>
+        <TextBox Text="{Binding ManualAccessTokens, UpdateSourceTrigger=PropertyChanged}"
+                 AcceptsReturn="True"
+                 TextWrapping="NoWrap"
+                 Height="72"
+                 FontFamily="Consolas"
+                 VerticalScrollBarVisibility="Auto"
+                 ToolTip="每行一个 JWT Access Token；选择了邮箱时此项不会参与任务"/>
+      </StackPanel>
+      <StackPanel Grid.Row="5" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,0,0,10">
+        <TextBlock Text="批次 ID" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBox Text="{Binding BatchId, UpdateSourceTrigger=PropertyChanged}" Width="300" FontFamily="Consolas"/>
+        <TextBlock Text="仅勾选“恢复已有断点”时复用此 ID" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" Margin="12,0,0,0"/>
       </StackPanel>
     </Grid>
 
     <!-- 账号地区 / 支付资格矩阵已移除：所有账号统一使用上方设置的代理地区。 -->
 
     <Grid Grid.Row="2" Margin="0,0,0,12">
-      <DataGrid x:Name="ResultsGrid"
+        <DataGrid x:Name="ResultsGrid"
                 ItemsSource="{Binding Results}"
                 IsReadOnly="True"
                 AutoGenerateColumns="False"
@@ -112,12 +132,17 @@
                 Margin="0">
         <DataGrid.Columns>
           <DataGridTextColumn Header="账号" Binding="{Binding AccountRef}" Width="135"/>
-          <DataGridTextColumn Header="矩阵" Binding="{Binding MatrixCell}" Width="115"/>
-          <DataGridTextColumn Header="AT" Binding="{Binding AuthStatus}" Width="68"/>
-          <DataGridTextColumn Header="JIT" Binding="{Binding RefreshStatus}" Width="66"/>
-          <DataGridTextColumn Header="资格" Binding="{Binding Eligibility}" Width="66"/>
-          <DataGridTextColumn Header="终态" Binding="{Binding TerminalState}" Width="82"/>
-          <DataGridTextColumn Header="错误阶段" Binding="{Binding ErrorStage}" Width="96"/>
+          <DataGridTextColumn Header="结果" Binding="{Binding ResultStatus}" Width="72"/>
+          <DataGridTextColumn Header="进度" Binding="{Binding ProgressText}" Width="64"/>
+          <DataGridTextColumn Header="阶段" Binding="{Binding CurrentStage}" Width="110"/>
+          <DataGridTextColumn x:Name="AuthorizationQueueColumn" Header="BA授权队列" Binding="{Binding AuthorizationDisplay}" Width="92"/>
+          <DataGridTemplateColumn Header="阶段进度" Width="125">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Height="12" Margin="6,0" VerticalAlignment="Center"/>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTemplateColumn Header="支付链接 / 二维码" Width="*">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
@@ -152,7 +177,7 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="次数" Binding="{Binding Attempts}" Width="56"/>
+          <DataGridTextColumn Header="重试次数" Binding="{Binding Attempts}" Width="72"/>
         </DataGrid.Columns>
       </DataGrid>
     </Grid>

@@ -9,18 +9,23 @@ namespace SmsWorkbench
     {
         private static readonly PaymentProxyCountryOption AutomaticCheckoutCountryOption =
             new("", "自动（跟随账单区）");
+        private static readonly char[] ManualTokenSeparators = ['\r', '\n', ',', ';'];
 
         private readonly IPaymentBatchService _paymentBatchService;
         private readonly IFileLauncher _fileLauncher;
         private readonly IPaymentCountryCatalog? _countryCatalog;
         private readonly PaymentBatchAccount[] _accounts;
+        private readonly HashSet<string> _terminalProgressAccounts = new(StringComparer.OrdinalIgnoreCase);
         private string _automaticBatchId;
+        private bool _acceptProgress;
 
         [ObservableProperty] private PaymentMethodOption selectedMethod;
         [ObservableProperty] private int workers = 2;
-        [ObservableProperty] private int retries = 1;
+        [ObservableProperty] private int retries = 3;
+        [ObservableProperty] private string manualAccessTokens = "";
         [ObservableProperty] private string canaryText = "0";
         [ObservableProperty] private string batchId = "";
+        [ObservableProperty] private bool resumeCheckpoint;
         [ObservableProperty] private string checkoutProxyPool = "";
         [ObservableProperty] private string approveProxyPool = "";
         [ObservableProperty] private string checkoutProxyCountry = "";
@@ -57,7 +62,7 @@ namespace SmsWorkbench
                 .ToArray();
             PaymentMethodOptions = PaymentMethods.BatchOptions;
             WorkerOptions = Enumerable.Range(1, 10).ToArray();
-            RetryOptions = new[] { 0, 1, 2 };
+            RetryOptions = new[] { 0, 1, 2, 3, 4, 5 };
             selectedMethod = PaymentMethodOptions.First(option => option.Id == "momo");
             _automaticBatchId = CreateBatchId(selectedMethod.Id);
             batchId = _automaticBatchId;
@@ -79,11 +84,33 @@ namespace SmsWorkbench
 
         public ObservableCollection<PaymentBatchResultRow> Results { get; } = new();
 
-        public string AccountSummary => $"账号 {_accounts.Length}  ·  AT 已获取 {_accounts.Count(account => account.HasAccessToken)}";
+        public string AccountSummary => _accounts.Length > 0
+            ? $"账号 {_accounts.Length}  ·  AT 已获取 {_accounts.Count(account => account.HasAccessToken)}"
+            : $"手动 AT {ParseManualAccessTokens().Length} / 10";
 
         public bool RequireZeroEnabled => !ProbeOnly;
+        public bool IsPayPalSelected => string.Equals(SelectedMethod?.Id, "paypal", StringComparison.OrdinalIgnoreCase);
 
-        private bool CanRun() => !IsRunning && _accounts.Length > 0;
+        private bool CanRun()
+        {
+            int manualCount = ParseManualAccessTokens().Length;
+            return !IsRunning && (_accounts.Length > 0 || manualCount is > 0 and <= 10);
+        }
+
+        partial void OnResumeCheckpointChanged(bool value)
+        {
+            OnPropertyChanged(nameof(ExecutionModeSummary));
+        }
+
+        public string ExecutionModeSummary => ResumeCheckpoint
+            ? "断点恢复（复用当前批次 ID）"
+            : "新执行（每次生成新批次 ID）";
+
+        partial void OnManualAccessTokensChanged(string value)
+        {
+            OnPropertyChanged(nameof(AccountSummary));
+            RunCommand.NotifyCanExecuteChanged();
+        }
 
         private bool CanOpenReport() => !IsRunning && _fileLauncher.Exists(ReportPath);
 
@@ -99,6 +126,7 @@ namespace SmsWorkbench
             ReloadCountryOptions();
             ReloadProxyConfiguration();
             SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(IsPayPalSelected));
         }
 
         partial void OnProbeOnlyChanged(bool value)
@@ -220,6 +248,18 @@ namespace SmsWorkbench
         {
             if (!TryCreateRequest(out PaymentBatchRequest request)) return;
             Results.Clear();
+            _terminalProgressAccounts.Clear();
+            _acceptProgress = true;
+            foreach (PaymentBatchAccount account in request.Accounts)
+            {
+                Results.Add(new PaymentBatchResultRow
+                {
+                    AccountRef = account.Email,
+                    CurrentStage = "等待",
+                    ProgressText = "0%",
+                    ResultStatus = "等待",
+                });
+            }
             ReportPath = "";
             Status = ProbeOnly
                 ? "正在执行 Checkout 与 Stripe init 支付能力探测..."
@@ -227,14 +267,23 @@ namespace SmsWorkbench
             IsRunning = true;
             try
             {
-                JsonElement report = await _paymentBatchService.RunAsync(request, cancellationToken);
+                IProgress<BackendOutputLine> progress = new Progress<BackendOutputLine>(ApplyProgress);
+                JsonElement report = _paymentBatchService is IPaymentBatchProgressService progressService
+                    ? await progressService.RunAsync(request, progress, cancellationToken)
+                    : await _paymentBatchService.RunAsync(request, cancellationToken);
                 HasRun = true;
+                _acceptProgress = false;
+                Results.Clear();
                 PopulateResults(report);
                 ReportPath = JsonString(report, "report_path");
                 string error = JsonString(report, "error");
-                Status = error.Length > 0 && !report.TryGetProperty("counts", out _)
+                string summary = error.Length > 0 && !report.TryGetProperty("counts", out _)
                     ? "执行失败：" + error
                     : FormatSummary(report);
+                int resumed = JsonInt(report, "resumed");
+                Status = request.ResumeCheckpoint
+                    ? $"断点恢复 · 已恢复 {resumed} 个账号 · {summary}"
+                    : "新执行 · " + summary;
             }
             catch (OperationCanceledException)
             {
@@ -254,6 +303,7 @@ namespace SmsWorkbench
             }
             finally
             {
+                _acceptProgress = false;
                 IsRunning = false;
             }
         }
@@ -266,14 +316,20 @@ namespace SmsWorkbench
                 Status = "Canary 数量必须是非负整数。";
                 return false;
             }
-            string normalizedBatchId = Regex.Replace((BatchId ?? "").Trim(), @"[^A-Za-z0-9_.-]+", "_");
-            if (normalizedBatchId.Length == 0)
-            {
-                normalizedBatchId = CreateBatchId(SelectedMethod?.Id ?? "paypal");
-            }
+            string normalizedBatchId = ResumeCheckpoint
+                ? Regex.Replace((BatchId ?? "").Trim(), @"[^A-Za-z0-9_.-]+", "_")
+                : CreateBatchId(SelectedMethod?.Id ?? "paypal");
+            if (normalizedBatchId.Length == 0) normalizedBatchId = CreateBatchId(SelectedMethod?.Id ?? "paypal");
             BatchId = normalizedBatchId;
+            PaymentBatchAccount[] accounts = EffectiveAccounts();
+            if (accounts.Length == 0)
+            {
+                if (ParseManualAccessTokens().Length <= 10)
+                    Status = "请选择账号，或输入 1 至 10 个 Access Token。";
+                return false;
+            }
             request = new PaymentBatchRequest(
-                _accounts,
+                accounts,
                 SelectedMethod?.Id ?? "paypal",
                 Workers,
                 Retries,
@@ -286,9 +342,111 @@ namespace SmsWorkbench
                 JitRefresh,
                 ProbeOnly,
                 RequireZero,
-                new[] { CreateNeutralMatrixRow() });
+                new[] { CreateNeutralMatrixRow() })
+            {
+                ResumeCheckpoint = ResumeCheckpoint,
+            };
             return true;
         }
+
+        private PaymentBatchAccount[] EffectiveAccounts()
+        {
+            if (_accounts.Length > 0) return _accounts;
+            string[] tokens = ParseManualAccessTokens();
+            if (tokens.Length > 10)
+            {
+                Status = "手动 Access Token 最多允许 10 个。";
+                return Array.Empty<PaymentBatchAccount>();
+            }
+            return tokens.Select((token, index) => new PaymentBatchAccount($"AT-{index + 1}", true, token)).ToArray();
+        }
+
+        private string[] ParseManualAccessTokens()
+            => (ManualAccessTokens ?? "")
+                .Split(ManualTokenSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+        private void ApplyProgress(BackendOutputLine line)
+        {
+            if (!_acceptProgress) return;
+            if (!BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progress)) return;
+            string accountRef = ResolveProgressAccount(progress.AccountRef);
+            PaymentBatchResultRow? row = Results.FirstOrDefault(item => item.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
+            if (row == null) return;
+            bool accountTerminal = progress.AccountTerminal;
+            // Backend events can arrive out of order when adapter callbacks and
+            // the executor's terminal event share stdout. Never let a stale
+            // running event regress a terminal row back to "执行中".
+            if (_terminalProgressAccounts.Contains(row.AccountRef)
+                && !accountTerminal)
+                return;
+            int percent = PaymentStageProgress(progress.Stage, accountTerminal, SelectedMethod?.Id);
+            if (percent >= row.ProgressPercent || accountTerminal)
+            {
+                row.ProgressPercent = Math.Max(row.ProgressPercent, percent);
+                row.ProgressText = $"{(int)row.ProgressPercent}%";
+                row.CurrentStage = PaymentStageLabel(progress.Stage);
+            }
+            if (accountTerminal)
+            {
+                _terminalProgressAccounts.Add(row.AccountRef);
+                row.ProgressPercent = 100;
+                row.ProgressText = "100%";
+            }
+            row.ResultStatus = accountTerminal
+                ? progress.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) ? "成功" : "失败"
+                : "执行中";
+            Status = $"{accountRef}  {row.CurrentStage}  {row.ProgressText}";
+        }
+
+        private string ResolveProgressAccount(string accountRef)
+        {
+            if (string.IsNullOrWhiteSpace(accountRef)) return "";
+            PaymentBatchResultRow exact = Results.FirstOrDefault(row => row.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return exact.AccountRef;
+            return ResolveAccountDisplay(accountRef);
+        }
+
+        private string ResolveAccountDisplay(string accountRef)
+        {
+            if (string.IsNullOrWhiteSpace(accountRef)) return "";
+            PaymentBatchAccount? account = EffectiveAccounts()
+                .FirstOrDefault(item => item.Email.Equals(accountRef, StringComparison.OrdinalIgnoreCase)
+                    || PaymentAccountRef(item.Email).Equals(accountRef, StringComparison.OrdinalIgnoreCase));
+            return account?.Email ?? accountRef;
+        }
+
+        private static string PaymentAccountRef(string value)
+        {
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes((value ?? "").Trim().ToLowerInvariant()));
+            return Convert.ToHexString(hash).ToLowerInvariant()[..16];
+        }
+
+        private static int PaymentStageProgress(string stage, bool terminal, string? method = null)
+        {
+            if (terminal) return 100;
+            string normalized = (stage ?? "").Trim().ToLowerInvariant();
+            IReadOnlyList<string> stages = Array.Empty<string>();
+            try { stages = PaymentMethods.Find(method).Stages ?? Array.Empty<string>(); } catch { }
+            if (stages.Count == 0) stages = new[] { "routing", "auth_gate", "checkout", "stripe_init", "provider", "confirm", "redirect", "artifact" };
+            int index = Array.FindIndex(stages.ToArray(), item => item == normalized || (normalized == "checkout_create" && item == "checkout") || (normalized == "capability_probe" && item == "stripe_init") || (normalized == "payment_method" && item == "provider"));
+            return index < 0 ? 5 : Math.Clamp((index + 1) * 95 / stages.Count, 5, 95);
+        }
+
+        private static string PaymentStageLabel(string stage) => (stage ?? "").Trim().ToLowerInvariant() switch
+        {
+            "routing" => "路由准备",
+            "auth_gate" => "AT 验证",
+            "checkout" or "checkout_create" => "创建 Checkout",
+            "stripe_init" or "capability_probe" => "能力探测",
+            "provider" or "payment_method" => "支付方式处理",
+            "approve" or "confirm" => "支付确认",
+            "redirect" or "promotion" => "结果确认",
+            "completed" => "完成",
+            _ => string.IsNullOrWhiteSpace(stage) ? "执行中" : stage,
+        };
 
         /// <summary>
         /// Single neutral matrix cell: no registration-country cohort and no
@@ -379,7 +537,7 @@ namespace SmsWorkbench
                 string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
                 Results.Add(new PaymentBatchResultRow
                 {
-                    AccountRef = JsonString(row, "account_ref"),
+                    AccountRef = ResolveAccountDisplay(JsonString(row, "account_ref")),
                     MatrixCell = JsonString(row, "matrix_cell"),
                     AuthStatus = JsonBool(row, "authenticated") ? "200" : "失败",
                     RefreshStatus = JsonBool(row, "refreshed") ? "已刷新" : "未刷新",
@@ -391,6 +549,16 @@ namespace SmsWorkbench
                     ResultKind = resultKind,
                     ResultValue = resultValue,
                     ResultPresent = paymentUrlPresent || qrDataPresent || qrPathPresent,
+                    AuthorizationQueued = JsonBool(row, "authorization_queued"),
+                    AuthorizationStatus = JsonString(row, "authorization_status"),
+                    ProgressPercent = 100,
+                    ProgressText = "100%",
+                    CurrentStage = "完成",
+                    ResultStatus = JsonBool(row, "ok")
+                        || terminalState.Equals("completed", StringComparison.OrdinalIgnoreCase)
+                        || paymentUrlPresent || qrDataPresent || qrPathPresent
+                        ? "成功"
+                        : "失败",
                     Attempts = JsonInt(row, "attempts")
                 });
             }

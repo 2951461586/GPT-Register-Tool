@@ -61,6 +61,10 @@ class AccountSessionModel:
     success: bool | None
     status: str
     error: str
+    source: str = ""
+    register_method: str = "unknown"
+    session_type: str = "unknown"
+    plan_type: str = "unknown"
     password: str = field(default="", repr=False)
     device_id: str = ""
     credentials: SessionCredentials = field(default_factory=SessionCredentials, repr=False)
@@ -125,6 +129,10 @@ class AccountSessionModel:
             success=bool(success) if success is not None else None,
             status=_text(value.get("status")),
             error=_text(value.get("error")),
+            source=_text(value.get("source") or value.get("account_source")),
+            register_method=_text(value.get("register_method") or "unknown").lower(),
+            session_type=_text(value.get("session_type") or "unknown").lower(),
+            plan_type=_text(value.get("plan_type") or value.get("account_type") or "unknown").lower(),
             password=_text(value.get("password")),
             device_id=_text(value.get("device_id")),
             credentials=credentials,
@@ -146,6 +154,10 @@ class AccountSessionModel:
             "success": self.success,
             "status": self.status,
             "error": self.error,
+            "source": self.source,
+            "register_method": self.register_method,
+            "session_type": self.session_type,
+            "plan_type": self.plan_type,
             "password": self.password,
             "device_id": self.device_id,
             "access_token": self.credentials.access_token,
@@ -166,6 +178,10 @@ class AccountSessionModel:
             "status": self.status,
             "error": self.error,
             "device_id": self.device_id,
+            "source": self.source,
+            "register_method": self.register_method,
+            "session_type": self.session_type,
+            "plan_type": self.plan_type,
             "mailbox": {
                 "email": self.mailbox.email,
                 "provider": self.mailbox.provider,

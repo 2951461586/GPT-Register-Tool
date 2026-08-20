@@ -12,6 +12,10 @@ from .paths import project_path, runtime_file
 
 
 EXTRA_COLUMNS = {
+    "source": "TEXT DEFAULT ''",
+    "register_method": "TEXT DEFAULT 'unknown'",
+    "session_type": "TEXT DEFAULT 'unknown'",
+    "plan_type": "TEXT DEFAULT 'unknown'",
     "batch_id": "TEXT DEFAULT ''",
     "registration_state": "TEXT DEFAULT ''",
     "registration_country": "TEXT DEFAULT ''",
@@ -158,6 +162,12 @@ def _ensure_extra_columns(conn):
         UPDATE accounts
         SET refresh_token_status='no_rt'
         WHERE refresh_token_status IS NULL OR refresh_token_status=''
+    """)
+    conn.execute("""
+        UPDATE accounts
+        SET plan_type=lower(account_type)
+        WHERE (plan_type IS NULL OR plan_type='' OR plan_type='unknown')
+          AND account_type IS NOT NULL AND account_type <> ''
     """)
 
 
@@ -525,6 +535,10 @@ def upsert_account(
 
     row = {
         "email": email,
+        "source": model.source,
+        "register_method": model.register_method,
+        "session_type": model.session_type,
+        "plan_type": model.plan_type,
         "password": model.password,
         "success": _as_bool(_success_value(data, access_token)),
         "status": status,

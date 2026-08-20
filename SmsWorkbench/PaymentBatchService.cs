@@ -257,10 +257,16 @@ namespace SmsWorkbench
         {
             string emailFile = Path.Combine(Path.GetTempPath(), "payment_batch_" + Guid.NewGuid().ToString("N") + ".txt");
             string matrixFile = Path.Combine(Path.GetTempPath(), "payment_matrix_" + Guid.NewGuid().ToString("N") + ".json");
+            string tokenFile = Path.Combine(Path.GetTempPath(), "payment_tokens_" + Guid.NewGuid().ToString("N") + ".json");
             try
             {
                 File.WriteAllLines(emailFile, request.Accounts.Select(account => account.Email), new UTF8Encoding(false));
                 File.WriteAllText(matrixFile, SerializeMatrix(request.MatrixRows, request.PaymentMethod), new UTF8Encoding(false));
+                var tokenMap = request.Accounts
+                    .Where(account => !string.IsNullOrWhiteSpace(account.AccessToken))
+                    .ToDictionary(account => account.Email, account => account.AccessToken, StringComparer.OrdinalIgnoreCase);
+                if (tokenMap.Count > 0)
+                    File.WriteAllText(tokenFile, JsonSerializer.Serialize(tokenMap), new UTF8Encoding(false));
                 var arguments = new List<string>
                 {
                     "--desktop-ipc",
@@ -273,8 +279,10 @@ namespace SmsWorkbench
                     "--payment-matrix", matrixFile,
                     "--refresh-timeout", "180"
                 };
+                if (tokenMap.Count > 0) arguments.AddRange(new[] { "--payment-token-map", tokenFile });
                 if (!request.JitRefresh) arguments.Add("--no-jit-at-refresh");
                 if (request.ProbeOnly) arguments.Add("--payment-probe-only");
+                if (request.ResumeCheckpoint) arguments.Add("--payment-resume-checkpoint");
                 if (!request.RequireZero) arguments.Add("--no-require-zero");
                 if (request.Canary > 0) arguments.AddRange(new[] { "--payment-canary", request.Canary.ToString(CultureInfo.InvariantCulture) });
                 AddPoolArgument(arguments, "--checkout-proxy-pool", request.CheckoutProxyPool);
@@ -308,6 +316,7 @@ namespace SmsWorkbench
             {
                 TryDelete(emailFile);
                 TryDelete(matrixFile);
+                TryDelete(tokenFile);
             }
         }
 

@@ -225,3 +225,39 @@ def batch_auto_pay(args: Any) -> None:
         for r in results:
             if not r.get("ok"):
                 print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
+
+
+def list_paypal_ba_queue(args: Any) -> None:
+    from ..desktop_ipc import emit_result
+    from ..paypal_authorization_queue import list_paypal_ba_authorizations
+
+    items = list_paypal_ba_authorizations(
+        limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0))
+    )
+    emit_result(
+        {"ok": True, "total": len(items), "results": items},
+        enabled=bool(getattr(args, "desktop_ipc", False)),
+    )
+
+
+def process_paypal_ba_queue(args: Any) -> None:
+    from ..desktop_ipc import emit_event, emit_result
+    from ..paypal_authorization_queue import process_paypal_ba_authorizations
+    from ..paypal_auto import auto_pay as run_auto_pay
+
+    def authorize(item: dict[str, Any]) -> dict[str, Any]:
+        return run_auto_pay(
+            email=str(item.get("email") or ""),
+            approval_url=str(item.get("approval_url") or ""),
+            proxy=getattr(args, "proxy", None),
+            headless=bool(getattr(args, "auto_pay_headless", False)),
+            timeout=int(getattr(args, "auto_pay_timeout", 180) or 180),
+            reverse_only=bool(getattr(args, "auto_pay_reverse_only", False)),
+        )
+
+    result = process_paypal_ba_authorizations(
+        authorize,
+        limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0)),
+        progress=lambda event: emit_event(event),
+    )
+    emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))

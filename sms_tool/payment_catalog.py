@@ -51,6 +51,9 @@ class PaymentMethodDefinition:
     flow_profile: str = "protocol_redirect"
     stages: tuple[str, ...] = ("auth_gate", "checkout", "artifact")
     artifact_kind: str = "url"
+    artifact_validator: str = "http_url"
+    probe_output_kind: str = "capability"
+    reconciliation_policy: str = "artifact"
     side_effect_stage: str = "confirm"
     provider: str = ""
     redirect_hosts: tuple[str, ...] = ()
@@ -127,6 +130,9 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
                 for stage in item.get("stages") or ("auth_gate", "checkout", "artifact")
             ),
             artifact_kind=str(item.get("artifact_kind") or "url").strip(),
+            artifact_validator=str(item.get("artifact_validator") or "http_url").strip().lower(),
+            probe_output_kind=str(item.get("probe_output_kind") or "capability").strip().lower(),
+            reconciliation_policy=str(item.get("reconciliation_policy") or "artifact").strip().lower(),
             side_effect_stage=str(item.get("side_effect_stage") or "confirm").strip(),
             provider=str(item.get("provider") or "").strip(),
             redirect_hosts=tuple(str(host or "").strip().lower() for host in item.get("redirect_hosts") or ()),
@@ -149,6 +155,9 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             or not definition.stripe_type
             or not definition.stages
             or definition.artifact_kind not in {"url", "url_or_qr", "completion"}
+            or definition.artifact_validator not in {"http_url", "paypal_ba_url", "url_or_qr", "completion", "provider_redirect", "checkout_url"}
+            or definition.probe_output_kind not in {"capability", "availability", "provider_redirect"}
+            or definition.reconciliation_policy not in {"artifact", "paypal_return", "provider_status", "none"}
             or definition.release_tier not in {"production", "canary", "offline"}
         ):
             raise ValueError(f"invalid payment catalog definition: {key}")

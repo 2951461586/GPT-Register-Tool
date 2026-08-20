@@ -49,6 +49,28 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertNotIn("access_token", report["results"][0]["auth"])
         self.assertNotIn("email", report["results"][0])
 
+    def test_manual_access_token_uses_liveness_probe_without_persisted_auth(self):
+        auth_probe = {"status_code": 200, "ok": True}
+        payment = {"ok": True, "decision": "ready", "url": "https://pay.example.test/opaque"}
+        progress_events = []
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", side_effect=AssertionError("persisted auth must not run")), \
+             patch("sms_tool.account_liveness.probe_account_liveness", return_value=auth_probe) as probe, \
+             patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "manual.json"):
+            report = payment_batch.run_payment_batch(
+                ["AT-1"], payment_method="momo", retries=0,
+                access_tokens={"AT-1": "secret-manual-at"},
+                progress=progress_events.append,
+            )
+
+        probe.assert_called_once()
+        self.assertEqual(probe.call_args.args[0]["email"], "at-1")
+        self.assertNotIn("secret-manual-at", str(report))
+        self.assertEqual(generate.call_args.kwargs["access_token"], "secret-manual-at")
+        self.assertTrue(progress_events[-1]["account_terminal"])
+        self.assertEqual(progress_events[-1]["status"], "completed")
+
     def test_checkpoint_keeps_only_artifact_presence_without_mutating_report(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {
@@ -548,13 +570,16 @@ class PaymentBatchTests(unittest.TestCase):
         success = {"ok": True, "url": "https://example.test/pay"}
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "probe_payment_method", return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"}), \
              patch.object(payment_batch, "generate_payment_link", side_effect=[retryable, success]) as generate, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "retry.json"):
             payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+                resume_checkpoint=True,
             )
             report = payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+                resume_checkpoint=True,
             )
 
         self.assertEqual(ensure.call_count, 2)
@@ -572,13 +597,16 @@ class PaymentBatchTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
+             patch.object(payment_batch, "probe_payment_method", return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"}), \
              patch.object(payment_batch, "generate_payment_link", return_value=terminal) as generate, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "terminal.json"):
             payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+                resume_checkpoint=True,
             )
             report = payment_batch.run_payment_batch(
                 ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+                resume_checkpoint=True,
             )
 
         self.assertEqual(ensure.call_count, 1)
@@ -708,6 +736,66 @@ class PaymentBatchTests(unittest.TestCase):
         serialized = str(report)
         self.assertNotIn("user:pass", serialized)
         self.assertNotIn("checkout_proxy", serialized)
+
+    def test_probe_and_extract_use_distinct_default_report_paths(self):
+        self.assertEqual(payment_batch._report_path("run", probe_only=True).name, "run.probe.json")
+        self.assertEqual(payment_batch._report_path("run", probe_only=False).name, "run.extract.json")
+
+    def test_report_contains_mode_and_per_account_stage_timing(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"):
+            report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", retries=0)
+        self.assertEqual(report["mode"], "extract")
+        row = report["results"][0]
+        self.assertIn("stage_timings_ms", row)
+        self.assertGreaterEqual(row["total_duration_ms"], 0)
+        self.assertEqual(row["last_failed_stage"], "")
+
+    def test_adapter_progress_uses_canonical_batch_events_and_stage_timings(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        events = []
+
+        def generate(**kwargs):
+            kwargs["progress"]({"stage": "checkout", "status": "running", "detail": "start"})
+            kwargs["progress"]({"stage": "checkout", "status": "completed"})
+            kwargs["progress"]({"stage": "stripe_init", "state": "running"})
+            return {"ok": True, "url": "https://example.test/pay"}
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", side_effect=generate), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"):
+            report = payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="momo", retries=0, progress=events.append,
+            )
+
+        adapter_event = next(event for event in events if event["stage"] == "stripe_init")
+        self.assertEqual(adapter_event["operation"], "extract")
+        self.assertEqual(adapter_event["batch_id"], report["batch_id"])
+        self.assertEqual(adapter_event["account_ref"], report["results"][0]["account_ref"])
+        self.assertIn("checkout", report["results"][0]["stage_timings_ms"])
+        self.assertIn("stripe_init", report["results"][0]["stage_timings_ms"])
+
+    def test_checkpoint_resume_replays_durable_desktop_events(self):
+        auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
+        payment = {"ok": True, "url": "https://example.test/pay"}
+        replayed = []
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
+             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
+             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"), \
+             patch.object(payment_batch, "_event_path", return_value=Path(tmp) / "resume.events.jsonl"):
+            payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", batch_id="resume")
+            payment_batch.run_payment_batch(
+                ["a@example.com"], payment_method="momo", batch_id="resume", progress=replayed.append,
+            )
+
+        self.assertTrue(replayed)
+        self.assertTrue(any(event.get("replayed") for event in replayed))
+        self.assertTrue(any(event.get("account_terminal") for event in replayed))
 
 
 if __name__ == "__main__":

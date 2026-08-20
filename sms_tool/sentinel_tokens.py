@@ -134,13 +134,11 @@ def assert_sentinel_device_id(sentinel_data, device_id: str) -> str:
 
 def _set_oai_did_cookie(session, did):
     if did:
-        try:
-            session.cookies.set("oai-did", did, domain=".openai.com", path="/")
-        except Exception:
+        for domain in (".openai.com", "chatgpt.com"):
             try:
-                session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
+                session.cookies.set("oai-did", did, domain=domain, path="/")
             except Exception:
-                pass
+                continue
 
 
 def _import_sentinel_cookies(session, sentinel_data, did):
@@ -213,7 +211,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
 
-    flows = ["username_password_create", "oauth_create_account"]
+    flows = ["username_password_create", "authorize_continue", "oauth_create_account"]
     results = {}
 
     for flow in flows:
@@ -238,14 +236,19 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
             return None
 
     upc = results.get("username_password_create", {})
+    authorize = results.get("authorize_continue", {})
     oauth = results.get("oauth_create_account", {})
 
     if not upc.get("token"):
         print("  [!] HTTP sentinel: no token in username_password_create response")
         return None
+    if not authorize.get("token") or not authorize.get("so"):
+        print("  [!] HTTP sentinel: no token in authorize_continue response")
+        return None
 
     # Build sentinel_token (same structure as browser path)
     sentinel_token = _build_sentinel_pow_token(upc, did, "username_password_create")
+    sentinel_authorize_token = _build_sentinel_pow_token(authorize, did, "authorize_continue")
     sentinel_oauth_token = _build_sentinel_pow_token(oauth, did, "oauth_create_account")
 
     # Build sentinel_so_token
@@ -254,6 +257,12 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
         "c": oauth.get("token", ""),
         "id": did,
         "flow": "oauth_create_account",
+    }
+    authorize_so_obj = {
+        "so": authorize.get("so", authorize.get("token", "")),
+        "c": authorize.get("token", ""),
+        "id": did,
+        "flow": "authorize_continue",
     }
     sentinel_so_token = json.dumps(sentinel_so_obj)
 
@@ -281,8 +290,10 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
 
     result = {
         "sentinel_token": sentinel_token,
-        "sentinel_oauth_token": sentinel_oauth_token or sentinel_token,
+        "sentinel_authorize_continue_token": sentinel_authorize_token,
+        "sentinel_oauth_token": sentinel_oauth_token,
         "sentinel_so_token": sentinel_so_token,
+        "sentinel_authorize_continue_so_token": json.dumps(authorize_so_obj),
         "cookie_str": cookie_str,
         "oai_did": did,
     }
@@ -454,6 +465,16 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
         "id": did,
         "flow": "oauth_create_account",
     }
+    try:
+        authorize_payload = json.loads(tokens.get("authorize_continue") or "{}")
+    except Exception:
+        authorize_payload = {}
+    authorize_so_obj = {
+        "so": authorize_payload.get("so") or authorize_payload.get("c") or "",
+        "c": authorize_payload.get("c") or "",
+        "id": did,
+        "flow": "authorize_continue",
+    }
 
     try:
         auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
@@ -476,6 +497,7 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
     result = {
         "sentinel_token": tokens["username_password_create"],
         "sentinel_authorize_continue_token": tokens["authorize_continue"],
+        "sentinel_authorize_continue_so_token": json.dumps(authorize_so_obj, separators=(",", ":"), ensure_ascii=False),
         "sentinel_oauth_token": tokens["oauth_create_account"],
         "sentinel_so_token": json.dumps(sentinel_so_obj, separators=(",", ":"), ensure_ascii=False),
         "cookie_str": cookie_str,
@@ -667,28 +689,42 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
     page.evaluate("() => SentinelSDK.init()"); time.sleep(0.5)
     did = page.evaluate("() => document.cookie.match(/oai-did=([^;]+)/)?.[1] || ''")
 
-    sentinel_token = page.evaluate(f"""(did) => {{
-        return SentinelSDK.token().then(raw => {{
+    def browser_token(flow):
+        return page.evaluate("""async ({did, flow}) => {
+            const raw = await SentinelSDK.token(flow);
             const parsed = JSON.parse(raw);
             parsed.id = did;
-            parsed.flow = 'username_password_create';
+            parsed.flow = flow;
             return JSON.stringify(parsed);
-        }});
-    }}""", did)
+        }""", {"did": did, "flow": flow})
 
-    sentinel_so = page.evaluate(f"""(did) => {{
-        return SentinelSDK.token().then(raw => {{
-            const parsed = JSON.parse(raw);
-            return JSON.stringify({{
-                so: raw, c: parsed.c, id: did, flow: 'oauth_create_account'
-            }});
-        }});
-    }}""", did)
+    sentinel_token = browser_token("username_password_create")
+    authorize_token = browser_token("authorize_continue")
+    oauth_token = browser_token("oauth_create_account")
+    if not authorize_token:
+        return None
+    authorize_payload = json.loads(authorize_token)
+    authorize_so = json.dumps({
+        "so": authorize_payload.get("so") or authorize_payload.get("c") or "",
+        "c": authorize_payload.get("c") or "",
+        "id": did,
+        "flow": "authorize_continue",
+    }, separators=(",", ":"), ensure_ascii=False)
+    oauth_payload = json.loads(oauth_token)
+    sentinel_so = json.dumps({
+        "so": oauth_payload.get("so") or oauth_payload.get("c") or "",
+        "c": oauth_payload.get("c") or "",
+        "id": did,
+        "flow": "oauth_create_account",
+    }, separators=(",", ":"), ensure_ascii=False)
 
     cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in ctx.cookies())
 
     result = {
         "sentinel_token": sentinel_token,
+        "sentinel_authorize_continue_token": authorize_token,
+        "sentinel_authorize_continue_so_token": authorize_so,
+        "sentinel_oauth_token": oauth_token,
         "sentinel_so_token": sentinel_so,
         "cookie_str": cookie_str,
         "oai_did": did,

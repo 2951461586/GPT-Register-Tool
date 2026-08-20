@@ -227,12 +227,14 @@ def main():
     parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
     parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
     parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
-    parser.add_argument("--payment-batch-id", default=None, help="Stable cohort ID for a resumable protocol-payment batch")
+    parser.add_argument("--payment-batch-id", default=None, help="Batch ID; reused only together with --payment-resume-checkpoint")
+    parser.add_argument("--payment-resume-checkpoint", action="store_true", help="Explicitly resume matching accounts from an existing payment batch checkpoint")
     parser.add_argument("--no-jit-at-refresh", action="store_true", help="Probe the saved AT but do not run email OTP OAuth on HTTP 401")
     parser.add_argument("--payment-probe-only", action="store_true", help="Create Checkout and run Stripe capability detection without creating a payment method")
     parser.add_argument("--payment-matrix", default=None, help="Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix")
     parser.add_argument("--payment-canary", type=int, default=0, help="Limit a payment batch to the first N unique accounts")
-    parser.add_argument("--payment-retries", type=int, default=1, help="Retries for classified transient payment failures")
+    parser.add_argument("--payment-retries", type=int, default=3, help="Retries for classified transient payment failures")
+    parser.add_argument("--payment-token-map", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--list-payment-methods", action="store_true", help="List protocol payment methods and adapter availability")
     parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link/--generate-upi-qr")
     parser.add_argument("--qr-path", default=None, help="Output PNG path for --generate-upi-qr")
@@ -298,6 +300,9 @@ def main():
     parser.add_argument("--auto-pay-timeout", type=int, default=180, help="Seconds to wait for auto-pay completion")
     parser.add_argument("--batch-auto-pay", action="store_true", help="Run auto-pay for all pending accounts in SQLite")
     parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
+    parser.add_argument("--list-paypal-ba-queue", action="store_true", help="List durable PayPal BA authorization queue")
+    parser.add_argument("--process-paypal-ba-queue", action="store_true", help="Process pending PayPal BA authorization jobs")
+    parser.add_argument("--paypal-ba-queue-limit", type=int, default=0, help="Max PayPal BA authorization jobs (0=all)")
     parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
     parser.add_argument("--one-click-scan", action="store_true", help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification")
     parser.add_argument("--no-scan-workspace-status", action="store_true", help="Deprecated compatibility flag; --one-click-scan no longer performs workspace checks")
@@ -415,6 +420,12 @@ def main():
         return
     if args.mark_paypal_status:
         _mark_paypal_status(args)
+        return
+    if args.list_paypal_ba_queue:
+        _list_paypal_ba_queue(args)
+        return
+    if args.process_paypal_ba_queue:
+        _process_paypal_ba_queue(args)
         return
     if args.import_cpa and not args.register_and_import:
         _import_cpa(args)
@@ -812,6 +823,14 @@ def _auto_pay(args):
 
 def _batch_auto_pay(args):
     return payment_link_commands.batch_auto_pay(args)
+
+
+def _list_paypal_ba_queue(args):
+    return payment_link_commands.list_paypal_ba_queue(args)
+
+
+def _process_paypal_ba_queue(args):
+    return payment_link_commands.process_paypal_ba_queue(args)
 
 
 def _one_click_command_context():

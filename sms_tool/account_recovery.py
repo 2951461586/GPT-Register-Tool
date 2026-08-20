@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,14 @@ def refresh_local_quota_statuses(
     relogin_mode: str = "auto",
 ) -> dict[str, Any]:
     accounts = _local_quota_accounts(emails)
+    run_id = uuid.uuid4().hex
+    _emit_account_batch_event(
+        run_id,
+        "batch_started",
+        "running",
+        total=len(accounts),
+        detail="账号测活开始",
+    )
     # The liveness probe is a single light GET, so a modestly higher ceiling keeps
     # a full-pool scan responsive; heavy 401 relogins only run for invalid tokens.
     max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
@@ -43,49 +52,65 @@ def refresh_local_quota_statuses(
 
     def run(index: int, account: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         email = str(account.get("email") or "").strip()
-        if is_permanently_deactivated(account):
-            probe = {
-                "ok": False,
-                "mode": "local",
-                "status": "account_deactivated",
-                "quota_status": "account_deactivated",
-                "error": "account_deactivated",
-                "terminal": True,
+        try:
+            if is_permanently_deactivated(account):
+                probe = {
+                    "ok": False,
+                    "mode": "local",
+                    "status": "account_deactivated",
+                    "quota_status": "account_deactivated",
+                    "error": "account_deactivated",
+                    "terminal": True,
+                }
+            else:
+                probe = probe_account_liveness(account, proxy=proxy, timeout=timeout)
+            relogin: dict[str, Any] = {}
+            if relogin_on_401 and _probe_is_token_invalid(probe) and email:
+                relogin = relogin_codex_account(
+                    account,
+                    proxy=proxy,
+                    timeout=max(int(relogin_timeout or timeout or 180), int(timeout or 30)),
+                    mode=relogin_mode,
+                )
+                if relogin.get("ok"):
+                    probe = dict(relogin.get("probe") or {})
+                    if email:
+                        try:
+                            clear_stale_promotion_at_marker(email)
+                        except Exception:
+                            pass
+            status = str(probe.get("quota_status") or probe.get("status") or "未知")
+            if relogin and not relogin.get("ok"):
+                status = _relogin_failure_quota_status(relogin)
+            persisted = mark_quota_status(email, status, quota_result=probe) if email else False
+            probe_ok = bool(probe.get("ok"))
+            result = {
+                "ok": probe_ok and bool(persisted),
+                "email": email,
+                "quota_status": status,
+                "probe": probe,
+                **({"relogin": relogin} if relogin else {}),
+                "probe_ok": probe_ok,
+                "persisted": bool(persisted),
             }
-        else:
-            probe = probe_account_liveness(account, proxy=proxy, timeout=timeout)
-        relogin: dict[str, Any] = {}
-        if relogin_on_401 and _probe_is_token_invalid(probe) and email:
-            relogin = relogin_codex_account(
-                account,
-                proxy=proxy,
-                timeout=max(int(relogin_timeout or timeout or 180), int(timeout or 30)),
-                mode=relogin_mode,
-            )
-            if relogin.get("ok"):
-                probe = dict(relogin.get("probe") or {})
-                # The verified replacement AT invalidates a stale promotion
-                # "AT失效" label; clear it before the quota write-back merges
-                # the older raw_json over the refreshed session file.
-                if email:
-                    try:
-                        clear_stale_promotion_at_marker(email)
-                    except Exception:
-                        pass
-        status = str(probe.get("quota_status") or probe.get("status") or "未知")
-        if relogin and not relogin.get("ok"):
-            status = _relogin_failure_quota_status(relogin)
-        persisted = mark_quota_status(email, status, quota_result=probe) if email else False
-        probe_ok = bool(probe.get("ok"))
-        return index, {
-            "ok": probe_ok and bool(persisted),
-            "email": email,
-            "quota_status": status,
-            "probe": probe,
-            **({"relogin": relogin} if relogin else {}),
-            "probe_ok": probe_ok,
-            "persisted": bool(persisted),
-        }
+        except Exception as exc:
+            result = {
+                "ok": False,
+                "email": email,
+                "quota_status": "检测失败",
+                "probe": {"ok": False, "error": str(exc)[:200]},
+                "probe_ok": False,
+                "persisted": False,
+            }
+        _emit_account_batch_event(
+            run_id,
+            "account_completed",
+            "completed" if result.get("ok") else "failed",
+            account_ref=email,
+            total=len(accounts),
+            detail=str(result.get("quota_status") or "检测完成"),
+        )
+        return index, result
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(run, index, account) for index, account in enumerate(accounts)]
@@ -111,6 +136,13 @@ def refresh_local_quota_statuses(
     relogin_results = [item.get("relogin") for item in results if isinstance(item.get("relogin"), dict)]
     relogin_success = sum(1 for item in relogin_results if item.get("ok"))
     relogin_deactivated = sum(1 for item in relogin_results if _looks_account_deactivated(item))
+    _emit_account_batch_event(
+        run_id,
+        "batch_completed",
+        "completed",
+        total=len(results),
+        detail=f"完成 {len(results)} 个账号",
+    )
     return {
         "ok": success == len(results),
         "mode": "local",
@@ -128,6 +160,31 @@ def refresh_local_quota_statuses(
         "relogin_account_deactivated": relogin_deactivated,
         "results": results,
     }
+
+
+def _emit_account_batch_event(
+    run_id: str,
+    stage: str,
+    status: str,
+    *,
+    account_ref: str = "",
+    total: int = 0,
+    detail: str = "",
+) -> None:
+    try:
+        from .desktop_ipc import emit_event
+
+        emit_event({
+            "domain": "account_scan",
+            "run_id": run_id,
+            "account_ref": account_ref,
+            "stage": stage,
+            "status": status,
+            "total": int(total or 0),
+            "detail": detail,
+        })
+    except Exception:
+        pass
 
 
 def relogin_web_session_account(account: dict[str, Any], proxy: str | None = None, timeout: int = 180) -> dict[str, Any]:

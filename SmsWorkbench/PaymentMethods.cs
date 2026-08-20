@@ -19,7 +19,8 @@ namespace SmsWorkbench
         string RegistrationDisplayName,
         IReadOnlyList<string> Aliases,
         bool BatchEnabled = true,
-        bool RegistrationEnabled = true)
+        bool RegistrationEnabled = true,
+        IReadOnlyList<string>? Stages = null)
     {
         public string SingleAccountDescription => RegistrationDisplayName;
     }
@@ -91,6 +92,9 @@ namespace SmsWorkbench
 
         [JsonPropertyName("registration_enabled")]
         public bool RegistrationEnabled { get; init; } = true;
+
+        [JsonPropertyName("stages")]
+        public List<string> Stages { get; init; } = [];
     }
 
     public static class PaymentMethods
@@ -110,7 +114,8 @@ namespace SmsWorkbench
                 method.RegistrationDisplayName,
                 method.Aliases,
                 method.BatchEnabled,
-                method.RegistrationEnabled))
+                method.RegistrationEnabled,
+                method.Stages))
             .ToArray();
 
         public static IReadOnlyList<PaymentMethodOption> BatchOptions { get; } = All

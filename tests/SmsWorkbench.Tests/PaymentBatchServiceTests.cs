@@ -149,6 +149,39 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal(3, cell.GetProperty("sample_size").GetInt32());
     }
 
+    [Fact]
+    public async Task ManualAccessTokensUsePrivateMapFileWithoutLeakingIntoArguments()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
+        const string secret = "secret-manual-access-token";
+        string tokenFile = "";
+        var backend = new StubBackendClient
+        {
+            Handler = command =>
+            {
+                tokenFile = ArgumentAfter(command.Arguments, "--payment-token-map");
+                Assert.True(File.Exists(tokenFile));
+                string tokenJson = File.ReadAllText(tokenFile);
+                Assert.Contains(secret, tokenJson);
+                Assert.DoesNotContain(secret, command.Arguments);
+                return new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false);
+            }
+        };
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var request = new PaymentBatchRequest(
+            new[] { new PaymentBatchAccount("AT-1", true, secret) },
+            "momo", 1, 3, 0, "manual-at", "", "", "", "JP",
+            true, true, true,
+            new[] { service.CreateDefaultMatrixRow("momo") });
+
+        await service.RunAsync(request, CancellationToken.None);
+
+        Assert.NotEmpty(tokenFile);
+        Assert.False(File.Exists(tokenFile));
+        Assert.Equal("3", ArgumentAfter(backend.LastCommand!.Arguments, "--payment-retries"));
+    }
+
     [Theory]
     [InlineData("gopay", "ID", "TH", "JP")]
     [InlineData("gcash", "PH", "PH", "PH")]

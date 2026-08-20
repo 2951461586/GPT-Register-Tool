@@ -63,6 +63,7 @@ class EgressCheckError(Exception):
             "url": "",
             "error": str(self),
             "error_code": self.error_code,
+            "failure_class": "proxy_country_mismatch" if self.error_code == "egress_country_mismatch" else "proxy_transport_failed",
             "error_stage": "preparing_proxy",
             "retryable": self.retryable,
             "egress": {
@@ -73,7 +74,7 @@ class EgressCheckError(Exception):
         }
 
 
-def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, float, float]:
+def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, float, float, float]:
     protocol = runtime_config.get("protocol_payments") if isinstance(runtime_config, Mapping) else None
     gate = protocol.get("egress_check") if isinstance(protocol, Mapping) else None
     if not isinstance(gate, Mapping):
@@ -87,7 +88,11 @@ def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, floa
         ttl = max(0.0, float(gate.get("cache_ttl_seconds") or _DEFAULT_CACHE_TTL_SECONDS))
     except (TypeError, ValueError):
         ttl = _DEFAULT_CACHE_TTL_SECONDS
-    return bool(enabled), timeout, ttl
+    try:
+        failure_cooldown = max(0.0, float(gate.get("failure_cooldown_seconds") or 180))
+    except (TypeError, ValueError):
+        failure_cooldown = 180.0
+    return bool(enabled), timeout, ttl, failure_cooldown
 
 
 def _default_probe(proxy: str, expected_country: str, stage: str, timeout: float):
@@ -103,13 +108,15 @@ def _cached_probe(
     stage: str,
     timeout: float,
     ttl: float,
+    failure_cooldown: float,
 ) -> tuple[bool, str, str]:
     """Probe with a monotonic cache so batch runs do not re-probe healthy proxies."""
-    key = (proxy, expected)
+    from .paypal_proxy import proxy_key
+    key = (proxy_key(proxy), expected)
     now = time.monotonic()
     with _cache_lock:
         cached = _probe_cache.get(key)
-        if cached and ttl > 0 and now - cached[0] < ttl:
+        if cached and now - cached[0] < (ttl if cached[1][0] else failure_cooldown):
             return cached[1]
     result = probe(proxy, expected, stage, timeout)
     observed = str(getattr(result, "country_code", "") or "")
@@ -138,7 +145,7 @@ def assert_egress_countries(
     Raises :class:`EgressCheckError` on mismatch or probe failure; returns
     silently when the gate is disabled or a stage carries no expectation.
     """
-    enabled, timeout, ttl = _gate_settings(runtime_config)
+    enabled, timeout, ttl, failure_cooldown = _gate_settings(runtime_config)
     if not enabled:
         return
     probe = probe or _default_probe
@@ -156,7 +163,7 @@ def assert_egress_countries(
                 break
         if not expected:
             continue
-        ok, observed, error = _cached_probe(probe, proxy, expected, stage, timeout, ttl)
+        ok, observed, error = _cached_probe(probe, proxy, expected, stage, timeout, ttl, failure_cooldown)
         if ok:
             continue
         if error.startswith("country_mismatch:"):
@@ -171,7 +178,7 @@ def assert_egress_countries(
                 observed_country=observed,
             )
         raise EgressCheckError(
-            f"egress_probe_failed: stage={stage} expected={expected} error={error}",
+            f"proxy_transport_failed: stage={stage} expected={expected} error={error}",
             error_code="egress_probe_failed",
             retryable=True,
             stage=stage,

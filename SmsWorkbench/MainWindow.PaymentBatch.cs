@@ -4,8 +4,9 @@ namespace SmsWorkbench
     {
         private void BatchProtocolPayment_Click(object sender, RoutedEventArgs e)
         {
-            var rows = SelectedEmailRowsOrNotify("批量协议支付");
-            if (rows.Count == 0) return;
+            var rows = SelectedRowsOrCurrent()
+                .Where(row => row != null && !string.IsNullOrWhiteSpace(row.Identifier))
+                .ToList();
             ShowPaymentBatchDialog(rows);
         }
 

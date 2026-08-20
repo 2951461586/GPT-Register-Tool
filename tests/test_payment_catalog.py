@@ -117,6 +117,24 @@ class PaymentCatalogTests(unittest.TestCase):
         self.assertEqual(catalog.default_method, "gopay")
         self.assertEqual(set(catalog.methods), {"gopay", "grabpay"})
 
+    def test_declarative_artifact_and_reconciliation_contracts_are_loaded(self):
+        payload = _catalog_payload()
+        payload["methods"][0].update({
+            "artifact_validator": "url_or_qr",
+            "probe_output_kind": "availability",
+            "reconciliation_policy": "provider_status",
+        })
+        definition = self.load(payload).methods["gopay"]
+        self.assertEqual(definition.artifact_validator, "url_or_qr")
+        self.assertEqual(definition.probe_output_kind, "availability")
+        self.assertEqual(definition.reconciliation_policy, "provider_status")
+
+    def test_unknown_artifact_validator_is_rejected(self):
+        payload = _catalog_payload()
+        payload["methods"][0]["artifact_validator"] = "arbitrary_code"
+        with self.assertRaisesRegex(ValueError, "gopay"):
+            self.load(payload)
+
 
 if __name__ == "__main__":
     unittest.main()

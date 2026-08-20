@@ -83,6 +83,7 @@ class _PayPalStepError(Exception):
 def auto_pay(
     email: str = "",
     session_file: str = "",
+    approval_url: str = "",
     proxy: str | None = None,
     headless: bool = False,
     timeout: int = 180,
@@ -109,7 +110,7 @@ def auto_pay(
 
     # 2. Get or generate PayPal URL
     paypal = data.get("paypal") or {}
-    paypal_url = str(paypal.get("url") or "").strip()
+    paypal_url = str(approval_url or paypal.get("url") or "").strip()
     if not paypal_url:
         print("[*] No PayPal URL found, generating...")
         paypal = generate_pp_link(access_token)

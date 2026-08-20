@@ -5,14 +5,29 @@ public sealed class StageMatrixTests
     [Fact]
     public void ParserParsesVersionTwoEventAndRejectsPlainOutput()
     {
-        const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"r1\",\"sequence\":7,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"registration\",\"run_id\":\"r1\",\"account_ref\":\"a@example.test\",\"stage\":\"email_otp_wait\",\"status\":\"running\",\"detail\":\"waiting\",\"attempt\":2,\"max_attempts\":3,\"country\":\"US\"}}";
+        const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"r1\",\"sequence\":7,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"registration\",\"run_id\":\"r1\",\"account_ref\":\"a@example.test\",\"stage\":\"email_otp_wait\",\"status\":\"running\",\"detail\":\"waiting\",\"attempt\":2,\"max_attempts\":3,\"country\":\"US\",\"total\":12}}";
 
         Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent value));
         Assert.Equal("registration", value.Domain);
         Assert.Equal("email_otp_wait", value.Stage);
         Assert.Equal(2, value.Attempt);
         Assert.Equal(7, value.Sequence);
+        Assert.Equal(12, value.Total);
         Assert.False(BackendProgressEventParser.TryParse("ordinary backend output", out _));
+    }
+
+    [Fact]
+    public void AccountBatchProgressTrackerCountsUniqueTerminalAccounts()
+    {
+        var tracker = new AccountBatchProgressTracker("account_scan", 3);
+
+        tracker.Update(new BackendProgressEvent("account_scan", "run-1", "a@example.test", "", "account_completed", "completed", "active", Terminal: true, Total: 3));
+        tracker.Update(new BackendProgressEvent("account_scan", "run-1", "A@example.test", "", "account_completed", "failed", "retry", Terminal: true, Total: 3));
+        tracker.Update(new BackendProgressEvent("account_scan", "run-1", "b@example.test", "", "probing", "running", "", Terminal: false, Total: 3));
+        tracker.Update(new BackendProgressEvent("account_promotion", "run-2", "c@example.test", "", "account_completed", "completed", "", Terminal: true, Total: 5));
+
+        Assert.Equal(1, tracker.Completed);
+        Assert.Equal(3, tracker.Total);
     }
 
     [Fact]
@@ -67,5 +82,14 @@ public sealed class StageMatrixTests
         {
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
+    }
+
+    [Theory]
+    [InlineData("remail", "user@outlook.com", "remail/outlook")]
+    [InlineData("icloud_url", "user@icloud.com", "icloud")]
+    [InlineData("cf_worker", "user@example.com", "cfworker")]
+    public void MailboxTypeDisplayDoesNotExposeSqlitePrefix(string provider, string email, string expected)
+    {
+        Assert.Equal(expected, MainWindow.MailboxTypeDisplay(provider, email));
     }
 }

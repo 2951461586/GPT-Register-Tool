@@ -272,6 +272,7 @@ def select_proxy_from_pool(
     *,
     pool_loader: Any = None,
     state: "PayPalProxyState | None" = None,
+    timeout: float = 12,
 ) -> tuple[str, list[dict[str, Any]]]:
     """Return the first healthy country-matched dynamic proxy in pool order.
 
@@ -309,9 +310,9 @@ def select_proxy_from_pool(
         # Preserve the exact no-state call shape so patched probe doubles that
         # only accept (proxy, expected_country, stage, timeout) keep working.
         if state is not None:
-            result = probe_proxy(candidate, expected_country=expected, stage=stage, state=state)
+            result = probe_proxy(candidate, expected_country=expected, stage=stage, state=state, timeout=timeout)
         else:
-            result = probe_proxy(candidate, expected_country=expected, stage=stage)
+            result = probe_proxy(candidate, expected_country=expected, stage=stage, timeout=timeout)
         attempts.append({
             "proxy": redact_proxy_url(candidate),
             "ok": result.ok,

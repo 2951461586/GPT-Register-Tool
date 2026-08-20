@@ -244,7 +244,7 @@
                    Margin="16,0,0,0"
                    FontSize="12"
                    Foreground="{DynamicResource TextMuted}"
-                   Text="GPT Register Tool"/>
+                   Text="GRT"/>
 
         <!-- Window control buttons -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
@@ -360,7 +360,6 @@
               </Border>
               <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
                 <TextBlock Text="GPT Register Tool" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Text="Fluent account workbench" FontSize="10.5" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
               </StackPanel>
               <Button x:Name="SidebarToggleButton"
                       Grid.Column="2"
@@ -455,16 +454,6 @@
                             Data="M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3"/>
                     </Border>
                     <TextBlock Grid.Column="1" Text="标记支付完成" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
-                  </Grid>
-                </Button>
-                <Button Style="{StaticResource SidebarNavButtonStyle}" Click="AtExtractBaLink_Click">
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
-                      <Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71 M5 3v4 M3 5h4"/>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="协议支付提链" Style="{StaticResource SidebarLabelStyle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}"/>
                   </Grid>
                 </Button>
                 <Button x:Name="BatchPaymentButton" AutomationProperties.Name="批量协议支付" Style="{StaticResource SidebarNavButtonStyle}" Click="BatchProtocolPayment_Click">
@@ -765,6 +754,12 @@
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="复制 AT" Click="CtxCopyAccessToken_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                    <MenuItem.Icon>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
+                            Data="M15 7a5 5 0 1 0-4.9 6H13l2 2 2-2 2 2 3-3-4-4h-3z"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="复制支付链接" Click="CtxCopyPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">

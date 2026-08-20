@@ -1,21 +1,6 @@
 namespace SmsWorkbench
 {
     /// <summary>
-    /// Formatted wham_usage 5h/7d quota fields, ready for display binding.
-    /// Replaces the PoolRow-mutating PopulateQuotaFields helper so the
-    /// interpretation layer stays window-independent.
-    /// </summary>
-    public sealed record WhamQuotaFields(
-        string Quota5hUsed = "",
-        string Quota5hLimit = "",
-        string Quota5hRemaining = "",
-        string Quota5hPercent = "",
-        string Quota7dUsed = "",
-        string Quota7dLimit = "",
-        string Quota7dRemaining = "",
-        string Quota7dPercent = "");
-
-    /// <summary>
     /// Window-independent interpretation of backend account JSON: plan type,
     /// quota labels, payment status, deactivation detection, and import state.
     /// This is the single business-rule implementation that previously lived
@@ -158,42 +143,6 @@ namespace SmsWorkbench
                 }
             }
             return parts.Count > 0 ? string.Join(" | ", parts) : "";
-        }
-
-        /// <summary>
-        /// Quota fields for display binding, extracted from wham_usage data.
-        /// </summary>
-        public static WhamQuotaFields ExtractWhamQuotaFields(Dictionary<string, object> data)
-        {
-            var wham = ExtractWhamUsage(data);
-            if (wham == null) return new WhamQuotaFields();
-            string quota5hUsed = "", quota5hLimit = "", quota5hRemaining = "", quota5hPercent = "";
-            string quota7dUsed = "", quota7dLimit = "", quota7dRemaining = "", quota7dPercent = "";
-            foreach (string windowKey in new[] { "5h", "7d" })
-            {
-                if (!wham.TryGetValue(windowKey, out object w) || w is not Dictionary<string, object> window) continue;
-                long used = BackendJson.GetLong(window, "used");
-                long limit = BackendJson.GetLong(window, "limit");
-                long remaining = BackendJson.GetLong(window, "remaining");
-                double percent = BackendJson.GetDouble(window, "percent");
-                if (windowKey == "5h")
-                {
-                    quota5hUsed = FmtTokenCount(used);
-                    quota5hLimit = FmtTokenCount(limit);
-                    quota5hRemaining = FmtTokenCount(remaining);
-                    quota5hPercent = percent.ToString("F0", CultureInfo.InvariantCulture) + "%";
-                }
-                else
-                {
-                    quota7dUsed = FmtTokenCount(used);
-                    quota7dLimit = FmtTokenCount(limit);
-                    quota7dRemaining = FmtTokenCount(remaining);
-                    quota7dPercent = percent.ToString("F0", CultureInfo.InvariantCulture) + "%";
-                }
-            }
-            return new WhamQuotaFields(
-                quota5hUsed, quota5hLimit, quota5hRemaining, quota5hPercent,
-                quota7dUsed, quota7dLimit, quota7dRemaining, quota7dPercent);
         }
 
         public static string FmtTokenCount(long n)

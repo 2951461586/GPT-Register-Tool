@@ -75,8 +75,6 @@ namespace SmsWorkbench
                 ("邮箱", row.Identifier),
                 ("类型", row.AccountType ?? ""),
                 ("状态", row.Status ?? ""),
-                ("额度 5h", FormatQuotaWindow(row.Quota5hUsed, row.Quota5hLimit, row.Quota5hRemaining, row.Quota5hPercent)),
-                ("额度 7d", FormatQuotaWindow(row.Quota7dUsed, row.Quota7dLimit, row.Quota7dRemaining, row.Quota7dPercent)),
                 ("支付状态", row.PayPalStatus ?? ""),
                 ("支付金额", row.PayPalAmount ?? ""),
                 ("Refresh Token", row.RefreshTokenStatus ?? ""),
@@ -327,12 +325,6 @@ namespace SmsWorkbench
             {
                 return rawJson;
             }
-        }
-
-        private static string FormatQuotaWindow(string used, string limit, string remaining, string percent)
-        {
-            if (string.IsNullOrEmpty(used) && string.IsNullOrEmpty(limit)) return "—";
-            return $"{used}/{limit} ({percent}) 剩 {remaining}";
         }
 
         private void AddDetailRow(Grid parent, int row, string label, string value)

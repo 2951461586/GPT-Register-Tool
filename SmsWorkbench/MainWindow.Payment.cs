@@ -72,12 +72,7 @@ namespace SmsWorkbench
                 .GroupBy(row => row.Identifier.Trim().ToLowerInvariant())
                 .Select(group => group.First())
                 .ToList();
-            if (selected.Count > 1)
-            {
-                ShowPaymentBatchDialog(selected);
-                return;
-            }
-            ShowProtocolPaymentDialog(selected.FirstOrDefault());
+            ShowPaymentBatchDialog(selected);
         }
 
         /// <summary>

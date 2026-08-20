@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import cli
+from sms_tool import account_promotion
 from sms_tool.account_promotion import parse_accounts_check, promotion_status_label
 
 
@@ -56,6 +57,23 @@ def test_parse_free_without_promo():
 def test_labels_for_failures():
     assert promotion_status_label({"ok": False, "error": "token_invalid"}) == "AT失效"
     assert promotion_status_label({"ok": False, "error": "boom"}) == "检测失败"
+
+
+def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch):
+    events = []
+    monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
+    monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    monkeypatch.setattr(account_promotion, "check_account_promotion", lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"})
+
+    result = account_promotion.refresh_promotion_statuses(["a@example.com", "b@example.com"], workers=2)
+
+    terminal = [event for event in events if event.get("stage") == "account_completed"]
+    assert result["total"] == 2
+    assert len(terminal) == 2
+    assert {event["account_ref"] for event in terminal} == {"a@example.com", "b@example.com"}
+    assert all(event["total"] == 2 for event in terminal)
 
 
 def test_parse_missing_accounts():

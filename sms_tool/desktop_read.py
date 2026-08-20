@@ -19,10 +19,11 @@ from .storage import _account_type, _looks_codex_refresh_token, get_account_reco
 
 
 _PUBLIC_COLUMNS = (
-    "id", "email", "success", "status", "error", "device_id", "paypal_ok",
+    "id", "email", "success", "status", "error", "device_id", "source",
+    "register_method", "session_type", "plan_type", "paypal_ok",
     "payment_method", "paypal_status", "paypal_updated_at", "refresh_token_status",
     "refresh_token_updated_at", "workspace_status", "workspace_id", "workspace_name",
-    "workspace_switch_result", "workspace_updated_at", "account_type", "quota_status",
+    "workspace_switch_result", "workspace_updated_at", "account_type",
     "batch_id", "registration_state", "registration_country", "twofa_enrolled_at",
     "twofa_enroll_error", "auth_session_logging_id", "device_id_generated_at",
     "mailbox_provider", "mailbox_source", "purchase_id", "project_name", "price",
@@ -120,7 +121,13 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
                 promotion_status = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
-            result["session"] = _sanitized_session(raw_json, session)
+            public_session = _sanitized_session(raw_json, session)
+            if isinstance(public_session, dict):
+                public_session.pop("quota", None)
+                public_session.pop("quota_status", None)
+                public_session.pop("quota_updated_at", None)
+                public_session.pop("wham_usage", None)
+            result["session"] = public_session
         except (TypeError, ValueError):
             result["session"] = {}
     else:
