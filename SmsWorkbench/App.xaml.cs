@@ -19,6 +19,8 @@ namespace SmsWorkbench
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+                new RoutedEventHandler((sender, _) => WindowThemeService.Apply((Window)sender)));
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;

@@ -95,60 +95,6 @@ def open_paypal_link(email: str, ctx: AccountCommandContext) -> None:
     print(url)
     webbrowser.open(url)
 
-
-def mark_paypal_status(args: Any, ctx: AccountCommandContext) -> None:
-    from ..storage import mark_paypal_status as storage_mark_paypal_status
-
-    status = args.mark_paypal_status
-    emails = read_email_file(args.email_file)
-    email = (args.email or "").strip()
-    if not emails and email:
-        emails = [email]
-    if not emails:
-        print("[Error] --email or --email-file is required with --mark-paypal-status")
-        return
-
-    results = []
-    for item_email in emails:
-        if storage_mark_paypal_status(item_email, status=status):
-            print(f"[*] Payment status updated: {item_email} -> {status}")
-            result = {"ok": True, "email": item_email, "paypal_status": status}
-        else:
-            print(f"[Error] account not found: {item_email}")
-            result = {"ok": False, "email": item_email, "error": "account_not_found"}
-        results.append(result)
-
-    if args.import_cpa:
-        from ..import_targets import import_account_sessions
-
-        import_emails = [result["email"] for result in results if result.get("ok")]
-        import_result = import_account_sessions(
-            args.import_target,
-            import_emails,
-            **import_sessions_kwargs(args),
-        )
-        print(json.dumps(import_result, ensure_ascii=False, indent=2))
-        if any(not result.get("ok") for result in results) or not import_result.get("ok"):
-            raise SystemExit(3)
-    elif args.export_codex_json:
-        from ..codex_export import export_codex_sessions
-
-        export_emails = [result["email"] for result in results if result.get("ok")]
-        export_result = export_codex_sessions(
-            export_emails,
-            export_dir=args.codex_export_dir or "",
-            workers=args.workers,
-            refresh=not args.no_session_refresh,
-            proxy=args.proxy,
-            timeout=args.refresh_timeout,
-        )
-        print(json.dumps(export_result, ensure_ascii=False, indent=2))
-        if any(not result.get("ok") for result in results) or not export_result.get("ok"):
-            raise SystemExit(3)
-    elif any(not result.get("ok") for result in results):
-        raise SystemExit(3)
-
-
 def refresh_session(args: Any) -> None:
     from ..session_refresh import refresh_session as refresh_auth_session
 

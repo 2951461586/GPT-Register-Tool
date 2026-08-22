@@ -126,6 +126,22 @@ class AdminAllResponse:
         }
 
 
+class CreateMailboxResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {"ok": True, "data": {"emails": ["oai-test@liziai.cloud"]}}
+
+
+class EmptyCreateMailboxResponse:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {"ok": True, "data": {"emails": []}}
+
+
 class AdminDetailResponse:
     status_code = 200
     text = "{}"
@@ -152,6 +168,27 @@ class AdminDetailResponse:
 
 
 class CFWorkerMailboxClientTests(unittest.TestCase):
+    def test_create_mailboxes_returns_addresses_from_worker_response(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
+
+        with patch.object(cfworker_mailbox.curl_requests, "post", return_value=CreateMailboxResponse()) as post:
+            emails = client.create_mailboxes(count=1, domain="liziai.cloud")
+
+        self.assertEqual(emails, ["oai-test@liziai.cloud"])
+        self.assertEqual(client.last_create_diagnostic["returned"], 1)
+        self.assertIn("/api/mailboxes", post.call_args.args[0])
+
+    def test_create_mailboxes_never_synthesizes_addresses_after_provider_failures(self):
+        client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
+
+        with patch.object(cfworker_mailbox.curl_requests, "post", return_value=EmptyCreateMailboxResponse()), \
+             patch.object(cfworker_mailbox.curl_requests, "get", return_value=EmptyCreateMailboxResponse()):
+            with self.assertRaisesRegex(RuntimeError, "cfworker mailbox creation failed"):
+                client.create_mailboxes(count=1, domain="liziai.cloud")
+
+        self.assertFalse(client.last_create_diagnostic["ok"])
+        self.assertEqual(client.last_create_diagnostic["returned"], 0)
+
     def test_admin_all_hydrates_detail_and_decodes_chinese_mime_message(self):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
 

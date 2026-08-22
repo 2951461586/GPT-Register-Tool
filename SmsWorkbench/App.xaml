@@ -8,32 +8,32 @@
         <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Wpf.Ui.xaml"/>
       </ResourceDictionary.MergedDictionaries>
 
-      <!-- Semantic Color Palette (Warm Premium Light Theme) -->
-      <SolidColorBrush x:Key="AppBg" Color="#F7F5F0"/>
-      <SolidColorBrush x:Key="PanelBg" Color="#F0EEE8"/>
-      <SolidColorBrush x:Key="PanelBg2" Color="#DDDAD4"/>
-      <SolidColorBrush x:Key="PanelHover" Color="#E3E1DB"/>
-      <SolidColorBrush x:Key="Line" Color="#DDDAD4"/>
-      <SolidColorBrush x:Key="LineStrong" Color="#C5C2BA"/>
-      <SolidColorBrush x:Key="Primary" Color="#3E3B36"/>
-      <SolidColorBrush x:Key="PrimarySoft" Color="#E3E1DB"/>
-      <SolidColorBrush x:Key="Danger" Color="#985248"/>
-      <SolidColorBrush x:Key="DangerSoft" Color="#ECE2DC"/>
-      <SolidColorBrush x:Key="DangerBorder" Color="#C49088"/>
-      <SolidColorBrush x:Key="Success" Color="#3E846F"/>
-      <SolidColorBrush x:Key="SuccessSoft" Color="#E0F3E6"/>
-      <SolidColorBrush x:Key="SuccessBorder" Color="#8DC5A9"/>
-      <SolidColorBrush x:Key="TextMain" Color="#3E3B36"/>
-      <SolidColorBrush x:Key="TextSub" Color="#6B6860"/>
-      <SolidColorBrush x:Key="TextMuted" Color="#9E9B93"/>
-      <SolidColorBrush x:Key="SidebarBg" Color="#F0EEE8"/>
-      <SolidColorBrush x:Key="SidebarButtonBg" Color="#DDDAD4"/>
-      <SolidColorBrush x:Key="GridAltBg" Color="#F7F5F0"/>
-      <SolidColorBrush x:Key="SplitterBg" Color="#DDDAD4"/>
-      <SolidColorBrush x:Key="StatusBg" Color="#F7F5F0"/>
-      <SolidColorBrush x:Key="LogBg" Color="#3E3B36"/>
-      <SolidColorBrush x:Key="LogBorder" Color="#55524C"/>
-      <SolidColorBrush x:Key="LogText" Color="#E3E1DB"/>
+      <!-- Semantic palette: neutral workbench surfaces with one blue action accent. -->
+      <SolidColorBrush x:Key="AppBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="PanelBg2" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="PanelHover" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="Line" Color="#E2E2E2"/>
+      <SolidColorBrush x:Key="LineStrong" Color="#C8C8C8"/>
+      <SolidColorBrush x:Key="Primary" Color="#2563EB"/>
+      <SolidColorBrush x:Key="PrimarySoft" Color="#EAF2FF"/>
+      <SolidColorBrush x:Key="Danger" Color="#B42318"/>
+      <SolidColorBrush x:Key="DangerSoft" Color="#FEF0EE"/>
+      <SolidColorBrush x:Key="DangerBorder" Color="#F0B8B2"/>
+      <SolidColorBrush x:Key="Success" Color="#16794C"/>
+      <SolidColorBrush x:Key="SuccessSoft" Color="#EAF7F0"/>
+      <SolidColorBrush x:Key="SuccessBorder" Color="#9AD8B7"/>
+      <SolidColorBrush x:Key="TextMain" Color="#58595C"/>
+      <SolidColorBrush x:Key="TextSub" Color="#58595C"/>
+      <SolidColorBrush x:Key="TextMuted" Color="#58595C"/>
+      <SolidColorBrush x:Key="SidebarBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="SidebarButtonBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="GridAltBg" Color="#FAFAFA"/>
+      <SolidColorBrush x:Key="SplitterBg" Color="#E6E6E6"/>
+      <SolidColorBrush x:Key="StatusBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="LogBg" Color="#2A2A2A"/>
+      <SolidColorBrush x:Key="LogBorder" Color="#444444"/>
+      <SolidColorBrush x:Key="LogText" Color="#DFDFDF"/>
 
       <Style TargetType="TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
@@ -44,7 +44,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Margin" Value="6,14,0,7"/>
+        <Setter Property="Margin" Value="4,12,0,6"/>
       </Style>
 
       <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -55,9 +55,9 @@
 
       <!-- Modernized Button Style -->
       <Style TargetType="Button">
-        <Setter Property="Height" Value="32"/>
-        <Setter Property="Padding" Value="12,0"/>
-        <Setter Property="Margin" Value="4,0"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Margin" Value="3,0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
@@ -74,18 +74,17 @@
                        Background="{TemplateBinding Background}"
                        BorderBrush="{TemplateBinding BorderBrush}"
                        BorderThickness="{TemplateBinding BorderThickness}"
-                       CornerRadius="6">
+                       CornerRadius="4">
                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                  <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
                   <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                  <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelBg2}"/>
+                  <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.82"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                   <Setter Property="Opacity" Value="0.45"/>
@@ -96,12 +95,12 @@
         </Setter>
       </Style>
 
-      <!-- PrimaryButton Style with clear Accent/Border -->
+      <!-- PrimaryButton keeps dialog actions neutral across light and dark themes. -->
       <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
       </Style>
 
       <!-- SecondaryButton Style for neutral dialog actions -->
@@ -119,8 +118,8 @@
       </Style>
 
       <Style x:Key="SidebarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Height" Value="34"/>
-        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Margin" Value="0,0,0,5"/>
         <Setter Property="Padding" Value="12,0"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
       </Style>
@@ -150,8 +149,8 @@
 
       <!-- Modernized TextBox -->
       <Style TargetType="TextBox">
-        <Setter Property="Height" Value="34"/>
-        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="9,0"/>
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
@@ -164,7 +163,7 @@
               <Border x:Name="BoxChrome" Background="{TemplateBinding Background}"
                        BorderBrush="{TemplateBinding BorderBrush}"
                        BorderThickness="{TemplateBinding BorderThickness}"
-                       CornerRadius="6">
+                       CornerRadius="4">
                 <ScrollViewer x:Name="PART_ContentHost"
                                Margin="{TemplateBinding Padding}"
                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -194,7 +193,7 @@
                 Background="{DynamicResource PanelBg}"
                 BorderBrush="{DynamicResource Line}"
                 BorderThickness="1"
-                CornerRadius="6">
+                CornerRadius="4">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*"/>
@@ -286,8 +285,8 @@
       </Style>
 
       <Style TargetType="PasswordBox">
-        <Setter Property="Height" Value="34"/>
-        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="9,0"/>
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
@@ -301,7 +300,7 @@
                       Background="{TemplateBinding Background}"
                       BorderBrush="{TemplateBinding BorderBrush}"
                       BorderThickness="{TemplateBinding BorderThickness}"
-                      CornerRadius="6">
+                      CornerRadius="4">
                 <ScrollViewer x:Name="PART_ContentHost"
                               Margin="{TemplateBinding Padding}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
@@ -364,9 +363,9 @@
       <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource StableScrollBarStyle}"/>
 
       <Style TargetType="ComboBox">
-        <Setter Property="Height" Value="34"/>
+        <Setter Property="Height" Value="32"/>
         <Setter Property="MinWidth" Value="120"/>
-        <Setter Property="Padding" Value="10,0,8,0"/>
+        <Setter Property="Padding" Value="9,0,7,0"/>
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
@@ -427,7 +426,7 @@
                           Background="{DynamicResource PanelBg}"
                           BorderBrush="{DynamicResource LineStrong}"
                           BorderThickness="1"
-                          CornerRadius="6"
+                          CornerRadius="4"
                           Width="{Binding ActualWidth, ElementName=TemplateRoot}"
                           MaxHeight="{TemplateBinding MaxDropDownHeight}"
                           Padding="0,4">
@@ -520,7 +519,7 @@
         <Setter Property="RowBackground" Value="{DynamicResource PanelBg}"/>
         <Setter Property="AlternatingRowBackground" Value="{DynamicResource GridAltBg}"/>
         <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource Line}"/>
+        <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
         <Setter Property="SelectionMode" Value="Extended"/>
         <Setter Property="CanUserResizeRows" Value="False"/>
       </Style>
@@ -541,13 +540,13 @@
 
       <Style TargetType="DataGridCell">
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Padding" Value="6,0"/>
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="DataGridCell">
               <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                       BorderThickness="0,0,1,1" Padding="{TemplateBinding Padding}">
+                       BorderThickness="0,0,0,1" Padding="{TemplateBinding Padding}">
                 <ContentPresenter VerticalAlignment="Center"/>
               </Border>
             </ControlTemplate>
@@ -556,12 +555,12 @@
       </Style>
 
       <Style TargetType="DataGridColumnHeader">
-        <Setter Property="Background" Value="{DynamicResource PanelBg2}"/>
+        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="Padding" Value="8,0"/>
-        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="6,0"/>
+        <Setter Property="Height" Value="28"/>
       </Style>
 
       <Style TargetType="CheckBox">
@@ -570,38 +569,38 @@
       </Style>
 
       <!-- ── Status Badge Brushes ── -->
-      <SolidColorBrush x:Key="BadgeSuccessBg" Color="#E0F3E6"/>
-      <SolidColorBrush x:Key="BadgeSuccessFg" Color="#2D6A4F"/>
-      <SolidColorBrush x:Key="BadgeSuccessBd" Color="#8DC5A9"/>
-      <SolidColorBrush x:Key="BadgeWarnBg" Color="#FFF3CD"/>
-      <SolidColorBrush x:Key="BadgeWarnFg" Color="#856404"/>
-      <SolidColorBrush x:Key="BadgeWarnBd" Color="#FFE08A"/>
-      <SolidColorBrush x:Key="BadgeDangerBg" Color="#F8E0DC"/>
-      <SolidColorBrush x:Key="BadgeDangerFg" Color="#8B3A2E"/>
-      <SolidColorBrush x:Key="BadgeDangerBd" Color="#C49088"/>
-      <SolidColorBrush x:Key="BadgeInfoBg" Color="#E3E1DB"/>
-      <SolidColorBrush x:Key="BadgeInfoFg" Color="#4A4740"/>
-      <SolidColorBrush x:Key="BadgeInfoBd" Color="#C5C2BA"/>
-      <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F0EEE8"/>
-      <SolidColorBrush x:Key="BadgeNeutralFg" Color="#6B6860"/>
-      <SolidColorBrush x:Key="BadgeNeutralBd" Color="#DDDAD4"/>
+      <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EAF7F0"/>
+      <SolidColorBrush x:Key="BadgeSuccessFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeSuccessBd" Color="#9AD8B7"/>
+      <SolidColorBrush x:Key="BadgeWarnBg" Color="#FFF7E6"/>
+      <SolidColorBrush x:Key="BadgeWarnFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeWarnBd" Color="#F2C66D"/>
+      <SolidColorBrush x:Key="BadgeDangerBg" Color="#FEF0EE"/>
+      <SolidColorBrush x:Key="BadgeDangerFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeDangerBd" Color="#F0B8B2"/>
+      <SolidColorBrush x:Key="BadgeInfoBg" Color="#EAF2FF"/>
+      <SolidColorBrush x:Key="BadgeInfoFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeInfoBd" Color="#A9C5FF"/>
+      <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F1F3F5"/>
+      <SolidColorBrush x:Key="BadgeNeutralFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeNeutralBd" Color="#CBD5E1"/>
 
       <!-- ── Card Accent Brushes ── -->
-      <SolidColorBrush x:Key="AccentBlue" Color="#4A6FA5"/>
-      <SolidColorBrush x:Key="AccentGreen" Color="#3E846F"/>
-      <SolidColorBrush x:Key="AccentOrange" Color="#C77D3A"/>
-      <SolidColorBrush x:Key="AccentPurple" Color="#7B5BA6"/>
-      <SolidColorBrush x:Key="AccentRed" Color="#985248"/>
+      <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
+      <SolidColorBrush x:Key="AccentGreen" Color="#16A34A"/>
+      <SolidColorBrush x:Key="AccentOrange" Color="#D97706"/>
+      <SolidColorBrush x:Key="AccentPurple" Color="#7C3AED"/>
+      <SolidColorBrush x:Key="AccentRed" Color="#DC2626"/>
 
       <!-- ── Status Badge Style (for DataGrid cells) ── -->
       <Style x:Key="StatusBadge" TargetType="Border">
         <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Padding" Value="6,2"/>
+        <Setter Property="Padding" Value="5,1"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="Background" Value="{DynamicResource BadgeNeutralBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BadgeNeutralBd}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderThickness" Value="0"/>
         <Style.Triggers>
           <DataTrigger Binding="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" Value="success">
             <Setter Property="Background" Value="{DynamicResource BadgeSuccessBg}"/>
@@ -666,11 +665,11 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Window">
-              <Border Margin="12" CornerRadius="10">
+              <Border Margin="12" CornerRadius="4">
                 <Border.Effect>
                   <DropShadowEffect Color="#22000000" BlurRadius="16" ShadowDepth="3" Opacity="0.5" Direction="270"/>
                 </Border.Effect>
-                <Border Background="{DynamicResource AppBg}" CornerRadius="10" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1">
+                <Border Background="{DynamicResource AppBg}" CornerRadius="4" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1">
                   <Grid>
                     <Grid.RowDefinitions>
                       <RowDefinition Height="36"/>

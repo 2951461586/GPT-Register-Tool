@@ -15,6 +15,21 @@ WPF or CLI
   -> status display and maintenance actions
 ```
 
+## Email Change Flow
+
+邮箱换绑是独立于注册、支付和普通测活的账号维护流程：
+
+```text
+WPF selected rows / CLI --email-file
+  -> commands/email_change.py (argument adapter)
+  -> account_email_change.py (provider allocation + eligibility/begin/OTP/verify)
+  -> passwordless relogin without early persistence
+  -> account liveness probe (HTTP 200 boundary)
+  -> storage.migrate_account_email (destination conflict check + session/SQLite migration)
+```
+
+`ChangeEmailDialogService.cs` 只负责桌面输入，`MainWindow.ContextMenu.cs` 只负责选中行和任务生命周期；provider API、OTP 轮询、重新登录和持久化不得回流到 WPF code-behind。ReMail、CFWorker、Smailr 由 provider allocator 生成目标邮箱；iCloud、Outlook、Hotmail 必须从凭证池按账号数消费。
+
 ## Repository Layout
 
 ```text

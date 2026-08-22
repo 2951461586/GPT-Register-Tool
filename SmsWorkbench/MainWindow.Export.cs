@@ -740,10 +740,6 @@ namespace SmsWorkbench
 
             EnsureJsonExportEmail(clean, row);
             EnsureJsonExportRefreshToken(clean, data);
-            if (IsPayPalCompletedRow(row))
-            {
-                SetJsonExportPlanTypePlus(clean);
-            }
 
             return clean;
         }

@@ -25,46 +25,6 @@ namespace SmsWorkbench
             OpenPayPalUrl(row.PayPalUrl, row.Identifier);
         }
 
-        private void MarkPayPalComplete_Click(object sender, RoutedEventArgs e)
-        {
-            var rows = SelectedEmailRowsOrNotify("标记支付完成");
-            if (rows.Count == 0) return;
-            MarkPayPalComplete(rows);
-        }
-
-        private void MarkPayPalComplete(PoolRow row)
-        {
-            MarkPayPalComplete(row == null ? new List<PoolRow>() : new List<PoolRow> { row });
-        }
-
-        private void MarkPayPalComplete(List<PoolRow> rows)
-        {
-            rows = (rows ?? new List<PoolRow>())
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            if (rows.Count == 0)
-            {
-                ShowEmailSelectionRequired("标记支付完成");
-                return;
-            }
-
-            if (rows.Count == 1)
-            {
-                PoolRow row = rows[0];
-                var plan = BackendCommandPlanner.CreateMarkPaymentComplete(
-                    row.Identifier,
-                    SessionFileFor(row));
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
-                return;
-            }
-
-            var batchPlan = BackendCommandPlanner.CreateMarkPaymentCompleteBatch(
-                rows.Select(r => r.Identifier.Trim()).ToList());
-            RunBackend(batchPlan.TaskName, batchPlan.Arguments.ToList());
-        }
-
         private void AtExtractBaLink_Click(object sender, RoutedEventArgs e)
         {
             var selected = SelectedRowsOrCurrent()

@@ -264,6 +264,8 @@ def relogin_chatgpt_email_account(
     account: dict[str, Any],
     proxy: str | None = None,
     timeout: int = 300,
+    *,
+    persist: bool = True,
 ) -> dict[str, Any]:
     """Acquire a ChatGPT web AT through the passwordless email-OTP protocol."""
     if not isinstance(account, dict):
@@ -373,6 +375,7 @@ def relogin_chatgpt_email_account(
             mode="chatgpt_email_otp",
             proxy=proxy,
             timeout=timeout,
+            persist=persist,
         )
     except Exception as exc:
         return {
@@ -528,6 +531,7 @@ def _verify_and_persist_candidate(
     mode: str,
     proxy: str | None,
     timeout: int,
+    persist: bool = True,
 ) -> dict[str, Any]:
     email = str(candidate.get("email") or account.get("email") or "").strip().lower()
     access_token = str(candidate.get("access_token") or "").strip()
@@ -565,17 +569,20 @@ def _verify_and_persist_candidate(
     verified["access_token_updated_at"] = now
     verified["refreshed_at"] = now
     json_path = str(verified.get("json_path") or account.get("json_path") or "").strip()
-    from .session_refresh import _save_refreshed
+    saved_path = json_path
+    if persist:
+        from .session_refresh import _save_refreshed
 
-    saved_path = _save_refreshed(verified, json_path)
+        saved_path = _save_refreshed(verified, json_path)
     return {
         "ok": True,
         "mode": mode,
         "email": email,
         "json_path": saved_path,
         "probe": probe,
-        "persisted": True,
+        "persisted": bool(persist),
         "refresh_token_status": str(verified.get("refresh_token_status") or "no_rt"),
+        **({"_verified_data": verified} if not persist else {}),
     }
 
 

@@ -793,6 +793,123 @@ def list_account_records(*, runtime_config: ConfigInput = None):
     return [dict(row) for row in rows]
 
 
+def migrate_account_email(old_email, new_email, verified_data, *, runtime_config: ConfigInput = None):
+    """Atomically move one account row to a new email after verified relogin.
+
+    The destination is never overwritten.  The database update and session-file
+    replacement are prepared before the transaction; a failed destination
+    conflict or malformed account leaves the original row untouched.
+    """
+    old = _normalize_account_email(old_email)
+    new = _normalize_account_email(new_email)
+    if not old or not new or old == new or not isinstance(verified_data, Mapping):
+        return False
+    if not str(verified_data.get("access_token") or verified_data.get("cookie_header") or "").strip():
+        return False
+    init_database(runtime_config=runtime_config)
+    conn = _connect(runtime_config=runtime_config)
+    session_path = ""
+    session_payload = None
+    session_target = None
+    session_backup = None
+    session_existed = False
+    session_replaced = False
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        source = conn.execute("SELECT * FROM accounts WHERE lower(email)=lower(?)", (old,)).fetchone()
+        if source is None:
+            conn.rollback()
+            return False
+        destination = conn.execute("SELECT 1 FROM accounts WHERE lower(email)=lower(?)", (new,)).fetchone()
+        if destination is not None:
+            conn.rollback()
+            return False
+        row = dict(source)
+        session_path = str(row.get("json_path") or verified_data.get("json_path") or "").strip()
+        session_payload = dict(verified_data)
+        session_payload["email"] = new
+        if session_path:
+            target = Path(session_path)
+            if target.exists():
+                try:
+                    existing_session = json.loads(target.read_text(encoding="utf-8"))
+                    if isinstance(existing_session, dict):
+                        merged = dict(existing_session)
+                        merged.update(session_payload)
+                        session_payload = merged
+                except Exception:
+                    pass
+        model = AccountSessionModel.from_value(session_payload)
+        mailbox = model.mailbox
+        safe = model.safe_snapshot()
+        safe["email"] = new
+        raw_existing = {}
+        try:
+            raw_existing = json.loads(row.get("raw_json") or "{}")
+        except Exception:
+            raw_existing = {}
+        if isinstance(raw_existing, dict):
+            raw_existing.update(safe)
+            raw_json = json.dumps(raw_existing, ensure_ascii=False, separators=(",", ":"))
+        else:
+            raw_json = json.dumps(safe, ensure_ascii=False, separators=(",", ":"))
+        now = int(time.time())
+        updates = {
+            "email": new,
+            "password": model.password or row.get("password", ""),
+            "success": _as_bool(_success_value(session_payload, model.credentials.access_token)),
+            "status": _status(session_payload, _nested(session_payload, "paypal"), model.credentials.access_token, has_refresh_token=bool(model.credentials.refresh_token or model.credentials.oauth_refresh_token)),
+            "error": model.error,
+            "session_token": model.credentials.session_token or row.get("session_token", ""),
+            "access_token": model.credentials.access_token or row.get("access_token", ""),
+            "refresh_token": model.credentials.refresh_token or row.get("refresh_token", ""),
+            "cookie_header": model.credentials.cookie_header or row.get("cookie_header", ""),
+            "device_id": model.device_id or row.get("device_id", ""),
+            "mailbox_provider": mailbox.provider,
+            "mailbox_source": mailbox.source,
+            "mailbox_token": mailbox.token,
+            "purchase_id": mailbox.purchase_id,
+            "project_name": mailbox.project_name,
+            "price": mailbox.price,
+            "purchase_total_cost": mailbox.purchase_total_cost,
+            "balance_after": mailbox.balance_after,
+            "json_path": session_path,
+            "updated_at": now,
+            "raw_json": raw_json,
+        }
+        if session_path:
+            session_target = Path(session_path)
+            session_target.parent.mkdir(parents=True, exist_ok=True)
+            session_existed = session_target.exists()
+            session_backup = session_target.read_bytes() if session_existed else None
+            temp = session_target.with_name(session_target.name + ".email-change.tmp")
+            temp.write_text(json.dumps(session_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            temp.replace(session_target)
+            session_replaced = True
+        cursor = conn.execute("UPDATE accounts SET " + ", ".join(f"{key}=:{key}" for key in updates) + " WHERE lower(email)=lower(:old)", {**updates, "old": old})
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return False
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if session_replaced and session_target is not None:
+            try:
+                if session_existed and session_backup is not None:
+                    session_target.write_bytes(session_backup)
+                elif session_target.exists():
+                    session_target.unlink()
+            except Exception:
+                pass
+        return False
+    finally:
+        conn.close()
+    return True
+
+
 def get_device_context(email, *, runtime_config: ConfigInput = None):
     """Return persisted {device_id, auth_session_logging_id} for an existing account.
 
@@ -847,58 +964,6 @@ def list_terminal_remail_accounts(*, runtime_config: ConfigInput = None):
 
 
 # ── Status Update Operations ─────────────────────────────────────────────────
-
-def mark_paypal_status(email, status="completed", *, runtime_config: ConfigInput = None):
-    init_database(runtime_config=runtime_config)
-    now = int(time.time())
-    conn = _connect(runtime_config=runtime_config)
-    try:
-        lookup_email = _find_existing_account_email(conn, email)
-        if not lookup_email:
-            return False
-        row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
-            (lookup_email,),
-        ).fetchone()
-        if row is None:
-            return False
-        raw_json = row["raw_json"] or "{}"
-        json_path = str(row["json_path"] or "").strip()
-        try:
-            data = json.loads(raw_json)
-        except Exception:
-            data = {}
-        if json_path:
-            try:
-                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
-                if isinstance(file_data, dict):
-                    data = {**file_data, **data}
-            except Exception:
-                pass
-        paypal = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
-        paypal["status"] = status
-        data["paypal"] = paypal
-        data["paypal_status"] = status
-        data["paypal_updated_at"] = now
-        if status == "completed":
-            data["paypal_completed_at"] = now
-            _mark_plan_type_plus(data)
-        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-        conn.execute(
-            """
-            UPDATE accounts
-            SET paypal_status=?, paypal_updated_at=?, updated_at=?, raw_json=?
-            WHERE lower(email)=lower(?)
-            """,
-            (status, now, now, raw_json, lookup_email),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    if json_path:
-        _update_session_json(json_path, data)
-    return True
-
 
 def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_config: ConfigInput = None):
     init_database(runtime_config=runtime_config)
