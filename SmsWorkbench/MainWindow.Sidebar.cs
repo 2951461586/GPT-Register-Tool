@@ -2,8 +2,8 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        private const double SidebarExpandedWidth = 272;
-        private const double SidebarCollapsedWidth = 80;
+        private const double SidebarExpandedWidth = 248;
+        private const double SidebarCollapsedWidth = 90;
         private const int SidebarAnimDurationMs = 100;
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
@@ -40,11 +40,6 @@ namespace SmsWorkbench
                 sidebarRenderingHandler = null;
             }
             sidebarAnimStopwatch = Stopwatch.StartNew();
-
-            if (SidebarHost != null)
-            {
-                SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
-            }
 
             double lastWidth = double.NaN;
             EventHandler? renderingHandler = null;

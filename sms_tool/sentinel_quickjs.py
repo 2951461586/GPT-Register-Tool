@@ -45,6 +45,10 @@ logger = logging.getLogger(__name__)
 
 SENTINEL_VERSION = "20260219f9f6"
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
+# Kept as a public compatibility constant for callers that used the original
+# standalone implementation.  Runtime URL construction still goes through
+# ``sentinel_version()`` so SDK rotation can be configured without a code edit.
+SENTINEL_SDK_URL = f"https://sentinel.openai.com/sentinel/{SENTINEL_VERSION}/sdk.js"
 
 
 def sentinel_version() -> str:
@@ -70,6 +74,10 @@ def _quickjs_script_path() -> Path:
     return Path(__file__).resolve().parent / "openai_sentinel_quickjs.js"
 
 
+def sentinel_sdk_url() -> str:
+    return f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"
+
+
 def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
     """Download OpenAI's actual sdk.js to /tmp cache (one-shot per version)."""
     version = sentinel_version()
@@ -77,12 +85,17 @@ def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     sdk_file = cache_dir / "sdk.js"
     if sdk_file.exists() and sdk_file.stat().st_size > 0:
-        return sdk_file
+        try:
+            cached = sdk_file.read_bytes()
+            if b"SentinelSDK" in cached:
+                return sdk_file
+        except OSError:
+            pass
 
     resp = request_with_retry(
         session,
         "get",
-        f"https://sentinel.openai.com/sentinel/{version}/sdk.js",
+        sentinel_sdk_url(),
         label="sentinel-sdk",
         headers={
             "accept": "*/*",
@@ -107,7 +120,19 @@ def _ensure_sdk_file(session: Any, timeout_ms: int) -> Path:
     content = getattr(resp, "content", b"") or (resp.text or "").encode()
     if not content:
         raise RuntimeError("下载 sdk.js 失败: 响应为空")
-    sdk_file.write_bytes(content)
+    if b"SentinelSDK" not in content:
+        raise RuntimeError("下载 sdk.js 失败: 响应不是 Sentinel SDK")
+    # A batch can start several workers at once.  Publish only a complete SDK
+    # file so a reader never evaluates a partially-written JavaScript bundle.
+    tmp_file = sdk_file.with_name(f"{sdk_file.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp_file.write_bytes(content)
+        tmp_file.replace(sdk_file)
+    finally:
+        try:
+            tmp_file.unlink(missing_ok=True)
+        except OSError:
+            pass
     return sdk_file
 
 
@@ -164,6 +189,10 @@ def _run_quickjs_action(
 ) -> dict:
     body = dict(payload)
     body["action"] = action
+    if not sdk_file.exists() or sdk_file.stat().st_size <= 0:
+        raise RuntimeError("QuickJS SDK 文件不存在或为空")
+    if not quickjs_script.exists() or quickjs_script.stat().st_size <= 0:
+        raise RuntimeError("QuickJS wrapper 文件不存在或为空")
     proc = subprocess.run(
         [_resolve_node_binary(), "-e", _WRAPPER_JS],
         input=json.dumps(body, ensure_ascii=False),

@@ -139,7 +139,7 @@ namespace SmsWorkbench
 
         private int PageSizeValue()
         {
-            return int.TryParse(PageSizeText, out int value) && value > 0 ? Math.Min(value, 500) : 25;
+            return int.TryParse(PageSizeText, out int value) && value > 0 ? Math.Min(value, 500) : 100;
         }
 
         private string GetSessionsDir()

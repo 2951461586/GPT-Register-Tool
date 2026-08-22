@@ -29,6 +29,9 @@
       <SolidColorBrush x:Key="SidebarBg" Color="#F3F3F3"/>
       <SolidColorBrush x:Key="SidebarButtonBg" Color="#F3F3F3"/>
       <SolidColorBrush x:Key="GridAltBg" Color="#FAFAFA"/>
+      <SolidColorBrush x:Key="GridSelectionBg" Color="#C8C8C8"/>
+      <SolidColorBrush x:Key="SettingsSelectionBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#C8C8C8"/>
       <SolidColorBrush x:Key="SplitterBg" Color="#E6E6E6"/>
       <SolidColorBrush x:Key="StatusBg" Color="#FFFFFF"/>
       <SolidColorBrush x:Key="LogBg" Color="#2A2A2A"/>
@@ -532,13 +535,14 @@
             <Setter Property="Background" Value="{DynamicResource PanelHover}"/>
           </Trigger>
           <Trigger Property="IsSelected" Value="True">
-            <Setter Property="Background" Value="{DynamicResource PanelBg2}"/>
+            <Setter Property="Background" Value="{DynamicResource GridSelectionBg}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
           </Trigger>
         </Style.Triggers>
       </Style>
 
       <Style TargetType="DataGridCell">
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="Padding" Value="6,0"/>
@@ -552,6 +556,12 @@
             </ControlTemplate>
           </Setter.Value>
         </Setter>
+        <Style.Triggers>
+          <Trigger Property="IsSelected" Value="True">
+            <Setter Property="Background" Value="{DynamicResource GridSelectionBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+          </Trigger>
+        </Style.Triggers>
       </Style>
 
       <Style TargetType="DataGridColumnHeader">

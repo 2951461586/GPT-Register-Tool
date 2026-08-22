@@ -50,6 +50,9 @@ namespace SmsWorkbench
                 SetBrush("SidebarBg", "#202020");
                 SetBrush("SidebarButtonBg", "#202020");
                 SetBrush("GridAltBg", "#1E1E1E");
+                SetBrush("GridSelectionBg", "#2A2A2A");
+                SetBrush("SettingsSelectionBg", "#2A2A2A");
+                SetBrush("SettingsSelectionBorder", "#505050");
                 SetBrush("SplitterBg", "#363636");
                 SetBrush("StatusBg", "#181818");
                 SetBrush("LogBg", "#2A2A2A");
@@ -91,6 +94,9 @@ namespace SmsWorkbench
                 SetBrush("SidebarBg", "#F3F3F3");
                 SetBrush("SidebarButtonBg", "#F3F3F3");
                 SetBrush("GridAltBg", "#FAFAFA");
+                SetBrush("GridSelectionBg", "#C8C8C8");
+                SetBrush("SettingsSelectionBg", "#F3F3F3");
+                SetBrush("SettingsSelectionBorder", "#C8C8C8");
                 SetBrush("SplitterBg", "#E6E6E6");
                 SetBrush("StatusBg", "#FFFFFF");
                 SetBrush("LogBg", "#2A2A2A");

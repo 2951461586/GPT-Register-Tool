@@ -53,15 +53,6 @@
           </ControlTemplate>
         </Setter.Value>
       </Setter>
-      <Style.Triggers>
-        <DataTrigger Binding="{Binding SidebarCollapsed}" Value="True">
-          <Setter Property="Width" Value="46"/>
-          <Setter Property="HorizontalAlignment" Value="Center"/>
-          <Setter Property="HorizontalContentAlignment" Value="Center"/>
-          <Setter Property="Padding" Value="0"/>
-          <Setter Property="Margin" Value="0,0,0,8"/>
-        </DataTrigger>
-      </Style.Triggers>
     </Style>
     <Style x:Key="SidebarPaneBorderStyle" TargetType="Border">
       <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
@@ -69,11 +60,6 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="4"/>
       <Setter Property="Padding" Value="8"/>
-      <Style.Triggers>
-        <DataTrigger Binding="{Binding SidebarCollapsed}" Value="True">
-          <Setter Property="Padding" Value="7"/>
-        </DataTrigger>
-      </Style.Triggers>
     </Style>
     <Style x:Key="SidebarBrandLogoStyle" TargetType="Border">
       <Setter Property="Width" Value="40"/>
@@ -132,12 +118,7 @@
       </Setter>
       <Style.Triggers>
         <DataTrigger Binding="{Binding SidebarCollapsed}" Value="True">
-          <Setter Property="Grid.Column" Value="0"/>
-          <Setter Property="Grid.ColumnSpan" Value="3"/>
-          <Setter Property="Width" Value="40"/>
-          <Setter Property="Height" Value="40"/>
-          <Setter Property="Margin" Value="0"/>
-          <Setter Property="HorizontalAlignment" Value="Center"/>
+          <Setter Property="Margin" Value="0,0,9,0"/>
         </DataTrigger>
       </Style.Triggers>
     </Style>
@@ -161,11 +142,15 @@
       <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Height" Value="13"/>
       <Setter Property="Margin" Value="4,12,0,5"/>
       <Setter Property="TextWrapping" Value="NoWrap"/>
+      <Setter Property="TextAlignment" Value="Left"/>
       <Style.Triggers>
         <DataTrigger Binding="{Binding SidebarCollapsed}" Value="True">
-          <Setter Property="Visibility" Value="Collapsed"/>
+          <Setter Property="Margin" Value="4,12,4,5"/>
+          <Setter Property="HorizontalAlignment" Value="Stretch"/>
+          <Setter Property="TextAlignment" Value="Left"/>
         </DataTrigger>
       </Style.Triggers>
     </Style>
@@ -365,7 +350,7 @@
 
       <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition x:Name="SidebarColumn" Width="272"/>
+          <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid x:Name="SidebarHost" Grid.Column="0" Margin="10,0,10,10" ClipToBounds="True" HorizontalAlignment="Stretch">
@@ -374,7 +359,8 @@
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
 
-          <Border Margin="0,0,0,10"
+          <Border Height="58"
+                  Margin="0,0,0,10"
                   Style="{StaticResource SidebarPaneBorderStyle}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -815,7 +801,6 @@
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="80" IsReadOnly="True"/>
                 <DataGridCheckBoxColumn Header="选中" Binding="{Binding IsChecked}" Width="60"/>
                 <DataGridTextColumn Header="创建时间" Binding="{Binding CreatedAt}" Width="155" IsReadOnly="True"/>
                 <DataGridTextColumn Header="更新时间" Binding="{Binding CompletedAt}" Width="155" IsReadOnly="True"/>
@@ -823,7 +808,7 @@
                 <DataGridTextColumn Header="账号类型" Binding="{Binding AccountPlanType}" Width="92" IsReadOnly="True"/>
                 <DataGridTextColumn Header="注册区" Binding="{Binding RegistrationCountry}" Width="64" IsReadOnly="True"/>
                 <DataGridTextColumn Header="类型" Binding="{Binding AccountType}" Width="120" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="状态" Width="130" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
+                <DataGridTemplateColumn Header="状态" Width="96" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
@@ -832,7 +817,7 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="AT" Width="86" IsReadOnly="True" SortMemberPath="AccessTokenStatus" CanUserSort="True">
+                <DataGridTemplateColumn Header="AT" Width="96" IsReadOnly="True" SortMemberPath="AccessTokenStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding AccessTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
@@ -841,7 +826,7 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="RT" Width="78" IsReadOnly="True">
+                <DataGridTemplateColumn Header="RT" Width="96" IsReadOnly="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding RefreshTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
@@ -850,7 +835,7 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="2FA" Width="84" IsReadOnly="True" SortMemberPath="TwoFactorStatus" CanUserSort="True">
+                <DataGridTemplateColumn Header="2FA" Width="96" IsReadOnly="True" SortMemberPath="TwoFactorStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding TwoFactorStatus, Converter={StaticResource StatusSeverityConverter}}">

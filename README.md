@@ -481,6 +481,8 @@ HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/sessi
 
 - `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key（`sms_tool/gen_pp_link.py` 与 `services/protocol-payment/momo/ac_paylink_core.py` 两处共用）。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。
 - `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel_quickjs.py`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
+- `OPENAI_SENTINEL_DISABLE_QUICKJS`：设任意值可显式禁用真实 SDK 路径；生产注册默认不建议设置，
+  因为纯 HTTP PoW 无法通过 Sentinel 深层校验。
 
 启动前可运行 `python scripts/preflight_env.py` 检出 Node.js、Playwright Chromium 与关键 Python 包是否就绪。
 

@@ -222,8 +222,14 @@ public sealed class DesktopWindowSmokeTests
                 FindVisualChildren<TextBlock>(main),
                 textBlock => textBlock.Text == "重新生成支付链接");
             string[] headers = accountGrid.Columns.Select(column => column.Header?.ToString() ?? "").ToArray();
+            Assert.DoesNotContain("ID", headers);
             Assert.DoesNotContain("注册批次", headers);
             Assert.DoesNotContain("入库", headers);
+            DataGridColumn[] equalWidthColumns = accountGrid.Columns
+                .Where(column => new[] { "状态", "AT", "RT", "2FA" }.Contains(column.Header?.ToString() ?? ""))
+                .ToArray();
+            Assert.Equal(4, equalWidthColumns.Length);
+            Assert.Single(equalWidthColumns.Select(column => column.Width.Value).Distinct());
             DataGridColumn promotionColumn = Assert.Single(
                 accountGrid.Columns,
                 column => (column.Header?.ToString() ?? "") == "优惠状态");
@@ -477,6 +483,15 @@ public sealed class DesktopWindowSmokeTests
             secretBox.Password = "second-edit";
             Assert.Equal("second-edit", secretField.Value);
             Assert.NotNull(secretBox.GetBindingExpression(PasswordBoxBinding.BoundPasswordProperty));
+            var categoryList = FindVisualChildren<ListBox>(settings)
+                .Single(listBox => ReferenceEquals(listBox.ItemsSource, settingsViewModel.Categories));
+            categoryList.SelectedIndex = 0;
+            categoryList.UpdateLayout();
+            var selectedCategory = Assert.IsType<ListBoxItem>(categoryList.ItemContainerGenerator.ContainerFromIndex(0));
+            selectedCategory.ApplyTemplate();
+            var selectedChrome = Assert.IsType<Border>(selectedCategory.Template.FindName("ItemChrome", selectedCategory));
+            Assert.Equal(settings.FindResource("SettingsSelectionBg"), selectedChrome.Background);
+            Assert.Equal(settings.FindResource("SettingsSelectionBorder"), selectedChrome.BorderBrush);
             stage("verify settings layout");
             VerifySettingsLayout(settings, settingsViewModel);
             settings.Close();

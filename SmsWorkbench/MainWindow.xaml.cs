@@ -20,7 +20,7 @@ namespace SmsWorkbench
         private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
-        private string pageSizeText = "25";
+        private string pageSizeText = "100";
         private object scopeFilter = "全部";
         private string logText = "";
         private string statusText = "就绪";
@@ -122,7 +122,7 @@ namespace SmsWorkbench
         public string PageSizeText
         {
             get => pageSizeText;
-            set { pageSizeText = value ?? "25"; OnPropertyChanged(nameof(PageSizeText)); currentPage = 1; RefreshPagedRows(); }
+            set { pageSizeText = value ?? "100"; OnPropertyChanged(nameof(PageSizeText)); currentPage = 1; RefreshPagedRows(); }
         }
 
         public object ScopeFilter
