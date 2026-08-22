@@ -25,6 +25,7 @@ from .commands import omakse as omakse_commands
 from .commands import payment as payment_commands
 from .commands import payment_links as payment_link_commands
 from .commands import registration as registration_commands
+from .commands.email_change import run_change_email
 
 
 def _configured_registration_proxy() -> str:
@@ -193,7 +194,6 @@ def main():
     parser.add_argument("--delete-account", action="store_true", help="Delete/archive one or more accounts through the lifecycle adapter")
     parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
     parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
-    parser.add_argument("--mark-paypal-status", default=None, help="Update saved PayPal status for --email")
     parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
     parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
     parser.add_argument("--register-and-import", action="store_true", help="Register new account(s), then import only the successful registrations into CPA/SUB2API")
@@ -321,6 +321,14 @@ def main():
     parser.add_argument("--phone-source", default=None, choices=["smsbower", "phone_pool"], help="Override phone source for registration/one-click SMS")
     parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
     parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
+    parser.add_argument("--change-email", action="store_true", help="Batch change ChatGPT protocol email addresses")
+    parser.add_argument("--change-email-provider", choices=["remail", "cfworker", "smailr", "icloud", "outlook", "hotmail"], default=None)
+    parser.add_argument("--change-email-mailbox-file", default=None, help="Credential pool for persistent target email providers")
+    parser.add_argument("--change-email-workers", type=int, default=None)
+    parser.add_argument("--change-email-timeout", type=int, default=180)
+    parser.add_argument("--change-email-otp-timeout", type=int, default=300)
+    parser.add_argument("--change-email-service-mode", choices=["code", "purchase"], default="purchase")
+    parser.add_argument("--change-email-smailr-domain", default="")
     args = parser.parse_args()
     if args.register_and_import:
         args.import_cpa = True
@@ -408,6 +416,17 @@ def main():
         if failures:
             raise SystemExit(3)
         return
+    if args.change_email:
+        from .account_email_change import EmailChangeRequest, change_email_batch, load_change_email_accounts
+        from .desktop_ipc import emit_result
+        run_change_email(
+            args,
+            load_accounts=load_change_email_accounts,
+            change_email_batch=change_email_batch,
+            request_type=EmailChangeRequest,
+            emit_result=emit_result,
+        )
+        return
     if args.rebuild_sqlite:
         count = rebuild_from_session_dir(base_dir)
         print(f"[*] SQLite rebuilt: {database_path()} ({count} account record(s))")
@@ -417,9 +436,6 @@ def main():
         return
     if args.open_paypal_link:
         _open_paypal_link(args.email)
-        return
-    if args.mark_paypal_status:
-        _mark_paypal_status(args)
         return
     if args.list_paypal_ba_queue:
         _list_paypal_ba_queue(args)
@@ -698,10 +714,6 @@ def _print_paypal_links(email=""):
 
 def _open_paypal_link(email):
     return account_commands.open_paypal_link(email, _account_command_context())
-
-
-def _mark_paypal_status(args):
-    return account_commands.mark_paypal_status(args, _account_command_context())
 
 
 def _refresh_session(args):

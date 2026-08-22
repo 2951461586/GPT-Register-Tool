@@ -15,6 +15,7 @@ namespace SmsWorkbench
             {
                 Wpf.Ui.Appearance.ApplicationThemeManager.Apply(_currentTheme, Wpf.Ui.Controls.WindowBackdropType.Mica, true);
                 ApplyCustomThemeColors(_currentTheme);
+                WindowThemeService.ApplyToOpenWindows();
                 ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
                 Log("主题更新应用成功。");
             }
@@ -28,72 +29,116 @@ namespace SmsWorkbench
         {
             if (theme == Wpf.Ui.Appearance.ApplicationTheme.Dark)
             {
-                // Antigravity-like premium Dark Theme (deep navy/charcoal, neon/slate accent)
-                SetBrush("AppBg", "#0F1115");
-                SetBrush("PanelBg", "#161920");
-                SetBrush("PanelBg2", "#1E222B");
-                SetBrush("PanelHover", "#242933");
-                SetBrush("Line", "#2C313D");
-                SetBrush("LineStrong", "#4C5467");
-                SetBrush("Primary", "#E9ECEF");
-                SetBrush("PrimarySoft", "#1E222B");
+                // Neutral dark workbench palette with a blue action accent.
+                SetBrush("AppBg", "#181818");
+                SetBrush("PanelBg", "#181818");
+                SetBrush("PanelBg2", "#202020");
+                SetBrush("PanelHover", "#2A2A2A");
+                SetBrush("Line", "#363636");
+                SetBrush("LineStrong", "#505050");
+                SetBrush("Primary", "#3B82F6");
+                SetBrush("PrimarySoft", "#172554");
                 SetBrush("Danger", "#FA5252");
                 SetBrush("DangerSoft", "#2B1D1D");
                 SetBrush("DangerBorder", "#8C2A2A");
                 SetBrush("Success", "#51CF66");
                 SetBrush("SuccessSoft", "#1A2E1F");
                 SetBrush("SuccessBorder", "#2B6B3A");
-                SetBrush("TextMain", "#F1F3F5");
-                SetBrush("TextSub", "#A9B2C3");
-                SetBrush("TextMuted", "#6C7A93");
-                SetBrush("SidebarBg", "#161920");
-                SetBrush("SidebarButtonBg", "#161920");
-                SetBrush("GridAltBg", "#12141A");
-                SetBrush("SplitterBg", "#2C313D");
-                SetBrush("StatusBg", "#0F1115");
-                SetBrush("LogBg", "#0A0B0E");
-                SetBrush("LogBorder", "#1E222B");
-                SetBrush("LogText", "#D1D6E0");
+                SetBrush("TextMain", "#DFDFDF");
+                SetBrush("TextSub", "#DFDFDF");
+                SetBrush("TextMuted", "#DFDFDF");
+                SetBrush("SidebarBg", "#202020");
+                SetBrush("SidebarButtonBg", "#202020");
+                SetBrush("GridAltBg", "#1E1E1E");
+                SetBrush("SplitterBg", "#363636");
+                SetBrush("StatusBg", "#181818");
+                SetBrush("LogBg", "#2A2A2A");
+                SetBrush("LogBorder", "#444444");
+                SetBrush("LogText", "#DFDFDF");
+                ApplyBadgeThemeKeys(
+                    success: ("#123524", "#DFDFDF", "#286548"),
+                    warn: ("#3A2B0B", "#DFDFDF", "#80611A"),
+                    danger: ("#3B1717", "#DFDFDF", "#7F2D2D"),
+                    info: ("#172554", "#DFDFDF", "#315DA8"),
+                    neutral: ("#202020", "#DFDFDF", "#505050"),
+                    accents: ("#60A5FA", "#4ADE80", "#FBBF24", "#A78BFA", "#F87171"));
 
                 ApplyComboBoxThemeKeys(
-                    dropBg: "#161920", dropBorder: "#2C313D", glyph: "#6C7A93",
-                    focused: "#4C5467", pointerOver: "#242933",
-                    disabledBg: "#1E222B", disabledBorder: "#2C313D", disabledFg: "#6C7A93");
+                    dropBg: "#181818", dropBorder: "#363636", glyph: "#DFDFDF",
+                    focused: "#505050", pointerOver: "#2A2A2A",
+                    disabledBg: "#202020", disabledBorder: "#363636", disabledFg: "#DFDFDF");
             }
             else
             {
-                // Warm Premium Light Theme
-                SetBrush("AppBg", "#F7F5F0");           // 247,245,240
-                SetBrush("PanelBg", "#F0EEE8");          // 240,238,232
-                SetBrush("PanelBg2", "#DDDAD4");         // 221,218,212
-                SetBrush("PanelHover", "#E3E1DB");       // 227,225,219
-                SetBrush("Line", "#DDDAD4");             // 221,218,212
-                SetBrush("LineStrong", "#C5C2BA");
-                SetBrush("Primary", "#3E3B36");
-                SetBrush("PrimarySoft", "#E3E1DB");      // 227,225,219
-                SetBrush("Danger", "#985248");           // 152,82,72  待支付/未获取
-                SetBrush("DangerSoft", "#ECE2DC");       // 236,226,220
-                SetBrush("DangerBorder", "#C49088");
-                SetBrush("Success", "#3E846F");          // 62,132,111  支付完成/已获取
-                SetBrush("SuccessSoft", "#E0F3E6");      // 224,243,230
-                SetBrush("SuccessBorder", "#8DC5A9");
-                SetBrush("TextMain", "#3E3B36");
-                SetBrush("TextSub", "#6B6860");
-                SetBrush("TextMuted", "#9E9B93");
-                SetBrush("SidebarBg", "#F0EEE8");        // 240,238,232
-                SetBrush("SidebarButtonBg", "#DDDAD4");  // 221,218,212
-                SetBrush("GridAltBg", "#F7F5F0");        // 247,245,240
-                SetBrush("SplitterBg", "#DDDAD4");       // 221,218,212
-                SetBrush("StatusBg", "#F7F5F0");         // 247,245,240
-                SetBrush("LogBg", "#3E3B36");
-                SetBrush("LogBorder", "#55524C");
-                SetBrush("LogText", "#E3E1DB");
+                // Neutral light workbench palette.
+                SetBrush("AppBg", "#FFFFFF");
+                SetBrush("PanelBg", "#FFFFFF");
+                SetBrush("PanelBg2", "#F3F3F3");
+                SetBrush("PanelHover", "#F3F3F3");
+                SetBrush("Line", "#E2E2E2");
+                SetBrush("LineStrong", "#C8C8C8");
+                SetBrush("Primary", "#2563EB");
+                SetBrush("PrimarySoft", "#EAF2FF");
+                SetBrush("Danger", "#B42318");
+                SetBrush("DangerSoft", "#FEF0EE");
+                SetBrush("DangerBorder", "#F0B8B2");
+                SetBrush("Success", "#16794C");
+                SetBrush("SuccessSoft", "#EAF7F0");
+                SetBrush("SuccessBorder", "#9AD8B7");
+                SetBrush("TextMain", "#58595C");
+                SetBrush("TextSub", "#58595C");
+                SetBrush("TextMuted", "#58595C");
+                SetBrush("SidebarBg", "#F3F3F3");
+                SetBrush("SidebarButtonBg", "#F3F3F3");
+                SetBrush("GridAltBg", "#FAFAFA");
+                SetBrush("SplitterBg", "#E6E6E6");
+                SetBrush("StatusBg", "#FFFFFF");
+                SetBrush("LogBg", "#2A2A2A");
+                SetBrush("LogBorder", "#444444");
+                SetBrush("LogText", "#DFDFDF");
+                ApplyBadgeThemeKeys(
+                    success: ("#EAF7F0", "#58595C", "#9AD8B7"),
+                    warn: ("#FFF7E6", "#58595C", "#F2C66D"),
+                    danger: ("#FEF0EE", "#58595C", "#F0B8B2"),
+                    info: ("#EAF2FF", "#58595C", "#A9C5FF"),
+                    neutral: ("#F1F3F5", "#526173", "#CBD5E1"),
+                    accents: ("#2563EB", "#16A34A", "#D97706", "#7C3AED", "#DC2626"));
 
                 ApplyComboBoxThemeKeys(
-                    dropBg: "#F0EEE8", dropBorder: "#DDDAD4", glyph: "#9E9B93",
-                    focused: "#C5C2BA", pointerOver: "#E3E1DB",
-                    disabledBg: "#DDDAD4", disabledBorder: "#DDDAD4", disabledFg: "#9E9B93");
+                    dropBg: "#FFFFFF", dropBorder: "#E2E2E2", glyph: "#58595C",
+                    focused: "#C8C8C8", pointerOver: "#F3F3F3",
+                    disabledBg: "#F3F3F3", disabledBorder: "#E2E2E2", disabledFg: "#58595C");
             }
+        }
+
+        private void ApplyBadgeThemeKeys(
+            (string bg, string fg, string bd) success,
+            (string bg, string fg, string bd) warn,
+            (string bg, string fg, string bd) danger,
+            (string bg, string fg, string bd) info,
+            (string bg, string fg, string bd) neutral,
+            (string blue, string green, string orange, string purple, string red) accents)
+        {
+            SetBrush("BadgeSuccessBg", success.bg);
+            SetBrush("BadgeSuccessFg", success.fg);
+            SetBrush("BadgeSuccessBd", success.bd);
+            SetBrush("BadgeWarnBg", warn.bg);
+            SetBrush("BadgeWarnFg", warn.fg);
+            SetBrush("BadgeWarnBd", warn.bd);
+            SetBrush("BadgeDangerBg", danger.bg);
+            SetBrush("BadgeDangerFg", danger.fg);
+            SetBrush("BadgeDangerBd", danger.bd);
+            SetBrush("BadgeInfoBg", info.bg);
+            SetBrush("BadgeInfoFg", info.fg);
+            SetBrush("BadgeInfoBd", info.bd);
+            SetBrush("BadgeNeutralBg", neutral.bg);
+            SetBrush("BadgeNeutralFg", neutral.fg);
+            SetBrush("BadgeNeutralBd", neutral.bd);
+            SetBrush("AccentBlue", accents.blue);
+            SetBrush("AccentGreen", accents.green);
+            SetBrush("AccentOrange", accents.orange);
+            SetBrush("AccentPurple", accents.purple);
+            SetBrush("AccentRed", accents.red);
         }
 
         private void ApplyComboBoxThemeKeys(string dropBg, string dropBorder, string glyph,
@@ -117,139 +162,5 @@ namespace SmsWorkbench
             this.Resources[key] = brush; // Force local window resource update
         }
 
-        private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
-        {
-            SidebarCollapsed = !SidebarCollapsed;
-        }
-
-        // Custom TitleBar button handlers
-        private void TitleBar_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (e.ClickCount == 2)
-            {
-                // Double-click to toggle maximize/restore
-                WindowState = WindowState == WindowState.Maximized
-                    ? WindowState.Normal
-                    : WindowState.Maximized;
-            }
-            else
-            {
-                DragMove();
-            }
-        }
-
-        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
-        {
-            WindowState = WindowState.Minimized;
-        }
-
-        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
-        {
-            WindowState = WindowState == WindowState.Maximized
-                ? WindowState.Normal
-                : WindowState.Maximized;
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-
-        private void ApplySidebarCompact(bool compact)
-        {
-            if (SidebarToggleButton != null)
-            {
-                SidebarToggleButton.ToolTip = compact ? "展开侧边栏" : "收起侧边栏";
-            }
-
-            SidebarToggleGlyph = compact ? "›" : "‹";
-            SidebarToggleGeometry = Geometry.Parse(compact
-                ? "M9 18l6-6-6-6"
-                : "M15 18l-6-6 6-6");
-
-            AnimateSidebar(compact);
-        }
-
-        private const double SidebarExpandedWidth = 272;
-        private const double SidebarCollapsedWidth = 80;
-        private const int SidebarAnimDurationMs = 220;
-
-        private void AnimateSidebar(bool collapse)
-        {
-            double target = collapse ? SidebarCollapsedWidth : SidebarExpandedWidth;
-            double current = SidebarColumn?.Width.Value ?? (collapse ? SidebarExpandedWidth : SidebarCollapsedWidth);
-
-            sidebarAnimStart = current;
-            sidebarAnimTarget = target;
-
-            sidebarAnimTimer?.Stop();
-            sidebarAnimTimer = null;
-            if (sidebarRenderingHandler != null)
-            {
-                CompositionTarget.Rendering -= sidebarRenderingHandler;
-                sidebarRenderingHandler = null;
-            }
-            sidebarAnimStopwatch = Stopwatch.StartNew();
-
-            if (SidebarHost != null)
-            {
-                SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
-            }
-
-            sidebarRenderingHandler = (_, __) =>
-            {
-                double elapsed = sidebarAnimStopwatch?.Elapsed.TotalMilliseconds ?? SidebarAnimDurationMs;
-                double t = Math.Min(1.0, elapsed / SidebarAnimDurationMs);
-                double eased = t < 0.5
-                    ? 4 * t * t * t
-                    : 1 - Math.Pow(-2 * t + 2, 3) / 2;
-                double value = Math.Round(sidebarAnimStart + (sidebarAnimTarget - sidebarAnimStart) * eased, 2);
-
-                if (SidebarColumn != null)
-                {
-                    SidebarColumn.Width = new GridLength(value);
-                }
-
-                if (t >= 1.0)
-                {
-                    if (sidebarRenderingHandler != null)
-                    {
-                        CompositionTarget.Rendering -= sidebarRenderingHandler;
-                        sidebarRenderingHandler = null;
-                    }
-                    sidebarAnimStopwatch?.Stop();
-                    sidebarAnimStopwatch = null;
-                    if (SidebarColumn != null)
-                    {
-                        SidebarColumn.Width = new GridLength(sidebarAnimTarget);
-                    }
-
-                    // Update margin and layout after animation completes
-                    if (SidebarHost != null)
-                    {
-                        SidebarHost.ClearValue(FrameworkElement.WidthProperty);
-                        SidebarHost.Margin = collapse ? new Thickness(8, 0, 8, 10) : new Thickness(10, 0, 10, 10);
-                        SidebarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
-                    }
-                }
-            };
-
-            CompositionTarget.Rendering += sidebarRenderingHandler;
-        }
-
-        private static IEnumerable<DependencyObject> FindVisualChildren(DependencyObject node)
-        {
-            if (node == null) yield break;
-            int childCount = VisualTreeHelper.GetChildrenCount(node);
-            for (int i = 0; i < childCount; i++)
-            {
-                DependencyObject child = VisualTreeHelper.GetChild(node, i);
-                yield return child;
-                foreach (DependencyObject grandChild in FindVisualChildren(child))
-                {
-                    yield return grandChild;
-                }
-            }
-        }
     }
 }

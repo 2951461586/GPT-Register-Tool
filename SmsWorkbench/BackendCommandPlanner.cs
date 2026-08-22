@@ -255,6 +255,38 @@ namespace SmsWorkbench
                 TemporaryFiles: tempFiles);
         }
 
+        public static BackendCommandPlan CreateChangeEmail(
+            IReadOnlyList<string> emails,
+            string provider,
+            string mailboxFile,
+            int workers,
+            string smailrDomain,
+            string cfworkerDomain,
+            IReadOnlyList<string> proxyPool,
+            string tempDirectory = null)
+        {
+            List<string> targets = RequireEmails(emails);
+            RequireArgument(provider, nameof(provider));
+            var args = new List<string>
+            {
+                "--change-email",
+                "--change-email-provider", provider.Trim().ToLowerInvariant(),
+                "--change-email-workers", Count(workers),
+            };
+            var tempFiles = new List<string>();
+            string emailFile = WriteEmailFile(tempDirectory, "change_email_accounts_", targets);
+            tempFiles.Add(emailFile);
+            args.AddRange(new[] { "--email-file", emailFile });
+            if (!string.IsNullOrWhiteSpace(mailboxFile))
+                args.AddRange(new[] { "--change-email-mailbox-file", mailboxFile.Trim() });
+            if (!string.IsNullOrWhiteSpace(smailrDomain))
+                args.AddRange(new[] { "--change-email-smailr-domain", smailrDomain.Trim() });
+            if (!string.IsNullOrWhiteSpace(cfworkerDomain))
+                args.AddRange(new[] { "--cfworker-domain", cfworkerDomain.Trim() });
+            AppendProxyPool(args, proxyPool);
+            return new BackendCommandPlan("批量邮箱换绑(" + Count(targets.Count) + ")", args, TemporaryFiles: tempFiles, TimeoutMilliseconds: 900000);
+        }
+
         public static BackendCommandPlan CreatePromotionCheck(
             IReadOnlyList<string> emails,
             int workers,
@@ -438,36 +470,6 @@ namespace SmsWorkbench
         public static BackendCommandPlan CreateRebuildSqlite()
         {
             return new BackendCommandPlan("重建SQLite索引", new List<string> { "--rebuild-sqlite" });
-        }
-
-        public static BackendCommandPlan CreateMarkPaymentComplete(string email, string sessionFile)
-        {
-            var args = new List<string>
-            {
-                "--email", RequireEmail(email),
-                "--mark-paypal-status", "completed",
-                "--workers", "4",
-            };
-            AppendSessionFile(args, sessionFile);
-            return new BackendCommandPlan("标记支付完成", args);
-        }
-
-        public static BackendCommandPlan CreateMarkPaymentCompleteBatch(
-            IReadOnlyList<string> emails,
-            string tempDirectory = null)
-        {
-            List<string> targets = RequireEmails(emails);
-            string emailFile = WriteEmailFile(tempDirectory, "paypal_completed_emails_", targets);
-            var args = new List<string>
-            {
-                "--mark-paypal-status", "completed",
-                "--email-file", emailFile,
-                "--workers", "4",
-            };
-            return new BackendCommandPlan(
-                "批量标记支付完成 (" + Count(targets.Count) + ")",
-                args,
-                TemporaryFiles: new[] { emailFile });
         }
 
         // ── Inbox ───────────────────────────────────────────────────────

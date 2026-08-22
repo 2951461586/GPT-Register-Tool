@@ -22,7 +22,6 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--no-phone-reuse", plan.Arguments);
         Assert.Contains("--proxy", plan.Arguments);
         Assert.Contains("http://proxy1:8080", plan.Arguments);
-        Assert.Contains("--proxy-pool", plan.Arguments);
     }
 
     [Fact]
@@ -378,25 +377,6 @@ public sealed class BackendCommandPlannerTests
         Assert.Single(plan.Arguments);
     }
 
-    [Fact]
-    public void CreateMarkPaymentComplete_IncludesEmail()
-    {
-        var plan = BackendCommandPlanner.CreateMarkPaymentComplete(
-            "user@example.com",
-            "C:\\session.json");
-        Assert.Contains("--mark-paypal-status", plan.Arguments);
-        Assert.Contains("completed", plan.Arguments);
-    }
-
-    [Fact]
-    public void CreateMarkPaymentCompleteBatch_WritesTempFile()
-    {
-        var plan = BackendCommandPlanner.CreateMarkPaymentCompleteBatch(
-            new[] { "a@b.com", "c@d.com" });
-        Assert.Contains("--email-file", plan.Arguments);
-        Assert.Single(plan.TempFiles);
-    }
-
     // ── Inbox ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -421,6 +401,30 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("http://proxy:8080", plan.Arguments);
         Assert.Single(plan.Environment);
         Assert.Equal("abc123", plan.Environment["REMAIL_SERVICE_TOKEN"]);
+    }
+
+    [Fact]
+    public void CreateChangeEmail_UsesProviderWorkersAndTemporaryEmailFile()
+    {
+        var plan = BackendCommandPlanner.CreateChangeEmail(
+            new[] { "a@example.com", "b@example.com" },
+            provider: "icloud",
+            mailboxFile: "C:\\mailboxes.txt",
+            workers: 2,
+            smailrDomain: "",
+            cfworkerDomain: "",
+            proxyPool: new[] { "http://proxy:8080" },
+            tempDirectory: null!);
+
+        Assert.Contains("--change-email", plan.Arguments);
+        Assert.Contains("--change-email-provider", plan.Arguments);
+        Assert.Contains("icloud", plan.Arguments);
+        Assert.Contains("--change-email-workers", plan.Arguments);
+        Assert.Contains("2", plan.Arguments);
+        Assert.Contains("--change-email-mailbox-file", plan.Arguments);
+        Assert.Contains("--proxy", plan.Arguments);
+        Assert.Contains("http://proxy:8080", plan.Arguments);
+        Assert.Single(plan.TempFiles);
     }
 
     // ── Shared helpers ──────────────────────────────────────────────────

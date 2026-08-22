@@ -226,17 +226,10 @@ namespace SmsWorkbench
             openPayPalButton.Click += (_, __) => OpenPayPalUrl(paypalUrl, row.Identifier);
             var copyPayPalButton = new Button { Content = "复制支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl, row.Identifier);
-            var markPayPalCompleteButton = new Button { Content = "标记支付完成", MinWidth = 120, Style = (System.Windows.Style)FindResource("PrimaryButton"), Margin = new Thickness(0, 0, 8, 0) };
-            markPayPalCompleteButton.Click += (_, __) =>
-            {
-                MarkPayPalComplete(row);
-                dialog.Close();
-            };
             var closeButton = new Button { Content = "关闭", MinWidth = 80 };
             closeButton.Click += (_, __) => dialog.Close();
             rightActions.Children.Add(openPayPalButton);
             rightActions.Children.Add(copyPayPalButton);
-            rightActions.Children.Add(markPayPalCompleteButton);
             rightActions.Children.Add(closeButton);
 
             Grid.SetColumn(leftActions, 0);

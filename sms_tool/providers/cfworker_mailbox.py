@@ -1,7 +1,6 @@
 import json
 import re
 import time
-import uuid
 import urllib.error
 import urllib.request
 from email import policy
@@ -25,6 +24,7 @@ class CFWorkerMailboxClient:
         self.cf_api_token = str(cf_api_token or "").strip()
         self.timeout = timeout
         self.proxy = str(proxy or "").strip()
+        self.last_create_diagnostic = {}
         if not self.base_url:
             raise RuntimeError("cfworker_url is required")
 
@@ -32,6 +32,7 @@ class CFWorkerMailboxClient:
         count = max(1, min(int(count or 1), 200))
         domain = str(domain or "liziai.cloud").strip().lstrip("@").lower()
         payload = {"domain": domain, "count": count, "quantity": count}
+        diagnostics = []
         candidates = [
             ("POST", "/api/mailboxes", payload),
             ("POST", "/api/emails", payload),
@@ -44,11 +45,40 @@ class CFWorkerMailboxClient:
         for method, path, body in candidates:
             result = self._request(method, path, json_body=body, allow_404=True)
             if not result.get("ok"):
+                diagnostics.append({
+                    "method": method,
+                    "endpoint": path.split("?", 1)[0],
+                    "status_code": result.get("status_code"),
+                    "error": _safe_error(result.get("error", "")),
+                })
                 continue
             emails = _extract_emails(result.get("data"), domain=domain)
             if emails:
+                self.last_create_diagnostic = {
+                    "ok": True,
+                    "method": method,
+                    "endpoint": path.split("?", 1)[0],
+                    "status_code": result.get("status_code"),
+                    "requested": count,
+                    "returned": len(emails[:count]),
+                }
                 return emails[:count]
-        return [f"oai-{uuid.uuid4().hex[:16]}@{domain}" for _ in range(count)]
+            diagnostics.append({
+                "method": method,
+                "endpoint": path.split("?", 1)[0],
+                "status_code": result.get("status_code"),
+                "error": "response contained no mailbox addresses",
+            })
+        self.last_create_diagnostic = {
+            "ok": False,
+            "requested": count,
+            "returned": 0,
+            "attempts": diagnostics,
+        }
+        raise RuntimeError(
+            "cfworker mailbox creation failed: "
+            + json.dumps(self.last_create_diagnostic, ensure_ascii=True, sort_keys=True)
+        )
 
     def fetch_messages(self, email, limit=25):
         email = str(email or "").strip().lower()

@@ -463,7 +463,7 @@ namespace SmsWorkbench
             var promotionBox = new CheckBox
             {
                 Content = "注册完成后查询试用优惠",
-                IsChecked = false,
+                IsChecked = true,
                 Margin = new Thickness(0, 0, 0, 10),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
             };
@@ -577,7 +577,7 @@ namespace SmsWorkbench
             var promotionBox = new CheckBox
             {
                 Content = "注册完成后查询试用优惠",
-                IsChecked = false,
+                IsChecked = true,
                 Margin = new Thickness(0, 0, 0, 10),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
             };
@@ -693,7 +693,6 @@ namespace SmsWorkbench
         private bool HasRegisteredAccountState(PoolRow row)
         {
             string status = row.Status ?? "";
-            if (IsPayPalCompletedRow(row)) return true;
             return status.Contains("已注册")
                 || status.Contains("PayPal")
                 || status.Contains("支付完成")

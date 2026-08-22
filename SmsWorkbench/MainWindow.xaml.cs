@@ -26,9 +26,8 @@ namespace SmsWorkbench
         private string statusText = "就绪";
         private string pageStatusText = "第 0/0 页";
         private string totalCountText = "0";
-        private string mailboxCountText = "0";
+        private string trialCountText = "0";
         private string registeredCountText = "0";
-        private string paypalCountText = "0";
         private string attentionCountText = "0";
         private int currentPage = 1;
         private int filteredCount;
@@ -36,9 +35,8 @@ namespace SmsWorkbench
         private ListSortDirection? accountSortDirection;
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
-        private Geometry sidebarToggleGeometry = Geometry.Parse("M15 18l-6-6 6-6");
+        private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
         private Geometry themeIconGeometry;
-        private DispatcherTimer sidebarAnimTimer;
         private double sidebarAnimTarget;
         private double sidebarAnimStart;
         private EventHandler sidebarRenderingHandler;
@@ -163,22 +161,16 @@ namespace SmsWorkbench
             set { totalCountText = value ?? "0"; OnPropertyChanged(nameof(TotalCountText)); }
         }
 
-        public string MailboxCountText
+        public string TrialCountText
         {
-            get => mailboxCountText;
-            set { mailboxCountText = value ?? "0"; OnPropertyChanged(nameof(MailboxCountText)); }
+            get => trialCountText;
+            set { trialCountText = value ?? "0"; OnPropertyChanged(nameof(TrialCountText)); }
         }
 
         public string RegisteredCountText
         {
             get => registeredCountText;
             set { registeredCountText = value ?? "0"; OnPropertyChanged(nameof(RegisteredCountText)); }
-        }
-
-        public string PaypalCountText
-        {
-            get => paypalCountText;
-            set { paypalCountText = value ?? "0"; OnPropertyChanged(nameof(PaypalCountText)); }
         }
 
         public string AttentionCountText
