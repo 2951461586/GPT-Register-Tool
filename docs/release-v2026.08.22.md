@@ -22,5 +22,5 @@
 ## 验证
 
 - Python 全量测试：1019 passed，另有 28 个 subtests passed。
-- .NET 测试：217 passed。
+- .NET 测试：218 passed。
 - `python -m compileall -q sms_tool`、`git diff --check`、桌面发布和安装包 SHA-256 校验通过。
