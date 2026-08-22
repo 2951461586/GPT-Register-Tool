@@ -33,7 +33,24 @@ public sealed class DesktopWindowSmokeTests
         Assert.True(contentSite.ActualWidth > 0);
 
         comboBox.IsDropDownOpen = true;
-        FlushDispatcher();
+        Assert.True(
+            WaitForDispatcher(
+                () =>
+                {
+                    var popup = comboBox.Template.FindName("Popup", comboBox) as Popup;
+                    var border = popup?.Child as Border;
+                    if (border is null)
+                        return false;
+
+                    var scrollBars = FindVisualChildren<ScrollBar>(border).ToArray();
+                    var verticalBar = scrollBars.SingleOrDefault(scrollBar => scrollBar.Orientation == Orientation.Vertical);
+                    var horizontalBar = scrollBars.SingleOrDefault(scrollBar => scrollBar.Orientation == Orientation.Horizontal);
+                    return border.ActualWidth >= comboBox.ActualWidth
+                        && verticalBar?.ActualWidth > 0
+                        && horizontalBar?.ActualHeight > 0;
+                },
+                TimeSpan.FromSeconds(5)),
+            "ComboBox popup did not finish layout in time");
 
         var popup = Assert.IsType<Popup>(comboBox.Template.FindName("Popup", comboBox));
         var border = Assert.IsType<Border>(popup.Child);
@@ -532,6 +549,25 @@ public sealed class DesktopWindowSmokeTests
 
     private static void FlushDispatcher()
         => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);
+
+    private static bool WaitForDispatcher(Func<bool> condition, TimeSpan timeout)
+    {
+        Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
+        DateTime deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+                return false;
+
+            var frame = new DispatcherFrame();
+            dispatcher.BeginInvoke(
+                DispatcherPriority.Render,
+                new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+
+        return true;
+    }
 
     private static void InspectWindow(Window dialog, Action<Window> inspect)
     {
