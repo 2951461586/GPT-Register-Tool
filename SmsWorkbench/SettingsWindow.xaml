@@ -202,6 +202,34 @@
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
                 <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                      <Border x:Name="ItemChrome"
+                              Background="{TemplateBinding Background}"
+                              BorderBrush="{TemplateBinding BorderBrush}"
+                              BorderThickness="{TemplateBinding BorderThickness}"
+                              CornerRadius="4"
+                              Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                          <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource SettingsSelectionBg}"/>
+                          <Setter TargetName="ItemChrome" Property="BorderBrush" Value="{DynamicResource SettingsSelectionBorder}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                          <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
               </Style>
             </ListBox.ItemContainerStyle>
           </ListBox>

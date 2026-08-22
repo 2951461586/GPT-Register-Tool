@@ -229,7 +229,19 @@ function installRuntime(payload) {
     maxTouchPoints: Number(payload.max_touch_points || 0),
     platform: String(payload.platform || "Win32"),
     vendor: String(payload.vendor || "Google Inc."),
+    cookieEnabled: true,
+    doNotTrack: null,
+    pdfViewerEnabled: true,
     webdriver: false,
+    geolocation: {},
+    mediaDevices: {},
+    permissions: {},
+    plugins: [],
+    mimeTypes: [],
+    connection: {},
+    credentials: {},
+    locks: {},
+    userActivation: {},
     userAgentData: {
       brands: [
         { brand: "Chromium", version: String(payload.chrome_version || "146") },
@@ -371,10 +383,16 @@ function installRuntime(payload) {
 
 function loadPatchedSdk(sdkSource) {
   let sdk = String(sdkSource || "");
+  if (!sdk.includes(SDK_GLOBAL_PATCH) || !sdk.includes(INSTANCE_PATCH) || !sdk.includes(EXPOSE_PATCH)) {
+    throw new Error("unsupported Sentinel SDK bundle: debug hooks not found");
+  }
   sdk = sdk.replace(SDK_GLOBAL_PATCH, SDK_GLOBAL_REPLACEMENT);
   sdk = sdk.replace(INSTANCE_PATCH, INSTANCE_REPLACEMENT);
   sdk = sdk.replace(EXPOSE_PATCH, EXPOSE_REPLACEMENT);
   eval(sdk);
+  if (!globalThis.__debugP || !globalThis.SentinelSDK || typeof globalThis.SentinelSDK.__debug_n !== "function") {
+    throw new Error("Sentinel SDK debug hooks unavailable");
+  }
 }
 
 async function run(payload, sdkSource) {

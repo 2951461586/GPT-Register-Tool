@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import threading
 import time
@@ -321,6 +322,8 @@ def _sentinel_mode():
 
 
 def _quickjs_enabled():
+    if os.environ.get("OPENAI_SENTINEL_DISABLE_QUICKJS"):
+        return False
     return _sentinel_mode() in {"auto", "quickjs"}
 
 
