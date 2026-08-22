@@ -420,7 +420,7 @@
                        AllowsTransparency="True"
                        Focusable="False"
                        PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
-                       PopupAnimation="Slide"
+                       PopupAnimation="None"
                        VerticalOffset="4">
                   <Border x:Name="DropDownBorder"
                           Background="{DynamicResource PanelBg}"
