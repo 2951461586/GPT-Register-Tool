@@ -1,7 +1,7 @@
 """Phone verification integration for ChatGPT registration.
 
 Uses phone_reuse.py pool for multi-account phone verification,
-or falls back to single-phone paypal_auto helpers when pool is not provided.
+or falls back to single-phone paypal.config_picker helpers when no pool is given.
 """
 
 from .config import CFG
@@ -13,7 +13,7 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
     """Complete phone verification during registration.
 
     If phone_pool is provided (PhonePool from phone_reuse.py), uses the reuse pool.
-    Otherwise falls back to the legacy single-phone flow from paypal_auto.
+    Otherwise falls back to the legacy single-phone flow from paypal.config_picker.
     """
     if phone_pool:
         return _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=proxy)
@@ -64,9 +64,11 @@ def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
 
 
 def _verify_with_legacy(session, did, current_url, proxy=None):
-    """Legacy single-phone verification from paypal_auto config."""
+    """Legacy single-phone verification from the paypal_auto config section."""
     try:
-        from .paypal_auto import _pick_phone_and_sms
+        # Import from config_picker directly: this path only needs the
+        # round-robin phone picker, not the whole PayPal browser stack.
+        from .paypal.config_picker import _pick_phone_and_sms
         from .sms_utils import _poll_sms_code, _sms_baseline
     except Exception as exc:
         return {"ok": False, "error": f"phone_helpers_unavailable:{exc}"}

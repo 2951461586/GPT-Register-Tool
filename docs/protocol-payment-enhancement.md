@@ -132,7 +132,7 @@ class LocalProxyBridge:
 - 每次 `start()` 选择空闲端口，`stop()` 释放；可作为上下文管理器与 `with` 块配合使用。
 
 **集成点**：
-- `sms_tool/nodriver_paypal.py`、`sms_tool/paypal_auto.py` 中浏览器会话创建前，可 `with LocalProxyBridge(upstream).local_url` 作为浏览器 `proxy` 参数。
+- `sms_tool/nodriver_paypal.py`、`sms_tool/paypal/orchestrator.py` 中浏览器会话创建前，可 `with LocalProxyBridge(upstream).local_url` 作为浏览器 `proxy` 参数。
 - CLI `--ba-token` / `--proxy` 路径（`sms_tool/cli.py`）可选择开启本地桥。
 
 **依赖**：无新增（复用 `proxy_pool` 与 `asyncio`）。
