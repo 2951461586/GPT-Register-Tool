@@ -1,9 +1,7 @@
 <Solution>
   <Project Path="SmsWorkbench.Contracts/SmsWorkbench.Contracts.csproj" />
-  <Project Path="SmsWorkbench.WebHost/SmsWorkbench.WebHost.csproj" />
   <Project Path="SmsWorkbench/SmsWorkbench.csproj" />
   <Folder Name="/tests/">
     <Project Path="tests/SmsWorkbench.Tests/SmsWorkbench.Tests.csproj" />
-    <Project Path="tests/SmsWorkbench.WebHost.Tests/SmsWorkbench.WebHost.Tests.csproj" />
   </Folder>
 </Solution>
