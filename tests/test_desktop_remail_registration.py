@@ -18,13 +18,13 @@ def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_r
     assert positions == sorted(positions)
     assert "sourceBox.SelectedIndex = 0" in source
     assert '"--remail-service-mode", "purchase"' in (
-        ROOT / "SmsWorkbench" / "BackendCommandPlanner.cs"
+        ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs"
     ).read_text(encoding="utf-8-sig")
 
 
 def test_long_term_remail_disables_phone_reuse_by_default():
     register = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
-    planner = (ROOT / "SmsWorkbench" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
+    planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # One-click ReMail long-term routes to the purchase-mode planner factory.
     start = register.index('if (options.Source == "remail_target")')
@@ -51,7 +51,7 @@ def test_long_term_remail_disables_phone_reuse_by_default():
 def test_only_phone_registration_selects_phone_flow():
     register = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
     tasks_source = (ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
-    planner = (ROOT / "SmsWorkbench" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
+    planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # Pool registration and failed-rerun both route through no-phone-reuse planners.
     pool_start = register.index("private void RegisterFromPool_Click")

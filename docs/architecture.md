@@ -343,10 +343,16 @@ normalize and delegate to `proxy_entry`, so the same provider proxy rotates
 identically regardless of the calling flow (the parser understands both
 `region-XX`/`-sid-…-t-N` username templates and Kookeey
 `BASE-CC-SESSION-TTL` password templates, with the `\d+[smhd]` TTL unit
-superset). The proxy pool itself is Kookeey-only: `config.json` carries
-Kookeey gate URLs exclusively, the Cliproxy white/api short-lived fetch path
-and `stage_proxy_api_urls` are removed, and `direct_card` rotates Kookeey
-sticky passwords through the same template rules as `proxy_entry`. Before any
+superset). The proxy pool itself is **IPWO-only (as of 2026-08-27)**: `config.json` carries
+IPWO gate URLs exclusively across `proxy.registration` / `proxy.pool`, every
+checkout/approve pool, and all payment methods' `stage_proxies` and per-method
+`proxy`. Kookeey (`gate.kookeey.info`) was removed entirely from config on
+2026-08-27 — it had persisted only in payment `stage_proxies` / single-method
+`proxy` entries and is no longer referenced anywhere. The Cliproxy white/api
+short-lived fetch path and `stage_proxy_api_urls` are **not configured** in
+config (the `region-XX` / `-sid-…-t-N` username template code in `proxy_entry`
+is retained but dormant), and `direct_card` rotates IPWO sticky credentials
+through the same template rules as `proxy_entry`. Before any
 subprocess extractor spawns, `payment_egress.assert_egress_countries` probes
 the routed checkout/approve/promotion proxies and rejects a run whose observed
 exit country mismatches the route plan (`protocol_payments.egress_check`,

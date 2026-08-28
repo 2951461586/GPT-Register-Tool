@@ -14,9 +14,6 @@ _TERMINAL_STATUSES = {
     "account_deactivated",
     "deactivated",
     "dropped",
-    "token_invalid",
-    "unauthorized",
-    "access_token_expired",
 }
 _TOKEN_FAILURE_RE = re.compile(
     r"(?:\b401\b|access[_ -]?token.*(?:invalid|expired)|"
@@ -29,16 +26,14 @@ def account_cleanup_reason(account: dict[str, Any]) -> str:
     """Return a terminal removal reason, or ``""`` when the row is retained."""
     if not isinstance(account, dict):
         return ""
-    access_token = str(account.get("access_token") or "").strip()
-    if not access_token:
-        return "missing_access_token"
-
     status = str(account.get("status") or "").strip().lower()
     if status in _TERMINAL_STATUSES:
         return status
-    error = str(account.get("error") or "").strip()
-    if _TOKEN_FAILURE_RE.search(error):
-        return "token_invalid"
+    terminal = account.get("terminal_failure")
+    if isinstance(terminal, dict):
+        code = str(terminal.get("code") or "").strip().lower()
+        if code in _TERMINAL_STATUSES:
+            return code
     return ""
 
 

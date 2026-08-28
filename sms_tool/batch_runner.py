@@ -40,6 +40,19 @@ def select_registration_proxy_base(proxy_pool, fallback=None):
     return candidates[0] if candidates else str(fallback or "").strip()
 
 
+def _registration_proxy_metadata(proxy: str | None, *, pool_index: int, expected_country: str = "") -> dict:
+    """Return audit-safe proxy selection metadata without URL credentials."""
+    from urllib.parse import urlsplit
+
+    parsed = urlsplit(str(proxy or ""))
+    return {
+        "pool_index": int(pool_index) if int(pool_index) >= 0 else -1,
+        "expected_country": str(expected_country or "").strip().upper(),
+        "actual_country": "",
+        "scheme": str(parsed.scheme or "").strip().lower(),
+    }
+
+
 def _unique_mailboxes(mailboxes):
     if not mailboxes:
         return []
@@ -69,16 +82,22 @@ def run_batch_impl(
     browser_headless: bool | None = None,
     enroll_2fa: bool = True,
     on_result=None,
+    registration_driver: str | None = None,
 ):
     if run_email_func is None:
         raise ValueError("run_email_func is required")
+    from .registration_drivers.base import normalize_registration_driver
+    explicit_registration_driver = registration_driver is not None
+    registration_driver = normalize_registration_driver(registration_driver, CFG)
     mailboxes = _unique_mailboxes(mailboxes)
     proxy_pool = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
     if proxy and str(proxy).strip() not in proxy_pool:
         proxy_pool.insert(0, str(proxy).strip())
     if not proxy_pool and proxy:
         proxy_pool = [str(proxy).strip()]
+    original_pool = list(proxy_pool)
     proxy_pool = select_registration_proxy_pool(proxy_pool, proxy)
+    pool_indices = {value: index for index, value in enumerate(original_pool)}
     proxy = proxy_pool[0] if proxy_pool else proxy
     if mailboxes and int(count or 1) > len(mailboxes):
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
@@ -97,9 +116,15 @@ def run_batch_impl(
         prewarm_window = max(0, min(int(email_cfg.get("sentinel_prewarm_window") or 0), workers, count))
     except (TypeError, ValueError):
         prewarm_window = 0
+    from .sentinel import sentinel_backend
+
+    if sentinel_backend({"email_registration": email_cfg}) != "legacy":
+        prewarm_window = 0
     prewarm_executor = None
     prewarmed = {}
     first_attempt_proxies = {}
+    if registration_driver != "protocol":
+        prewarm_window = 0
     if prewarm_window:
         from .sentinel_tokens import _extract_sentinel, _sentinel_max_concurrency
 
@@ -133,9 +158,15 @@ def run_batch_impl(
                 if attempt == 1 and i in first_attempt_proxies
                 else (refresh_proxy_sid(base_proxy) if base_proxy else base_proxy)
             )
+            expected_country = infer_proxy_country(worker_proxy)
+            proxy_metadata = _registration_proxy_metadata(
+                worker_proxy,
+                pool_index=pool_indices.get(base_proxy, i % len(proxy_pool) if proxy_pool else -1),
+                expected_country=expected_country,
+            )
             sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
             try:
-                result = run_email_func(
+                call_kwargs = dict(
                     proxy=worker_proxy,
                     mailbox=mailbox,
                     phone_pool=phone_pool,
@@ -145,6 +176,11 @@ def run_batch_impl(
                     browser_headless=browser_headless,
                     enroll_2fa=enroll_2fa,
                 )
+                if explicit_registration_driver or registration_driver != "protocol":
+                    call_kwargs["registration_driver"] = registration_driver
+                if registration_driver != "protocol":
+                    call_kwargs["proxy_metadata"] = proxy_metadata
+                result = run_email_func(**call_kwargs)
             except Exception as e:
                 import traceback; traceback.print_exc()
                 failure_class = classify_error(str(e))
@@ -164,6 +200,9 @@ def run_batch_impl(
                 result.setdefault("dropped", False)
             elif result["failure_class"] == "account":
                 result.setdefault("dropped", True)
+            # Only transport and auth-state failures are retried with a new
+            # pool member. Rate limits and mailbox outcomes are terminal for
+            # this account and must not consume another proxy.
             if result["failure_class"] not in {"network", "auth_state"} or attempt >= max_attempts:
                 return i, result
             print(
@@ -194,6 +233,20 @@ def run_batch_impl(
         if prewarm_executor is not None:
             prewarm_executor.shutdown(wait=True)
         return results
+
+    # Pulse-wave scheduling: when enabled, split the batch into discrete
+    # waves with IP-ban detection between waves.
+    from .registration_pulse import PulseConfig, run_pulse_batch
+
+    pulse_config = PulseConfig.from_config(CFG)
+    if pulse_config.enabled:
+        return run_pulse_batch(
+            count,
+            run_one_fn=_run_one,
+            on_result=_notify_result,
+            workers=workers,
+            pulse_config=pulse_config,
+        )
 
     ordered = [None] * count
     with ThreadPoolExecutor(max_workers=workers) as executor:

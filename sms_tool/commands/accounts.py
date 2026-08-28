@@ -283,7 +283,9 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             )
             result["fallback_cpa"] = fallback
             result["ok"] = bool(fallback.get("ok"))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    from ..desktop_ipc import emit_result
+
+    emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))
     if not result.get("ok"):
         raise SystemExit(3)
 
@@ -315,7 +317,9 @@ def quota_usage(args: Any) -> None:
         "status_code": probe.get("status_code"),
         "error": probe.get("error", ""),
     }
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    from ..desktop_ipc import emit_result
+
+    emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))
     if not result["ok"]:
         raise SystemExit(3)
 

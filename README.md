@@ -55,7 +55,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
 | 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
-| 浏览器辅助 | Playwright、Camoufox、CloakBrowser |
+| 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser、Browser Use、Skyvern |
 
 ## 安装部署方式
 
@@ -128,6 +128,16 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
 3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
 4. 保存后重新打开对应功能即可使用新配置。
+
+注册驱动在 **设置 -> 注册与接码 -> 注册驱动** 中选择，默认仍为 `protocol`。选择浏览器驱动后，注册会复用同一套邮箱 OTP、Session 提取、AT HTTP 200 探活和本地持久化边界：
+
+- `playwright`：本机 Chromium，通过 Playwright 启动。
+- `roxy`：连接本机 RoxyBrowser API 创建/打开 Profile，再通过 CDP 接管。
+- `cloak`：调用已安装的 CloakBrowser Python SDK。
+- `browser_use`：通过 Browser Use 云端 CDP 地址连接；API Key 只保存在本机配置中。
+- `skyvern`：通过 Skyvern Browser Sessions API 创建会话，再通过 CDP 接管。
+
+RoxyBrowser、Browser Use 和 Skyvern 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
 
 ReMail API Key 也可以通过环境变量提供：
 

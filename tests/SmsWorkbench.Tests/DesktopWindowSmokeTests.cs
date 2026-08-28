@@ -193,6 +193,17 @@ public sealed class DesktopWindowSmokeTests
             Assert.True(contentBounds.Bottom <= horizontalBounds.Top + 0.5);
             Assert.True(contentBounds.Right <= verticalBounds.Left + 0.5);
         }
+
+        SettingsCategoryViewModel registrationCategory = viewModel.Categories.Single(category => category.Title == "注册与接码");
+        viewModel.SelectedCategory = registrationCategory;
+        settings.UpdateLayout();
+        var driverEditor = FindVisualChildren<ComboBox>(settings)
+            .Single(editor => editor.IsVisible
+                && editor.DataContext is SettingFieldViewModel field
+                && field.Key == "registration_driver");
+        Assert.Equal(7, driverEditor.Items.Count);
+        Assert.True(contentScrollViewer.ScrollableHeight > 0);
+        Assert.Equal(Visibility.Visible, outerVerticalBar.Visibility);
     }
 
     private static Rect BoundsRelativeTo(FrameworkElement element, Visual ancestor)
@@ -224,6 +235,23 @@ public sealed class DesktopWindowSmokeTests
             stage("show main window");
             main.Show();
             main.UpdateLayout();
+            var brandTitle = Assert.IsType<TextBlock>(main.FindName("SidebarBrandTitle"));
+            Assert.Equal("GPT Register Tool", brandTitle.Text);
+            var formattedBrandTitle = new FormattedText(
+                brandTitle.Text,
+                System.Globalization.CultureInfo.CurrentUICulture,
+                brandTitle.FlowDirection,
+                new Typeface(
+                    brandTitle.FontFamily,
+                    brandTitle.FontStyle,
+                    brandTitle.FontWeight,
+                    brandTitle.FontStretch),
+                brandTitle.FontSize,
+                brandTitle.Foreground,
+                VisualTreeHelper.GetDpi(brandTitle).PixelsPerDip);
+            Assert.True(
+                formattedBrandTitle.WidthIncludingTrailingWhitespace <= brandTitle.ActualWidth + 0.5,
+                $"Sidebar brand title is clipped: needs {formattedBrandTitle.WidthIncludingTrailingWhitespace:F1}px, has {brandTitle.ActualWidth:F1}px");
             Assert.DoesNotContain(
                 backendClient.Commands,
                 command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));

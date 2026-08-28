@@ -417,17 +417,27 @@ class RegistrationEmailWorkflow:
     def extract_sentinel(self) -> None:
         r = self.r
         s = self.runtime
+        from .sentinel import sentinel_backend
+
         if self.input_sentinel:
             print("[*] Using provided sentinel tokens")
             s.sentinel_data = self.input_sentinel
-        else:
+        elif sentinel_backend(self.config) == "legacy":
             s.sentinel_data = r._extract_sentinel(
                 proxy=s.proxy,
                 force_fresh=True,
                 persist=False,
                 browser_headless=self.browser_headless,
             )
-        if not s.sentinel_data or not s.sentinel_data.get("sentinel_token"):
+        else:
+            from .storage import get_device_context
+
+            device_context = dict(get_device_context(s.username) or {})
+            s.sentinel_data = {
+                "oai_did": str(device_context.get("device_id") or uuid.uuid4()),
+                "sentinel_source": "node_sdk_runner",
+            }
+        if not s.sentinel_data or not r._sentinel_device_id(s.sentinel_data):
             self._abort("sentinel_extract_failed")
         r.think_stage("post_sentinel")
 
@@ -440,16 +450,24 @@ class RegistrationEmailWorkflow:
         stored_device_id = str(device_context.get("device_id") or "").strip()
         sentinel_device_id = str(r._sentinel_device_id(s.sentinel_data) or "").strip()
         if stored_device_id and stored_device_id != sentinel_device_id:
-            print("  [Device] Regenerating Sentinel tokens for persisted device context")
-            s.sentinel_data = r._extract_sentinel(
-                proxy=s.proxy,
-                force_fresh=True,
-                persist=False,
-                browser_headless=self.browser_headless,
-                device_id=stored_device_id,
-            )
-            if not s.sentinel_data:
-                self._abort("sentinel_extract_failed: persisted device token refresh failed")
+            from .sentinel import sentinel_backend
+
+            if sentinel_backend(self.config) == "legacy" or self.input_sentinel:
+                print("  [Device] Regenerating Sentinel tokens for persisted device context")
+                s.sentinel_data = r._extract_sentinel(
+                    proxy=s.proxy,
+                    force_fresh=True,
+                    persist=False,
+                    browser_headless=self.browser_headless,
+                    device_id=stored_device_id,
+                )
+                if not s.sentinel_data:
+                    self._abort("sentinel_extract_failed: persisted device token refresh failed")
+            else:
+                s.sentinel_data = {
+                    **dict(s.sentinel_data),
+                    "oai_did": stored_device_id,
+                }
 
         s.context = prepare_registration_context(
             proxy=s.proxy,
@@ -503,6 +521,18 @@ class RegistrationEmailWorkflow:
         from .paypal_proxy import infer_proxy_country
         r.set_fingerprint_geo(infer_proxy_country(s.proxy))
         r.set_fingerprint_device(s.device_id)
+        # Apply a round-robin protocol fingerprint profile from the pool.
+        # This rotates the browser impersonation version and sec-ch-ua headers
+        # across registrations so consecutive accounts don't cluster.
+        try:
+            from .fingerprint_pool import shared_fingerprint_pool
+            pool = shared_fingerprint_pool(self.config)
+            if pool.size > 0:
+                profile = pool.next()
+                from .auth_headers import set_auth_fingerprint
+                set_auth_fingerprint(profile.name)
+        except Exception:
+            pass
         s.base_headers = r.openai_auth_headers(
             s.device_id,
             accept="application/json",
@@ -513,6 +543,37 @@ class RegistrationEmailWorkflow:
         if str(s.base_headers.get("oai-device-id") or "") != s.device_id:
             self._abort("sentinel_extract_failed: auth header device id mismatch")
         s.auth_flow_started = int(time.time())
+
+    def _issue_sentinel(self, flow: str) -> Any:
+        from .sentinel import issue_sentinel_flow, sentinel_backend
+
+        s = self.runtime
+        issued = issue_sentinel_flow(
+            flow=flow,
+            device_id=s.device_id,
+            session=s.session,
+            proxy=s.proxy,
+            supplied_data=s.sentinel_data,
+            config=self.config,
+        )
+        data = dict(s.sentinel_data)
+        if flow == "username_password_create":
+            data["sentinel_token"] = issued.token
+            s.sentinel_token = issued.token
+        elif flow == "authorize_continue":
+            data["sentinel_authorize_continue_token"] = issued.token
+            data["sentinel_authorize_continue_so_token"] = issued.so_token
+            s.sentinel_authorize_token = issued.token
+        elif flow == "oauth_create_account":
+            data["sentinel_oauth_token"] = issued.token
+            data["sentinel_so_token"] = issued.so_token
+            s.sentinel_so_token = issued.so_token
+        data["oai_did"] = issued.device_id
+        data["sentinel_source"] = str(
+            data.get("sentinel_source") or sentinel_backend(self.config)
+        )
+        s.sentinel_data = data
+        return issued
 
     def auth_flow(self) -> None:
         r = self.r
@@ -581,6 +642,7 @@ class RegistrationEmailWorkflow:
             s.password_unknown = True
             print("  Registration mode: passwordless_signup (HAR login_or_signup)")
             return
+        username_sentinel = self._issue_sentinel("username_password_create")
         s.reg_response = r.request_with_retry(
             s.session, "post", f"{s.auth_base}/api/accounts/user/register", label="User register",
             json={"password": s.password, "username": s.username},
@@ -589,7 +651,7 @@ class RegistrationEmailWorkflow:
                 did=s.device_id,
                 referer=f"{s.auth_base}/create-account/password",
                 origin=s.auth_base,
-                sentinel_token=s.sentinel_token,
+                sentinel_token=username_sentinel.token,
             ),
             impersonate=r.auth_impersonate(),
         )
@@ -723,7 +785,7 @@ class RegistrationEmailWorkflow:
     def create_account(self) -> None:
         r = self.r
         s = self.runtime
-        create_sentinel_token = r._create_account_sentinel_token(s.sentinel_data, proxy=s.proxy)
+        create_sentinel = self._issue_sentinel("oauth_create_account")
         response = r.request_with_retry(
             s.session, "post", f"{s.auth_base}/api/accounts/create_account", label="Create account",
             json={"name": s.full_name, "birthdate": s.birthdate},
@@ -732,8 +794,8 @@ class RegistrationEmailWorkflow:
                 did=s.device_id,
                 referer=f"{s.auth_base}/about-you",
                 origin=s.auth_base,
-                sentinel_token=create_sentinel_token,
-                sentinel_so_token=s.sentinel_so_token,
+                sentinel_token=create_sentinel.token,
+                sentinel_so_token=create_sentinel.so_token,
             ),
             impersonate=r.auth_impersonate(),
         )
@@ -963,10 +1025,22 @@ class RegistrationEmailWorkflow:
         from .auth_headers import current_auth_fingerprint
         from .token_telemetry import access_token_telemetry
         from .paypal_proxy import infer_proxy_country
-        from .sentinel_quickjs import sentinel_version
+        from .sentinel.bundle import sentinel_version
 
         fingerprint = current_auth_fingerprint()
         token_telemetry = access_token_telemetry(s.access_token)
+        from .account_identity import create_registration_identity, complete_registration_identity
+        identity_context = complete_registration_identity(
+            create_registration_identity(
+                s.proxy,
+                fingerprint_key=str(fingerprint.get("impersonate") or ""),
+                device_id=s.device_id,
+                auth_session_logging_id=s.session_logging_id,
+                config=self.config,
+            ),
+            device_id=s.device_id,
+            auth_session_logging_id=s.session_logging_id,
+        )
         result = {
             "success": s.success,
             "error": r._sanitize_text(s.error),
@@ -1015,6 +1089,7 @@ class RegistrationEmailWorkflow:
             "registration_mode": s.registration_mode,
             "device_id": s.device_id,
             "auth_session_logging_id": s.session_logging_id,
+            "identity_context": identity_context,
             "timing": r._timing_summary(),
             "mailbox": r._mailbox_snapshot(s.mailbox),
         }

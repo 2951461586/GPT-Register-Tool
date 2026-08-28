@@ -161,25 +161,33 @@ def _print_protocol_diagnostic(stage, diagnostic):
     print(f"  Protocol diagnostic[{stage}]: {json.dumps(safe, ensure_ascii=False, sort_keys=True)}")
 
 
-def _authorize_continue_sentinel(session, did, proxy=""):
+def _authorize_continue_sentinel(
+    session,
+    did,
+    proxy="",
+    sentinel_token="",
+    sentinel_so_token="",
+):
     """Fetch a fresh, same-flow Sentinel challenge for API continue calls."""
-    from .sentinel_tokens import _extract_sentinel
+    from .sentinel import issue_sentinel_flow
 
-    data = _extract_sentinel(proxy=proxy, force_fresh=True, persist=False, device_id=did)
-    if not isinstance(data, dict):
-        raise RuntimeError("sentinel_extract_failed: authorize_continue")
-    token = str(data.get("sentinel_authorize_continue_token") or "").strip()
-    so_token = str(data.get("sentinel_authorize_continue_so_token") or "").strip()
-    if not token or not so_token:
-        raise RuntimeError("sentinel_extract_failed: authorize_continue flow incomplete")
-    try:
-        token_flow = str(json.loads(token).get("flow") or "")
-        so_flow = str(json.loads(so_token).get("flow") or "")
-    except Exception as exc:
-        raise RuntimeError("sentinel_extract_failed: authorize_continue token malformed") from exc
-    if token_flow != "authorize_continue" or so_flow != "authorize_continue":
-        raise RuntimeError("sentinel_extract_failed: authorize_continue token flow mismatch")
-    return data, token, so_token
+    issued = issue_sentinel_flow(
+        flow="authorize_continue",
+        device_id=did,
+        session=session,
+        proxy=proxy,
+        supplied_data={
+            "sentinel_authorize_continue_token": sentinel_token,
+            "sentinel_authorize_continue_so_token": sentinel_so_token,
+        },
+    )
+    data = {
+        "sentinel_authorize_continue_token": issued.token,
+        "sentinel_authorize_continue_so_token": issued.so_token,
+        "sentinel_source": "node_sdk_runner",
+        "oai_did": issued.device_id,
+    }
+    return data, issued.token, issued.so_token
 
 
 def _signup_signin_attempts():
@@ -220,7 +228,13 @@ def _continue_signup_username(session, username, did, auth_base, base_headers, c
     if _is_signup_password_step(current_url) or _is_email_verification_step(current_url):
         return {"ok": True, "url": current_url, "skipped": True}
 
-    fresh_data, fresh_token, fresh_so = _authorize_continue_sentinel(session, did, proxy=proxy)
+    fresh_data, fresh_token, fresh_so = _authorize_continue_sentinel(
+        session,
+        did,
+        proxy=proxy,
+        sentinel_token=sentinel_token,
+        sentinel_so_token=sentinel_so_token,
+    )
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/create-account"
     headers = {
         **base_headers,
@@ -506,10 +520,12 @@ def _send_existing_login_otp(session, auth_base, base_headers, current_url, did,
         extra={"Content-Type": "application/json"},
     )
     last_response = None
+    # authorize/continue already creates the existing-account OTP challenge.
+    # Reuse that state first; passwordless/send-otp belongs to account creation
+    # and invalidates the login challenge with a 409 invalid_state response.
     for endpoint in (
-        "/api/accounts/passwordless/send-otp",
-        "/api/accounts/email-otp/send",
         "/api/accounts/email-otp/resend",
+        "/api/accounts/email-otp/send",
     ):
         response = request_with_retry(
             session,
@@ -560,6 +576,7 @@ def _login_existing_account_with_email_otp(
     sentinel_token="",
     sentinel_so_token="",
     totp_secret="",
+    otp_timeout=None,
 ):
     print("  Existing account login: starting email OTP flow")
     signin_url = (
@@ -659,18 +676,19 @@ def _login_existing_account_with_email_otp(
         base_headers,
         current_url,
         did,
-        sentinel_token=sentinel_token,
-        sentinel_so_token=sentinel_so_token,
+        sentinel_token=fresh_token or sentinel_token,
+        sentinel_so_token=fresh_so or sentinel_so_token,
     )
     if not ok:
         status = getattr(otp_send_response, "status_code", 0)
         return {"ok": False, "error": f"existing_login_otp_send_failed:{status}"}
 
     email_cfg = current_config_data().get("email_registration", {})
+    poll_timeout = int(otp_timeout or email_cfg.get("otp_timeout", 300))
     code = _poll_email_otp(
         mailbox,
         subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
-        timeout=int(email_cfg.get("otp_timeout", 300)),
+        timeout=poll_timeout,
         issued_after_unix=otp_send_started,
         proxy=proxy,
     )
@@ -678,7 +696,10 @@ def _login_existing_account_with_email_otp(
         return {"ok": False, "error": "existing_login_otp_poll_timeout"}
 
     otp_ok, otp_data = _validate_email_otp(session, auth_base, base_headers, code,
-        sentinel_data={"sentinel_token": sentinel_token, "sentinel_so_token": sentinel_so_token})
+        sentinel_data={
+            "sentinel_token": fresh_token or sentinel_token,
+            "sentinel_so_token": fresh_so or sentinel_so_token,
+        })
     if not otp_ok:
         return {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}
     mfa_result = _complete_existing_login_totp(
@@ -687,8 +708,8 @@ def _login_existing_account_with_email_otp(
         base_headers,
         otp_data,
         did=did,
-        sentinel_token=sentinel_token,
-        sentinel_so_token=sentinel_so_token,
+        sentinel_token=fresh_token or sentinel_token,
+        sentinel_so_token=fresh_so or sentinel_so_token,
         totp_secret=totp_secret,
     )
     if not mfa_result.get("ok"):

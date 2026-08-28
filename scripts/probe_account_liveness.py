@@ -24,7 +24,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from sms_tool.account_liveness import CODEX_USAGE_URL, probe_account_liveness
+from sms_tool.account_liveness import (
+    CODEX_USAGE_URL,
+    probe_account_liveness,
+    browser_fetch_for_account,
+)
 from sms_tool.storage import get_account_record
 
 
@@ -86,8 +90,10 @@ def load_account(email: str, sessions_dir: str) -> tuple[dict[str, Any], float, 
     return account, created_at, None
 
 
-def probe_account(account: dict[str, Any], proxy: str, timeout: int) -> dict[str, Any]:
-    return probe_account_liveness(account, proxy=proxy or None, timeout=timeout)
+def probe_account(account: dict[str, Any], proxy: str, timeout: int, browser_fetch=None) -> dict[str, Any]:
+    return probe_account_liveness(
+        account, proxy=proxy or None, timeout=timeout, browser_fetch=browser_fetch
+    )
 
 
 def classify_probe(result: dict[str, Any]) -> str:
@@ -100,6 +106,9 @@ def classify_probe(result: dict[str, Any]) -> str:
 
     if bool(result.get("ok")) and 200 <= status_code < 300:
         return "alive"
+    mode = str(result.get("mode") or "")
+    if mode == "browser" and not bool(result.get("ok")) and not status_code:
+        return "browser_error"
     if status == "account_deactivated" or "account_deactivated" in error or "deactivat" in error:
         return "deactivated"
     if status_code == 401 or status == "token_invalid":
@@ -120,6 +129,10 @@ def main() -> int:
     parser.add_argument("--proxy", default=None, help="Override proxy; defaults to config registration/default proxy")
     parser.add_argument("--workers", type=int, default=10)
     parser.add_argument("--timeout", type=int, default=20)
+    parser.add_argument("--browser", action="store_true",
+                        help="Route quota probes through a headless browser (camoufox/playwright) "
+                             "via browser_fetch_for_account, carrying the account's real fingerprint "
+                             "and cookies to bypass Cloudflare TLS-stage resets on protocol-only probes.")
     parser.add_argument("--json-out", default="", help="Write per-account JSON results")
     args = parser.parse_args()
 
@@ -127,6 +140,11 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     proxy = args.proxy if args.proxy is not None else load_config_proxy()
+    if args.browser:
+        safe_workers = max(1, min(args.workers, 2))
+        if safe_workers != args.workers:
+            print(f"[browser] capping workers {args.workers} -> {safe_workers} to limit concurrent browsers")
+        args.workers = safe_workers
     emails = [line.strip() for line in Path(args.email_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     if not emails:
         print("Account list is empty")
@@ -143,7 +161,25 @@ def main() -> int:
         age = round((now - created_at) / 60, 1) if created_at else None
         if preclassified:
             return {"email": email, "category": preclassified, "status": None, "age_min": age}
-        probe = probe_account(account, proxy, args.timeout)
+        if args.browser:
+            # Let the browser manager pick the health_browser lane when no
+            # explicit proxy is forced, so the probe carries the account's real
+            # fingerprint + cookies (bypasses Cloudflare TLS-stage resets).
+            explicit_proxy = proxy if args.proxy is not None else None
+            try:
+                with browser_fetch_for_account(account, proxy=explicit_proxy, timeout=args.timeout) as browser_fetch:
+                    probe = probe_account(account, proxy, args.timeout, browser_fetch=browser_fetch)
+            except Exception as exc:
+                probe = {
+                    "ok": False,
+                    "mode": "browser",
+                    "status": "unknown",
+                    "quota_status": "检测失败",
+                    "error": str(exc)[:500],
+                    "status_code": 0,
+                }
+        else:
+            probe = probe_account(account, proxy, args.timeout)
         return {
             "email": email,
             "category": classify_probe(probe),
@@ -164,13 +200,15 @@ def main() -> int:
         "forbidden": "Forbidden (403)",
         "rate_limited": "Rate limited (429)",
         "error": "Network/probe error",
+        "browser_error": "Browser launch/SSL error",
         "no_account": "No SQLite/session account",
         "no_token": "No access token",
     }
-    order = ["alive", "unauthorized", "deactivated", "forbidden", "rate_limited", "error", "no_account", "no_token"]
+    order = ["alive", "unauthorized", "deactivated", "forbidden", "rate_limited", "error", "browser_error", "no_account", "no_token"]
 
+    mode_label = "browser_fetch" if args.browser else "protocol(curl_cffi)"
     print("=" * 56)
-    print(f"Account liveness: {total}  endpoint={LIVENESS_ENDPOINT}  proxy={'configured' if proxy else 'direct'}")
+    print(f"Account liveness: {total}  endpoint={LIVENESS_ENDPOINT}  mode={mode_label}  proxy={'configured' if proxy else 'direct'}")
     print("=" * 56)
     for key in order + [category for category in counts if category not in order]:
         count = counts.get(key)

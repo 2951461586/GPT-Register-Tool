@@ -10,10 +10,15 @@ from __future__ import annotations
 import base64
 import json
 import re
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Generator
 from curl_cffi import requests as curl_requests
 
+from .account_identity import account_identity, bind_account_identity
+from .auth_headers import auth_impersonate, chatgpt_headers
+from .config import CFG
 from .phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
+from .proxy_routing import select_operation_proxy
 
 
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -29,8 +34,105 @@ def redact_proxy_url(proxy: str | None) -> str:
     return _redact_proxy_url(proxy, empty_placeholder="")
 
 
-def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, timeout: int = 30) -> dict[str, Any]:
-    """Probe a saved account without relogin or persistence side effects."""
+@contextmanager
+def browser_fetch_for_account(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 30,
+    config: Any = None,
+) -> Generator[Any, None, None]:
+    """Open a browser session and yield a ``browser_fetch`` callable.
+
+    When the account has a saved ``browser_identity`` (set during browser-driver
+    registration), this opens a browser session with the same driver and profile,
+    navigates to chatgpt.com, waits for Cloudflare to clear, and yields the
+    browser's ``fetch_json`` method so liveness/promotion probes carry the real
+    fingerprint and cookies instead of falling back to curl_cffi.
+
+    Yields ``None`` when no ``browser_identity`` is present or when the browser
+    session cannot be opened, so callers can fall back to curl_cffi.
+    """
+    identity = account_identity(account)
+    browser_identity = identity.get("browser_identity") or {}
+    driver = str(browser_identity.get("driver") or "").strip().lower()
+
+    if not driver:
+        yield None
+        return
+
+    cfg = config or CFG
+    health_proxy = select_operation_proxy(
+        account,
+        operation="health_browser",
+        explicit=proxy,
+        config=cfg,
+    )
+    chat_cfg = cfg.get("chatgpt", {}) if isinstance(cfg, dict) else {}
+    chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+    auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+    device_id = str(identity.get("device_id") or account.get("device_id") or "").strip()
+
+    session = None
+    browser = None
+    fetch_fn: Any = None
+    try:
+        from .registration_drivers.external_sessions import create_browser_session
+        from .registration_drivers.playwright import _wait_for_challenge_clear
+
+        session = create_browser_session(
+            driver,
+            config=cfg,
+            proxy=health_proxy,
+            headless=True,
+            timeout_ms=max(10_000, int(timeout) * 1000),
+            locale="en-US",
+            timezone_id="America/New_York",
+            browser_identity=dict(browser_identity) if browser_identity else None,
+        )
+        browser = session.__enter__()
+        if device_id:
+            try:
+                browser.add_device_cookie(device_id, chat_base, auth_base)
+            except Exception:
+                pass
+        page = browser.page
+        page.goto(chat_base, wait_until="domcontentloaded", timeout=max(5_000, int(timeout) * 1000))
+        _wait_for_challenge_clear(page, max_wait_seconds=min(30, int(timeout)))
+        fetch_fn = browser.fetch_json
+    except Exception:
+        if browser is not None and session is not None:
+            try:
+                session.__exit__(None, None, None)
+            except Exception:
+                pass
+        browser = None
+        session = None
+        fetch_fn = None
+
+    try:
+        yield fetch_fn
+    finally:
+        if browser is not None and session is not None:
+            try:
+                session.__exit__(None, None, None)
+            except Exception:
+                pass
+
+
+def probe_account_liveness(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 30,
+    *,
+    browser_fetch: Any = None,
+) -> dict[str, Any]:
+    """Probe a saved account without relogin or persistence side effects.
+
+    When ``browser_fetch`` is provided, the quota probe is routed through
+    the browser context's ``fetch_json`` method instead of ``curl_cffi``,
+    carrying the real browser fingerprint and cookies to bypass
+    Cloudflare-based 401 blocks on protocol-only requests.
+    """
     if not isinstance(account, dict):
         return {
             "ok": False,
@@ -49,20 +151,68 @@ def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, ti
             "error": "missing_access_token",
         }
 
-    headers = dict(CODEX_QUOTA_HEADERS)
+    had_identity_context = bool(account.get("identity_context"))
+    identity = bind_account_identity(account)
+    # Health probes deliberately do not restore registration proxy affinity.
+    resolved_proxy = select_operation_proxy(
+        account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
+        operation="liveness",
+        explicit=proxy,
+        config=CFG,
+    )
+
+    device_id = str(identity.get("device_id") or "")
+    headers = chatgpt_headers(device_id, accept="application/json")
     headers["Authorization"] = f"Bearer {access_token}"
+    headers["Content-Type"] = "application/json"
     account_id = account_chatgpt_id(account)
     if account_id:
         headers["Chatgpt-Account-Id"] = account_id
-    normalized_proxy = normalize_proxy_url(proxy)
+    normalized_proxy = normalize_proxy_url(resolved_proxy)
     proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
+
+    # When a browser fetch callable is provided, route the probe through the
+    # browser context to carry the real fingerprint and cookies.  This bypasses
+    # Cloudflare 401 blocks that affect protocol-only requests.
+    if browser_fetch is not None:
+        try:
+            result = browser_fetch(CODEX_USAGE_URL, headers=headers, timeout_ms=timeout * 1000)
+            # The browser fetch returns the HTTP status under the ``status`` key
+            # (see roxy_selenium._fetch_json_with_window_recovery), not
+            # ``status_code``. Normalize so the classifier sees the real code
+            # instead of discarding a genuine 401 as a transport failure.
+            if isinstance(result, dict) and "status_code" not in result and "status" in result:
+                result = {**result, "status_code": result.get("status")}
+            if isinstance(result, dict) and "status_code" in result:
+                return quota_result_from_payload(
+                    result,
+                    status_code=result.get("status_code"),
+                    mode="browser",
+                    account_id=account_id,
+                )
+            return quota_result_from_payload(
+                {"status_code": 0, "body": result},
+                status_code=0,
+                mode="browser",
+                account_id=account_id,
+                transport_ok=False,
+            )
+        except Exception as exc:
+            return {
+                "ok": False,
+                "mode": "browser",
+                "status": "unknown",
+                "quota_status": "检测失败",
+                "error": str(exc)[:500],
+            }
+
     try:
         response = curl_requests.get(
             CODEX_USAGE_URL,
             headers=headers,
             proxies=proxies,
             timeout=timeout,
-            impersonate="chrome110",
+            impersonate=auth_impersonate(),
         )
         try:
             body = response.json()
@@ -76,7 +226,7 @@ def probe_account_liveness(account: dict[str, Any], proxy: str | None = None, ti
         )
     except Exception as exc:
         error = str(exc)
-        for candidate in (str(proxy or "").strip(), normalized_proxy):
+        for candidate in (str(proxy or "").strip(), str(resolved_proxy or "").strip(), normalized_proxy):
             if candidate:
                 error = error.replace(candidate, redact_proxy_url(candidate))
         return {

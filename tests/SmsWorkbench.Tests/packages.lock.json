@@ -365,8 +365,12 @@
           "Serilog.Extensions.Hosting": "[10.0.0, )",
           "Serilog.Sinks.Async": "[2.1.0, )",
           "Serilog.Sinks.File": "[7.0.0, )",
+          "SmsWorkbench.Contracts": "[1.0.0, )",
           "WPF-UI": "[4.3.0, )"
         }
+      },
+      "smsworkbench.contracts": {
+        "type": "Project"
       },
       "CommunityToolkit.Mvvm": {
         "type": "CentralTransitive",

@@ -19,6 +19,76 @@ class ConfigError(ValueError):
     pass
 
 
+def validate_registration_driver_config(
+    config: Mapping[str, Any],
+    driver: Any = None,
+    *,
+    proxy: Any = None,
+) -> str:
+    """Validate credentials required by the selected browser driver.
+
+    Static ``validate_config`` checks types and URL shapes, but cannot require
+    credentials for every optional driver.  This focused preflight is called at
+    the registration boundary so a missing cloud/API setting is reported before
+    a disposable mailbox is claimed or a browser session is created.
+    """
+    from .registration_drivers.base import normalize_registration_driver
+
+    selected = normalize_registration_driver(driver, config)
+    if selected == "protocol":
+        return selected
+
+    registration = config.get("registration")
+    registration = registration if isinstance(registration, Mapping) else {}
+    drivers = registration.get("drivers")
+    drivers = drivers if isinstance(drivers, Mapping) else {}
+    selected_config = drivers.get(selected)
+    selected_config = selected_config if isinstance(selected_config, Mapping) else {}
+    # Use the same environment-overlay logic as the runtime session factory so
+    # preflight does not reject a driver whose credentials live in deployment
+    # environment variables.
+    try:
+        from .registration_drivers.external_sessions import _driver_config
+
+        selected_config = _driver_config(config, selected)
+    except Exception:
+        selected_config = dict(selected_config)
+
+    # Cloud browser secrets may be injected by deployment environments.  Keep
+    # environment precedence at the validation boundary without mutating the
+    # persisted JSON configuration.
+    requirements = {
+        "roxy": (("workspace_id", "roxy_workspace_id_missing"),),
+        "browser_use": (("api_key", "browser_use_api_key_missing"),),
+        "skyvern": (("api_key", "skyvern_api_key_missing"),),
+    }
+    for key, error_code in requirements.get(selected, ()):
+        configured = selected_config.get(key)
+        if not str(configured or "").strip():
+            raise ConfigError(error_code)
+
+    # Browser Use and Skyvern do not accept an arbitrary proxy URL from this
+    # process.  When the caller selected a registration proxy, require an
+    # explicit provider-native proxy setting instead of silently validating a
+    # local route that the remote browser will never consume.
+    if str(proxy or "").strip() and selected == "browser_use":
+        proxy_country = str(selected_config.get("proxy_country_code") or "").strip()
+        if not bool(selected_config.get("use_proxy", True)) or not proxy_country:
+            raise ConfigError(
+                "browser_use_registration_proxy_not_consumed: configure "
+                "registration.drivers.browser_use.proxy_country_code with use_proxy=true "
+                "or clear the registration proxy"
+            )
+    if str(proxy or "").strip() and selected == "skyvern":
+        proxy_location = str(selected_config.get("proxy_location") or "").strip()
+        if not proxy_location or proxy_location.upper() == "NONE":
+            raise ConfigError(
+                "skyvern_registration_proxy_not_consumed: configure "
+                "registration.drivers.skyvern.proxy_location or clear the registration proxy"
+            )
+    return selected
+
+
 def _freeze(value: Any) -> Any:
     if isinstance(value, dict):
         return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
@@ -194,15 +264,94 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         pool = proxy.get("pool", [])
         if pool is not None and not isinstance(pool, (list, tuple)):
             errors.append("proxy.pool must be an array")
+        for key in (
+            "browser_registration_pool",
+            "browser_pool",
+            "protocol_registration_pool",
+            "protocol_pool",
+        ):
+            if key in proxy and not isinstance(proxy.get(key), (str, list, tuple)):
+                errors.append(f"proxy.{key} must be a proxy list")
+        if "health" in proxy and not isinstance(proxy.get("health"), (str, list, tuple)):
+            errors.append("proxy.health must be a proxy list")
+
+    account_health = config.get("account_health", {})
+    if account_health is not None and not isinstance(account_health, Mapping):
+        errors.append("account_health must be an object")
+    if isinstance(account_health, Mapping):
+        if "proxy_pool" in account_health and not isinstance(
+            account_health.get("proxy_pool"), (str, list, tuple)
+        ):
+            errors.append("account_health.proxy_pool must be a proxy list")
+        health_proxies = account_health.get("proxies", {})
+        if health_proxies is not None and not isinstance(health_proxies, Mapping):
+            errors.append("account_health.proxies must be an object")
+        elif isinstance(health_proxies, Mapping):
+            supported_health_lanes = {
+                "liveness", "liveness_pool", "quota_pool",
+                "promotion", "promotion_pool",
+                "browser", "browser_pool", "browser_verification_pool",
+            }
+            unknown_health_lanes = sorted(set(health_proxies) - supported_health_lanes)
+            if unknown_health_lanes:
+                errors.append(
+                    "unsupported account_health proxy lane: "
+                    + ", ".join(unknown_health_lanes)
+                )
+            for key, value in health_proxies.items():
+                if not isinstance(value, (str, list, tuple)):
+                    errors.append(f"account_health.proxies.{key} must be a proxy list")
 
     registration = config.get("registration", {})
     if registration is not None and not isinstance(registration, Mapping):
         errors.append("registration must be an object")
     if isinstance(registration, Mapping):
+        driver = str(registration.get("driver") or "protocol").strip().lower().replace("-", "_")
+        if driver not in {
+            "protocol", "api", "http", "playwright", "pw",
+            "browser", "browser_registration", "fingerprint", "fingerprint_browser",
+            "roxy", "roxybrowser", "roxy_browser", "cloak", "cloakbrowser", "cloak_browser",
+            "browser_use", "browseruse", "browser_use_cloud", "bu", "skyvern", "sv",
+            "camoufox", "camou", "fox", "cf",
+        }:
+            errors.append("registration.driver is unsupported")
         _validate_positive_numbers(registration, (
             "retry_attempts", "retry_delay_seconds", "at_stability_probe_count",
-            "at_stability_probe_delay_seconds", "at_probe_timeout_seconds",
+            "at_stability_probe_delay_seconds", "at_probe_timeout_seconds", "browser_timeout_seconds",
         ), "registration", errors)
+        if "browser_headless" in registration and not isinstance(registration.get("browser_headless"), bool):
+            errors.append("registration.browser_headless must be a boolean")
+        for key in ("browser_locale", "browser_timezone"):
+            if key in registration and not str(registration.get(key) or "").strip():
+                errors.append(f"registration.{key} must not be blank")
+        drivers = registration.get("drivers", {})
+        if drivers is not None and not isinstance(drivers, Mapping):
+            errors.append("registration.drivers must be an object")
+        elif isinstance(drivers, Mapping):
+            supported_drivers = {"roxy", "cloak", "browser_use", "skyvern", "playwright", "camoufox"}
+            unknown_drivers = sorted(set(drivers) - supported_drivers)
+            if unknown_drivers:
+                errors.append(f"unsupported registration driver config: {', '.join(unknown_drivers)}")
+            for name, raw in drivers.items():
+                if not isinstance(raw, Mapping):
+                    errors.append(f"registration.drivers.{name} must be an object")
+                    continue
+                for key in ("api_base", "cdp_base", "start_url"):
+                    value = str(raw.get(key) or "").strip()
+                    if value and urlsplit(value).scheme not in {"http", "https", "ws", "wss"}:
+                        errors.append(f"registration.drivers.{name}.{key} must be a URL")
+                _validate_positive_numbers(
+                    raw,
+                    ("session_timeout_minutes",),
+                    f"registration.drivers.{name}",
+                    errors,
+                )
+                for key in (
+                    "use_proxy", "humanize", "geoip", "keep_browser_open",
+                    "delete_profile_after_run", "generate_browser_profile", "ad_blocker",
+                ):
+                    if key in raw and not isinstance(raw.get(key), bool):
+                        errors.append(f"registration.drivers.{name}.{key} must be a boolean")
         stage_timeouts = registration.get("stage_timeouts", {})
         if stage_timeouts is not None and not isinstance(stage_timeouts, Mapping):
             errors.append("registration.stage_timeouts must be an object")

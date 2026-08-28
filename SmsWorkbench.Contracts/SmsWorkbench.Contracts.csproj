@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>annotations</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SmsWorkbench.Contracts</AssemblyName>
+    <RootNamespace>SmsWorkbench</RootNamespace>
+  </PropertyGroup>
+</Project>

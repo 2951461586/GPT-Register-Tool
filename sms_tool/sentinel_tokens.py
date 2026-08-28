@@ -8,7 +8,7 @@ import uuid
 from curl_cffi import requests as curl_requests
 
 from .codex_sentinel import import_cookie_header
-from .auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
+from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
 from .paths import runtime_file
 from .phone_proxy import normalize_proxy_url, redact_proxy_text as _phone_redact_proxy_text, redact_proxy_url as _phone_redact_proxy_url
@@ -169,12 +169,9 @@ def _solve_pow(seed, difficulty_hex):
 
 
 def _sentinel_frame_version():
-    try:
-        from .sentinel_quickjs import sentinel_version
+    from .sentinel.bundle import sentinel_version
 
-        return sentinel_version()
-    except Exception:
-        return "20260219f9f6"
+    return sentinel_version()
 
 
 def _build_sentinel_pow_token(flow_data, did, flow):
@@ -400,114 +397,25 @@ def sentinel_metrics_snapshot(reset: bool = False) -> dict:
 
 
 def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
-    """Extract Sentinel tokens by running the real Sentinel SDK through Node.
-
-    This is intentionally an optional enhancement: if Node/SDK execution fails,
-    callers in ``auto`` mode can still fall back to the existing HTTP PoW or
-    browser extraction paths.
-    """
+    """Compatibility facade for the vendored Node SDK runner."""
     if not _quickjs_enabled():
         return None
     did = str(device_id or uuid.uuid4())
-    session = curl_requests.Session()
-    if proxy:
-        session.proxies = {"http": proxy, "https": proxy}
     try:
-        from .sentinel_quickjs import get_sentinel_token_via_quickjs
-    except Exception as exc:
-        print(f"  [!] Sentinel QuickJS unavailable: {_redact_proxy_text(exc, proxy)}")
-        return None
+        from .sentinel import issue_sentinel_bundle
 
-    tokens = {}
-    fingerprint = sentinel_fingerprint()
-    for flow in ("username_password_create", "authorize_continue", "oauth_create_account"):
-        token = get_sentinel_token_via_quickjs(
-            session,
+        result = issue_sentinel_bundle(
             device_id=did,
-            flow=flow,
-            log=lambda message: print(f"  {_redact_proxy_text(message, proxy)}"),
-            user_agent=str(fingerprint.get("user_agent") or ""),
-            screen=str(fingerprint.get("screen") or ""),
-            lang=str(fingerprint.get("lang") or ""),
-            lang_full=str(fingerprint.get("lang_full") or ""),
-            browser_type=str(fingerprint.get("browser_type") or ""),
-            navigator_platform=str(fingerprint.get("navigator_platform") or ""),
-            navigator_vendor=str(fingerprint.get("navigator_vendor") or ""),
-            hardware_concurrency=int(fingerprint.get("hardware_concurrency") or 8),
-            device_memory=fingerprint.get("device_memory"),
-            max_touch_points=int(fingerprint.get("max_touch_points") or 0),
-            device_pixel_ratio=float(fingerprint.get("device_pixel_ratio") or 1.0),
-            timezone=str(fingerprint.get("timezone") or "UTC"),
-            js_heap_size_limit=int(fingerprint.get("js_heap_size_limit") or 4395630592),
-            time_origin=int(fingerprint.get("time_origin") or 1710000000000),
-            performance_now=float(fingerprint.get("performance_now") or 12345.67),
-            sec_ch_ua_full_version_list=str(fingerprint.get("sec_ch_ua_full_version_list") or ""),
-            sec_ch_ua_arch=str(fingerprint.get("sec_ch_ua_arch") or ""),
-            sec_ch_ua_bitness=str(fingerprint.get("sec_ch_ua_bitness") or ""),
-            sec_ch_ua_model=str(fingerprint.get("sec_ch_ua_model") or ""),
-            sec_ch_ua_platform_version=str(fingerprint.get("sec_ch_ua_platform_version") or ""),
+            proxy=proxy,
         )
-        if not token:
-            return None
-        try:
-            token_id = str(json.loads(token).get("id") or "").strip()
-        except Exception:
-            return None
-        if token_id != did:
-            print("  [!] Sentinel token device id mismatch")
-            return None
-        tokens[flow] = token
-
-    try:
-        oauth_payload = json.loads(tokens.get("oauth_create_account") or "{}")
-    except Exception:
-        oauth_payload = {}
-    sentinel_so_obj = {
-        "so": oauth_payload.get("so") or oauth_payload.get("c") or "",
-        "c": oauth_payload.get("c") or "",
-        "id": did,
-        "flow": "oauth_create_account",
-    }
-    try:
-        authorize_payload = json.loads(tokens.get("authorize_continue") or "{}")
-    except Exception:
-        authorize_payload = {}
-    authorize_so_obj = {
-        "so": authorize_payload.get("so") or authorize_payload.get("c") or "",
-        "c": authorize_payload.get("c") or "",
-        "id": did,
-        "flow": "authorize_continue",
-    }
-
-    try:
-        auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
-        session.cookies.set("oai-did", did, domain=".openai.com", path="/")
-        session.get(
-            f"{auth_base}/create-account",
-            headers={
-                "User-Agent": auth_user_agent(),
-                "Accept": "text/html,application/xhtml+xml",
-            },
-            timeout=30,
-            impersonate=auth_impersonate(),
-        )
-        cookie_str = _cookie_jar_header(session.cookies)
-        cookie_str = "; ".join(item for item in (f"oai-did={did}", cookie_str) if item)
     except Exception as exc:
-        print(f"  [!] Auth prime request failed after QuickJS sentinel: {_redact_proxy_text(exc, proxy)}")
-        cookie_str = f"oai-did={did}"
-
-    result = {
-        "sentinel_token": tokens["username_password_create"],
-        "sentinel_authorize_continue_token": tokens["authorize_continue"],
-        "sentinel_authorize_continue_so_token": json.dumps(authorize_so_obj, separators=(",", ":"), ensure_ascii=False),
-        "sentinel_oauth_token": tokens["oauth_create_account"],
-        "sentinel_so_token": json.dumps(sentinel_so_obj, separators=(",", ":"), ensure_ascii=False),
-        "cookie_str": cookie_str,
-        "oai_did": did,
-        "sentinel_source": "quickjs",
-    }
-    assert_sentinel_device_id(result, did)
+        print(f"  [!] Sentinel Node runner unavailable: {_redact_proxy_text(exc, proxy)}")
+        return None
+    try:
+        assert_sentinel_device_id(result, did)
+    except ValueError as exc:
+        print(f"  [!] Sentinel Node runner identity mismatch: {exc}")
+        return None
     if persist:
         _save_sentinel_cache(result)
     return result

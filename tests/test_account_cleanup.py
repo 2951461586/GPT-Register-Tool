@@ -6,7 +6,7 @@ def test_cleanup_keeps_unknown_transport_failure():
     assert account_cleanup_reason(account) == ""
 
 
-def test_cleanup_selects_missing_and_terminal_tokens():
+def test_cleanup_selects_only_explicit_terminal_states():
     accounts = [
         {"email": "missing@example.com", "access_token": ""},
         {"email": "deactivated@example.com", "access_token": "at", "status": "account_deactivated"},
@@ -15,7 +15,5 @@ def test_cleanup_selects_missing_and_terminal_tokens():
     ]
     selected = select_removable_accounts(accounts)
     assert [(row["email"], row["cleanup_reason"]) for row in selected] == [
-        ("missing@example.com", "missing_access_token"),
         ("deactivated@example.com", "account_deactivated"),
-        ("invalid@example.com", "token_invalid"),
     ]

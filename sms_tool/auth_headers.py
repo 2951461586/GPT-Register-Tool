@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+import re
 import threading
 import time
 import uuid
@@ -11,23 +12,59 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlparse
 
 
-AUTH_IMPERSONATE = "chrome146"
-DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-DEFAULT_SEC_CH_UA = '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"'
+AUTH_IMPERSONATE = "firefox144"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
+DEFAULT_SEC_CH_UA = ""
+
+# Firefox (first) is the primary impersonation. At ChatGPT's edge, Cloudflare
+# challenges Chrome TLS/HTTP2 with HTTP 403 while Firefox passes, so the protocol
+# path defaults to firefox144. Chrome is retained as a fallback pool entry for
+# A/B comparison and recovery. Firefox does not emit Sec-CH-UA client hints, so
+# its sec_ch_ua is intentionally blank (see family-aware header building below).
 AUTH_FINGERPRINT_PROFILES = {
-    f"chrome{version}": {
-        "name": f"chrome{version}",
-        "impersonate": f"chrome{version}",
+    "firefox144": {
+        "name": "firefox144",
+        "impersonate": "firefox144",
         "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version}.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
+            "rv:144.0) Gecko/20100101 Firefox/144.0"
         ),
-        "sec_ch_ua": f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"',
+        "sec_ch_ua": "",
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
-    }
-    for version in (124, 131, 136, 142, 145, 146)
+    },
+    "chrome146": {
+        "name": "chrome146",
+        "impersonate": "chrome146",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
 }
+
+
+def _browser_family(impersonate: str) -> str:
+    """Classify an impersonate token as 'firefox' / 'chrome' / 'safari' / 'edge'."""
+    name = str(impersonate or "").lower()
+    if name.startswith("firefox"):
+        return "firefox"
+    if name.startswith("chrome"):
+        return "chrome"
+    if name.startswith("safari"):
+        return "safari"
+    if name.startswith("edge"):
+        return "edge"
+    return "chrome"
+
+
+def _browser_version(impersonate: str) -> str:
+    """Extract the numeric major version from an impersonate token (e.g. '144')."""
+    match = re.match(r"^[a-z]+(\d+)", str(impersonate or "").lower())
+    return match.group(1) if match else ""
 _AUTH_FINGERPRINT_LOCAL = threading.local()
 
 _GEO_PROFILES = {
@@ -175,6 +212,18 @@ def select_auth_fingerprint(rotate=False):
     return dict(AUTH_FINGERPRINT_PROFILES[name])
 
 
+def set_auth_fingerprint(name: str) -> None:
+    """Explicitly set the current thread's auth fingerprint profile by name.
+
+    When ``name`` is not a known profile, the call is a no-op so callers
+    can pass pool-generated identifiers without a hard dependency on the
+    canonical profile table.
+    """
+    profile_name = str(name or "").strip().lower()
+    if profile_name in AUTH_FINGERPRINT_PROFILES:
+        _AUTH_FINGERPRINT_LOCAL.profile_name = profile_name
+
+
 def current_auth_fingerprint():
     name = getattr(_AUTH_FINGERPRINT_LOCAL, "profile_name", "")
     try:
@@ -267,18 +316,22 @@ def curl_cffi_capabilities() -> dict[str, object]:
 def sentinel_fingerprint() -> dict[str, object]:
     """Return the browser environment shared by auth headers and Sentinel SDK."""
     fingerprint = current_auth_fingerprint()
-    version = str(fingerprint["impersonate"]).removeprefix("chrome")
+    impersonate = str(fingerprint.get("impersonate") or "")
+    family = _browser_family(impersonate)
+    version = _browser_version(impersonate) or "144"
     geo = getattr(_AUTH_FINGERPRINT_LOCAL, "geo_profile", None) or set_fingerprint_geo("")
     session_id = str(getattr(_AUTH_FINGERPRINT_LOCAL, "session_id", "") or uuid.uuid4())
     _AUTH_FINGERPRINT_LOCAL.session_id = session_id
     device = _device_profile(_device_seed() or session_id)
+    is_chrome = family == "chrome"
     return {
         **fingerprint,
         "screen": device["screen"],
         "lang": geo["lang"],
         "lang_full": geo["lang_full"],
         "navigator_platform": "Win32",
-        "navigator_vendor": "Google Inc.",
+        # Firefox's navigator.vendor is empty; Chrome reports "Google Inc."
+        "navigator_vendor": "Google Inc." if is_chrome else "",
         "hardware_concurrency": device["hardware_concurrency"],
         "device_memory": device["device_memory"],
         "max_touch_points": 0,
@@ -288,12 +341,14 @@ def sentinel_fingerprint() -> dict[str, object]:
         "js_heap_size_limit": device["js_heap_size_limit"],
         "time_origin": device["time_origin"],
         "performance_now": device["performance_now"],
+        # Sec-CH-UA-* client hints are Chromium-only; Firefox emits none of them.
         "sec_ch_ua_full_version_list": (
             f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"'
+            if is_chrome else ""
         ),
-        "sec_ch_ua_arch": "x86",
-        "sec_ch_ua_bitness": "64",
-        "sec_ch_ua_model": "",
+        "sec_ch_ua_arch": "x86" if is_chrome else "",
+        "sec_ch_ua_bitness": "64" if is_chrome else "",
+        "sec_ch_ua_model": "" if is_chrome else "",
         "sec_ch_ua_platform_version": "10.0.0",
     }
 
@@ -352,20 +407,26 @@ def openai_auth_headers(
     origin = str(origin or "").strip() or _extra_header_value(extra, "origin")
     fingerprint = current_auth_fingerprint()
     environment = sentinel_fingerprint()
+    browser_family = _browser_family(str(fingerprint.get("impersonate") or ""))
     headers = {
         "Accept": accept,
         "Accept-Language": str(environment["lang_full"]),
         "Accept-Encoding": "gzip, deflate, br, zstd",
         "User-Agent": fingerprint["user_agent"],
-        "sec-ch-ua": fingerprint["sec_ch_ua"],
-        "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
-        "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
-        "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
-        "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
-        "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
-        "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
-        "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
     }
+    # Sec-CH-UA-* client hints are Chromium-only. Firefox emits none, so only
+    # attach them when the active fingerprint is Chrome-family.
+    if browser_family == "chrome":
+        headers.update({
+            "sec-ch-ua": fingerprint["sec_ch_ua"],
+            "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
+            "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
+            "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
+            "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
+            "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
+            "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
+            "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
+        })
     if referer:
         headers["Referer"] = str(referer)
     resolved_origin = str(origin or "").strip() or origin_from_referer(referer)

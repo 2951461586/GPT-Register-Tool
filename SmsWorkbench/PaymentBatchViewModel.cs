@@ -16,6 +16,14 @@ namespace SmsWorkbench
         private readonly IPaymentCountryCatalog? _countryCatalog;
         private readonly PaymentBatchAccount[] _accounts;
         private readonly HashSet<string> _terminalProgressAccounts = new(StringComparer.OrdinalIgnoreCase);
+        // Region-bucketed view of the full mixed proxy pool.  Keys are upper-case
+        // ISO codes; the empty string key holds entries whose region cannot be
+        // inferred (always shown so they are never lost).  _checkoutRegionOrder /
+        // _approveRegionOrder preserve first-seen region order for stable display.
+        private readonly Dictionary<string, List<string>> _checkoutRegionPools = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _checkoutRegionOrder = new();
+        private readonly Dictionary<string, List<string>> _approveRegionPools = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _approveRegionOrder = new();
         private string _automaticBatchId;
         private bool _acceptProgress;
 
@@ -30,6 +38,9 @@ namespace SmsWorkbench
         [ObservableProperty] private string approveProxyPool = "";
         [ObservableProperty] private string checkoutProxyCountry = "";
         [ObservableProperty] private string approveProxyCountry = "";
+        // Region composition of the current mixed source pool (e.g. "US×30 · JP×30 · GB×30 · 未知×0").
+        [ObservableProperty] private string checkoutRegionSummary = "";
+        [ObservableProperty] private string approveRegionSummary = "";
         [ObservableProperty] private bool jitRefresh = true;
         [ObservableProperty] private bool probeOnly;
         [ObservableProperty] private bool requireZero = true;
@@ -175,7 +186,9 @@ namespace SmsWorkbench
                     ApproveProxyPool,
                     CheckoutProxyCountry,
                     ApproveProxyCountry,
-                    ApproveProxyCountry));
+                    ApproveProxyCountry,
+                    FullPool(_checkoutRegionPools, _checkoutRegionOrder),
+                    FullPool(_approveRegionPools, _approveRegionOrder)));
             Status = result.Ok
                 ? $"{PaymentMethods.DisplayName(method)} Checkout / Approve 代理配置已保存。"
                 : result.Error;
@@ -493,8 +506,16 @@ namespace SmsWorkbench
         {
             if (_paymentBatchService == null || SelectedMethod == null) return;
             PaymentBatchProxyConfiguration configured = _paymentBatchService.LoadProxyConfiguration(SelectedMethod.Id);
-            CheckoutProxyPool = configured.CheckoutProxyPool ?? "";
-            ApproveProxyPool = configured.ApproveProxyPool ?? "";
+            string checkoutSource = !string.IsNullOrWhiteSpace(configured.CheckoutProxySourcePool)
+                ? configured.CheckoutProxySourcePool
+                : configured.CheckoutProxyPool ?? "";
+            string approveSource = !string.IsNullOrWhiteSpace(configured.ApproveProxySourcePool)
+                ? configured.ApproveProxySourcePool
+                : configured.ApproveProxyPool ?? "";
+            // Buckets must be rebuilt before the country/pool setters fire their
+            // partial handlers so the region filter has source data to read from.
+            InitializeBuckets(checkoutSource, _checkoutRegionPools, _checkoutRegionOrder);
+            InitializeBuckets(approveSource, _approveRegionPools, _approveRegionOrder);
             CheckoutProxyCountry = configured.CheckoutCountry ?? "";
             // The configured approve country wins only when the catalog offers
             // it for the selected method; otherwise fall back to the catalog's
@@ -503,6 +524,177 @@ namespace SmsWorkbench
             ApproveProxyCountry = ApproveCountryOptions.Any(option => option.Code == configuredApproveCountry)
                 ? configuredApproveCountry
                 : DefaultApproveCountry;
+            RefreshRegionSummaries();
+        }
+
+        // ── Region-aware proxy pool handling ──────────────────────────────────
+        //
+        // The payment lane's proxy pools carry every zone mixed together (US+JP+GB
+        // for one IPWO account).  The user picks a country in the checkout /
+        // approve dropdown and the pool textbox should show only that region's
+        // entries (matched on the IPWO `custom_zone_<CC>` credential token, with
+        // Cliproxy `region-<CC>` as a secondary hint).  The full mixed pool is
+        // preserved as the source so switching back never drops a zone, and the
+        // backend still rotates each chosen entry to the selected country at
+        // runtime — the 测试出口 probe validates the resulting egress.
+
+        private static string InferProxyRegion(string proxy)
+        {
+            string text = (proxy ?? "").Trim();
+            if (text.Length == 0) return "";
+            string username = "";
+            int at = text.IndexOf('@');
+            if (at >= 0)
+            {
+                // URL form: scheme://user:pass@host:port
+                string auth = text.Substring(0, at);
+                int schemeSep = auth.IndexOf("://", StringComparison.Ordinal);
+                if (schemeSep >= 0) auth = auth.Substring(schemeSep + 3);
+                int colon = auth.IndexOf(':');
+                username = colon >= 0 ? auth.Substring(0, colon) : auth;
+            }
+            else
+            {
+                // 4-segment form: host:port:user:pass (no scheme, no @)
+                string[] parts = text.Split(':');
+                if (parts.Length >= 4) username = parts[2];
+            }
+            try { username = Uri.UnescapeDataString(username); } catch { }
+            Match match = Regex.Match(username, @"(?:^|[_-])custom[_-]zone[_-]([A-Za-z]{2})(?=$|[_-])", RegexOptions.IgnoreCase);
+            if (match.Success) return match.Groups[1].Value.ToUpperInvariant();
+            Match cliproxy = Regex.Match(username, @"region-([A-Za-z]{2})(?=$|[-_:])", RegexOptions.IgnoreCase);
+            if (cliproxy.Success) return cliproxy.Groups[1].Value.ToUpperInvariant();
+            return "";
+        }
+
+        private static string[] SplitPoolText(string value)
+            => (value ?? "")
+                .Split(new[] { "\r\n", "\n", ",", ";" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        private static void InitializeBuckets(
+            string text, Dictionary<string, List<string>> buckets, List<string> order)
+        {
+            buckets.Clear();
+            order.Clear();
+            foreach (string line in SplitPoolText(text))
+            {
+                string region = InferProxyRegion(line);
+                if (!buckets.TryGetValue(region, out List<string>? list))
+                {
+                    list = new List<string>();
+                    buckets[region] = list;
+                    order.Add(region);
+                }
+                list.Add(line);
+            }
+        }
+
+        private static void SyncDisplay(
+            string display, string country, Dictionary<string, List<string>> buckets, List<string> order)
+        {
+            if (string.IsNullOrWhiteSpace(country))
+            {
+                // Automatic / 自动: the display holds every region, so re-derive
+                // all buckets from it.
+                InitializeBuckets(display, buckets, order);
+                return;
+            }
+            // A concrete country only exposes that region plus the unknown bucket,
+            // so only those two buckets are rewritten — every other zone's
+            // entries stay intact in their own bucket.
+            if (!buckets.TryGetValue(country, out List<string>? countryList) || countryList == null)
+            {
+                countryList = new List<string>();
+                buckets[country] = countryList;
+                if (order.FindIndex(item => string.Equals(item, country, StringComparison.OrdinalIgnoreCase)) < 0)
+                    order.Add(country);
+            }
+            else
+            {
+                countryList.Clear();
+            }
+            if (!buckets.TryGetValue("", out List<string>? unknownList) || unknownList == null)
+            {
+                unknownList = new List<string>();
+                buckets[""] = unknownList;
+                if (order.FindIndex(item => item.Length == 0) < 0)
+                    order.Add("");
+            }
+            else
+            {
+                unknownList.Clear();
+            }
+            foreach (string line in SplitPoolText(display))
+            {
+                string region = InferProxyRegion(line);
+                if (string.Equals(region, country, StringComparison.OrdinalIgnoreCase))
+                    countryList.Add(line);
+                else
+                    unknownList.Add(line);
+            }
+        }
+
+        private static string ComputeDisplay(
+            string country, Dictionary<string, List<string>> buckets, List<string> order)
+        {
+            var lines = new List<string>();
+            if (string.IsNullOrWhiteSpace(country))
+            {
+                foreach (string region in order)
+                    lines.AddRange(buckets[region]);
+            }
+            else
+            {
+                if (buckets.TryGetValue(country, out List<string>? countryList))
+                    lines.AddRange(countryList);
+                if (buckets.TryGetValue("", out List<string>? unknownList))
+                    lines.AddRange(unknownList);
+            }
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static string FullPool(Dictionary<string, List<string>> buckets, List<string> order)
+            => string.Join(Environment.NewLine, order.SelectMany(region => buckets[region]));
+
+        private static string FormatRegionSummary(Dictionary<string, List<string>> buckets, List<string> order)
+        {
+            if (buckets.Count == 0) return "（空）";
+            return string.Join(" · ", order.Select(region =>
+                (region.Length == 0 ? "未知" : region) + "×" + buckets[region].Count));
+        }
+
+        private void RefreshRegionSummaries()
+        {
+            CheckoutRegionSummary = FormatRegionSummary(_checkoutRegionPools, _checkoutRegionOrder);
+            ApproveRegionSummary = FormatRegionSummary(_approveRegionPools, _approveRegionOrder);
+        }
+
+        partial void OnCheckoutProxyPoolChanged(string value)
+        {
+            // Mirror manual edits into the region buckets so the auto-switch
+            // never resurrects stale entries and edits survive country changes.
+            SyncDisplay(value ?? "", CheckoutProxyCountry, _checkoutRegionPools, _checkoutRegionOrder);
+            RefreshRegionSummaries();
+        }
+
+        partial void OnCheckoutProxyCountryChanged(string value)
+        {
+            // Buckets already reflect the previous display (synced on every
+            // edit), so only the visible window changes; other zones are kept.
+            CheckoutProxyPool = ComputeDisplay(value ?? "", _checkoutRegionPools, _checkoutRegionOrder);
+            RefreshRegionSummaries();
+        }
+
+        partial void OnApproveProxyPoolChanged(string value)
+        {
+            SyncDisplay(value ?? "", ApproveProxyCountry, _approveRegionPools, _approveRegionOrder);
+            RefreshRegionSummaries();
+        }
+
+        partial void OnApproveProxyCountryChanged(string value)
+        {
+            ApproveProxyPool = ComputeDisplay(value ?? "", _approveRegionPools, _approveRegionOrder);
+            RefreshRegionSummaries();
         }
 
         private void PopulateResults(JsonElement report)

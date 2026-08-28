@@ -14,7 +14,16 @@ namespace SmsWorkbench
         string ApproveProxyPool = "",
         string CheckoutCountry = "",
         string ApproveCountry = "",
-        string UpdateCountry = "");
+        string UpdateCountry = "",
+        /// <summary>
+        /// Full mixed-region source pool (every zone's entries).  Persisted to
+        /// the named &lt;method&gt;_checkout / &lt;method&gt;_approve pool so the
+        /// region filter never loses the zones the user is not currently viewing.
+        /// Empty falls back to <see cref="CheckoutProxyPool"/> for back-compat.
+        /// </summary>
+        string CheckoutProxySourcePool = "",
+        /// <summary>Same as <see cref="CheckoutProxySourcePool"/> for Approve.</summary>
+        string ApproveProxySourcePool = "");
 
     public sealed record PaymentProxyCountryOption(string Code, string DisplayName);
 

@@ -6,6 +6,7 @@ from unittest.mock import patch
 from sms_tool import cli
 from sms_tool import account_promotion
 from sms_tool.account_promotion import parse_accounts_check, promotion_status_label
+from sms_tool.account_identity import create_registration_identity
 
 
 def test_parse_plus_trial_eligible():
@@ -57,6 +58,52 @@ def test_parse_free_without_promo():
 def test_labels_for_failures():
     assert promotion_status_label({"ok": False, "error": "token_invalid"}) == "AT失效"
     assert promotion_status_label({"ok": False, "error": "boom"}) == "检测失败"
+
+
+def test_promotion_uses_dedicated_health_proxy_with_account_fingerprint_and_device():
+    base_proxy = "http://user-region-US-sid-OLD1234-t-5:secret@proxy.example:443"
+    registration_proxy = "http://user-region-US-sid-NEW5678-t-5:secret@proxy.example:443"
+    health_proxy = "http://promotion.example:8000"
+    config = {
+        "proxy": {"registration": base_proxy, "pool": [base_proxy]},
+        "account_health": {"proxies": {"promotion": [health_proxy]}},
+    }
+    account = {
+        "access_token": "at",
+        "chatgpt_account_id": "acc",
+        "identity_context": create_registration_identity(
+            registration_proxy,
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+        ),
+    }
+    response = SimpleNamespace(
+        status_code=200,
+        json=lambda: {
+            "accounts": {
+                "default": {
+                    "account": {"plan_type": "free", "account_id": "acc"},
+                    "entitlement": {"has_active_subscription": False},
+                },
+            },
+        },
+    )
+
+    with patch.object(account_promotion, "CFG", config), patch.object(
+        account_promotion.curl_requests,
+        "get",
+        return_value=response,
+    ) as get:
+        result = account_promotion.check_account_promotion(
+            account,
+            proxy="http://127.0.0.1:7897",
+        )
+
+    assert result["ok"]
+    assert get.call_args.kwargs["proxies"]["https"] == health_proxy
+    assert get.call_args.kwargs["impersonate"] == "chrome146"
+    assert get.call_args.kwargs["headers"]["oai-device-id"] == "device-123"
 
 
 def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch):
@@ -141,3 +188,50 @@ def test_registration_save_invokes_optional_promotion_stage(tmp_path):
     check.assert_called_once()
     assert check.call_args.args[0] == ["new@example.com"]
     assert report["promotion"] == promotion
+
+
+def test_promotion_uses_browser_fetch_when_browser_identity_present():
+    """Browser-registered accounts route promotion through the browser context."""
+    registration_proxy = "http://proxy.example:8080"
+    config = {"proxy": {"registration": registration_proxy, "pool": [registration_proxy]}}
+    account = {
+        "access_token": "at",
+        "chatgpt_account_id": "acc",
+        "identity_context": create_registration_identity(
+            registration_proxy,
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+            account_key="browser@example.com",
+            browser_identity={"driver": "playwright", "profile_id": "browser@example.com"},
+        ),
+    }
+    browser_response = {
+        "status_code": 200,
+        "body": {
+            "accounts": {
+                "default": {
+                    "account": {"plan_type": "free", "account_id": "acc"},
+                    "entitlement": {"has_active_subscription": False},
+                },
+            },
+        },
+    }
+
+    def fake_browser_fetch(url, *, headers=None, timeout_ms=None):
+        return browser_response
+
+    with patch.object(account_promotion, "CFG", config), patch.object(
+        account_promotion.curl_requests,
+        "get",
+    ) as curl_get:
+        result = account_promotion.check_account_promotion(
+            account,
+            proxy="http://127.0.0.1:7897",
+            browser_fetch=fake_browser_fetch,
+        )
+
+    assert result["ok"]
+    assert result["promotion_status"] == "Free·无优惠"
+    # curl_cffi must NOT be called when browser_fetch is provided
+    curl_get.assert_not_called()

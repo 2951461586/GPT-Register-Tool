@@ -109,6 +109,7 @@ def build_session_file(data):
         "id_token": id_token or "",
         "refresh_token": refresh_token or "",
         "device_id": data.get("device_id") or response.get("device_id") or "",
+        "identity_context": data.get("identity_context") or {},
         "auth_session_logging_id": data.get("auth_session_logging_id") or "",
         "cookie_header": data.get("cookie_header") or response.get("cookie_header") or "",
         "auth_session": auth_session,
@@ -116,6 +117,8 @@ def build_session_file(data):
         "payment_method": payment_method,
         "paypal_status": paypal_status,
         "registration_mode": data.get("registration_mode", ""),
+        "registration_driver": data.get("registration_driver", ""),
+        "proxy_audit": data.get("proxy_audit") or {},
         "oauth_refresh_token": oauth_refresh_token or "",
         "refresh_token_status": refresh_token_status,
         "quota_status": data.get("quota_status", ""),
@@ -136,6 +139,7 @@ def build_session_file(data):
             if isinstance(data.get("twofa_enrollment"), dict)
             else ""
         ),
+        "browser_diagnostics": data.get("browser_diagnostics") or {},
         "purchase": data.get("purchase") or purchase,
         "mailbox": {
             "email": mailbox.get("email", ""),

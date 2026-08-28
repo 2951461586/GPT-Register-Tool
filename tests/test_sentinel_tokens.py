@@ -71,13 +71,18 @@ class SentinelTokenTests(unittest.TestCase):
             self.assertIsNone(sentinel_tokens._extract_sentinel_http(persist=False, device_id="did-fixed"))
 
     def test_quickjs_extract_persist_false_does_not_write_shared_cache(self):
-        seen = []
-        def token(_session, device_id, *, flow, **_kwargs):
-            seen.append(_kwargs)
-            return json.dumps({"p": "p", "t": "t", "c": "c", "id": device_id, "flow": flow})
+        expected = {
+            "sentinel_token": json.dumps({"id": "did-fixed", "flow": "username_password_create"}),
+            "sentinel_authorize_continue_token": json.dumps({"id": "did-fixed", "flow": "authorize_continue"}),
+            "sentinel_authorize_continue_so_token": json.dumps({"id": "did-fixed", "flow": "authorize_continue"}),
+            "sentinel_oauth_token": json.dumps({"id": "did-fixed", "flow": "oauth_create_account"}),
+            "sentinel_so_token": json.dumps({"id": "did-fixed", "flow": "oauth_create_account"}),
+            "cookie_str": "oai-did=did-fixed",
+            "oai_did": "did-fixed",
+            "sentinel_source": "node_sdk_runner",
+        }
 
-        with patch("sms_tool.sentinel_tokens.curl_requests.Session", _Session), \
-             patch("sms_tool.sentinel_quickjs.get_sentinel_token_via_quickjs", side_effect=token), \
+        with patch("sms_tool.sentinel.issue_sentinel_bundle", return_value=expected) as issue, \
              patch("sms_tool.sentinel_tokens._save_sentinel_cache") as save:
             result = sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed")
 
@@ -86,15 +91,15 @@ class SentinelTokenTests(unittest.TestCase):
         self.assertEqual(json.loads(result["sentinel_oauth_token"])["id"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["id"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_authorize_continue_so_token"])["flow"], "authorize_continue")
-        self.assertTrue(all(item["user_agent"].startswith("Mozilla/5.0 (Windows") for item in seen))
-        self.assertTrue(all(item["navigator_platform"] == "Win32" for item in seen))
+        issue.assert_called_once_with(device_id="did-fixed", proxy=None)
 
     def test_quickjs_extract_rejects_token_device_mismatch(self):
-        def token(_session, device_id, *, flow, **_kwargs):
-            return json.dumps({"p": "p", "t": "t", "c": "c", "id": "other", "flow": flow})
+        mismatched = {
+            "sentinel_token": json.dumps({"id": "other", "flow": "username_password_create"}),
+            "oai_did": "other",
+        }
 
-        with patch("sms_tool.sentinel_tokens.curl_requests.Session", _Session), \
-             patch("sms_tool.sentinel_quickjs.get_sentinel_token_via_quickjs", side_effect=token):
+        with patch("sms_tool.sentinel.issue_sentinel_bundle", return_value=mismatched):
             self.assertIsNone(sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed"))
 
     def test_browser_collector_keeps_authorize_tokens_on_authorize_flow(self):

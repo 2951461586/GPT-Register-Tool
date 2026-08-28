@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import cli, registration, registration_preflight, sentinel_tokens
+from sms_tool.config import ConfigError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,120 @@ def test_cli_preflights_before_claiming_mailbox_and_promotes_healthy_proxy():
     assert calls == ["http://first.example:8080", "http://second.example:8080"]
     assert args.proxy == "http://second.example:8080"
     assert args.proxy_pool.splitlines()[0] == "http://second.example:8080"
+
+
+def test_cli_rejects_missing_browser_driver_credentials_before_network_preflight():
+    args = SimpleNamespace(
+        registration_driver="roxy",
+        proxy="http://registration.example:8080",
+        proxy_explicit=False,
+        proxy_pool="",
+    )
+    config = {
+        "registration": {"driver": "roxy", "drivers": {"roxy": {}}},
+        "proxy": {"registration": "http://registration.example:8080"},
+    }
+    with patch.object(cli, "CFG", config), patch(
+        "sms_tool.registration.registration_network_preflight"
+    ) as network_preflight:
+        try:
+            cli._preflight_registration_before_mailbox(args)
+        except ConfigError as exc:
+            assert str(exc) == "roxy_workspace_id_missing"
+        else:
+            raise AssertionError("missing Roxy credentials should fail preflight")
+    network_preflight.assert_not_called()
+
+
+def test_cli_rejects_cloud_proxy_mismatch_before_network_preflight():
+    args = SimpleNamespace(
+        registration_driver="browser_use",
+        proxy="http://user:secret@registration.example:8080",
+        proxy_explicit=True,
+        proxy_pool="",
+    )
+    config = {
+        "registration": {
+            "driver": "browser_use",
+            "drivers": {"browser_use": {"api_key": "test-key"}},
+        },
+        "proxy": {"registration": "http://user:secret@registration.example:8080"},
+    }
+    with patch.object(cli, "CFG", config), patch(
+        "sms_tool.registration.registration_network_preflight"
+    ) as network_preflight:
+        try:
+            cli._preflight_registration_before_mailbox(args)
+        except ConfigError as exc:
+            assert str(exc).startswith("browser_use_registration_proxy_not_consumed")
+            assert "secret" not in str(exc)
+            assert "registration.example" not in str(exc)
+        else:
+            raise AssertionError("Browser Use must not accept a local proxy without provider proxy configuration")
+    network_preflight.assert_not_called()
+
+
+def test_cli_cloud_browser_preflight_skips_local_network_probe():
+    args = SimpleNamespace(
+        registration_driver="browser_use",
+        proxy="http://registration.example:8080",
+        proxy_explicit=True,
+        proxy_pool="",
+    )
+    config = {
+        "registration": {
+            "driver": "browser_use",
+            "drivers": {
+                "browser_use": {
+                    "api_key": "test-key",
+                    "use_proxy": True,
+                    "proxy_country_code": "US",
+                }
+            },
+        },
+        "proxy": {"registration": "http://registration.example:8080"},
+    }
+    with patch.object(cli, "CFG", config), patch(
+        "sms_tool.registration.registration_network_preflight"
+    ) as network_preflight:
+        result = cli._preflight_registration_before_mailbox(args)
+
+    assert result == {
+        "ok": True,
+        "mode": "cloud_browser",
+        "registration_driver": "browser_use",
+        "proxy": "http://registration.example:8080",
+    }
+    network_preflight.assert_not_called()
+
+
+def test_cli_skyvern_preflight_skips_local_network_probe():
+    args = SimpleNamespace(
+        registration_driver="skyvern",
+        proxy="http://registration.example:8080",
+        proxy_explicit=True,
+        proxy_pool="",
+    )
+    config = {
+        "registration": {
+            "driver": "skyvern",
+            "drivers": {
+                "skyvern": {
+                    "api_key": "test-key",
+                    "proxy_location": "RESIDENTIAL_US",
+                }
+            },
+        },
+        "proxy": {"registration": "http://registration.example:8080"},
+    }
+    with patch.object(cli, "CFG", config), patch(
+        "sms_tool.registration.registration_network_preflight"
+    ) as network_preflight:
+        result = cli._preflight_registration_before_mailbox(args)
+
+    assert result["mode"] == "cloud_browser"
+    assert result["registration_driver"] == "skyvern"
+    network_preflight.assert_not_called()
 
 
 def test_registration_normalizes_provider_proxy_before_sentinel_extraction():

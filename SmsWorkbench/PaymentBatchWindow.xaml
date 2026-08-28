@@ -68,6 +68,7 @@
                  TextWrapping="NoWrap"
                  Height="62"
                  VerticalScrollBarVisibility="Auto"/>
+        <TextBlock Text="{Binding CheckoutRegionSummary, StringFormat=池构成：{0}}" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,3,0,0"/>
       </StackPanel>
       <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
         <TextBlock Text="Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
@@ -77,6 +78,7 @@
                  TextWrapping="NoWrap"
                  Height="62"
                  VerticalScrollBarVisibility="Auto"/>
+        <TextBlock Text="{Binding ApproveRegionSummary, StringFormat=池构成：{0}}" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,3,0,0"/>
       </StackPanel>
 
       <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,7,10">

@@ -40,7 +40,7 @@ Dynamic and static IP resources are available with free testing through the [IPW
 - Python 3.10 or later.
 - .NET 10 Desktop Runtime; the .NET 10 SDK is required when building from source.
 - Node.js 18 or later available on `PATH`.
-- Playwright Chromium for browser-assisted payment workflows.
+- Playwright Chromium for browser-assisted payment workflows and browser registration.
 
 ## Installation
 
@@ -70,3 +70,14 @@ The Chinese README contains the complete feature, configuration, architecture, C
 ## Data And Responsible Use
 
 Local configuration, mailbox credentials, proxy passwords, API keys, Tokens, Sessions, and runtime data must not be committed or shared publicly. Use this project only with authorization and in compliance with applicable service terms, regional laws, and organizational policies.
+### Registration drivers
+
+The desktop **Settings -> Registration & mailbox -> Registration driver** selector keeps `protocol` as the default and also exposes independent browser drivers:
+
+- `playwright`: launch local Chromium through Playwright.
+- `roxy`: create/open a RoxyBrowser profile through its local API and attach over CDP.
+- `cloak`: use the installed CloakBrowser Python SDK.
+- `browser_use`: attach to Browser Use cloud CDP with the configured API key.
+- `skyvern`: create a Skyvern Browser Session through REST and attach over CDP.
+
+Each driver reuses the mailbox OTP, session extraction, AT HTTP 200 probe, and persistence boundary. Provider credentials and lifecycle flags are configured in their own Settings sections. Missing required fields produce sanitized configuration errors; browser drivers do not bypass CAPTCHA and return `manual_challenge_required` when a human challenge is encountered.
