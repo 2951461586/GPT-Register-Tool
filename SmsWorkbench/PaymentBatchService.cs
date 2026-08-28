@@ -141,7 +141,9 @@ namespace SmsWorkbench
                     NormalizePoolText(approvePool),
                     checkoutCountry,
                     approveCountry,
-                    updateCountry);
+                    updateCountry,
+                    NormalizePoolText(checkoutPool),
+                    NormalizePoolText(approvePool));
             }
             catch
             {
@@ -168,6 +170,18 @@ namespace SmsWorkbench
             if (!ValidCountry(checkoutCountry) || !ValidCountry(approveCountry) || !ValidCountry(updateCountry))
                 return new SettingsSaveResult(false, "代理出口国家必须为空或两位字母代码。");
 
+            // The region-filtered active pool the UI shows for the selected
+            // country; persisted to checkout_proxy_pool so the backend's stage
+            // planner receives exactly the zone the operator chose.  The full
+            // mixed source pool is persisted under the named <method>_* pool so
+            // switching countries never drops the other zones.
+            string checkoutSource = !string.IsNullOrWhiteSpace(configuration?.CheckoutProxySourcePool)
+                ? configuration!.CheckoutProxySourcePool!
+                : configuration?.CheckoutProxyPool ?? "";
+            string approveSource = !string.IsNullOrWhiteSpace(configuration?.ApproveProxySourcePool)
+                ? configuration!.ApproveProxySourcePool!
+                : configuration?.ApproveProxyPool ?? "";
+
             try
             {
                 JsonObject root = ReadConfigRoot();
@@ -178,8 +192,8 @@ namespace SmsWorkbench
                 string[] approvePool = NormalizePool(configuration?.ApproveProxyPool);
                 string checkoutPoolName = method + "_checkout";
                 string approvePoolName = method + "_approve";
-                SetArray(proxyPools, checkoutPoolName, checkoutPool);
-                SetArray(proxyPools, approvePoolName, approvePool);
+                SetArray(proxyPools, checkoutPoolName, NormalizePool(checkoutSource));
+                SetArray(proxyPools, approvePoolName, NormalizePool(approveSource));
                 SetArray(methodConfig, "checkout_proxy_pool", checkoutPool);
                 SetArray(methodConfig, "approve_proxy_pool", approvePool);
 

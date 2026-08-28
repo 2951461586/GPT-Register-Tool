@@ -71,6 +71,7 @@ class AccountSessionModel:
     mailbox: MailboxSnapshot = field(default_factory=MailboxSnapshot, repr=False)
     payment: PaymentSnapshot = field(default_factory=PaymentSnapshot, repr=False)
     auth_session: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), repr=False)
+    identity_context: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     timing: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     pipeline_timing: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     quota: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
@@ -139,6 +140,7 @@ class AccountSessionModel:
             mailbox=mailbox_model,
             payment=payment_model,
             auth_session=MappingProxyType(dict(auth_session)),
+            identity_context=MappingProxyType(dict(_mapping(value.get("identity_context")))),
             timing=MappingProxyType(dict(_mapping(value.get("timing")))),
             pipeline_timing=MappingProxyType(dict(_mapping(value.get("pipeline_timing")))),
             quota=MappingProxyType(dict(_mapping(value.get("quota")))),
@@ -167,6 +169,7 @@ class AccountSessionModel:
             "session_token": self.credentials.session_token,
             "cookie_header": self.credentials.cookie_header,
             "totp_secret": self.credentials.totp_secret,
+            "identity_context": dict(self.identity_context),
         })
         return value
 
@@ -206,5 +209,6 @@ class AccountSessionModel:
             "pipeline_timing": dict(self.pipeline_timing),
             "quota": dict(self.quota),
             "workspace_scan": dict(self.workspace),
+            "identity_context": dict(self.identity_context),
         }
         return sanitize(value)

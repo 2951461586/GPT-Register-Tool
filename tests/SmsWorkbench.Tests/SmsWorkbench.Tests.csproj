@@ -17,6 +17,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\SmsWorkbench.Contracts\SmsWorkbench.Contracts.csproj" />
     <ProjectReference Include="..\..\SmsWorkbench\SmsWorkbench.csproj" />
   </ItemGroup>
 </Project>

@@ -390,6 +390,29 @@ class ReMailPickupTests(unittest.TestCase):
         self.assertEqual(kwargs["issued_after_unix"], issued_after - 90)
         self.assertEqual(kwargs["proxy"], mailbox_router._configured_mailbox_proxy())
 
+    def test_router_keeps_explicit_remail_provider_when_password_is_present(self):
+        account = MailboxAccount(
+            email="user@outlook.com",
+            password="registration-password",
+            provider="remail",
+            token="service-token",
+        )
+        with patch.object(mailbox_router, "_email_cfg", return_value={
+            "chongzhi": {"enabled": True},
+        }), patch.object(
+            mailbox_router,
+            "_poll_chongzhi_otp",
+        ) as chongzhi_poll, patch.object(
+            mailbox_remail,
+            "_poll_remail_otp",
+            return_value="654321",
+        ) as remail_poll:
+            code = mailbox_router._poll_email_otp(account, timeout=0)
+
+        self.assertEqual(code, "654321")
+        remail_poll.assert_called_once()
+        chongzhi_poll.assert_not_called()
+
     def test_inbox_mode_fetches_detail_even_when_summary_has_code(self):
         summary = {
             "items": [{

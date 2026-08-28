@@ -23,8 +23,8 @@ namespace SmsWorkbench
     /// (registration, SMS, liveness, deletion, import, export, refresh,
     /// protocol payment, inbox). It generalizes the
     /// <see cref="ProtocolPaymentExecutionPlanner"/> pattern so the CLI
-    /// contract lives in exactly one module that can be unit tested without
-    /// WPF. Settings resolution stays with the caller; this class only shapes
+    /// contract lives in exactly one module that can be unit tested by every
+    /// client adapter. Settings resolution stays with the caller; this class only shapes
     /// already-resolved values into command-line arguments.
     /// </summary>
     public static class BackendCommandPlanner
@@ -539,7 +539,7 @@ namespace SmsWorkbench
             if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("smailr://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
             if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
-            if (MailboxPoolFileStore.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
+            if (MailboxCredentialLineParser.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
             if (value.Contains("----", StringComparison.Ordinal) && value.Split("----", StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
             if (value.Contains("---", StringComparison.Ordinal) && value.Split("---", StringSplitOptions.None).Length >= 3) return "--mailbox-file";
             return "";

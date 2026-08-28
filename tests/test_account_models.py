@@ -1,6 +1,7 @@
 import json
 
 from sms_tool.account_models import AccountSessionModel
+from sms_tool.account_identity import create_registration_identity
 from sms_tool import storage
 
 
@@ -60,3 +61,31 @@ def test_storage_accepts_typed_model_and_raw_json_is_token_free(tmp_path, monkey
     assert row["plan_type"] == "free"
     assert "at-secret-value" not in row["raw_json"]
     assert "rt_secret_value" not in row["raw_json"]
+
+
+def test_storage_persists_safe_account_identity_context(tmp_path, monkeypatch):
+    database = tmp_path / "accounts.sqlite3"
+    monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
+    base_proxy = "http://user-region-US-sid-OLD1234-t-5:proxy-secret@proxy.example:443"
+    registration_proxy = "http://user-region-US-sid-NEW5678-t-5:proxy-secret@proxy.example:443"
+    identity = create_registration_identity(
+        registration_proxy,
+        pool_index=0,
+        fingerprint_key="chrome146",
+        device_id="device-123",
+    )
+    account = {
+        "email": "identity-storage@example.com",
+        "success": True,
+        "access_token": "at-secret-value",
+        "identity_context": identity,
+    }
+
+    assert storage.upsert_account(account)
+    record = storage.get_account_record("identity-storage@example.com")
+    payload = json.loads(record["raw_json"])
+
+    assert payload["identity_context"] == identity
+    assert payload["identity_context"]["proxy_affinity"]["session_id"] == "NEW5678"
+    assert "proxy-secret" not in record["raw_json"]
+    assert base_proxy not in record["raw_json"]

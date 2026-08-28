@@ -503,7 +503,10 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.append(kwargs.get("sentinel_data"))
             return {"success": True, "email": kwargs["mailbox"].email}
 
-        with patch.object(batch_runner, "CFG", {"email_registration": {"sentinel_prewarm_window": 2}}), \
+        with patch.object(batch_runner, "CFG", {"email_registration": {
+                 "sentinel_backend": "legacy",
+                 "sentinel_prewarm_window": 2,
+             }}), \
              patch("sms_tool.sentinel_tokens._extract_sentinel", side_effect=extract):
             results = batch_runner.run_batch_impl(
                 count=3, mailboxes=mailboxes, workers=3, run_email_func=run_email_func,

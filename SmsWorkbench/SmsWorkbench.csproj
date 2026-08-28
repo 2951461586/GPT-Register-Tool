@@ -18,6 +18,9 @@
     <EmbeddedResource Include="..\sensitive_policy.json" LogicalName="SmsWorkbench.sensitive_policy.json" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\SmsWorkbench.Contracts\SmsWorkbench.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog" />

@@ -3,6 +3,7 @@ from unittest.mock import patch
 from sms_tool import account_recovery
 from sms_tool import codex_oauth
 from sms_tool.mailbox import MailboxAccount
+from sms_tool.account_identity import create_registration_identity
 
 
 def test_chatgpt_email_relogin_validates_account_input():
@@ -227,6 +228,44 @@ def test_relogin_auto_uses_refresh_cookie_email_then_oauth():
     email_otp.assert_called_once()
     oauth.assert_called_once()
     assert not hasattr(account_recovery, "relogin_browser_account")
+
+
+def test_relogin_reuses_account_proxy_affinity_for_every_strategy():
+    base_proxy = "http://user-region-US-sid-OLD1234-t-5:secret@proxy.example:443"
+    registration_proxy = "http://user-region-US-sid-NEW5678-t-5:secret@proxy.example:443"
+    account = {
+        "email": "ok@example.com",
+        "identity_context": create_registration_identity(
+            registration_proxy,
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+        ),
+    }
+    config = {"proxy": {"registration": base_proxy, "pool": [base_proxy]}}
+
+    with (
+        patch.object(account_recovery, "CFG", config),
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "mode": "oauth_refresh_token", "error": "invalid_grant"},
+        ) as refresh,
+        patch.object(
+            account_recovery,
+            "relogin_web_session_account",
+            return_value={"ok": True, "mode": "web_session"},
+        ) as web,
+    ):
+        result = account_recovery.relogin_codex_account(
+            account,
+            proxy="http://127.0.0.1:7897",
+            mode="auto",
+        )
+
+    assert result["ok"]
+    assert refresh.call_args.kwargs["proxy"] == registration_proxy
+    assert web.call_args.kwargs["proxy"] == registration_proxy
 
 
 def test_relogin_auto_stops_after_refresh_token_success():
@@ -529,3 +568,116 @@ def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():
     }
     payload_401 = _record_payload(record_with(still_401))
     assert payload_401["promotion_status"] == stale_label
+
+
+def test_browser_recovery_uses_driver_from_browser_identity():
+    """Browser recovery reopens the same driver recorded at registration."""
+    from unittest.mock import MagicMock, patch
+
+    account = {
+        "email": "browser@example.com",
+        "access_token": "expired_at",
+        "identity_context": create_registration_identity(
+            "http://proxy.example:8080",
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+            account_key="browser@example.com",
+            browser_identity={"driver": "cloak", "profile_id": "browser@example.com"},
+        ),
+    }
+    mock_browser = MagicMock()
+    mock_browser.__enter__ = MagicMock(return_value=mock_browser)
+    mock_browser.__exit__ = MagicMock(return_value=False)
+    mock_browser.page = MagicMock()
+    mock_browser.cookie_header.return_value = ""
+
+    with (
+        patch("sms_tool.account_recovery.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"}, "registration": {}}),
+        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_browser) as create_session,
+        patch("sms_tool.registration_drivers.playwright._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.playwright._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
+        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
+        patch("sms_tool.session_refresh._save_refreshed", return_value="session.json"),
+    ):
+        result = account_recovery.relogin_browser_session_account(account)
+
+    assert result["ok"]
+    # Must use the driver from browser_identity, not the default camoufox
+    assert create_session.call_args.args[0] == "cloak"
+    # Must pass browser_identity so the same profile is reopened
+    assert create_session.call_args.kwargs["browser_identity"] == {"driver": "cloak", "profile_id": "browser@example.com"}
+
+
+def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_present():
+    """Liveness probe routes through browser context when browser_identity is present."""
+    from unittest.mock import MagicMock, patch
+
+    account = {
+        "email": "browser@example.com",
+        "access_token": "at_123",
+        "identity_context": create_registration_identity(
+            "http://proxy.example:8080",
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+            account_key="browser@example.com",
+            browser_identity={"driver": "camoufox", "profile_id": "browser@example.com"},
+        ),
+    }
+
+    mock_browser = MagicMock()
+    mock_browser.fetch_json = MagicMock(return_value={"status_code": 200, "body": {}})
+    mock_browser.page = MagicMock()
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_browser)
+    mock_session.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
+        patch("sms_tool.registration_drivers.playwright._wait_for_challenge_clear"),
+        patch.object(account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness) as probe,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+
+    assert result["ok"]
+    # Must have opened a browser session with the saved driver
+    assert create_session.call_args.args[0] == "camoufox"
+    assert create_session.call_args.kwargs.get("browser_identity") == {
+        "driver": "camoufox",
+        "profile_id": "browser@example.com",
+    }
+    # Must have passed browser_fetch to probe_account_liveness
+    assert probe.call_args.kwargs.get("browser_fetch") is not None
+
+
+def test_refresh_local_quota_statuses_falls_back_to_curl_when_no_browser_identity():
+    """Liveness probe uses curl_cffi when no browser_identity is present."""
+    from unittest.mock import patch
+
+    account = {
+        "email": "plain@example.com",
+        "access_token": "at_123",
+        "identity_context": create_registration_identity(
+            "http://proxy.example:8080",
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+        ),
+    }
+
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch("sms_tool.registration_drivers.external_sessions.create_browser_session") as create_session,
+        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}) as probe,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["plain@example.com"])
+
+    assert result["ok"]
+    # Must NOT have opened a browser session
+    create_session.assert_not_called()
+    # Must NOT have passed browser_fetch
+    assert "browser_fetch" not in probe.call_args.kwargs or probe.call_args.kwargs.get("browser_fetch") is None

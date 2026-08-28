@@ -21,6 +21,7 @@ from .mail_otp import (
     _message_recipients,
 )
 from . import mailbox_cfworker
+from . import mailbox_stalwart  # self-registers the "stalwart" JMAP OTP poller
 from .mailbox_types import MailboxAccount
 from .mailbox_parsers import (
     _looks_ms_client_id,
@@ -754,9 +755,16 @@ def _poll_email_otp(
     cfg = _email_cfg(runtime_config)
     provider = str(getattr(mailbox, "provider", "") or "")
 
-    # Chongzhi: only when provider=="chongzhi" OR chongzhi is enabled globally
-    # and the mailbox has a password (pre-API polling over Graph).
-    if provider == "chongzhi" or (mailbox_chongzhi.chongzhi_enabled(cfg) and getattr(mailbox, "password", "")):
+    # Chongzhi credentials are only selected explicitly.  Older unlabelled
+    # mailbox records may still use the provider when the integration is
+    # enabled and a password is present; labelled providers must keep their
+    # own strategy (notably ReMail) even when the account also has a login
+    # password.
+    if provider == "chongzhi" or (
+        not provider
+        and mailbox_chongzhi.chongzhi_enabled(cfg)
+        and getattr(mailbox, "password", "")
+    ):
         email = str(getattr(mailbox, "email", "") or "").strip()
         password = str(getattr(mailbox, "password", "") or "").strip()
         if email and password:

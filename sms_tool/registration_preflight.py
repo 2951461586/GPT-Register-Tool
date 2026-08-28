@@ -15,11 +15,16 @@ from .auth_headers import (
 from .config import CFG
 from .account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
-from .sentinel_tokens import _sentinel_frame_version
+from .sentinel.bundle import sentinel_version
 
 # ``auto`` keeps the historical mislabeled-provider correction; ``off`` pins the
 # declared scheme so a transient socks5 outage cannot change the transport.
 _SCHEME_FALLBACK_MODES = ("auto", "off")
+
+
+def _sentinel_frame_version() -> str:
+    """Compatibility seam backed by the pinned Sentinel bundle."""
+    return sentinel_version()
 
 
 def _chat_base() -> str:

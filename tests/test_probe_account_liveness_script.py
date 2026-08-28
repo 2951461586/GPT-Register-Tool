@@ -40,7 +40,7 @@ def test_probe_account_delegates_to_canonical_quota_probe():
         result = LIVENESS.probe_account(account, proxy="http://proxy.example:8080", timeout=25)
 
     assert result == expected
-    probe.assert_called_once_with(account, proxy="http://proxy.example:8080", timeout=25)
+    probe.assert_called_once_with(account, proxy="http://proxy.example:8080", timeout=25, browser_fetch=None)
 
 
 def test_classify_probe_matches_desktop_liveness_semantics():

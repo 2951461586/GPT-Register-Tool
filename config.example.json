@@ -7,6 +7,13 @@
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
     "registration": "http://127.0.0.1:7897",
+    "browser_registration_pool": [
+      "http://127.0.0.1:7897"
+    ],
+    "protocol_registration_pool": [
+      "http://127.0.0.1:7897"
+    ],
+    "health": "http://127.0.0.1:7897",
     "default": "http://127.0.0.1:7897",
     "pool": [
       "us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD",
@@ -15,6 +22,80 @@
     ]
   },
   "registration": {
+    "driver": "protocol",
+    "browser_headless": true,
+    "browser_timeout_seconds": 90,
+    "browser_locale": "en-US",
+    "browser_timezone": "America/New_York",
+    "post_registration_dwell_seconds_range": "18,45",
+    "drivers": {
+      "playwright": {
+        "start_url": "https://chatgpt.com/auth/login"
+      },
+      "roxy": {
+        "api_base": "http://127.0.0.1:50100",
+        "backend": "playwright",
+        "api_token": "",
+        "workspace_id": "",
+          "project_id": "",
+          "profile_id": "",
+          "create_path": "/browser/create",
+          "create_method": "POST",
+          "open_path": "/browser/open",
+          "open_method": "POST",
+          "close_path": "/browser/close",
+          "close_method": "POST",
+          "delete_path": "/browser/delete",
+          "delete_method": "POST",
+        "delete_profile_after_run": true,
+        "keep_browser_open": false,
+        "start_url": "https://chatgpt.com/auth/login"
+      },
+      "cloak": {
+        "humanize": true,
+        "geoip": true,
+        "use_proxy": true,
+        "license_key": "",
+        "fingerprint_seed": "",
+        "user_data_dir": "",
+        "keep_browser_open": false,
+        "start_url": "https://chatgpt.com/auth/login"
+      },
+      "camoufox": {
+        "humanize": true,
+        "geoip": true,
+        "use_proxy": true,
+        "max_width": 1280,
+        "max_height": 900,
+        "locale": "",
+        "timezone": "",
+        "user_data_dir": "",
+        "keep_browser_open": false,
+        "start_url": "https://chatgpt.com/auth/login"
+      },
+      "browser_use": {
+        "api_key": "",
+        "cdp_base": "wss://connect.browser-use.com",
+        "proxy_country_code": "",
+        "use_proxy": true,
+        "profile_id": "",
+        "session_timeout_minutes": 120,
+        "keep_browser_open": false,
+        "start_url": "https://chatgpt.com/auth/login"
+      },
+      "skyvern": {
+        "api_key": "",
+        "api_base": "https://api.skyvern.com",
+        "session_timeout_minutes": 60,
+        "profile_id": "",
+        "proxy_location": "",
+        "generate_browser_profile": false,
+        "ad_blocker": true,
+        "browser_type": "stealth-chromium",
+        "keep_browser_open": false,
+        "start_url": "https://chatgpt.com/auth/login"
+      }
+    },
     "password_random_length": 12,
     "password_suffix": "!A1",
     "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -60,8 +141,10 @@
     },
     "otp_poll_interval": 2,
     "sentinel_version": "20260219f9f6",
+    "sentinel_backend": "node_runner",
+    "sentinel_legacy_fallback": true,
     "sentinel_max_concurrency": 2,
-    "sentinel_prewarm_window": 4,
+    "sentinel_prewarm_window": 0,
     "sentinel_circuit_failures": 3,
     "sentinel_circuit_cooldown_seconds": 60,
     "remail_otp_issued_after_grace_seconds": 90,
@@ -330,6 +413,26 @@
   "output": {
     "directory": "sessions",
     "filename_pattern": "session_{email}_{timestamp}.json"
+  },
+  "account_health": {
+    "post_registration_enabled": true,
+    "post_registration_deep_liveness": true,
+    "proxy_pool": [
+      "http://127.0.0.1:7897"
+    ],
+    "proxies": {
+      "liveness": [
+        "http://127.0.0.1:7897"
+      ],
+      "promotion": [
+        "http://127.0.0.1:7897"
+      ],
+      "browser": [
+        "http://127.0.0.1:7897"
+      ]
+    },
+    "workers": 2,
+    "max_pending": 1000
   },
   "paypal_browser": {
     "enabled": true,

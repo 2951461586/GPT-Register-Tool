@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import account_liveness
+from sms_tool.account_identity import create_registration_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,49 @@ def test_probe_uses_saved_access_token_and_account_id():
     assert call.kwargs["headers"]["Authorization"] == "Bearer at_123"
     assert call.kwargs["headers"]["Chatgpt-Account-Id"] == "acc_123"
     assert call.kwargs["proxies"]["https"] == "http://proxy.example:8080"
+
+
+def test_liveness_uses_dedicated_health_proxy_with_account_fingerprint_and_device():
+    base_proxy = "http://user-region-US-sid-OLD1234-t-5:secret@proxy.example:443"
+    registration_proxy = "http://user-region-US-sid-NEW5678-t-5:secret@proxy.example:443"
+    health_proxy = "http://health.example:8000"
+    config = {
+        "proxy": {"registration": base_proxy, "pool": [base_proxy]},
+        "account_health": {"proxies": {"liveness": [health_proxy]}},
+    }
+    account = {
+        "access_token": "at",
+        "identity_context": create_registration_identity(
+            registration_proxy,
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+        ),
+    }
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"quota": {"remaining": 3, "limit": 5}}
+
+    with patch.object(account_liveness, "CFG", config), patch.object(
+        account_liveness.curl_requests,
+        "get",
+        return_value=FakeResponse(),
+    ) as get:
+        result = account_liveness.probe_account_liveness(
+            account,
+            proxy="http://127.0.0.1:7897",
+        )
+
+    assert result["ok"]
+    assert get.call_args.kwargs["proxies"]["https"] == health_proxy
+    assert get.call_args.kwargs["impersonate"] == "chrome146"
+    assert get.call_args.kwargs["headers"]["oai-device-id"] == "device-123"
+    assert "Chrome/146" in get.call_args.kwargs["headers"]["User-Agent"]
 
 
 def test_probe_normalizes_provider_host_port_user_password_proxy():

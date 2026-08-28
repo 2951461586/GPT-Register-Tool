@@ -16,7 +16,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from .account_liveness import probe_account_liveness
+from .account_identity import resolve_account_proxy
+from .account_liveness import browser_fetch_for_account, probe_account_liveness
 from .config import CFG
 from .storage import (
     clear_stale_promotion_at_marker,
@@ -63,7 +64,10 @@ def refresh_local_quota_statuses(
                     "terminal": True,
                 }
             else:
-                probe = probe_account_liveness(account, proxy=proxy, timeout=timeout)
+                with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
+                    probe = probe_account_liveness(
+                        account, proxy=proxy, timeout=timeout, browser_fetch=browser_fetch
+                    )
             relogin: dict[str, Any] = {}
             if relogin_on_401 and _probe_is_token_invalid(probe) and email:
                 relogin = relogin_codex_account(
@@ -284,7 +288,7 @@ def relogin_chatgpt_email_account(
         from .codex_oauth import _mailbox_from_data
         from .http_client import request_with_retry
         from .registration import _login_existing_account_with_email_otp
-        from .sentinel_tokens import _extract_sentinel, _sentinel_device_id, _set_oai_did_cookie
+        from .sentinel_tokens import _set_oai_did_cookie
         from .session_refresh import _auth_session_email
 
         mailbox = _mailbox_from_data(account)
@@ -292,14 +296,10 @@ def relogin_chatgpt_email_account(
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_mailbox"}
 
         select_auth_fingerprint(rotate=True)
-        sentinel = _extract_sentinel(proxy=proxy, force_fresh=True, persist=False)
-        if not isinstance(sentinel, dict) or not sentinel.get("sentinel_token"):
-            return {"ok": False, "mode": "chatgpt_email_otp", "error": "sentinel_extract_failed"}
-
         chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
         auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
         chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-        device_id = _sentinel_device_id(sentinel) or str(uuid.uuid4())
+        device_id = str(account.get("device_id") or uuid.uuid4())
         logging_id = str(uuid.uuid4()).replace("-", "")
         session = curl_requests.Session()
         if proxy:
@@ -338,9 +338,8 @@ def relogin_chatgpt_email_account(
             base_headers=base_headers,
             csrf_token=csrf_token,
             proxy=proxy,
-            sentinel_token=str(sentinel.get("sentinel_token") or ""),
-            sentinel_so_token=str(sentinel.get("sentinel_so_token") or ""),
             totp_secret=str(account.get("totp_secret") or ""),
+            otp_timeout=max(30, int(timeout or 300)),
         )
         if not login.get("ok"):
             return {
@@ -400,19 +399,30 @@ def relogin_codex_account(
             "terminal": True,
             "skipped": True,
         }
+    resolved_proxy = resolve_account_proxy(account, fallback_proxy=proxy, config=CFG)
     normalized_mode = _normalize_relogin_mode(mode)
     if normalized_mode == "web_session":
-        return relogin_web_session_account(account, proxy=proxy, timeout=timeout)
+        return relogin_web_session_account(account, proxy=resolved_proxy, timeout=timeout)
+    if normalized_mode == "chatgpt_email_otp":
+        recovery_proxy, _ = _select_recovery_proxy(account, resolved_proxy)
+        result = relogin_chatgpt_email_account(account, proxy=recovery_proxy, timeout=timeout)
+        if _looks_account_deactivated(result):
+            _persist_permanent_deactivation(account, result)
+            result = {**result, "terminal": True, "error": "account_deactivated"}
+        return result
     if normalized_mode == "codex_oauth":
-        return relogin_local_codex_account(account, proxy=proxy, timeout=timeout)
+        return relogin_local_codex_account(account, proxy=resolved_proxy, timeout=timeout)
+    if normalized_mode == "browser_session":
+        return relogin_browser_session_account(account, proxy=resolved_proxy, timeout=timeout)
 
-    recovery_proxy, proxy_attempts = _select_recovery_proxy(account, proxy)
+    recovery_proxy, proxy_attempts = _select_recovery_proxy(account, resolved_proxy)
     attempts: list[dict[str, Any]] = []
     strategies = (
         ("oauth_refresh_token", relogin_refresh_token_account, timeout),
         ("web_session", relogin_web_session_account, min(max(15, int(timeout or 180)), 30)),
         ("chatgpt_email_otp", relogin_chatgpt_email_account, timeout),
         ("codex_oauth_pkce", relogin_local_codex_account, timeout),
+        ("browser_session", relogin_browser_session_account, timeout),
     )
     for strategy, handler, strategy_timeout in strategies:
         result = dict(handler(account, proxy=recovery_proxy, timeout=strategy_timeout) or {})
@@ -522,6 +532,106 @@ def relogin_local_codex_account(
         return safe
     except Exception as exc:
         return {"ok": False, "error": _redact_recovery_error(exc)}
+
+
+def relogin_browser_session_account(
+    account: dict[str, Any],
+    proxy: str | None = None,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    """Recover an invalid AT through a Camoufox browser session.
+
+    Launches a headless Camoufox browser, navigates to ChatGPT, waits for
+    Cloudflare to clear, and extracts the access token from the browser's
+    session endpoint.  This bypasses Cloudflare 401 blocks that affect
+    protocol-only requests.
+    """
+    if not isinstance(account, dict):
+        return {"ok": False, "mode": "browser_session", "error": "invalid_account"}
+    email = str(account.get("email") or "").strip().lower()
+    if not email:
+        return {"ok": False, "mode": "browser_session", "error": "missing_email"}
+    if is_permanently_deactivated(account):
+        return {
+            "ok": False,
+            "mode": "browser_session",
+            "error": "account_deactivated",
+            "terminal": True,
+            "skipped": True,
+        }
+    try:
+        from .registration_drivers.external_sessions import create_browser_session
+        from .registration_drivers.playwright import _wait_for_challenge_clear
+
+        config = CFG.data if hasattr(CFG, "data") else {}
+        chat_cfg = config.get("chatgpt", {}) if isinstance(config.get("chatgpt"), dict) else {}
+        chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+        auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+        device_id = str(account.get("device_id") or uuid.uuid4())
+
+        # Determine the driver to use for browser recovery.  When the
+        # account was registered through a browser driver, reuse the same
+        # driver and profile from the persisted browser_identity so the
+        # recovery session carries the original fingerprint and cookies.
+        from .account_identity import account_identity
+
+        identity = account_identity(account)
+        browser_identity = identity.get("browser_identity") or {}
+        recovery_driver = str(browser_identity.get("driver") or "").strip().lower() or "camoufox"
+        if not browser_identity and isinstance(config.get("registration"), dict):
+            configured_driver = str(config["registration"].get("driver") or "").strip().lower().replace("-", "_")
+            if configured_driver in {"cloak", "roxy", "playwright"}:
+                recovery_driver = configured_driver
+
+        browser_session = create_browser_session(
+            recovery_driver,
+            config=config,
+            proxy=proxy,
+            headless=True,
+            timeout_ms=max(10_000, int(timeout) * 1000),
+            locale="en-US",
+            timezone_id="America/New_York",
+            browser_identity=dict(browser_identity) if browser_identity else None,
+        )
+        with browser_session as browser:
+            browser.add_device_cookie(device_id, chat_base, auth_base)
+            page = browser.page
+            page.goto(chat_base, wait_until="domcontentloaded", timeout=int(timeout) * 1000)
+            # Wait for Cloudflare challenge to clear automatically
+            _wait_for_challenge_clear(page, max_wait_seconds=30)
+            # Extract session info
+            from .registration_drivers.playwright import _session_payload
+            session_info = _session_payload(browser, chat_base, email, timeout_seconds=timeout)
+            auth_body = session_info.get("body") or {}
+            access_token = str(session_info.get("access_token") or "").strip()
+            if not access_token:
+                return {
+                    "ok": False,
+                    "mode": "browser_session",
+                    "error": "browser_session_no_access_token",
+                }
+            candidate = dict(account)
+            candidate.update({
+                "email": email,
+                "device_id": device_id,
+                "access_token": access_token,
+                "auth_session": auth_body,
+                "cookie_header": str(browser.cookie_header() or ""),
+            })
+            return _verify_and_persist_candidate(
+                account,
+                candidate,
+                mode="browser_session",
+                proxy=proxy,
+                timeout=timeout,
+                persist=True,
+            )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "mode": "browser_session",
+            "error": _redact_recovery_error(exc),
+        }
 
 
 def _verify_and_persist_candidate(
@@ -810,8 +920,12 @@ def _normalize_relogin_mode(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_")
     if text in {"web", "web_session", "session", "chatgpt_session"}:
         return "web_session"
+    if text in {"email_otp", "chatgpt_email_otp", "passwordless", "passwordless_email"}:
+        return "chatgpt_email_otp"
     if text in {"codex", "codex_oauth", "oauth", "pkce"}:
         return "codex_oauth"
+    if text in {"browser", "browser_session", "camoufox"}:
+        return "browser_session"
     return "auto"
 
 

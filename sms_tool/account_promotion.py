@@ -16,9 +16,12 @@ from typing import Any
 
 from curl_cffi import requests as curl_requests
 
+from .account_identity import account_identity, bind_account_identity
+from .account_liveness import account_chatgpt_id, browser_fetch_for_account
 from .auth_headers import auth_impersonate, chatgpt_headers
-from .account_liveness import account_chatgpt_id
+from .config import CFG
 from .phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
+from .proxy_routing import select_operation_proxy
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
@@ -127,44 +130,78 @@ def check_account_promotion(
     proxy: str | None = None,
     timeout: int = 20,
     timezone_offset_min: str = "-",
+    *,
+    browser_fetch: Any = None,
 ) -> dict[str, Any]:
-    """Probe accounts/check for one account and return plan + promotion detail."""
+    """Probe accounts/check for one account and return plan + promotion detail.
+
+    When ``browser_fetch`` is provided, the probe is routed through the
+    browser context's ``fetch_json`` method instead of ``curl_cffi``,
+    carrying the real browser fingerprint and cookies to bypass
+    Cloudflare-based 401 blocks on protocol-only requests.
+    """
     token = _account_token(account)
     if not token:
         return {"ok": False, "promotion_status": "缺少AT", "error": "missing_access_token"}
 
+    had_identity_context = bool(account.get("identity_context")) if isinstance(account, dict) else False
+    identity = bind_account_identity(account)
+    # Promotion checks are separate account operations; do not reuse a saved
+    # browser-registration exit that may now be blocked or contaminated.
+    resolved_proxy = select_operation_proxy(
+        account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
+        operation="promotion",
+        explicit=proxy,
+        config=CFG,
+    )
+
     account_id = account_chatgpt_id(account) if isinstance(account, dict) else _jwt_account_id(token)
-    did = str(account.get("device_id") or "") if isinstance(account, dict) else ""
+    did = str(identity.get("device_id") or (account.get("device_id") if isinstance(account, dict) else "") or "")
     headers = chatgpt_headers(did, accept="*/*", referer="https://chatgpt.com/")
     headers["Authorization"] = f"Bearer {token}"
     headers["oai-language"] = "en-US"
     if account_id:
         headers["Chatgpt-Account-Id"] = account_id
 
-    normalized_proxy = normalize_proxy_url(proxy)
-    proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
     url = f"{ACCOUNTS_CHECK_URL}?timezone_offset_min={timezone_offset_min}"
-    try:
-        response = curl_requests.get(
-            url, headers=headers, proxies=proxies, timeout=timeout,
-            impersonate=auth_impersonate(), allow_redirects=False,
-        )
-    except Exception as exc:
-        error = str(exc)
-        for candidate in (str(proxy or "").strip(), normalized_proxy):
-            if candidate:
-                error = error.replace(candidate, _redact_proxy_url(candidate, empty_placeholder=""))
-        return {"ok": False, "promotion_status": "检测失败", "error": error[:300]}
 
-    status_code = int(getattr(response, "status_code", 0) or 0)
+    # When a browser fetch callable is provided, route the probe through the
+    # browser context to carry the real fingerprint and cookies.
+    if browser_fetch is not None:
+        try:
+            result = browser_fetch(url, headers=headers, timeout_ms=timeout * 1000)
+            if isinstance(result, dict) and "status_code" in result:
+                status_code = int(result.get("status_code") or 0)
+                body = result.get("body")
+            else:
+                status_code = 0
+                body = result
+        except Exception as exc:
+            return {"ok": False, "promotion_status": "检测失败", "error": str(exc)[:300]}
+    else:
+        normalized_proxy = normalize_proxy_url(resolved_proxy)
+        proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
+        try:
+            response = curl_requests.get(
+                url, headers=headers, proxies=proxies, timeout=timeout,
+                impersonate=auth_impersonate(), allow_redirects=False,
+            )
+        except Exception as exc:
+            error = str(exc)
+            for candidate in (str(proxy or "").strip(), str(resolved_proxy or "").strip(), normalized_proxy):
+                if candidate:
+                    error = error.replace(candidate, _redact_proxy_url(candidate, empty_placeholder=""))
+            return {"ok": False, "promotion_status": "检测失败", "error": error[:300]}
+        status_code = int(getattr(response, "status_code", 0) or 0)
+        try:
+            body = response.json()
+        except Exception:
+            return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code}
+
     if status_code == 401:
         return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401}
     if not (200 <= status_code < 300):
         return {"ok": False, "promotion_status": f"HTTP {status_code}", "error": f"http_{status_code}", "status_code": status_code}
-    try:
-        body = response.json()
-    except Exception:
-        return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code}
 
     parsed = parse_accounts_check(body, account_id=account_id)
     parsed["status_code"] = status_code
@@ -207,7 +244,10 @@ def refresh_promotion_statuses(
     def run(account: dict[str, Any]) -> dict[str, Any]:
         email = str(account.get("email") or "").strip().lower()
         try:
-            probe = check_account_promotion(account, proxy=proxy, timeout=timeout)
+            with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
+                probe = check_account_promotion(
+                    account, proxy=proxy, timeout=timeout, browser_fetch=browser_fetch
+                )
             label = str(probe.get("promotion_status") or "")
             persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
             result = {"email": email, "ok": bool(probe.get("ok")), "promotion_status": label, "persisted": bool(persisted), "probe": probe}

@@ -1023,6 +1023,83 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
     return True
 
 
+def mark_account_health_result(
+    email,
+    health_result,
+    *,
+    runtime_config: ConfigInput = None,
+):
+    """Persist the unified account-health contract without storing credentials."""
+    if not isinstance(health_result, Mapping):
+        return False
+    init_database(runtime_config=runtime_config)
+    now = int(time.time())
+    conn = _connect(runtime_config=runtime_config)
+    json_path = ""
+    data = {}
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json, json_path FROM accounts WHERE lower(email)=lower(?)",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        json_path = str(row["json_path"] or "")
+        try:
+            data = json.loads(row["raw_json"] or "{}")
+        except Exception:
+            data = {}
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        from .account_health import sanitize_health_details
+
+        safe_result = sanitize_health_details(dict(health_result))
+        check = str(safe_result.get("check") or "unknown")
+        health = data.get("account_health") if isinstance(data.get("account_health"), dict) else {}
+        checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
+        checks[check] = safe_result
+        health.update({
+            "latest": safe_result,
+            "checks": checks,
+            "updated_at": now,
+        })
+        data["account_health"] = health
+        plan_type = str(safe_result.get("plan_type") or "").strip().lower()
+        terminal = bool(safe_result.get("terminal"))
+        if plan_type:
+            data["plan_type"] = plan_type
+        if terminal:
+            data["status"] = "account_deactivated"
+            data["error"] = "account_deactivated"
+        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            """
+            UPDATE accounts
+            SET plan_type=CASE WHEN ? <> '' THEN ? ELSE plan_type END,
+                status=CASE WHEN ? THEN 'account_deactivated' ELSE status END,
+                error=CASE WHEN ? THEN 'account_deactivated' ELSE error END,
+                updated_at=?,
+                raw_json=?
+            WHERE lower(email)=lower(?)
+            """,
+            (plan_type, plan_type, int(terminal), int(terminal), now, raw_json, lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
+
+
 def mark_promotion_status(email, promotion_status="", promotion_result=None, *, runtime_config: ConfigInput = None):
     """Persist the account plan/promotion (优惠) probe result into raw_json + session.
 

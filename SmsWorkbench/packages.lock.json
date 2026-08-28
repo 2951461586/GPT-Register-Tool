@@ -346,6 +346,9 @@
         "type": "Transitive",
         "resolved": "4.3.0",
         "contentHash": "7Kj9DmCCo4SOCd1jAiw4+EcMFP2nR8rLLvitAYzVtzbWToTsodkbie24+8x9C4LDLxkopWEUGX62szqqNy7oeg=="
+      },
+      "smsworkbench.contracts": {
+        "type": "Project"
       }
     },
     "net10.0-windows7.0/win-x64": {}

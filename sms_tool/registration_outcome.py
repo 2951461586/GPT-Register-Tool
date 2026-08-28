@@ -148,6 +148,37 @@ def _mailbox_snapshot(mailbox):
     }
 
 
+def _browser_mailbox_snapshot(mailbox):
+    """Return the non-secret mailbox metadata allowed in failed browser results.
+
+    ``_mailbox_snapshot`` is also used by internal checkpoints and OAuth
+    hand-off code, where mailbox credentials may still be needed. Successful
+    browser results retain that snapshot until ``build_session_file`` persists
+    the canonical artifact; failures use this allow-list because they are only
+    operator-visible workflow payloads.
+    """
+    if not mailbox:
+        return {}
+    fields = (
+        "email",
+        "source",
+        "provider",
+        "order_no",
+        "auth_mode",
+        "sender_name",
+        "purchase_id",
+        "project_name",
+        "price",
+        "purchase_total_cost",
+        "balance_after",
+    )
+    return {
+        key: value
+        for key in fields
+        if (value := getattr(mailbox, key, "")) not in (None, "")
+    }
+
+
 def _failure_result(error, email="", mailbox=None, password=""):
     result = {"success": False, "error": _sanitize_text(error), "failure_class": classify_error(_sanitize_text(error)), "timing": _timing_summary()}
     if email:

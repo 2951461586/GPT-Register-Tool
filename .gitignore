@@ -1,4 +1,7 @@
 config.json
+.env
+.env.*
+!.env.example
 .agents/skills/
 .claude/
 .codex/
@@ -20,6 +23,11 @@ skills-lock.json
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# === 一次性诊断/探测脚本（常内联明文凭据，禁止入库）===
+_*.py
+scripts/diag_*.py
+build_log.txt
 *~
 *.bak
 *.bak_before_*
@@ -31,6 +39,12 @@ SmsWorkbench/bin/
 SmsWorkbench/obj/
 tests/**/bin/
 tests/**/obj/
+SmsWorkbench.Contracts/bin/
+SmsWorkbench.Contracts/obj/
+SmsWorkbench.WebHost/bin/
+SmsWorkbench.WebHost/obj/
+SmsWorkbench.WebHost/wwwroot/
+webui/node_modules/
 
 .vs/
 .idea/
@@ -49,3 +63,10 @@ scripts/installer/payload.zip
 
 /.retention.*.log
 /nul
+
+# === 本地日志与前端构建产物（不入库）===
+logs/
+webui/*.tsbuildinfo
+webui/vite.config.js
+webui/vite.config.d.ts
+webui/dist/

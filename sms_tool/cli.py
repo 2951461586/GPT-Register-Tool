@@ -26,15 +26,31 @@ from .commands import payment as payment_commands
 from .commands import payment_links as payment_link_commands
 from .commands import registration as registration_commands
 from .commands.email_change import run_change_email
+from .proxy_routing import proxy_pool_for
 
 
-def _configured_registration_proxy() -> str:
+def _registration_proxy_lane(registration_driver: object = None) -> str:
+    from .registration_drivers.base import normalize_registration_driver
+    driver = normalize_registration_driver(registration_driver, CFG)
+    return "protocol_registration" if driver == "protocol" else "browser_registration"
+
+
+def _configured_registration_proxy(registration_driver: object = None) -> str:
     proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    lane = _registration_proxy_lane(registration_driver)
+    lane_keys = (
+        ("browser_pool", "browser_registration_pool")
+        if lane == "browser_registration"
+        else ("protocol_pool", "protocol_registration_pool")
+    )
+    if CFG.get("registration_proxy") and not any(proxy_cfg.get(key) for key in (*lane_keys, "registration", "pool")):
+        return str(CFG["registration_proxy"]).strip()
+    values = proxy_pool_for(CFG, _registration_proxy_lane(registration_driver))
+    if values:
+        return values[0]
     return str(
-        proxy_cfg.get("registration")
-        or CFG.get("registration_proxy")
-        or proxy_cfg.get("default")
-        or "http://127.0.0.1:7897"
+        proxy_cfg.get("default")
+        or ""
     ).strip()
 
 
@@ -44,7 +60,7 @@ def _apply_registration_proxy_defaults(args) -> None:
     if str(getattr(args, "proxy_pool", "") or "").strip():
         args.proxy = None
         return
-    args.proxy = _configured_registration_proxy() or None
+    args.proxy = _configured_registration_proxy(getattr(args, "registration_driver", None)) or None
 
 
 def _proxy_pool_values(args) -> list[str]:
@@ -56,14 +72,11 @@ def _proxy_pool_values(args) -> list[str]:
     if values:
         return list(dict.fromkeys(values))
 
-    configured_primary = _configured_registration_proxy()
-    if configured_primary:
-        values.append(configured_primary)
-    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
-    configured = proxy_cfg.get("pool") or []
-    if isinstance(configured, str):
-        configured = re.split(r"[\r\n,;]+", configured)
-    values.extend(str(item or "").strip() for item in configured if str(item or "").strip())
+    values.extend(proxy_pool_for(CFG, _registration_proxy_lane(getattr(args, "registration_driver", None))))
+    if not values:
+        fallback = _configured_registration_proxy(getattr(args, "registration_driver", None))
+        if fallback:
+            values.append(fallback)
     return list(dict.fromkeys(values))
 
 
@@ -186,6 +199,9 @@ def main():
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
+    parser.add_argument("--registration-driver", choices=["protocol", "playwright", "roxy", "cloak", "camoufox", "browser_use", "skyvern"], default=None, help="Registration driver (default: protocol)")
+    parser.add_argument("--browser-headless", dest="browser_headless", action="store_true", default=None, help="Run Playwright registration headless")
+    parser.add_argument("--browser-visible", dest="browser_headless", action="store_false", help="Run Playwright registration with a visible browser")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
     parser.add_argument("--payment-method", "--payment-link-method", choices=_payment_method_choices(), default=None, help="Protocol payment-link method")
     parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
@@ -600,11 +616,15 @@ def main():
                 print(f"[OK] Phone registered: {result.get('phone', '')} | AT: [REDACTED]")
             else:
                 print(f"[FAIL] {result.get('error', 'unknown')}")
-        _save_registration_results(
+        report = _save_registration_results(
             args, results, effective_count=effective_count, base_dir=base_dir,
             pipeline_started=pipeline_started, mailbox_seconds=0,
             register_seconds=time.time() - register_started,
         )
+        if bool(getattr(args, "desktop_ipc", False)):
+            from .desktop_ipc import emit_result
+
+            emit_result(report, enabled=True)
         return
 
     register_started = time.time()
@@ -632,7 +652,8 @@ def main():
             phone_pool=phone_pool,
             codex_oauth=False,
             registration_mode=args.registration_mode,
-            browser_headless=bool(getattr(args, "browser_headless", False)),
+            registration_driver=getattr(args, "registration_driver", None),
+            browser_headless=getattr(args, "browser_headless", None),
             enroll_2fa=not getattr(args, "no_2fa", False),
             run_email_func=run_email,
             on_result=persist_completed_result,
@@ -640,22 +661,23 @@ def main():
     else:
         mailbox = mailboxes[0] if mailboxes else None
         proxy_pool = _proxy_pool_values(args)
-        if len(proxy_pool) > 1:
-            from .batch_runner import select_registration_proxy_base
-            selected_proxy = select_registration_proxy_base(proxy_pool, args.proxy)
-            proxy_pool = [selected_proxy] if selected_proxy else []
-        results = [run_email(
-            proxy=(proxy_pool[0] if proxy_pool else args.proxy),
-            password=args.password,
-            mailbox=mailbox,
+        results = run_batch(
+            count=1,
+            proxy=args.proxy,
+            proxy_pool=proxy_pool,
+            mailboxes=[mailbox] if mailbox else [],
+            workers=1,
             phone_pool=phone_pool,
             codex_oauth=False,
             registration_mode=args.registration_mode,
+            registration_driver=getattr(args, "registration_driver", None),
+            browser_headless=getattr(args, "browser_headless", None),
             enroll_2fa=not getattr(args, "no_2fa", False),
-        )]
+            run_email_func=run_email,
+        )
     register_seconds = time.time() - register_started
 
-    _save_registration_results(
+    report = _save_registration_results(
         args,
         results,
         effective_count=effective_count,
@@ -664,6 +686,10 @@ def main():
         mailbox_seconds=mailbox_seconds,
         register_seconds=register_seconds,
     )
+    if bool(getattr(args, "desktop_ipc", False)):
+        from .desktop_ipc import emit_result
+
+        emit_result(report, enabled=True)
 
 
 def _save_registration_results(

@@ -397,48 +397,17 @@ class PPLinkExtractor:
     def _fresh_approval_sentinel(self, session: Any) -> dict[str, str]:
         """Mint one checkout-approval Sentinel bound to this flow/session."""
         try:
-            from .sentinel_quickjs import get_sentinel_token_via_quickjs
-            from .auth_headers import sentinel_fingerprint
+            from .sentinel import issue_sentinel_flow
 
-            fp = sentinel_fingerprint()
-            token = get_sentinel_token_via_quickjs(
-                session,
-                device_id=self.device_id,
+            issued = issue_sentinel_flow(
                 flow="checkout_session_approval",
-                log=lambda message: self._log("sentinel", _compact_diagnostic(message)),
-                user_agent=str(fp.get("user_agent") or ""),
-                screen=str(fp.get("screen") or ""),
-                lang=str(fp.get("lang") or ""),
-                lang_full=str(fp.get("lang_full") or ""),
-                browser_type=str(fp.get("browser_type") or ""),
-                navigator_platform=str(fp.get("navigator_platform") or "Win32"),
-                navigator_vendor=str(fp.get("navigator_vendor") or "Google Inc."),
-                hardware_concurrency=int(fp.get("hardware_concurrency") or 8),
-                device_memory=fp.get("device_memory"),
-                max_touch_points=int(fp.get("max_touch_points") or 0),
-                device_pixel_ratio=float(fp.get("device_pixel_ratio") or 1.0),
-                timezone=str(fp.get("timezone") or "UTC"),
-                js_heap_size_limit=int(fp.get("js_heap_size_limit") or 4395630592),
-                time_origin=int(fp.get("time_origin") or 1710000000000),
-                performance_now=float(fp.get("performance_now") or 12345.67),
-                sec_ch_ua_full_version_list=str(fp.get("sec_ch_ua_full_version_list") or ""),
-                sec_ch_ua_arch=str(fp.get("sec_ch_ua_arch") or ""),
-                sec_ch_ua_bitness=str(fp.get("sec_ch_ua_bitness") or ""),
-                sec_ch_ua_model=str(fp.get("sec_ch_ua_model") or ""),
-                sec_ch_ua_platform_version=str(fp.get("sec_ch_ua_platform_version") or ""),
+                device_id=self.device_id,
+                session=session,
+                proxy=self.approve_proxy,
             )
-            payload = json.loads(token or "{}")
-            if not token or str(payload.get("id") or "") != self.device_id:
-                return {}
-            so = payload.get("so") or payload.get("c") or ""
-            headers = {"OpenAI-Sentinel-Token": token}
-            if so:
-                headers["OpenAI-Sentinel-SO-Token"] = json.dumps({
-                    "so": so,
-                    "c": payload.get("c") or "",
-                    "id": self.device_id,
-                    "flow": "checkout_session_approval",
-                }, separators=(",", ":"), ensure_ascii=False)
+            headers = {"OpenAI-Sentinel-Token": issued.token}
+            if issued.so_token:
+                headers["OpenAI-Sentinel-SO-Token"] = issued.so_token
             self._log("sentinel", "checkout_session_approval Sentinel ready")
             return headers
         except Exception as exc:

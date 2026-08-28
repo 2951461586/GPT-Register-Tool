@@ -19,7 +19,14 @@ from .auth_headers import (
     select_auth_fingerprint,
 )
 from .error_classification import classify_error
-from .config import CFG, current_config_data, resolve_runtime_config, runtime_config_scope, validate_config
+from .config import (
+    CFG,
+    current_config_data,
+    resolve_runtime_config,
+    runtime_config_scope,
+    validate_config,
+    validate_registration_driver_config,
+)
 from .http_client import request_with_retry
 from .phone_proxy import normalize_proxy_url, refresh_proxy_sid
 from .sentinel_tokens import (
@@ -115,6 +122,7 @@ from .utils import (
     _tl,
     think_stage,
 )
+from .registration_drivers.base import normalize_registration_driver
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = f"{REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD}|{LOGIN_EMAIL_OTP_SUBJECT_KEYWORD}"
@@ -137,12 +145,30 @@ def run_email(
     browser_headless: bool | None = None,
     enroll_2fa=True,
     runtime_config=None,
+    registration_driver=None,
+    proxy_metadata=None,
 ):
     """Run the staged email-registration workflow."""
+    config = resolve_runtime_config(runtime_config, workflow="registration")
+    selected_driver = normalize_registration_driver(registration_driver, config.data)
+    # Validate selected browser credentials before the driver can claim a
+    # disposable mailbox or create an external profile/session.
+    validate_registration_driver_config(config.data, selected_driver, proxy=proxy)
+    if selected_driver != "protocol":
+        from .registration_drivers.playwright import run_browser_registration
+        return run_browser_registration(
+            driver_name=selected_driver,
+            proxy=proxy, password=password, mailbox=mailbox, config=config.data,
+            browser_headless=browser_headless, enroll_2fa=enroll_2fa,
+            proxy_metadata=proxy_metadata,
+            # Every browser registration validates the first AT inside the
+            # same browser context.  Crossing to the protocol/health proxy at
+            # this point creates fingerprint and egress drift on a new account.
+            probe_fn=None,
+        )
     from .registration_handlers import RegistrationEmailWorkflow
 
     flow = RegistrationStateMachine(registration_stage)
-    config = resolve_runtime_config(runtime_config, workflow="registration")
     return RegistrationEmailWorkflow(
         flow,
         proxy=proxy,
@@ -225,6 +251,7 @@ def run_batch(
     browser_headless=None,
     enroll_2fa=True,
     on_result=None,
+    registration_driver=None,
 ):
     """Compatibility entry point for callers importing ``registration.run_batch``."""
     from .batch_runner import run_batch_impl
@@ -243,6 +270,7 @@ def run_batch(
         on_result=on_result,
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
+        registration_driver=registration_driver,
         run_email_func=run_email,
     )
 

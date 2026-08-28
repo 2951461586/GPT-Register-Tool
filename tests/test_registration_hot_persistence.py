@@ -64,6 +64,7 @@ def _runtime_cfg(db_path):
     cfg["storage"]["sqlite_path"] = str(db_path)
     cfg["output"] = dict(cfg.get("output") or {})
     cfg["output"]["filename_pattern"] = "session_{email}_{timestamp}.json"
+    cfg["account_health"] = {"post_registration_enabled": False}
     return cfg
 
 
@@ -199,3 +200,20 @@ def test_failed_hot_persistence_is_retried_without_stopping_batch(tmp_path):
     assert report["session_saved"] == 2
     assert report["db_saved"] == 2
     assert calls["count"] == 3
+
+
+def test_successful_persistence_enqueues_post_registration_health(tmp_path):
+    cfg = _runtime_cfg(tmp_path / "accounts.sqlite3")
+    cfg["account_health"] = {"post_registration_enabled": True}
+    ctx = _context(cfg, lambda _data, *, json_path: bool(json_path))
+    result = _result("health@example.com")
+
+    with patch(
+        "sms_tool.account_health_queue.enqueue_post_registration_checks",
+        return_value=[{"id": "plan-job"}, {"id": "deep-job"}],
+    ) as enqueue:
+        marker = persist_registration_result(_args(), result, tmp_path, ctx)
+
+    assert marker["account_health_enqueued"] is True
+    assert marker["account_health_jobs"] == ["plan-job", "deep-job"]
+    enqueue.assert_called_once()

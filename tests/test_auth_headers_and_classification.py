@@ -57,9 +57,15 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertEqual(chat["oai-session-id"], "sid")
 
     def test_auth_browser_fingerprint_versions_are_consistent(self):
-        version = AUTH_IMPERSONATE.removeprefix("chrome")
-        self.assertIn(f"Chrome/{version}.", DEFAULT_USER_AGENT)
-        self.assertIn(f'v="{version}"', DEFAULT_SEC_CH_UA)
+        if AUTH_IMPERSONATE.startswith("firefox"):
+            version = AUTH_IMPERSONATE.removeprefix("firefox")
+            self.assertIn(f"Firefox/{version}.", DEFAULT_USER_AGENT)
+            # Firefox emits no Sec-CH-UA client hints; the profile value stays blank.
+            self.assertEqual(DEFAULT_SEC_CH_UA, "")
+        else:
+            version = AUTH_IMPERSONATE.removeprefix("chrome")
+            self.assertIn(f"Chrome/{version}.", DEFAULT_USER_AGENT)
+            self.assertIn(f'v="{version}"', DEFAULT_SEC_CH_UA)
 
     def test_rotated_fingerprint_keeps_tls_and_client_hints_coherent(self):
         cfg = {"mode": "rotate", "profiles": ["chrome124", "chrome131"]}

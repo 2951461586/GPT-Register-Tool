@@ -372,7 +372,11 @@
                 <Image Source="Assets/app-icon.ico" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
               <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
-                <TextBlock Text="GPT Register Tool" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="SidebarBrandTitle"
+                           Text="GPT Register Tool"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"/>
               </StackPanel>
               <Button x:Name="SidebarToggleButton"
                       Grid.Column="2"

@@ -13,7 +13,8 @@ from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fin
 from .config import current_config_data
 from .http_client import request_with_retry
 from .registration_outcome import _failure_result
-from .sentinel_tokens import _extract_sentinel, _import_sentinel_cookies, _sentinel_device_id
+from .sentinel import issue_sentinel_flow
+from .sentinel_tokens import _import_sentinel_cookies, _sentinel_device_id
 from .utils import (
     _generate_password,
     _print_timings,
@@ -80,21 +81,15 @@ def run_phone_register(
     print(f"[*] Phone: {phone}  Activation ID: {activation.activation_id}")
     _tock()
 
-    # Step 1: Get sentinel tokens
+    # Step 1: Establish the device identity. Flow tokens are minted immediately
+    # before the protocol operations that consume them.
     if sentinel_data:
         print("[*] Using provided sentinel tokens")
     else:
-        _tick("1-Extract sentinel token")
-        try:
-            sentinel_data = _extract_sentinel(proxy=proxy, force_fresh=True, persist=False)
-            _tock()
-        except Exception as exc:
-            _safe_tock()
-            sms_client.cancel(activation.activation_id)
-            return _failure_result(f"sentinel_extract_failed: {exc}", email=phone)
-    if not sentinel_data or not sentinel_data.get("sentinel_token"):
-        sms_client.cancel(activation.activation_id)
-        return _failure_result("sentinel_extract_failed", email=phone)
+        sentinel_data = {
+            "oai_did": str(uuid.uuid4()),
+            "sentinel_source": "node_sdk_runner",
+        }
 
     # Step 2: Generate credentials
     explicit_password = bool(str(password or "").strip())
@@ -105,8 +100,6 @@ def run_phone_register(
     did = _sentinel_device_id(sentinel_data) or str(uuid.uuid4())
     session_logging_id = str(uuid.uuid4()).replace("-", "")
 
-    _sentinel_token = sentinel_data["sentinel_token"]
-    _sentinel_so_token = sentinel_data["sentinel_so_token"]
     # 密码是敏感凭据，绝不打印明文到 stdout（日志会被采集/分享）。
     # 跟 run_email 的 passwordless 分支保持一致的脱敏标记。
     _phone_display = f"{phone[:3]}***{phone[-3:]}" if phone and len(phone) >= 6 else "(none)"
@@ -162,6 +155,19 @@ def run_phone_register(
 
         # Step 3: Register with phone + password
         _tick("3-User register (phone+password)")
+        username_sentinel = issue_sentinel_flow(
+            flow="username_password_create",
+            device_id=did,
+            session=session,
+            proxy=proxy,
+            supplied_data=sentinel_data,
+            config=config,
+        )
+        sentinel_data = {
+            **dict(sentinel_data),
+            "sentinel_token": username_sentinel.token,
+            "oai_did": did,
+        }
         r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
             json={"password": password, "username": phone},
             headers=_auth_request_headers(
@@ -169,7 +175,7 @@ def run_phone_register(
                 did=did,
                 referer=f"{auth_base}/create-account/password",
                 origin=auth_base,
-                sentinel_token=_sentinel_token,
+                sentinel_token=username_sentinel.token,
             ),
             impersonate=auth_impersonate())
         _tock()
@@ -209,7 +215,7 @@ def run_phone_register(
                 did=did,
                 referer=f"{auth_base}/phone-verification",
                 origin=auth_base,
-                sentinel_token=_sentinel_token,
+                sentinel_token=username_sentinel.token,
             ),
             impersonate=auth_impersonate())
         _tock()
@@ -235,6 +241,19 @@ def run_phone_register(
 
         # Step 6: Create account
         _tick("6-Create account")
+        create_sentinel = issue_sentinel_flow(
+            flow="oauth_create_account",
+            device_id=did,
+            session=session,
+            proxy=proxy,
+            supplied_data=sentinel_data,
+            config=config,
+        )
+        sentinel_data = {
+            **dict(sentinel_data),
+            "sentinel_oauth_token": create_sentinel.token,
+            "sentinel_so_token": create_sentinel.so_token,
+        }
         create_body = {"name": full_name, "birthdate": birthdate}
         if continue_url:
             create_body["continue_url"] = continue_url
@@ -246,8 +265,8 @@ def run_phone_register(
                 did=did,
                 referer=f"{auth_base}/create-account/name",
                 origin=auth_base,
-                sentinel_token=_sentinel_token,
-                sentinel_so_token=_sentinel_so_token,
+                sentinel_token=create_sentinel.token,
+                sentinel_so_token=create_sentinel.so_token,
             ),
             impersonate=auth_impersonate())
         _tock()
