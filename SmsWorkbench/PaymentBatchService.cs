@@ -30,6 +30,7 @@ namespace SmsWorkbench
     public sealed class PaymentBatchService : IPaymentBatchService, IPaymentBatchProgressService
     {
         private static readonly string[] ListSeparators = ["\r\n", "\n", ",", ";"];
+        private const string PoolLineSeparator = ProxyInputNormalizer.LineSeparator;
         private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
         private readonly IApplicationPaths _paths;
         private readonly IBackendClient _backendClient;
@@ -432,16 +433,16 @@ namespace SmsWorkbench
             foreach (object value in values)
             {
                 if (value is string[] array && array.Length > 0)
-                    return string.Join(Environment.NewLine, array);
+                    return string.Join(PoolLineSeparator, array);
                 string text = value switch
                 {
-                    JsonArray jsonArray => string.Join(Environment.NewLine, jsonArray.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0)),
+                    JsonArray jsonArray => string.Join(PoolLineSeparator, jsonArray.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0)),
                     JsonNode node => node.ToString(),
                     _ => value?.ToString() ?? ""
                 };
                 string[] parsed = ParseList(text);
                 if (parsed.Length > 0)
-                    return string.Join(Environment.NewLine, parsed);
+                    return string.Join(PoolLineSeparator, parsed);
             }
             return "";
         }
@@ -467,7 +468,7 @@ namespace SmsWorkbench
             => ProxyInputNormalizer.NormalizeList(value);
 
         private static string NormalizePoolText(string value)
-            => string.Join(Environment.NewLine, NormalizePool(value));
+            => string.Join(PoolLineSeparator, NormalizePool(value));
 
         private static bool ValidCountry(string value)
             => value.Length == 0 || Regex.IsMatch(value, "^[A-Z]{2}$", RegexOptions.CultureInvariant);

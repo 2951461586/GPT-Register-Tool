@@ -315,7 +315,7 @@ namespace SmsWorkbench
             IEnumerable<string> entries = value is JsonArray array
                 ? array.Select(item => item?.ToString() ?? "")
                 : ParseList(value?.ToString() ?? "");
-            return string.Join(Environment.NewLine, entries.Where(item => item.Length > 0));
+            return string.Join(ProxyInputNormalizer.LineSeparator, entries.Where(item => item.Length > 0));
         }
 
         private static string FirstArray(JsonObject root, string path)
