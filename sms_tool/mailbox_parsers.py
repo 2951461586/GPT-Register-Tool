@@ -57,36 +57,6 @@ def _is_cfworker_line(line):
     return lowered.startswith("cfworker://") or lowered.endswith("@edu.liziai.cloud") or lowered.endswith("@liziai.cloud")
 
 
-def _is_stalwart_line(line):
-    return line.lower().startswith("stalwart://")
-
-
-def _parse_stalwart_line(line, source_path, line_no):
-    """Parse a self-hosted Stalwart mailbox.
-
-    Format: stalwart://email---password---host
-      - email     : the Stalwart account email (also the OTP destination)
-      - password  : the Stalwart account password / app password
-      - host      : optional JMAP base host (default https://stalwart.liziai.cloud)
-    """
-    payload = line.split("://", 1)[1].strip() if "://" in line else line.strip()
-    parts = [p.strip() for p in payload.split("---", 2)]
-    email = _normalize_mailbox_email(parts[0] if parts else "")
-    password = parts[1] if len(parts) >= 2 else ""
-    host = parts[2] if len(parts) >= 3 else ""
-    if not email or not password:
-        print(f"[!] Skip malformed Stalwart mailbox line {source_path}:{line_no}")
-        return None
-    return MailboxAccount(
-        email=email.lower(),
-        password=password,
-        host=host,
-        source=str(source_path),
-        provider="stalwart",
-        auth_mode="password",
-    )
-
-
 def _is_gmail_line(line):
     return line.lower().startswith("gmail://")
 
@@ -278,8 +248,6 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
         return _parse_smailr_line(line, source_path, line_no)
     if _is_icloud_url_line(line):
         return _parse_icloud_url_line(line, source_path, line_no)
-    if _is_stalwart_line(line):
-        return _parse_stalwart_line(line, source_path, line_no)
     if _is_cfworker_line(line):
         return _parse_cfworker_line(line, source_path, line_no)
     if _is_gmail_line(line):
@@ -340,11 +308,6 @@ def _parse_mailbox_token_file(path):
             continue
         if _is_icloud_url_line(line):
             account = _parse_icloud_url_line(line, token_path, line_no)
-            if account:
-                records.append(account)
-            continue
-        if _is_stalwart_line(line):
-            account = _parse_stalwart_line(line, token_path, line_no)
             if account:
                 records.append(account)
             continue
