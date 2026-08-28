@@ -634,6 +634,11 @@ namespace SmsWorkbench
             }
         }
 
+        // Proxy-pool text is data handed to the backend and persisted to
+        // config, not display text, so it must stay platform-neutral ("\n").
+        // PaymentBatchService parses either "\r\n" or "\n" back (ListSeparators).
+        private const string PoolLineSeparator = "\n";
+
         private static string ComputeDisplay(
             string country, Dictionary<string, List<string>> buckets, List<string> order)
         {
@@ -650,11 +655,11 @@ namespace SmsWorkbench
                 if (buckets.TryGetValue("", out List<string>? unknownList))
                     lines.AddRange(unknownList);
             }
-            return string.Join(Environment.NewLine, lines);
+            return string.Join(PoolLineSeparator, lines);
         }
 
         private static string FullPool(Dictionary<string, List<string>> buckets, List<string> order)
-            => string.Join(Environment.NewLine, order.SelectMany(region => buckets[region]));
+            => string.Join(PoolLineSeparator, order.SelectMany(region => buckets[region]));
 
         private static string FormatRegionSummary(Dictionary<string, List<string>> buckets, List<string> order)
         {
