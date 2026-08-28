@@ -9,6 +9,15 @@ namespace SmsWorkbench
         private static readonly string[] SupportedSchemes = ["http", "https", "socks5", "socks5h"];
         private static readonly string[] ListSeparators = ["\r\n", "\n", ",", ";"];
 
+        /// <summary>
+        /// Line separator used whenever proxy lists are serialized back to text
+        /// (config persistence and backend command-line arguments). Proxy lists
+        /// are data, not display text, so they stay platform-neutral: a config
+        /// written on Windows must be byte-identical on Linux.
+        /// <see cref="ListSeparators"/> parses either form back.
+        /// </summary>
+        public const string LineSeparator = "\n";
+
         public static string Normalize(string value, string defaultScheme = "http")
         {
             string raw = (value ?? "").Trim().Replace('：', ':');
@@ -82,7 +91,7 @@ namespace SmsWorkbench
         }
 
         public static string NormalizeListText(string value, string defaultScheme = "http")
-            => string.Join(Environment.NewLine, NormalizeList(value, defaultScheme));
+            => string.Join(LineSeparator, NormalizeList(value, defaultScheme));
 
         private static string NormalizeUrlForm(string scheme, string remainder)
         {

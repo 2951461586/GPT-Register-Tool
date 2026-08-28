@@ -195,7 +195,7 @@ public sealed class SettingsServiceTests
         IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
 
         Assert.Equal(
-            string.Join(Environment.NewLine, "http://registration-one", "http://registration-two"),
+            string.Join("\n", "http://registration-one", "http://registration-two"),
             Field(categories, "registration_proxy_pool").Value);
         Assert.DoesNotContain(SettingsCatalog.AllFields, field => field.Key == "protocol_proxy_pool");
     }

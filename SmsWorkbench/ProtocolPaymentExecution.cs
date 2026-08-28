@@ -149,7 +149,7 @@ namespace SmsWorkbench
         private static void AddPoolArgument(List<string> arguments, string option, string value)
         {
             string normalized = string.Join(
-                Environment.NewLine,
+                ProxyInputNormalizer.LineSeparator,
                 (value ?? "")
                     .Split(ListSeparators, StringSplitOptions.RemoveEmptyEntries)
                     .Select(item => item.Trim())

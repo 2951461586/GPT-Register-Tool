@@ -57,7 +57,7 @@ public sealed class PaymentBatchServiceTests
         Assert.Contains("--payment-probe-only", backend.LastCommand.Arguments);
         Assert.DoesNotContain("--no-require-zero", backend.LastCommand.Arguments);
         Assert.Equal("probe-batch", ArgumentAfter(backend.LastCommand.Arguments, "--payment-batch-id"));
-        Assert.Equal("http://checkout-one" + Environment.NewLine + "http://checkout-two", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-pool"));
+        Assert.Equal("http://checkout-one\nhttp://checkout-two", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-pool"));
         Assert.Equal("http://approve-jp", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-pool"));
         Assert.Equal("ID", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-country"));
         Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
@@ -306,7 +306,7 @@ public sealed class PaymentBatchServiceTests
 
         PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("gopay");
 
-        Assert.Equal("http://legacy-one" + Environment.NewLine + "http://legacy-two", loaded.CheckoutProxyPool);
+        Assert.Equal("http://legacy-one\nhttp://legacy-two", loaded.CheckoutProxyPool);
         Assert.Equal(loaded.CheckoutProxyPool, loaded.ApproveProxyPool);
     }
 
@@ -365,7 +365,7 @@ public sealed class PaymentBatchServiceTests
 
         PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("paypal");
 
-        Assert.Equal("http://payment-us-one" + Environment.NewLine + "http://payment-us-two", loaded.CheckoutProxyPool);
+        Assert.Equal("http://payment-us-one\nhttp://payment-us-two", loaded.CheckoutProxyPool);
         Assert.Equal("http://payment-jp", loaded.ApproveProxyPool);
         Assert.Equal("US", loaded.CheckoutCountry);
         Assert.Equal("JP", loaded.ApproveCountry);

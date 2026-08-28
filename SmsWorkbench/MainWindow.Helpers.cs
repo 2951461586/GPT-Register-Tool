@@ -40,7 +40,7 @@ namespace SmsWorkbench
             if (pool.Count > 1)
             {
                 args.Add("--proxy-pool");
-                args.Add(string.Join(Environment.NewLine, pool));
+                args.Add(string.Join(ProxyInputNormalizer.LineSeparator, pool));
             }
         }
 

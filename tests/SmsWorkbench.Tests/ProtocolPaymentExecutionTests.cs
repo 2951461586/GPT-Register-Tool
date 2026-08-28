@@ -27,7 +27,7 @@ public sealed class ProtocolPaymentExecutionPlannerTests
             "--target-country", "US",
             "--email", "user@example.com",
             "--session-file", "C:\\sessions\\user.json",
-            "--checkout-proxy-pool", "http://checkout-one" + Environment.NewLine + "http://checkout-two",
+            "--checkout-proxy-pool", "http://checkout-one\nhttp://checkout-two",
             "--approve-proxy-pool", "http://approve-one",
             "--no-jit-at-refresh",
             "--checkout-proxy-country", "US",
@@ -52,7 +52,7 @@ public sealed class ProtocolPaymentExecutionPlannerTests
             "tr");
 
         Assert.Equal("direct_card", ArgumentAfter(arguments, "--payment-method"));
-        Assert.Equal("http://checkout-one" + Environment.NewLine + "http://checkout-two", ArgumentAfter(arguments, "--checkout-proxy-pool"));
+        Assert.Equal("http://checkout-one\nhttp://checkout-two", ArgumentAfter(arguments, "--checkout-proxy-pool"));
         Assert.Equal("http://approve-one", ArgumentAfter(arguments, "--approve-proxy-pool"));
         Assert.Equal("US", ArgumentAfter(arguments, "--checkout-proxy-country"));
         Assert.Equal("PH", ArgumentAfter(arguments, "--approve-proxy-country"));
