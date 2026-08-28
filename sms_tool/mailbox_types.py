@@ -23,6 +23,6 @@ class MailboxAccount:
     price: str = ""
     purchase_total_cost: str = ""
     balance_after: str = ""
-    # Self-hosted mailbox (Stalwart / generic JMAP-IMAP) connection hints.
-    host: str = ""          # JMAP/IMAP base host, e.g. stalwart.liziai.cloud
+    # Self-hosted / IMAP mailbox connection hints (Gmail, generic IMAP, etc.).
+    host: str = ""          # IMAP base host
     port: int = 0           # IMAP/Submission port when not default

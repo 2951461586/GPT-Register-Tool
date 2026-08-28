@@ -21,7 +21,6 @@ from .mail_otp import (
     _message_recipients,
 )
 from . import mailbox_cfworker
-from . import mailbox_stalwart  # self-registers the "stalwart" JMAP OTP poller
 from .mailbox_types import MailboxAccount
 from .mailbox_parsers import (
     _looks_ms_client_id,
