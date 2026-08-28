@@ -111,7 +111,8 @@ sms_tool/
   paypal_reconciliation.py  Independent, secret-free PayPal merchant-return reconciliation.
   payment_reconciliation.py Method-neutral reconciliation facade and unknown-result contract.
   paypal_authorization_queue.py Durable PayPal-only BA follow-up authorization queue.
-  paypal_auto.py            Project-local PayPal browser page automation helper.
+  paypal/                   Project-local PayPal browser automation package (7 layers, see PayPal Payment Layer).
+  paypal_auto.py            Compatibility shim re-exporting sms_tool.paypal.
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
   nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
   captcha_solver.py         CAPTCHA solving abstraction.
@@ -179,7 +180,7 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | PayPal return reconciliation | `sms_tool.paypal_reconciliation` | caller-supplied authenticated transport, allowlisted merchant return hosts | payment-link extraction, link persistence, payment authorization |
 | Payment reconciliation dispatch | `sms_tool.payment_reconciliation` | catalog reconciliation policy and method-owned reconciler | link generation, automatic retry of unknown side effects |
 | PayPal BA authorization queue | `sms_tool.paypal_authorization_queue` | completed PayPal BA extraction artifacts and explicit authorization handlers | non-PayPal methods, inline authorization during extraction |
-| Payment execution | `sms_tool.paypal_auto` | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
+| Payment execution | `sms_tool.paypal` (shim: `sms_tool.paypal_auto`) | account seed, saved payment links, provider services | Registration, mailbox pool edits, link regeneration as a side effect |
 | Explicit Agent Identity conversion | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
 | SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import`, `sms_tool.sub2api_import` | session JSON, account seed, CPA/SUB2API API | Registration or payment execution |
@@ -761,7 +762,7 @@ matching free-form error text.
    exception: when a six-digit BLIK code is supplied, its operation is
    `execute_payment`, it submits the code, and it returns `status=completed`
    without fabricating a URL. The UI must label this action as payment execution.
-2. **Execute an explicit payment command**: `sms_tool.paypal_auto`.
+2. **Execute an explicit payment command**: `sms_tool.paypal` (via `auto_pay`).
    It only runs when the user requests `--one-click-pay` or a matching UI action.
    It uses existing account seed data and payment links rather than registering
    accounts. UPI has no one-click execution adapter in this project; it is a
@@ -877,7 +878,19 @@ transaction.
 
 ### PayPal Payment Layer
 
-`sms_tool/paypal_auto.py` owns browser page mechanics: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
+`sms_tool/paypal/` owns browser page mechanics: form filling, PayPal challenge detection, SMS polling hooks, and browser-engine fallback. It must not regenerate links, select accounts, or persist SQLite rows directly except through the result passed back to the adapter.
+
+The package is split by layer with a strictly one-way dependency direction (no cycles). `sms_tool/paypal_auto.py` is kept only as a compatibility shim that re-exports the package; new code should import from `sms_tool.paypal` directly.
+
+| module | responsibility |
+| --- | --- |
+| `paypal.orchestrator` | `auto_pay` entry point and strategy selection: reverse protocol -> nodriver -> anti-detect browser; persists the outcome |
+| `paypal.flow_steps` | Ordered step machine (`_run_browser_steps`) plus the human-verification and SMS gates that can interrupt it |
+| `paypal.form_steps` | Semantic PayPal checkout fields: email, name, phone, password, card, billing address, terms |
+| `paypal.session` | Browser context helpers: cookie import, navigator fingerprint override, load waits, overlay dismissal, screenshots |
+| `paypal.dom_fields` | Generic locate / fill / read primitives with selector fallbacks; no PayPal-specific meaning |
+| `paypal.config_picker` | Card / address / phone round-robin selection, index files, alias email, result persistence |
+| `paypal.errors` | `_PayPalStepError` (dependency-free leaf, importable from every layer) |
 
 The retired `sms_tool/paypal_links.py` regeneration wrapper has been removed.
 New and repeated PayPal links use the unified `payment_link_manager` interface;

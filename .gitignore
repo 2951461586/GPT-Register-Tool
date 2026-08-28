@@ -37,6 +37,7 @@ runtime/**/*.log
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/
+SmsWorkbench/*_wpftmp.csproj
 tests/**/bin/
 tests/**/obj/
 SmsWorkbench.Contracts/bin/
