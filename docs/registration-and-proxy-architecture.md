@@ -150,7 +150,7 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 
 ## 9. 敏感数据边界
 
-- `.gitignore` 已保护：`config.json`、`sms_tool/config.json`、`mailbox_tokens.txt`、`sessions/`、`runtime/`、`dist/`、`.dotnet/`、`logs/`、`webui/dist/`、`*_tokens.txt` 等。
+- `.gitignore` 已保护：`config.json`、`sms_tool/config.json`、`mailbox_tokens.txt`、`sessions/`、`runtime/`、`dist/`、`.dotnet/`、`logs/`、`*_tokens.txt` 等。
 - `sensitive_policy.json` 是唯一的语言中立脱敏策略；Python 经 `sanitizer`，WPF 经 `SensitiveDataSanitizer` 加载同一文件。token / TOTP / 代理凭据 / 卡号 / 密码 / 支付密钥在日志、异常、IPC、报告里**全部替换**（非前缀遮罩）。
 
 ---
