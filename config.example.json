@@ -101,7 +101,6 @@
     "browser_process_pool": {
       "enabled": true,
       "max_concurrent": 4,
-      "contexts_per_process": 6,
       "max_uses_per_process": 10,
       "recycle_on_error": true
     }

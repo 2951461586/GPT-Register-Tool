@@ -376,7 +376,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                     errors.append(f"registration.browser_process_pool.{key} must be a boolean")
             _validate_positive_numbers(
                 process_pool,
-                ("max_concurrent", "contexts_per_process", "max_uses_per_process"),
+                ("max_concurrent", "max_uses_per_process"),
                 "registration.browser_process_pool",
                 errors,
             )

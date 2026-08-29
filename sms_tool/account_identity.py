@@ -38,7 +38,7 @@ def create_registration_identity(
     """Allocate the canonical identity persisted for one account."""
     key = _canonical_fingerprint_key(fingerprint_key)
     if not key:
-        key = _canonical_fingerprint_key(shared_fingerprint_pool(config).next().name)
+        key = _canonical_fingerprint_key(shared_fingerprint_pool(config).next(proxy).name)
     identity: dict[str, Any] = {
         "version": IDENTITY_VERSION,
         "proxy_affinity": _proxy_affinity(proxy, pool_index=pool_index),

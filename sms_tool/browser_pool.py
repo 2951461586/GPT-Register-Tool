@@ -60,7 +60,6 @@ class BrowserSlot:
 class PoolConfig:
     enabled: bool = False
     max_concurrent: int = 4
-    contexts_per_process: int = 6
     max_uses_per_process: int = 10
     recycle_on_error: bool = True
 
@@ -78,7 +77,6 @@ class PoolConfig:
         return cls(
             enabled=bool(pool_cfg.get("enabled", False)),
             max_concurrent=max(1, _coerce_int(pool_cfg.get("max_concurrent"), 4)),
-            contexts_per_process=max(1, _coerce_int(pool_cfg.get("contexts_per_process"), 6)),
             max_uses_per_process=max(1, _coerce_int(pool_cfg.get("max_uses_per_process"), 10)),
             recycle_on_error=bool(pool_cfg.get("recycle_on_error", True)),
         )
@@ -134,6 +132,15 @@ class BrowserProcessPool:
         ]
         self._lock = threading.Lock()
         self._closed = False
+        # Resident browser processes, keyed by slot id.  Unlike the old design
+        # (which launched + closed a browser on every call), a resident is kept
+        # alive across accounts: each account gets a fresh isolated context via
+        # ``renew_account_context`` while the expensive process stays resident
+        # until it is recycled.  ``_resident_proxy`` records the egress the
+        # resident was launched with so a proxy change forces a clean relaunch
+        # (preserving per-account proxy isolation).
+        self._residents: dict[int, Any] = {}
+        self._resident_proxy: dict[int, str | None] = {}
 
     @contextmanager
     def session(self, **session_overrides: Any):
@@ -141,7 +148,13 @@ class BrowserProcessPool:
 
         Yields ``(browser, slot)`` where ``browser`` is a connected browser
         session and ``slot`` is the ``BrowserSlot`` tracking this process.
-        The browser is closed on context exit if it needs recycling.
+
+        Real process reuse: when a resident browser already exists for the slot
+        and the requested proxy matches its launch egress, the resident browser
+        is kept alive and only a fresh per-account context is created (so cookies
+        / storage never leak between accounts).  The browser is fully torn down
+        and relaunched when it reaches ``max_uses_per_process``, errors (if
+        ``recycle_on_error``), or the proxy changes.
         """
         if self._closed:
             raise BrowserRegistrationError("browser_pool_closed")
@@ -153,25 +166,69 @@ class BrowserProcessPool:
                 f"no slot available within {_SLOT_TIMEOUT_SECONDS}s",
             )
 
-        slot = self._acquire_slot()
-        browser = None
+        requested_proxy = session_overrides.get("proxy", self.proxy)
+        slot = self._acquire_slot(requested_proxy)
         try:
-            # Start from the pool defaults, then let the caller override or
-            # extend them.  Extra keys (``browser_identity``, ``viewport``)
-            # must reach the session factory: browser_identity carries the
-            # per-account profile id and viewport carries the fingerprint
-            # pool's screen size, both of which are anti-linkage critical.
-            kwargs = {
-                "proxy": self.proxy,
-                "headless": self.headless,
-                "timeout_ms": self.timeout_ms,
-                "locale": self.locale,
-                "timezone_id": self.timezone_id,
-            }
-            kwargs.update(session_overrides)
-            browser = self.session_factory(self.driver, config=self.config, **kwargs)
-            browser.__enter__()
-            yield browser, slot
+            resident = self._residents.get(slot.slot_id)
+            relaunch = resident is None or self._resident_proxy.get(slot.slot_id) != requested_proxy
+            if relaunch:
+                # Tear down any prior resident before launching a fresh process
+                # (proxy change or first use of this slot generation).
+                old = self._residents.pop(slot.slot_id, None)
+                if old is not None:
+                    try:
+                        old.close()
+                    except Exception:
+                        pass
+                self._resident_proxy.pop(slot.slot_id, None)
+                kwargs = {
+                    "proxy": self.proxy,
+                    "headless": self.headless,
+                    "timeout_ms": self.timeout_ms,
+                    "locale": self.locale,
+                    "timezone_id": self.timezone_id,
+                }
+                kwargs.update(session_overrides)
+                resident = self.session_factory(self.driver, config=self.config, **kwargs)
+                resident.__enter__()
+                self._residents[slot.slot_id] = resident
+                self._resident_proxy[slot.slot_id] = requested_proxy
+            else:
+                # Reuse: swap in a fresh isolated context on the resident browser.
+                # If the driver cannot renew (no resident browser, CDP quirk,
+                # etc.) fall back to a clean relaunch so the caller is never
+                # handed a dead browser.
+                try:
+                    renew = getattr(resident, "renew_account_context", None)
+                    if renew is None:
+                        raise AttributeError("renew_account_context_unavailable")
+                    per_account = {
+                        k: session_overrides[k]
+                        for k in ("locale", "timezone_id", "viewport")
+                        if k in session_overrides
+                    }
+                    renew(**per_account)
+                except Exception:
+                    try:
+                        resident.close()
+                    except Exception:
+                        pass
+                    self._residents.pop(slot.slot_id, None)
+                    self._resident_proxy.pop(slot.slot_id, None)
+                    kwargs = {
+                        "proxy": self.proxy,
+                        "headless": self.headless,
+                        "timeout_ms": self.timeout_ms,
+                        "locale": self.locale,
+                        "timezone_id": self.timezone_id,
+                    }
+                    kwargs.update(session_overrides)
+                    resident = self.session_factory(self.driver, config=self.config, **kwargs)
+                    resident.__enter__()
+                    self._residents[slot.slot_id] = resident
+                    self._resident_proxy[slot.slot_id] = requested_proxy
+
+            yield resident, slot
             slot.health = BrowserHealth.HEALTHY
         except BrowserRegistrationError as exc:
             slot.health = BrowserHealth.FAILED
@@ -182,23 +239,54 @@ class BrowserProcessPool:
             slot.last_error = str(exc)[:200]
             raise
         finally:
-            if browser is not None:
-                try:
-                    browser.close()
-                except Exception:
-                    pass
             slot.uses += 1
             slot.last_used = time.time()
+            resident = self._residents.get(slot.slot_id)
+            if slot.needs_recycle(self.pool_config.max_uses_per_process):
+                # Browser reached its use limit or was flagged failed: tear the
+                # process down fully so the next acquire relaunches clean.
+                if resident is not None:
+                    try:
+                        resident.close()
+                    except Exception:
+                        pass
+                self._residents.pop(slot.slot_id, None)
+                self._resident_proxy.pop(slot.slot_id, None)
+            elif resident is not None:
+                # Keep the process alive; only release the per-account context.
+                # Drivers without ``release_account_context`` fall back to a full
+                # close (degrading gracefully to the old per-account behaviour).
+                try:
+                    release = getattr(resident, "release_account_context", None)
+                    if release is not None:
+                        release()
+                    else:
+                        resident.close()
+                except Exception:
+                    pass
             self._release_slot(slot)
             self._semaphore.release()
 
-    def _acquire_slot(self) -> BrowserSlot:
+    def _acquire_slot(self, requested_proxy: str | None) -> BrowserSlot:
         with self._lock:
-            # Prefer the healthiest, least-recently-used slot.
+            # Preference order:
+            #   1. healthy slots whose resident browser already matches the
+            #      requested egress -- reuse the process (real process reuse);
+            #   2. healthy slots with no resident (or a mismatched egress) --
+            #      they will be launched / relaunched on use;
+            #   3. slots that need recycling;
+            #   4. least-recently-used as a tie-breaker.
+            # Reusing a live resident first is what makes the pool actually
+            # reuse browser processes instead of spreading one account per slot.
+            def _has_resident(s: BrowserSlot) -> bool:
+                resident = self._residents.get(s.slot_id)
+                return resident is not None and self._resident_proxy.get(s.slot_id) == requested_proxy
+
             candidates = sorted(
                 self._slots,
                 key=lambda s: (
                     s.health != BrowserHealth.HEALTHY,
+                    not _has_resident(s),
                     s.needs_recycle(self.pool_config.max_uses_per_process),
                     s.last_used,
                 ),
@@ -227,8 +315,8 @@ class BrowserProcessPool:
                 "driver": self.driver,
                 "enabled": self.pool_config.enabled,
                 "max_concurrent": self.pool_config.max_concurrent,
-                "contexts_per_process": self.pool_config.contexts_per_process,
                 "max_uses_per_process": self.pool_config.max_uses_per_process,
+                "resident_browsers": len(self._residents),
                 "slots": [
                     {
                         "slot_id": s.slot_id,
@@ -242,8 +330,15 @@ class BrowserProcessPool:
             }
 
     def close(self) -> None:
-        """Mark the pool as closed; no new sessions can be acquired."""
+        """Mark the pool as closed and tear down every resident browser."""
         self._closed = True
+        for resident in list(self._residents.values()):
+            try:
+                resident.close()
+            except Exception:
+                pass
+        self._residents.clear()
+        self._resident_proxy.clear()
 
 
 __all__ = [

@@ -17,12 +17,19 @@ from sms_tool.registration_drivers.base import BrowserRegistrationError
 
 
 class FakeBrowser:
-    """Minimal stand-in for a connected browser session."""
+    """Minimal stand-in for a connected browser session.
+
+    Models the two-lifecycle contract the pool now relies on: a *process*
+    (launched once per resident browser, torn down only on recycle) and a
+    per-account *context* (created/released on every ``session()`` call when
+    the resident is reused).
+    """
 
     def __init__(self, recorder: list, fail_with: BaseException | None = None):
         self.recorder = recorder
         self.fail_with = fail_with
-        self.closed = False
+        self.process_closed = False
+        self.context_count = 0
         self.page = object()
 
     def __enter__(self):
@@ -36,8 +43,19 @@ class FakeBrowser:
         return False
 
     def close(self):
-        self.closed = True
+        self.process_closed = True
         self.recorder.append("close")
+
+    def release_account_context(self):
+        self.context_count += 1
+        self.recorder.append("release_context")
+
+    def renew_account_context(self, **kwargs):
+        if self.process_closed:
+            raise RuntimeError("browser_not_resident")
+        self.context_count += 1
+        self.recorder.append("renew_context")
+        return self
 
 
 class RecordingFactory:
@@ -125,14 +143,49 @@ def test_slot_recycles_on_failure_and_on_use_limit():
 # session lifecycle
 # --------------------------------------------------------------------------
 
-def test_session_yields_browser_and_closes_it():
+def test_session_yields_browser_and_keeps_process_alive():
     factory = RecordingFactory()
     pool = _pool(session_factory=factory)
     with pool.session(proxy="http://user:pw@1.2.3.4:8080") as (browser, slot):
         assert browser is factory.browsers[0]
         assert slot.slot_id == 0
-    assert browser.closed is True
-    assert factory.events == ["enter", "close", "exit"] or "close" in factory.events
+    # Real reuse: the process is NOT closed between accounts; only the
+    # per-account context is released so cookies/storage don't leak.
+    assert browser.process_closed is False
+    assert browser.context_count == 1
+    assert "release_context" in factory.events
+
+
+def test_pool_reuses_resident_browser_across_same_proxy_accounts():
+    factory = RecordingFactory()
+    pool = _pool(session_factory=factory)
+    proxy = "http://user:pw@1.2.3.4:8080"
+    for _ in range(3):
+        with pool.session(proxy=proxy, viewport=(1366, 768)) as (_browser, _slot):
+            pass
+    # One process launched, three per-account contexts created on it.
+    assert len(factory.calls) == 1
+    assert factory.browsers[0].process_closed is False
+    # Each account gets at least one released/created context (isolation).
+    assert factory.browsers[0].context_count >= 3
+    # The resident survives until it is recycled by max_uses.
+    assert pool.stats["resident_browsers"] == 1
+
+
+def test_pool_relaunches_when_proxy_changes_to_preserve_isolation():
+    factory = RecordingFactory()
+    pool = _pool(session_factory=factory)
+    with pool.session(proxy="http://1.1.1.1:1"):
+        pass
+    with pool.session(proxy="http://2.2.2.2:2"):
+        pass
+    # Different egress -> fresh browser process so accounts never share an
+    # exit IP through a reused process.
+    assert len(factory.calls) == 2
+    assert [call["proxy"] for call in factory.calls] == [
+        "http://1.1.1.1:1",
+        "http://2.2.2.2:2",
+    ]
 
 
 def test_session_forwards_anti_linkage_parameters():

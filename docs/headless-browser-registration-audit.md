@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | `playwright.py` | 1914 | 主引擎，所有驱动最终都走它 |
 | `external_sessions.py` | 1321 | 六个外部会话类的真实实现 |
-| `roxy_selenium.py` | 640 | Roxy 的 Selenium 轨道（与 CDP 轨道并存） |
+| `roxy_selenium.py` | 640 | **已删除（2026-08-29）**：Roxy 的 Selenium 轨道，与 CDP 轨道并存；决策为保留 CDP 单实现，已删 |
 | `browser_session.py` | 313 | 会话抽象 |
 | `stealth.py` | 92 | 反检测 |
 | `base.py` | 63 | 基类 |
@@ -105,7 +105,7 @@
 | --- | --- |
 | `browser_use.py` + `skyvern.py`（各 12 行） | 死驱动外壳。要么删，要么在启动时**快速失败**并给出明确提示，现在的表现是跑到一半才报 api_key 缺失 |
 | 四个 12 行薄封装 | `camoufox/cloak/browser_use/skyvern.py` 内容雷同，可收敛为一张 driver 注册表 |
-| `roxy_selenium.py`（640 行）双轨 | CDP 轨道 + Selenium 轨道并存，需确认哪条在跑，否则删一条 |
+| `roxy_selenium.py`（640 行）双轨 | **已解决（2026-08-29）**：保留 CDP 单实现（`RoxyBrowserSession`），删除 Selenium 轨道 + `RoxySeleniumSession` + `run_roxy_selenium_registration` |
 | `browser_pool.py` | **不要直接删** —— 它是 §3 第 1 项的现成实现，先决定接线还是删除 |
 
 > **注意**：`nodriver` 依赖**只用于 PayPal 验证码场景**，不是注册驱动，清理时别误删。

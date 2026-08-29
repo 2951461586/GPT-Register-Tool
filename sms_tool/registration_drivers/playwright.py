@@ -497,9 +497,6 @@ def _submit_email_via_nextauth(page, email: str) -> bool:
 
 
 def _click_resend(page) -> bool:
-    if hasattr(page, "driver") and not type(page).__module__.startswith("unittest.mock"):
-        from .roxy_selenium import _click_resend_email_otp
-        return _click_resend_email_otp(page.driver)
     # Stable intent/value attributes take precedence over localized text.
     button = _first_visible(page, (
         "button[name='intent'][value='resend']",
@@ -515,10 +512,6 @@ def _click_resend(page) -> bool:
 
 
 def _fill_email(page, email: str) -> None:
-    if hasattr(page, "driver") and not type(page).__module__.startswith("unittest.mock"):
-        from .roxy_selenium import _submit_email_and_wait_next
-        _submit_email_and_wait_next(page.driver, email)
-        return
     selectors = (
         "input[type='email']", "input[name='email']", "input[name='username']",
         "input#email-input", "input[autocomplete='email']",
@@ -810,12 +803,6 @@ def _otp_fields(page):
 
 
 def _fill_otp(page, code: str) -> None:
-    if hasattr(page, "driver") and not type(page).__module__.startswith("unittest.mock"):
-        from .roxy_selenium import _submit_email_otp, _type_otp
-        _type_otp(page.driver, code)
-        if not _submit_email_otp(page.driver):
-            _click_continue(page)
-        return
     fields = _otp_fields(page)
     if fields is None:
         raise BrowserRegistrationError("browser_otp_field_missing")
@@ -1785,21 +1772,7 @@ def run_browser_registration(
             page = getattr(browser, "page", None) or page
             machine.transition(RegistrationState.CREATE_ACCOUNT)
             profile_required = _profile_completion_required(state)
-            is_roxy_selenium = hasattr(page, "driver") and not type(page).__module__.startswith("unittest.mock")
-            if profile_required and is_roxy_selenium:
-                from .roxy_selenium import _complete_profile_after_otp, _wait_for_profile_completion as _wait_roxy_profile
-                profile_submitted = _complete_profile_after_otp(page.driver, full_name, birthdate, timeout=min(60, max(15, timeout)))
-                if profile_submitted and not _wait_roxy_profile(page.driver, timeout=min(30, max(5, timeout))):
-                    raise BrowserRegistrationError("browser_profile_submit_timeout")
-                # Preserve the reference driver's grace period for the natural
-                # OAuth callback before explicitly reopening ChatGPT.
-                page.wait_for_timeout(15_000)
-                # The profile submit response sets the ChatGPT session cookie
-                # asynchronously; allow the callback and cookie write to settle
-                # before selecting a window and polling /api/auth/session.
-                if profile_submitted:
-                    page.wait_for_timeout(3_000)
-            elif profile_required:
+            if profile_required:
                 _complete_profile(page, full_name, birthdate)
                 if not _wait_for_profile_completion(page, timeout_seconds=min(30, max(5, timeout))):
                     raise BrowserRegistrationError("browser_profile_submit_timeout")
@@ -1808,10 +1781,9 @@ def run_browser_registration(
                 if not _wait_for_challenge_clear(page, max_wait_seconds=30):
                     raise BrowserRegistrationError("manual_challenge_required")
             chat_host = str(urlsplit(chat_base).hostname or "").lower()
-            is_roxy_selenium = hasattr(page, "driver") and not type(page).__module__.startswith("unittest.mock")
             if hasattr(browser, "ensure_chatgpt_context"):
                 page = _prepare_session_page(browser, page, timeout)
-            elif chat_host and chat_host not in str(page.url or "").lower() and not is_roxy_selenium:
+            elif chat_host and chat_host not in str(page.url or "").lower():
                 page.goto(chat_base, wait_until="domcontentloaded", timeout=timeout * 1_000)
             _maybe_dismiss_chatgpt_onboarding(page)
             machine.transition(RegistrationState.AUTH_SESSION)

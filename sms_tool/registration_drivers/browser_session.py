@@ -129,6 +129,57 @@ class PlaywrightBrowserSession:
         self._playwright = None
         self.stealth_status = {"playwright_stealth": False}
 
+    def release_account_context(self) -> None:
+        """Close only the per-account context, keeping the browser process alive.
+
+        Used by the browser process pool: after one registration finishes the
+        browser is recycled for the next account, so only the isolated context
+        (cookies / storage / sessions) must be torn down.  The browser process
+        and the Playwright driver stay resident.
+        """
+        if self.context is not None:
+            try:
+                self.context.close()
+            except Exception:
+                pass
+        self.page = None
+        self.context = None
+        self.stealth_status = {"playwright_stealth": False}
+
+    def renew_account_context(
+        self,
+        *,
+        locale: str | None = None,
+        timezone_id: str | None = None,
+        viewport: tuple[int, int] | None = None,
+    ) -> "PlaywrightBrowserSession":
+        """Create a fresh, isolated context+page on the resident browser.
+
+        Mirrors ``__enter__``'s context setup but reuses the already-launched
+        ``self.browser`` instead of spawning a new process.  Proxy is inherited
+        from the launch (the pool binds one egress per resident browser), while
+        locale / timezone / viewport can be re-supplied per account.
+        """
+        self.release_account_context()
+        if self.browser is None or self._playwright is None:
+            raise RuntimeError("browser_not_resident")
+        loc = str(locale or self.locale or "en-US")
+        tz = str(timezone_id or self.timezone_id or "America/New_York")
+        if viewport and len(viewport) == 2 and viewport[0] > 0 and viewport[1] > 0:
+            vp: dict[str, int] = {"width": int(viewport[0]), "height": int(viewport[1])}
+        else:
+            vp = dict(self.viewport)
+        self.context = self.browser.new_context(locale=loc, timezone_id=tz, viewport=vp)
+        self.context.set_default_timeout(self.timeout_ms)
+        self.page = self.context.new_page()
+        self.stealth_status = apply_playwright_stealth(
+            self.context,
+            self.page,
+            label="playwright",
+            provider_prefix="playwright",
+        )
+        return self
+
     def cookie_header(self) -> str:
         if self.context is None:
             return ""
