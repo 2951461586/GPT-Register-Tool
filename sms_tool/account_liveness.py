@@ -178,7 +178,7 @@ def probe_account_liveness(
         try:
             result = browser_fetch(CODEX_USAGE_URL, headers=headers, timeout_ms=timeout * 1000)
             # The browser fetch returns the HTTP status under the ``status`` key
-            # (see roxy_selenium._fetch_json_with_window_recovery), not
+            # (see the anti-detect drivers' fetch_json contract), not
             # ``status_code``. Normalize so the classifier sees the real code
             # instead of discarding a genuine 401 as a transport failure.
             if isinstance(result, dict) and "status_code" not in result and "status" in result:

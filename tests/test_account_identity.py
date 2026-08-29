@@ -114,7 +114,7 @@ def test_registration_identity_allocates_canonical_profile_from_shared_pool():
     # table currently ships.
     pool_profile_name = next(iter(AUTH_FINGERPRINT_PROFILES))
     profile = type("Profile", (), {"name": pool_profile_name})()
-    pool = type("Pool", (), {"next": lambda self: profile})()
+    pool = type("Pool", (), {"next": lambda self, proxy=None: profile})()
 
     with patch("sms_tool.account_identity.shared_fingerprint_pool", return_value=pool):
         identity = create_registration_identity(

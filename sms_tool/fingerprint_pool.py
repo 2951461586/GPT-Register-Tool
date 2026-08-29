@@ -89,10 +89,12 @@ def _build_profiles() -> list[ProtocolEnvironmentProfile]:
         supported = {item.value for item in BrowserType}
     except Exception:
         supported = set(AUTH_FINGERPRINT_PROFILES)
-    # The canonical profile key must stay separate from geo.  Geo is bound from
-    # the account's proxy affinity, not encoded into a synthetic profile name.
+    # The canonical profile key must stay separate from geo.  Geo is bound at
+    # selection time from the account's proxy affinity (see ``_with_geo``), so
+    # the only hard-coded value here is the DEFAULT geo used when no proxy is
+    # supplied at all -- it is overridden on every ``next(proxy)`` call.
     geo_key = "US"
-    geo = _GEO_PROFILES[geo_key]
+    geo = _GEO_PROFILES.get(geo_key, {})
     for browser_name, browser_cfg in AUTH_FINGERPRINT_PROFILES.items():
         if browser_name not in supported:
             continue
@@ -147,27 +149,62 @@ class FingerprintPool:
             pool._profiles = [p for p in pool._profiles if p.country in allowed]
         return pool
 
-    def next(self) -> ProtocolEnvironmentProfile:
-        """Return the next profile in round-robin order."""
+    def _with_geo(self, profile: "ProtocolEnvironmentProfile", proxy: str | None) -> "ProtocolEnvironmentProfile":
+        """Override a profile's locale/timezone to match the proxy egress.
+
+        Without a proxy the profile keeps its default (US) geo; when a proxy is
+        supplied the real exit country drives the timezone/lang so the protocol
+        fingerprint stays consistent with the registration egress instead of
+        being hard-coded to US.
+        """
+        if not proxy:
+            return profile
+        try:
+            from .paypal_proxy import infer_proxy_country
+            from .auth_headers import _GEO_PROFILES
+        except Exception:
+            return profile
+        country = infer_proxy_country(proxy)
+        geo = _GEO_PROFILES.get(country) if country else None
+        if not geo:
+            return profile
+        return ProtocolEnvironmentProfile(
+            name=profile.name,
+            impersonate=profile.impersonate,
+            user_agent=profile.user_agent,
+            sec_ch_ua=profile.sec_ch_ua,
+            sec_ch_ua_mobile=profile.sec_ch_ua_mobile,
+            sec_ch_ua_platform=profile.sec_ch_ua_platform,
+            timezone=str(geo.get("timezone") or profile.timezone),
+            lang=str(geo.get("lang") or profile.lang),
+            lang_full=str(geo.get("lang_full") or profile.lang_full),
+            country=country,
+        )
+
+    def next(self, proxy: str | None = None) -> ProtocolEnvironmentProfile:
+        """Return the next profile (round-robin), geo-aligned to the proxy exit."""
         if not self._profiles:
             # Fallback to a default profile
-            return ProtocolEnvironmentProfile(
-                name="default",
-                impersonate="chrome146",
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-                sec_ch_ua='"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+            return self._with_geo(
+                ProtocolEnvironmentProfile(
+                    name="default",
+                    impersonate="chrome146",
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                    sec_ch_ua='"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+                ),
+                proxy,
             )
         with self._lock:
             profile = self._profiles[self._index % len(self._profiles)]
             self._index += 1
-            return profile
+        return self._with_geo(profile, proxy)
 
-    def select(self, name: str) -> ProtocolEnvironmentProfile | None:
-        """Select a specific profile by name, or ``None`` if not found."""
+    def select(self, name: str, proxy: str | None = None) -> ProtocolEnvironmentProfile | None:
+        """Select a specific profile by name, geo-aligned to the proxy exit."""
         canonical = str(name or "").strip().lower().split("_", 1)[0]
         for p in self._profiles:
             if p.name == canonical:
-                return p
+                return self._with_geo(p, proxy)
         return None
 
     @property

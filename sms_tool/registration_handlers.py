@@ -528,7 +528,7 @@ class RegistrationEmailWorkflow:
             from .fingerprint_pool import shared_fingerprint_pool
             pool = shared_fingerprint_pool(self.config)
             if pool.size > 0:
-                profile = pool.next()
+                profile = pool.next(s.proxy)
                 from .auth_headers import set_auth_fingerprint
                 set_auth_fingerprint(profile.name)
         except Exception:

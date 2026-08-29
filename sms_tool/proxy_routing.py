@@ -77,9 +77,15 @@ def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
         values = parse_proxy_pool(health.get("proxy_pool"))
         if values:
             return values
-        # Legacy compatibility only.  New deployments should configure an
-        # explicit account_health pool so registration exits stay isolated.
-        return parse_proxy_pool(proxy.get("health")) or parse_proxy_pool(proxy.get("default"))
+        # Operator decision 2026-08-29: drop the separate 127.0.0.1:7897 lane
+        # so post-registration checks reuse the signup egress. Fall back to the
+        # registration pool; the isolated-health-lane behaviour is kept only if
+        # an explicit health/account_health proxy list is configured.
+        return (
+            parse_proxy_pool(proxy.get("health"))
+            or parse_proxy_pool(proxy.get("registration"))
+            or parse_proxy_pool(proxy.get("default"))
+        )
     return []
 
 

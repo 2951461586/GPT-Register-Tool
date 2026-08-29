@@ -156,159 +156,6 @@ def _roxy_retryable(exc: Exception) -> bool:
     ))
 
 
-class _SeleniumLocator:
-    """Small Playwright-like locator used by the shared registration flow."""
-
-    def __init__(self, driver: Any, selector: str, index: int = 0) -> None:
-        self.driver = driver
-        self.selector = selector
-        self.index = index
-
-    @property
-    def first(self) -> "_SeleniumLocator":
-        return _SeleniumLocator(self.driver, self.selector, 0)
-
-    def nth(self, index: int) -> "_SeleniumLocator":
-        return _SeleniumLocator(self.driver, self.selector, index)
-
-    def _elements(self) -> list[Any]:
-        from selenium.webdriver.common.by import By
-
-        selector = self.selector
-        if ":has-text(" in selector:
-            base, _, tail = selector.partition(":has-text(")
-            wanted = tail.rstrip(")").strip("'\"").lower()
-            return [item for item in self.driver.find_elements(By.CSS_SELECTOR, base) if wanted in str(item.text or "").lower()]
-        return list(self.driver.find_elements(By.CSS_SELECTOR, selector))
-
-    def _element(self) -> Any:
-        items = self._elements()
-        if self.index >= len(items):
-            raise RuntimeError("selenium_locator_missing")
-        return items[self.index]
-
-    def count(self) -> int:
-        return len(self._elements())
-
-    def wait_for(self, *, state: str = "visible", timeout: int = 5_000) -> None:
-        deadline = time.monotonic() + max(0.1, timeout / 1000)
-        while time.monotonic() < deadline:
-            try:
-                item = self._element()
-                if state != "visible" or (item.is_displayed() and item.is_enabled()):
-                    return
-            except Exception:
-                pass
-            time.sleep(0.1)
-        raise RuntimeError("selenium_locator_timeout")
-
-    def is_visible(self, *, timeout: int | None = None) -> bool:
-        if timeout:
-            try:
-                self.wait_for(timeout=timeout)
-                return True
-            except Exception:
-                return False
-        try:
-            item = self._element()
-            return bool(item.is_displayed() and item.is_enabled())
-        except Exception:
-            return False
-
-    def fill(self, value: str) -> None:
-        item = self._element()
-        try:
-            item.clear()
-        except Exception:
-            pass
-        item.send_keys(str(value))
-
-    def input_value(self) -> str:
-        return str(self._element().get_attribute("value") or "")
-
-    def click(self, **_kwargs: Any) -> None:
-        item = self._element()
-        try:
-            item.click()
-        except Exception:
-            self.driver.execute_script("arguments[0].click();", item)
-
-    def inner_text(self, *, timeout: int | None = None) -> str:
-        if timeout:
-            self.wait_for(timeout=timeout)
-        return str(self._element().text or "")
-
-
-class _SeleniumPage:
-    def __init__(self, driver: Any, timeout_ms: int) -> None:
-        self.driver = driver
-        self.timeout_ms = timeout_ms
-
-    @property
-    def url(self) -> str:
-        return str(self.driver.current_url or "")
-
-    def title(self) -> str:
-        return str(self.driver.title or "")
-
-    def locator(self, selector: str) -> _SeleniumLocator:
-        return _SeleniumLocator(self.driver, selector)
-
-    def get_by_role(self, role: str, *, name: str, exact: bool = False) -> _SeleniumLocator:
-        from selenium.webdriver.common.by import By
-
-        tag = "button" if role == "button" else "[role='%s']" % role
-        items = self.driver.find_elements(By.CSS_SELECTOR, tag)
-        wanted = str(name or "").strip()
-        for index, item in enumerate(items):
-            text_value = str(item.text or item.get_attribute("aria-label") or "").strip()
-            if (exact and text_value == wanted) or (not exact and wanted.lower() in text_value.lower()):
-                return _SeleniumLocator(self.driver, tag, index)
-        return _SeleniumLocator(self.driver, tag, len(items))
-
-    def wait_for_timeout(self, timeout_ms: int) -> None:
-        time.sleep(max(0, timeout_ms) / 1000)
-
-    def evaluate(self, script: str, arg: Any = None) -> Any:
-        source = str(script or "").strip()
-        if source.startswith("(") or source.startswith("async"):
-            # Selenium's execute_script does not await Promises. Convert the
-            # async probe into a callback-based script so Roxy's WebDriver
-            # backend observes the same country result as Playwright/CDP.
-            if source.startswith("async"):
-                source = f"var done = arguments[arguments.length - 1]; Promise.resolve(({source})(arguments[0])).then(done).catch(function () {{ done(null); }});"
-                if arg is None:
-                    return self.driver.execute_async_script(source)
-                return self.driver.execute_async_script(source, arg)
-            source = f"return ({source})(arguments[0]);"
-        if arg is None:
-            return self.driver.execute_script(source)
-        return self.driver.execute_script(source, arg)
-
-    def goto(self, url: str, *, wait_until: str = "domcontentloaded", timeout: int | None = None) -> None:
-        del wait_until
-        seconds = max(10, int((timeout or self.timeout_ms) / 1000))
-        last_error: Exception | None = None
-        accepted = {str(urlsplit(url).hostname or "").lower(), "chatgpt.com", "auth.openai.com"}
-        for attempt in range(2):
-            try:
-                self.driver.set_page_load_timeout(seconds)
-                self.driver.get(url)
-                return
-            except Exception as exc:
-                last_error = exc
-                try:
-                    self.driver.execute_script("window.stop();")
-                    current_host = str(urlsplit(self.url).hostname or "").lower()
-                    has_body = bool(self.driver.execute_script("return !!document.body"))
-                    if current_host in accepted and has_body:
-                        return
-                except Exception:
-                    pass
-                if attempt == 0:
-                    time.sleep(1.5)
-        raise last_error or RuntimeError("selenium_navigation_failed")
-
 
 class ConnectedPlaywrightSession(PlaywrightBrowserSession):
     """Base for services exposing an existing browser through CDP."""
@@ -587,9 +434,6 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         self.profile_id = ""
         self.created_profile = False
         self.debugger_address = ""
-        self.webdriver_url = ""
-        self.driver_path = ""
-        self.selenium = None
 
     def _headers(self) -> dict[str, str]:
         token = str(self.driver_config.get("api_token") or "").strip()
@@ -719,25 +563,7 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             ("data", "remoteDebuggingAddress"), ("data", "remote_debugging_address"),
             ("result", "http"), ("result", "debugAddress"), ("result", "debugHttp"),
         )
-        self.webdriver_url = _first(
-            opened, ("webdriver",), ("webDriver",), ("webdriverUrl",), ("webdriver_url",),
-            ("selenium",), ("selenium_url",), ("seleniumUrl",),
-            ("data", "webdriver"), ("data", "webDriver"),
-            ("data", "webdriverUrl"), ("data", "webdriver_url"), ("data", "selenium"),
-            ("data", "selenium_url"), ("data", "seleniumUrl"),
-            ("result", "webdriver"), ("result", "webdriverUrl"), ("result", "selenium"),
-        )
-        self.driver_path = _first(
-            opened, ("driver",), ("driverPath",), ("driver_path",),
-            ("data", "driver"), ("data", "driverPath"), ("data", "driver_path"),
-            ("result", "driver"), ("result", "driverPath"),
-        )
         address = ws_address or self.debugger_address
-        backend = str(self.driver_config.get("backend") or self.driver_config.get("mode") or "").strip().lower()
-        if not address and self.webdriver_url and backend in {"selenium", "webdriver"}:
-            # The Selenium backend can attach through Roxy's WebDriver endpoint
-            # without a CDP address.  Keep the profile lifecycle owned here.
-            return self
         if not address:
             self.close()
             raise BrowserRegistrationError("roxy_debug_address_missing")
@@ -754,41 +580,9 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             self.close()
             raise BrowserRegistrationError("roxy_connect_failed", type(exc).__name__) from exc
 
-    def selenium_driver(self) -> Any:
-        """Attach Selenium to the Roxy profile using its own Chromedriver.
-
-        This is intentionally lazy so installations that only use Playwright do
-        not need Selenium installed. The returned driver is owned by the caller.
-        """
-        address = str(self.debugger_address or "").strip()
-        webdriver_url = str(self.webdriver_url or "").strip()
-        if not address and not webdriver_url:
-            raise BrowserRegistrationError("roxy_selenium_debug_address_missing")
-        if address.startswith(("http://", "https://")):
-            address = urlsplit(address).netloc
-        try:
-            from .roxy_selenium import _build_driver
-            self.selenium = _build_driver({
-                "data": {
-                    "http": address,
-                    "webdriver": webdriver_url,
-                    "driver": self.driver_path,
-                }
-            })
-            return self.selenium
-        except ImportError as exc:
-            raise BrowserRegistrationError("browser_dependency_missing", "selenium") from exc
-        except Exception as exc:
-            raise BrowserRegistrationError("roxy_selenium_connect_failed", type(exc).__name__) from exc
 
     def close(self) -> None:
         keep_open = bool(self.driver_config.get("keep_browser_open", False))
-        if self.selenium is not None and not keep_open:
-            try:
-                self.selenium.quit()
-            except Exception:
-                pass
-            self.selenium = None
         self._close_connection(keep_browser_open=keep_open)
         if not self.profile_id or not self.api_base or keep_open:
             return
@@ -928,174 +722,6 @@ def verify_browser_proxy_country(browser: Any, *, expected_country: str = "", ti
     return {"ok": True, "actual_country": actual}
 
 
-class RoxySeleniumSession:
-    """Roxy profile controlled by Roxy's own Chromedriver."""
-
-    def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        self.proxy = kwargs.get("proxy")
-        self.headless = bool(kwargs.get("headless", True))
-        self.timeout_ms = max(5_000, int(kwargs.get("timeout_ms", 45_000) or 45_000))
-        self.locale = str(kwargs.get("locale") or "en-US")
-        self.timezone_id = str(kwargs.get("timezone_id") or "America/New_York")
-        self.config = config
-        self.driver_config = _driver_config(config, "roxy")
-        self._roxy: RoxyBrowserSession | None = None
-        self.driver = None
-        self.page = None
-
-    def __enter__(self):
-        self._roxy = RoxyBrowserSession(config=self.config, proxy=self.proxy, headless=self.headless, timeout_ms=self.timeout_ms, locale=self.locale, timezone_id=self.timezone_id)
-        self._roxy.__enter__()
-        try:
-            self.driver = self._roxy.selenium_driver()
-            self.page = _SeleniumPage(self.driver, self.timeout_ms)
-            return self
-        except Exception:
-            self.close()
-            raise
-
-    def verify_proxy_country(self, expected_country: str = "", timeout_seconds: int = 20) -> dict[str, Any]:
-        return verify_browser_proxy_country(self, expected_country=expected_country, timeout_seconds=timeout_seconds)
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.close()
-
-    def add_device_cookie(self, device_id: str, chat_base: str, auth_base: str) -> None:
-        if not self.driver or not str(device_id or "").strip():
-            return
-        for base in (chat_base, auth_base):
-            parsed = urlsplit(str(base or ""))
-            if not parsed.netloc:
-                continue
-            try:
-                self.driver.get(f"{parsed.scheme}://{parsed.netloc}/")
-                self.driver.add_cookie({"name": "oai-did", "value": str(device_id), "path": "/"})
-            except Exception:
-                pass
-
-    def cookie_header(self) -> str:
-        try:
-            return "; ".join(f"{c.get('name')}={c.get('value')}" for c in self.driver.get_cookies() if c.get("name") and c.get("value"))
-        except Exception:
-            return ""
-
-    def session_cookie_state(self) -> dict[str, Any]:
-        """Return cookie presence metadata without exposing cookie values."""
-        names = set()
-        try:
-            names = {str(item.get("name") or "") for item in self.driver.get_cookies() if isinstance(item, Mapping)}
-        except Exception:
-            pass
-        return {
-            "session_cookie_present": any("session-token" in name or name.startswith("oai") for name in names),
-            "cookie_count": len(names),
-        }
-
-    def context_state(self) -> dict[str, Any]:
-        hosts: list[str] = []
-        try:
-            for handle in list(self.driver.window_handles or []):
-                try:
-                    self.driver.switch_to.window(handle)
-                    host = str(urlsplit(str(self.driver.current_url or "")).hostname or "").lower()
-                    if host and host not in hosts:
-                        hosts.append(host)
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        return {"current_host": str(urlsplit(str(getattr(self.driver, "current_url", "") or "")).hostname or "").lower(), "window_hosts": hosts, **self.session_cookie_state()}
-
-    @staticmethod
-    def _is_chatgpt_url(url: str) -> bool:
-        host = str(urlsplit(str(url or "")).hostname or "").lower()
-        return host == "chatgpt.com" or host.endswith(".chatgpt.com")
-
-    def _switch_to_chatgpt_window_if_any(self) -> bool:
-        """Select a callback window which has already reached ChatGPT.
-
-        Roxy may complete the OpenAI callback in a different WebDriver window.
-        Preserve the current window when neither window is on ChatGPT.
-        """
-        if self.driver is None:
-            return False
-        try:
-            current_handle = self.driver.current_window_handle
-        except Exception:
-            current_handle = None
-        try:
-            handles = list(self.driver.window_handles or [])
-        except Exception:
-            handles = []
-        for handle in handles:
-            try:
-                self.driver.switch_to.window(handle)
-                if self._is_chatgpt_url(str(self.driver.current_url or "")):
-                    return True
-            except Exception:
-                continue
-        if current_handle is not None:
-            try:
-                self.driver.switch_to.window(current_handle)
-            except Exception:
-                pass
-        return False
-
-    def _ensure_chatgpt_context(self, *, auto_jump_wait: int = 15) -> bool:
-        """Wait for OAuth's natural return before explicitly visiting ChatGPT."""
-        if self.driver is None:
-            return False
-        deadline = time.monotonic() + max(0, int(auto_jump_wait or 0))
-        while True:
-            try:
-                if self._is_chatgpt_url(str(self.driver.current_url or "")):
-                    return True
-            except Exception:
-                pass
-            if self._switch_to_chatgpt_window_if_any():
-                return True
-            if time.monotonic() >= deadline:
-                break
-            time.sleep(1)
-        try:
-            self.driver.get("https://chatgpt.com/")
-            return self._is_chatgpt_url(str(self.driver.current_url or ""))
-        except Exception:
-            return False
-
-    def fetch_json(self, url: str, *, timeout_ms: int = 20_000) -> dict[str, Any]:
-        is_chatgpt_session = self._is_chatgpt_url(url) and urlsplit(str(url or "")).path.rstrip("/") == "/api/auth/session"
-        if is_chatgpt_session and not self._ensure_chatgpt_context():
-            return {"status": 0, "body": {"error": "chatgpt_context_unavailable"}}
-        # /api/auth/session must be fetched from a ChatGPT origin.  Fetching the
-        # absolute URL while the driver remains on auth.openai.com can return a
-        # harmless HTTP 200 without the newly written ChatGPT session.
-        target = "/api/auth/session" if is_chatgpt_session else str(url)
-        from .roxy_selenium import _fetch_json_with_window_recovery
-
-        return _fetch_json_with_window_recovery(
-            self.driver,
-            target,
-            timeout_ms=timeout_ms,
-            proxy=self.proxy,
-        )
-
-    def close(self) -> None:
-        keep_open = bool(self.driver_config.get("keep_browser_open", False))
-        if self.driver is not None and not keep_open:
-            try:
-                self.driver.quit()
-            except Exception:
-                pass
-        self.driver = None
-        if self._roxy is not None:
-            try:
-                self._roxy.selenium = None
-                self._roxy.close()
-            except Exception:
-                pass
-            self._roxy = None
-        self.page = None
 
 
 def _browser_profile_dir(driver: str, profile_id: str) -> str:
@@ -1171,17 +797,19 @@ def create_browser_session(
         # Only the local Playwright driver consumes the rotated screen profile;
         # external/anti-detect browsers manage their own viewport.
         kwargs["viewport"] = viewport
-    if driver == "roxy":
-        roxy_cfg = _driver_config(config, "roxy")
-        if str(roxy_cfg.get("backend") or roxy_cfg.get("mode") or "").strip().lower() in {"selenium", "webdriver"}:
-            return RoxySeleniumSession(config=config, **kwargs)
-        return RoxyBrowserSession(config=config, **kwargs)
     if driver == "cloak":
         return CloakBrowserSession(config=config, **kwargs)
     if driver == "camoufox":
         return CamoufoxBrowserSession(config=config, **kwargs)
     if driver == "adspower":
         return AdsPowerBrowserSession(config=config, **kwargs)
+    if driver == "roxy":
+        # Single CDP-track implementation: RoxyBrowserSession attaches to the
+        # Roxy-managed Chromium over its local REST API and drives it through
+        # Playwright's connect_over_cdp -- the same contract as the other
+        # anti-detect drivers.  The legacy Selenium/Chromedriver track was
+        # removed so Roxy aligns with Cloak/Camoufox/AdsPower.
+        return RoxyBrowserSession(config=config, **kwargs)
     # Playwright: pass user_data_dir for persistent context when available.
     pw_user_data_dir = str(_driver_config(config, "playwright").get("user_data_dir") or "").strip()
     if pw_user_data_dir:
@@ -1191,6 +819,6 @@ def create_browser_session(
 
 __all__ = [
     "CamoufoxBrowserSession", "CloakBrowserSession",
-    "RoxyBrowserSession", "RoxySeleniumSession", "AdsPowerBrowserSession",
+    "RoxyBrowserSession", "AdsPowerBrowserSession",
     "create_browser_session",
 ]

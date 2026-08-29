@@ -14,7 +14,6 @@ from sms_tool.registration_drivers.base import BrowserRegistrationError, normali
 from sms_tool.registration_drivers.external_sessions import (
     CloakBrowserSession,
     RoxyBrowserSession,
-    RoxySeleniumSession,
     _driver_config,
     create_browser_session,
     verify_browser_proxy_country,
@@ -48,9 +47,6 @@ from sms_tool.registration_drivers.playwright import (
     _post_registration_dwell,
     run_browser_registration,
 )
-from sms_tool.registration_drivers.roxy_selenium import _complete_profile_after_otp, _submit_email_otp
-from sms_tool.registration_drivers.roxy_selenium import _build_driver as _build_roxy_driver
-from sms_tool.registration_drivers.roxy_selenium import _fill_profile_react_controls
 
 
 class _Response:
@@ -128,34 +124,6 @@ class _FlowSession:
 
     def cookie_header(self):
         return "session=redacted"
-
-
-class _SeleniumWindowDriver:
-    def __init__(self, urls, current):
-        self.urls = dict(urls)
-        self.current_window_handle = current
-        self.window_handles = list(urls)
-        self.switch_to = SimpleNamespace(window=self._switch)
-        self.async_calls = []
-        self.get_calls = []
-
-    @property
-    def current_url(self):
-        return self.urls[self.current_window_handle]
-
-    def _switch(self, handle):
-        self.current_window_handle = handle
-
-    def get(self, url):
-        self.get_calls.append(url)
-        self.urls[self.current_window_handle] = url
-
-    def set_script_timeout(self, _seconds):
-        return None
-
-    def execute_async_script(self, *args):
-        self.async_calls.append(args)
-        return {"status": 200, "body": {}}
 
 
 class _Page:
@@ -420,33 +388,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(request.call_args_list[3].kwargs["json"]["dirIds"], [42])
         self.assertEqual(fake.connections[0][0], "ws://127.0.0.1:9222/devtools/browser/test")
 
-    @patch("sms_tool.registration_drivers.roxy_selenium._apply_browser_automation_mask")
-    def test_roxy_driver_uses_remote_webdriver_when_no_debugger_address(self, automation_mask):
-        remote_driver = object()
-        remote_type = MagicMock(return_value=remote_driver)
-        modules = {
-            "selenium.webdriver.remote.webdriver": SimpleNamespace(WebDriver=remote_type),
-        }
-        with patch.dict(sys.modules, modules):
-            driver = _build_roxy_driver({"data": {"webdriverUrl": "http://127.0.0.1:9515"}})
-
-        self.assertIs(driver, remote_driver)
-        remote_type.assert_called_once()
-        self.assertEqual(remote_type.call_args.kwargs["command_executor"], "http://127.0.0.1:9515")
-        automation_mask.assert_called_once_with(remote_driver)
-
-    def test_roxy_profile_react_controls_support_hidden_selects(self):
-        driver = MagicMock()
-        driver.execute_script.return_value = {"name": True, "birth": True, "mode": "react_select"}
-
-        mode = _fill_profile_react_controls(driver, "Test User", "1990-01-02", 36)
-
-        self.assertEqual(mode, "react_select")
-        script = driver.execute_script.call_args.args[0]
-        self.assertIn("hidden-select-container", script)
-        self.assertIn("role=spinbutton", script)
-
-
     @patch("sms_tool.registration_drivers.external_sessions.curl_requests.request")
     def test_roxy_get_methods_use_query_params_and_extract_reference_keys(self, request):
         request.side_effect = [
@@ -458,7 +399,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         config = {"registration": {"drivers": {"roxy": {
             "api_base": "https://roxy.test",
             "workspace_id": "7",
-            "backend": "selenium",
             "create_method": "GET",
             "open_method": "GET",
             "close_method": "GET",
@@ -513,20 +453,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         sleep.assert_called_once_with(0)
 
-
-    def test_roxy_selenium_keep_open_does_not_quit_webdriver(self):
-        driver = MagicMock()
-        session = RoxySeleniumSession(
-            config={"registration": {"drivers": {"roxy": {"keep_browser_open": True}}}},
-            **self._session_kwargs(),
-        )
-        session.driver = driver
-        session._roxy = SimpleNamespace(selenium=driver, close=MagicMock())
-
-        session.close()
-
-        driver.quit.assert_not_called()
-        session._roxy  # keep the assertion above focused on the WebDriver lifecycle
 
     def test_cloak_dependency_failure_is_lazy_and_sanitized(self):
         session = CloakBrowserSession(config={"registration": {}}, **self._session_kwargs())
@@ -670,29 +596,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             with self.assertRaises(BrowserRegistrationError) as raised:
                 _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
         self.assertEqual(raised.exception.code, "browser_session_context_closed")
-
-    def test_roxy_session_switches_to_existing_chatgpt_callback_window(self):
-        session = RoxySeleniumSession(config={})
-        driver = _SeleniumWindowDriver(
-            {"auth": "https://auth.openai.com/about-you", "callback": "https://chatgpt.com/"}, "auth"
-        )
-        session.driver = driver
-
-        payload = session.fetch_json("https://chatgpt.com/api/auth/session")
-
-        self.assertEqual(payload["status"], 200)
-        self.assertEqual(driver.current_window_handle, "callback")
-        self.assertEqual(driver.get_calls, [])
-        self.assertEqual(driver.async_calls[0][1], "/api/auth/session")
-
-    def test_roxy_session_opens_chatgpt_only_after_callback_wait_expires(self):
-        session = RoxySeleniumSession(config={})
-        driver = _SeleniumWindowDriver({"auth": "https://auth.openai.com/about-you"}, "auth")
-        session.driver = driver
-
-        self.assertTrue(session._ensure_chatgpt_context(auto_jump_wait=0))
-
-        self.assertEqual(driver.get_calls, ["https://chatgpt.com/"])
 
     def test_playwright_session_switches_callback_page_and_uses_relative_session_path(self):
         session = PlaywrightBrowserSession()
@@ -1103,28 +1006,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
         self.assertEqual(payload["body"]["accessToken"], "at")
         self.assertEqual(page.evaluate_calls, [])
-
-    def test_roxy_otp_submit_excludes_resend_intent(self):
-        driver = MagicMock()
-        driver.execute_script.return_value = True
-
-        self.assertTrue(_submit_email_otp(driver))
-
-        script = driver.execute_script.call_args.args[0]
-        self.assertIn("!isResend(el)", script)
-        self.assertIn("resend|send.*again|new.*code", script)
-
-    def test_roxy_profile_wait_submits_profile_form(self):
-        field = MagicMock()
-        field.is_displayed.return_value = True
-        field.is_enabled.return_value = True
-        driver = MagicMock()
-        driver.current_url = "https://auth.openai.com/about-you"
-        driver.find_elements.side_effect = lambda *_args: [field]
-        driver.execute_script.side_effect = [None, True]
-
-        self.assertTrue(_complete_profile_after_otp(driver, "Test User", "1990-01-02", timeout=1))
-        self.assertEqual(field.send_keys.call_count, 2)
 
     @patch("sms_tool.registration_drivers.playwright._click_continue")
     def test_fill_email_retries_after_hydration_reload(self, click_continue):
