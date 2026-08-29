@@ -235,3 +235,71 @@ def test_promotion_uses_browser_fetch_when_browser_identity_present():
     assert result["promotion_status"] == "Free·无优惠"
     # curl_cffi must NOT be called when browser_fetch is provided
     curl_get.assert_not_called()
+
+
+def _browser_identity_account(driver="cloak"):
+    registration_proxy = "http://proxy.example:8080"
+    return {
+        "access_token": "at",
+        "chatgpt_account_id": "acc",
+        "identity_context": create_registration_identity(
+            registration_proxy,
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+            account_key="browser@example.com",
+            browser_identity={"driver": driver, "profile_id": "browser@example.com"},
+        ),
+    }, {"proxy": {"registration": registration_proxy, "pool": [registration_proxy]}}
+
+
+def test_promotion_normalizes_browser_fetch_status_key():
+    """Regression: ``fetch_json`` returns ``{"status", "body"}``, not ``{"status_code"}``.
+
+    ``PlaywrightBrowserSession.fetch_json`` — inherited by the anti-detect
+    drivers (cloak/roxy/camoufox) — returns the HTTP code under ``status``.
+    Reading only ``status_code`` silently degraded every browser-routed probe to
+    "HTTP 0", so promotion checks on browser-registered accounts always
+    reported HTTP 0 regardless of the real response.  ``account_liveness``
+    already normalized this; promotion did not.
+    """
+    account, config = _browser_identity_account()
+
+    def fake_browser_fetch(url, *, headers=None, timeout_ms=None):
+        # The REAL PlaywrightBrowserSession.fetch_json contract.
+        return {
+            "status": 200,
+            "body": {
+                "accounts": {
+                    "default": {
+                        "account": {"plan_type": "free", "account_id": "acc"},
+                        "entitlement": {"has_active_subscription": False},
+                    },
+                },
+            },
+        }
+
+    with patch.object(account_promotion, "CFG", config):
+        result = account_promotion.check_account_promotion(
+            account, proxy=None, browser_fetch=fake_browser_fetch
+        )
+
+    assert result["ok"], result
+    assert result["status_code"] == 200
+    assert result["promotion_status"] == "Free·无优惠"
+
+
+def test_promotion_surfaces_real_browser_http_errors_not_zero():
+    """A genuine 401 from the browser must surface as AT失效, not HTTP 0."""
+    account, config = _browser_identity_account()
+
+    def fake_browser_fetch(url, *, headers=None, timeout_ms=None):
+        return {"status": 401, "body": {"error": {"message": "Could not parse your authentication token."}}}
+
+    with patch.object(account_promotion, "CFG", config):
+        result = account_promotion.check_account_promotion(
+            account, proxy=None, browser_fetch=fake_browser_fetch
+        )
+
+    assert result["status_code"] == 401
+    assert result["promotion_status"] == "AT失效"
