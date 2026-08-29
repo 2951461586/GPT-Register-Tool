@@ -606,21 +606,33 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             "workspaceId": int(workspace_id) if workspace_id.isdigit() else workspace_id,
             "dirId": int(self.profile_id) if self.profile_id.isdigit() else self.profile_id,
         }
+        close_method = str(self.driver_config.get("close_method") or "POST").upper()
+        close_path = self._path("close_path", "/browser/close")
+        delete_method = str(self.driver_config.get("delete_method") or "POST").upper()
+        delete_path = self._path("delete_path", "/browser/delete")
+        # 关窗（幂等，失败忽略）。Roxy 关窗是异步的，紧接着删会 code:101 请先关闭窗口。
         try:
-            close_method = str(self.driver_config.get("close_method") or "POST").upper()
-            close_path = self._path("close_path", "/browser/close")
             self._request(close_method, close_path, common)
         except Exception:
             pass
         if self.created_profile and bool(self.driver_config.get("delete_profile_after_run", True)):
-            try:
-                delete_method = str(self.driver_config.get("delete_method") or "POST").upper()
-                delete_path = self._path("delete_path", "/browser/delete")
-                self._request(delete_method, delete_path, {
-                    "workspaceId": common["workspaceId"], "dirIds": [common["dirId"]],
-                })
-            except Exception:
-                pass
+            payload = {"workspaceId": common["workspaceId"], "dirIds": [common["dirId"]]}
+            last_err: Exception | None = None
+            for attempt in range(3):
+                try:
+                    self._request(delete_method, delete_path, payload)
+                    last_err = None
+                    break
+                except Exception as exc:
+                    last_err = exc
+                    if attempt < 2:
+                        # 窗口可能尚未完全关闭 → 先再发一次 close 确保关闭，退避后重试删
+                        try:
+                            self._request(close_method, close_path, common)
+                        except Exception:
+                            pass
+                        time.sleep(2 ** attempt)
+            # 3 次仍失败：保持原语义静默（delete_profile_after_run 仅做清理，不应抛）
         self.profile_id = ""
 
 
