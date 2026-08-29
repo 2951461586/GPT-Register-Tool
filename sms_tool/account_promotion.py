@@ -170,6 +170,13 @@ def check_account_promotion(
     if browser_fetch is not None:
         try:
             result = browser_fetch(url, headers=headers, timeout_ms=timeout * 1000)
+            # ``PlaywrightBrowserSession.fetch_json`` returns the HTTP status
+            # under the ``status`` key, not ``status_code``.  Normalize the same
+            # way ``account_liveness.probe_account_liveness`` does, otherwise a
+            # genuine response is discarded as a transport failure and every
+            # browser-routed promotion probe degrades to "HTTP 0".
+            if isinstance(result, dict) and "status_code" not in result and "status" in result:
+                result = {**result, "status_code": result.get("status")}
             if isinstance(result, dict) and "status_code" in result:
                 status_code = int(result.get("status_code") or 0)
                 body = result.get("body")
