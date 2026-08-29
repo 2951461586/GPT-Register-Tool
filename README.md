@@ -55,7 +55,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
 | 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
-| 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser、Browser Use、Skyvern |
+| 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser、AdsPower |
 
 ## 安装部署方式
 
@@ -134,10 +134,12 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 - `playwright`：本机 Chromium，通过 Playwright 启动。
 - `roxy`：连接本机 RoxyBrowser API 创建/打开 Profile，再通过 CDP 接管。
 - `cloak`：调用已安装的 CloakBrowser Python SDK。
-- `browser_use`：通过 Browser Use 云端 CDP 地址连接；API Key 只保存在本机配置中。
-- `skyvern`：通过 Skyvern Browser Sessions API 创建会话，再通过 CDP 接管。
+- `camoufox`：调用已安装的 Camoufox 反检测浏览器（**当前默认浏览器驱动**）。
+- `adspower`：连接本机 AdsPower API 创建/打开环境，再通过 CDP 接管。
 
-RoxyBrowser、Browser Use 和 Skyvern 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
+RoxyBrowser 与 AdsPower 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
+
+浏览器注册默认启用 **脉冲调度**（`registration.pulse`，波次间隔 + OTP-ban 暂停）与 **浏览器进程池**（`registration.browser_process_pool`，按进程复用浏览器上下文、按健康度回收）。二者与「账号 ↔ 代理槽绑定」协同：每个账号在整个生命周期内固定走同一个注册出口，重试时只刷新会话 sid，不切换代理成员——避免出口轮换被注册方判定为代理抖动而封禁。进程池哈希键按 `(driver, headless, timeout)` 缓存，使同一出口、同一头部配置的账号复用同一浏览器进程，降低冷启动开销。
 
 ReMail API Key 也可以通过环境变量提供：
 

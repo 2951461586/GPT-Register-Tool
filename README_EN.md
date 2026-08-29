@@ -77,7 +77,7 @@ The desktop **Settings -> Registration & mailbox -> Registration driver** select
 - `playwright`: launch local Chromium through Playwright.
 - `roxy`: create/open a RoxyBrowser profile through its local API and attach over CDP.
 - `cloak`: use the installed CloakBrowser Python SDK.
-- `browser_use`: attach to Browser Use cloud CDP with the configured API key.
-- `skyvern`: create a Skyvern Browser Session through REST and attach over CDP.
+- `camoufox`: use the installed Camoufox anti-detect browser (default browser driver).
+- `adspower`: create/open an AdsPower environment through its local API and attach over CDP.
 
 Each driver reuses the mailbox OTP, session extraction, AT HTTP 200 probe, and persistence boundary. Provider credentials and lifecycle flags are configured in their own Settings sections. Missing required fields produce sanitized configuration errors; browser drivers do not bypass CAPTCHA and return `manual_challenge_required` when a human challenge is encountered.

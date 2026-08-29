@@ -49,29 +49,6 @@ def _driver_config(config: Mapping[str, Any], name: str) -> Mapping[str, Any]:
             "start_url": ("ROXY_START_URL", "str"),
             "headless": ("ROXY_HEADLESS", "bool"),
         },
-        "browser_use": {
-            "api_key": ("BROWSER_USE_API_KEY", "str"),
-            "cdp_base": ("BROWSER_USE_CDP_BASE", "str"),
-            "proxy_country_code": ("BROWSER_USE_PROXY_COUNTRY_CODE", "str"),
-            "use_proxy": ("BROWSER_USE_USE_PROXY", "bool"),
-            "profile_id": ("BROWSER_USE_PROFILE_ID", "str"),
-            "session_timeout_minutes": ("BROWSER_USE_SESSION_TIMEOUT", "int"),
-            "keep_browser_open": ("BROWSER_USE_KEEP_BROWSER_OPEN", "bool"),
-            "start_url": ("BROWSER_USE_START_URL", "str"),
-            "extra_query": ("BROWSER_USE_EXTRA_QUERY", "json"),
-        },
-        "skyvern": {
-            "api_key": ("SKYVERN_API_KEY", "str"),
-            "api_base": ("SKYVERN_API_BASE", "str"),
-            "session_timeout_minutes": ("SKYVERN_BROWSER_SESSION_TIMEOUT", "int"),
-            "profile_id": ("SKYVERN_BROWSER_PROFILE_ID", "str"),
-            "proxy_location": ("SKYVERN_PROXY_LOCATION", "str"),
-            "generate_browser_profile": ("SKYVERN_GENERATE_BROWSER_PROFILE", "bool"),
-            "ad_blocker": ("SKYVERN_AD_BLOCKER", "bool"),
-            "browser_type": ("SKYVERN_BROWSER_TYPE", "str"),
-            "keep_browser_open": ("SKYVERN_KEEP_BROWSER_OPEN", "bool"),
-            "start_url": ("SKYVERN_START_URL", "str"),
-        },
         "cloak": {
             "license_key": ("CLOAK_LICENSE_KEY", "str"),
             "headless": ("CLOAK_HEADLESS", "bool"),
@@ -97,6 +74,12 @@ def _driver_config(config: Mapping[str, Any], name: str) -> Mapping[str, Any]:
             "start_url": ("CAMOUFOX_START_URL", "str"),
             "max_width": ("CAMOUFOX_MAX_WIDTH", "int"),
             "max_height": ("CAMOUFOX_MAX_HEIGHT", "int"),
+        },
+        "adspower": {
+            "api_base": ("ADSPOWER_API_BASE", "str"),
+            "user_id": ("ADSPOWER_USER_ID", "str"),
+            "headless": ("ADSPOWER_HEADLESS", "bool"),
+            "keep_browser_open": ("ADSPOWER_KEEP_BROWSER_OPEN", "bool"),
         },
     }
     for key, (env_name, value_type) in env_overrides.get(name, {}).items():
@@ -148,51 +131,6 @@ def _first(payload: Any, *paths: tuple[str, ...]) -> str:
         if current is not None and str(current).strip():
             return str(current).strip()
     return ""
-
-
-def _normalize_skyvern_proxy_location(value: Any) -> str:
-    """Normalize country aliases to Skyvern's residential location names."""
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    upper = text.upper().replace("-", "_")
-    aliases = {
-        "JP": "RESIDENTIAL_JP",
-        "JA": "RESIDENTIAL_JP",
-        "JAPAN": "RESIDENTIAL_JP",
-        "US": "RESIDENTIAL",
-        "USA": "RESIDENTIAL",
-        "GB": "RESIDENTIAL_GB",
-        "UK": "RESIDENTIAL_GB",
-        "IN": "RESIDENTIAL_IN",
-        "DE": "RESIDENTIAL_DE",
-        "FR": "RESIDENTIAL_FR",
-        "AU": "RESIDENTIAL_AU",
-        "CA": "RESIDENTIAL_CA",
-        "KR": "RESIDENTIAL_KR",
-        "NONE": "NONE",
-    }
-    if upper in aliases:
-        return aliases[upper]
-    if len(upper) == 2:
-        return f"RESIDENTIAL_{upper}"
-    return upper
-
-
-def _normalize_skyvern_browser_type(value: Any) -> str:
-    """Normalize Skyvern browser type aliases accepted by the reference client."""
-    text = str(value or "").strip().lower().replace("_", "-")
-    aliases = {
-        "": "stealth-chromium",
-        "chromium": "stealth-chromium",
-        "chromium-headful": "stealth-chromium",
-        "headful": "stealth-chromium",
-        "stealth": "stealth-chromium",
-        "stealth-chrome": "stealth-chromium",
-        "edge": "msedge",
-        "microsoft-edge": "msedge",
-    }
-    return aliases.get(text, text)
 
 
 def _normalize_debugger_address(value: Any) -> str:
@@ -641,148 +579,6 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         super().close()
 
 
-class BrowserUseSession(ConnectedPlaywrightSession):
-    def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.driver_config = _driver_config(config, "browser_use")
-
-    def connect_url(self) -> str:
-        api_key = _require(self.driver_config.get("api_key"), "browser_use_api_key_missing")
-        base = str(self.driver_config.get("cdp_base") or "wss://connect.browser-use.com").rstrip("?&")
-        query = {"apiKey": api_key}
-        country = str(self.driver_config.get("proxy_country_code") or "").strip().lower()
-        if bool(self.driver_config.get("use_proxy", True)) and country:
-            query["proxyCountryCode"] = country
-        profile_id = str(self.driver_config.get("profile_id") or "").strip()
-        if profile_id:
-            query["profileId"] = profile_id
-        timeout = max(1, min(240, int(self.driver_config.get("session_timeout_minutes") or 120)))
-        query["timeout"] = str(timeout)
-        extra_query = self.driver_config.get("extra_query")
-        if isinstance(extra_query, Mapping):
-            # Keep provider-owned connection settings authoritative.  An
-            # arbitrary extra query must not silently disable or replace the
-            # configured residential proxy, profile, timeout, or API key.
-            reserved = {
-                "apikey", "api_key", "proxycountrycode", "proxy_country_code",
-                "profileid", "profile_id", "timeout",
-            }
-            for key, value in extra_query.items():
-                normalized_key = str(key).strip()
-                if (
-                    normalized_key
-                    and normalized_key.lower() not in reserved
-                    and value is not None
-                ):
-                    query[normalized_key] = str(value)
-            # Never permit an arbitrary override to remove the credential used
-            # to establish the cloud CDP connection.
-            query["apiKey"] = api_key
-        return f"{base}?{urlencode(query)}"
-
-    def __enter__(self):
-        self._start_playwright()
-        try:
-            browser = self._playwright.chromium.connect_over_cdp(self.connect_url(), timeout=self.timeout_ms)
-            self._adopt_browser(browser)
-            return self
-        except BrowserRegistrationError:
-            self.close()
-            raise
-        except Exception as exc:
-            self.close()
-            raise BrowserRegistrationError("browser_use_connect_failed", type(exc).__name__) from exc
-
-    def close(self) -> None:
-        self._close_connection(keep_browser_open=bool(self.driver_config.get("keep_browser_open", False)))
-
-
-class SkyvernBrowserSession(ConnectedPlaywrightSession):
-    def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.driver_config = _driver_config(config, "skyvern")
-        self.api_key = ""
-        self.api_base = ""
-        self.session_id = ""
-
-    def _headers(self) -> dict[str, str]:
-        return {"x-api-key": self.api_key, "Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-
-    def _request(self, method: str, path: str, *, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        normalized_method = str(method or "GET").upper()
-        request_kwargs: dict[str, Any] = {
-            "headers": self._headers(),
-            "timeout": min(60, max(10, self.timeout_ms // 1000)),
-        }
-        if normalized_method == "GET":
-            if body:
-                request_kwargs["params"] = body
-        else:
-            request_kwargs["json"] = body
-        response = curl_requests.request(
-            normalized_method,
-            urljoin(self.api_base.rstrip("/") + "/", path.lstrip("/")),
-            **request_kwargs,
-        )
-        try:
-            data = response.json()
-        except Exception:
-            data = {"raw": str(response.text or "")[:500]}
-        if int(response.status_code or 0) >= 400:
-            raise BrowserRegistrationError("skyvern_api_error", f"http_{response.status_code}")
-        return data if isinstance(data, dict) else {}
-
-    def __enter__(self):
-        self.api_key = _require(self.driver_config.get("api_key"), "skyvern_api_key_missing")
-        self.api_base = str(self.driver_config.get("api_base") or "https://api.skyvern.com").rstrip("/")
-        payload: dict[str, Any] = {
-            "timeout": max(1, int(self.driver_config.get("session_timeout_minutes") or 60)),
-            "generate_browser_profile": bool(self.driver_config.get("generate_browser_profile", False)),
-            "ad_blocker": bool(self.driver_config.get("ad_blocker", True)),
-            "browser_type": _normalize_skyvern_browser_type(self.driver_config.get("browser_type")),
-        }
-        for source, target in (("profile_id", "browser_profile_id"), ("proxy_location", "proxy_location")):
-            value = str(self.driver_config.get(source) or "").strip()
-            if value:
-                payload[target] = (
-                    _normalize_skyvern_proxy_location(value)
-                    if source == "proxy_location" else value
-                )
-        data = self._request("POST", "/v1/browser_sessions", body=payload)
-        self.session_id = _first(data, ("browser_session_id",), ("session_id",), ("id",))
-        address = _first(data, ("browser_address",), ("cdp_url",), ("connect_url",), ("ws_endpoint",))
-        for _ in range(10):
-            if address or not self.session_id:
-                break
-            time.sleep(1)
-            current = self._request("GET", f"/v1/browser_sessions/{self.session_id}")
-            address = _first(current, ("browser_address",), ("cdp_url",), ("connect_url",), ("ws_endpoint",))
-        if not address:
-            self.close()
-            raise BrowserRegistrationError("skyvern_browser_address_missing")
-        self._start_playwright()
-        try:
-            browser = self._playwright.chromium.connect_over_cdp(address, headers=self._headers(), timeout=self.timeout_ms)
-            self._adopt_browser(browser)
-            return self
-        except BrowserRegistrationError:
-            self.close()
-            raise
-        except Exception as exc:
-            self.close()
-            raise BrowserRegistrationError("skyvern_connect_failed", type(exc).__name__) from exc
-
-    def close(self) -> None:
-        keep_open = bool(self.driver_config.get("keep_browser_open", False))
-        self._close_connection(keep_browser_open=keep_open)
-        if self.session_id and self.api_key and self.api_base and not keep_open:
-            try:
-                self._request("POST", f"/v1/browser_sessions/{self.session_id}/close", body={})
-            except Exception:
-                pass
-        self.session_id = ""
-
-
 class RoxyBrowserSession(ConnectedPlaywrightSession):
     def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -869,7 +665,9 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         return result
 
     def __enter__(self):
-        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50100").rstrip("/")
+        # Default matches config.json's roxy.api_base (50000); 50100 was wrong
+        # and would silently point at a dead port whenever api_base is absent.
+        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50000").rstrip("/")
         workspace_id = _require(self.driver_config.get("workspace_id"), "roxy_workspace_id_missing")
         self.profile_id = str(self.driver_config.get("profile_id") or "").strip()
         if not self.profile_id:
@@ -1015,6 +813,85 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             except Exception:
                 pass
         self.profile_id = ""
+
+
+class AdsPowerBrowserSession(ConnectedPlaywrightSession):
+    """Drive an AdsPower-managed Chromium over its local REST API.
+
+    AdsPower owns the browser process, the fingerprint and the proxy for each
+    environment (``user_id``).  This session only starts/stops the environment
+    and attaches through CDP -- the environment must already exist in AdsPower's
+    UI, because fingerprint/proxy configuration lives there, not in config.
+    """
+
+    def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.driver_config = _driver_config(config, "adspower")
+        self.api_base = ""
+        self.user_id = ""
+        self.debugger_address = ""
+
+    def _api_get(self, path: str, params: Mapping[str, Any]) -> dict[str, Any]:
+        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50325").rstrip("/")
+        url = urljoin(self.api_base + "/", path.lstrip("/"))
+        timeout = min(60, max(10, self.timeout_ms // 1000))
+        try:
+            response = curl_requests.get(url, params=params, timeout=timeout)
+            data = response.json()
+        except Exception as exc:
+            raise BrowserRegistrationError("adspower_api_error", type(exc).__name__) from exc
+        if int(getattr(response, "status_code", 0) or 0) >= 400:
+            raise BrowserRegistrationError("adspower_api_error", f"http_{response.status_code}")
+        if not isinstance(data, Mapping):
+            raise BrowserRegistrationError("adspower_api_error", "non_json_response")
+        if int(data.get("code", 0) or 0) != 0:
+            raise BrowserRegistrationError(
+                "adspower_api_error",
+                str(data.get("msg") or data.get("message") or f"code_{data.get('code')}"),
+            )
+        return dict(data)
+
+    def __enter__(self):
+        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50325").rstrip("/")
+        self.user_id = str(self.driver_config.get("user_id") or self.driver_config.get("profile_id") or "").strip()
+        if not self.user_id:
+            raise BrowserRegistrationError("adspower_user_id_missing")
+        started = self._api_get("api/v1/browser/start", {
+            "user_id": self.user_id,
+            "headless": 1 if self.headless else 0,
+            "ip_tab": 0,
+        })
+        data = started.get("data") or {}
+        ws_blob = data.get("ws") if isinstance(data.get("ws"), Mapping) else {}
+        ws_address = str(ws_blob.get("playwright") or ws_blob.get("puppeteer") or "").strip()
+        if not ws_address:
+            ws_address = str(data.get("debuggerAddress") or "").strip()
+        if not ws_address:
+            raise BrowserRegistrationError("adspower_debug_address_missing")
+        ws_address = _normalize_debugger_address(ws_address)
+        self.debugger_address = ws_address
+        self._start_playwright()
+        try:
+            browser = self._playwright.chromium.connect_over_cdp(ws_address, timeout=self.timeout_ms)
+            self._adopt_browser(browser)
+            return self
+        except BrowserRegistrationError:
+            self.close()
+            raise
+        except Exception as exc:
+            self.close()
+            raise BrowserRegistrationError("adspower_connect_failed", type(exc).__name__) from exc
+
+    def close(self) -> None:
+        keep_open = bool(self.driver_config.get("keep_browser_open", False))
+        self._close_connection(keep_browser_open=keep_open)
+        if not self.user_id or not self.api_base or keep_open:
+            return
+        try:
+            self._api_get("api/v1/browser/stop", {"user_id": self.user_id})
+        except Exception:
+            pass
+        self.user_id = ""
 
 
 def verify_browser_proxy_country(browser: Any, *, expected_country: str = "", timeout_seconds: int = 20) -> dict[str, Any]:
@@ -1303,10 +1180,8 @@ def create_browser_session(
         return CloakBrowserSession(config=config, **kwargs)
     if driver == "camoufox":
         return CamoufoxBrowserSession(config=config, **kwargs)
-    if driver == "browser_use":
-        return BrowserUseSession(config=config, **kwargs)
-    if driver == "skyvern":
-        return SkyvernBrowserSession(config=config, **kwargs)
+    if driver == "adspower":
+        return AdsPowerBrowserSession(config=config, **kwargs)
     # Playwright: pass user_data_dir for persistent context when available.
     pw_user_data_dir = str(_driver_config(config, "playwright").get("user_data_dir") or "").strip()
     if pw_user_data_dir:
@@ -1315,7 +1190,7 @@ def create_browser_session(
 
 
 __all__ = [
-    "BrowserUseSession", "CamoufoxBrowserSession", "CloakBrowserSession",
-    "RoxyBrowserSession", "RoxySeleniumSession", "SkyvernBrowserSession",
+    "CamoufoxBrowserSession", "CloakBrowserSession",
+    "RoxyBrowserSession", "RoxySeleniumSession", "AdsPowerBrowserSession",
     "create_browser_session",
 ]

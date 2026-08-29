@@ -33,7 +33,7 @@
         "start_url": "https://chatgpt.com/auth/login"
       },
       "roxy": {
-        "api_base": "http://127.0.0.1:50100",
+        "api_base": "http://127.0.0.1:50000",
         "backend": "playwright",
         "api_token": "",
         "workspace_id": "",
@@ -73,25 +73,10 @@
         "keep_browser_open": false,
         "start_url": "https://chatgpt.com/auth/login"
       },
-      "browser_use": {
-        "api_key": "",
-        "cdp_base": "wss://connect.browser-use.com",
-        "proxy_country_code": "",
-        "use_proxy": true,
-        "profile_id": "",
-        "session_timeout_minutes": 120,
-        "keep_browser_open": false,
-        "start_url": "https://chatgpt.com/auth/login"
-      },
-      "skyvern": {
-        "api_key": "",
-        "api_base": "https://api.skyvern.com",
-        "session_timeout_minutes": 60,
-        "profile_id": "",
-        "proxy_location": "",
-        "generate_browser_profile": false,
-        "ad_blocker": true,
-        "browser_type": "stealth-chromium",
+      "adspower": {
+        "api_base": "http://127.0.0.1:50325",
+        "user_id": "",
+        "headless": false,
         "keep_browser_open": false,
         "start_url": "https://chatgpt.com/auth/login"
       }
@@ -104,7 +89,22 @@
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
-    "stage_concurrency": { "auth": 1, "network": 4, "at_probe": 4 }
+    "stage_concurrency": { "auth": 1, "network": 4, "at_probe": 4 },
+    "pulse": {
+      "enabled": true,
+      "wave_size": 4,
+      "wave_delay_seconds": 5,
+      "ban_threshold": 2,
+      "ban_pause_seconds": 60,
+      "max_waves": 0
+    },
+    "browser_process_pool": {
+      "enabled": true,
+      "max_concurrent": 4,
+      "contexts_per_process": 6,
+      "max_uses_per_process": 10,
+      "recycle_on_error": true
+    }
   },
   "email_registration": {
     "registration_mode": "passwordless",

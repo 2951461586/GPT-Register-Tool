@@ -11,18 +11,16 @@ class RegistrationDriver(str, Enum):
     PLAYWRIGHT = "playwright"
     ROXY = "roxy"
     CLOAK = "cloak"
-    BROWSER_USE = "browser_use"
-    SKYVERN = "skyvern"
     CAMOUFOX = "camoufox"
+    ADSPOWER = "adspower"
 
 
 BROWSER_REGISTRATION_DRIVERS = frozenset({
     RegistrationDriver.PLAYWRIGHT.value,
     RegistrationDriver.ROXY.value,
     RegistrationDriver.CLOAK.value,
-    RegistrationDriver.BROWSER_USE.value,
-    RegistrationDriver.SKYVERN.value,
     RegistrationDriver.CAMOUFOX.value,
+    RegistrationDriver.ADSPOWER.value,
 })
 
 
@@ -45,12 +43,10 @@ def normalize_registration_driver(value: Any = None, config: Mapping[str, Any] |
         return RegistrationDriver.ROXY.value
     if raw in {"cloak", "cloakbrowser", "cloak_browser"}:
         return RegistrationDriver.CLOAK.value
-    if raw in {"browser_use", "browseruse", "browser_use_cloud", "bu"}:
-        return RegistrationDriver.BROWSER_USE.value
-    if raw in {"skyvern", "sv"}:
-        return RegistrationDriver.SKYVERN.value
     if raw in {"camoufox", "camou", "fox", "cf"}:
         return RegistrationDriver.CAMOUFOX.value
+    if raw in {"adspower", "adsp", "ap", "adspower_browser"}:
+        return RegistrationDriver.ADSPOWER.value
     raise ValueError(f"unsupported registration driver: {raw}")
 
 

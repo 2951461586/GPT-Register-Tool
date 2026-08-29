@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import random
+import threading
 import time
 import uuid
 from collections.abc import Mapping
+from contextlib import contextmanager
 from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
@@ -1257,6 +1259,24 @@ def _browser_heartbeat(browser: Any, page: Any) -> Any:
     return page
 
 
+def _page_is_alive(page: Any) -> bool:
+    """Return True unless the page is definitively gone.
+
+    Decides whether an OTP retry should merely resend the code or rebuild the
+    whole email step.  Only an explicit crash / close marker counts as dead:
+    a transient evaluate failure (navigation in flight, stub page) must not
+    force a costly full-flow rebuild, so a live page keeps the historical
+    resend-only behaviour.
+    """
+    if page is None:
+        return False
+    try:
+        page.evaluate("() => 1")
+        return True
+    except Exception as exc:
+        return not _session_context_closed(f"{type(exc).__name__}: {exc}")
+
+
 def _prepare_session_page(browser: Any, page: Any, timeout_seconds: int) -> Any:
     """Give the natural OAuth callback a bounded grace period before session polling."""
     ensure_context = getattr(browser, "ensure_chatgpt_context", None)
@@ -1283,15 +1303,10 @@ def _poll_browser_otp(
     proxy: str | None,
     excluded_otps: set[str],
 ) -> str | None:
-    if driver_name not in {"browser_use", "skyvern"}:
-        return mailbox_service.poll_otp(
-            mailbox,
-            subject_keyword=subject_keyword,
-            timeout=timeout,
-            issued_after_unix=issued_after_unix,
-            proxy=proxy,
-            excluded_otps=excluded_otps,
-        )
+    # Heartbeat-aware polling applies to every driver, not just the retired
+    # cloud ones: a crashed or recycled page is caught between OTP windows
+    # instead of silently burning the whole timeout.  ``driver_name`` stays in
+    # the signature so callers and tests keep a stable seam.
     deadline = time.monotonic() + max(1, int(timeout or 1))
     while time.monotonic() < deadline:
         remaining = max(1, int(deadline - time.monotonic()))
@@ -1442,6 +1457,77 @@ def _bind_totp_in_browser(page: Any, access_token: str, device_id: str) -> dict[
         return {"ok": False, "error": f"browser_totp_exception: {type(exc).__name__}: {exc}"}
 
 
+_BROWSER_POOL_LOCK = threading.Lock()
+_BROWSER_POOL: Any = None
+_BROWSER_POOL_KEY: tuple[Any, ...] | None = None
+
+
+@contextmanager
+def _browser_session_scope(
+    *,
+    driver_name: str,
+    config: Mapping[str, Any],
+    proxy: str | None,
+    headless: bool,
+    timeout_ms: int,
+    locale: str,
+    timezone_id: str,
+    browser_identity: Mapping[str, Any] | None,
+    viewport: tuple[int, int] | None,
+    session_factory,
+):
+    """Yield a connected browser session, routed through the process pool when enabled.
+
+    Two paths:
+
+    * pool disabled (default) -- the session factory is called directly and
+      lives exactly as long as the ``with`` block, which is the historical
+      behaviour.
+    * pool enabled (``registration.browser_process_pool.enabled``) -- slots
+      come from a process-wide pool that bounds concurrency and recycles
+      degraded browsers.  Per-account values (proxy, locale, timezone,
+      identity, viewport) are still passed per session; only the expensive
+      browser process is shared.
+    """
+    from ..browser_pool import BrowserProcessPool, PoolConfig
+
+    if not PoolConfig.from_config(config).enabled:
+        session = session_factory(
+            driver_name, config=config, proxy=proxy, headless=headless,
+            timeout_ms=timeout_ms, locale=locale, timezone_id=timezone_id,
+            browser_identity=browser_identity, viewport=viewport,
+        )
+        with session as browser:
+            yield browser
+        return
+
+    global _BROWSER_POOL, _BROWSER_POOL_KEY
+    # The pool owns the browser processes, so it is keyed only by the knobs
+    # that shape a process.  Everything per-account is supplied per session.
+    key = (driver_name, headless, timeout_ms)
+    with _BROWSER_POOL_LOCK:
+        if _BROWSER_POOL is None or _BROWSER_POOL_KEY != key:
+            _BROWSER_POOL = BrowserProcessPool(
+                config,
+                driver=driver_name,
+                headless=headless,
+                timeout_ms=timeout_ms,
+                locale=locale,
+                timezone_id=timezone_id,
+                session_factory=session_factory,
+            )
+            _BROWSER_POOL_KEY = key
+        pool = _BROWSER_POOL
+    with pool.session(
+        proxy=proxy,
+        locale=locale,
+        timezone_id=timezone_id,
+        browser_identity=browser_identity,
+        viewport=viewport,
+    ) as (browser, _slot):
+        yield browser
+
+
 def run_browser_registration(
     *,
     driver_name: str,
@@ -1560,12 +1646,12 @@ def run_browser_registration(
             int(_browser_profile.get("screen_height") or 900),
         )
     try:
-        browser_session = session_factory(
-            driver_name, config=config, proxy=proxy, headless=headless,
+        with _browser_session_scope(
+            driver_name=driver_name, config=config, proxy=proxy, headless=headless,
             timeout_ms=max(5_000, timeout * 1_000), locale=locale, timezone_id=timezone_id,
             browser_identity=browser_identity, viewport=_browser_viewport,
-        )
-        with browser_session as browser:
+            session_factory=session_factory,
+        ) as browser:
             if driver_name in {"roxy", "cloak"}:
                 from .external_sessions import verify_browser_proxy_country
 
@@ -1653,7 +1739,7 @@ def run_browser_registration(
                         if not otp:
                             if otp_attempt < 2:
                                 restarted = False
-                                if driver_name in {"browser_use", "skyvern"}:
+                                if not _page_is_alive(page):
                                     try:
                                         page, _ = _restart_email_otp_flow(
                                             browser, page, start_url=start_url, email=email,
@@ -1678,7 +1764,7 @@ def run_browser_registration(
                         break
                     if outcome == "invalid" and otp_attempt < 2:
                         restarted = False
-                        if driver_name in {"browser_use", "skyvern"}:
+                        if not _page_is_alive(page):
                             try:
                                 page, _ = _restart_email_otp_flow(
                                     browser, page, start_url=start_url, email=email,

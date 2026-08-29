@@ -10,7 +10,6 @@ from sms_tool.batch_runner import run_batch_impl
 from sms_tool.config import ConfigError, validate_registration_driver_config
 from sms_tool.registration_drivers.base import normalize_registration_driver
 from sms_tool.registration_drivers.browser_session import _playwright_proxy
-from sms_tool.registration_drivers.external_sessions import BrowserUseSession
 from sms_tool.registration_drivers.playwright import build_browser_session_file
 from sms_tool.registration_outcome import _browser_mailbox_snapshot
 from sms_tool.registration import run_email
@@ -141,9 +140,11 @@ class RegistrationDriverTests(unittest.TestCase):
     def test_example_config_uses_runtime_roxy_api_default(self):
         config_path = Path(__file__).resolve().parents[1] / "config.example.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
+        # 50000 is the correct Roxy default (50100 was a stale port that pointed
+        # at a dead endpoint); the example file must match the runtime default.
         self.assertEqual(
             config["registration"]["drivers"]["roxy"]["api_base"],
-            "http://127.0.0.1:50100",
+            "http://127.0.0.1:50000",
         )
 
     def test_browser_registration_rejects_protocol_and_unknown_driver(self):
@@ -159,84 +160,16 @@ class RegistrationDriverTests(unittest.TestCase):
                 self.assertEqual(result["failure_class"], "configuration")
 
     def test_browser_driver_credentials_accept_environment_overrides(self):
-        config = {"registration": {"drivers": {"browser_use": {}}}}
-        with patch.dict(os.environ, {"BROWSER_USE_API_KEY": "env-key"}, clear=False):
-            self.assertEqual(validate_registration_driver_config(config, "browser_use"), "browser_use")
+        config = {"registration": {"drivers": {"roxy": {}}}}
+        with patch.dict(os.environ, {"ROXY_WORKSPACE_ID": "env-workspace"}, clear=False):
+            self.assertEqual(validate_registration_driver_config(config, "roxy"), "roxy")
 
-    def test_browser_driver_runtime_options_accept_environment_overrides(self):
-        config = {"registration": {"drivers": {"browser_use": {}}}}
-        with patch.dict(
-            os.environ,
-            {
-                "BROWSER_USE_API_KEY": "env-key",
-                "BROWSER_USE_CDP_BASE": "wss://env.browser.test",
-                "BROWSER_USE_PROXY_COUNTRY_CODE": "JP",
-                "BROWSER_USE_USE_PROXY": "false",
-            },
-            clear=False,
-        ):
-            session = BrowserUseSession(config=config, **self._session_kwargs())
-
-        parsed = parse_qs(urlsplit(session.connect_url()).query)
-        self.assertEqual(urlsplit(session.connect_url()).netloc, "env.browser.test")
-        self.assertNotIn("proxyCountryCode", parsed)
-
-    def test_cloud_drivers_reject_unconsumed_registration_proxy(self):
-        proxy = "http://user:secret@proxy.example:8080"
-        cases = {
-            "browser_use": (
-                {"api_key": "test-key"},
-                "browser_use_registration_proxy_not_consumed",
-            ),
-            "skyvern": (
-                {"api_key": "test-key"},
-                "skyvern_registration_proxy_not_consumed",
-            ),
-        }
-        for driver, (driver_config, error_code) in cases.items():
-            with self.subTest(driver=driver):
-                config = {"registration": {"drivers": {driver: driver_config}}}
-                with self.assertRaises(ConfigError) as raised:
-                    validate_registration_driver_config(config, driver, proxy=proxy)
-                self.assertTrue(str(raised.exception).startswith(error_code))
-                self.assertNotIn("secret", str(raised.exception))
-                self.assertNotIn("proxy.example", str(raised.exception))
-
-    def test_cloud_drivers_accept_provider_native_proxy_configuration(self):
-        cases = {
-            "browser_use": {"api_key": "test-key", "use_proxy": True, "proxy_country_code": "US"},
-            "skyvern": {"api_key": "test-key", "proxy_location": "RESIDENTIAL_US"},
-        }
-        for driver, driver_config in cases.items():
-            with self.subTest(driver=driver):
-                config = {"registration": {"drivers": {driver: driver_config}}}
-                self.assertEqual(
-                    validate_registration_driver_config(
-                        config,
-                        driver,
-                        proxy="http://proxy.example:8080",
-                    ),
-                    driver,
-                )
-
-    def test_browser_use_disabled_provider_proxy_rejects_registration_proxy(self):
-        config = {"registration": {"drivers": {"browser_use": {
-            "api_key": "test-key",
-            "use_proxy": False,
-            "proxy_country_code": "US",
-        }}}}
-        with self.assertRaisesRegex(ConfigError, "^browser_use_registration_proxy_not_consumed"):
-            validate_registration_driver_config(
-                config,
-                "browser_use",
-                proxy="http://proxy.example:8080",
-            )
 
     @patch("sms_tool.registration_drivers.playwright.run_browser_registration")
     def test_run_email_dispatches_every_explicit_browser_driver(self, browser_run):
         browser_run.return_value = {"success": False, "error": "manual_challenge_required"}
         mailbox = type("Mailbox", (), {"email": "user@example.com"})()
-        for driver in ("playwright", "roxy", "cloak", "browser_use", "skyvern"):
+        for driver in ("playwright", "roxy", "cloak", "camoufox"):
             with self.subTest(driver=driver):
                 browser_run.reset_mock()
                 result = run_email(
@@ -248,8 +181,6 @@ class RegistrationDriverTests(unittest.TestCase):
                             "driver": "protocol",
                             "drivers": {
                                 "roxy": {"workspace_id": "7"},
-                                "browser_use": {"api_key": "test-key"},
-                                "skyvern": {"api_key": "test-key"},
                             },
                         },
                     },
@@ -264,8 +195,6 @@ class RegistrationDriverTests(unittest.TestCase):
         mailbox = type("Mailbox", (), {"email": "user@example.com"})()
         expected = {
             "roxy": "roxy_workspace_id_missing",
-            "browser_use": "browser_use_api_key_missing",
-            "skyvern": "skyvern_api_key_missing",
         }
         for driver, error_code in expected.items():
             with self.subTest(driver=driver):
@@ -280,30 +209,6 @@ class RegistrationDriverTests(unittest.TestCase):
                                 "chat_base_url": "https://chatgpt.com",
                             },
                             "registration": {"driver": "protocol"},
-                        },
-                    )
-                browser_run.assert_not_called()
-
-    @patch("sms_tool.registration_drivers.playwright.run_browser_registration")
-    def test_run_email_rejects_unconsumed_cloud_proxy_before_browser_dispatch(self, browser_run):
-        mailbox = type("Mailbox", (), {"email": "user@example.com"})()
-        for driver in ("browser_use", "skyvern"):
-            with self.subTest(driver=driver):
-                browser_run.reset_mock()
-                with self.assertRaisesRegex(ConfigError, f"^{driver}_registration_proxy_not_consumed"):
-                    run_email(
-                        proxy="http://user:secret@proxy.example:8080",
-                        mailbox=mailbox,
-                        registration_driver=driver,
-                        runtime_config={
-                            "chatgpt": {
-                                "auth_base_url": "https://auth.openai.com",
-                                "chat_base_url": "https://chatgpt.com",
-                            },
-                            "registration": {
-                                "driver": "protocol",
-                                "drivers": {driver: {"api_key": "test-key"}},
-                            },
                         },
                     )
                 browser_run.assert_not_called()
@@ -354,9 +259,12 @@ class RegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.batch_runner.infer_proxy_country", side_effect=["US", "DE"])
     @patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid")
     @patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda pool, _fallback: pool)
-    def test_roxy_country_mismatch_rotates_to_next_pool_proxy(
+    def test_roxy_country_mismatch_keeps_pinned_proxy_on_retry(
         self, _select_pool, _refresh_sid, _infer_country,
     ):
+        # Audit #4: a retry must NOT rotate to a different pool member -- that
+        # egress churn is a ban trigger.  The account stays pinned to pool[0];
+        # on retry only the sticky session id is refreshed.
         calls = []
 
         def run_email(**kwargs):
@@ -376,11 +284,14 @@ class RegistrationDriverTests(unittest.TestCase):
         )
 
         self.assertTrue(result[0]["success"])
+        # Both attempts stay on the pinned pool[0] egress (only the sid is
+        # refreshed each time, which the patched refresh_proxy_sid makes a
+        # no-op here).
         self.assertEqual([call["proxy"] for call in calls], [
-            "http://pool-a.test:8000-sid", "http://pool-b.test:8000-sid",
+            "http://pool-a.test:8000-sid", "http://pool-a.test:8000-sid",
         ])
         self.assertEqual(calls[0]["proxy_metadata"]["pool_index"], 0)
-        self.assertEqual(calls[1]["proxy_metadata"]["pool_index"], 1)
+        self.assertEqual(calls[1]["proxy_metadata"]["pool_index"], 0)
         self.assertEqual(calls[0]["proxy_metadata"]["expected_country"], "US")
         self.assertNotIn("proxy", calls[0]["proxy_metadata"])
 

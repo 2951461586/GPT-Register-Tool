@@ -74,7 +74,11 @@ class BatchErrorClassificationTests(unittest.TestCase):
 
         self.assertEqual(selected, [pool[0], pool[2]])
 
-    def test_batch_distributes_static_proxy_pool_and_rotates_on_retry(self):
+    def test_account_proxy_egress_is_pinned_across_retries(self):
+        # Audit #4: rotating the egress on every retry looks like proxy churn
+        # to registrars and is a ban trigger.  Each account is now pinned to a
+        # stable proxy (account_proxy_index = i % len(pool)); a retry keeps the
+        # same egress and only refreshes the sticky session id.
         pool = ["http://static-a.example:8080", "http://static-b.example:8080"]
         calls = []
 
@@ -85,6 +89,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
             return {"success": True}
 
         with patch("sms_tool.batch_runner.select_registration_proxy_pool", return_value=pool), \
+             patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid"), \
              patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
             results = run_batch_impl(
                 count=2,
@@ -95,7 +100,9 @@ class BatchErrorClassificationTests(unittest.TestCase):
                 run_email_func=run_email,
             )
 
-        self.assertEqual(calls, [pool[0], pool[1], pool[1]])
+        # Account 0 is pinned to pool[0] for BOTH attempts; account 1 to pool[1].
+        # No retry rotates to a different pool member.
+        self.assertEqual(calls, [pool[0] + "-sid", pool[0] + "-sid", pool[1] + "-sid"])
         self.assertTrue(all(result["success"] for result in results))
 
     def test_dynamic_registration_proxy_refreshes_sid_per_account(self):

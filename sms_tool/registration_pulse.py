@@ -62,12 +62,29 @@ class PulseConfig:
             return cls()
         return cls(
             enabled=bool(pulse.get("enabled", False)),
-            wave_size=int(pulse.get("wave_size") or 4),
-            wave_delay_seconds=float(pulse.get("wave_delay_seconds") or 5.0),
-            ban_threshold=int(pulse.get("ban_threshold") or 2),
-            ban_pause_seconds=float(pulse.get("ban_pause_seconds") or 60.0),
-            max_waves=int(pulse.get("max_waves") or 0),
+            # ``or`` would swallow legitimate zeros: wave_size=0 must clamp to
+            # 1 (PulseConfig's floor), not silently fall back to the default.
+            wave_size=_coerce_number(pulse.get("wave_size"), 4, int),
+            wave_delay_seconds=_coerce_number(pulse.get("wave_delay_seconds"), 5.0, float),
+            ban_threshold=_coerce_number(pulse.get("ban_threshold"), 2, int),
+            ban_pause_seconds=_coerce_number(pulse.get("ban_pause_seconds"), 60.0, float),
+            max_waves=_coerce_number(pulse.get("max_waves"), 0, int),
         )
+
+
+def _coerce_number(value: Any, default: Any, cast: Callable[[Any], Any]) -> Any:
+    """Cast a config value, falling back to ``default`` when unusable.
+
+    Missing values (``None``), booleans and non-numeric junk all yield the
+    default so a typo in config.json degrades to stock behaviour instead of
+    crashing the whole batch before it starts.
+    """
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _is_otp_ban_signal(result: dict[str, Any]) -> bool:
@@ -114,7 +131,23 @@ def run_pulse_batch(
     while remaining:
         wave_number += 1
         if max_waves > 0 and wave_number > max_waves:
+            # Emit a terminal result for every skipped account instead of
+            # silently dropping it: callers size their bookkeeping from the
+            # returned list, so a short list would desync account indices and
+            # make the run look like it never attempted those accounts.
             print(f"[Pulse] Max waves ({max_waves}) reached; stopping with {len(remaining)} accounts unprocessed")
+            for idx in remaining:
+                skipped = {
+                    "success": False,
+                    "error": "pulse_max_waves_reached",
+                    "failure_class": "skipped",
+                    "dropped": False,
+                    "registration_attempts": 0,
+                }
+                results[idx] = skipped
+                if on_result:
+                    on_result(idx, skipped)
+            remaining = []
             break
 
         wave_indices = remaining[:wave_size]
