@@ -542,11 +542,19 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         profile_value = int(self.profile_id) if self.profile_id.isdigit() else self.profile_id
         open_method = str(self.driver_config.get("open_method") or "POST").upper()
         open_path = self._path("open_path", "/browser/open")
-        opened = self._request(open_method, open_path, {
-            "workspaceId": workspace_value,
-            "dirId": profile_value,
-            "args": [], "forceOpen": True, "headless": self.headless,
-        })
+        try:
+            opened = self._request(open_method, open_path, {
+                "workspaceId": workspace_value,
+                "dirId": profile_value,
+                "args": [], "forceOpen": True, "headless": self.headless,
+            })
+        except Exception:
+            # __enter__ 内 open 失败：清理已建 profile，避免孤儿占满 Roxy 3/3 额度
+            try:
+                self.close()
+            except Exception:
+                pass
+            raise
         ws_address = _first(
             opened, ("ws",), ("wsEndpoint",), ("ws_endpoint",), ("debuggerWsUrl",),
             ("data", "ws"), ("data", "wsEndpoint"), ("data", "ws_endpoint"), ("data", "debuggerWsUrl"),
@@ -565,19 +573,26 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         )
         address = ws_address or self.debugger_address
         if not address:
-            self.close()
             raise BrowserRegistrationError("roxy_debug_address_missing")
         address = _normalize_debugger_address(address)
-        self._start_playwright()
         try:
+            self._start_playwright()
             browser = self._playwright.chromium.connect_over_cdp(address, timeout=self.timeout_ms)
             self._adopt_browser(browser)
             return self
         except BrowserRegistrationError:
-            self.close()
+            # __enter__ 内失败：清理已建 profile（close() 按 created_profile +
+            # delete_profile_after_run 删除），否则孤儿占满 Roxy 3/3 额度 → 死亡螺旋
+            try:
+                self.close()
+            except Exception:
+                pass
             raise
         except Exception as exc:
-            self.close()
+            try:
+                self.close()
+            except Exception:
+                pass
             raise BrowserRegistrationError("roxy_connect_failed", type(exc).__name__) from exc
 
 
