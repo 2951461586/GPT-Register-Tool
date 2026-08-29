@@ -94,13 +94,11 @@ public sealed class SettingsServiceTests
         SettingDefinition driver = SettingsCatalog.AllFields.Single(field => field.Key == "registration_driver");
         Assert.Equal(SettingFieldKind.Options, driver.Kind);
         Assert.Equal(
-            new[] { "protocol", "playwright", "roxy", "cloak", "camoufox", "browser_use", "skyvern" },
+            new[] { "protocol", "playwright", "roxy", "cloak", "camoufox", "adspower" },
             driver.Options);
 
         Assert.Equal(SettingFieldKind.Secret, SettingsCatalog.AllFields.Single(field => field.Key == "roxy_api_token").Kind);
         Assert.Equal(SettingFieldKind.Secret, SettingsCatalog.AllFields.Single(field => field.Key == "cloak_license_key").Kind);
-        Assert.Equal(SettingFieldKind.Secret, SettingsCatalog.AllFields.Single(field => field.Key == "browser_use_api_key").Kind);
-        Assert.Equal(SettingFieldKind.Secret, SettingsCatalog.AllFields.Single(field => field.Key == "skyvern_api_key").Kind);
         Assert.Contains(
             SettingsCatalog.Categories.Single(category => category.Title == "注册与接码").Sections,
             section => section.Title == "RoxyBrowser");
@@ -114,7 +112,7 @@ public sealed class SettingsServiceTests
         File.WriteAllText(configPath, """
             {
               "registration": {
-                "driver": "browser_use",
+                "driver": "camoufox",
                 "browser_headless": false,
                 "browser_timeout_seconds": 75,
                 "browser_locale": "en-GB",
@@ -122,8 +120,7 @@ public sealed class SettingsServiceTests
                 "drivers": {
                   "roxy": { "api_token": "roxy-token", "workspace_id": "11" },
                   "cloak": { "license_key": "cloak-key", "humanize": false },
-                  "browser_use": { "api_key": "browser-use-key", "profile_id": "profile-1" },
-                  "skyvern": { "api_key": "skyvern-key", "browser_type": "chromium" }
+                  "camoufox": { "humanize": false, "max_width": 1366 }
                 }
               }
             }
@@ -132,27 +129,24 @@ public sealed class SettingsServiceTests
 
         IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
 
-        Assert.Equal("browser_use", Field(categories, "registration_driver").Value);
+        Assert.Equal("camoufox", Field(categories, "registration_driver").Value);
         Assert.False(Field(categories, "registration_browser_headless").BooleanValue);
         Assert.Equal("roxy-token", Field(categories, "roxy_api_token").Value);
         Assert.Equal("cloak-key", Field(categories, "cloak_license_key").Value);
-        Assert.Equal("browser-use-key", Field(categories, "browser_use_api_key").Value);
-        Assert.Equal("chromium", Field(categories, "skyvern_browser_type").Value);
+        Assert.False(Field(categories, "camoufox_humanize").BooleanValue);
 
-        Field(categories, "registration_driver").Value = "skyvern";
+        Field(categories, "registration_driver").Value = "roxy";
         Field(categories, "registration_browser_headless").BooleanValue = true;
         Field(categories, "roxy_workspace_id").Value = "22";
-        Field(categories, "browser_use_profile_id").Value = "profile-2";
-        Field(categories, "skyvern_keep_open").BooleanValue = true;
+        Field(categories, "camoufox_max_width").Value = "1440";
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
         JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
-        Assert.Equal("skyvern", root["registration"]!["driver"]!.GetValue<string>());
+        Assert.Equal("roxy", root["registration"]!["driver"]!.GetValue<string>());
         Assert.True(root["registration"]!["browser_headless"]!.GetValue<bool>());
         Assert.Equal("22", root["registration"]!["drivers"]!["roxy"]!["workspace_id"]!.GetValue<string>());
-        Assert.Equal("profile-2", root["registration"]!["drivers"]!["browser_use"]!["profile_id"]!.GetValue<string>());
-        Assert.True(root["registration"]!["drivers"]!["skyvern"]!["keep_browser_open"]!.GetValue<bool>());
+        Assert.Equal(1440, root["registration"]!["drivers"]!["camoufox"]!["max_width"]!.GetValue<int>());
     }
 
     [Fact]

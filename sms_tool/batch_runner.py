@@ -151,8 +151,14 @@ def run_batch_impl(
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         mailbox = mailboxes[i] if mailboxes else None
+        # Pin each account to a stable proxy egress for its entire lifetime.
+        # Previously the index shifted on every retry (proxy_pool[(i+attempt-1)
+        # % n]), which rotated the egress on each retry and looked like proxy
+        # churn to registrars -- a ban trigger.  Retries now keep the same
+        # egress and only refresh the session id (see refresh_proxy_sid below).
+        account_proxy_index = i % len(proxy_pool) if proxy_pool else 0
         for attempt in range(1, max_attempts + 1):
-            base_proxy = proxy_pool[(i + attempt - 1) % len(proxy_pool)] if proxy_pool else proxy
+            base_proxy = proxy_pool[account_proxy_index] if proxy_pool else proxy
             worker_proxy = (
                 first_attempt_proxies[i]
                 if attempt == 1 and i in first_attempt_proxies
@@ -240,13 +246,20 @@ def run_batch_impl(
 
     pulse_config = PulseConfig.from_config(CFG)
     if pulse_config.enabled:
-        return run_pulse_batch(
-            count,
-            run_one_fn=_run_one,
-            on_result=_notify_result,
-            workers=workers,
-            pulse_config=pulse_config,
-        )
+        try:
+            return run_pulse_batch(
+                count,
+                run_one_fn=_run_one,
+                on_result=_notify_result,
+                workers=workers,
+                pulse_config=pulse_config,
+            )
+        finally:
+            # The all-at-once path shuts the prewarm pool down at the end of
+            # the function; the pulse path returns early and used to leak the
+            # executor threads for the rest of the process lifetime.
+            if prewarm_executor is not None:
+                prewarm_executor.shutdown(wait=True)
 
     ordered = [None] * count
     with ThreadPoolExecutor(max_workers=workers) as executor:

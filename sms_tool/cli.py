@@ -199,7 +199,7 @@ def main():
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
-    parser.add_argument("--registration-driver", choices=["protocol", "playwright", "roxy", "cloak", "camoufox", "browser_use", "skyvern"], default=None, help="Registration driver (default: protocol)")
+    parser.add_argument("--registration-driver", choices=["protocol", "playwright", "roxy", "cloak", "camoufox"], default=None, help="Registration driver (default: protocol)")
     parser.add_argument("--browser-headless", dest="browser_headless", action="store_true", default=None, help="Run Playwright registration headless")
     parser.add_argument("--browser-visible", dest="browser_headless", action="store_false", help="Run Playwright registration with a visible browser")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")

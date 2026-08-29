@@ -12,11 +12,9 @@ from sms_tool import env_loader
 from sms_tool.config import ConfigError, validate_config
 from sms_tool.registration_drivers.base import BrowserRegistrationError, normalize_registration_driver
 from sms_tool.registration_drivers.external_sessions import (
-    BrowserUseSession,
     CloakBrowserSession,
     RoxyBrowserSession,
     RoxySeleniumSession,
-    SkyvernBrowserSession,
     _driver_config,
     create_browser_session,
     verify_browser_proxy_country,
@@ -237,8 +235,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             "fingerprint": "roxy",
             "roxybrowser": "roxy",
             "cloak-browser": "cloak",
-            "browseruse": "browser_use",
-            "sv": "skyvern",
+            "camou": "camoufox",
         }
         for alias, expected in aliases.items():
             with self.subTest(alias=alias):
@@ -265,7 +262,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         context = Target()
         page = Target()
         with patch.dict(sys.modules, {"playwright_stealth": fake_module}):
-            result = apply_playwright_stealth(context, page, label="test", provider_prefix="browser_use")
+            result = apply_playwright_stealth(context, page, label="test", provider_prefix="camoufox")
 
         self.assertTrue(result["playwright_stealth"])
         self.assertEqual(context.scripts, ["stealth"])
@@ -292,14 +289,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertTrue(session.stealth_status["playwright_stealth"])
         apply.assert_called_once()
 
-    def test_connected_cloud_session_applies_stealth_after_cdp_adoption(self):
-        session = BrowserUseSession(config={"registration": {"drivers": {"browser_use": {}}}}, **self._session_kwargs())
-        fake = _Playwright()
-        with patch("sms_tool.registration_drivers.external_sessions.apply_playwright_stealth", return_value={"playwright_stealth": True}) as apply:
-            session._adopt_browser(fake.browser)
-
-        self.assertTrue(session.stealth_status["playwright_stealth"])
-        apply.assert_called_once()
 
     def test_cloud_access_token_probe_uses_browser_context_and_redacts_errors(self):
         class Browser:
@@ -341,8 +330,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         expected = {
             "roxy": RoxyBrowserSession,
             "cloak": CloakBrowserSession,
-            "browser_use": BrowserUseSession,
-            "skyvern": SkyvernBrowserSession,
         }
         for driver, session_type in expected.items():
             with self.subTest(driver=driver):
@@ -357,40 +344,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             create_browser_session("not-a-driver", config={"registration": {}}, **self._session_kwargs())
         self.assertEqual(unknown_error.exception.code, "unsupported_registration_driver")
 
-    def test_browser_use_cdp_url_contains_config_without_leaking_from_connect_error(self):
-        config = {
-            "registration": {"drivers": {"browser_use": {
-                "api_key": "secret-key",
-                "cdp_base": "wss://connect.browser-use.test",
-                "proxy_country_code": "US",
-                "profile_id": "profile-1",
-                "session_timeout_minutes": 45,
-            }}}
-        }
-        session = BrowserUseSession(config=config, **self._session_kwargs())
-        parsed = urlsplit(session.connect_url())
-        query = parse_qs(parsed.query)
-        self.assertEqual(parsed.netloc, "connect.browser-use.test")
-        self.assertEqual(query["apiKey"], ["secret-key"])
-        self.assertEqual(query["proxyCountryCode"], ["us"])
-        self.assertEqual(query["profileId"], ["profile-1"])
-        self.assertEqual(query["timeout"], ["45"])
 
-        fake = _Playwright()
-        fake.connect_over_cdp = MagicMock(side_effect=RuntimeError("failed secret-key"))
-        session._start_playwright = lambda: setattr(session, "_playwright", fake)
-        with self.assertRaises(BrowserRegistrationError) as raised:
-            session.__enter__()
-        self.assertEqual(raised.exception.code, "browser_use_connect_failed")
-        self.assertNotIn("secret-key", str(raised.exception))
-
-    def test_browser_use_environment_secret_overrides_json_without_mutation(self):
-        config = {"registration": {"drivers": {"browser_use": {"api_key": "json-key"}}}}
-        with patch.dict(os.environ, {"BROWSER_USE_API_KEY": "env-key"}, clear=False):
-            session = BrowserUseSession(config=config, **self._session_kwargs())
-
-        self.assertEqual(parse_qs(urlsplit(session.connect_url()).query)["apiKey"], ["env-key"])
-        self.assertEqual(config["registration"]["drivers"]["browser_use"]["api_key"], "json-key")
 
     def test_invalid_boolean_environment_override_is_ignored(self):
         config = {"registration": {"drivers": {"roxy": {"keep_browser_open": True}}}}
@@ -406,22 +360,22 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             with TemporaryDirectory() as directory:
                 env_path = Path(directory) / ".env"
                 env_path.write_text(
-                    'export BROWSER_USE_API_KEY="file-key"\n'
-                    "BROWSER_USE_PROXY_COUNTRY_CODE=JP\n"
+                    'export ROXY_API_TOKEN="file-key"\n'
+                    "ROXY_API_BASE=http://from-file\n"
                     "BROKEN KEY=value\n",
                     encoding="utf-8",
                 )
-                with patch.dict(os.environ, {"BROWSER_USE_API_KEY": "process-key"}, clear=True):
+                with patch.dict(os.environ, {"ROXY_API_TOKEN": "process-key"}, clear=True):
                     env_loader._LOADED = False
                     env_loader.ENV_PATH = env_path
                     env_loader.ensure_loaded()
-                    self.assertEqual(os.environ["BROWSER_USE_API_KEY"], "process-key")
-                    self.assertEqual(os.environ["BROWSER_USE_PROXY_COUNTRY_CODE"], "JP")
+                    self.assertEqual(os.environ["ROXY_API_TOKEN"], "process-key")
+                    self.assertEqual(os.environ["ROXY_API_BASE"], "http://from-file")
                     self.assertEqual(
                         _driver_config(
-                            {"registration": {"drivers": {"browser_use": {}}}},
-                            "browser_use",
-                        )["api_key"],
+                            {"registration": {"drivers": {"roxy": {}}}},
+                            "roxy",
+                        )["api_token"],
                         "process-key",
                     )
                     self.assertNotIn("BROKEN KEY", os.environ)
@@ -429,28 +383,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             env_loader._LOADED = original_loaded
             env_loader.ENV_PATH = original_path
 
-    def test_browser_use_extra_query_cannot_override_provider_connection_settings(self):
-        config = {"registration": {"drivers": {"browser_use": {
-            "api_key": "key",
-            "proxy_country_code": "US",
-            "profile_id": "profile-1",
-            "session_timeout_minutes": 45,
-            "extra_query": {
-                "proxyCountryCode": "DE",
-                "profileId": "profile-2",
-                "timeout": "1",
-                "apiKey": "other-key",
-                "feature": "enabled",
-            },
-        }}}}
-        session = BrowserUseSession(config=config, **self._session_kwargs())
-        query = parse_qs(urlsplit(session.connect_url()).query)
-
-        self.assertEqual(query["apiKey"], ["key"])
-        self.assertEqual(query["proxyCountryCode"], ["us"])
-        self.assertEqual(query["profileId"], ["profile-1"])
-        self.assertEqual(query["timeout"], ["45"])
-        self.assertEqual(query["feature"], ["enabled"])
 
     @patch("sms_tool.registration_drivers.external_sessions.curl_requests.request")
     def test_roxy_create_open_close_delete_lifecycle(self, request):
@@ -514,35 +446,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertIn("hidden-select-container", script)
         self.assertIn("role=spinbutton", script)
 
-    @patch("sms_tool.registration_drivers.external_sessions.time.sleep")
-    @patch("sms_tool.registration_drivers.external_sessions.curl_requests.request")
-    def test_skyvern_create_poll_connect_and_close_lifecycle(self, request, _sleep):
-        request.side_effect = [
-            _Response({"browser_session_id": "session-1"}),
-            _Response({"browser_address": "wss://browser.skyvern.test/session-1"}),
-            _Response({"ok": True}),
-        ]
-        config = {"registration": {"drivers": {"skyvern": {
-            "api_key": "skyvern-secret",
-            "api_base": "https://api.skyvern.test",
-            "profile_id": "profile-1",
-            "proxy_location": "US",
-            "browser_type": "chromium",
-        }}}}
-        session = SkyvernBrowserSession(config=config, **self._session_kwargs())
-        fake = _Playwright()
-        session._start_playwright = lambda: setattr(session, "_playwright", fake)
-
-        self.assertIs(session.__enter__(), session)
-        session.close()
-
-        self.assertEqual([call.args[0] for call in request.call_args_list], ["POST", "GET", "POST"])
-        self.assertTrue(request.call_args_list[0].args[1].endswith("/v1/browser_sessions"))
-        self.assertEqual(request.call_args_list[0].kwargs["json"]["browser_profile_id"], "profile-1")
-        self.assertEqual(request.call_args_list[0].kwargs["json"]["proxy_location"], "RESIDENTIAL")
-        self.assertEqual(request.call_args_list[0].kwargs["json"]["browser_type"], "stealth-chromium")
-        self.assertTrue(request.call_args_list[2].args[1].endswith("/session-1/close"))
-        self.assertEqual(fake.connections[0][0], "wss://browser.skyvern.test/session-1")
 
     @patch("sms_tool.registration_drivers.external_sessions.curl_requests.request")
     def test_roxy_get_methods_use_query_params_and_extract_reference_keys(self, request):
@@ -610,17 +513,6 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         sleep.assert_called_once_with(0)
 
-    def test_keep_open_detaches_browser_use_without_closing_remote_browser(self):
-        config = {"registration": {"drivers": {"browser_use": {"keep_browser_open": True}}}}
-        session = BrowserUseSession(config=config, **self._session_kwargs())
-        fake = _Playwright()
-        session._playwright = fake
-        session.browser = fake.browser
-        session.context = fake.browser.contexts[0]
-        session.close()
-        self.assertFalse(fake.browser.closed)
-        self.assertFalse(fake.browser.contexts[0].closed)
-        self.assertTrue(fake.stopped)
 
     def test_roxy_selenium_keep_open_does_not_quit_webdriver(self):
         driver = MagicMock()
@@ -1098,7 +990,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             _complete_profile(page, "Test User", "1990-01-02")
         self.assertEqual(raised.exception.code, "browser_profile_birthdate_missing")
 
-    def test_cloud_otp_poll_heartbeats_between_short_polls(self):
+    def test_heartbeat_otp_poll_heartbeats_between_short_polls(self):
         mailbox_service = MagicMock()
         mailbox_service.poll_otp.side_effect = [None, "123456"]
         browser = MagicMock()
@@ -1110,7 +1002,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             SimpleNamespace(email="user@example.com"),
             browser=browser,
             page=page,
-            driver_name="browser_use",
+            driver_name="camoufox",
             subject_keyword="verification code",
             timeout=40,
             issued_after_unix=1,
@@ -1124,7 +1016,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertGreaterEqual(page.evaluate.call_count, 1)
 
     @patch("sms_tool.registration_drivers.playwright._browser_heartbeat")
-    def test_cloud_otp_poll_fails_immediately_when_browser_context_closes(self, heartbeat):
+    def test_heartbeat_otp_poll_fails_immediately_when_browser_context_closes(self, heartbeat):
         heartbeat.side_effect = BrowserRegistrationError("browser_session_context_closed")
         mailbox_service = MagicMock()
 
@@ -1134,7 +1026,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                 SimpleNamespace(email="user@example.com"),
                 browser=MagicMock(),
                 page=MagicMock(),
-                driver_name="browser_use",
+                driver_name="camoufox",
                 subject_keyword="verification code",
                 timeout=300,
                 issued_after_unix=1,
@@ -1145,7 +1037,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "browser_session_context_closed")
         mailbox_service.poll_otp.assert_not_called()
 
-    def test_cloud_otp_poll_retries_transient_mailbox_error(self):
+    def test_heartbeat_otp_poll_retries_transient_mailbox_error(self):
         mailbox_service = MagicMock()
         mailbox_service.poll_otp.side_effect = [RuntimeError("temporary mailbox failure"), "123456"]
         browser = MagicMock()
@@ -1157,7 +1049,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             SimpleNamespace(email="user@example.com"),
             browser=browser,
             page=page,
-            driver_name="skyvern",
+            driver_name="camoufox",
             subject_keyword="verification code",
             timeout=40,
             issued_after_unix=1,

@@ -67,7 +67,9 @@
 
 ## 3. 待补强（按性价比排序）
 
-| # | 项目 | 现状 | 参考来源 | 成本 |
+> **状态更新（2026-08-29）**：本轮已落地第 1/2/3/4/7 项，第 5/8 项经诊断确认已有等价实现，第 6 项属配置微调。详见文末「改造落地记录」。
+
+| # | 项目 | 现状（改造前） | 参考来源 | 成本 |
 | --- | --- | --- | --- | --- |
 | 1 | **把 `browser_pool.py` 接进 `run_browser_registration`** | 217 行孤儿，slot 健康度/LRU/`recycle_on_error`/`max_uses_per_process` 全写好没用 | — | 低（纯接线） |
 | 2 | **启用脉冲调度** | `registration_pulse.py` 已实现（波次 + OTP-ban 检测），`enabled` 默认 `False`，config 无 `pulse` 键 | aBai | 极低（或删掉二选一） |
@@ -77,6 +79,23 @@
 | 6 | **云端会话保活** | `session_timeout_minutes: 120` | turb 用 240 | 极低（改配置） |
 | 7 | **无头 OOM / 崩溃恢复** | 无 `crash`/`oom`/`restart` 相关代码 | aBai | 中高 |
 | 8 | **页面级反误点** | 依赖 DOM 选择器 | turb 用技术属性定位 | 中 |
+
+---
+
+## 3.1 改造落地记录（2026-08-29）
+
+| 原项 | 状态 | 落地方式 | 配置/代码位置 |
+| --- | --- | --- | --- |
+| 1 browser_pool 接线 | ✅ 完成 | 新增 `_browser_session_scope` 上下文管理器；`BrowserProcessPool` 按 `(driver,headless,timeout)` 缓存进程级池，透传 `browser_identity`/`viewport`；原孤儿模块全部接通 | `playwright.py:_browser_session_scope`、`.browser_pool` 配置键 |
+| 2 脉冲调度 | ✅ 完成 | `registration.pulse` 默认 `enabled:true`；修 max_waves 截断丢账号、合法 `0` 被 `or` 吞掉、`prewarm_executor` 未 shutdown 三个 bug | `config.json`、`registration_pulse.py`、`SettingsCatalog.cs`「脉冲调度」 |
+| 3 AdsPower 驱动 | ✅ 完成 | 新增 `AdsPowerBrowserSession`（仿 Roxy CDP 接管：`browser/start`→ws→`connect_over_cdp`→`browser/stop`）；`user_id` 由 AdsPower UI 预建 | `external_sessions.py`、`base.py`、`SettingsCatalog.cs`「AdsPower」 |
+| 4 账号↔代理槽 | ✅ 完成 | `batch_runner._run_one` 固定 `account_proxy_index = i % len(proxy_pool)`，重试不再偏移出口，仅 `refresh_proxy_sid` 刷新会话；跨批次亲和性由 `proxy_affinity` 持久化 | `batch_runner.py` |
+| 5 邮箱租约 | ➖ 已有等价实现 | 单批次内 `mailboxes[i]` 按账号索引唯一 + `count` capping 防超卖，不存在并发重复占用；跨进程共享邮箱池才需 `cross_process_gate` 式租约（本仓库单实例部署，暂未实现，留作后续） | `batch_runner._unique_mailboxes` |
+| 6 云端会话保活 | ⏭ 跳过 | `session_timeout_minutes:120` 已是合理值，turb 的 240 仅参考，无证据表明需要翻倍 | `config.json` |
+| 7 OOM/崩溃恢复 | ✅ 完成（进程模式留尾） | `_page_is_alive()` 心跳软失败（只认显式关闭标记）；OTP 阶段 `_restart_email_otp_flow` 重建页面重走；进程级 OOM 靠进程池槽位回收隔离。注：非池化单浏览器模式下整浏览器 OOM 仍整账号失败 | `playwright.py`、`browser_pool.py` |
+| 8 页面级反误点 | ✅ 已有（语义化多候选） | `_fill_email` 等已用语义属性多候选选择器 + `.first` + 回填值校验，比纯层级 DOM 更稳；未做大规模重写以免破坏已跑通的注册流 | `playwright.py:_fill_email` 等 |
+
+
 
 ---
 

@@ -57,19 +57,8 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
         getattr(args, "registration_driver", None),
         proxy=selected_proxy,
     )
-    # Browser Use and Skyvern execute the registration page in a provider
-    # managed browser.  A local Sentinel/ChatGPT probe would test this
-    # process' egress instead of the browser's egress and can reject a valid
-    # cloud session before the mailbox is even claimed.  Keep the provider
-    # credential/proxy validation above, then let session creation validate the
-    # remote route.
-    if selected_driver in {"browser_use", "skyvern"}:
-        return {
-            "ok": True,
-            "mode": "cloud_browser",
-            "registration_driver": selected_driver,
-            "proxy": selected_proxy or "",
-        }
+    # Every remaining driver launches its browser locally, so a Sentinel/
+    # ChatGPT probe from this process measures the real registration egress.
     from ..registration import registration_network_preflight
 
     last_error = None

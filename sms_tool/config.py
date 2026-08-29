@@ -59,33 +59,14 @@ def validate_registration_driver_config(
     # persisted JSON configuration.
     requirements = {
         "roxy": (("workspace_id", "roxy_workspace_id_missing"),),
-        "browser_use": (("api_key", "browser_use_api_key_missing"),),
-        "skyvern": (("api_key", "skyvern_api_key_missing"),),
     }
     for key, error_code in requirements.get(selected, ()):
         configured = selected_config.get(key)
         if not str(configured or "").strip():
             raise ConfigError(error_code)
-
-    # Browser Use and Skyvern do not accept an arbitrary proxy URL from this
-    # process.  When the caller selected a registration proxy, require an
-    # explicit provider-native proxy setting instead of silently validating a
-    # local route that the remote browser will never consume.
-    if str(proxy or "").strip() and selected == "browser_use":
-        proxy_country = str(selected_config.get("proxy_country_code") or "").strip()
-        if not bool(selected_config.get("use_proxy", True)) or not proxy_country:
-            raise ConfigError(
-                "browser_use_registration_proxy_not_consumed: configure "
-                "registration.drivers.browser_use.proxy_country_code with use_proxy=true "
-                "or clear the registration proxy"
-            )
-    if str(proxy or "").strip() and selected == "skyvern":
-        proxy_location = str(selected_config.get("proxy_location") or "").strip()
-        if not proxy_location or proxy_location.upper() == "NONE":
-            raise ConfigError(
-                "skyvern_registration_proxy_not_consumed: configure "
-                "registration.drivers.skyvern.proxy_location or clear the registration proxy"
-            )
+    # ``proxy`` stays in the signature for call-site stability; every remaining
+    # driver consumes the registration proxy locally, so there is no
+    # "provider-native proxy setting required" case left to validate.
     return selected
 
 
@@ -311,7 +292,6 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             "protocol", "api", "http", "playwright", "pw",
             "browser", "browser_registration", "fingerprint", "fingerprint_browser",
             "roxy", "roxybrowser", "roxy_browser", "cloak", "cloakbrowser", "cloak_browser",
-            "browser_use", "browseruse", "browser_use_cloud", "bu", "skyvern", "sv",
             "camoufox", "camou", "fox", "cf",
         }:
             errors.append("registration.driver is unsupported")
@@ -328,7 +308,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         if drivers is not None and not isinstance(drivers, Mapping):
             errors.append("registration.drivers must be an object")
         elif isinstance(drivers, Mapping):
-            supported_drivers = {"roxy", "cloak", "browser_use", "skyvern", "playwright", "camoufox"}
+            supported_drivers = {"roxy", "cloak", "playwright", "camoufox", "adspower"}
             unknown_drivers = sorted(set(drivers) - supported_drivers)
             if unknown_drivers:
                 errors.append(f"unsupported registration driver config: {', '.join(unknown_drivers)}")
@@ -369,6 +349,35 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 stage_timeouts,
                 tuple(str(key) for key in stage_timeouts),
                 "registration.stage_timeouts",
+                errors,
+            )
+        pulse = registration.get("pulse", {})
+        if pulse is not None and not isinstance(pulse, Mapping):
+            errors.append("registration.pulse must be an object")
+        elif isinstance(pulse, Mapping):
+            if "enabled" in pulse and not isinstance(pulse.get("enabled"), bool):
+                errors.append("registration.pulse.enabled must be a boolean")
+            _validate_positive_numbers(
+                pulse,
+                ("wave_size", "wave_delay_seconds", "ban_threshold",
+                 "ban_pause_seconds", "max_waves"),
+                "registration.pulse",
+                errors,
+            )
+        process_pool = registration.get("browser_process_pool", {})
+        if process_pool is not None and not isinstance(process_pool, Mapping):
+            errors.append("registration.browser_process_pool must be an object")
+        elif isinstance(process_pool, Mapping):
+            # NOTE: deliberately NOT named ``browser_pool`` -- that key is a
+            # proxy-pool alias (see proxy_routing.PROXY_LANE_ALIASES); reusing
+            # it here would make every future grep ambiguous.
+            for key in ("enabled", "recycle_on_error"):
+                if key in process_pool and not isinstance(process_pool.get(key), bool):
+                    errors.append(f"registration.browser_process_pool.{key} must be a boolean")
+            _validate_positive_numbers(
+                process_pool,
+                ("max_concurrent", "contexts_per_process", "max_uses_per_process"),
+                "registration.browser_process_pool",
                 errors,
             )
 

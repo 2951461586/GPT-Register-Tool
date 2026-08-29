@@ -35,8 +35,7 @@ class RegistrationDriver(str, Enum):
     CAMOUFOX   = "camoufox"
     CLOAK      = "cloak"
     ROXY       = "roxy"
-    BROWSER_USE = "browser_use"
-    SKYVERN    = "skyvern"
+    ADSPOWER   = "adspower"
 ```
 
 关键切分在 `BROWSER_REGISTRATION_DRIVERS`（`base.py:19`）—— 除 `protocol` 之外的全部成员。

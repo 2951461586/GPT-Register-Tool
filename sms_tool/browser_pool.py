@@ -26,6 +26,10 @@ from .registration_drivers.external_sessions import create_browser_session
 
 logger = logging.getLogger(__name__)
 
+# How long a caller waits for a free slot before giving up.  Registration
+# itself has its own stage timeouts; this only bounds pool contention.
+_SLOT_TIMEOUT_SECONDS = 120.0
+
 
 class BrowserHealth(str, Enum):
     HEALTHY = "healthy"
@@ -54,6 +58,7 @@ class BrowserSlot:
 
 @dataclass
 class PoolConfig:
+    enabled: bool = False
     max_concurrent: int = 4
     contexts_per_process: int = 6
     max_uses_per_process: int = 10
@@ -61,16 +66,31 @@ class PoolConfig:
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "PoolConfig":
-        pool_cfg = config.get("registration", {})
-        pool_cfg = pool_cfg.get("browser_pool", {}) if isinstance(pool_cfg, Mapping) else {}
+        registration = config.get("registration", {})
+        # NOTE: the key is ``browser_process_pool`` on purpose.  ``browser_pool``
+        # already means something completely different elsewhere in this repo --
+        # it is a *proxy pool alias* (see proxy_routing.PROXY_LANE_ALIASES and
+        # cli._PROXY_POOL_ALIASES).  Reusing that name here would make every
+        # future grep ambiguous.
+        pool_cfg = registration.get("browser_process_pool", {}) if isinstance(registration, Mapping) else {}
         if not isinstance(pool_cfg, Mapping):
             pool_cfg = {}
         return cls(
-            max_concurrent=int(pool_cfg.get("max_concurrent") or 4),
-            contexts_per_process=int(pool_cfg.get("contexts_per_process") or 6),
-            max_uses_per_process=int(pool_cfg.get("max_uses_per_process") or 10),
+            enabled=bool(pool_cfg.get("enabled", False)),
+            max_concurrent=max(1, _coerce_int(pool_cfg.get("max_concurrent"), 4)),
+            contexts_per_process=max(1, _coerce_int(pool_cfg.get("contexts_per_process"), 6)),
+            max_uses_per_process=max(1, _coerce_int(pool_cfg.get("max_uses_per_process"), 10)),
             recycle_on_error=bool(pool_cfg.get("recycle_on_error", True)),
         )
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class BrowserProcessPool:
@@ -94,6 +114,7 @@ class BrowserProcessPool:
         timeout_ms: int = 90_000,
         locale: str = "en-US",
         timezone_id: str = "America/New_York",
+        session_factory: Callable[..., Any] = create_browser_session,
     ) -> None:
         self.pool_config = PoolConfig.from_config(config)
         self.driver = driver
@@ -103,6 +124,9 @@ class BrowserProcessPool:
         self.timeout_ms = timeout_ms
         self.locale = locale
         self.timezone_id = timezone_id
+        # Injectable so callers (and tests) that substitute the session
+        # factory keep working on the pooled path too.
+        self.session_factory = session_factory
 
         self._semaphore = threading.Semaphore(self.pool_config.max_concurrent)
         self._slots: list[BrowserSlot] = [
@@ -122,21 +146,30 @@ class BrowserProcessPool:
         if self._closed:
             raise BrowserRegistrationError("browser_pool_closed")
 
-        acquired = self._semaphore.acquire(timeout=120)
+        acquired = self._semaphore.acquire(timeout=_SLOT_TIMEOUT_SECONDS)
         if not acquired:
-            raise BrowserRegistrationError("browser_pool_timeout", "no slot available within 120s")
+            raise BrowserRegistrationError(
+                "browser_pool_timeout",
+                f"no slot available within {_SLOT_TIMEOUT_SECONDS}s",
+            )
 
         slot = self._acquire_slot()
         browser = None
         try:
+            # Start from the pool defaults, then let the caller override or
+            # extend them.  Extra keys (``browser_identity``, ``viewport``)
+            # must reach the session factory: browser_identity carries the
+            # per-account profile id and viewport carries the fingerprint
+            # pool's screen size, both of which are anti-linkage critical.
             kwargs = {
-                "proxy": session_overrides.get("proxy", self.proxy),
-                "headless": session_overrides.get("headless", self.headless),
-                "timeout_ms": session_overrides.get("timeout_ms", self.timeout_ms),
-                "locale": session_overrides.get("locale", self.locale),
-                "timezone_id": session_overrides.get("timezone_id", self.timezone_id),
+                "proxy": self.proxy,
+                "headless": self.headless,
+                "timeout_ms": self.timeout_ms,
+                "locale": self.locale,
+                "timezone_id": self.timezone_id,
             }
-            browser = create_browser_session(self.driver, config=self.config, **kwargs)
+            kwargs.update(session_overrides)
+            browser = self.session_factory(self.driver, config=self.config, **kwargs)
             browser.__enter__()
             yield browser, slot
             slot.health = BrowserHealth.HEALTHY
@@ -191,7 +224,11 @@ class BrowserProcessPool:
         """Return a snapshot of pool health for diagnostics."""
         with self._lock:
             return {
+                "driver": self.driver,
+                "enabled": self.pool_config.enabled,
                 "max_concurrent": self.pool_config.max_concurrent,
+                "contexts_per_process": self.pool_config.contexts_per_process,
+                "max_uses_per_process": self.pool_config.max_uses_per_process,
                 "slots": [
                     {
                         "slot_id": s.slot_id,
