@@ -749,7 +749,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
         self.assertEqual(state, "profile")
         wait_state.assert_called_once_with(
-            page, 5, browser=None, wait_for_otp_transition=True,
+            page, 5, browser=None, wait_for_otp_transition=True, config=None,
         )
         self.assertTrue(_profile_completion_required(state))
 
@@ -822,7 +822,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertFalse(_fill_password_if_present(page, "Password!1"))
 
         click_otp.assert_called_once_with(page)
-        wait_state.assert_called_once_with(page, 20)
+        wait_state.assert_called_once_with(page, 20, config=None)
 
     def test_email_poll_propagates_unexpected_identity_provider(self):
         class Field:
@@ -974,7 +974,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         browser.select_live_page.return_value = page
         events = []
         accept_cookies.side_effect = lambda *_args: events.append("cookies")
-        fill_email.side_effect = lambda *_args: events.append("email")
+        fill_email.side_effect = lambda *_args, **_kwargs: events.append("email")
 
         restarted, state = _restart_email_otp_flow(
             browser,
@@ -988,7 +988,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertIs(restarted, page)
         self.assertEqual(state, "otp")
         page.goto.assert_called_once()
-        fill_email.assert_called_once_with(page, "user@example.com")
+        fill_email.assert_called_once_with(page, "user@example.com", config=None)
         self.assertEqual(events, ["cookies", "email"])
 
     def test_session_fetch_prefers_context_request_token(self):
@@ -1202,7 +1202,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             side_effect=lambda *_args: events.append("cookies"),
         ), patch(
             "sms_tool.registration_drivers.playwright._fill_email",
-            side_effect=lambda *_args: events.append("email"),
+            side_effect=lambda *_args, **_kwargs: events.append("email"),
         ), patch(
             "sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="authenticated"
         ), patch("sms_tool.registration_drivers.playwright._otp_fields", return_value=None), patch(
@@ -1211,7 +1211,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             "sms_tool.registration_drivers.playwright._wait_for_profile_completion", return_value=True
         ), patch(
             "sms_tool.registration_drivers.playwright._maybe_dismiss_chatgpt_onboarding",
-            side_effect=lambda *_args: events.append("onboarding"),
+            side_effect=lambda *_args, **_kwargs: events.append("onboarding"),
         ), patch(
             "sms_tool.registration_drivers.playwright._session_payload",
             side_effect=lambda *_args, **_kwargs: (events.append("session") or session_result),

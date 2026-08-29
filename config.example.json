@@ -28,6 +28,16 @@
     "browser_locale": "en-US",
     "browser_timezone": "America/New_York",
     "post_registration_dwell_seconds_range": "18,45",
+    "chatgpt_bootstrap": {
+      "enabled": false,
+      "anonymous": true,
+      "authenticated": true
+    },
+    "humanize": {
+      "enabled": false,
+      "factor": 1.0
+    },
+    "reject_cloud_proxy": false,
     "drivers": {
       "playwright": {
         "start_url": "https://chatgpt.com/auth/login"
