@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ..account_liveness import CODEX_USAGE_URL, account_chatgpt_id, quota_result_from_payload
+from ..humanize import delay as humanize_delay
 from ..mailbox import _ensure_mailbox_account
 from ..mailbox_service import MailboxService
 from ..phone_proxy import redact_proxy_text
@@ -132,7 +133,9 @@ def _hard_proxy_block(page) -> bool:
     return any(marker in text for marker in markers)
 
 
-def _ensure_signup_page_ready(page, *, timeout_seconds: int = 45) -> None:
+def _ensure_signup_page_ready(
+    page, *, timeout_seconds: int = 45, config: Mapping[str, Any] | None = None
+) -> None:
     """Wait for either the email form or a classified proxy/challenge result."""
     if not callable(getattr(page, "locator", None)):
         return
@@ -156,10 +159,13 @@ def _ensure_signup_page_ready(page, *, timeout_seconds: int = 45) -> None:
                 return
         except Exception:
             pass
+        # P3: randomize the settle interval so every account in a batch does
+        # not share one identical timing signature.
+        _settle = humanize_delay("page_settle", config=config)
         try:
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(int(_settle * 1000))
         except Exception:
-            time.sleep(0.5)
+            time.sleep(_settle)
     if _hard_proxy_block(page):
         raise BrowserRegistrationError("browser_proxy_blocked")
     if _manual_challenge(page):
@@ -335,7 +341,7 @@ def _maybe_accept_cookies(page) -> bool:
     )
 
 
-def _maybe_dismiss_chatgpt_onboarding(page) -> int:
+def _maybe_dismiss_chatgpt_onboarding(page, config: Mapping[str, Any] | None = None) -> int:
     """Clear the post-login ChatGPT welcome dialog before reading the session."""
     if page is None:
         return 0
@@ -370,10 +376,11 @@ def _maybe_dismiss_chatgpt_onboarding(page) -> int:
         if not _click_first_visible(page, selectors, timeout_ms=400):
             break
         clicks += 1
+        _pause = humanize_delay("click", config=config)
         try:
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(int(_pause * 1000))
         except Exception:
-            time.sleep(0.25)
+            time.sleep(_pause)
     return clicks
 
 
@@ -511,7 +518,7 @@ def _click_resend(page) -> bool:
     return True
 
 
-def _fill_email(page, email: str) -> None:
+def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> None:
     selectors = (
         "input[type='email']", "input[name='email']", "input[name='username']",
         "input#email-input", "input[autocomplete='email']",
@@ -580,10 +587,11 @@ def _fill_email(page, email: str) -> None:
                     # Renderer navigation can destroy the execution context for
                     # one poll; the next poll observes the new document.
                     pass
+                _pause = humanize_delay("retry", config=config)
                 try:
-                    page.wait_for_timeout(400)
+                    page.wait_for_timeout(int(_pause * 1000))
                 except Exception:
-                    time.sleep(0.4)
+                    time.sleep(_pause)
             if attempt < 2:
                 field = page.locator(selector).first
                 field.wait_for(state="visible", timeout=30_000)
@@ -597,7 +605,9 @@ def _fill_email(page, email: str) -> None:
             return
 
 
-def _fill_password_if_present(page, password: str) -> bool:
+def _fill_password_if_present(
+    page, password: str, config: Mapping[str, Any] | None = None
+) -> bool:
     state = _quick_auth_state(page)
     path = str(urlsplit(str(getattr(page, "url", "") or "")).path or "").lower()
     if state == "login_password" or "/log-in/password" in path or "/login/password" in path:
@@ -606,7 +616,7 @@ def _fill_password_if_present(page, password: str) -> bool:
         # classify the mailbox as an existing account when the route is absent
         # or does not reach OTP/authenticated state.
         if _click_passwordless_otp(page):
-            next_state = _wait_for_registration_state(page, 20)
+            next_state = _wait_for_registration_state(page, 20, config=config)
             if next_state in {"otp", "authenticated"}:
                 return False
             if next_state == "challenge":
@@ -616,7 +626,7 @@ def _fill_password_if_present(page, password: str) -> bool:
             raise BrowserRegistrationError("browser_passwordless_otp_state_unknown")
         raise BrowserRegistrationError("browser_existing_account")
     if _click_passwordless_otp(page):
-        next_state = _wait_for_registration_state(page, 20)
+        next_state = _wait_for_registration_state(page, 20, config=config)
         if next_state in {"otp", "authenticated"}:
             return False
         if next_state == "challenge":
@@ -640,6 +650,7 @@ def _wait_for_registration_state(
     *,
     browser: Any = None,
     wait_for_otp_transition: bool = False,
+    config: Mapping[str, Any] | None = None,
 ) -> str:
     """Wait for a recognized registration state.
 
@@ -723,10 +734,11 @@ def _wait_for_registration_state(
                 return "authenticated"
         except Exception:
             pass
+        _pause = humanize_delay("state_probe", config=config)
         try:
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(int(_pause * 1000))
         except Exception:
-            time.sleep(0.25)
+            time.sleep(_pause)
     return "unknown"
 
 
@@ -745,7 +757,13 @@ def _profile_completion_required(state: str) -> bool:
     raise BrowserRegistrationError("browser_registration_state_unknown")
 
 
-def _post_otp_registration_state(page: Any, *, browser: Any = None, timeout_seconds: int = 30) -> str:
+def _post_otp_registration_state(
+    page: Any,
+    *,
+    browser: Any = None,
+    timeout_seconds: int = 30,
+    config: Mapping[str, Any] | None = None,
+) -> str:
     """Re-probe the destination after OTP before deciding on profile work."""
     probe_timeout = min(30, max(1, int(timeout_seconds or 1)))
     state = _wait_for_registration_state(
@@ -753,6 +771,7 @@ def _post_otp_registration_state(page: Any, *, browser: Any = None, timeout_seco
         probe_timeout,
         browser=browser,
         wait_for_otp_transition=True,
+        config=config,
     )
     if state != "otp":
         return state
@@ -958,7 +977,9 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
     _click_continue(page)
 
 
-def _wait_for_profile_completion(page: Any, timeout_seconds: int = 30) -> bool:
+def _wait_for_profile_completion(
+    page: Any, timeout_seconds: int = 30, config: Mapping[str, Any] | None = None
+) -> bool:
     """Confirm that the profile form has routed away before fetching a session."""
     if not callable(getattr(page, "evaluate", None)):
         return True
@@ -969,10 +990,11 @@ def _wait_for_profile_completion(page: Any, timeout_seconds: int = 30) -> bool:
             return True
         if state == "challenge":
             raise BrowserRegistrationError("manual_challenge_required")
+        _settle = humanize_delay("page_settle", config=config)
         try:
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(int(_settle * 1000))
         except Exception:
-            time.sleep(0.5)
+            time.sleep(_settle)
     return _quick_auth_state(page) in {"authenticated", "otp", "email"}
 
 
@@ -1323,6 +1345,7 @@ def _restart_email_otp_flow(
     email: str,
     password: str,
     timeout_seconds: int,
+    config: Mapping[str, Any] | None = None,
 ) -> tuple[Any, str]:
     """Rebuild the email step when a remote OTP target enters an error page."""
     select_page = getattr(browser, "select_live_page", None)
@@ -1340,18 +1363,18 @@ def _restart_email_otp_flow(
     if _manual_challenge(page):
         if not _wait_for_challenge_clear(page, max_wait_seconds=30):
             raise BrowserRegistrationError("manual_challenge_required")
-    _fill_email(page, email)
-    state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser)
+    _fill_email(page, email, config=config)
+    state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
     if state in {"challenge", "identity_provider"}:
         if state == "challenge" and _wait_for_challenge_clear(page, max_wait_seconds=30):
-            state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser)
+            state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
         if state in {"challenge", "identity_provider"}:
             raise BrowserRegistrationError("manual_challenge_required" if state == "challenge" else "browser_unexpected_identity_provider")
     if state == "login_password":
         raise BrowserRegistrationError("browser_existing_account")
     if state == "password":
-        _fill_password_if_present(page, password)
-        state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser)
+        _fill_password_if_present(page, password, config=config)
+        state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
     if state == "challenge":
         if not _wait_for_challenge_clear(page, max_wait_seconds=30):
             raise BrowserRegistrationError("manual_challenge_required")
@@ -1653,17 +1676,24 @@ def run_browser_registration(
             machine.transition(RegistrationState.AUTH_FLOW)
             page.goto(start_url, wait_until="domcontentloaded", timeout=timeout * 1_000)
             _maybe_accept_cookies(page)
-            _ensure_signup_page_ready(page, timeout_seconds=min(45, timeout))
+            # P1 risk-control: replay a real browser's ChatGPT first-screen
+            # request sequence (mirrors turb-gpt-free-register's
+            # core/chatgpt_bootstrap.py).  Config-gated (default off) and
+            # non-fatal by construction, so it can never gate registration.
+            from ..chatgpt_bootstrap import run_anonymous_bootstrap
+
+            _anon_bootstrap = run_anonymous_bootstrap(page, config)
+            _ensure_signup_page_ready(page, timeout_seconds=min(45, timeout), config=config)
             from ..mailbox import _snapshot_mailbox_message
             _snapshot_mailbox_message(mailbox, proxy=proxy)
             started = int(time.time())
-            _fill_email(page, email)
+            _fill_email(page, email, config=config)
             machine.transition(RegistrationState.USER_REGISTER)
-            state = _wait_for_registration_state(page, min(timeout, 30), browser=browser)
+            state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
             if state == "challenge":
                 if not _wait_for_challenge_clear(page, max_wait_seconds=30):
                     raise BrowserRegistrationError("manual_challenge_required")
-                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser)
+                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
                 if state == "challenge":
                     raise BrowserRegistrationError("manual_challenge_required")
             if state == "identity_provider":
@@ -1675,16 +1705,16 @@ def run_browser_registration(
             if state == "otp":
                 password_used = False
             elif state == "password":
-                password_used = _fill_password_if_present(page, password)
+                password_used = _fill_password_if_present(page, password, config=config)
             else:
                 password_used = False
             machine.transition(RegistrationState.EMAIL_OTP_SEND)
             if password_used:
-                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser)
+                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
                 if state == "challenge":
                     if not _wait_for_challenge_clear(page, max_wait_seconds=30):
                         raise BrowserRegistrationError("manual_challenge_required")
-                    state = _wait_for_registration_state(page, min(timeout, 30), browser=browser)
+                    state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
                     if state == "challenge":
                         raise BrowserRegistrationError("manual_challenge_required")
                 if state == "login_password":
@@ -1731,6 +1761,7 @@ def run_browser_registration(
                                         page, _ = _restart_email_otp_flow(
                                             browser, page, start_url=start_url, email=email,
                                             password=password, timeout_seconds=timeout,
+                                            config=config,
                                         )
                                         restarted = True
                                     except Exception:
@@ -1756,6 +1787,7 @@ def run_browser_registration(
                                 page, _ = _restart_email_otp_flow(
                                     browser, page, start_url=start_url, email=email,
                                     password=password, timeout_seconds=timeout,
+                                    config=config,
                                 )
                                 restarted = True
                             except Exception:
@@ -1768,13 +1800,14 @@ def run_browser_registration(
                 page,
                 browser=browser,
                 timeout_seconds=min(30, max(5, timeout)),
+                config=config,
             )
             page = getattr(browser, "page", None) or page
             machine.transition(RegistrationState.CREATE_ACCOUNT)
             profile_required = _profile_completion_required(state)
             if profile_required:
                 _complete_profile(page, full_name, birthdate)
-                if not _wait_for_profile_completion(page, timeout_seconds=min(30, max(5, timeout))):
+                if not _wait_for_profile_completion(page, timeout_seconds=min(30, max(5, timeout)), config=config):
                     raise BrowserRegistrationError("browser_profile_submit_timeout")
                 page.wait_for_timeout(2_000)
             if _manual_challenge(page):
@@ -1785,7 +1818,7 @@ def run_browser_registration(
                 page = _prepare_session_page(browser, page, timeout)
             elif chat_host and chat_host not in str(page.url or "").lower():
                 page.goto(chat_base, wait_until="domcontentloaded", timeout=timeout * 1_000)
-            _maybe_dismiss_chatgpt_onboarding(page)
+            _maybe_dismiss_chatgpt_onboarding(page, config=config)
             machine.transition(RegistrationState.AUTH_SESSION)
             session_info = _session_payload(browser, chat_base, email, timeout_seconds=timeout)
             auth_body = session_info["body"]
@@ -1835,6 +1868,15 @@ def run_browser_registration(
                     twofa_result = {"ok": False, "reason": f"browser_totp_exception: {type(exc).__name__}"}
             elif enroll_2fa:
                 twofa_result = {"ok": False, "reason": "registration_not_successful"}
+            # P1: logged-in first-screen warm-up.  Deliberately placed *after*
+            # 2FA enrollment — that enrollment protects the account, so it must
+            # never be delayed by decorative warm-up traffic.
+            if success:
+                from ..chatgpt_bootstrap import run_authenticated_bootstrap
+
+                _auth_bootstrap = run_authenticated_bootstrap(
+                    page, access_token, device_id=device_id, config=config
+                )
             machine.transition(RegistrationState.FINALIZE)
             from ..account_identity import create_registration_identity
             identity_context = create_registration_identity(
