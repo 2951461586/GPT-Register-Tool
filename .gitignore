@@ -63,5 +63,8 @@ scripts/installer/payload.zip
 /.retention.*.log
 /nul
 
+# === 本地虚拟环境（359M，禁止入库）===
+.venv/
+
 # === 本地日志（不入库）===
 logs/

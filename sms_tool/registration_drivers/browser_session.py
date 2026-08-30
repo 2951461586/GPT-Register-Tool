@@ -337,6 +337,15 @@ class PlaywrightBrowserSession:
                 return request_payload
         if is_chatgpt_session and not self.ensure_chatgpt_context():
             return {"status": 0, "body": {"error": "chatgpt_context_unavailable"}}
+        # Same-origin requirement for browser-side API calls.  select_live_page()
+        # above may have adopted a leftover OTP/verify tab (higher score than the
+        # chatgpt.com tab), which makes Firefox-based drivers (camoufox) block the
+        # cross-origin fetch and the probe collapses to status 0 / error.  Force
+        # the evaluate onto a chatgpt.com page when the target host is chatgpt.
+        if not is_chatgpt_session and self._is_chatgpt_url(str(url or "")):
+            cur_host = str(urlsplit(str(getattr(self.page, "url", "") or "")).hostname or "").lower()
+            if cur_host != "chatgpt.com":
+                self.switch_to_chatgpt_page()
         target = "/api/auth/session" if is_chatgpt_session else str(url)
         request_headers = {"accept": "application/json"}
         if isinstance(headers, Mapping):
