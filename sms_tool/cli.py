@@ -33,21 +33,43 @@ from .proxy_routing import proxy_pool_for
 # registration / one-click paths that actually need them.
 _heavy_deps_loaded = False
 
+# Module-level placeholders so these names always exist as attributes. This keeps
+# `import sms_tool.cli` free of curl_cffi (the real values are imported lazily by
+# _load_heavy_deps), while still letting tests `patch.object(cli, "...")` and direct
+# handler calls reference them without a NameError/AttributeError.
+_load_mailbox_pool = None
+_remail_enabled = None
+_build_session_file = None
+_mailbox_snapshot = None
+run_email = None
+
 
 def _load_heavy_deps() -> None:
     global _heavy_deps_loaded
     global _load_mailbox_pool, _remail_enabled, _build_session_file, _mailbox_snapshot, run_email
     if _heavy_deps_loaded:
         return
-    from .mailbox import (
-        _load_mailbox_pool as _load_mailbox_pool,
-        _remail_enabled as _remail_enabled,
-    )
-    from .registration import (
-        _build_session_file as _build_session_file,
-        _mailbox_snapshot as _mailbox_snapshot,
-        run_email as run_email,
-    )
+    if _load_mailbox_pool is None or _remail_enabled is None:
+        from .mailbox import (
+            _load_mailbox_pool as _lmp,
+            _remail_enabled as _re,
+        )
+        if _load_mailbox_pool is None:
+            _load_mailbox_pool = _lmp
+        if _remail_enabled is None:
+            _remail_enabled = _re
+    if _build_session_file is None or _mailbox_snapshot is None or run_email is None:
+        from .registration import (
+            _build_session_file as _bsf,
+            _mailbox_snapshot as _ms,
+            run_email as _re2,
+        )
+        if _build_session_file is None:
+            _build_session_file = _bsf
+        if _mailbox_snapshot is None:
+            _mailbox_snapshot = _ms
+        if run_email is None:
+            run_email = _re2
     _heavy_deps_loaded = True
 
 
@@ -103,6 +125,7 @@ def _proxy_pool_values(args) -> list[str]:
 
 
 def _registration_command_context():
+    _load_heavy_deps()
     return registration_commands.RegistrationCommandContext(
         proxy_pool_values=_proxy_pool_values,
         load_mailbox_pool=_load_mailbox_pool,
@@ -895,6 +918,7 @@ def _process_paypal_ba_queue(args):
 
 
 def _one_click_command_context():
+    _load_heavy_deps()
     return one_click_commands.OneClickCommandContext(
         load_mailbox_pool=_load_mailbox_pool,
         max_reuse=_one_click_sms_max_reuse,
@@ -905,6 +929,7 @@ def _one_click_command_context():
 
 
 def _one_click_sms(args):
+    _load_heavy_deps()
     return one_click_commands.one_click_sms(args, _one_click_command_context())
 
 
