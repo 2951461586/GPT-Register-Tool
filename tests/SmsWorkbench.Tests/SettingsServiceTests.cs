@@ -42,7 +42,7 @@ public sealed class SettingsServiceTests
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal(42, root["unknown_extension"]!["keep"]!.GetValue<int>());
         Assert.Equal("http://primary", root["proxy"]!["registration"]!.GetValue<string>());
         Assert.Equal("http://primary", root["proxy"]!["default"]!.GetValue<string>());
@@ -142,7 +142,7 @@ public sealed class SettingsServiceTests
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal("roxy", root["registration"]!["driver"]!.GetValue<string>());
         Assert.True(root["registration"]!["browser_headless"]!.GetValue<bool>());
         Assert.Equal("22", root["registration"]!["drivers"]!["roxy"]!["workspace_id"]!.GetValue<string>());
@@ -229,7 +229,7 @@ public sealed class SettingsServiceTests
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal(
             "http://account_custom_zone_US:password@us.ipwo.net:7878",
             root["proxy"]!["registration"]!.GetValue<string>());
@@ -269,7 +269,7 @@ public sealed class SettingsServiceTests
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         // Python already defaults these (smsbower.OPENAI_SERVICE_CODE / display-only
         // metadata), so Save must leave operator values untouched.
         Assert.Equal("custom", root["phone_reuse"]!["smsbower"]!["service"]!.GetValue<string>());
@@ -291,7 +291,7 @@ public sealed class SettingsServiceTests
         SettingsSaveResult result = service.Save(categories);
 
         Assert.True(result.Ok, result.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         // The catalog fields create phone_reuse.smsbower, but the previously forced
         // business values must stay absent so Python-side defaults keep applying.
         Assert.Null(root["phone_reuse"]!["smsbower"]!["service"]);
@@ -358,7 +358,7 @@ public sealed class SettingsServiceTests
             smsBower.Remove("country_prefix");
         });
 
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal(42, root["unknown_extension"]!["keep"]!.GetValue<int>());
         Assert.Equal("22", root["phone_reuse"]!["smsbower"]!["country"]!.GetValue<string>());
         Assert.Null(root["phone_reuse"]!["smsbower"]!["country_prefix"]);
@@ -376,7 +376,7 @@ public sealed class SettingsServiceTests
 
         service.UpdateConfig(root => root["phone_reuse"] = new JsonObject { ["source"] = "smsbower" });
 
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal("smsbower", root["phone_reuse"]!["source"]!.GetValue<string>());
     }
 

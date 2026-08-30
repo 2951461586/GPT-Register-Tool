@@ -19,6 +19,101 @@ class ConfigError(ValueError):
     pass
 
 
+# ---- Config sharding (proxy.json / runtime.json / payment.json) ----
+# The historical single config.json is split into three focused shard files.
+# Both the desktop shell and the Python backend merge these shards at load time,
+# and a legacy config.json is migrated into shards on first load.
+SHARD_FILES: dict[str, str] = {
+    "proxy": "proxy.json",
+    "runtime": "runtime.json",
+    "payment": "payment.json",
+}
+# Top-level config key -> owning shard name. Every key present in config.json
+# must be listed here so writes can be routed to the correct shard.
+SHARD_OWNERSHIP: dict[str, str] = {
+    # runtime.json
+    "runtime": "runtime",
+    "timeouts": "runtime",
+    "storage": "runtime",
+    "output": "runtime",
+    "account_health": "runtime",
+    "registration": "runtime",
+    "chatgpt": "runtime",
+    "email_registration": "runtime",
+    "codex_oauth": "runtime",
+    # proxy.json
+    "proxy": "proxy",
+    "mailbox_proxy": "proxy",
+    "phone_reuse": "proxy",
+    "paypal_browser": "proxy",
+    # payment.json
+    "paypal": "payment",
+    "paypal_nocard": "payment",
+    "upi": "payment",
+    "omakse": "payment",
+    "protocol_payments": "payment",
+    "kakao": "payment",
+    "momo": "payment",
+    "cpa_mode": "payment",
+    "sub2api": "payment",
+}
+_CONFIG_DIR = Path(__file__).resolve().parent.parent  # project root
+
+
+def _deep_merge(target: dict, source: Mapping) -> None:
+    for key, value in source.items():
+        if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+            _deep_merge(target[key], value)
+        else:
+            target[key] = value
+
+
+def _split_into_shards(data: Mapping[str, Any]) -> dict[str, dict]:
+    shards: dict[str, dict] = {name: {} for name in SHARD_FILES}
+    for key, value in data.items():
+        owner = SHARD_OWNERSHIP.get(key, "runtime")
+        shards[owner][key] = value
+    return shards
+
+
+def _write_shards(shards: Mapping[str, Mapping], config_dir: Path) -> None:
+    for name, filename in SHARD_FILES.items():
+        path = config_dir / filename
+        path.write_text(
+            json.dumps(dict(shards[name]), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+
+def load_merged_config() -> dict[str, Any]:
+    """Merge the proxy/runtime/payment shards into a single config dict.
+
+    Honors a legacy single config.json by migrating it into shards on first
+    load. Returns {} when no configuration exists.
+    """
+    shard_paths = [(name, _CONFIG_DIR / filename) for name, filename in SHARD_FILES.items()]
+    if any(path.exists() for _, path in shard_paths):
+        merged: dict[str, Any] = {}
+        for _, path in shard_paths:
+            if not path.exists():
+                continue
+            with open(path, encoding="utf-8-sig") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict):
+                _deep_merge(merged, data)
+        return merged
+    legacy = _CONFIG_DIR / "config.json"
+    if legacy.exists():
+        with open(legacy, encoding="utf-8-sig") as handle:
+            data = json.load(handle)
+        if isinstance(data, dict):
+            _write_shards(_split_into_shards(data), _CONFIG_DIR)
+            return dict(data)
+    return {}
+
+
+
+
 def validate_registration_driver_config(
     config: Mapping[str, Any],
     driver: Any = None,
@@ -190,7 +285,16 @@ def default_config_path() -> Path:
 
 
 def load_runtime_config(path: str | Path | None = None, *, validate: bool = True) -> RuntimeConfig:
-    source = Path(path).expanduser().resolve() if path else default_config_path()
+    if path is None:
+        # Merge the proxy/runtime/payment shards (migrating a legacy single
+        # config.json on first load). This is the canonical desktop + backend path.
+        raw = load_merged_config()
+        if not isinstance(raw, dict):
+            raise ConfigError("merged config root must be a JSON object")
+        if validate:
+            validate_config(raw)
+        return RuntimeConfig(data=_freeze(raw), source=_CONFIG_DIR)
+    source = Path(path).expanduser().resolve()
     if not source.is_file():
         raise ConfigError(f"config file not found: {source}")
     try:
@@ -201,13 +305,13 @@ def load_runtime_config(path: str | Path | None = None, *, validate: bool = True
         raise ConfigError("config root must be a JSON object")
     if validate:
         validate_config(raw)
-    if path is None and source == Path(__file__).resolve().parent / "config.json":
+    if source == Path(__file__).resolve().parent / "config.json":
         # The bundled package config is a minimal safe fallback (endpoints and
         # paths only). Running on it means the project-root config.json is
         # missing, so say so loudly instead of silently flipping behavior.
         print(
             f"[!] Using the bundled fallback config {source}; "
-            f"create a project-root config.json (see config.example.json) for full behavior",
+            f"create a project-root config (see config.example.json) for full behavior",
             file=sys.stderr,
         )
     return RuntimeConfig(data=_freeze(raw), source=source)
