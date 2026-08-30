@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import threading
 import time
@@ -142,6 +143,56 @@ def test_queue_serializes_jobs_for_the_same_account():
     assert second["processed"] == 1
     assert second["completed"] == 1
     assert second["results"][0]["result"]["state"] == "token_invalid"
+
+
+def test_pid_alive_never_emits_console_ctrl_events():
+    """os.kill(pid, 0) aliases signal.CTRL_C_EVENT (which is 0) on Windows.
+
+    Probing our own worker pid therefore broadcast a Ctrl+C to the process
+    group. CI runners create step processes with CREATE_NEW_PROCESS_GROUP, so
+    the current pid is also a group id and the event came straight back and
+    aborted the pytest session with KeyboardInterrupt.
+    """
+    calls = []
+    with patch.object(os, "kill", side_effect=lambda *args: calls.append(args)):
+        assert account_health_queue._pid_alive(os.getpid()) is True
+
+    if os.name == "nt":
+        assert calls == []
+    else:
+        assert calls == [(os.getpid(), 0)]
+
+
+def test_pid_alive_rejects_invalid_pids():
+    assert account_health_queue._pid_alive(0) is False
+    assert account_health_queue._pid_alive(-1) is False
+
+
+def test_running_item_owned_by_current_process_is_not_recovered():
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        account_health_queue,
+        "queue_path",
+        return_value=Path(tmp) / "queue.json",
+    ):
+        account_health_queue._write_unlocked(
+            [
+                {
+                    "id": "job-owned-by-us",
+                    "email": "owner@example.com",
+                    "kind": "plan",
+                    "status": "running",
+                    "worker_pid": os.getpid(),
+                    "updated_at": int(time.time()),
+                    "attempts": 1,
+                    "last_error": "",
+                }
+            ]
+        )
+        items = account_health_queue._load_unlocked()
+
+    assert len(items) == 1
+    assert items[0]["status"] == "running"
+    assert items[0]["last_error"] == ""
 
 
 def test_storage_persists_unified_health_result_without_token():

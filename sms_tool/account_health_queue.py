@@ -411,9 +411,67 @@ def _as_bool(value: Any) -> bool:
     return str(value or "").strip().lower() not in {"", "0", "false", "no", "off"}
 
 
+_STILL_ACTIVE = 259
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_WINDOWS_KERNEL32 = None
+
+
+def _windows_kernel32():
+    """Return a lazily bound kernel32 handle, or None off Windows."""
+    global _WINDOWS_KERNEL32
+    if os.name != "nt":
+        return None
+    if _WINDOWS_KERNEL32 is None:
+        try:
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+            kernel32.OpenProcess.restype = ctypes.c_void_p
+            kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+            kernel32.GetExitCodeProcess.restype = ctypes.c_int
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel32.CloseHandle.restype = ctypes.c_int
+            _WINDOWS_KERNEL32 = kernel32
+        except Exception:
+            _WINDOWS_KERNEL32 = False
+    return _WINDOWS_KERNEL32 or None
+
+
+def _windows_pid_alive(pid: int) -> bool:
+    kernel32 = _windows_kernel32()
+    if kernel32 is None:
+        return False
+    import ctypes
+
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong(0)
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return False
+        return int(code.value) == _STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def _pid_alive(pid: int) -> bool:
+    """Return True when *pid* is still running.
+
+    ``os.kill(pid, 0)`` is NOT a liveness probe on Windows: signal 0 aliases
+    ``signal.CTRL_C_EVENT``, so the call maps to ``GenerateConsoleCtrlEvent``
+    and broadcasts Ctrl+C to that process group.  CI runners start step
+    processes with ``CREATE_NEW_PROCESS_GROUP``, which makes the current pid a
+    process group id - so probing our own worker pid injected a spurious
+    Ctrl+C and aborted the whole test session with KeyboardInterrupt.
+    """
     if pid <= 0:
         return False
+    if pid == os.getpid():
+        return True
+    if os.name == "nt":
+        return _windows_pid_alive(pid)
     try:
         os.kill(pid, 0)
         return True
