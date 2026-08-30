@@ -40,8 +40,8 @@ _EC_RE = re.compile(r"(EC-[A-Z0-9]{17,})")
 
 def _load_config() -> dict[str, Any]:
     try:
-        with open(DEFAULT_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        from .config import load_merged_config
+        return load_merged_config()
     except Exception:
         return {}
 

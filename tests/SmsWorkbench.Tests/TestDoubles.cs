@@ -1,6 +1,18 @@
+using System.Text.Json.Nodes;
 using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
+
+internal static class ConfigTestHelpers
+{
+    /// <summary>
+    /// Merge the proxy/runtime/payment shard files back into a single object,
+    /// mirroring ConfigStore.ReadMerged, so assertions can inspect the persisted
+    /// configuration exactly as the services persist it.
+    /// </summary>
+    internal static JsonObject ReadMergedConfig(string rootDirectory)
+        => ConfigStore.ReadMerged(new TestApplicationPaths(rootDirectory)) ?? new JsonObject();
+}
 
 internal sealed class TestApplicationPaths : IApplicationPaths
 {

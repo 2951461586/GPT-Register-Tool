@@ -275,7 +275,7 @@ public sealed class PaymentBatchServiceTests
                 "TR"));
 
         Assert.True(saved.Ok, saved.Error);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         JsonObject method = root["protocol_payments"]!["methods"]!["gopay"]!.AsObject();
         Assert.Equal(
             new[] { "http://checkout-one", "http://checkout-two" },
@@ -369,7 +369,7 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal("http://payment-jp", loaded.ApproveProxyPool);
         Assert.Equal("US", loaded.CheckoutCountry);
         Assert.Equal("JP", loaded.ApproveCountry);
-        JsonObject root = JsonNode.Parse(File.ReadAllText(configPath, Encoding.UTF8))!.AsObject();
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal("http://registration-jp", root["proxy"]!["registration"]!.GetValue<string>());
         Assert.DoesNotContain(
             root["proxy"]!["pool"]!.AsArray().Select(node => node!.GetValue<string>()),

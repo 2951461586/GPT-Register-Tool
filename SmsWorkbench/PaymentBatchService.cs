@@ -46,7 +46,7 @@ namespace SmsWorkbench
             var output = new List<PaymentMatrixRow>();
             try
             {
-                JsonNode root = JsonNode.Parse(File.ReadAllText(Path.Combine(_paths.RootDirectory, "config.json"), Encoding.UTF8));
+                JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
                 JsonArray cells = root?["protocol_payments"]?["matrix"]?["cells"] as JsonArray;
                 foreach (JsonNode node in cells ?? new JsonArray())
                 {
@@ -87,7 +87,7 @@ namespace SmsWorkbench
 
             try
             {
-                JsonNode root = JsonNode.Parse(File.ReadAllText(Path.Combine(_paths.RootDirectory, "config.json"), Encoding.UTF8));
+                JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
                 JsonObject protocol = root?["protocol_payments"] as JsonObject;
                 JsonObject methods = protocol?["methods"] as JsonObject;
                 JsonObject legacy = root?[method] as JsonObject;
@@ -373,7 +373,7 @@ namespace SmsWorkbench
             int seconds = 900;
             try
             {
-                JsonNode root = JsonNode.Parse(File.ReadAllText(Path.Combine(_paths.RootDirectory, "config.json"), Encoding.UTF8));
+                JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
                 JsonNode protocol = root?["protocol_payments"];
                 if (int.TryParse(protocol?["timeout_seconds"]?.ToString(), out int configured))
                     seconds = configured;
@@ -473,34 +473,20 @@ namespace SmsWorkbench
         private static bool ValidCountry(string value)
             => value.Length == 0 || Regex.IsMatch(value, "^[A-Z]{2}$", RegexOptions.CultureInvariant);
 
-        private static JsonObject ReadConfigRoot(string path)
-            => JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8)) as JsonObject ?? new JsonObject();
-
         private JsonObject ReadConfigRoot()
         {
-            string path = Path.Combine(_paths.RootDirectory, "config.json");
-            if (!File.Exists(path))
-            {
-                string example = Path.Combine(_paths.RootDirectory, "config.example.json");
-                if (File.Exists(example)) File.Copy(example, path);
-                else File.WriteAllText(path, "{}", new UTF8Encoding(false));
-            }
-            return ReadConfigRoot(path);
+            // Merge the proxy/runtime/payment shards (or migrate a legacy single
+            // config.json); an empty object lets a first-time save create the
+            // payment shard without needing a pre-existing file.
+            return ConfigStore.ReadMerged(_paths) ?? new JsonObject();
         }
 
         private void WriteConfigRoot(JsonObject root)
         {
-            string path = Path.Combine(_paths.RootDirectory, "config.json");
-            string temporary = path + ".tmp." + Guid.NewGuid().ToString("N");
-            try
-            {
-                File.WriteAllText(temporary, root.ToJsonString(IndentedJson), new UTF8Encoding(false));
-                File.Move(temporary, path, overwrite: true);
-            }
-            finally
-            {
-                TryDelete(temporary);
-            }
+            // Persist back into the shards. Protocol-payment keys land in
+            // payment.json; any other keys present in the merged root are routed
+            // to their owning shard by ConfigStore.
+            ConfigStore.WriteShards(_paths, root);
         }
 
         private static JsonObject EnsureObject(JsonObject root, params string[] path)
