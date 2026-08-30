@@ -1,0 +1,39 @@
+#!/bin/sh
+# Refuse commits that would add credentials or runtime state dumps to git.
+#
+# Installed by scripts/install_git_hooks.py, which sets:
+#     git config core.hooksPath .githooks
+#
+# Background: on 2026-08-30 the config was sharded into proxy.json /
+# runtime.json / payment.json.  config.json was gitignored, the three new
+# filenames were not, and eight plaintext credentials were committed.  A
+# filename-based .gitignore cannot catch the next new filename, so this gate
+# inspects content as well.  See docs/security-exposure-assessment-2026-08-31.md
+#
+# The guard only uses the Python standard library, so any interpreter works.
+# Override with: PYTHON=/path/to/python git commit ...
+# Bypass entirely with: git commit --no-verify  (you own the consequences)
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+PYTHON_BIN="${PYTHON:-}"
+if [ -z "$PYTHON_BIN" ]; then
+    for candidate in python3 python py; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            PYTHON_BIN="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+    echo "pre-commit: no python interpreter found on PATH." >&2
+    echo "pre-commit: refusing to commit without the credential guard." >&2
+    echo "pre-commit: set PYTHON=/path/to/python, or use --no-verify to bypass." >&2
+    exit 1
+fi
+
+exec "$PYTHON_BIN" scripts/precommit_guard.py
