@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 import threading
 import time
@@ -46,6 +47,17 @@ def _browser_access_token_probe(browser: Any, account: Mapping[str, Any], *, tim
             mode="browser",
             transport_ok=False,
         )
+    if os.environ.get("CAMOUFOX_PROBE_TRACE"):
+        try:
+            page_url = str(getattr(getattr(browser, "page", None), "url", "") or "")
+        except Exception:
+            page_url = "<unknown>"
+        logger.warning(
+            "[AT_PROBE_TRACE] driver=%s page_url=%s target=%s",
+            type(getattr(browser, "driver", browser)).__name__,
+            page_url,
+            CODEX_USAGE_URL,
+        )
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     account_id = account_chatgpt_id(account)
     if account_id:
@@ -67,6 +79,12 @@ def _browser_access_token_probe(browser: Any, account: Mapping[str, Any], *, tim
                 timeout_ms=max(5_000, int(timeout or 30) * 1_000),
             )
         status_code = int(payload.get("status") or payload.get("status_code") or 0) if isinstance(payload, Mapping) else 0
+        if os.environ.get("CAMOUFOX_PROBE_TRACE"):
+            logger.warning(
+                "[AT_PROBE_TRACE] raw payload status=%s body=%s",
+                status_code,
+                str(payload.get("body"))[:300] if isinstance(payload, Mapping) else payload,
+            )
         result = quota_result_from_payload(
             payload,
             status_code=status_code,

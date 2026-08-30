@@ -7,9 +7,7 @@ import time
 
 from .config import CFG, initialize_runtime_config
 from .diagnostics import install_safe_stdio
-from .mailbox import _load_mailbox_pool, _remail_enabled
 from .paths import output_dir, runtime_file
-from .registration import _build_session_file, _mailbox_snapshot, run_email
 from .batch_runner import run_batch_impl as run_batch
 from .storage import database_path, get_paypal_url, list_paypal_accounts, rebuild_from_session_dir, upsert_account
 from .commands.helpers import (
@@ -27,6 +25,30 @@ from .commands import payment_links as payment_link_commands
 from .commands import registration as registration_commands
 from .commands.email_change import run_change_email
 from .proxy_routing import proxy_pool_for
+
+# `mailbox` and `registration` import `curl_cffi` at module top, so they must NOT
+# be imported eagerly at the top of this file — otherwise `import sms_tool.cli`
+# (and therefore the `--doctor` / `--desktop-read` lightweight commands) would
+# crash whenever curl_cffi is missing. They are loaded on demand, only on the
+# registration / one-click paths that actually need them.
+_heavy_deps_loaded = False
+
+
+def _load_heavy_deps() -> None:
+    global _heavy_deps_loaded
+    global _load_mailbox_pool, _remail_enabled, _build_session_file, _mailbox_snapshot, run_email
+    if _heavy_deps_loaded:
+        return
+    from .mailbox import (
+        _load_mailbox_pool as _load_mailbox_pool,
+        _remail_enabled as _remail_enabled,
+    )
+    from .registration import (
+        _build_session_file as _build_session_file,
+        _mailbox_snapshot as _mailbox_snapshot,
+        run_email as run_email,
+    )
+    _heavy_deps_loaded = True
 
 
 def _registration_proxy_lane(registration_driver: object = None) -> str:
@@ -511,6 +533,7 @@ def main():
         _batch_auto_pay(args)
         return
 
+    _load_heavy_deps()
     _apply_registration_proxy_defaults(args)
 
     if args.one_click_sms:

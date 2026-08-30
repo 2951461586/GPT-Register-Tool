@@ -313,6 +313,25 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
     unchanged.
     """
 
+    # Camoufox cannot do lightweight per-account context reuse the way the stock
+    # Playwright driver can.  Its sync API owns one event loop per ``Camoufox``
+    # object (see camoufox.sync_api.Camoufox.__exit__'s #82 note): tearing the
+    # loop down requires ``Camoufox.__exit__`` -> ``PlaywrightContextManager.
+    # __exit__``.  The ``release_account_context`` / ``renew_account_context``
+    # methods inherited from ``PlaywrightBrowserSession`` only close
+    # ``self.context`` and leave that loop running, which leaks a "running"
+    # asyncio loop into the caller thread.  The next retry's
+    # ``Camoufox(**options).__enter__()`` then dies with
+    # "It looks like you are using Playwright Sync API inside the asyncio loop"
+    # because the caller thread still has a live loop.
+    #
+    # Declaring these as unsupported (None) makes the browser process pool fall
+    # back to a full ``close()`` + relaunch on every account, which is the only
+    # safe reuse model for Camoufox and stops the loop from leaking between
+    # retry attempts.
+    release_account_context = None  # type: ignore[assignment]
+    renew_account_context = None  # type: ignore[assignment]
+
     def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.driver_config = _driver_config(config, "camoufox")
