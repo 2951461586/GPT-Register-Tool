@@ -13,7 +13,7 @@ services/mail-otp-web/config.json
 outlook_results/
 dist/
 sessions/
-runtime/
+/runtime/
 browser_extensions/
 .dotnet/
 sms_tool/sentinel_cache.json
