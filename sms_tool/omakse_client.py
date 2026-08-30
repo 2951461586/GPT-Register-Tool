@@ -42,6 +42,9 @@ TERMINAL_STATES = {"completed", "failed", "stopped"}
 
 
 def _load_json(path: str) -> dict:
+    if os.path.abspath(path) == os.path.abspath(DEFAULT_CONFIG_PATH):
+        from .config import load_merged_config
+        return load_merged_config()
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
