@@ -124,33 +124,63 @@ class LocalProxyBridge:
 
     # ── sync lifecycle (standalone background thread + loop) ───────────────
 
-    def start(self, loop: asyncio.AbstractEventLoop | None = None) -> int:
-        """Start the local SOCKS5 server on a background thread.  Returns port."""
+    def start(self) -> int:
+        """Start the local SOCKS5 server on a background thread.  Returns port.
+
+        The event loop is created **and torn down inside the server thread**.
+        Doing the setup in the calling thread instead
+        (``loop.run_until_complete(start_server(...))``) raises
+        ``RuntimeError: Cannot run the event loop while another loop is running``
+        whenever the caller already owns one — which is exactly what happens
+        when Playwright's sync API holds the thread, or when a pooled Camoufox
+        session keeps its loop alive across a batch retry.  That failure also
+        leaves the ``start_server`` coroutine un-awaited, so the resulting
+        RuntimeWarning points at an unrelated frame and hides the real cause.
+        """
         if self._server is not None:
             return self._port
         if self.upstream is None:
             raise RuntimeError("proxy_bridge: no upstream proxy configured")
-        self._loop = loop or asyncio.new_event_loop()
-        self._server = self._loop.run_until_complete(
-            asyncio.start_server(self._on_client, self.listen_host, self.listen_port)
-        )
-        socket_name = self._server.sockets[0].getsockname()
-        self._port = int(socket_name[1])
-        logger.info(
-            "proxy_bridge listening on %s:%s -> upstream %s (sync)",
-            self.listen_host,
-            self._port,
-            self.upstream.masked,
-        )
-        # Run the loop so the server actually services connections.
-        if self._thread is None:
-            def _run_forever():
-                try:
-                    self._loop.run_forever()
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.debug("proxy_bridge loop exited: %s", exc)
-            self._thread = threading.Thread(target=_run_forever, daemon=True)
-            self._thread.start()
+
+        ready = threading.Event()
+        failure: list[BaseException] = []
+
+        def _serve() -> None:
+            # Always build a dedicated loop *inside the server thread*.  Reusing a
+            # loop handed in by the caller would run it on two threads at once
+            # (caller's run_forever + ours) and is exactly what produced the
+            # "Cannot run the event loop while another loop is running" crash.
+            inner = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(inner)
+                self._loop = inner
+                server = inner.run_until_complete(
+                    asyncio.start_server(self._on_client, self.listen_host, self.listen_port)
+                )
+                self._server = server
+                self._port = int(server.sockets[0].getsockname()[1])
+                logger.info(
+                    "proxy_bridge listening on %s:%s -> upstream %s (sync)",
+                    self.listen_host,
+                    self._port,
+                    self.upstream.masked,
+                )
+                ready.set()
+                inner.run_forever()
+            except BaseException as exc:  # noqa: BLE001 - surface to the caller
+                failure.append(exc)
+                ready.set()
+            finally:
+                self._shutdown_loop(inner)
+
+        self._thread = threading.Thread(target=_serve, daemon=True)
+        self._thread.start()
+        if not ready.wait(timeout=15):
+            raise RuntimeError("proxy_bridge: server did not become ready in time")
+        if failure:
+            raise failure[0]
+        if not self._port:
+            raise RuntimeError("proxy_bridge: failed to bind a local port")
         return self._port
 
     @property
@@ -181,25 +211,37 @@ class LocalProxyBridge:
         if self._thread is not None:
             self._thread.join(timeout=3)
             self._thread = None
-        if loop is not None:
-            try:
-                pending = asyncio.all_tasks(loop)
-                for task in pending:
-                    task.cancel()
-                if pending:
-                    loop.run_until_complete(
-                        asyncio.gather(*pending, return_exceptions=True)
-                    )
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("proxy_bridge loop shutdown: %s", exc)
+        # The loop is fully shut down inside the server thread (see _serve's
+        # finally -> _shutdown_loop); calling run_until_complete here would hit
+        # a closed loop, so teardown must NOT happen on the caller thread.
         self._loop = None
         self._server = None
         self._port = 0
         logger.info("proxy_bridge stopped")
 
     @staticmethod
+    def _shutdown_loop(loop: asyncio.AbstractEventLoop) -> None:
+        """Drain and close a loop.  Only ever called from the owning thread.
+
+        ``run_until_complete`` must not be called from an arbitrary thread while
+        another loop is running there, so loop teardown lives here (inside the
+        server thread) instead of in :meth:`stop`.
+        """
+        try:
+            pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("proxy_bridge loop shutdown: %s", exc)
+        finally:
+            try:
+                loop.close()
+            except Exception:  # pragma: no cover - defensive
+                pass
+
     async def _close_server(server: asyncio.Server) -> None:
         server.close()
         await server.wait_closed()
