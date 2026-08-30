@@ -80,6 +80,7 @@
         "locale": "",
         "timezone": "",
         "user_data_dir": "",
+        "disable_content_sandbox": true,
         "keep_browser_open": false,
         "start_url": "https://chatgpt.com/auth/login"
       },
