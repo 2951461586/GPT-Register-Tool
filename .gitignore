@@ -1,4 +1,7 @@
 config.json
+proxy.json
+runtime.json
+payment.json
 .env
 .env.*
 !.env.example
