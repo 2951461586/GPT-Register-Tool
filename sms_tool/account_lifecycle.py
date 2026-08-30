@@ -79,6 +79,33 @@ class AccountLifecycle:
                 with sqlite3.connect(db) as conn:
                     cursor = conn.execute("DELETE FROM accounts WHERE lower(email)=lower(?)", (email,))
                     removed_rows = max(0, int(cursor.rowcount or 0))
+                    if removed_rows == 0:
+                        # The WPF shell normalizes "@+" to "+@" (e.g.
+                        # "user@+tag@hotmail.com" -> "user+tag@hotmail.com") via
+                        # MailboxPoolFileStore.NormalizeEmailKey, but the database
+                        # may store the original "@+" form.  The normalization is
+                        # lossy (it splits "taghotmail.com" into "tag" + "hotmail.com"
+                        # and reassembles with a "." that wasn't there), so a
+                        # simple reverse doesn't work.  Fall back to a two-step
+                        # approach: use a LIKE prefix scan to find candidates, then
+                        # verify each candidate with _email_core (separator-
+                        # insensitive) before deleting — this prevents accidental
+                        # deletion of unrelated accounts that happen to share a
+                        # prefix.
+                        pattern = _email_fuzzy_pattern(email)
+                        if pattern:
+                            target_core = _email_core(email)
+                            candidate_rows = conn.execute(
+                                "SELECT rowid, email FROM accounts WHERE lower(email) LIKE ? ESCAPE '\\'",
+                                (pattern,),
+                            ).fetchall()
+                            doomed_ids = [
+                                row[0] for row in candidate_rows
+                                if _email_core(row[1]) == target_core
+                            ]
+                            for rowid in doomed_ids:
+                                conn.execute("DELETE FROM accounts WHERE rowid=?", (rowid,))
+                            removed_rows = len(doomed_ids)
         removed_lines = 0
         mailbox_files = tuple(request.mailbox_files) or self._configured_mailbox_files()
         for raw_path in mailbox_files:
@@ -139,5 +166,49 @@ class AccountLifecycle:
         if not normalized:
             return False
         prefix = email.casefold()
-        first = normalized.split("----", 1)[0].split("---", 1)[0].split("|", 1)[0].strip()
-        return first.casefold() == prefix or first.casefold().startswith(prefix + "-")
+        first = normalized.split("----", 1)[0].split("---", 1)[0].split("|", 1)[0].strip().casefold()
+        if first == prefix or first.startswith(prefix + "-"):
+            return True
+        # Also try a separator-insensitive match for the @+/+@ alias issue
+        # (see _email_fuzzy_pattern for the full explanation).
+        return _fuzzy_match(first, email.casefold())
+
+
+def _email_core(email: str) -> str:
+    """Extract the alphanumeric core (lowercased) by removing separators.
+
+    ``cierrariste7566@+oai01hotmail.com`` and
+    ``cierrariste7566+oai01@hotmail.com`` both yield
+    ``cierrariste7566oai01hotmailcom``.
+    """
+    return "".join(ch for ch in email.lower() if ch.isalnum())
+
+
+def _fuzzy_match(stored: str, target: str) -> bool:
+    """Separator-insensitive comparison for the @+/+@ alias issue."""
+    return _email_core(stored) == _email_core(target)
+
+
+def _email_fuzzy_pattern(email: str) -> str:
+    """Build a SQLite LIKE pattern that matches an email ignoring the
+    positions of ``@`` and ``+`` separators.
+
+    The WPF shell's ``MailboxPoolFileStore.NormalizeEmailKey`` rewrites
+    ``user@+tag@hotmail.com`` to ``user+tag@hotmail.com``, but this is lossy:
+    ``oai01hotmail.com`` is split into ``oai01`` + ``hotmail.com`` and
+    reassembled with a ``.`` that wasn't in the original.  A simple reverse
+    cannot recover the original, so we fall back to matching the alphanumeric
+    characters of the local part with ``%`` wildcards between them.
+    """
+    local = email.split("@", 1)[0].lower()
+    if not local:
+        return ""
+    # Extract the core local part (before any + or @)
+    core = local.split("+", 1)[0]
+    if not core:
+        return ""
+    # Build a LIKE pattern: core% — this matches any email whose local part
+    # starts with the same alphanumeric core, regardless of separator placement.
+    # Escape LIKE special characters in the core.
+    escaped = core.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return escaped + "%"
