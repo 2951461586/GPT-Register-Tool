@@ -241,7 +241,14 @@ def _emit(step: str, msg: str, **kw: Any) -> None:
 
 
 def _load_json(path: str) -> dict:
-    """Load a JSON object from disk, accepting UTF-8 files with or without BOM."""
+    """Load a JSON object from disk, accepting UTF-8 files with or without BOM.
+
+    The canonical config path resolves to the merged proxy/runtime/payment
+    shards, so route it through the shard-aware loader.
+    """
+    if os.path.abspath(path) == os.path.abspath(DEFAULT_CONFIG_PATH):
+        from ..config import load_merged_config
+        return load_merged_config()
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
