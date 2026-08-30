@@ -1,23 +1,28 @@
 """Roxy 无头浏览器出口诊断（不买邮箱、不注册）。
 
 复现真实注册时的 Roxy + IPWO US 代理 setup，验证无头浏览器能否访问 chatgpt.com。
-用法: python scripts/_diag_roxy_egress.py
+用法:
+    set ROXY_API_TOKEN=xxx
+    set DIAG_PROXY_URL=http://user:pass@host:port
+    python scripts/_diag_roxy_egress.py
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import urllib.request
 
 import curl_cffi.requests as http
 
-TOKEN = "***REMOVED***"
+# 敏感信息走环境变量，禁止硬编码（曾误提交进版本库）
+TOKEN = os.environ.get("ROXY_API_TOKEN", "")
 WS = 149427
 PROJ = 160525
 API = "http://127.0.0.1:50000"
 # 与失败 run 中 e921 挂的代理一致（proxy.pool 第一条 IPWO US）
-PROXY_URL = "http://lizi1_custom_zone_US_sid_36268881_time_5:***REMOVED***@us.ipwo.net:7878"
+PROXY_URL = os.environ.get("DIAG_PROXY_URL", "")
 
 
 def _hdr():
@@ -47,6 +52,10 @@ def _proxy_info():
 
 
 def main():
+    if not TOKEN or not PROXY_URL:
+        print("[!] 请先设置环境变量 ROXY_API_TOKEN 与 DIAG_PROXY_URL")
+        return 1
+
     from playwright.sync_api import sync_playwright
 
     dir_id = None
