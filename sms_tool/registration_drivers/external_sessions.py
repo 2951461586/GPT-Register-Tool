@@ -286,6 +286,22 @@ class CloakBrowserSession(ConnectedPlaywrightSession):
         super().close()
 
 
+# Firefox (Camoufox) cannot spawn renderer/content processes on some Windows
+# hosts while the content sandbox is enabled.  The failure mode is subtle: the
+# browser process starts fine and Juggler reports "listening to the pipe", but
+# every ``new_context().new_page()`` call then hangs forever (Playwright's
+# ``launch_persistent_context`` times out for the same reason, because it also
+# creates a page).  A GPU/compositor annotation ("RenderCompositorSWGL failed
+# mapping default framebuffer, no dt") is the only hint in the browser log.
+#
+# Setting this variable before the browser is spawned fixes it.  The browser
+# captures its environment at spawn time, so it only has to be set around the
+# launch — content processes inherit it from the browser process, which lets us
+# restore the caller's environment immediately afterwards instead of leaking a
+# process-wide variable to the other drivers.
+MOZ_DISABLE_CONTENT_SANDBOX = "MOZ_DISABLE_CONTENT_SANDBOX"
+
+
 class CamoufoxBrowserSession(ConnectedPlaywrightSession):
     """Browser session backed by the Camoufox anti-detect engine.
 
@@ -370,8 +386,23 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             tmp_profile = user_data_dir or tempfile.mkdtemp(prefix="camoufox_reg_")
             options["persistent_context"] = True
             options["user_data_dir"] = tmp_profile
-            self._camoufox_ctx = Camoufox(**options)
-            self.context = self._camoufox_ctx.__enter__()
+            # See the MOZ_DISABLE_CONTENT_SANDBOX note above: without it every
+            # new_page() call hangs forever on affected hosts.
+            if bool(self.driver_config.get("disable_content_sandbox", True)):
+                saved_sandbox: str | None = os.environ.get(MOZ_DISABLE_CONTENT_SANDBOX)
+                os.environ[MOZ_DISABLE_CONTENT_SANDBOX] = "1"
+            else:
+                saved_sandbox = None
+            try:
+                self._camoufox_ctx = Camoufox(**options)
+                self.context = self._camoufox_ctx.__enter__()
+            finally:
+                # The browser process already inherited the variable, so restore
+                # the caller's environment instead of leaking it process-wide.
+                if saved_sandbox is None:
+                    os.environ.pop(MOZ_DISABLE_CONTENT_SANDBOX, None)
+                else:
+                    os.environ[MOZ_DISABLE_CONTENT_SANDBOX] = saved_sandbox
             self._persistent = True
             self.browser = getattr(self.context, "browser", None) or self.context
             pages = list(getattr(self.context, "pages", []) or [])
