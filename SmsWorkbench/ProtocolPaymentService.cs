@@ -27,18 +27,18 @@ namespace SmsWorkbench
         };
 
         private readonly IApplicationPaths _paths;
-        private readonly IBackendClient _backendClient;
+        private readonly IBackendTaskCoordinator _backendTasks;
         private readonly IPaymentBatchService _paymentBatchService;
         private readonly ISettingsService _settings;
 
         public ProtocolPaymentService(
             IApplicationPaths paths,
-            IBackendClient backendClient,
+            IBackendTaskCoordinator backendTasks,
             IPaymentBatchService paymentBatchService,
             ISettingsService settings)
         {
             _paths = paths;
-            _backendClient = backendClient;
+            _backendTasks = backendTasks;
             _paymentBatchService = paymentBatchService;
             _settings = settings;
         }
@@ -119,7 +119,7 @@ namespace SmsWorkbench
                 configuration.CheckoutCountry,
                 configuration.ApproveCountry,
                 configuration.UpdateCountry);
-            BackendCommandResult result = await _backendClient.RunAsync(
+            BackendCommandResult result = await _backendTasks.RunAsync(
                 BackendCommand.Create("测试协议支付代理", arguments, 120000),
                 cancellationToken: cancellationToken);
             if (result.TimedOut)
@@ -173,7 +173,7 @@ namespace SmsWorkbench
                     sessionFile));
 
                 int timeoutMs = BackendTimeoutMs(request.PaymentMethod);
-                BackendCommandResult backend = await _backendClient.RunAsync(
+                BackendCommandResult backend = await _backendTasks.RunAsync(
                     BackendCommand.Create(
                         plan.TaskName,
                         plan.Arguments,

@@ -288,7 +288,15 @@ namespace SmsWorkbench
             private ResidentChannel(Process process, Serilog.ILogger logger)
             {
                 _process = process;
-                _readLoop = Task.Run(() => ReadLoopAsync(logger));
+                // stderr is redirected, so it has to be drained concurrently.
+                // An unread pipe fills its ~4-8 KB buffer, after which the
+                // Python side blocks on write and every request hangs until the
+                // 120s timeout fires — the window then looks "empty" even
+                // though the process is alive. Only stdout ending closes the
+                // channel, so stderr does not participate in FailAllPending.
+                Task stdoutLoop = Task.Run(() => ReadLoopAsync(logger));
+                Task stderrLoop = Task.Run(() => DrainStandardErrorAsync(logger));
+                _readLoop = Task.WhenAll(stdoutLoop, stderrLoop);
             }
 
             public bool IsAlive => !_closed && !_process.HasExited;
@@ -387,6 +395,40 @@ namespace SmsWorkbench
                     _closed = true;
                     logger.Information("Resident desktop-read channel closed");
                 }
+            }
+
+            private async Task DrainStandardErrorAsync(Serilog.ILogger logger)
+            {
+                const int logBudget = 50;
+                int emitted = 0;
+                int suppressed = 0;
+                try
+                {
+                    while (await _process.StandardError.ReadLineAsync().ConfigureAwait(false) is string line)
+                    {
+                        if (line.Length == 0)
+                            continue;
+                        if (emitted < logBudget)
+                        {
+                            emitted++;
+                            logger.Warning(
+                                "Resident backend stderr: {Line}",
+                                SensitiveDataSanitizer.Redact(line));
+                        }
+                        else
+                        {
+                            // A chatty backend must not bury the log, but the
+                            // pipe still has to keep being drained.
+                            suppressed++;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // stderr closed or the process was killed: nothing to drain.
+                }
+                if (suppressed > 0)
+                    logger.Warning("Resident backend stderr: {Count} further lines suppressed", suppressed);
             }
 
             private void Complete(int id, JsonElement payload)

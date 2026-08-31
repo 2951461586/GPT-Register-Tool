@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sys
+import tempfile
 from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -76,13 +79,43 @@ def _split_into_shards(data: Mapping[str, Any]) -> dict[str, dict]:
     return shards
 
 
+def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
+    """Write JSON atomically: a temp file in the *same* directory + ``os.replace``.
+
+    The temp file lives beside the target so ``os.replace`` is a same-volume
+    rename (atomic on Windows, no truncated-file window). A ``.bak`` copy of
+    the previous content is kept first, because the three shard files *are*
+    the whole application configuration — a crash mid-write used to leave a
+    truncated JSON and take the app down with it.
+    """
+    directory = path.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    backup = path.with_name(path.name + ".bak")
+    if path.exists():
+        try:
+            shutil.copy2(path, backup)
+        except OSError:
+            # Best-effort only; a missing/locked backup must not fail the write.
+            pass
+    prefix = "." + path.stem + "."
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(dict(data), indent=2, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
 def _write_shards(shards: Mapping[str, Mapping], config_dir: Path) -> None:
     for name, filename in SHARD_FILES.items():
-        path = config_dir / filename
-        path.write_text(
-            json.dumps(dict(shards[name]), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+        _atomic_write_json(config_dir / filename, dict(shards[name]))
 
 
 def load_merged_config() -> dict[str, Any]:

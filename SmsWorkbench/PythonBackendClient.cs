@@ -78,7 +78,25 @@ namespace SmsWorkbench
             int exitCode = process.HasExited ? process.ExitCode : -1;
             string output = stdout.ToString().Trim();
             string error = SensitiveDataSanitizer.Redact(stderr.ToString().Trim());
-            JsonElement? payload = BackendJsonProtocol.ExtractPayload(output);
+            JsonElement? payload;
+            try
+            {
+                payload = BackendJsonProtocol.ExtractPayload(
+                    output,
+                    message => _logger.Warning(message));
+            }
+            catch (JsonException exception)
+            {
+                // A malformed backend envelope is a *response parse* failure, not
+                // a startup failure (startup failures are the process-did-not-start
+                // InvalidOperationExceptions above). Classify it distinctly so the
+                // caller surfaces "响应解析失败" instead of blaming the interpreter.
+                _logger.Warning(
+                    exception,
+                    "Backend response parse failed for {CommandName}; returning no payload instead of classifying as startup failure",
+                    command.Name);
+                payload = null;
+            }
             _logger.Information(
                 "Backend command {CommandName} exited with code {ExitCode}; payload={HasPayload}; timedOut={TimedOut}",
                 command.Name,

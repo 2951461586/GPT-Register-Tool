@@ -227,7 +227,7 @@ public sealed class DesktopWindowSmokeTests
             new BackendTaskCoordinator(backendClient),
             new DesktopReadClient(new BackendTaskCoordinator(backendClient)),
             new WindowPaymentBatchDialogService(),
-            new PaymentBatchService(new TestApplicationPaths(rootDirectory), backendClient),
+            new PaymentBatchService(new TestApplicationPaths(rootDirectory), new BackendTaskCoordinator(backendClient)),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
             new SettingsService(new TestApplicationPaths(rootDirectory)),

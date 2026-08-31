@@ -10,11 +10,19 @@ file-lock semaphore enforces the same cap across every process on the machine,
 so running the CLI and the desktop workbench concurrently no longer oversells
 the proxy/sentinel quota a group is meant to bound. Disable the outer layer
 with ``registration.stage_concurrency.cross_process: false``.
+
+Ownership is **explicit**: :func:`acquire_registration_stage` returns a
+:class:`RegistrationStageLease` that the caller owns and must release. It is
+deliberately *not* tracked in a :class:`contextvars.ContextVar`. Worker threads
+of a ``ThreadPoolExecutor`` are reused and ``submit()`` does not copy the
+context, so a context-local "which gate do I own" marker leaks into the next
+task on the same worker; that task then believes it already holds the group and
+skips acquisition, silently disabling the cap. See
+``tests/test_registration_stage_concurrency.py`` for the regression guard.
 """
 
 from __future__ import annotations
 
-import contextvars
 import json
 import threading
 import time
@@ -43,14 +51,73 @@ _CROSS_GATE_TIMEOUT_SECONDS = 600.0
 _gate_lock = threading.Lock()
 _stage_gates: dict[tuple[str, int], threading.BoundedSemaphore] = {}
 _cross_gates: dict[tuple[str, int], CrossProcessSemaphore | None] = {}
-_held_gate: contextvars.ContextVar[tuple[str, threading.BoundedSemaphore, CrossProcessSemaphore | None] | None] = contextvars.ContextVar(
-    "registration_stage_gate",
-    default=None,
-)
 _metrics_lock = threading.Lock()
 _metrics: dict[str, dict[str, float]] = {}
 _rate_limit_lock = threading.Lock()
+# Deliberately process-wide: an upstream HTTP 429 throttles the *egress IP*,
+# and every account in this process shares the same proxy pool, so one account
+# being rate limited means all of them are. Scoping this per account would
+# hammer the same throttled egress instead of backing off.
 _rate_limit_blocked_until = 0.0
+
+
+class RegistrationStageLease:
+    """Explicit ownership of one held stage gate.
+
+    The holder is responsible for :meth:`release`. Releasing twice is a no-op,
+    and releasing a gate whose permit was already returned by someone else is
+    recorded in the stage metrics instead of being silently swallowed, because
+    an over-release means the cap has been corrupted for the rest of the
+    process lifetime.
+    """
+
+    __slots__ = ("group", "waited_ms", "_gate", "_cross", "_released")
+
+    def __init__(
+        self,
+        group: str,
+        gate: threading.BoundedSemaphore,
+        cross: CrossProcessSemaphore | None,
+        waited_ms: float,
+    ) -> None:
+        self.group = group
+        self.waited_ms = waited_ms
+        self._gate = gate
+        self._cross = cross
+        self._released = False
+
+    @property
+    def released(self) -> bool:
+        return self._released
+
+    def release(self) -> None:
+        if self._released:
+            return
+        self._released = True
+        if self._cross is not None:
+            try:
+                self._cross.release()
+            except OSError:
+                # A lost lock file must not stop the in-process gate from being
+                # returned; the cross-process layer re-creates it on next use.
+                pass
+        try:
+            self._gate.release()
+        except ValueError:
+            # BoundedSemaphore rejects releasing more times than acquired.
+            # Swallowing it hides a corrupted cap, so surface it as a metric.
+            _record_over_release(self.group)
+
+    def __enter__(self) -> "RegistrationStageLease":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        self.release()
+        return False
+
+    def __repr__(self) -> str:
+        state = "released" if self._released else "held"
+        return f"<RegistrationStageLease {self.group} {state} waited={self.waited_ms:.1f}ms>"
 
 
 def mark_registration_rate_limited(retry_after_seconds: float = 300.0) -> float:
@@ -81,15 +148,31 @@ def _raise_if_registration_rate_limited(group: str) -> None:
         raise RuntimeError(f"registration_rate_limit_circuit_open:retry_after={remaining:.0f}s")
 
 
-def enter_registration_stage(stage: str) -> float:
-    """Enter the resource group for ``stage`` and return queue wait time."""
+def _record_transition(group: str, waited_ms: float) -> None:
+    with _metrics_lock:
+        metrics = _metrics.setdefault(group, {"transitions": 0, "wait_ms": 0.0, "over_releases": 0})
+        metrics["transitions"] += 1
+        metrics["wait_ms"] += round(waited_ms, 3)
+
+
+def _record_over_release(group: str) -> None:
+    with _metrics_lock:
+        metrics = _metrics.setdefault(group, {"transitions": 0, "wait_ms": 0.0, "over_releases": 0})
+        metrics["over_releases"] += 1
+
+
+def acquire_registration_stage(stage: str) -> RegistrationStageLease | None:
+    """Acquire the gate for ``stage`` and return the lease the caller owns.
+
+    Returns ``None`` when the stage is not concurrency-gated, so callers can
+    treat "no gate" and "gate held" uniformly. The caller **must** release the
+    returned lease; a leak holds one permit for the rest of the process life
+    but never satisfies another caller by accident, which is exactly what the
+    previous context-local ownership got wrong.
+    """
     group = _STAGE_GROUPS.get(str(stage or ""), "")
-    held = _held_gate.get()
-    if held is not None and held[0] == group:
-        return 0.0
-    release_registration_stage()
     if not group:
-        return 0.0
+        return None
 
     _raise_if_registration_rate_limited(group)
 
@@ -111,27 +194,14 @@ def enter_registration_stage(stage: str) -> float:
                 f"registration stage gate '{group}' stayed saturated across processes "
                 f"for over {_CROSS_GATE_TIMEOUT_SECONDS}s"
             ) from exc
+        except BaseException:
+            # Any other failure (missing lock dir, permission, interrupt) must
+            # still return the in-process permit.
+            gate.release()
+            raise
     waited_ms = (time.perf_counter() - started) * 1000
-    _held_gate.set((group, gate, cross))
-    with _metrics_lock:
-        metrics = _metrics.setdefault(group, {"transitions": 0, "wait_ms": 0.0})
-        metrics["transitions"] += 1
-        metrics["wait_ms"] += round(waited_ms, 3)
-    return waited_ms
-
-
-def release_registration_stage() -> None:
-    held = _held_gate.get()
-    if held is None:
-        return
-    _held_gate.set(None)
-    _group, gate, cross = held
-    if cross is not None:
-        cross.release()
-    try:
-        gate.release()
-    except ValueError:
-        pass
+    _record_transition(group, waited_ms)
+    return RegistrationStageLease(group, gate, cross, waited_ms)
 
 
 def registration_stage_metrics(reset: bool = False) -> dict[str, dict[str, float]]:

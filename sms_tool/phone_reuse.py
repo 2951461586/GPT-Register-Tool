@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import CFG
+from .cross_process_gate import cross_process_write_lock
 from .smsbower import (
     DEFAULT_ENDPOINT,
     GHANA_COUNTRY_CODE,
@@ -31,6 +32,32 @@ from .sms_provider import SmsProviderAdapter, provider_name
 
 SMSBOWER_NO_NUMBERS_MAX_ATTEMPTS = 10
 SMSBOWER_PHONE_IN_USE_MAX_ATTEMPTS = 10
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` atomically (temp file + os.replace).
+
+    A crash mid-write leaves the previous file intact, so a concurrent reader
+    (or the next process) never sees a torn JSON state. The temp file lives in
+    the same directory as ``path`` so os.replace is a rename on the same volume.
+    """
+    directory = path.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    import tempfile
+
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f".{path.stem}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 PLACEHOLDER_KEYS = {"", "YOUR_SMSBOWER_API_KEY", "$SMSBOWER_API_KEY"}
@@ -124,8 +151,12 @@ class PhonePool:
             "updated_at": int(time.time()),
         }
         path = Path(self.state_file)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Serialise across processes: two backend processes must not interleave
+        # writes, or the same phone number can be handed to two accounts.
+        # _atomic_write_text guarantees a reader never sees a half-written file.
+        lock_path = path.with_name(f"{path.name}.lock")
+        with cross_process_write_lock(lock_path):
+            _atomic_write_text(path, json.dumps(state, ensure_ascii=False, indent=2))
 
     def load_state(self):
         if not self.state_file:
