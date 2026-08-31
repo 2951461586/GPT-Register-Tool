@@ -184,9 +184,9 @@ namespace SmsWorkbench
         }
 
         private void OneClickSms_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(OneClickSmsAsync);
+            => RunUiTask(() => OneClickSmsAsync());
 
-        private async Task OneClickSmsAsync()
+        private async Task OneClickSmsAsync(CancellationToken ct = default)
         {
             var rows = SelectedEmailRowsOrNotify("接码");
             if (rows.Count == 0) return;

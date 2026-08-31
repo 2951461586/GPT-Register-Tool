@@ -73,6 +73,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.extractor_helpers import is_user_already_paid_error
 from common.protocol_core import (
     ProtocolResultReporter,
     amount_from_payload as common_amount_from_payload,
@@ -240,10 +241,6 @@ def env_int(name: str, default: int, minimum: int = 1) -> int:
 
 def is_checkout_not_active_error(value: Any) -> bool:
     return "checkout_not_active_session" in str(value)
-
-
-def is_user_already_paid_error(value: Any) -> bool:
-    return "user is already paid" in str(value or "").lower()
 
 
 def is_ideal_unavailable_error(value: Any) -> bool:

@@ -107,9 +107,9 @@ namespace SmsWorkbench
         }
 
         private void ExportAccountsJson(List<PoolRow> rows)
-            => RunUiTask(() => ExportAccountsJsonAsync(rows));
+            => RunUiTask(() => ExportAccountsJsonAsync(rows, _lifetimeCts.Token));
 
-        private async Task ExportAccountsJsonAsync(List<PoolRow> rows)
+        private async Task ExportAccountsJsonAsync(List<PoolRow> rows, CancellationToken ct = default)
         {
             var collected = await CollectAccountExportJsonAsync(rows);
             if (collected.Items.Count == 0)
@@ -130,7 +130,7 @@ namespace SmsWorkbench
 
         private sealed record CollectedAccountExport(List<Dictionary<string, object>> Items, int Skipped);
 
-        private async Task<CollectedAccountExport> CollectAccountExportJsonAsync(List<PoolRow> rows)
+        private async Task<CollectedAccountExport> CollectAccountExportJsonAsync(List<PoolRow> rows, CancellationToken ct = default)
         {
             var items = new List<Dictionary<string, object>>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -155,9 +155,9 @@ namespace SmsWorkbench
         }
 
         private void ExportAccountsConvertedJson(List<PoolRow> rows, string format)
-            => RunUiTask(() => ExportAccountsConvertedJsonAsync(rows, format));
+            => RunUiTask(() => ExportAccountsConvertedJsonAsync(rows, format, _lifetimeCts.Token));
 
-        private async Task ExportAccountsConvertedJsonAsync(List<PoolRow> rows, string format)
+        private async Task ExportAccountsConvertedJsonAsync(List<PoolRow> rows, string format, CancellationToken ct = default)
         {
             var collected = await CollectAccountExportJsonAsync(rows);
             if (collected.Items.Count == 0)
@@ -613,7 +613,7 @@ namespace SmsWorkbench
             parent.Children.Add(card);
         }
 
-        private async Task<Dictionary<string, object>> BuildAccountExportJsonAsync(PoolRow row)
+        private async Task<Dictionary<string, object>> BuildAccountExportJsonAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return null;
             var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -639,7 +639,7 @@ namespace SmsWorkbench
             return clean;
         }
 
-        private async Task<bool> TryLoadAccountDataForRowAsync(PoolRow row, Dictionary<string, object> data)
+        private async Task<bool> TryLoadAccountDataForRowAsync(PoolRow row, Dictionary<string, object> data, CancellationToken ct = default)
         {
             if (row == null) return false;
 

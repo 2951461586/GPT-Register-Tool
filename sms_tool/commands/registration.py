@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import unique_emails
+from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
 
 
 @dataclass(frozen=True)
@@ -182,6 +183,84 @@ def registration_pipeline_timing(pipeline_started, mailbox_seconds, register_sta
 
 
 def persist_registration_result(
+    args,
+    data,
+    base_dir,
+    ctx: RegistrationCommandContext,
+    *,
+    pipeline_timing=None,
+):
+    """Persist one completed registration result behind a cross-process durable
+    idempotency boundary.
+
+    The in-memory ``_PERSISTENCE_KEY`` marker (in ``_persist_registration_result_core``)
+    keeps retries idempotent *within* a process. This wrapper adds the durable layer:
+    a ``PaymentOperationStore`` record keyed by ``email|batch`` acquires a cross-process
+    lock and replays the same guard used for payments, so two processes (or a restart
+    mid-batch) cannot double-write the session file, upsert the row, or re-enqueue the
+    health check. A successful persist is finalized (replays blocked); a failed one is
+    left running so the in-process finalization retry can still re-acquire the lock.
+    """
+    identity = (data.get("email") or data.get("phone") or "unknown") if isinstance(data, dict) else "unknown"
+    batch_id = str(getattr(args, "registration_batch_id", "") or "")
+    # Cheap in-process guard: this exact result object was already persisted in this
+    # process (save_registration_results re-emits the same data objects). The durable
+    # journal below is only for cross-process / restart dedup, so skip it here.
+    marker = data.get(_PERSISTENCE_KEY) if isinstance(data, dict) else None
+    if isinstance(marker, dict) and marker.get("status") == "complete":
+        return marker
+
+    store = PaymentOperationStore.from_config(ctx.runtime_config)
+    try:
+        op = store.begin(
+            payment_method="registration",
+            operation="persist_result",
+            idempotency_key=f"{identity}|{batch_id}",
+        )
+    except PaymentOperationConflict as conflict:
+        previous = conflict.record
+        return {
+            "status": "complete",
+            "session_saved": int(previous.get("session_saved") or 0),
+            "db_saved": int(previous.get("db_saved") or 0),
+            "import_email": str(data.get("email") or "") if isinstance(data, dict) else "",
+            "durable_conflict": True,
+        }
+
+    try:
+        result = _persist_registration_result_core(args, data, base_dir, ctx, pipeline_timing=pipeline_timing)
+    except Exception as exc:
+        # A persistence failure (e.g. a temporary DB error) must surface as a failed
+        # status, not propagate. Leave the durable record running so an in-process
+        # retry can re-acquire the lock and attempt the side effects again.
+        op.close()
+        return {
+            "status": "failed",
+            "session_saved": 0,
+            "db_saved": 0,
+            "import_email": str(data.get("email") or "") if isinstance(data, dict) else "",
+            "error": str(exc)[:500],
+        }
+
+    # Finalize only when the core durably persisted the account row (db_saved == 1).
+    # A logical failure (success=False) leaves db_saved 0 and must not be finalized, and
+    # an upsert error leaves db_saved 0 even if the session file was written; in both cases
+    # leave the durable record running so an in-process / cross-process retry can re-acquire
+    # the lock and attempt the side effects again.
+    committed = isinstance(result, dict) and bool(result.get("db_saved"))
+    if committed:
+        # Carry the real side-effect counts onto the journal record so a later
+        # durable-conflict replay (e.g. save_registration_results re-persisting the
+        # same account, or a cross-process resume) reports accurate totals instead of 0.
+        op.record["session_saved"] = int(result.get("session_saved") or 0)
+        op.record["db_saved"] = int(result.get("db_saved") or 0)
+        op.finish({"ok": True, "status": "completed", "side_effect_started": True})
+    else:
+        op.close()
+    return result
+
+
+def _persist_registration_result_core(
     args,
     data,
     base_dir,

@@ -4,9 +4,9 @@ namespace SmsWorkbench
     {
         // Account detail dialog and detail formatting
         private void ShowAccountDetail(PoolRow row)
-            => RunUiTask(() => ShowAccountDetailAsync(row));
+            => RunUiTask(() => ShowAccountDetailAsync(row, _lifetimeCts.Token));
 
-        private async Task ShowAccountDetailAsync(PoolRow row)
+        private async Task ShowAccountDetailAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return;
             string detail = await BuildAccountDetailAsync(row);
@@ -243,7 +243,7 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private async Task<string> ResolveAccountAccessTokenAsync(PoolRow row)
+        private async Task<string> ResolveAccountAccessTokenAsync(PoolRow row, CancellationToken ct = default)
         {
             var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             if (!await TryLoadAccountDataForRowAsync(row, data) || data.Count == 0)
@@ -261,9 +261,9 @@ namespace SmsWorkbench
         }
 
         private void OpenAccountJson(PoolRow row)
-            => RunUiTask(() => OpenAccountJsonAsync(row));
+            => RunUiTask(() => OpenAccountJsonAsync(row, _lifetimeCts.Token));
 
-        private async Task OpenAccountJsonAsync(PoolRow row)
+        private async Task OpenAccountJsonAsync(PoolRow row, CancellationToken ct = default)
         {
             string path = await ResolveAccountJsonPathAsync(row);
             if (string.IsNullOrWhiteSpace(path))
@@ -274,7 +274,7 @@ namespace SmsWorkbench
             OpenPath(path);
         }
 
-        private async Task<string> ResolveAccountJsonPathAsync(PoolRow row)
+        private async Task<string> ResolveAccountJsonPathAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return "";
             string notes = (row.Notes ?? "").Trim();
@@ -354,7 +354,7 @@ namespace SmsWorkbench
             parent.Children.Add(valueBox);
         }
 
-        private async Task<string> BuildAccountDetailAsync(PoolRow row)
+        private async Task<string> BuildAccountDetailAsync(PoolRow row, CancellationToken ct = default)
         {
             var lines = new List<string>
             {

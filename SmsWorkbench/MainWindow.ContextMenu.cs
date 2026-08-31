@@ -56,9 +56,9 @@ namespace SmsWorkbench
         }
 
         private void CtxCopyAccessToken_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(CtxCopyAccessTokenAsync);
+            => RunUiTask(() => CtxCopyAccessTokenAsync());
 
-        private async Task CtxCopyAccessTokenAsync()
+        private async Task CtxCopyAccessTokenAsync(CancellationToken ct = default)
         {
             if (AccountGrid?.SelectedItem is not PoolRow row)
             {
@@ -113,9 +113,9 @@ namespace SmsWorkbench
         }
 
         private void CtxCheckAccountAlive_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(CtxCheckAccountAliveAsync);
+            => RunUiTask(() => CtxCheckAccountAliveAsync());
 
-        private async Task CtxCheckAccountAliveAsync()
+        private async Task CtxCheckAccountAliveAsync(CancellationToken ct = default)
         {
             if (AccountGrid?.SelectedItem is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
             {
@@ -131,12 +131,12 @@ namespace SmsWorkbench
         }
 
         private void CtxChangeEmail_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(CtxChangeEmailAsync);
+            => RunUiTask(() => CtxChangeEmailAsync());
 
         private void ChangeEmail_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(CtxChangeEmailAsync);
+            => RunUiTask(() => CtxChangeEmailAsync());
 
-        private async Task CtxChangeEmailAsync()
+        private async Task CtxChangeEmailAsync(CancellationToken ct = default)
         {
             var rows = SelectedRowsOrCurrent().Where(row => row != null && !string.IsNullOrWhiteSpace(row.Identifier)).ToList();
             if (rows.Count == 0)
@@ -176,7 +176,7 @@ namespace SmsWorkbench
             }
         }
 
-        private async Task CheckAccountAliveAsync(PoolRow row)
+        private async Task CheckAccountAliveAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null || string.IsNullOrWhiteSpace(row.Identifier))
             {
