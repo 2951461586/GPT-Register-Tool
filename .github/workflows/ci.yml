@@ -19,7 +19,22 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
-          cache: true
+          # No NuGet package caching.
+          #
+          # `cache: true` requires a packages.lock.json at the *repository root*
+          # and hard-fails with "Dependencies lock file is not found" when there
+          # is none. This repo's only lock file lives at
+          # scripts/installer/packages.lock.json, and pointing
+          # cache-dependency-path at it would key the whole build cache off the
+          # installer project alone — SmsWorkbench could change dependencies and
+          # still get a stale cache.
+          #
+          # Enabling a root lock file is not a small change either: `dotnet test`
+          # restores without a RID while the publish script restores with
+          # -r win-x64, and those two want opposite lock contents (that was the
+          # NU1004 break). Restore here costs ~18s, so caching is not worth
+          # reintroducing that class of failure.
+          cache: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
