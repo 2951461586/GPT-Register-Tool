@@ -240,6 +240,25 @@ cd /d "%~dp0"
 start "" "%~dp0dist\net10\SmsWorkbench.exe"
 "@ | Set-Content -Path (Join-Path $packageDir "Start-SmsWorkbench.cmd") -Encoding ASCII
 
+# --- Release payload gate ----------------------------------------------------
+# The payload is collected from `git ls-files` but copied from the working tree,
+# so a file that git ignores can still be on disk and get shipped. On 2026-08-31
+# that is exactly how a deleted diagnostic script carrying real credential
+# prefixes reached the public release assets. Do not bypass this gate.
+$pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $pythonExe)) {
+    $pythonExe = "python"
+}
+$gateScript = Join-Path $repoRoot "scripts\scan_release_payload.py"
+if (-not (Test-Path $gateScript)) {
+    throw "Release payload gate is missing: $gateScript"
+}
+Write-Host "Scanning release payload for ignored or credential-bearing files..."
+& $pythonExe $gateScript $packageDir
+if ($LASTEXITCODE -ne 0) {
+    throw "Release payload scan failed. Refusing to build the installer. Remove the flagged files and re-run the payload staging step."
+}
+
 $safeVersion = ($Version -replace '[^0-9A-Za-z_.-]', '-')
 $zipPath = Join-Path $releaseDir "GPT-Register-Tool-win-x64-$safeVersion.zip"
 $setupPath = Join-Path $releaseDir "GPT-Register-Tool-Setup-$safeVersion.exe"
