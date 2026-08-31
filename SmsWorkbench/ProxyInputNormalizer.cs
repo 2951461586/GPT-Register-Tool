@@ -10,6 +10,15 @@ namespace SmsWorkbench
         private static readonly string[] ListSeparators = ["\r\n", "\n", ",", ";"];
 
         /// <summary>
+        /// Wrapping characters left behind when structured text is pasted in
+        /// (JSON arrays, CSV columns, shell snippets). Stripped from both ends
+        /// of every entry; none of them can legitimately start or end a proxy
+        /// URL, so this never eats real input.
+        /// </summary>
+        private static readonly char[] PasteNoiseChars =
+            ['[', ']', '"', '\'', ',', ';', '{', '}', '“', '”', '‘', '’'];
+
+        /// <summary>
         /// Line separator used whenever proxy lists are serialized back to text
         /// (config persistence and backend command-line arguments). Proxy lists
         /// are data, not display text, so they stay platform-neutral: a config
@@ -21,6 +30,11 @@ namespace SmsWorkbench
         public static string Normalize(string value, string defaultScheme = "http")
         {
             string raw = (value ?? "").Trim().Replace('：', ':');
+            // Pasting a JSON array, a CSV column or a shell snippet leaves its
+            // wrapping characters behind ("\"http://...\",", "[...]", "http://...;").
+            // Strip them from both ends first, otherwise the quote/bracket is
+            // treated as part of the scheme and rejected as an unknown protocol.
+            raw = raw.Trim(PasteNoiseChars).Trim();
             if (raw.Length == 0)
                 return "";
 
@@ -64,6 +78,10 @@ namespace SmsWorkbench
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0)
                 .Select(item => Normalize(item, defaultScheme))
+                // Entries that were nothing but paste noise ("[" / "]" lines)
+                // normalize to an empty string; drop them instead of writing
+                // blank entries into the config.
+                .Where(item => item.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 

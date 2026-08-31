@@ -72,4 +72,56 @@ public sealed class ProxyInputNormalizerTests
             "socks5h://host:1080",
             ProxyInputNormalizer.Normalize("SOCKS5h://host:1080"));
     }
+
+    [Fact]
+    public void QuotedJsonArrayEntryIsNormalized()
+    {
+        // Pasting a JSON array leaves the enclosing quotes on every entry.
+        // The quote used to be treated as part of the scheme ("\"http\""),
+        // which rejected the whole list with a bogus protocol error.
+        Assert.Equal(
+            "http://user:pass@us.ipwo.net:7878",
+            ProxyInputNormalizer.Normalize("\"http://user:pass@us.ipwo.net:7878\","));
+    }
+
+    [Fact]
+    public void JsonArrayPasteYieldsCleanProxyList()
+    {
+        string pasted = string.Join("\n", new[]
+        {
+            "[",
+            "  \"http://acct_custom_zone_US:secret@us.ipwo.net:7878\",",
+            "  \"socks5h://acct_custom_zone_US:secret@us.ipwo.net:1080\",",
+            "]",
+        });
+
+        Assert.Equal(
+            new[]
+            {
+                "http://acct_custom_zone_US:secret@us.ipwo.net:7878",
+                "socks5h://acct_custom_zone_US:secret@us.ipwo.net:1080",
+            },
+            ProxyInputNormalizer.NormalizeList(pasted));
+    }
+
+    [Fact]
+    public void PasteNoiseOnlyLinesAreDropped()
+    {
+        // The "[" / "]" lines of a JSON array carry no proxy. They must not
+        // end up as blank entries in the saved config.
+        Assert.Equal(
+            new[] { "http://user:pass@host:7878" },
+            ProxyInputNormalizer.NormalizeList("[\n]\n\"http://user:pass@host:7878\",\n"));
+    }
+
+    [Fact]
+    public void CountryInferenceSurvivesJsonArrayPaste()
+    {
+        // Regression guard: inference goes through Normalize, so quoting the
+        // entry used to make the country undetectable too.
+        Assert.Equal(
+            "US",
+            ProxyInputNormalizer.InferCountry(
+                "\"http://lizi1_custom_zone_US_sid_36268881_time_5:pw@us.ipwo.net:7878\""));
+    }
 }
