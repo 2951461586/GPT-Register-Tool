@@ -7,6 +7,14 @@ import os
 import re
 import sys
 
+# Output must stay ASCII: on a GitHub-hosted Windows runner stdout is cp1252 and
+# any non-Latin1 character raises UnicodeEncodeError, which kills the CI step.
+# The messages below are already English; this guards future additions.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except (AttributeError, OSError, ValueError):
+    pass
+
 # scripts/ 的上一级就是仓库根。此前套了 3 层 dirname，得到的是仓库根的**父目录**
 # （F:\epsoft），于是 SCAN_DIRS 全部 isdir 失败被静默跳过，只剩 '.' 去扫同级无关目录。
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,7 +72,8 @@ def iter_files():
     missing = [d for d in SCAN_DIRS if not os.path.isdir(os.path.join(ROOT, d))]
     if len(missing) == len(SCAN_DIRS):
         raise SystemExit(
-            'FATAL: 所有 SCAN_DIRS 都不存在，ROOT 很可能算错了。ROOT=%s\n  missing=%s'
+            'FATAL: none of SCAN_DIRS exists, ROOT is probably wrong. '
+            'ROOT=%s\n  missing=%s'
             % (ROOT, missing)
         )
     for d in SCAN_DIRS + ROOT_SCRIPTS:
@@ -72,7 +81,7 @@ def iter_files():
         if os.path.isfile(base):
             candidates = [base]
         elif not os.path.isdir(base):
-            print('WARN: 扫描目标不存在，已跳过: %s' % d)
+            print('WARN: scan target does not exist, skipped: %s' % d)
             continue
         else:
             candidates = []
