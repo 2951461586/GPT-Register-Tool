@@ -209,7 +209,14 @@ def scan_file(path: Path, sensitive_keys: set[str]) -> list[tuple[str, int, str,
     except OSError:
         return []
 
-    rel = path.relative_to(ROOT).as_posix()
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        # 仓库外的路径（如 pytest 的 tmp_path）。relative_to 会抛 ValueError，
+        # 此前这直接把测试钉死在「必须往 runtime/ 里写真文件」上——而 runtime/
+        # 是生产数据区，留在那里的 pytest 日志会让 sensitive_field_scan 报红。
+        # 仓库外路径无法判定 docs/tests 归属，按源码处理。
+        rel = path.as_posix()
     # Test fixtures and docs are full of deliberately fake credentials; they
     # are expected content, not a leak.  Only the filename gate applies there.
     if DOC_OR_TEST.search(rel):
