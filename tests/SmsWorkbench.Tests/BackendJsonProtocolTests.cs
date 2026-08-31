@@ -34,4 +34,34 @@ public sealed class BackendJsonProtocolTests
 
         Assert.Null(BackendJsonProtocol.ExtractPayload(output));
     }
+
+    [Fact]
+    public void ExtractPayloadWarnsInsteadOfSilentlyDowngradingOnVersionMismatch()
+    {
+        // Without onWarning, a v3 envelope must still refuse to fall back to the
+        // legacy parser (behaviour preserved by ExtractPayloadRejectsUnknownEnvelopeVersion).
+        // This test additionally proves the mismatch is surfaced rather than swallowed.
+        string output = BackendJsonProtocol.Prefix
+            + "{\"version\":3,\"schema\":\"smsworkbench.ipc.v2\",\"type\":\"result\",\"payload\":{\"ok\":true}}";
+
+        var warnings = new System.Collections.Generic.List<string>();
+        JsonElement? payload = BackendJsonProtocol.ExtractPayload(output, warnings.Add);
+
+        Assert.Null(payload);
+        Assert.Single(warnings);
+        Assert.Contains("smsworkbench.ipc.v2", warnings[0]);
+    }
+
+    [Fact]
+    public void ExtractPayloadDoesNotWarnWhenNoEnvelopeIsPresent()
+    {
+        // Legacy-only output has no v2 envelope, so the mismatch path must stay silent.
+        var warnings = new System.Collections.Generic.List<string>();
+        JsonElement? payload = BackendJsonProtocol.ExtractPayload(
+            "progress\n{\"ok\":true,\"nested\":{\"value\":3}}",
+            warnings.Add);
+
+        Assert.True(payload.HasValue);
+        Assert.Empty(warnings);
+    }
 }

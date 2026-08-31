@@ -12,6 +12,7 @@ because the lock itself lives in the filesystem.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -112,3 +113,40 @@ class CrossProcessSemaphore:
 
 def _safe_name(name: str) -> str:
     return "".join(char if char.isalnum() or char in "-_." else "_" for char in name)
+
+
+@contextlib.contextmanager
+def cross_process_write_lock(lock_path: str | Path, *, timeout: float = 30.0, poll_interval: float = 0.05):
+    """Exclusive cross-process lock for serialising writes to a shared file.
+
+    Reuses the same OS byte-lock primitive as ``CrossProcessSemaphore`` so two
+    backend processes (CLI + workbench, or two CLIs) cannot interleave writes to
+    the same state file and hand out the same phone number / proxy slot twice.
+    Blocks up to ``timeout`` seconds; raises ``GateTimeoutError`` if it cannot
+    acquire the lock in time (never silently proceeds with a torn write).
+    """
+    lock_path = Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "a+b")
+    deadline = time.monotonic() + max(0.0, float(timeout))
+    acquired = False
+    try:
+        while True:
+            try:
+                _lock_byte(handle)
+                acquired = True
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise GateTimeoutError(
+                        f"cross-process write lock {lock_path} not acquired within {timeout}s"
+                    )
+                time.sleep(poll_interval)
+        yield
+    finally:
+        if acquired:
+            _unlock_byte(handle)
+        try:
+            handle.close()
+        except OSError:
+            pass

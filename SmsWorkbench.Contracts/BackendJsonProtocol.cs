@@ -8,10 +8,11 @@ namespace SmsWorkbench
 
         public const string Prefix = "@@SMSWORKBENCH_V2@@";
 
-        public static JsonElement? ExtractPayload(string standardOutput)
+        public static JsonElement? ExtractPayload(string standardOutput, Action<string>? onWarning = null)
         {
             string[] lines = (standardOutput ?? "").Split(LineSeparators, StringSplitOptions.None);
             bool sawEnvelope = false;
+            bool sawEnvelopeMismatch = false;
             for (int index = lines.Length - 1; index >= 0; index--)
             {
                 string line = lines[index].Trim();
@@ -20,11 +21,22 @@ namespace SmsWorkbench
                 string envelopeJson = line.Substring(Prefix.Length);
                 using JsonDocument envelope = JsonDocument.Parse(envelopeJson);
                 JsonElement root = envelope.RootElement;
-                if (root.TryGetProperty("version", out JsonElement version)
-                    && version.GetInt32() == 2
-                    && root.TryGetProperty("schema", out JsonElement schema)
-                    && string.Equals(schema.GetString(), "smsworkbench.ipc.v2", StringComparison.Ordinal)
-                    && root.TryGetProperty("type", out JsonElement type)
+                // A present envelope whose version/schema does not satisfy the
+                // v2 result contract is a protocol/version mismatch, NOT a
+                // legacy payload. Track it so we can warn instead of silently
+                // downgrading to the legacy tail-JSON parser below.
+                bool versionOk = root.TryGetProperty("version", out JsonElement version)
+                    && version.ValueKind == JsonValueKind.Number
+                    && version.TryGetInt32(out int versionNumber)
+                    && versionNumber == 2;
+                bool schemaOk = root.TryGetProperty("schema", out JsonElement schema)
+                    && string.Equals(schema.GetString(), "smsworkbench.ipc.v2", StringComparison.Ordinal);
+                if (!versionOk || !schemaOk)
+                {
+                    sawEnvelopeMismatch = true;
+                    continue;
+                }
+                if (root.TryGetProperty("type", out JsonElement type)
                     && string.Equals(type.GetString(), "result", StringComparison.Ordinal)
                     && root.TryGetProperty("payload", out JsonElement payload))
                 {
@@ -32,7 +44,18 @@ namespace SmsWorkbench
                 }
             }
 
-            if (sawEnvelope) return null;
+            if (sawEnvelope)
+            {
+                // An envelope was present but it did not satisfy the v2 result
+                // contract. Refuse to silently fall back to the legacy parser —
+                // that would misattribute a protocol/version mismatch to a
+                // legacy payload and hide the real cause. Warn and return no
+                // payload so the caller sees an explicit missing-result state.
+                if (sawEnvelopeMismatch)
+                    onWarning?.Invoke(
+                        "Backend IPC envelope present but version/schema did not match smsworkbench.ipc.v2; not falling back to legacy parser");
+                return null;
+            }
             return ExtractLegacyPayload(standardOutput);
         }
 

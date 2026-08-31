@@ -33,12 +33,12 @@ namespace SmsWorkbench
         private const string PoolLineSeparator = ProxyInputNormalizer.LineSeparator;
         private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
         private readonly IApplicationPaths _paths;
-        private readonly IBackendClient _backendClient;
+        private readonly IBackendTaskCoordinator _backendTasks;
 
-        public PaymentBatchService(IApplicationPaths paths, IBackendClient backendClient)
+        public PaymentBatchService(IApplicationPaths paths, IBackendTaskCoordinator backendTasks)
         {
             _paths = paths;
-            _backendClient = backendClient;
+            _backendTasks = backendTasks;
         }
 
         public IReadOnlyList<PaymentMatrixRow> LoadMatrix(string paymentMethod)
@@ -310,7 +310,7 @@ namespace SmsWorkbench
                 int waves = Math.Max(1, (int)Math.Ceiling(waveSize / (double)Math.Max(1, request.Workers)));
                 long timeout = Math.Max(120000L, (long)GetMethodTimeoutMilliseconds(request.PaymentMethod) * waves);
                 timeout = Math.Min(12L * 60 * 60 * 1000, timeout);
-                BackendCommandResult result = await _backendClient.RunAsync(
+                BackendCommandResult result = await _backendTasks.RunAsync(
                     BackendCommand.Create(
                         "批量协议支付",
                         arguments,
@@ -358,7 +358,7 @@ namespace SmsWorkbench
             // configuration, never from the approve selection.
             AddCountryArgument(arguments, "--update-proxy-country", LoadProxyConfiguration(paymentMethod).UpdateCountry);
 
-            BackendCommandResult result = await _backendClient.RunAsync(
+            BackendCommandResult result = await _backendTasks.RunAsync(
                 BackendCommand.Create("测试代理", arguments, 120000),
                 cancellationToken: cancellationToken);
 

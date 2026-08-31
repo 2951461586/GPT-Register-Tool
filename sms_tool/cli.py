@@ -197,13 +197,13 @@ def _at_promotion_proxy_arg(args, payment_method="paypal"):
     return payment_commands.promotion_proxy_arg(args, payment_method, CFG)
 
 
-def main():
-    initialize_runtime_config()
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
-    install_safe_stdio()
+def build_parser():
+    """Build the command-line argument parser.
 
+    Extracted from ``main`` so the argument set (including the
+    ``--registration-driver`` choices) is unit-testable without triggering the
+    runtime/config initialization that ``main`` performs.
+    """
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
     parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--desktop-serve", action="store_true", help=argparse.SUPPRESS)
@@ -245,7 +245,7 @@ def main():
     parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
     parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
-    parser.add_argument("--registration-driver", choices=["protocol", "playwright", "roxy", "cloak", "camoufox"], default=None, help="Registration driver (default: protocol)")
+    parser.add_argument("--registration-driver", choices=["protocol", "playwright", "roxy", "cloak", "camoufox", "adspower"], default=None, help="Registration driver (default: protocol)")
     parser.add_argument("--browser-headless", dest="browser_headless", action="store_true", default=None, help="Run Playwright registration headless")
     parser.add_argument("--browser-visible", dest="browser_headless", action="store_false", help="Run Playwright registration with a visible browser")
     parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
@@ -391,6 +391,17 @@ def main():
     parser.add_argument("--change-email-otp-timeout", type=int, default=300)
     parser.add_argument("--change-email-service-mode", choices=["code", "purchase"], default="purchase")
     parser.add_argument("--change-email-smailr-domain", default="")
+    return parser
+
+
+def main():
+    initialize_runtime_config()
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    install_safe_stdio()
+
+    parser = build_parser()
     args = parser.parse_args()
     if args.register_and_import:
         args.import_cpa = True

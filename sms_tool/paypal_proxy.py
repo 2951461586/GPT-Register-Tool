@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
+from .cross_process_gate import cross_process_write_lock
 from .phone_proxy import normalize_proxy_url as _normalize_proxy_url, redact_proxy_url as _canon_redact_proxy_url, redact_proxy_text as _canon_redact_proxy_text
 
 
@@ -403,7 +404,11 @@ class PayPalProxyState:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
             temp.write_text(json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
-            os.replace(temp, self.path)
+            # Serialise the replace across backend processes (CLI + workbench,
+            # or two CLIs) so concurrent health/geo updates don't interleave and
+            # lose each other's writes on the shared state file.
+            with cross_process_write_lock(self.path.with_name(f"{self.path.name}.lock")):
+                os.replace(temp, self.path)
 
     def _record(self, stage: str, proxy: str) -> dict[str, Any]:
         stages = self._load().setdefault("stages", {})
@@ -598,6 +603,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
 
+# Guards the module-level cache dict below. ThreadPoolExecutor fans out proxy
+# selection across worker threads, so the read-modify-write on the cache must
+# be serialised or two threads can insert/overwrite the same key.
+_CACHE_LOCK = threading.Lock()
+
 
 def _stage_proxy_value(stage_proxies: dict, key: str, fallback: str = "") -> str:
     return str((stage_proxies or {}).get(key) or fallback or "").strip()
@@ -622,17 +632,18 @@ def _paypal_proxy_state(paypal_cfg: dict) -> PayPalProxyState:
         int(health.get("zero_cache_ttl_seconds", 1800) or 0),
         int(health.get("probe_cache_ttl_seconds", 600) or 0),
     )
-    state = _PAYPAL_PROXY_STATE_CACHE.get(key)
-    if state is None:
-        state = PayPalProxyState(
-            state_path,
-            enabled=key[1],
-            fail_skip_after=key[2],
-            fail_cooldown_seconds=key[3],
-            zero_cache_ttl_seconds=key[4],
-            probe_cache_ttl_seconds=key[5],
-        )
-        _PAYPAL_PROXY_STATE_CACHE[key] = state
+    with _CACHE_LOCK:
+        state = _PAYPAL_PROXY_STATE_CACHE.get(key)
+        if state is None:
+            state = PayPalProxyState(
+                state_path,
+                enabled=key[1],
+                fail_skip_after=key[2],
+                fail_cooldown_seconds=key[3],
+                zero_cache_ttl_seconds=key[4],
+                probe_cache_ttl_seconds=key[5],
+            )
+            _PAYPAL_PROXY_STATE_CACHE[key] = state
     return state
 
 

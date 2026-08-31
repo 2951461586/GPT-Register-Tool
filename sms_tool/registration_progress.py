@@ -11,9 +11,9 @@ from typing import Any, Callable
 from .config import CFG
 from .paths import runtime_file
 from .registration_concurrency import (
-    enter_registration_stage,
+    RegistrationStageLease,
+    acquire_registration_stage,
     registration_stage_metrics,
-    release_registration_stage,
 )
 from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 
@@ -33,7 +33,26 @@ class RegistrationProgress:
         self.events: list[dict[str, Any]] = []
         self.sequence = 0
         self.last_stage = "started"
+        # The concurrency gate is owned by this progress object, never by a
+        # ContextVar: pool workers are reused, so context-local ownership leaks
+        # into the next account on the same worker.
+        self._lease: RegistrationStageLease | None = None
         self.stage("started")
+
+    def enter_stage_gate(self, name: str) -> float:
+        """Take the concurrency gate for ``name``, releasing the previous one.
+
+        Returns the queue wait in milliseconds so callers can report it.
+        """
+        previous, self._lease = self._lease, acquire_registration_stage(name)
+        if previous is not None:
+            previous.release()
+        return self._lease.waited_ms if self._lease is not None else 0.0
+
+    def release_stage_gate(self) -> None:
+        lease, self._lease = self._lease, None
+        if lease is not None:
+            lease.release()
 
     def stage(self, name: str, status: str = "running", detail: str = "") -> None:
         self.last_stage = str(name or "unknown")
@@ -97,7 +116,7 @@ def registration_stage(name: str, status: str = "running", detail: str = "") -> 
     progress = _current.get()
     if progress is None:
         return
-    waited_ms = enter_registration_stage(name)
+    waited_ms = progress.enter_stage_gate(name)
     wait_detail = f"stage_queue_wait_ms={waited_ms:.1f}" if waited_ms >= 1 else ""
     progress.stage(name, status, detail or wait_detail)
 
@@ -127,7 +146,7 @@ def track_registration(func: Callable[..., dict[str, Any]]) -> Callable[..., dic
                     result["registration_progress"] = progress.snapshot()
                     result["registration_stage_metrics"] = registration_stage_metrics()
             finally:
-                release_registration_stage()
+                progress.release_stage_gate()
                 _current.reset(token)
 
     return wrapper

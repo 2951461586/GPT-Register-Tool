@@ -43,6 +43,20 @@ namespace SmsWorkbench
         /// </summary>
         private void ShowProtocolPaymentDialog(PoolRow selectedAccount = null)
         {
+            // Same single-backend-task guard as the batch dialog: the coordinator
+            // rejects a concurrent run, so surface it here instead of failing
+            // once the dialog's run begins.
+            if (backendTasks.IsRunning)
+            {
+                MessageBox.Show(
+                    this,
+                    "已有后端任务正在运行，请先等待其完成或取消后再发起协议支付。",
+                    "任务进行中",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
             ProtocolPaymentAccount account = selectedAccount == null
                 ? null
                 : new ProtocolPaymentAccount(selectedAccount.Identifier, SessionFileFor(selectedAccount));

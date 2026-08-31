@@ -30,7 +30,7 @@ public sealed class PaymentBatchServiceTests
                     false);
             }
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
         var request = new PaymentBatchRequest(
             new[] { new PaymentBatchAccount("first@example.com", true) },
             "momo",
@@ -85,7 +85,7 @@ public sealed class PaymentBatchServiceTests
                 JsonElementOf("{\"ok\":true,\"stages\":{}}"),
                 false)
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
 
         await service.ProbeProxiesAsync(
             "momo",
@@ -117,7 +117,7 @@ public sealed class PaymentBatchServiceTests
                 return new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false);
             }
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
         var matrix = new PaymentMatrixRow
         {
             Name = "vn-primary",
@@ -175,7 +175,7 @@ public sealed class PaymentBatchServiceTests
                 return new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false);
             }
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
         var request = new PaymentBatchRequest(
             new[] { new PaymentBatchAccount("AT-1", true, secret) },
             "momo", 1, 3, 0, "manual-at", "", "", "", "JP", "VN",
@@ -201,7 +201,7 @@ public sealed class PaymentBatchServiceTests
     {
         using var fixture = new TemporaryDirectory();
         File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         PaymentMatrixRow row = service.CreateDefaultMatrixRow(paymentMethod);
 
@@ -224,7 +224,7 @@ public sealed class PaymentBatchServiceTests
         {
             Handler = _ => new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false)
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
         var request = new PaymentBatchRequest(
             new[] { new PaymentBatchAccount("first@example.com", true) },
             "gopay", 1, 0, 0, "update-country-batch", "", "", "ID", "JP", "TH",
@@ -258,7 +258,7 @@ public sealed class PaymentBatchServiceTests
         {
             Handler = _ => new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false)
         };
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
 
         await service.ProbeProxiesAsync("gopay", "", "", "ID", "JP", CancellationToken.None);
 
@@ -283,7 +283,7 @@ public sealed class PaymentBatchServiceTests
               }
             }
             """, new UTF8Encoding(false));
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         IReadOnlyList<PaymentMatrixRow> rows = service.LoadMatrix("gopay");
 
@@ -315,7 +315,7 @@ public sealed class PaymentBatchServiceTests
               }
             }
             """, new UTF8Encoding(false));
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("gopay");
         Assert.Equal("http://checkout-old", loaded.CheckoutProxyPool);
@@ -361,7 +361,7 @@ public sealed class PaymentBatchServiceTests
             Path.Combine(fixture.Path, "config.json"),
             "{\"protocol_payments\":{\"proxy_pool\":[\"http://legacy-one\",\"http://legacy-two\"]}}",
             new UTF8Encoding(false));
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("gopay");
 
@@ -375,7 +375,7 @@ public sealed class PaymentBatchServiceTests
         using var fixture = new TemporaryDirectory();
         string configPath = Path.Combine(fixture.Path, "config.json");
         File.WriteAllText(configPath, "{}", new UTF8Encoding(false));
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         SettingsSaveResult saved = service.SaveProxyConfiguration(
             "paypal",
@@ -420,7 +420,7 @@ public sealed class PaymentBatchServiceTests
               }
             }
             """, new UTF8Encoding(false));
-        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new StubBackendClient());
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
 
         PaymentBatchProxyConfiguration loaded = service.LoadProxyConfiguration("paypal");
 
