@@ -613,111 +613,6 @@ namespace SmsWorkbench
             parent.Children.Add(card);
         }
 
-        private string ScanStatusLabel(string status)
-        {
-            string value = (status ?? "").Trim().ToLowerInvariant();
-            return value switch
-            {
-                "alive" => "正常",
-                "alive_probe_inconclusive" => "RT正常 / OAuth深度探测未完成",
-                "account_deactivated" => "账号掉号",
-                "secondary_phone_verification_required" => "手机验证",
-                "phone_verification_required" => "支付完成",
-                "scan_failed" => "扫描失败",
-                _ => value.Length > 0 ? value : "未知"
-            };
-        }
-
-        private bool AccountLivenessProbeSucceeded(Dictionary<string, object> row)
-        {
-            return BackendJson.TryGetMap(row, "probe", out var probe) && BackendJson.GetBool(probe, "ok");
-        }
-
-        private bool AccountLivenessProbeReturned401(Dictionary<string, object> row)
-        {
-            if (!BackendJson.TryGetMap(row, "probe", out var probe)) return false;
-            string status = BackendJson.GetString(probe, "status").Trim().ToLowerInvariant();
-            return BackendJson.GetString(probe, "status_code") == "401" || status == "token_invalid";
-        }
-
-        private bool AccountLivenessProbeDeactivated(Dictionary<string, object> row)
-        {
-            if (row == null) return false;
-            if (AccountLivenessMapDeactivated(row)) return true;
-            if (BackendJson.TryGetMap(row, "probe", out var probe)
-                && AccountLivenessMapDeactivated(probe))
-            {
-                return true;
-            }
-            return BackendJson.TryGetMap(row, "relogin", out var relogin)
-                && AccountLivenessMapDeactivated(relogin);
-        }
-
-        private bool AccountLivenessMapDeactivated(Dictionary<string, object> data)
-        {
-            if (data == null) return false;
-            foreach (string key in new[] { "status", "quota_status", "account_scan_status", "error", "reason" })
-            {
-                string value = BackendJson.GetString(data, key).Trim();
-                if (value.Contains("account_deactivated", StringComparison.OrdinalIgnoreCase)
-                    || value.Contains("account_deatived", StringComparison.OrdinalIgnoreCase)
-                    || value.Equals("account_deleted", StringComparison.OrdinalIgnoreCase)
-                    || value.Equals("deactivated", StringComparison.OrdinalIgnoreCase)
-                    || value.Contains("account has been deactivated", StringComparison.OrdinalIgnoreCase)
-                    || value.Contains("deleted or deactivated", StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private string AccountLivenessProbeStatusLabel(Dictionary<string, object> probe)
-        {
-            if (AccountLivenessMapDeactivated(probe))
-            {
-                return "账号停用";
-            }
-            if (BackendJson.GetString(probe, "status_code") == "401" || BackendJson.GetString(probe, "status").Equals("token_invalid", StringComparison.OrdinalIgnoreCase))
-            {
-                return "AT失效 / HTTP 401";
-            }
-            if (BackendJson.GetBool(probe, "ok"))
-            {
-                string statusCode = BackendJson.GetString(probe, "status_code");
-                return statusCode.Length > 0 ? "AT有效 / HTTP " + statusCode : "AT有效";
-            }
-            string failedCode = BackendJson.GetString(probe, "status_code");
-            return failedCode.Length > 0 ? "测活失败 / HTTP " + failedCode : "测活失败";
-        }
-
-        private string ScanResultError(Dictionary<string, object> row)
-        {
-            foreach (string section in new[] { "oauth", "refresh" })
-            {
-                if (BackendJson.TryGetMap(row, section, out var map))
-                {
-                    string error = BackendJson.GetString(map, "error");
-                    if (error.Length > 0) return error;
-                }
-            }
-            return "";
-        }
-
-        private bool TryExtractScanSummary(string output, out Dictionary<string, object> summary)
-        {
-            summary = BackendResultInterpreter.TryExtractScanSummary(output);
-            return summary != null;
-        }
-
-        private bool BoolValue(Dictionary<string, object> data, string key)
-        {
-            if (data == null || !data.TryGetValue(key, out object value) || value == null) return false;
-            if (value is bool b) return b;
-            string text = Convert.ToString(value)?.Trim() ?? "";
-            return text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1";
-        }
-
         private async Task<Dictionary<string, object>> BuildAccountExportJsonAsync(PoolRow row)
         {
             if (row == null) return null;
@@ -816,11 +711,6 @@ namespace SmsWorkbench
             }
         }
 
-        private string NestedJsonString(Dictionary<string, object> data, string section, string key)
-        {
-            return BackendJson.TryGetMap(data, section, out var map) ? BackendJson.GetString(map, key) : "";
-        }
-
         private string FirstJsonString(params string[] values)
         {
             foreach (string value in values)
@@ -829,20 +719,6 @@ namespace SmsWorkbench
                 if (text.Length > 0) return text;
             }
             return "";
-        }
-
-        private void SetJsonExportPlanTypePlus(Dictionary<string, object> item)
-        {
-            if (item.ContainsKey("planType"))
-            {
-                item["planType"] = "plus";
-            }
-            if (!BackendJson.TryGetMap(item, "account", out var account))
-            {
-                account = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                item["account"] = account;
-            }
-            account["planType"] = "plus";
         }
 
         private string JsonExportDedupKey(Dictionary<string, object> item, PoolRow row)
@@ -998,32 +874,6 @@ namespace SmsWorkbench
             dialog.Content = root;
             dialog.ShowDialog();
             return selected;
-        }
-
-        private void AddImportTargetArg(List<string> args, string target)
-        {
-            args.Add("--import-target");
-            string value = (target ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api")
-            {
-                args.Add("sub2api");
-            }
-            else if (value == "cliproxyapi")
-            {
-                args.Add("cliproxyapi");
-            }
-            else
-            {
-                args.Add("cpa");
-            }
-        }
-
-        private string ImportTargetLabel(string target)
-        {
-            string value = (target ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api") return "SUB2API";
-            if (value == "cliproxyapi") return "CLIProxyAPI";
-            return "CPA";
         }
     }
 }

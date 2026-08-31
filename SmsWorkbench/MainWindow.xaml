@@ -16,7 +16,6 @@
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
   <ui:FluentWindow.Resources>
-    <local:CollapsedLabelConverter x:Key="CollapsedLabelConverter"/>
     <local:StatusSeverityConverter x:Key="StatusSeverityConverter"/>
     <local:RtDisplayConverter x:Key="RtDisplayConverter"/>
     <Style x:Key="SidebarNavButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

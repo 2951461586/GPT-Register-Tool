@@ -42,6 +42,7 @@ public sealed class PaymentBatchServiceTests
             "http://approve-jp",
             "ID",
             "JP",
+            "VN",
             true,
             true,
             true,
@@ -61,14 +62,17 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal("http://approve-jp", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-pool"));
         Assert.Equal("ID", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-country"));
         Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
-        Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
+        // The promotion/update rotation country is carried by the request; it must
+        // not fall back to the approve country, which used to overwrite the
+        // promotion country configured on the Python side.
+        Assert.Equal("VN", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
         Assert.DoesNotContain("--auto-proxy-country", backend.LastCommand.Arguments);
         Assert.False(File.Exists(emailFile));
         Assert.False(File.Exists(matrixFile));
     }
 
     [Fact]
-    public async Task ProxyProbeUsesSelectedCountryForApproveAndSharedUpdatePool()
+    public async Task ProxyProbeUsesSelectedCountryForApproveAndConfiguredUpdateCountry()
     {
         using var fixture = new TemporaryDirectory();
         File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
@@ -93,7 +97,9 @@ public sealed class PaymentBatchServiceTests
 
         Assert.NotNull(backend.LastCommand);
         Assert.Equal("TR", ArgumentAfter(backend.LastCommand!.Arguments, "--approve-proxy-country"));
-        Assert.Equal("TR", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
+        // With no persisted stage_proxy_countries.promotion the probe falls back to
+        // the method default (VN for momo) rather than reusing the approve country.
+        Assert.Equal("VN", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
         Assert.DoesNotContain("--auto-proxy-country", backend.LastCommand.Arguments);
     }
 
@@ -130,6 +136,7 @@ public sealed class PaymentBatchServiceTests
             "",
             "",
             "JP",
+            "VN",
             false,
             false,
             false,
@@ -171,7 +178,7 @@ public sealed class PaymentBatchServiceTests
         var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
         var request = new PaymentBatchRequest(
             new[] { new PaymentBatchAccount("AT-1", true, secret) },
-            "momo", 1, 3, 0, "manual-at", "", "", "", "JP",
+            "momo", 1, 3, 0, "manual-at", "", "", "", "JP", "VN",
             true, true, true,
             new[] { service.CreateDefaultMatrixRow("momo") });
 
@@ -206,6 +213,58 @@ public sealed class PaymentBatchServiceTests
         Assert.Equal(expectedApproveCountry, row.ApproveCountry);
         Assert.Equal(expectedCountry, row.RedirectCountry);
         Assert.Equal(1, row.SampleSize);
+    }
+
+    [Fact]
+    public async Task UpdateProxyCountryUsesUpdateCountryNotApproveCountry()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}");
+        var backend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false)
+        };
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+        var request = new PaymentBatchRequest(
+            new[] { new PaymentBatchAccount("first@example.com", true) },
+            "gopay", 1, 0, 0, "update-country-batch", "", "", "ID", "JP", "TH",
+            true, false, true,
+            new[] { service.CreateDefaultMatrixRow("gopay") });
+
+        await service.RunAsync(request, CancellationToken.None);
+
+        // GoPay rotates the promotion/update proxy through TH while the approve
+        // stage stays in JP. Passing the approve country here used to overwrite
+        // the promotion country configured on the Python side.
+        Assert.Equal("TH", ArgumentAfter(backend.LastCommand!.Arguments, "--update-proxy-country"));
+        Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
+        Assert.Equal("ID", ArgumentAfter(backend.LastCommand.Arguments, "--checkout-proxy-country"));
+    }
+
+    [Fact]
+    public async Task ProbeProxiesReadsUpdateCountryFromStageConfiguration()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
+            {
+              "protocol_payments": {
+                "methods": {
+                  "gopay": { "stage_proxy_countries": { "checkout": "ID", "approve": "JP", "promotion": "TH" } }
+                }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var backend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false)
+        };
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), backend);
+
+        await service.ProbeProxiesAsync("gopay", "", "", "ID", "JP", CancellationToken.None);
+
+        Assert.Equal("ID", ArgumentAfter(backend.LastCommand!.Arguments, "--checkout-proxy-country"));
+        Assert.Equal("JP", ArgumentAfter(backend.LastCommand.Arguments, "--approve-proxy-country"));
+        Assert.Equal("TH", ArgumentAfter(backend.LastCommand.Arguments, "--update-proxy-country"));
     }
 
     [Fact]
