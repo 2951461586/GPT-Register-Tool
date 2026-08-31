@@ -28,6 +28,12 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     }
 }
 
+# 手工传参时也要 trim。此前只有自动取 tag 的分支做了 TrimStart('v')，于是
+# -Version v2026.09.01 会原样进 `-p:Version=`，dotnet 直接报"不是有效的版本字符串"，
+# 而 -Version 2026.09.01 虽能构建却产出 Setup-2026.09.01.exe —— 与历史资产
+# 的 Setup-v2026.08.31.exe 命名不一致。两条路都不对，统一在这里归一。
+$Version = $Version.TrimStart('v')
+
 $publishDir = Join-Path $repoRoot "dist\net10"
 $installerRoot = Join-Path $repoRoot "dist\installer"
 $packageDir = Join-Path $installerRoot "package"
@@ -259,7 +265,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "Release payload scan failed. Refusing to build the installer. Remove the flagged files and re-run the payload staging step."
 }
 
-$safeVersion = ($Version -replace '[^0-9A-Za-z_.-]', '-')
+# $Version 归一为不带 v（供 -p:Version= 用），文件名则统一带 v，与历史资产一致。
+$safeVersion = 'v' + ($Version -replace '[^0-9A-Za-z_.-]', '-')
 $zipPath = Join-Path $releaseDir "GPT-Register-Tool-win-x64-$safeVersion.zip"
 $setupPath = Join-Path $releaseDir "GPT-Register-Tool-Setup-$safeVersion.exe"
 if (Test-Path $zipPath) {
