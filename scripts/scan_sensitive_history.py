@@ -7,6 +7,14 @@ import re
 import subprocess
 import sys
 
+# Output must stay ASCII. On a GitHub-hosted Windows runner stdout is cp1252 and
+# any non-Latin1 character raises UnicodeEncodeError, killing the step (which
+# then skips every later step in the job). Same for the other scan scripts.
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except (AttributeError, OSError, ValueError):
+    pass
+
 PAT = re.compile(r'(key|token|secret|password|passwd|pwd|auth|cookie|session)', re.I)
 
 
@@ -36,7 +44,7 @@ def mask_text(text):
 def main():
     paths = sys.argv[1:]
     if not paths:
-        print('需要至少一个路径参数')
+        print('need at least one path argument')
         return 1
 
     for p in paths:
@@ -48,24 +56,24 @@ def main():
         )
         commits = [c for c in r.stdout.split() if c]
         if not commits:
-            print('  (历史中不存在)')
+            print('  (not present in history)')
             continue
-        print(f'  出现在 {len(commits)} 个提交中')
+        print(f'  present in {len(commits)} commit(s)')
         # 只看最新版本
         head = commits[0]
         r2 = subprocess.run(
             ['git', 'show', f'{head}:{p}'], capture_output=True, text=True,
         )
         if r2.returncode != 0:
-            print('  (读取失败)')
+            print('  (read failed)')
             continue
         content = r2.stdout
-        print('  --- 最新版本内容（已脱敏）---')
+        print('  --- latest version (masked) ---')
         masked = mask_text(content)
         for line in masked.splitlines():
             if PAT.search(line):
                 print('   ', line.strip()[:120])
-        print('  --- 含敏感关键词的行数:',
+        print('  --- lines matching sensitive keywords:',
               sum(1 for l in content.splitlines() if PAT.search(l)))
     return 0
 
