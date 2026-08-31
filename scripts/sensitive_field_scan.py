@@ -23,7 +23,25 @@ ARTIFACT_SECRET = re.compile(
 ARTIFACT_CARD_FRAGMENT = re.compile(r"(?i)(?:card|卡片|尾号)[^\n]{0,30}\*{2,}\d{2,}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """扫描源码与产物。
+
+    可选参数：--artifacts <dir>（可重复）追加产物目录，供发布流程在打包后调用。
+    默认仍只扫 runtime/ 与 logs/，行为不变。
+    """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    extra_artifacts: list[Path] = []
+    while "--artifacts" in argv:
+        index = argv.index("--artifacts")
+        if index + 1 >= len(argv):
+            print("--artifacts requires a directory argument", file=sys.stderr)
+            return 2
+        extra_artifacts.append(Path(argv[index + 1]))
+        del argv[index:index + 2]
+    if argv:
+        print(f"unknown arguments: {' '.join(argv)}", file=sys.stderr)
+        return 2
+
     failures: list[str] = []
     policy_path = ROOT / "sensitive_policy.json"
     try:
@@ -76,8 +94,10 @@ def main() -> int:
                     }
                     if names & sensitive_names and not re.search(r"(?i)(sanitize|redact|mask)", expression):
                         failures.append(f"{path.relative_to(ROOT)}:{node.lineno}: sensitive output bypasses safe_print")
-    for base in (ROOT / "runtime", ROOT / "logs"):
+    for base in (ROOT / "runtime", ROOT / "logs", *extra_artifacts):
         if not base.is_dir():
+            if base in extra_artifacts:
+                failures.append(f"artifacts directory does not exist: {base}")
             continue
         for path in base.rglob("*"):
             if path.is_file() and path.suffix.lower() in {".json", ".jsonl", ".log", ".txt"}:
