@@ -589,11 +589,26 @@ public sealed class DesktopWindowSmokeTests
             if (DateTime.UtcNow >= deadline)
                 return false;
 
+            // Background, not Render.
+            //
+            // Render-priority work is only dispatched when a real render pass
+            // runs. GitHub's hosted Windows runner has no interactive desktop,
+            // so the render pass never happens, the BeginInvoke below is never
+            // invoked, and PushFrame blocks until the outer STA join times out
+            // (which reads as "did not finish in time", not as the real cause).
+            //
+            // Background (priority 4) sits below Render (7) and Loaded (6), so
+            // pushing a frame still drains every higher-priority item first —
+            // layout included — and exits regardless of whether rendering works.
             var frame = new DispatcherFrame();
             dispatcher.BeginInvoke(
-                DispatcherPriority.Render,
+                DispatcherPriority.Background,
                 new Action(() => frame.Continue = false));
             Dispatcher.PushFrame(frame);
+
+            // With Render there was a real frame interval between iterations.
+            // Without it the loop spins hot, so pace it explicitly.
+            Thread.Sleep(10);
         }
 
         return true;
@@ -644,8 +659,11 @@ public sealed class DesktopWindowSmokeTests
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
 
+        // 20 s was enough on a workstation but not on a hosted runner doing
+        // software rendering. The stage name in the failure is what actually
+        // identifies the hang, so a generous ceiling costs nothing but CI time.
         Assert.True(
-            thread.Join(TimeSpan.FromSeconds(20)),
+            thread.Join(TimeSpan.FromSeconds(90)),
             "WPF smoke test did not finish in time. Last stage: " + stage);
         Assert.Null(failure);
     }
