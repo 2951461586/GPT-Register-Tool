@@ -304,7 +304,7 @@ namespace SmsWorkbench
                 AddPoolArgument(arguments, "--approve-proxy-pool", request.ApproveProxyPool);
                 AddCountryArgument(arguments, "--checkout-proxy-country", request.CheckoutCountry);
                 AddCountryArgument(arguments, "--approve-proxy-country", request.ApproveCountry);
-                AddCountryArgument(arguments, "--update-proxy-country", request.ApproveCountry);
+                AddCountryArgument(arguments, "--update-proxy-country", request.UpdateCountry);
 
                 int waveSize = request.Canary > 0 ? Math.Min(request.Canary, request.Accounts.Count) : request.Accounts.Count;
                 int waves = Math.Max(1, (int)Math.Ceiling(waveSize / (double)Math.Max(1, request.Workers)));
@@ -353,7 +353,10 @@ namespace SmsWorkbench
             AddPoolArgument(arguments, "--approve-proxy-pool", approveProxyPool);
             AddCountryArgument(arguments, "--checkout-proxy-country", checkoutCountry);
             AddCountryArgument(arguments, "--approve-proxy-country", approveCountry);
-            AddCountryArgument(arguments, "--update-proxy-country", approveCountry);
+            // The promotion/update rotation country is a distinct concept from
+            // the approve country. It comes from the persisted per-method stage
+            // configuration, never from the approve selection.
+            AddCountryArgument(arguments, "--update-proxy-country", LoadProxyConfiguration(paymentMethod).UpdateCountry);
 
             BackendCommandResult result = await _backendClient.RunAsync(
                 BackendCommand.Create("测试代理", arguments, 120000),

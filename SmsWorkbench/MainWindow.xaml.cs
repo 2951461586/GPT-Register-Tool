@@ -326,20 +326,6 @@ namespace SmsWorkbench
         public string Retry { get; set; } = "0";
     }
 
-    public sealed class CollapsedLabelConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            var label = parameter?.ToString() ?? string.Empty;
-            return value is bool collapsed && collapsed ? string.Empty : label;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
     /// <summary>
     /// Converts a raw RefreshTokenStatus value (e.g. "oauth_present",
     /// "legacy_present", "no_rt") into a short display label.

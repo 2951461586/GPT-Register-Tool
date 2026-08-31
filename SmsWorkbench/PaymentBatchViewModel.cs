@@ -352,6 +352,7 @@ namespace SmsWorkbench
                 ApproveProxyPool ?? "",
                 CheckoutProxyCountry ?? "",
                 string.IsNullOrWhiteSpace(ApproveProxyCountry) ? DefaultApproveCountry : ApproveProxyCountry,
+                ResolveUpdateCountry(),
                 JitRefresh,
                 ProbeOnly,
                 RequireZero,
@@ -501,6 +502,25 @@ namespace SmsWorkbench
                 ?? PaymentMethods.ApproveCountryOptions(paymentMethod);
 
         private string DefaultApproveCountry => ApproveCountryOptions.Count > 0 ? ApproveCountryOptions[0].Code : "";
+
+        // The promotion/update rotation country lives in the persisted per-method
+        // stage configuration (stage_proxy_countries.promotion), not in the
+        // checkout/approve UI selection. Passing the approve country here used to
+        // overwrite the configured promotion country on the Python side, which
+        // silently switched the rotation region (e.g. GoPay: TH became JP).
+        private string ResolveUpdateCountry()
+        {
+            if (_paymentBatchService == null) return "";
+            try
+            {
+                return (_paymentBatchService.LoadProxyConfiguration(SelectedMethod?.Id ?? "paypal").UpdateCountry ?? "")
+                    .Trim().ToUpperInvariant();
+            }
+            catch
+            {
+                return "";
+            }
+        }
 
         private void ReloadProxyConfiguration()
         {

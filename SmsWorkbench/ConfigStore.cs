@@ -143,8 +143,10 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Split a merged config object into the owned shard files. Each top-level
-        /// key is routed to its owning shard by ShardOwnership; empty shards are
-        /// not written so we never leave spurious empty files behind.
+        /// key is routed to its owning shard by ShardOwnership. A shard that ends
+        /// up with no keys has its file removed, otherwise the stale file would be
+        /// merged back on the next ReadMerged and resurrect keys the caller just
+        /// deleted.
         /// </summary>
         public static void WriteShards(IApplicationPaths paths, JsonObject root)
         {
@@ -162,8 +164,23 @@ namespace SmsWorkbench
             }
             foreach (var bucket in buckets)
             {
-                if (bucket.Value.Count == 0) continue;
-                WriteAtomic(paths, bucket.Key, bucket.Value);
+                if (bucket.Value.Count == 0)
+                    DeleteShard(paths, bucket.Key);
+                else
+                    WriteAtomic(paths, bucket.Key, bucket.Value);
+            }
+        }
+
+        private static void DeleteShard(IApplicationPaths paths, string fileName)
+        {
+            try
+            {
+                string path = Path.Combine(paths.RootDirectory, fileName);
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch
+            {
+                // best-effort cleanup
             }
         }
 

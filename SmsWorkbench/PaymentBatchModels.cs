@@ -110,6 +110,7 @@ namespace SmsWorkbench
         string ApproveProxyPool,
         string CheckoutCountry,
         string ApproveCountry,
+        string UpdateCountry,
         bool JitRefresh,
         bool ProbeOnly,
         bool RequireZero,
