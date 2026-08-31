@@ -10,6 +10,9 @@
 # 用法:
 #   powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 # ============================================================================
+param(
+    [string]$Version = ""
+)
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -61,12 +64,11 @@ foreach ($relative in $retiredExecutorArtifacts) {
     }
 }
 
-& $dotnet publish $project `
-    -c Release `
-    -r win-x64 `
-    --self-contained false `
-    -p:PublishSingleFile=false `
-    -o $publishDir
+$publishArgs = @('-c', 'Release', '-r', 'win-x64', '--self-contained', 'false', '-p:PublishSingleFile=false', '-o', $publishDir)
+if ($Version) {
+    $publishArgs += "-p:Version=$Version"
+}
+& $dotnet publish $project @publishArgs
 
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"

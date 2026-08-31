@@ -4,14 +4,22 @@ on:
   push:
   pull_request:
 
+# Cancel superseded runs on the same ref to avoid queueing the runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: windows-latest
+    # Hard ceiling so a stuck step fails fast instead of burning the 6h GitHub limit.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+          cache: true
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -23,10 +31,18 @@ jobs:
         run: .\scripts\environment_preflight.ps1
       - run: python -m compileall -q sms_tool services
       - run: python -m pytest --collect-only -q
-      - run: python -m pytest -q
+      - run: python -m pytest -q --cov=sms_tool --cov=services --cov-report=term-missing
       - run: dotnet test GPTRegisterTool.slnx -c Release
       - run: python -c "import sms_tool.cli"
       - run: python -m pytest -q tests/test_protocol_payment_common.py tests/test_wallet_provider.py tests/test_wallet_manager_integration.py
+      # Secret gates — precommit_guard is the hard gate (non-zero on tracked-file violation);
+      # the other two are informational scanners that print findings.
+      - name: Secret scan — tracked files (gate)
+        run: python scripts/precommit_guard.py --all
+      - name: Secret scan — hardcoded credentials in source
+        run: python scripts/scan_hardcoded_secrets.py
+      - name: Secret scan — git history
+        run: python scripts/scan_sensitive_history.py config.json proxy.json runtime.json payment.json mailbox_tokens.txt kyl_state.json
       - run: python scripts/sensitive_field_scan.py
       - run: python scripts/architecture_scan.py
       - shell: powershell

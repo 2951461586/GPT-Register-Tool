@@ -7,5 +7,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
     <WarningsAsErrors>$(WarningsAsErrors);NU1605;NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+    <!-- Single source of truth for the assembly version. Overridable from the
+         command line via -p:Version so the installer can stamp the git tag. -->
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
   </PropertyGroup>
 </Project>

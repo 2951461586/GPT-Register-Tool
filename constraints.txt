@@ -1,0 +1,24 @@
+# Constraints file — pins the direct dependencies declared in requirements.txt to
+# known-good versions for reproducible Python builds.
+#
+# Usage (CI / local install):
+#     python -m pip install -r requirements.txt -c constraints.txt
+#
+# This file is the version floor for the 13 direct dependencies. Their transitive
+# closures are bounded by each package's own metadata, so a full lock is not required
+# to get reproducible installs. Regenerate after a deliberate major-version bump by
+# re-running `python -m pip freeze` and updating the lines below.
+curl_cffi==0.16.0
+cryptography==50.0.1
+PyNaCl==1.6.2
+httpx[http2,socks]==0.28.1
+requests==2.34.2
+PyOTP==2.10.0
+camoufox[geoip]==0.5.4
+browserforge==1.2.4
+cloakbrowser==0.5.9
+playwright==1.60.0
+playwright-stealth==2.0.3
+selenium==4.48.0
+qrcode[pil]==8.2
+pytest==9.1.1

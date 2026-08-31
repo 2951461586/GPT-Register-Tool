@@ -16,7 +16,6 @@ namespace SmsWorkbench
         private readonly ISettingsService settingsService;
         private readonly IPaymentBatchService paymentBatchService;
         private readonly string rootDir;
-        private readonly ObservableCollection<PoolRow> allRows = new ObservableCollection<PoolRow>();
         private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
@@ -29,10 +28,6 @@ namespace SmsWorkbench
         private string trialCountText = "0";
         private string registeredCountText = "0";
         private string attentionCountText = "0";
-        private int currentPage = 1;
-        private int filteredCount;
-        private string accountSortMember = "";
-        private ListSortDirection? accountSortDirection;
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
         private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
@@ -100,10 +95,6 @@ namespace SmsWorkbench
         public event PropertyChangedEventHandler PropertyChanged;
 
         public ObservableCollection<TaskRow> Tasks { get; } = new ObservableCollection<TaskRow>();
-
-        public ObservableCollection<PoolRow> PagedRows { get; } = new ObservableCollection<PoolRow>();
-
-        public PoolRow SelectedRow { get; set; }
 
         public int SelectedTabIndex { get; set; }
 

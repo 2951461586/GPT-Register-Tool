@@ -1,4 +1,6 @@
+import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -15,6 +17,25 @@ from .config import CFG
 from .mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from .mailbox_types import MailboxAccount
 from .paths import project_path, runtime_file
+
+logger = logging.getLogger(__name__)
+
+
+def _remail_idempotency_key(mode: str, supply: str, payload: dict) -> str:
+    """Stable idempotency key for a ReMail batch order.
+
+    Derived from the order intent (service mode + supply + canonical payload) so a
+    retried batch request reuses the same key and the server de-duplicates it instead
+    of double-charging. A fresh random key per call (the old behaviour) meant zero
+    de-duplication on retry.
+    """
+    canonical = json.dumps(
+        {"serviceMode": mode, "supply": supply, "payload": payload},
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 DEFAULT_BASE_URL = "https://remail.aishop6.com"
@@ -449,9 +470,10 @@ def _recover_recent_remail_batch(*, started_at, quantity, mode, payload):
         candidates.append(item)
 
     if len(candidates) != quantity:
-        print(
-            "[!] ReMail ambiguous-batch recovery refused: "
-            f"expected exactly {quantity} matching recent orders, found {len(candidates)}"
+        logger.warning(
+            "ReMail ambiguous-batch recovery refused: expected exactly %s matching recent orders, found %s",
+            quantity,
+            len(candidates),
         )
         return []
 
@@ -461,7 +483,7 @@ def _recover_recent_remail_batch(*, started_at, quantity, mode, payload):
             details = list(executor.map(_fetch_remail_order_detail, candidates))
         return filter_dead_remail_mailboxes([_mailbox_from_order(item, service_mode=mode) for item in details])
     except Exception as exc:
-        print(f"[!] ReMail ambiguous-batch detail recovery failed: {_redact(str(exc))}")
+        logger.warning("ReMail ambiguous-batch detail recovery failed: %s", _redact(str(exc)))
         return []
 
 
@@ -477,7 +499,7 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
             "POST",
             "/v1/open/orders/batch",
             auth=True,
-            headers={"Idempotency-Key": str(uuid.uuid4())},
+            headers={"Idempotency-Key": _remail_idempotency_key(mode, supply, payload)},
             params={"serviceMode": mode, "supply": supply},
             json=payload,
             timeout=max(30, int(_remail_cfg().get("batch_timeout") or quantity * 2)),
@@ -492,7 +514,7 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
             payload=payload,
         )
         if accounts:
-            print(f"[*] Recovered {len(accounts)} ReMail order(s) after an ambiguous batch response")
+            logger.info("Recovered %s ReMail order(s) after an ambiguous batch response", len(accounts))
             return accounts
         raise
     accounts = []
@@ -503,7 +525,7 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
         else:
             failures.append(_redact(item.get("error") or {"index": item.get("index")}))
     if failures:
-        print(f"[!] ReMail batch returned {len(failures)} failed item(s): {failures}")
+        logger.warning("ReMail batch returned %s failed item(s): %s", len(failures), failures)
     accounts = filter_dead_remail_mailboxes(accounts)
     if not accounts:
         raise RuntimeError("ReMail batch returned no usable mailboxes")
