@@ -21,4 +21,5 @@ qrcode[pil]>=7.4.2
 
 # Test runner used by CI and the documented validation command
 pytest>=8.0
+pytest-cov>=5.0
 

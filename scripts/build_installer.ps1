@@ -18,7 +18,14 @@ if (-not (Test-Path $dotnet)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = "v$(Get-Date -Format 'yyyy.MM.dd')"
+    # Single source of truth for the version is the latest git tag (vYYYY.MM.DD[.N]).
+    # Falls back to today's date only when no tag is reachable (e.g. shallow clone).
+    $tag = & git -C $repoRoot describe --tags --match='v*' --abbrev=0 2>$null
+    if ($LASTEXITCODE -eq 0 -and $tag) {
+        $Version = $tag.TrimStart('v')
+    } else {
+        $Version = "$(Get-Date -Format 'yyyy.MM.dd')"
+    }
 }
 
 $publishDir = Join-Path $repoRoot "dist\net10"
@@ -161,7 +168,7 @@ if ($SelfSign) {
 }
 
 if (-not $SkipPublish) {
-    & (Join-Path $repoRoot "SmsWorkbench\build_dotnet.ps1")
+    & (Join-Path $repoRoot "SmsWorkbench\build_dotnet.ps1") -Version $Version
     if ($LASTEXITCODE -ne 0) {
         throw "SmsWorkbench publish failed with exit code $LASTEXITCODE"
     }

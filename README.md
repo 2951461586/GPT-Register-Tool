@@ -211,7 +211,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 ### 协议支付提链
 
-- 支持 PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo。
+- 支持 PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay（共 15 种；QRIS/Bizum/Naver Pay 为 canary，未开放注册入口，仅 CLI 可选）。
 - BLIK 会提交一次性六位码并直接执行支付，只在单账号协议支付弹窗/命令中提供，不进入注册后自动提链或批量支付选择器。
 - 直卡 Checkout（菲律宾 PH/PHP）：走 US 下单 → TR 刷优惠 → 校验 0 元，产出 `chatgpt.com/checkout/<entity>/<cs_id>` 直卡结账长链。
 - MoMo（越南 VN/VND）：下单 → Stripe init → 强制 ₫0 → 建 MoMo PM → Confirm → Approve → 跟跳转，产出可扫的 `payment.momo.vn` 二维码（自动解码为 PNG，供“打开二维码”使用）。
@@ -221,7 +221,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - PayPal BA 提取成功后可进入持久化后续授权队列；该队列只属于 PayPal，不在其他支付方式界面显示。
 - PayPal 回跳对账由独立 `paypal_reconciliation.py` 处理，只跟踪白名单内的 Stripe Return → OpenAI Pay → Checkout Verify，并输出脱敏的 `conclusive`/`unknown`/`failed` 证据；它不改变提链接口，也不生成或覆盖支付链接。
 - 批量协议支付使用两个相互独立的支付出口池：Checkout 池默认跟随账单区，Approve / Update 与 Checkout 共用完整账单地区目录，不再限制为 JP/TR；Promotion、Provider、Confirm 和 Redirect 继续使用各适配器的内部阶段国家契约。
-- 动态代理会按支付方法自动改写国家与 Session，支持 US、JP、VN、ID、IN、NL、BR、KR、PL、CH、PH 等目标出口。
+- 动态代理会按支付方法自动改写国家与 Session，支持 `payment_methods.json` 中 `checkout_countries` 列出的 13 个目标出口：US、ID、JP、TR、TH、VN、PH、IN、GB、DE、ES、KR、BR（以配置文件为准，不要照抄旧文档的 NL/PL/CH——那三者不在结账国列表里，配不出结果）。
 - 协议支付代理池按顺序探测，当前代理不可用或出口国家不匹配时自动切换下一条。
 - 地区和代理选择保存为历史记录。
 - 支持实际测试代理出口 IP、国家及预期地区是否匹配。
@@ -384,6 +384,20 @@ services/
 更详细的边界说明参见 [docs/architecture.md](docs/architecture.md)，目录职责参见 [docs/directory-map.md](docs/directory-map.md)。
 
 ## 核心配置
+
+### 配置分片（config sharding）
+
+`config.json` 在 08-30 的改造中拆成了 **3 个分片文件**，全部被 Git 忽略、只存本地：
+
+| 分片文件 | 归属的顶层键（共 22 个） |
+|---|---|
+| `proxy.json` | `proxy`、`mailbox_proxy`、`phone_reuse`、`paypal_browser` |
+| `runtime.json` | `runtime`、`timeouts`、`storage`、`output`、`account_health`、`registration`、`chatgpt`、`email_registration`、`codex_oauth` |
+| `payment.json` | `paypal`、`paypal_nocard`、`upi`、`omakse`、`protocol_payments`、`kakao`、`momo`、`cpa_mode`、`sub2api` |
+
+写入时按 `SHARD_OWNERSHIP`（`sms_tool/config.py`）路由到正确的分片；未列出的键默认进 `runtime.json`。
+**配置模板是 `config.example.json`**（入库、安全），三个分片文件**不要**提交到仓库（含代理口令 / API Key / 支付凭据）。
+桌面「设置」页保存、CLI 启动都会先合并这三个分片再使用，分片缺失会自动从 `config.example.json` 派生默认值。
 
 ### ReMail
 

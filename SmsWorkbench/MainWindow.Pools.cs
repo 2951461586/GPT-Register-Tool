@@ -28,8 +28,6 @@ namespace SmsWorkbench
             return MailboxPoolFileStore.IsMailboxPoolLike(row.AccountType, row.MailboxProvider);
         }
 
-        private bool poolsRefreshRunning;
-
         /// <summary>
         /// Fire-and-forget refresh entry kept for existing sync callers; the
         /// actual work is async so the UI thread never waits on a backend call.
