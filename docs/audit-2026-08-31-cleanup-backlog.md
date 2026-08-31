@@ -37,11 +37,25 @@ UI 上没有对应输入项。已从配置读取并回退到 `PaymentMethods.Def
 `--update-proxy-country == "JP"`（approve 国家），`:97` 断言 `== "TR"`。
 这类"测试锁定错误行为"的情况，修 bug 时往往比 bug 本身更难发现——建议以后修完 bug 顺手看一眼有没有测试在断言旧行为。
 
-### 遗留（本次未动，待你决定）
+### 遗留（2026-08-31 下午已全部处置）
 
-- 5 个 `scripts/_diag_*.py` 仍被 git 跟踪（新规则已挡住**未来**新建的，但对已跟踪文件无效）。
-  若要一并移出版本控制：`git rm --cached scripts/_diag_*.py`（文件仍在磁盘上，只是不再跟踪）。
-- `pick_final_replacements.py` 的**历史**仍在公开仓库（fork 快照 ≤08-22 不含此提交，只需清主仓）。
+- **5 个 `scripts/_diag_*.py` 已 `git rm --cached`**：文件保留在磁盘（本地诊断仍可用），仅移出版本控制。
+  顺带查出这 5 个**也全在远端 main**，所以 filter-repo 实际剔除的是 **6 个路径**（原先以为只有 1 个）。
+- **历史已清**：filter-repo 剔除 6 个路径 + 强推，`main` → `6fc56c0`（173 → 171 提交）。
+  两分支 + 26 tag 逐个核验 0 命中，7 个含凭据 blob 已从对象库彻底消失（`git cat-file -t` 逐个确认）。
+
+**⚠️ 强推 ≠ 立即生效。** GitHub 的旧对象回收有延迟：强推 8 分钟后，旧 sha `ec28985`
+在主仓和 fork 上**仍可取到**含凭据文件。同类先例 `fa70bd0`（8 天前剔除）现在主仓 + fork
+全部 `No commit found`，说明最终会清掉。**需隔几天复查**：
+```
+gh api repos/2951461586/GPT-Register-Tool/commits/ec2898526556852fe09780c59c7afca044bd0cd1
+```
+
+**⚠️ 修正上午的一个判断。** 上午写「fork 快照 ≤08-22 不含此提交，只需清主仓」，隐含"fork 侧安全"。
+实测 188 个 fork 最后 push 最晚 `2026-08-25`，但**凭主仓 commit sha 在 fork 上照样取得到文件**（5/5 命中）——
+GitHub 的 fork 与主仓共享对象库。反过来，强推重写能清掉整个 network 的旧对象，所以**这轮清历史是有效的**。
+
+执行中把仓库搞毁过一次并恢复，全过程与根因见 `.workbuddy-ai/memory/git-history-rewrite.md`。
 
 ---
 
