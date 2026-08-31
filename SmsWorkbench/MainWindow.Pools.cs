@@ -34,10 +34,10 @@ namespace SmsWorkbench
         /// </summary>
         private void RefreshPools()
         {
-            _ = RefreshPoolsAsync();
+            _ = RefreshPoolsAsync(_lifetimeCts.Token);
         }
 
-        private async Task RefreshPoolsAsync()
+        private async Task RefreshPoolsAsync(CancellationToken ct = default)
         {
             if (poolsRefreshRunning)
                 return;
@@ -168,7 +168,7 @@ namespace SmsWorkbench
             return MailboxPoolFileStore.NormalizeEmailKey(email);
         }
 
-        private async Task LoadMailboxPoolAsync()
+        private async Task LoadMailboxPoolAsync(CancellationToken ct = default)
         {
             if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
             try
@@ -292,7 +292,7 @@ namespace SmsWorkbench
             return "";
         }
 
-        private async Task LoadSessionPoolAsync()
+        private async Task LoadSessionPoolAsync(CancellationToken ct = default)
         {
             if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
             try

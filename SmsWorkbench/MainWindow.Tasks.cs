@@ -24,7 +24,7 @@ namespace SmsWorkbench
         /// invariant is untouched. Surfaces missing interpreter/dependencies
         /// with fix hints instead of letting them surface as per-task failures.
         /// </summary>
-        internal async Task RunStartupDoctorProbeAsync()
+        internal async Task RunStartupDoctorProbeAsync(CancellationToken ct = default)
         {
             if (doctorProbeStarted)
                 return;
@@ -132,12 +132,12 @@ namespace SmsWorkbench
         }
 
         private void RunBackend(string taskName, List<string> args)
-            => RunUiTask(() => RunBackendAsync(taskName, args));
+            => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
         private void RunAccountBatchBackend(string taskName, List<string> args, string domain, int total)
-            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total));
+            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total, ct: _lifetimeCts.Token));
 
-        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0)
+        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, CancellationToken ct = default)
         {
             if (backendTasks.IsRunning)
             {
@@ -247,7 +247,7 @@ namespace SmsWorkbench
             }
         }
 
-        private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000)
+        private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000, CancellationToken ct = default)
         {
             Log("启动：python " + FormatBackendArgsForDisplay(args));
             return await backendTasks.RunForResultAsync(
@@ -286,9 +286,9 @@ namespace SmsWorkbench
         }
 
         private void DeleteSelected_Click(object sender, RoutedEventArgs e)
-            => RunUiTask(DeleteSelectedAsync);
+            => RunUiTask(() => DeleteSelectedAsync());
 
-        private async Task DeleteSelectedAsync()
+        private async Task DeleteSelectedAsync(CancellationToken ct = default)
         {
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;
@@ -338,7 +338,7 @@ namespace SmsWorkbench
                 : expected;
         }
 
-        private async Task<bool> ShowDeleteConfirmDialog(int count)
+        private async Task<bool> ShowDeleteConfirmDialog(int count, CancellationToken ct = default)
         {
             return await DialogFactory.ShowConfirmAsync(
                 this,

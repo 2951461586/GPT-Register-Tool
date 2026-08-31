@@ -16,6 +16,7 @@ namespace SmsWorkbench
         private readonly ISettingsService settingsService;
         private readonly IPaymentBatchService paymentBatchService;
         private readonly string rootDir;
+        private readonly CancellationTokenSource _lifetimeCts = new();
         private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
@@ -206,6 +207,15 @@ namespace SmsWorkbench
             ScopeFilter = "全部";
             RefreshPools();
             ApplySidebarCompact(false);
+            Closing += OnWindowClosing;
+        }
+
+        private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // Signal in-flight async operations (refresh / export / detail / payment …)
+            // to abort instead of touching the UI after the window is gone. We do not
+            // cancel the close itself — the window still shuts down.
+            _lifetimeCts.Cancel();
         }
 
         internal MainWindow(

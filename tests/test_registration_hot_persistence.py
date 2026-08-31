@@ -62,6 +62,10 @@ def _runtime_cfg(db_path):
     cfg = thaw(current_config_data())
     cfg["storage"] = dict(cfg.get("storage") or {})
     cfg["storage"]["sqlite_path"] = str(db_path)
+    # Isolate the durable operation journal (PaymentOperationStore) under tmp_path so
+    # the cross-process idempotency boundary does not leak state across test runs via
+    # the real runtime directory.
+    cfg.setdefault("runtime", {})["directory"] = str(db_path.parent)
     cfg["output"] = dict(cfg.get("output") or {})
     cfg["output"]["filename_pattern"] = "session_{email}_{timestamp}.json"
     cfg["account_health"] = {"post_registration_enabled": False}

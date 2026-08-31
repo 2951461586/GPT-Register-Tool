@@ -4,7 +4,7 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        private async Task<bool> ShowSmsBowerOneClickDialogAsync()
+        private async Task<bool> ShowSmsBowerOneClickDialogAsync(CancellationToken ct = default)
         {
             string apiKey = ResolveSmsBowerApiKey(settingsService.GetString("phone_reuse.smsbower.api_key"));
             if (string.IsNullOrWhiteSpace(apiKey))

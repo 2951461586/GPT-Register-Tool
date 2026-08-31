@@ -4,9 +4,9 @@ namespace SmsWorkbench
     {
         // Inbox view and mail detail dialog
         private void ShowInboxDialog(PoolRow row)
-            => RunUiTask(() => ShowInboxDialogAsync(row));
+            => RunUiTask(() => ShowInboxDialogAsync(row, _lifetimeCts.Token));
 
-        private async Task ShowInboxDialogAsync(PoolRow row)
+        private async Task ShowInboxDialogAsync(PoolRow row, CancellationToken ct = default)
         {
             var dialog = new Window
             {
@@ -77,7 +77,7 @@ namespace SmsWorkbench
 
             closeBtn.Click += (_, __) => dialog.Close();
 
-            async Task LoadEmails()
+            async Task LoadEmails(CancellationToken ct = default)
             {
                 if (IsCfWorkerRow(row) || IsReMailRow(row) || IsSmailrRow(row))
                 {
@@ -116,7 +116,7 @@ namespace SmsWorkbench
                 }
             }
 
-            refreshBtn.Click += (_, __) => RunUiTask(LoadEmails);
+            refreshBtn.Click += (_, __) => RunUiTask(() => LoadEmails());
             mailGrid.MouseDoubleClick += (_, __) =>
             {
                 if (mailGrid.SelectedItem is MailItem item)
@@ -130,7 +130,7 @@ namespace SmsWorkbench
             await LoadEmails();
         }
 
-        private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit)
+        private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit, CancellationToken ct = default)
         {
             var args = new List<string> { "--desktop-ipc", "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString(CultureInfo.InvariantCulture) };
             string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
