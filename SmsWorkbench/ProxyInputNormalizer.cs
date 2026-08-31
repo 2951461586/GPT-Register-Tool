@@ -122,9 +122,13 @@ namespace SmsWorkbench
         private static string NormalizeScheme(string scheme)
         {
             string normalized = (scheme ?? "http").Trim().ToLowerInvariant();
+            // Tolerate stray whitespace from copy-paste or IME half-state so
+            // "Socks 5h" / " socks5h " round-trip to the same canonical form.
+            normalized = Regex.Replace(normalized, @"\s+", "");
             if (normalized == "socks") normalized = "socks5";
             if (!SupportedSchemes.Contains(normalized, StringComparer.Ordinal))
-                throw new FormatException("代理协议仅支持 http、https、socks5 或 socks5h。");
+                throw new FormatException(
+                    $"代理协议「{scheme}」不支持，仅接受 http、https、socks5 或 socks5h。");
             return normalized;
         }
 

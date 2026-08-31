@@ -43,4 +43,33 @@ public sealed class ProxyInputNormalizerTests
                 "us.ipwo.net:7878:account_custom_zone_US:password\n" +
                 "as.ipwo.net:7878:account_custom_zone_JP:password"));
     }
+
+    [Fact]
+    public void InvalidSchemeErrorEchoesTheOffendingValue()
+    {
+        // Without the echo the user has to guess which token the validator
+        // disliked. With it, the message reads "代理协议「socks4」不支持..."
+        // and the offender is obvious from the dialog.
+        FormatException exception = Assert.Throws<FormatException>(
+            () => ProxyInputNormalizer.Normalize("socks4://host:1080"));
+        Assert.Contains("socks4", exception.Message);
+    }
+
+    [Fact]
+    public void InternalWhitespaceInSchemeIsTolerated()
+    {
+        // Copy-paste or IME half-state can leave "Socks 5h" with a stray
+        // space. It must still normalize to the canonical scheme.
+        Assert.Equal(
+            "socks5h://host:1080",
+            ProxyInputNormalizer.Normalize("Socks 5h://host:1080"));
+    }
+
+    [Fact]
+    public void MixedCaseSocks5hNormalizesToLowercase()
+    {
+        Assert.Equal(
+            "socks5h://host:1080",
+            ProxyInputNormalizer.Normalize("SOCKS5h://host:1080"));
+    }
 }
