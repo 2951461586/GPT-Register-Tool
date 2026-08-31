@@ -23,8 +23,15 @@ import precommit_guard  # noqa: E402
 
 
 def run_guard_on(tmp_path: Path, filename: str, content: str) -> list[str]:
-    """Write a file under the repo and return guard findings for it."""
-    target = ROOT / "runtime" / filename
+    """Write a file under tmp_path and return guard findings for it.
+
+    Previously this wrote into the repo's runtime/ directory — the production
+    data area (accounts.sqlite3, browser_profiles/). Leftover pytest logs there
+    (runtime/_pytest_storage_split.log) contain deliberately fake ba_token
+    values that make sensitive_field_scan fail, i.e. the test was reddening an
+    unrelated gate. tmp_path works now that scan_file tolerates out-of-repo paths.
+    """
+    target = Path(tmp_path) / filename
     target.write_text(content, encoding="utf-8")
     try:
         return precommit_guard.scan_file(target, precommit_guard.load_sensitive_keys())
