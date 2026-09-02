@@ -213,7 +213,10 @@ class RegistrationDriverTests(unittest.TestCase):
                     )
                 browser_run.assert_not_called()
 
-    @patch("sms_tool.registration_drivers.playwright.create_browser_session")
+    # 注：这个 patch 历史上就拦不到默认参数（session_factory=create_browser_session
+    # 在函数定义时已绑定原函数对象）。测试真正生效的是下面显式传入的 session_factory。
+    # 保留 patch 仅为保证符号存在性；拆分后目标改到 orchestrator 的副本。
+    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.create_browser_session")
     def test_missing_playwright_dependency_is_sanitized(self, session_cls):
         session_cls.side_effect = RuntimeError("browser_dependency_missing:playwright")
         mailbox = type("Mailbox", (), {

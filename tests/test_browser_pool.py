@@ -296,7 +296,10 @@ def test_pool_timeout_raises_when_no_slot_frees_up(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def reset_shared_pool():
-    from sms_tool.registration_drivers import playwright as pw
+    # 必须指向真正持有这些全局的模块：_BROWSER_POOL / _BROWSER_POOL_KEY 是
+    # flow_steps 的模块级可变状态（由 _browser_session_scope 里的 global 语句改写）。
+    # 拆包后薄壳不再是这些状态的宿主，读写薄壳上的同名属性会拿到导入时的快照。
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
 
     pw._BROWSER_POOL = None
     pw._BROWSER_POOL_KEY = None
@@ -306,7 +309,10 @@ def reset_shared_pool():
 
 
 def test_scope_bypasses_pool_when_disabled():
-    from sms_tool.registration_drivers import playwright as pw
+    # 必须指向真正持有这些全局的模块：_BROWSER_POOL / _BROWSER_POOL_KEY 是
+    # flow_steps 的模块级可变状态（由 _browser_session_scope 里的 global 语句改写）。
+    # 拆包后薄壳不再是这些状态的宿主，读写薄壳上的同名属性会拿到导入时的快照。
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
 
     factory = RecordingFactory()
     with pw._browser_session_scope(
@@ -320,7 +326,10 @@ def test_scope_bypasses_pool_when_disabled():
 
 
 def test_scope_uses_a_process_wide_pool_when_enabled():
-    from sms_tool.registration_drivers import playwright as pw
+    # 必须指向真正持有这些全局的模块：_BROWSER_POOL / _BROWSER_POOL_KEY 是
+    # flow_steps 的模块级可变状态（由 _browser_session_scope 里的 global 语句改写）。
+    # 拆包后薄壳不再是这些状态的宿主，读写薄壳上的同名属性会拿到导入时的快照。
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
 
     config = {"registration": {"browser_process_pool": {"enabled": True, "max_concurrent": 2}}}
     factory = RecordingFactory()
@@ -339,7 +348,10 @@ def test_scope_uses_a_process_wide_pool_when_enabled():
 
 
 def test_scope_rebuilds_pool_when_driver_changes():
-    from sms_tool.registration_drivers import playwright as pw
+    # 必须指向真正持有这些全局的模块：_BROWSER_POOL / _BROWSER_POOL_KEY 是
+    # flow_steps 的模块级可变状态（由 _browser_session_scope 里的 global 语句改写）。
+    # 拆包后薄壳不再是这些状态的宿主，读写薄壳上的同名属性会拿到导入时的快照。
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
 
     config = {"registration": {"browser_process_pool": {"enabled": True}}}
     factory = RecordingFactory()

@@ -77,7 +77,7 @@ def browser_fetch_for_account(
     fetch_fn: Any = None
     try:
         from .registration_drivers.external_sessions import create_browser_session
-        from .registration_drivers.playwright import _wait_for_challenge_clear
+        from .registration_drivers.browser_flow import _wait_for_challenge_clear
 
         session = create_browser_session(
             driver,
