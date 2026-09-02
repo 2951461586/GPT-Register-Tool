@@ -537,10 +537,6 @@ def _normalize_email(value):
     return text if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text) else ""
 
 
-def _normalize_domain_filter(value):
-    text = str(value or "").strip().lower().lstrip("@")
-    return text if re.match(r"^[a-z0-9.-]+\.[a-z]{2,}$", text) else ""
-
 
 def _cpa_error_text(payload, status_code):
     if isinstance(payload, dict):

@@ -24,52 +24,6 @@ def _extract_access_token(data):
     return ""
 
 
-def _extract_refresh_token(data):
-    """Return an OpenAI/Codex refresh token, avoiding mailbox provider RTs."""
-    if not isinstance(data, dict):
-        return ""
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
-    session = auth_session.get("session") if isinstance(auth_session.get("session"), dict) else {}
-    codex_session = data.get("codex_session") if isinstance(data.get("codex_session"), dict) else {}
-    candidates = (
-        data.get("oauth_refresh_token"),
-        data.get("refresh_token"),
-        data.get("refreshToken"),
-        codex_session.get("refresh_token"),
-        codex_session.get("refreshToken"),
-        auth_session.get("refreshToken"),
-        auth_session.get("refresh_token"),
-        session.get("refreshToken"),
-        session.get("refresh_token"),
-    )
-    for token in candidates:
-        token = str(token or "").strip()
-        if token.startswith(("rt.", "rt_")):
-            return token
-    return ""
-
-
-def _extract_id_token(data):
-    if not isinstance(data, dict):
-        return ""
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
-    session = auth_session.get("session") if isinstance(auth_session.get("session"), dict) else {}
-    codex_session = data.get("codex_session") if isinstance(data.get("codex_session"), dict) else {}
-    candidates = (
-        data.get("id_token"),
-        data.get("idToken"),
-        codex_session.get("id_token"),
-        codex_session.get("idToken"),
-        auth_session.get("idToken"),
-        auth_session.get("id_token"),
-        session.get("idToken"),
-        session.get("id_token"),
-    )
-    for token in candidates:
-        token = str(token or "").strip()
-        if token:
-            return token
-    return ""
 
 
 def _jwt_claims(token):

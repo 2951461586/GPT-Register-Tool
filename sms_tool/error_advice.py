@@ -40,15 +40,4 @@ _ERROR_ADVICE: dict[str, str] = {
 }
 
 
-def advice_for(error_code: str) -> Optional[str]:
-    """Return the advice string for ``error_code`` or ``None`` if undocumented."""
-    return _ERROR_ADVICE.get(error_code)
 
-
-def format_advice(error_code: str, detail: Optional[str] = None) -> str:
-    """Render a human-readable, actionable message for ``error_code``."""
-    advice = _ERROR_ADVICE.get(error_code)
-    if advice is None:
-        base = f"未知错误码 {error_code!r}（尚未登记可操作建议）"
-        return f"{base}：{detail}" if detail else base
-    return f"{error_code}: {advice}" + (f" | 细节: {detail}" if detail else "")

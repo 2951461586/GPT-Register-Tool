@@ -16,7 +16,8 @@ def _ok(name):
 class DoctorUnitTests(unittest.TestCase):
     def test_all_ok_report_is_green(self):
         probes = {name: _ok(name) for name in
-                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl")}
+                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl",
+                   "config_unread_keys")}
         report = doctor.run_doctor(
             {
                 "proxy": {"default": "http://p:1", "pool": []},
@@ -31,7 +32,8 @@ class DoctorUnitTests(unittest.TestCase):
 
     def test_missing_required_dependency_fails(self):
         probes = {name: _ok(name) for name in
-                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl")}
+                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl",
+                   "config_unread_keys")}
         probes["node"] = lambda: doctor._check("node", "fail", "not found", "install node")
         report = doctor.run_doctor({}, "", probes=probes)
         self.assertFalse(report["ok"])
@@ -39,7 +41,8 @@ class DoctorUnitTests(unittest.TestCase):
 
     def test_bundled_fallback_config_is_flagged(self):
         probes = {name: _ok(name) for name in
-                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl")}
+                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl",
+                   "config_unread_keys")}
         bundled = doctor.__file__.replace("doctor.py", "config.json")
         report = doctor.run_doctor({}, bundled, probes=probes)
         source_check = next(item for item in report["checks"] if item["name"] == "config_source")
@@ -48,7 +51,8 @@ class DoctorUnitTests(unittest.TestCase):
 
     def test_missing_proxy_and_mailbox_are_warnings_not_failures(self):
         probes = {name: _ok(name) for name in
-                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl")}
+                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl",
+                   "config_unread_keys")}
         report = doctor.run_doctor(
             {"proxy": {}, "email_registration": {"token_file": "does-not-exist.txt"}},
             "F:/repo/config.json",

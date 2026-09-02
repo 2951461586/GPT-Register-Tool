@@ -499,13 +499,6 @@ def probe_agent_identity(auth_json, proxy="", timeout=90, model="gpt-5.5", dispo
     }
 
 
-def _agent_runtime_deleted(result):
-    text = " ".join([
-        str((result or {}).get("error") or ""),
-        str((result or {}).get("message") or ""),
-    ]).lower()
-    return "deleted_agent_runtime_id" in text
-
 
 def validate_agent_identity(value):
     identity = _identity_dict(value)

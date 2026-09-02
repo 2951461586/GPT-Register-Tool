@@ -115,8 +115,9 @@ namespace SmsWorkbench
             return countries.Length == 1 ? countries[0] : "";
         }
 
-        public static string NormalizeListText(string value, string defaultScheme = "http")
-            => string.Join(LineSeparator, NormalizeList(value, defaultScheme));
+        // NormalizeListText() removed (2026-09-02, round 6): zero callers in the
+        // app and zero tests. Differs from InferCountryFromPool, which the
+        // test-suite does exercise and is therefore kept.
 
         private static string NormalizeUrlForm(string scheme, string remainder)
         {

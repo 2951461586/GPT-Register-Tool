@@ -1325,15 +1325,6 @@ def no_kakao_method_error(reason: str) -> bool:
     )
 
 
-def terminal_checkout_shape_error(reason: str) -> bool:
-    return is_checkout_shape_error(reason) and not no_kakao_method_error(reason)
-
-
-def checkout_retry_error(reason: str) -> bool:
-    text = str(reason or "").lower()
-    if "chatgpt /me failed" in text:
-        return not is_account_error(reason)
-    return "checkout failed" in text and not is_account_error(reason)
 
 
 def kakao_result_contract(

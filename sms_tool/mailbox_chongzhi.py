@@ -102,38 +102,6 @@ def _parse_chongzhi_credential_line(line):
     return (email, password, client_id, refresh_token)
 
 
-def parse_chongzhi_file(path):
-    """Parse a chongzhi.art credential file into MailboxAccount records.
-
-    Each line: email--------password----client_id----refresh_token
-    """
-    from pathlib import Path
-    from .mailbox_types import MailboxAccount
-
-    records = []
-    cred_path = Path(path)
-    if not cred_path.exists():
-        return records
-
-    for line_no, raw in enumerate(cred_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
-        parsed = _parse_chongzhi_credential_line(raw)
-        if not parsed:
-            if raw.strip() and not raw.strip().startswith("#"):
-                print(f"[!] Skip malformed chongzhi line {cred_path}:{line_no}")
-            continue
-
-        email, password, client_id, refresh_token = parsed
-        records.append(MailboxAccount(
-            email=email,
-            password=password,
-            refresh_token=refresh_token,
-            source=str(cred_path),
-            provider="chongzhi",
-            token=client_id,
-        ))
-
-    return records
-
 
 def fetch_chongzhi_messages(email, password, folder="all", proxy=None, timeout=None, email_cfg=None):
     """Fetch messages from chongzhi.art API.

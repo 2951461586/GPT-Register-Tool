@@ -5,11 +5,13 @@
         WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolVisibility"/>
-    <Style x:Key="FieldLabel" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Margin" Value="0,0,0,4"/>
-    </Style>
+    <!-- FieldLabel deliberately NOT redefined here (removed 2026-09-02, round 6).
+         A local copy used to shadow the App.xaml one. They set identical values,
+         but only the App.xaml style carries
+         BasedOn="{StaticResource {x:Type TextBlock}}", so field labels in this
+         window silently lost the global TextBlock base style (font family et al)
+         and rendered differently from PaymentBatchWindow. Application-level
+         resources are visible in every Window, so the shared style applies. -->
     <Style x:Key="Input" TargetType="Control">
       <Setter Property="Margin" Value="0,0,0,10"/>
       <Setter Property="Background" Value="{DynamicResource PanelBg}"/>

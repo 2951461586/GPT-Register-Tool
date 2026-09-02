@@ -166,6 +166,31 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
     return checks
 
 
+def _probe_unread_config_keys() -> dict[str, str]:
+    """Report config values that no code path reads.
+
+    These are the worst kind of configuration: they look like they are doing
+    something, they survive review because the key name is plausible, and they
+    quietly do nothing. Reported as a warning, never a failure -- an unread key
+    is untidy, not broken, and failing would train people to ignore --doctor.
+    """
+    try:
+        from .config_usage import unread_config_keys
+
+        unread = unread_config_keys()
+    except Exception as exc:  # pragma: no cover - advisory only
+        return _check("config_unread_keys", "warn", f"could not inspect config usage: {exc}")
+    if not unread:
+        return _check("config_unread_keys", "ok", "every configured key is read somewhere")
+    return _check(
+        "config_unread_keys",
+        "warn",
+        "%d key(s) set but never read: %s"
+        % (len(unread), ", ".join(item.path for item in unread[:6]) + ("..." if len(unread) > 6 else "")),
+        "remove them or wire them up; run with --json for the full list",
+    )
+
+
 def run_doctor(
     config: Mapping[str, Any] | None = None,
     config_source: str = "",
@@ -182,6 +207,9 @@ def run_doctor(
         ("pyotp", lambda: _probe_import("pyotp", "pyotp", "TOTP 2FA enrollment", required=False)),
         ("qrcode", lambda: _probe_import("qrcode", "qrcode", "UPI QR rendering", required=False)),
         ("nacl", lambda: _probe_import("nacl", "pynacl", "Agent Identity signing", required=False)),
+        # Advisory, and injectable like every other probe: it walks the whole
+        # source tree, so tests must be able to stub it out.
+        ("config_unread_keys", _probe_unread_config_keys),
     ]
     checks: list[dict[str, str]] = []
     for name, probe in default_probes:
@@ -190,12 +218,34 @@ def run_doctor(
     checks.extend(_probe_config(config or {}, config_source))
     failed = sum(1 for item in checks if item["status"] == "fail")
     warned = sum(1 for item in checks if item["status"] == "warn")
+    # Full list for --json: the console line is truncated, and 60+ key names
+    # would bury every other check.
+    unread_detail = next(
+        (item for item in checks if item["name"] == "config_unread_keys"), None
+    )
     return {
         "ok": failed == 0,
         "failed": failed,
         "warned": warned,
         "checks": checks,
+        "unread_config_keys": (
+            [
+                {"path": item.path, "shards": list(item.shards), "in_example": item.in_example}
+                for item in unread_config_keys_safe()
+            ]
+            if unread_detail and unread_detail["status"] == "warn"
+            else []
+        ),
     }
+
+
+def unread_config_keys_safe() -> list:
+    try:
+        from .config_usage import unread_config_keys
+
+        return list(unread_config_keys())
+    except Exception:  # pragma: no cover - advisory only
+        return []
 
 
 def print_doctor_report(report: Mapping[str, Any]) -> None:

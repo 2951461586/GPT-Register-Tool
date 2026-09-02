@@ -324,39 +324,9 @@ namespace SmsWorkbench
             }
         }
 
-        private void AddDetailRow(Grid parent, int row, string label, string value)
-        {
-            var labelBlock = new TextBlock
-            {
-                Text = label,
-                Margin = new Thickness(10, 7, 10, 7),
-                VerticalAlignment = VerticalAlignment.Top,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
-            };
-            Grid.SetRow(labelBlock, row);
-            Grid.SetColumn(labelBlock, 0);
-            parent.Children.Add(labelBlock);
-
-            bool longValue = label.Contains("链接") || (value ?? "").StartsWith("http", StringComparison.OrdinalIgnoreCase);
-            var valueBox = new TextBox
-            {
-                Text = value ?? "",
-                Margin = new Thickness(0, 4, 10, 4),
-                IsReadOnly = true,
-                BorderThickness = longValue ? new Thickness(1) : new Thickness(0),
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                TextWrapping = longValue ? TextWrapping.Wrap : TextWrapping.NoWrap,
-                HorizontalScrollBarVisibility = longValue ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = longValue ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
-                MinHeight = longValue ? 58 : 0,
-                MaxHeight = longValue ? 96 : double.PositiveInfinity,
-                Padding = longValue ? new Thickness(6, 4, 6, 4) : new Thickness(0)
-            };
-            Grid.SetRow(valueBox, row);
-            Grid.SetColumn(valueBox, 1);
-            parent.Children.Add(valueBox);
-        }
+        // AddDetailRow removed (2026-09-02, round 6): no caller. The account
+        // detail panel is built from XAML bindings now; this was the last
+        // code-behind row builder.
 
         private async Task<string> BuildAccountDetailAsync(PoolRow row, CancellationToken ct = default)
         {

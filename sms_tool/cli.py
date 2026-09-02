@@ -401,6 +401,16 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     install_safe_stdio()
+    # Wire the rotating file logger (`runtime/logs/sms_tool.log`). Without this
+    # the module is dead code and `logger.*` calls vanish: the codebase reports
+    # through print(), so nothing is ever persisted and no exception carries a
+    # traceback. `to_console=False` is deliberate -- stdout is the WPF host's
+    # IPC channel (the `@@SMSWORKBENCH_V2@@` envelope plus the "Saved session:"
+    # marker), and a StreamHandler would inject formatter-decorated lines into
+    # that contract.
+    from .logging_setup import configure_logging
+
+    configure_logging(to_console=False)
 
     parser = build_parser()
     args = parser.parse_args()
@@ -824,9 +834,6 @@ def _export_codex_json(args):
     return account_commands.export_codex_json(args, _account_command_context())
 
 
-def _importable_account_rows():
-    return account_commands.importable_account_rows(_account_command_context())
-
 
 def _import_cpa(args):
     return account_commands.import_cpa(args, _account_command_context())
@@ -896,21 +903,6 @@ def _test_payment_proxies(args):
 def _extract_payment_link(args):
     return payment_commands.extract_payment_link(args, _payment_command_context())
 
-
-def _resolve_cli_payment_route(args, payment_method):
-    try:
-        route = payment_commands.resolve_payment_route(
-            args,
-            payment_method,
-            _payment_command_context(),
-        )
-    except ValueError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
-        raise SystemExit(2) from exc
-    if not route.get("ok"):
-        print(json.dumps(route, ensure_ascii=False, indent=2))
-        raise SystemExit(3)
-    return route
 
 
 def _convert_session_json(args):

@@ -86,43 +86,12 @@ namespace SmsWorkbench
             }
         }
 
-        private async void RerunFailed_Click(object sender, RoutedEventArgs e)
-        {
-            var failedRows = allRows.Where(r =>
-                (r.Status.Contains("失败") || r.Status.Contains("待处理") || r.Status.Contains('缺'))
-                && IsMailboxPoolLikeRow(r)
-                && !string.IsNullOrWhiteSpace(r.RawLine)).ToList();
-
-            if (failedRows.Count == 0)
-            {
-                MessageBox.Show("没有找到需要重注册的失败账号。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取 access token→存 session 入库",
-                "确认重注册", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-
-            MailboxFileSelection? mailbox =
-                await TryCreateMailboxFileAsync(failedRows).ConfigureAwait(true);
-            if (mailbox is null)
-            {
-                MessageBox.Show("失败记录缺少可用邮箱凭据，无法重新注册。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var plan = BackendCommandPlanner.CreateRerunFailedRegistration(
-                mailbox.Arg,
-                mailbox.File,
-                mailbox.Count,
-                GetRegistrationProxyPool());
-            RunBackend(plan.TaskName, plan.Arguments.ToList());
-        }
-
-        private void RebuildSqlite_Click(object sender, RoutedEventArgs e)
-        {
-            var plan = BackendCommandPlanner.CreateRebuildSqlite();
-            RunBackend(plan.TaskName, plan.Arguments.ToList());
-        }
+        // RerunFailed_Click / RebuildSqlite_Click removed (2026-09-02, round 6):
+        // dead event handlers -- no XAML element subscribes to either. They were
+        // also the only `async void` in this file. The BackendCommandPlanner
+        // builders they called (CreateRerunFailedRegistration /
+        // CreateRebuildSqlite) are kept: the Contracts side is unit-tested and is
+        // the piece to wire up if these actions ever return to the UI.
 
         private void AccountGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -271,7 +240,7 @@ namespace SmsWorkbench
         private void RefreshPoolsAfterHotPersistence(string line)
         {
             if (string.IsNullOrWhiteSpace(line)
-                || !line.Contains("Saved session:", StringComparison.OrdinalIgnoreCase))
+                || !line.Contains(BackendTextMarkers.SavedSession, StringComparison.OrdinalIgnoreCase))
                 return;
 
             DateTime now = DateTime.UtcNow;

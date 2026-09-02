@@ -1,8 +1,7 @@
 {
   "chatgpt": {
     "auth_base_url": "https://auth.openai.com",
-    "chat_base_url": "https://chatgpt.com",
-    "chat_web_client_id": "app_X8zY6vW2pQ9tR3dE7nK1jL5gH"
+    "chat_base_url": "https://chatgpt.com"
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
   "proxy": {
@@ -47,16 +46,16 @@
         "backend": "playwright",
         "api_token": "",
         "workspace_id": "",
-          "project_id": "",
-          "profile_id": "",
-          "create_path": "/browser/create",
-          "create_method": "POST",
-          "open_path": "/browser/open",
-          "open_method": "POST",
-          "close_path": "/browser/close",
-          "close_method": "POST",
-          "delete_path": "/browser/delete",
-          "delete_method": "POST",
+        "project_id": "",
+        "profile_id": "",
+        "create_path": "/browser/create",
+        "create_method": "POST",
+        "open_path": "/browser/open",
+        "open_method": "POST",
+        "close_path": "/browser/close",
+        "close_method": "POST",
+        "delete_path": "/browser/delete",
+        "delete_method": "POST",
         "delete_profile_after_run": true,
         "keep_browser_open": false,
         "start_url": "https://chatgpt.com/auth/login"
@@ -100,7 +99,12 @@
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
-    "stage_concurrency": { "auth": 1, "network": 4, "at_probe": 4 },
+    "stage_concurrency": {
+      "auth": 1,
+      "network": 4,
+      "at_probe": 4
+    },
+    "stage_timeouts": {},
     "pulse": {
       "enabled": true,
       "wave_size": 4,
@@ -118,12 +122,13 @@
   },
   "email_registration": {
     "registration_mode": "passwordless",
-    "use_as_username": false,
     "token_file": "mailbox_tokens.txt",
     "auth_fingerprint": {
       "mode": "fixed",
       "profile": "chrome146",
-      "profiles": ["chrome146"]
+      "profiles": [
+        "chrome146"
+      ]
     },
     "remail": {
       "enabled": false,
@@ -132,18 +137,17 @@
       "project_id": 2,
       "service_mode": "purchase",
       "supply": "private_first",
-        "email_suffix": "outlook.com",
-        "otp_poll_interval": 1,
-        "batch_timeout": 200,
-        "exclude_dead_history": true,
-        "dead_registry_file": "runtime/remail_dead_accounts.json",
-        "supplier_dead_rate_stop_threshold": 0.25
+      "email_suffix": "outlook.com",
+      "otp_poll_interval": 1,
+      "batch_timeout": 200,
+      "exclude_dead_history": true,
+      "dead_registry_file": "runtime/remail_dead_accounts.json",
+      "supplier_dead_rate_stop_threshold": 0.25
     },
     "smailr": {
       "enabled": false,
       "base_url": "https://smailr.com",
       "api_key": "",
-      "domains": ["smailr.com", "loc.cc", "mail.nodeloc.cc", "nodeloc.cc"],
       "default_domain": "smailr.com",
       "domain_ids": {},
       "reuse_existing_on_level_error": true,
@@ -157,12 +161,9 @@
     "sentinel_prewarm_window": 0,
     "sentinel_circuit_failures": 3,
     "sentinel_circuit_cooldown_seconds": 60,
-    "remail_otp_issued_after_grace_seconds": 90,
     "remail_otp_resend_after_seconds": 30,
-    "smailr_otp_issued_after_grace_seconds": 10,
     "cfworker_otp_settle_seconds": 3,
     "cfworker_timeout_seconds": 30,
-    "cfworker_otp_issued_after_grace_seconds": 10,
     "cfworker_poll_proxy": true,
     "cfworker_direct_fallback": false,
     "cfworker_url": "https://tempmail.example.com",
@@ -223,20 +224,10 @@
     "preflight_proxy_check": true,
     "proxy_probe_timeout_seconds": 12,
     "rotate_proxy_sessions": true,
-    "checkout_only_long_url": false,
-    "stop_after_pm_create": false,
-    "link_mode": "chatgpt_checkout",
     "checkout_ui_mode": "hosted",
-    "redirect_url_format": "any",
-    "use_elements_session": true,
-    "approve_missing_redirect": false,
-    "redirect_poll_timeout_seconds": 30,
-    "redirect_poll_interval_seconds": 1,
-    "resolve_ba_redirect": false,
     "redirect_impersonate": "chrome136",
     "require_ba_token": false,
     "explicit_proxy_overrides_stage_proxies": false,
-    "disable_promo_on_confirm_decline": false,
     "billing_regions": [
       "US"
     ],
@@ -279,25 +270,18 @@
     },
     "promotion_taxes": false,
     "promo_campaign_id": "plus-1-month-free",
-    "confirm_style": "inline_payment_method_data",
-    "fallback_to_hosted_checkout_on_blocked": true,
-    "max_regenerate_workers": 1,
-    "regenerate_delay_seconds": 3,
-    "reference_confirm_mode": false,
-    "fast_reference_confirm": false,
-    "refresh_tax_region": true,
-    "fallback_to_stripe_redirect_on_missing_hosted": false,
-    "hosted_usd_fallback_on_422": false,
-    "allow_chatgpt_checkout_fallback": true,
-    "hosted_usd_fallback_on_non_hosted": false,
     "link_generation_type": "hosted_long_url"
   },
   "protocol_payments": {
-      "proxy_pool": [],
-      "proxy_pools": {
-        "checkout": ["us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"],
-        "approve": ["as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD"]
-      },
+    "proxy_pool": [],
+    "proxy_pools": {
+      "checkout": [
+        "us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
+      ],
+      "approve": [
+        "as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD"
+      ]
+    },
     "egress_check": {
       "enabled": true,
       "timeout_seconds": 12,
@@ -321,30 +305,187 @@
     "state_file": "runtime/payment_link_runs.jsonl",
     "timeout_seconds": 900,
     "batch": {
-      "method_workers": { "momo": 2, "kakao": 2, "gopay": 2, "gcash": 2, "grabpay": 2, "paypal": 4 },
+      "method_workers": {
+        "momo": 2,
+        "kakao": 2,
+        "gopay": 2,
+        "gcash": 2,
+        "grabpay": 2,
+        "paypal": 4
+      },
       "pause_on_canary_failure": true,
       "canary_pause_seconds": 21600
     },
     "matrix": {
       "cells": [
-        { "name": "gopay_jp", "payment_method": "gopay", "registration_country": "", "checkout_country": "ID", "promotion_country": "TH", "provider_country": "ID", "approve_country": "JP", "redirect_country": "ID", "sample_size": 1 },
-        { "name": "gopay_tr", "payment_method": "gopay", "registration_country": "", "checkout_country": "ID", "promotion_country": "TH", "provider_country": "ID", "approve_country": "TR", "redirect_country": "ID", "sample_size": 1 },
-        { "name": "ph_gcash", "payment_method": "gcash", "registration_country": "PH", "checkout_country": "PH", "provider_country": "PH", "approve_country": "PH", "redirect_country": "PH", "sample_size": 1 },
-        { "name": "ph_grabpay", "payment_method": "grabpay", "registration_country": "PH", "checkout_country": "PH", "provider_country": "PH", "approve_country": "PH", "redirect_country": "PH", "sample_size": 1 },
-          { "name": "vn_sticky", "payment_method": "momo", "registration_country": "VN", "checkout_country": "VN", "promotion_country": "VN", "provider_country": "VN", "approve_country": "VN", "redirect_country": "VN", "strategy": "custom_promo", "sample_size": 5 },
-          { "name": "kr_kakao", "payment_method": "kakao", "registration_country": "KR", "checkout_country": "KR", "promotion_country": "VN", "provider_country": "KR", "approve_country": "KR", "redirect_country": "KR", "sample_size": 5 }
+        {
+          "name": "gopay_jp",
+          "payment_method": "gopay",
+          "registration_country": "",
+          "checkout_country": "ID",
+          "promotion_country": "TH",
+          "provider_country": "ID",
+          "approve_country": "JP",
+          "redirect_country": "ID",
+          "sample_size": 1
+        },
+        {
+          "name": "gopay_tr",
+          "payment_method": "gopay",
+          "registration_country": "",
+          "checkout_country": "ID",
+          "promotion_country": "TH",
+          "provider_country": "ID",
+          "approve_country": "TR",
+          "redirect_country": "ID",
+          "sample_size": 1
+        },
+        {
+          "name": "ph_gcash",
+          "payment_method": "gcash",
+          "registration_country": "PH",
+          "checkout_country": "PH",
+          "provider_country": "PH",
+          "approve_country": "PH",
+          "redirect_country": "PH",
+          "sample_size": 1
+        },
+        {
+          "name": "ph_grabpay",
+          "payment_method": "grabpay",
+          "registration_country": "PH",
+          "checkout_country": "PH",
+          "provider_country": "PH",
+          "approve_country": "PH",
+          "redirect_country": "PH",
+          "sample_size": 1
+        },
+        {
+          "name": "vn_sticky",
+          "payment_method": "momo",
+          "registration_country": "VN",
+          "checkout_country": "VN",
+          "promotion_country": "VN",
+          "provider_country": "VN",
+          "approve_country": "VN",
+          "redirect_country": "VN",
+          "strategy": "custom_promo",
+          "sample_size": 5
+        },
+        {
+          "name": "kr_kakao",
+          "payment_method": "kakao",
+          "registration_country": "KR",
+          "checkout_country": "KR",
+          "promotion_country": "VN",
+          "provider_country": "KR",
+          "approve_country": "KR",
+          "redirect_country": "KR",
+          "sample_size": 5
+        }
       ]
     },
     "methods": {
-      "ideal": { "proxy": "", "timeout_seconds": 900 },
-      "pix": { "proxy": "", "timeout_seconds": 900 },
-        "gopay": { "flow_profile": "wallet_redirect", "stage_routes": { "auth_gate": { "pool": "checkout", "country": "ID" }, "checkout": { "pool": "checkout", "country": "ID" }, "promotion": { "pool": "approve", "country": "TH" }, "stripe_init": { "pool": "checkout", "country": "ID" }, "payment_method": { "pool": "checkout", "country": "ID" }, "confirm": { "pool": "checkout", "country": "ID" }, "approve": { "pool": "approve", "country": "JP" }, "poll": { "pool": "checkout", "country": "ID" }, "redirect": { "pool": "checkout", "country": "ID" } }, "checkout_proxy_pool": [], "approve_proxy_pool": [], "promotion_proxy": "", "promotion_update": true, "stage_proxy_countries": { "checkout": "ID", "promotion": "TH", "provider": "ID", "approve": "JP", "redirect": "ID" }, "timeout_seconds": 900, "require_zero": true, "rotate_proxy_sessions": true, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
-      "gcash": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
-      "grabpay": { "proxy": "", "timeout_seconds": 900, "require_zero": false, "max_approve_attempts": 6, "max_poll_attempts": 25, "poll_interval_seconds": 2 },
-      "kakao": { "proxy": "", "timeout_seconds": 900 },
-      "blik": { "proxy": "", "timeout_seconds": 900 },
-      "twint": { "proxy": "", "timeout_seconds": 900 },
-      "direct_card": { "proxy": "", "timeout_seconds": 900, "currency": "", "promo_campaign_id": "plus-1-month-free" },
+      "ideal": {
+        "proxy": "",
+        "timeout_seconds": 900
+      },
+      "pix": {
+        "proxy": "",
+        "timeout_seconds": 900
+      },
+      "gopay": {
+        "flow_profile": "wallet_redirect",
+        "stage_routes": {
+          "auth_gate": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "checkout": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "promotion": {
+            "pool": "approve",
+            "country": "TH"
+          },
+          "stripe_init": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "payment_method": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "confirm": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "approve": {
+            "pool": "approve",
+            "country": "JP"
+          },
+          "poll": {
+            "pool": "checkout",
+            "country": "ID"
+          },
+          "redirect": {
+            "pool": "checkout",
+            "country": "ID"
+          }
+        },
+        "checkout_proxy_pool": [],
+        "approve_proxy_pool": [],
+        "promotion_proxy": "",
+        "promotion_update": true,
+        "stage_proxy_countries": {
+          "checkout": "ID",
+          "promotion": "TH",
+          "provider": "ID",
+          "approve": "JP",
+          "redirect": "ID"
+        },
+        "timeout_seconds": 900,
+        "require_zero": true,
+        "rotate_proxy_sessions": true,
+        "max_approve_attempts": 6,
+        "max_poll_attempts": 25,
+        "poll_interval_seconds": 2
+      },
+      "gcash": {
+        "proxy": "",
+        "timeout_seconds": 900,
+        "require_zero": false,
+        "max_approve_attempts": 6,
+        "max_poll_attempts": 25,
+        "poll_interval_seconds": 2
+      },
+      "grabpay": {
+        "proxy": "",
+        "timeout_seconds": 900,
+        "require_zero": false,
+        "max_approve_attempts": 6,
+        "max_poll_attempts": 25,
+        "poll_interval_seconds": 2
+      },
+      "kakao": {
+        "proxy": "",
+        "timeout_seconds": 900
+      },
+      "blik": {
+        "proxy": "",
+        "timeout_seconds": 900
+      },
+      "twint": {
+        "proxy": "",
+        "timeout_seconds": 900
+      },
+      "direct_card": {
+        "proxy": "",
+        "timeout_seconds": 900,
+        "currency": "",
+        "promo_campaign_id": "plus-1-month-free"
+      },
       "momo": {
         "proxy": "",
         "timeout_seconds": 900,
@@ -355,7 +496,10 @@
         "stripe_profile": {
           "api_version": "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1",
           "runtime_version": "fed52f3bc6",
-          "client_betas": ["custom_checkout_server_updates_1", "custom_checkout_manual_approval_1"],
+          "client_betas": [
+            "custom_checkout_server_updates_1",
+            "custom_checkout_manual_approval_1"
+          ],
           "confirm_fields": {}
         }
       }
@@ -405,10 +549,8 @@
     "smsbower": {
       "api_key": "$SMSBOWER_API_KEY",
       "service": "dr",
-      "service_name": "OpenAI (ChatGPT)",
       "country": "38",
       "country_name": "Ghana",
-      "country_prefix": "+233",
       "min_price": "0.054",
       "target_price": "0.054",
       "max_price": "0.054",
@@ -448,8 +590,6 @@
     "enabled": true,
     "browser_engine": "camoufox",
     "country": "US",
-    "card_brand": "visa",
-    "email_mode": "random",
     "headless": false,
     "manual_human_verification": true,
     "human_verification_timeout": 300,
@@ -465,11 +605,7 @@
     "billing_regions": [
       "JP"
     ],
-    "link_mode": "chatgpt_checkout",
     "checkout_ui_mode": "hosted",
-    "redirect_url_format": "any",
-    "use_elements_session": true,
-    "approve_missing_redirect": false,
     "max_checkout_retries": 3,
     "stage_proxies": {
       "checkout": "socks5h://user:pass-JP@gate:1000",

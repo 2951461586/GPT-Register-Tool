@@ -49,19 +49,23 @@ def test_long_term_remail_disables_phone_reuse_by_default():
 
 
 def test_only_phone_registration_selects_phone_flow():
-    register = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
-    tasks_source = (ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
-    # Pool registration and failed-rerun both route through no-phone-reuse planners.
-    pool_start = register.index("private void RegisterFromPool_Click")
-    pool_end = register.index("private void ImportChataiMailbox_Click", pool_start)
-    assert "BackendCommandPlanner.CreatePoolRegistration(" in register[pool_start:pool_end]
-    assert "BackendCommandPlanner.CreateRerunFailedRegistration(" in tasks_source
-
+    # The two WPF entry points this test used to pin (MainWindow.Register.cs ->
+    # RegisterFromPool_Click, MainWindow.Tasks.cs -> RerunFailed_Click) were
+    # dead event handlers with no XAML subscriber and were removed on
+    # 2026-09-02 (round 6). The invariant worth keeping is the planner side:
+    # pool registration and failed-rerun both route through no-phone-reuse.
     pool_reg_start = planner.index("public static BackendCommandPlan CreatePoolRegistration")
     pool_reg_end = planner.index("public static BackendCommandPlan CreateMailboxFileRegistration", pool_reg_start)
     assert "AppendNoPhoneReuse(args);" in planner[pool_reg_start:pool_reg_end]
+
+    # Not AppendNoPhoneReuse: the rerun plan expresses "do not reduce this run
+    # to phone-only" through the registrationAtOnly flag instead.
+    rerun_start = planner.index("public static BackendCommandPlan CreateRerunFailedRegistration")
+    rerun_end = planner.index("public static BackendCommandPlan Create", rerun_start + 40)
+    rerun_block = planner[rerun_start:rerun_end]
+    assert "registrationAtOnly: false" in rerun_block
 
     # Phone registration uses --phone-register and must NOT disable phone reuse.
     phone_start = planner.index("public static BackendCommandPlan CreatePhoneRegistration")
@@ -72,10 +76,18 @@ def test_only_phone_registration_selects_phone_flow():
 
 
 def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
+    # Mailbox-line classification now lives in BackendCommandPlanner -- the single
+    # home for CLI argument construction. MainWindow.Register.cs used to carry a
+    # private copy of it (MailboxArgForLine) that had drifted in form and had no
+    # tests; it was removed on 2026-09-02 (round 6) and callers now delegate.
+    planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
     source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
 
     # remail:// lines are still passed to the backend as mailbox files.
-    assert 'value.StartsWith("remail://"' in source
+    assert 'value.StartsWith("remail://"' in planner
+    # No private duplicate left behind in the WPF host.
+    assert "private string MailboxArgForLine" not in source
+    assert "BackendCommandPlanner.MailboxArgumentForLine" in source
     # Registered rows resolve mailbox credentials through the backend read
     # (desktop_read "mailbox-file"), which owns the canonical remail:// line
     # format; the behavioral coverage lives in tests/test_desktop_read.py.
@@ -85,7 +97,7 @@ def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
 
 def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     register_source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
-    tasks_source = (ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
+    planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # Matched on the method name only, not on `private bool ...`: these helpers
     # became async (2026-09-02) because the backend read they depend on used to
@@ -102,8 +114,12 @@ def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     assert 'mailboxArg = "--chatai-mailbox-file"' not in selected_block
     assert '= "--chatai-mailbox-file"' not in selected_block
 
-    assert "TryCreateMailboxFileAsync(failedRows)" in tasks_source
-    # The resolved, format-aware mailbox argument is forwarded to the planner
-    # rather than hardcoding a chatai mailbox file argument inline.
-    assert "CreateRerunFailedRegistration(" in tasks_source
-    assert "mailbox.Arg," in tasks_source
+    # RerunFailed_Click was a dead event handler (no XAML subscriber) and was
+    # removed with the rest on 2026-09-02 (round 6). What survives is the
+    # planner contract: the rerun plan takes the *resolved* mailbox argument and
+    # file rather than hardcoding a chatai mailbox file argument inline.
+    rerun_start = planner.index("public static BackendCommandPlan CreateRerunFailedRegistration")
+    rerun_end = planner.index("public static BackendCommandPlan Create", rerun_start + 40)
+    rerun_block = planner[rerun_start:rerun_end]
+    assert "--chatai-mailbox-file" not in rerun_block
+    assert "mailboxArg" in rerun_block

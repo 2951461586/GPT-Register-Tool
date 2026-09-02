@@ -20,9 +20,6 @@ FORMATS = {"cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexman
 AXONHUB_PLACEHOLDER_REFRESH_TOKEN = "__missing_refresh_token__"
 
 
-def _is_obj(value: Any) -> bool:
-    return isinstance(value, dict)
-
 
 def first_non_empty(*values: Any) -> str:
     for value in values:

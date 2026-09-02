@@ -55,19 +55,9 @@ namespace SmsWorkbench
         [ObservableProperty] private string strategy = "";
         [ObservableProperty] private int sampleSize = 1;
 
-        public bool IsValid()
-        {
-            bool Country(string value) => string.IsNullOrWhiteSpace(value)
-                || Regex.IsMatch(value.Trim(), "^[A-Za-z]{2}$");
-            return !string.IsNullOrWhiteSpace(Name)
-                && SampleSize > 0
-                && Country(RegistrationCountry)
-                && Country(CheckoutCountry)
-                && Country(PromotionCountry)
-                && Country(ProviderCountry)
-                && Country(ApproveCountry)
-                && Country(RedirectCountry);
-        }
+        // IsValid() removed (2026-09-02, round 6): no caller and no test. The
+        // two-letter country rule it encoded now lives only here as a note -- if
+        // batch validation is ever reintroduced, this is the predicate to revive.
     }
 
     public sealed partial class PaymentBatchResultRow : ObservableObject

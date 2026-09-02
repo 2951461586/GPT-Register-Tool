@@ -183,10 +183,6 @@ class SmailrClient:
             data = {"raw": data}
         return data
 
-    def mailbox_detail(self, mailbox_id: str) -> dict:
-        data = _unwrap_data(self._request("GET", f"/api/v1/mailboxes/{mailbox_id}") or {})
-        return data if isinstance(data, dict) else {"raw": data}
-
     # ── Mail access ─────────────────────────────────────────────────────────
 
     def list_mails(self, mailbox_id: str, folder: str = "INBOX", page: int = 1, per_page: int = 25) -> list[dict]:

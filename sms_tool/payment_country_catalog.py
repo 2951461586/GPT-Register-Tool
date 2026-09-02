@@ -37,10 +37,6 @@ def is_paypal_supported(country: object) -> bool:
     return normalize_country(country) in PAYPAL_SUPPORTED_COUNTRIES
 
 
-def paypal_country_requires_validation(payment_method: object) -> bool:
-    """Deprecated compatibility hook; stage countries are no longer gated."""
-    return False
-
 
 def validate_paypal_country(payment_method: object, country: object, *, field: str = "country") -> None:
     """Deprecated no-op retained for third-party import compatibility."""

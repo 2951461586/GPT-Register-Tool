@@ -139,22 +139,3 @@ def import_account_sessions(
     )
 
 
-def fetch_target_auth_files(
-    target,
-    cpa_api_url="",
-    cpa_api_token="",
-    sub2api_url="",
-    sub2api_token="",
-    sub2api_email="",
-    sub2api_password="",
-):
-    target = normalize_import_target(target)
-    if target == TARGET_SUB2API:
-        return fetch_sub2api_auth_files(
-            api_url=sub2api_url,
-            api_token=sub2api_token,
-            login_email=sub2api_email,
-            login_password=sub2api_password,
-        )
-    resolved_url, resolved_token = _resolve_cpa_config(api_url=cpa_api_url, api_token=cpa_api_token)
-    return fetch_cpa_auth_files(resolved_url, resolved_token)

@@ -206,12 +206,6 @@ def _find_payment_method_types(payload: Any) -> list[str]:
     return []
 
 
-def ensure_pix_offered(init_payload: dict[str, Any], stage: str) -> list[str]:
-    methods = _find_payment_method_types(init_payload)
-    if methods and "pix" not in methods:
-        raise RuntimeError(f"pix line unavailable at {stage}: methods={methods}")
-    return methods
-
 
 def stripe_init_pix(stripe: requests.Session, cs_id: str, stripe_pk: str) -> dict[str, Any]:
     """PIX 专用 init：固定 pt-BR + America/Sao_Paulo。"""

@@ -184,15 +184,6 @@ namespace SmsWorkbench
         private string NestedString(Dictionary<string, object> data, params string[] path)
             => BackendJson.NestedString(data, path);
 
-        private Dictionary<string, object> JsonTextToObject(string json)
-            => BackendJson.TextToObject(json);
-
-        private Dictionary<string, object> JsonDocumentToObject(JsonDocument document)
-            => BackendJson.DocumentToObject(document);
-
-        private object JsonValueToObject(JsonElement element)
-            => BackendJson.ValueToObject(element);
-
         private Dictionary<string, object> JsonElementToDictionary(JsonElement element)
             => BackendJson.ElementToDictionary(element);
 
@@ -427,10 +418,14 @@ namespace SmsWorkbench
                 // Append into the control directly: whole-string reassignment of
                 // LogText re-rendered the entire buffer on every line (O(n²)).
                 LogTextBox.AppendText(line);
-                logText += line; // keep the bound property consistent without re-render
+                // Keep the bound property consistent without re-rendering. This
+                // used to be `logText += line`, which copied the whole buffer on
+                // every line and never truncated; AppendLogLine is amortised
+                // O(1) and caps retained history at MaxLogBufferChars.
+                AppendLogLine(line);
                 return;
             }
-            LogText += line;
+            AppendLogLine(line);
         }
 
         private void UiLog(string text)

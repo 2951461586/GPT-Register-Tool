@@ -302,6 +302,34 @@ def _status(data, paypal, access_token, has_refresh_token=False):
 
 
 
+# Account-state markers. The WPF host matches the same substrings against
+# backend text, so these lists are a cross-language contract: adding or
+# renaming one here and not in `BackendTextMarkers` (SmsWorkbench.Contracts)
+# makes the two sides disagree silently.
+# tests/test_backend_text_markers.py parses both and asserts they match.
+#
+# "account_deatived" is a misspelling that was written by an older release and
+# therefore still occurs in session files already on disk. Keep it until those
+# rows are known to be gone -- it looks like a typo but it is live data.
+ACCOUNT_DEACTIVATED_MARKERS = (
+    "account_deactivated",
+    "account_deatived",
+    "deleted or deactivated",
+    "account has been deleted",
+    "account has been deactivated",
+)
+
+AT_INVALID_MARKERS = (
+    "token_invalidated",
+    "token_expired",
+    "authentication token has been invalidated",
+    "could not validate your token",
+    "add_phone_required",
+    "secondary_phone_verification_required",
+    "oauth_refresh_http_401",
+) + ACCOUNT_DEACTIVATED_MARKERS
+
+
 def _looks_at_invalid(data, paypal):
     text = " ".join(
         str(value or "")
@@ -312,21 +340,7 @@ def _looks_at_invalid(data, paypal):
             _get(paypal, "refresh_error"),
         )
     ).lower()
-    markers = (
-        "token_invalidated",
-        "token_expired",
-        "authentication token has been invalidated",
-        "could not validate your token",
-        "add_phone_required",
-        "secondary_phone_verification_required",
-        "oauth_refresh_http_401",
-        "account_deactivated",
-        "account_deatived",
-        "deleted or deactivated",
-        "account has been deleted",
-        "account has been deactivated",
-    )
-    return any(marker in text for marker in markers)
+    return any(marker in text for marker in AT_INVALID_MARKERS)
 
 
 
@@ -340,13 +354,7 @@ def _looks_account_deactivated(data, paypal):
             _get(paypal, "error"),
         )
     ).lower()
-    return any(marker in text for marker in (
-        "account_deactivated",
-        "account_deatived",
-        "deleted or deactivated",
-        "account has been deleted",
-        "account has been deactivated",
-    ))
+    return any(marker in text for marker in ACCOUNT_DEACTIVATED_MARKERS)
 
 
 

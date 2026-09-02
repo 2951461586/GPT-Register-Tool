@@ -10,7 +10,7 @@ from ..config import current_config_data
 from ..config import resolve_runtime_config
 from ..paths import project_path
 from ..paths import runtime_file
-from .constants import EXTRA_COLUMNS
+from .constants import EXTRA_COLUMNS, SCHEMA_VERSION
 
 
 # Schema initialization is idempotent but NOT cheap: it replays the whole DDL
@@ -222,6 +222,11 @@ def _init_database_uncached(path=None, runtime_config: ConfigInput = None):
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_registration_checkpoints_state ON registration_checkpoints(state)")
+        # Stamp the schema shape. PRAGMA cannot be parameterised, and the value
+        # is a module constant (not user data), so this interpolation is safe.
+        # Written before commit() so a failed init never leaves a version stamp
+        # on a half-built database -- matching the memoize-on-success rule above.
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()
     finally:
         conn.close()
