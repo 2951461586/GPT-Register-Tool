@@ -1,7 +1,6 @@
 """core submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -26,7 +25,7 @@ from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_appr
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .adapters import _run_regional_wallet_adapter
+from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
 from .base import PAYMENT_METHODS, _LOGGER, _config_data, _redact_sensitive_text
 from .normalize import _classify_exception, _normalize_result
 from .persistence import _safe_persist_run
@@ -218,7 +217,7 @@ def probe_payment_method(
     if method == "gopay":
         if "timeout_seconds" not in options and options.get("timeout") is not None:
             options["timeout_seconds"] = options["timeout"]
-        return _plm._run_wallet_adapter(
+        return _run_wallet_adapter(
             PAYMENT_METHODS[method],
             access_token,
             proxy=plan.checkout_proxy,

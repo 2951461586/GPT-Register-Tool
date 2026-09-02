@@ -48,6 +48,8 @@ def test_storage_accepts_typed_model_and_raw_json_is_token_free(tmp_path, monkey
     })
 
     assert storage.upsert_account(model)
+    record = storage.get_account_record("typed-storage@example.com")
+    assert record["email"] == "typed-storage@example.com"
     with storage._connect() as connection:
         row = connection.execute(
             "SELECT access_token, oauth_refresh_token, source, register_method, session_type, plan_type, raw_json FROM accounts WHERE email=?",
@@ -89,3 +91,23 @@ def test_storage_persists_safe_account_identity_context(tmp_path, monkeypatch):
     assert payload["identity_context"]["proxy_affinity"]["session_id"] == "NEW5678"
     assert "proxy-secret" not in record["raw_json"]
     assert base_proxy not in record["raw_json"]
+
+
+def test_get_account_records_batches_one_query(tmp_path, monkeypatch):
+    database = tmp_path / "accounts.sqlite3"
+    monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
+    storage.upsert_account({"email": "batch1@example.com", "access_token": "at1"})
+    storage.upsert_account({"email": "BATCH2@Example.com", "access_token": "at2"})
+    storage.upsert_account({"email": "batch3@example.com", "access_token": "at3"})
+
+    # Case-insensitive match, and only the requested emails come back.
+    rows = storage.get_account_records(
+        ["batch1@example.com", "batch2@example.com", "missing@example.com"]
+    )
+    assert set(rows) == {"batch1@example.com", "batch2@example.com"}
+    assert rows["batch1@example.com"]["access_token"] == "at1"
+    assert rows["batch2@example.com"]["access_token"] == "at2"
+
+    # Empty / None input is safe.
+    assert storage.get_account_records([]) == {}
+    assert storage.get_account_records(None) == {}

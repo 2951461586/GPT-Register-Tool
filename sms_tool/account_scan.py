@@ -4,12 +4,15 @@ The scan is intentionally probe-only for phone verification: it detects an
 OAuth add-phone challenge but never sends an SMS or consumes a phone number.
 """
 
+from __future__ import annotations
+
 import base64
 import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any, Iterable
 
 from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 from .codex_oauth import collect_codex_oauth_tokens
@@ -30,18 +33,18 @@ _GMAIL_SCAN_LOCKS_GUARD = threading.Lock()
 
 
 def scan_accounts(
-    emails,
-    session_file="",
-    workers=4,
-    proxy=None,
-    timeout=120,
-    workspace_check=False,
-    switch_workspace_id="",
-    fallback_workspace_ids=None,
-    auto_switch_workspace=False,
-    quota_relogin_on_401=False,
-    relogin_mode="auto",
-):
+    emails: Iterable[str],
+    session_file: str = "",
+    workers: int = 4,
+    proxy: str | None = None,
+    timeout: int = 120,
+    workspace_check: bool = False,
+    switch_workspace_id: str = "",
+    fallback_workspace_ids: Iterable[str] | None = None,
+    auto_switch_workspace: bool = False,
+    quota_relogin_on_401: bool = False,
+    relogin_mode: str = "auto",
+) -> list[dict[str, Any]]:
     emails = _unique_emails(emails)
     workers = max(1, min(int(workers or 1), 8, len(emails) or 1))
     print(f"[*] One-click account scan: {len(emails)} account(s), workers={workers}")
@@ -138,19 +141,19 @@ def scan_accounts(
 
 
 def _scan_one(
-    index,
-    total,
-    email,
-    session_file="",
-    proxy=None,
-    timeout=120,
-    workspace_check=False,
-    switch_workspace_id="",
-    fallback_workspace_ids=None,
-    auto_switch_workspace=False,
-    quota_relogin_on_401=False,
-    relogin_mode="auto",
-):
+    index: int,
+    total: int,
+    email: str,
+    session_file: str = "",
+    proxy: str | None = None,
+    timeout: int = 120,
+    workspace_check: bool = False,
+    switch_workspace_id: str = "",
+    fallback_workspace_ids: Iterable[str] | None = None,
+    auto_switch_workspace: bool = False,
+    quota_relogin_on_401: bool = False,
+    relogin_mode: str = "auto",
+) -> dict[str, Any]:
     print(f"\n[{index + 1}/{total}] Account scan: {email}")
     started = time.time()
     data, json_path = _load_seed_session(email=email, session_file=session_file)
@@ -381,7 +384,7 @@ def _scan_one(
     return result
 
 
-def _persist_scan(data, json_path, result):
+def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str, Any]) -> dict[str, Any]:
     now = int(time.time())
     updated = dict(data or {})
     updated["email"] = result.get("email") or updated.get("email", "")
@@ -463,21 +466,21 @@ def _persist_scan(data, json_path, result):
 
 
 def _result(
-    index,
-    email,
-    status,
-    ok,
-    had_rt,
-    had_phone,
-    refresh_result=None,
-    oauth_result=None,
-    relogin_result=None,
-    token_probe=None,
-    phone_verification_required=False,
-    secondary_phone_verification_required=False,
-    started=0,
-    workspace_result=None,
-):
+    index: int,
+    email: str,
+    status: str,
+    ok: bool,
+    had_rt: bool,
+    had_phone: bool,
+    refresh_result: dict[str, Any] | None = None,
+    oauth_result: dict[str, Any] | None = None,
+    relogin_result: dict[str, Any] | None = None,
+    token_probe: dict[str, Any] | None = None,
+    phone_verification_required: bool = False,
+    secondary_phone_verification_required: bool = False,
+    started: float = 0,
+    workspace_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "index": index,
         "email": email,
@@ -526,7 +529,7 @@ def _print_scan_overview(results):
         )
 
 
-def _public_scan_result(result):
+def _public_scan_result(result: dict[str, Any] | None) -> dict[str, Any]:
     output = dict(result or {})
     output.pop("index", None)
     output["refresh"] = _public_oauth_result(output.get("refresh") or {})
@@ -632,7 +635,7 @@ def _public_probe_result(result):
     return output
 
 
-def _scan_one_with_lane(*args, **kwargs):
+def _scan_one_with_lane(*args: object, **kwargs: object) -> dict[str, Any]:
     email = args[2] if len(args) >= 3 else kwargs.get("email", "")
     lane = _gmail_scan_lane_key(email)
     if not lane:

@@ -1,3 +1,9 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
+using System.Diagnostics.CodeAnalysis;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -169,7 +175,10 @@ namespace SmsWorkbench
         private string GetString(Dictionary<string, object> data, string key)
             => BackendJson.GetString(data, key);
 
-        private bool TryGetMap(Dictionary<string, object> data, string key, out Dictionary<string, object> map)
+        // Mirrors BackendJson.TryGetMap, including its [NotNullWhen(true)] out
+        // contract: declaring `map` non-nullable here would promise callers
+        // something the shared helper does not guarantee.
+        private bool TryGetMap(Dictionary<string, object>? data, string key, [NotNullWhen(true)] out Dictionary<string, object>? map)
             => BackendJson.TryGetMap(data, key, out map);
 
         private string NestedString(Dictionary<string, object> data, params string[] path)
@@ -195,9 +204,9 @@ namespace SmsWorkbench
 
         private string DbTimingText(Dictionary<string, string> data)
         {
-            string pipeline = data.TryGetValue("pipeline_total_seconds", out string pipelineSeconds) ? pipelineSeconds : "";
+            string pipeline = data.TryGetValue("pipeline_total_seconds", out string? pipelineSeconds) ? pipelineSeconds : "";
             if (!string.IsNullOrWhiteSpace(pipeline) && pipeline != "0.0" && pipeline != "0") return pipeline + "s";
-            string timing = data.TryGetValue("timing_total_seconds", out string timingSeconds) ? timingSeconds : "";
+            string timing = data.TryGetValue("timing_total_seconds", out string? timingSeconds) ? timingSeconds : "";
             return string.IsNullOrWhiteSpace(timing) || timing == "0.0" || timing == "0" ? "" : timing + "s";
         }
 
@@ -286,7 +295,7 @@ namespace SmsWorkbench
         {
             try
             {
-                if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri) ||
+                if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ||
                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                 {
                     Log("无效链接：" + url);
@@ -387,7 +396,7 @@ namespace SmsWorkbench
 
         private bool IsHttpUrl(string url)
         {
-            return Uri.TryCreate(url, UriKind.Absolute, out Uri uri)
+            return Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
         }
 

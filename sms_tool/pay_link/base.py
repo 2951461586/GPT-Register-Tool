@@ -1,7 +1,6 @@
 """base submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -30,11 +29,7 @@ from .. import payment_egress
 def _config_data(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
     if runtime_config is not None:
         return resolve_runtime_config(runtime_config).data
-    if CFG:
-        merged = dict(_plm.current_config_data())
-        merged.update(CFG)
-        return merged
-    return _plm.current_config_data()
+    return current_config_data()
 
 
 
@@ -89,13 +84,13 @@ def _protocol_cfg(runtime_config: Mapping[str, Any] | None = None) -> Mapping[st
 
 
 def _reference_root(runtime_config: Mapping[str, Any] | None = None) -> Path:
-    configured = _plm._protocol_cfg(runtime_config).get("reference_root") or "services/protocol-payment"
+    configured = _protocol_cfg(runtime_config).get("reference_root") or "services/protocol-payment"
     return project_path(configured)
 
 
 
 def _state_path() -> Path:
-    configured = str(_plm._protocol_cfg().get("state_file") or "").strip()
+    configured = str(_protocol_cfg().get("state_file") or "").strip()
     return project_path(configured) if configured else runtime_file(_config_data(), "payment_link_runs.jsonl")
 
 
@@ -155,16 +150,12 @@ def _redact_sensitive_text(value: str) -> str:
 def _redact_sensitive_values(value: Any) -> Any:
     """Mask credentials anywhere inside a persisted payment-run value.
 
-    ``ba_token`` 键本身已被 :func:`_plm._persist_run` 的键名过滤丢弃，但 approve URL
+    ``ba_token`` 键本身已被 :func:`_persist_run` 的键名过滤丢弃，但 approve URL
     （如 ``.../agreements/approve?ba_token=BA-...``）会以 ``url``/``fallback_url`` 字段
     保留，需按值脱敏后再落盘。日志和错误文本还可能包含 Bearer/JWT、代理认证或
     其他命名凭据，因此统一递归清洗。仅影响持久化记录，不改动返回给调用方的结果。
     """
     return _canonical_sanitize(value)
-
-
-CFG: dict[str, Any] = {}
-
 
 
 _LOGGER = logging.getLogger("sms_tool.payment_link_manager")

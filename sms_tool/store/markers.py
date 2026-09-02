@@ -133,11 +133,12 @@ def mark_account_health_result(
             SET plan_type=CASE WHEN ? <> '' THEN ? ELSE plan_type END,
                 status=CASE WHEN ? THEN 'account_deactivated' ELSE status END,
                 error=CASE WHEN ? THEN 'account_deactivated' ELSE error END,
+                terminal_state=CASE WHEN ? THEN 'account_deactivated' ELSE terminal_state END,
                 updated_at=?,
                 raw_json=?
             WHERE lower(email)=lower(?)
             """,
-            (plan_type, plan_type, int(terminal), int(terminal), now, raw_json, lookup_email),
+            (plan_type, plan_type, int(terminal), int(terminal), int(terminal), now, raw_json, lookup_email),
         )
         conn.commit()
     finally:

@@ -1,8 +1,12 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public interface IProtocolPaymentDialogService
     {
-        void ShowDialog(Window owner, ProtocolPaymentAccount account);
+        void ShowDialog(Window owner, ProtocolPaymentAccount? account);
     }
 
     public sealed class ProtocolPaymentDialogService : IProtocolPaymentDialogService
@@ -18,7 +22,7 @@ namespace SmsWorkbench
             _stageMatrixStore = stageMatrixStore;
         }
 
-        public void ShowDialog(Window owner, ProtocolPaymentAccount account)
+        public void ShowDialog(Window owner, ProtocolPaymentAccount? account)
         {
             var viewModel = new ProtocolPaymentViewModel(_service, _fileLauncher, account, _stageMatrixStore);
             new ProtocolPaymentWindow(viewModel) { Owner = owner }.ShowDialog();

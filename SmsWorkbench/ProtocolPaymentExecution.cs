@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public sealed record ProtocolPaymentExecutionRequest(
@@ -298,8 +302,11 @@ namespace SmsWorkbench
             }
         }
 
+        // `plan` may be null: a run cancelled or timed out before the plan was
+        // built still needs a presentation, and the body already reads it as
+        // `plan?.MayHaveSideEffects`. The signature now says so.
         public static ProtocolPaymentResultPresentation Aborted(
-            ProtocolPaymentExecutionPlan plan,
+            ProtocolPaymentExecutionPlan? plan,
             string requestedState)
         {
             string requested = CanonicalState(requestedState);

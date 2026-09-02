@@ -1,9 +1,38 @@
 import tempfile
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import payment_link_manager as manager
+
+CONFIG = "sms_tool.pay_link.base.current_config_data"
+
+
+def _overlay(**overrides):
+    """Reproduce what ``patch.dict(manager.CFG, overrides, clear=False)`` did.
+
+    ``CFG`` was a module-level dict in ``pay_link/base.py`` that no production
+    code ever read - it existed purely as a patch target, and ``_config_data()``
+    merged it over the real config. With CFG gone the merge has to happen here,
+    at ``current_config_data``, the seam the production code actually reads.
+    Merging (not replacing) matters: these tests override one nested branch such
+    as ``protocol_payments.methods.gopay`` and rely on the rest of the real
+    config still being visible.
+    """
+    from sms_tool.pay_link.base import current_config_data
+
+    def merge(base, extra):
+        merged = dict(base) if isinstance(base, Mapping) else {}
+        for key, value in extra.items():
+            current = merged.get(key)
+            if isinstance(value, Mapping) and isinstance(current, Mapping):
+                merged[key] = merge(current, value)
+            else:
+                merged[key] = value
+        return merged
+
+    return patch(CONFIG, return_value=merge(current_config_data(), overrides))
 
 
 class WalletManagerIntegrationTests(unittest.TestCase):
@@ -43,7 +72,7 @@ class WalletManagerIntegrationTests(unittest.TestCase):
                 }
             }
         }
-        with patch.dict(manager.CFG, config, clear=False):
+        with _overlay(**config):
             result = manager._run_wallet_adapter(
                 manager.PAYMENT_METHODS["gopay"],
                 "fixture-access-token",
@@ -68,9 +97,9 @@ class WalletManagerIntegrationTests(unittest.TestCase):
             "link_type": "gopay_protocol",
         }
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.dict(manager.CFG, {"protocol_payments": {"enabled_methods": ["gopay"]}}, clear=False), \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch.object(manager, "_run_wallet_adapter", return_value=adapter_result) as adapter:
+             _overlay(protocol_payments={"enabled_methods": ["gopay"]}), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.pay_link.registry._run_wallet_adapter", return_value=adapter_result) as adapter:
             result = manager.generate_payment_link("token", payment_method="gopay")
 
         self.assertTrue(result["ok"])
@@ -118,8 +147,8 @@ class WalletManagerIntegrationTests(unittest.TestCase):
             },
         }
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.dict(manager.CFG, config, clear=False), \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             _overlay(**config), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe:
             result = manager.generate_payment_link(
                 "token",

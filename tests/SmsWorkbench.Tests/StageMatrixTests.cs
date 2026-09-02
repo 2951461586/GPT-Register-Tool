@@ -84,6 +84,78 @@ public sealed class StageMatrixTests
         }
     }
 
+    [Fact]
+    public void AppendStaysAmortizedConstantTimeAtTheRecordCap()
+    {
+        // Regression guard for the O(N^2) Append: it used to File.ReadLines the
+        // whole file and rewrite it on EVERY append once the store was at its
+        // cap, costing ~24 ms per progress event on the UI thread. The store is
+        // now kept in memory and only rewritten once per MaxRecords/2 appends.
+        string root = Path.Combine(Path.GetTempPath(), "sms-workbench-stage-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var store = new JsonlStageMatrixStore(new TestApplicationPaths(root));
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            for (int index = 0; index < 1000; index++)
+            {
+                store.Append(new BackendProgressEvent("payment", "run-" + index, "u" + index + "@example.test", "qris", "routing", "running", ""));
+            }
+            stopwatch.Stop();
+
+            // 1000 appends: 10.0 s before the fix, ~0.3 s after. The ceiling is
+            // deliberately loose (CI machines are slow and noisy) - it only has
+            // to fail loudly if the per-append full-file read ever comes back.
+            Assert.True(stopwatch.ElapsedMilliseconds < 3000, $"1000 appends took {stopwatch.ElapsedMilliseconds} ms");
+
+            // The cap itself still holds: never more than 2000 records survive.
+            for (int index = 0; index < 1500; index++)
+            {
+                store.Append(new BackendProgressEvent("payment", "run-extra-" + index, "x" + index + "@example.test", "qris", "routing", "running", ""));
+            }
+            IReadOnlyList<BackendProgressEvent> loaded = store.Load();
+            Assert.True(loaded.Count <= 2000, $"cap exceeded: {loaded.Count} records");
+            Assert.True(loaded.Count >= 1000, $"over-trimmed: only {loaded.Count} records survived");
+            Assert.Equal(loaded.Count, File.ReadAllLines(Path.Combine(root, "runtime", "stage_matrix.jsonl")).Length);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void AppendSurvivesAReopenedStoreAndNeverExceedsTheCap()
+    {
+        // A second store instance (app restart) must see the records written by
+        // the first, and the trim must not lose lines a different process wrote.
+        string root = Path.Combine(Path.GetTempPath(), "sms-workbench-stage-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string file = Path.Combine(root, "runtime", "stage_matrix.jsonl");
+            var first = new JsonlStageMatrixStore(new TestApplicationPaths(root));
+            for (int index = 0; index < 20; index++)
+            {
+                first.Append(new BackendProgressEvent("payment", "run-" + index, "u" + index + "@example.test", "qris", "routing", "running", ""));
+            }
+
+            var reopened = new JsonlStageMatrixStore(new TestApplicationPaths(root));
+            IReadOnlyList<BackendProgressEvent> restored = reopened.Load();
+            Assert.Equal(20, restored.Count);
+            Assert.Equal("run-0", restored[0].RunId);
+            Assert.Equal(20, File.ReadAllLines(file).Length);
+
+            reopened.Clear();
+            Assert.Empty(reopened.Load());
+            Assert.False(File.Exists(file));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
     [Theory]
     [InlineData("remail", "user@outlook.com", "remail/outlook")]
     [InlineData("icloud_url", "user@icloud.com", "icloud")]

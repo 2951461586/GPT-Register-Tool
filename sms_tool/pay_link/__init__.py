@@ -57,7 +57,6 @@ from .core import (
     probe_payment_method,
 )
 from .base import (
-    CFG,
     GOPAY_DEFAULT_APPROVE_COUNTRIES,
     PAYMENT_METHODS,
     _BLIK_RESULT_RE,
@@ -80,7 +79,7 @@ __all__ = [
     '_canonical_terminal_state', '_normalized_contract_value', '_normalize_error_contract', '_is_retryable_failure', '_result_terminal_state', '_classify_exception',
     '_persist_run', '_safe_persist_run', 'build_default_payment_registry', 'normalize_payment_method', 'payment_proxy_pools', 'payment_method_label',
     'supported_payment_methods', 'register_payment_adapter', 'allowed_approve_countries', 'coerce_approve_country', '_resolve_proxy_pool_routes', '_enabled_methods',
-    'generate_payment_link', 'probe_payment_method', 'CFG', 'GOPAY_DEFAULT_APPROVE_COUNTRIES', 'PAYMENT_ADAPTERS', 'PAYMENT_METHODS',
+    'generate_payment_link', 'probe_payment_method', 'GOPAY_DEFAULT_APPROVE_COUNTRIES', 'PAYMENT_ADAPTERS', 'PAYMENT_METHODS',
     '_BLIK_RESULT_RE', '_DIRECT_CARD_CURRENCY', '_LOGGER', '_NON_SUCCESS_TERMINAL_STATES', '_STATE_LOCK', '_TERMINAL_STATES',
     '_TRANSITIONS',
 ]

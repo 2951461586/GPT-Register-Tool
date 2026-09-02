@@ -172,6 +172,14 @@ def _try_reverse_pay(
     timeout: int = 60,
 ) -> dict[str, Any]:
     """Attempt PayPal payment via reverse-engineered HTTP protocol."""
+    # The reverse protocol talks HTTP directly - there is no browser window, so
+    # there is never a human in front of the page who could solve a CAPTCHA.
+    # `_run_browser_pay` derives this from its `headless` argument; here the
+    # value is fixed. (This used to reference an undefined `use_headless`, which
+    # raised NameError on the first line and made the whole reverse path dead -
+    # the caller's bare `except` swallowed it, so payments silently fell through
+    # to nothing instead of reporting a failure.)
+    use_headless = True
     sms_cfg = {
         "api_url": sms_api_url,
         "phone": phone,
@@ -222,7 +230,13 @@ def _try_nodriver_pay(
     proxy: str | None = None,
 ) -> dict[str, Any]:
     """Attempt PayPal payment via nodriver (undetected Chrome)."""
-    from .nodriver_paypal import run_nodriver_pay
+    # Two dots, not one: `nodriver_paypal` lives in `sms_tool/`, not in this
+    # `sms_tool/paypal/` subpackage. A single-dot import resolved to
+    # `sms_tool.paypal.nodriver_paypal` and raised ModuleNotFoundError - but
+    # only when this line ran, i.e. only once the reverse protocol had already
+    # failed. That escaped `auto_pay`'s fallback chain and killed the Camoufox /
+    # CloakBrowser attempt that comes after it.
+    from ..nodriver_paypal import run_nodriver_pay
 
     sms_cfg = {
         "api_url": sms_api_url,
@@ -233,7 +247,8 @@ def _try_nodriver_pay(
 
     # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
     # endpoint the browser can consume; also restores remote-DNS semantics.
-    from .proxy_bridge import proxy_for_browser
+    # Two dots - `proxy_bridge` is in `sms_tool/`, see the note above.
+    from ..proxy_bridge import proxy_for_browser
 
     nd_proxy, close_bridge = proxy_for_browser(proxy)
 
@@ -300,7 +315,8 @@ def _try_browser_pay(
 
     # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
     # endpoint the browser can consume; also restores remote-DNS semantics.
-    from .proxy_bridge import proxy_for_browser
+    # Two dots - `proxy_bridge` is in `sms_tool/`, see the note above.
+    from ..proxy_bridge import proxy_for_browser
 
     browser_proxy, close_bridge = proxy_for_browser(proxy)
 

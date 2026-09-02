@@ -30,6 +30,7 @@ EXTRA_COLUMNS = {
     "workspace_updated_at": "INTEGER DEFAULT 0",
     "account_type": "TEXT DEFAULT ''",
     "quota_status": "TEXT DEFAULT ''",
+    "terminal_state": "TEXT DEFAULT ''",
 }
 
 

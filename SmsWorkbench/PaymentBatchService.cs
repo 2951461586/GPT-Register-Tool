@@ -1,3 +1,9 @@
+// Opted into nullable reference checking file-by-file: the project-level switch
+// is still `annotations`, and enabling it wholesale reports 147 findings across
+// ~25 files that each need a real decision. This file is the largest single
+// cluster (all of it `as JsonObject` on a possibly-missing config branch).
+#nullable enable
+
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -47,8 +53,10 @@ namespace SmsWorkbench
             try
             {
                 JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
-                JsonArray cells = root?["protocol_payments"]?["matrix"]?["cells"] as JsonArray;
-                foreach (JsonNode node in cells ?? new JsonArray())
+                JsonArray? cells = root?["protocol_payments"]?["matrix"]?["cells"] as JsonArray;
+                // JsonArray is IEnumerable<JsonNode?>: a JSON `null` element is
+                // a legal node. The `is not JsonObject` guard below drops it.
+                foreach (JsonNode? node in cells ?? new JsonArray())
                 {
                     if (node is not JsonObject cell) continue;
                     string configuredMethod = Text(cell, "payment_method");
@@ -88,16 +96,16 @@ namespace SmsWorkbench
             try
             {
                 JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
-                JsonObject protocol = root?["protocol_payments"] as JsonObject;
-                JsonObject methods = protocol?["methods"] as JsonObject;
-                JsonObject legacy = root?[method] as JsonObject;
-                JsonObject configured = methods?[method] as JsonObject;
-                JsonObject namedPools = protocol?["proxy_pools"] as JsonObject;
-                JsonObject routes = configured?["stage_routes"] as JsonObject;
-                JsonObject stages = configured?["stage_proxies"] as JsonObject;
-                JsonObject countries = configured?["stage_proxy_countries"] as JsonObject;
-                JsonObject legacyStages = legacy?["stage_proxies"] as JsonObject;
-                JsonObject legacyCountries = legacy?["stage_proxy_countries"] as JsonObject;
+                JsonObject? protocol = root?["protocol_payments"] as JsonObject;
+                JsonObject? methods = protocol?["methods"] as JsonObject;
+                JsonObject? legacy = root?[method] as JsonObject;
+                JsonObject? configured = methods?[method] as JsonObject;
+                JsonObject? namedPools = protocol?["proxy_pools"] as JsonObject;
+                JsonObject? routes = configured?["stage_routes"] as JsonObject;
+                JsonObject? stages = configured?["stage_proxies"] as JsonObject;
+                JsonObject? countries = configured?["stage_proxy_countries"] as JsonObject;
+                JsonObject? legacyStages = legacy?["stage_proxies"] as JsonObject;
+                JsonObject? legacyCountries = legacy?["stage_proxy_countries"] as JsonObject;
 
                 string[] fallbackPool = NormalizePool(FirstPool(protocol?["proxy_pool"]));
                 string checkoutPool = FirstPool(
@@ -267,7 +275,7 @@ namespace SmsWorkbench
 
         public async Task<JsonElement> RunAsync(
             PaymentBatchRequest request,
-            IProgress<BackendOutputLine> progress,
+            IProgress<BackendOutputLine>? progress,
             CancellationToken cancellationToken)
         {
             string emailFile = Path.Combine(Path.GetTempPath(), "payment_batch_" + Guid.NewGuid().ToString("N") + ".txt");
@@ -377,10 +385,10 @@ namespace SmsWorkbench
             try
             {
                 JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
-                JsonNode protocol = root?["protocol_payments"];
+                JsonNode? protocol = root?["protocol_payments"];
                 if (int.TryParse(protocol?["timeout_seconds"]?.ToString(), out int configured))
                     seconds = configured;
-                JsonNode method = protocol?["methods"]?[PaymentMethods.Normalize(paymentMethod)];
+                JsonNode? method = protocol?["methods"]?[PaymentMethods.Normalize(paymentMethod)];
                 if (int.TryParse(method?["timeout_seconds"]?.ToString(), out int methodConfigured))
                     seconds = methodConfigured;
             }
@@ -424,16 +432,18 @@ namespace SmsWorkbench
             return JsonSerializer.Serialize(new { cells }, IndentedJson);
         }
 
-        private static string Text(JsonObject value, string name) => value?[name]?.ToString() ?? "";
+        private static string Text(JsonObject? value, string name) => value?[name]?.ToString() ?? "";
 
         private static string First(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
 
         private static string First(params string[] values)
             => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
-        private static string FirstPool(params object[] values)
+        // Every argument is a `?["key"]` lookup on a JSON branch that may be
+        // missing, so null is an expected input rather than a caller mistake.
+        private static string FirstPool(params object?[] values)
         {
-            foreach (object value in values)
+            foreach (object? value in values)
             {
                 if (value is string[] array && array.Length > 0)
                     return string.Join(PoolLineSeparator, array);
@@ -450,9 +460,11 @@ namespace SmsWorkbench
             return "";
         }
 
-        private static JsonNode NamedRoutePool(JsonObject routes, string stage, JsonObject namedPools)
+        private static JsonNode? NamedRoutePool(JsonObject? routes, string stage, JsonObject? namedPools)
         {
-            JsonNode route = routes?[stage];
+            // Returns null for "no named route configured" - callers chain it
+            // into FirstPool, which skips nulls.
+            JsonNode? route = routes?[stage];
             string poolName = route is JsonObject routeObject
                 ? routeObject["pool"]?.ToString() ?? ""
                 : route?.ToString() ?? "";
@@ -467,7 +479,7 @@ namespace SmsWorkbench
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-        private static string[] NormalizePool(string value)
+        private static string[] NormalizePool(string? value)
             => ProxyInputNormalizer.NormalizeList(value);
 
         private static string NormalizePoolText(string value)
@@ -510,7 +522,9 @@ namespace SmsWorkbench
         private static void SetArray(JsonObject target, string name, IEnumerable<string> values)
             => target[name] = new JsonArray(values.Select(value => (JsonNode)JsonValue.Create(value)).ToArray());
 
-        private static void SetOptionalString(JsonObject target, string name, string value)
+        // A null/blank value means "clear the setting", not "caller made a
+        // mistake" - it removes the key instead of writing an empty one.
+        private static void SetOptionalString(JsonObject target, string name, string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) target.Remove(name);
             else target[name] = value.Trim();

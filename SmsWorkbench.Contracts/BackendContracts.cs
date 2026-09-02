@@ -20,7 +20,7 @@ namespace SmsWorkbench
             string name,
             IEnumerable<string> arguments,
             int timeoutMilliseconds = 120000,
-            IReadOnlyDictionary<string, string> environmentVariables = null)
+            IReadOnlyDictionary<string, string>? environmentVariables = null)
         {
             return new BackendCommand(
                 name,
@@ -44,7 +44,7 @@ namespace SmsWorkbench
     {
         Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default);
     }
 }

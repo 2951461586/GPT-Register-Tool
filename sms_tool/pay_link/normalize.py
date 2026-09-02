@@ -1,7 +1,6 @@
 """normalize submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -241,7 +240,7 @@ def _classify_exception(exc: Exception) -> tuple[str, str, bool]:
     names = {_normalized_contract_value(cls.__name__) for cls in type(exc).mro()}
     if names & {"cancellederror", "cancelled_error", "canceled_error"}:
         return "cancelled", "payment_link_cancelled", False
-    if isinstance(exc, (_plm.subprocess.TimeoutExpired, TimeoutError)) or any("timeout" in name for name in names):
+    if isinstance(exc, (subprocess.TimeoutExpired, TimeoutError)) or any("timeout" in name for name in names):
         return "timed_out", "payment_link_timed_out", True
     retryable = _as_bool(getattr(exc, "retryable", None)) is True
     return "failed", custom_code or "payment_link_manager_failed", retryable

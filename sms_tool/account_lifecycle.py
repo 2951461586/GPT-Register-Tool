@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -76,36 +78,42 @@ class AccountLifecycle:
         if db.exists():
             import sqlite3
             with self._database_lock:
-                with sqlite3.connect(db) as conn:
-                    cursor = conn.execute("DELETE FROM accounts WHERE lower(email)=lower(?)", (email,))
-                    removed_rows = max(0, int(cursor.rowcount or 0))
-                    if removed_rows == 0:
-                        # The WPF shell normalizes "@+" to "+@" (e.g.
-                        # "user@+tag@hotmail.com" -> "user+tag@hotmail.com") via
-                        # MailboxPoolFileStore.NormalizeEmailKey, but the database
-                        # may store the original "@+" form.  The normalization is
-                        # lossy (it splits "taghotmail.com" into "tag" + "hotmail.com"
-                        # and reassembles with a "." that wasn't there), so a
-                        # simple reverse doesn't work.  Fall back to a two-step
-                        # approach: use a LIKE prefix scan to find candidates, then
-                        # verify each candidate with _email_core (separator-
-                        # insensitive) before deleting — this prevents accidental
-                        # deletion of unrelated accounts that happen to share a
-                        # prefix.
-                        pattern = _email_fuzzy_pattern(email)
-                        if pattern:
-                            target_core = _email_core(email)
-                            candidate_rows = conn.execute(
-                                "SELECT rowid, email FROM accounts WHERE lower(email) LIKE ? ESCAPE '\\'",
-                                (pattern,),
-                            ).fetchall()
-                            doomed_ids = [
-                                row[0] for row in candidate_rows
-                                if _email_core(row[1]) == target_core
-                            ]
-                            for rowid in doomed_ids:
-                                conn.execute("DELETE FROM accounts WHERE rowid=?", (rowid,))
-                            removed_rows = len(doomed_ids)
+                # `with sqlite3.connect(...)` is a TRANSACTION context manager,
+                # not a resource one: it commits/rolls back but never closes the
+                # connection, so every delete leaked a handle (and its file lock)
+                # until GC. `closing()` closes it; the inner `with conn:` keeps
+                # the commit-on-success / rollback-on-error behaviour.
+                with closing(sqlite3.connect(db)) as conn:
+                    with conn:
+                        cursor = conn.execute("DELETE FROM accounts WHERE lower(email)=lower(?)", (email,))
+                        removed_rows = max(0, int(cursor.rowcount or 0))
+                        if removed_rows == 0:
+                            # The WPF shell normalizes "@+" to "+@" (e.g.
+                            # "user@+tag@hotmail.com" -> "user+tag@hotmail.com") via
+                            # MailboxPoolFileStore.NormalizeEmailKey, but the database
+                            # may store the original "@+" form.  The normalization is
+                            # lossy (it splits "taghotmail.com" into "tag" + "hotmail.com"
+                            # and reassembles with a "." that wasn't there), so a
+                            # simple reverse doesn't work.  Fall back to a two-step
+                            # approach: use a LIKE prefix scan to find candidates, then
+                            # verify each candidate with _email_core (separator-
+                            # insensitive) before deleting — this prevents accidental
+                            # deletion of unrelated accounts that happen to share a
+                            # prefix.
+                            pattern = _email_fuzzy_pattern(email)
+                            if pattern:
+                                target_core = _email_core(email)
+                                candidate_rows = conn.execute(
+                                    "SELECT rowid, email FROM accounts WHERE lower(email) LIKE ? ESCAPE '\\'",
+                                    (pattern,),
+                                ).fetchall()
+                                doomed_ids = [
+                                    row[0] for row in candidate_rows
+                                    if _email_core(row[1]) == target_core
+                                ]
+                                for rowid in doomed_ids:
+                                    conn.execute("DELETE FROM accounts WHERE rowid=?", (rowid,))
+                                removed_rows = len(doomed_ids)
         removed_lines = 0
         mailbox_files = tuple(request.mailbox_files) or self._configured_mailbox_files()
         for raw_path in mailbox_files:
@@ -124,18 +132,23 @@ class AccountLifecycle:
             sessions = Path(self.config.workflow("output").get("directory") or "sessions")
             if not sessions.is_absolute():
                 sessions = Path(__file__).resolve().parent.parent / sessions
-            archive = sessions / "_deleted"
-            for path in sessions.glob("session_*.json") if sessions.is_dir() else ():
-                try:
-                    import json
-                    value = json.loads(path.read_text(encoding="utf-8"))
-                    if isinstance(value, Mapping) and str(value.get("email") or "").lower() == email.lower():
-                        archive.mkdir(parents=True, exist_ok=True)
-                        target = archive / path.name
-                        path.replace(target)
-                        archived.append(str(target))
-                except Exception:
-                    continue
+            if sessions.is_dir():
+                # Sessions are named `session_{email with '+' stripped}_{ts}.json`,
+                # so one account's files share an exact filename prefix. Globbing
+                # that prefix instead of parsing every session file turns a
+                # ~797-file scan into a handful of opens per delete.
+                archive = sessions / "_deleted"
+                prefix = f"session_{email.replace('+', '').lower()}"
+                for path in sessions.glob(f"{prefix}_*.json"):
+                    try:
+                        value = json.loads(path.read_text(encoding="utf-8"))
+                        if isinstance(value, Mapping) and str(value.get("email") or "").lower() == email.lower():
+                            archive.mkdir(parents=True, exist_ok=True)
+                            target = archive / path.name
+                            path.replace(target)
+                            archived.append(str(target))
+                    except Exception:
+                        continue
         return AccountDeleteResult(email, removed_lines, removed_rows, tuple(archived))
 
     def _mailbox_lock(self, path: Path) -> Lock:

@@ -12,6 +12,20 @@ from .connection import _connect, init_database
 from .normalize import _account_type, _as_bool, _as_float, _as_int, _find_existing_account_email, _get, _is_http_url, _nested, _normalize_account_email, _oauth_refresh_token, _payment_method, _paypal_status, _refresh_token_status, _resolve_account_email, _status, _success_value
 
 
+def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
+    """Derive the indexed terminal_state from the same three deactivated signals
+    used by the list_terminal_remail_accounts backfill (item #15). Kept in sync
+    with the SQL CASE in connection._ensure_extra_columns."""
+    s = status.lower()
+    e = error.lower()
+    r = raw_json.lower()
+    if (s in ("account_deactivated", "account_deatived")
+            or "account_deactivated" in e or "account_deatived" in e
+            or "account_deactivated" in r or "account_deatived" in r):
+        return "account_deactivated"
+    return "active"
+
+
 def upsert_account(
     data: AccountSessionModel | Mapping[str, object],
     json_path="",
@@ -42,6 +56,8 @@ def upsert_account(
     if has_refresh_token and status not in {"at_invalid", "account_deactivated"}:
         safe_snapshot["error"] = ""
     raw_json = json.dumps(safe_snapshot, ensure_ascii=False, separators=(",", ":"))
+    error_value = "" if has_refresh_token and status != "account_deactivated" else model.error
+    terminal_state = _terminal_state_from(status, error_value, raw_json)
 
     row = {
         "email": email,
@@ -52,7 +68,8 @@ def upsert_account(
         "password": model.password,
         "success": _as_bool(_success_value(data, access_token)),
         "status": status,
-        "error": "" if has_refresh_token and status != "account_deactivated" else model.error,
+        "error": error_value,
+        "terminal_state": terminal_state,
         "session_token": model.credentials.session_token,
         "access_token": access_token,
         "refresh_token": oauth_refresh_token or model.credentials.refresh_token,
@@ -225,7 +242,7 @@ def get_account_record(email, *, runtime_config: ConfigInput = None):
 
 
 
-def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):
+def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):  # noqa: E302
     init_database(runtime_config=runtime_config)
     digits = str(account_id or "").strip()
     if not digits.isdigit():
@@ -236,6 +253,40 @@ def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):
     finally:
         conn.close()
     return dict(row) if row else {}
+
+
+
+def get_account_records(emails, *, runtime_config: ConfigInput = None):
+    """Batch form of :func:`get_account_record`.
+
+    One ``WHERE lower(email) IN (...)`` query replaces N single-row lookups, so
+    callers that resolve a list of accounts (batch refresh, import, health
+    scans) no longer pay per-email round-tips. Results are keyed by the exact
+    email string passed in, so callers can map back to their input.
+
+    Emails are matched case-insensitively, matching the single-row lookup.
+    Unknown/empty entries are simply absent from the returned dict.
+    """
+    init_database(runtime_config=runtime_config)
+    wanted = [_normalize_account_email(e) for e in (emails or []) if e]
+    if not wanted:
+        return {}
+    conn = _connect(runtime_config=runtime_config)
+    try:
+        placeholders = ",".join("?" for _ in wanted)
+        rows = conn.execute(
+            f"SELECT * FROM accounts WHERE lower(email) IN ({placeholders})",
+            tuple(e.lower() for e in wanted),
+        ).fetchall()
+    finally:
+        conn.close()
+    by_lower = {row["email"].lower(): dict(row) for row in rows}
+    result: dict[str, dict] = {}
+    for original in wanted:
+        hit = by_lower.get(original.lower())
+        if hit:
+            result[original] = hit
+    return result
 
 
 
@@ -413,13 +464,7 @@ def list_terminal_remail_accounts(*, runtime_config: ConfigInput = None):
             SELECT email,purchase_id,raw_json
             FROM accounts
             WHERE lower(mailbox_provider)='remail'
-              AND (
-                lower(status) IN ('account_deactivated','account_deatived')
-                OR lower(error) LIKE '%account_deactivated%'
-                OR lower(error) LIKE '%account_deatived%'
-                OR lower(raw_json) LIKE '%account_deactivated%'
-                OR lower(raw_json) LIKE '%account_deatived%'
-              )
+              AND terminal_state='account_deactivated'
             """
         ).fetchall()
     finally:

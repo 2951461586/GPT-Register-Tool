@@ -544,18 +544,30 @@ def extract_links_for_account(
     """
     credentials = access_token
     if not credentials and email:
-        # Try loading from SQLite
+        # Try loading from SQLite.
+        # The path used to be hardcoded to <PROJECT_ROOT>/runtime/accounts.sqlite3,
+        # which silently ignored `storage.sqlite_path` from the config shards
+        # (config.json / runtime.json / payment.json merged via load_merged_config)
+        # and any monkeypatch of `sms_tool.storage.database_path` in tests.
+        # Resolved through database_path() instead; on a default config this
+        # returns exactly the same file as before.
         try:
             import sqlite3
-            db_path = os.path.join(PROJECT_ROOT, "runtime", "accounts.sqlite3")
-            conn = sqlite3.connect(db_path)
-            c = conn.cursor()
-            c.execute(
-                "SELECT access_token FROM accounts WHERE email=? ORDER BY updated_at DESC LIMIT 1",
-                (email,),
-            )
-            row = c.fetchone()
-            conn.close()
+            from contextlib import closing
+            from .storage import database_path
+
+            db_path = database_path()
+            with closing(sqlite3.connect(str(db_path))) as conn:
+                c = conn.cursor()
+                # Case-insensitive to match every other email lookup in the
+                # codebase; the bare `email=?` missed accounts stored with
+                # different casing and reported "No access token found".
+                c.execute(
+                    "SELECT access_token FROM accounts WHERE lower(email)=lower(?)"
+                    " ORDER BY updated_at DESC LIMIT 1",
+                    (email,),
+                )
+                row = c.fetchone()
             if row and row[0]:
                 credentials = row[0]
         except Exception:

@@ -8,8 +8,8 @@ namespace SmsWorkbench
     public sealed record BackendCommandPlan(
         string TaskName,
         IReadOnlyList<string> Arguments,
-        IReadOnlyDictionary<string, string> EnvironmentVariables = null,
-        IReadOnlyList<string> TemporaryFiles = null,
+        IReadOnlyDictionary<string, string>? EnvironmentVariables = null,
+        IReadOnlyList<string>? TemporaryFiles = null,
         int? TimeoutMilliseconds = null)
     {
         public IReadOnlyDictionary<string, string> Environment { get; } = EnvironmentVariables
@@ -181,7 +181,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> emails,
             string sessionFile,
             IReadOnlyList<string> proxyPool,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
             RequireArgument(mailboxFile, nameof(mailboxFile));
@@ -221,7 +221,7 @@ namespace SmsWorkbench
             int workers,
             bool autoRelogin,
             IReadOnlyList<string> proxyPool,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             List<string> targets = RequireEmails(emails);
             var args = new List<string>
@@ -263,7 +263,7 @@ namespace SmsWorkbench
             string smailrDomain,
             string cfworkerDomain,
             IReadOnlyList<string> proxyPool,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             List<string> targets = RequireEmails(emails);
             RequireArgument(provider, nameof(provider));
@@ -291,7 +291,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> emails,
             int workers,
             IReadOnlyList<string> proxyPool,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             List<string> targets = RequireEmails(emails);
             var args = new List<string>
@@ -352,7 +352,7 @@ namespace SmsWorkbench
         public static BackendCommandPlan CreateBatchDeleteAccounts(
             IReadOnlyList<string> emails,
             int workers = 4,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             List<string> targets = RequireEmails(emails);
             string emailFile = WriteEmailFile(tempDirectory, "delete_emails_", targets);
@@ -380,7 +380,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> emails,
             int workers = 4,
             int refreshTimeoutSeconds = 60,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             List<string> targets = RequireEmails(emails);
             string normalized = NormalizeImportTarget(target);
@@ -422,7 +422,7 @@ namespace SmsWorkbench
             string email,
             int workers = 4,
             int refreshTimeoutSeconds = 60,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             string normalized = NormalizeImportTarget(target);
             string emailFile = WriteEmailFile(tempDirectory, "single_import_email_", new[] { RequireEmail(email) });
@@ -482,7 +482,7 @@ namespace SmsWorkbench
             string sessionFile,
             string mailboxProxy,
             string remailToken,
-            string tempDirectory = null)
+            string? tempDirectory = null)
         {
             var args = new List<string>
             {
@@ -595,7 +595,7 @@ namespace SmsWorkbench
             if (checkPromotion) args.Add("--check-promotion-after-registration");
         }
 
-        private static string WriteEmailFile(string tempDirectory, string prefix, IReadOnlyList<string> emails)
+        private static string WriteEmailFile(string? tempDirectory, string prefix, IReadOnlyList<string> emails)
         {
             string emailFile = Path.Combine(
                 TempDirectory(tempDirectory),
@@ -604,17 +604,20 @@ namespace SmsWorkbench
             return emailFile;
         }
 
-        private static string TempDirectory(string tempDirectory)
+        private static string TempDirectory(string? tempDirectory)
         {
             return string.IsNullOrWhiteSpace(tempDirectory) ? Path.GetTempPath() : tempDirectory;
         }
 
-        private static string RequireArgument(string value, string parameterName)
+        private static string RequireArgument(string? value, string parameterName)
         {
             string trimmed = (value ?? "").Trim();
             if (trimmed.Length == 0)
                 throw new ArgumentException("Backend command argument must not be empty.", parameterName);
-            return value;
+            // `value` is non-null on every path that reaches here: null trims to
+            // "" and throws above. Not `trimmed`, which would also strip
+            // surrounding whitespace the caller passed deliberately.
+            return value!;
         }
 
         private static string RequireEmail(string email)

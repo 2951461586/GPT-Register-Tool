@@ -1,7 +1,21 @@
-"""Stable seams shared by protocol and browser registration drivers."""
+"""Stable seams shared by protocol and browser registration drivers.
+
+Single source of truth
+----------------------
+Every place that needs the list of registration drivers used to hardcode it:
+the ``RegistrationDriver`` enum values, ``BROWSER_REGISTRATION_DRIVERS``,
+the alias table inside ``normalize_registration_driver``, the argparse
+``choices`` in ``cli.py``, the ``supported_drivers`` set in ``config.py``
+(``validate_registration_driver_config`` *and* the ``registration.driver``
+check in ``validate_config``), and the dispatch if-chain in
+``external_sessions.create_browser_session`` -- six-to-seven copies that
+drifted whenever a driver was added. They now all derive from :data:`DRIVERS`
+below. Adding, renaming, or aliasing a driver is a one-line edit here.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
@@ -15,13 +29,58 @@ class RegistrationDriver(str, Enum):
     ADSPOWER = "adspower"
 
 
-BROWSER_REGISTRATION_DRIVERS = frozenset({
-    RegistrationDriver.PLAYWRIGHT.value,
-    RegistrationDriver.ROXY.value,
-    RegistrationDriver.CLOAK.value,
-    RegistrationDriver.CAMOUFOX.value,
-    RegistrationDriver.ADSPOWER.value,
-})
+@dataclass(frozen=True)
+class BrowserDriverSpec:
+    """Metadata for one registration driver, the single source of truth."""
+
+    key: str
+    # Every spelling (including the canonical ``key``) that resolves to this
+    # driver. Consumed by ``normalize_registration_driver`` and the config
+    # validators via :data:`KNOWN_DRIVER_ALIASES`.
+    aliases: frozenset[str] = field(default_factory=frozenset)
+    # ``protocol`` is the HTTP/API path and is not a browser driver; the rest
+    # map 1:1 to a browser session class.
+    is_browser: bool = True
+
+
+# Canonical driver registry. This is the only place the driver vocabulary and
+# its aliases are declared.
+DRIVERS: dict[str, BrowserDriverSpec] = {
+    RegistrationDriver.PROTOCOL.value: BrowserDriverSpec(
+        "protocol",
+        frozenset({"protocol", "api", "http"}),
+        is_browser=False,
+    ),
+    RegistrationDriver.PLAYWRIGHT.value: BrowserDriverSpec(
+        "playwright", frozenset({"playwright", "pw"}),
+    ),
+    RegistrationDriver.ROXY.value: BrowserDriverSpec(
+        "roxy",
+        frozenset({
+            "roxy", "roxybrowser", "roxy_browser",
+            "browser", "browser_registration", "fingerprint", "fingerprint_browser",
+        }),
+    ),
+    RegistrationDriver.CLOAK.value: BrowserDriverSpec(
+        "cloak", frozenset({"cloak", "cloakbrowser", "cloak_browser"}),
+    ),
+    RegistrationDriver.CAMOUFOX.value: BrowserDriverSpec(
+        "camoufox", frozenset({"camoufox", "camou", "fox", "cf"}),
+    ),
+    RegistrationDriver.ADSPOWER.value: BrowserDriverSpec(
+        "adspower", frozenset({"adspower", "adsp", "ap", "adspower_browser"}),
+    ),
+}
+
+
+# Derived lists -- none of these are hand-maintained anymore.
+BROWSER_REGISTRATION_DRIVERS = frozenset(k for k, s in DRIVERS.items() if s.is_browser)
+
+_ALIAS_TO_KEY: dict[str, str] = {a: spec.key for spec in DRIVERS.values() for a in spec.aliases}
+
+# Every accepted driver spelling, for config validators that only need a
+# membership test (e.g. ``registration.driver``).
+KNOWN_DRIVER_ALIASES = frozenset(_ALIAS_TO_KEY)
 
 
 def normalize_registration_driver(value: Any = None, config: Mapping[str, Any] | None = None) -> str:
@@ -32,22 +91,17 @@ def normalize_registration_driver(value: Any = None, config: Mapping[str, Any] |
         section = config.get("registration")
         if isinstance(section, Mapping):
             raw = str(section.get("driver") or "").strip().lower().replace("-", "_")
-    if not raw or raw in {"protocol", "api", "http"}:
+    canon = _ALIAS_TO_KEY.get(raw)
+    if canon is not None:
+        return canon
+    if not raw:
         return RegistrationDriver.PROTOCOL.value
-    if raw in {"playwright", "pw"}:
-        return RegistrationDriver.PLAYWRIGHT.value
-    if raw in {
-        "browser", "browser_registration", "fingerprint", "fingerprint_browser",
-        "roxy", "roxybrowser", "roxy_browser",
-    }:
-        return RegistrationDriver.ROXY.value
-    if raw in {"cloak", "cloakbrowser", "cloak_browser"}:
-        return RegistrationDriver.CLOAK.value
-    if raw in {"camoufox", "camou", "fox", "cf"}:
-        return RegistrationDriver.CAMOUFOX.value
-    if raw in {"adspower", "adsp", "ap", "adspower_browser"}:
-        return RegistrationDriver.ADSPOWER.value
     raise ValueError(f"unsupported registration driver: {raw}")
+
+
+def driver_choices() -> list[str]:
+    """Argparse choices for ``--registration-driver`` (and any CLI mirror)."""
+    return sorted(DRIVERS)
 
 
 class BrowserRegistrationError(RuntimeError):

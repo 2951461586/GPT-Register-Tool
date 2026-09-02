@@ -61,9 +61,11 @@ sms_tool/
   mailbox_chongzhi.py       Chongzhi mailbox provider adapter.
   outlook_imap.py           Outlook IMAP fallback fetcher.
   mail_otp.py               Shared OTP extraction/candidate filtering.
-  providers/                External provider clients.
+  providers/                External provider clients. Half-migrated: only 2 of 8 mailbox
+                            providers live here; see Subpackage Structure.
     cfworker_mailbox.py     CFWorker mailbox provider implementation.
-  commands/                 CLI subcommand helpers.
+    smailr_mailbox.py       Smailr mailbox provider implementation.
+  commands/                 CLI subcommand helpers; no package-level __all__.
     helpers.py              Shared command-level utilities.
     payment.py              Protocol-payment argument adaptation and exit-code boundary.
     payment_links.py        Link generation, UPI, and explicit payment-execution commands.
@@ -72,6 +74,7 @@ sms_tool/
     mailbox_ops.py          Inbox view and Gmail send command adaptation.
     one_click.py            One-click SMS and account-scan command adaptation.
     omakse.py               Omakase command adaptation.
+    email_change.py         Email-change argument adaptation.
   http_client.py            curl_cffi retry/transport handling.
   registration.py           Public registration facade and compatibility exports only.
   registration_state.py     Immutable input context, ordered state machine, and common stage deadline.
@@ -102,7 +105,7 @@ sms_tool/
   payment_flow.py           Canonical payment stages and per-method flow profiles.
   payment_routing.py        Named proxy pools, stage routes, one-time selection, and redacted plans.
   payment_executor.py       Common payment execution state machine and terminal-result normalization.
-  payment_link_manager.py   Payment state machine, adapter composition, and redacted run history.
+  payment_link_manager.py   49-line compatibility shim; re-exports sms_tool.pay_link.
   payment_egress.py         Pre-side-effect proxy-country assertions with bounded caching.
   wallet_provider.py        Shared GoPay/GrabPay orchestration and structured outcomes.
   wallet_transport.py       GoPay/GrabPay HTTP transport, stage proxies, Stripe metadata, and redirect validation.
@@ -112,7 +115,17 @@ sms_tool/
   payment_reconciliation.py Method-neutral reconciliation facade and unknown-result contract.
   paypal_authorization_queue.py Durable PayPal-only BA follow-up authorization queue.
   paypal/                   Project-local PayPal browser automation package (7 layers, see PayPal Payment Layer).
-  paypal_auto.py            Compatibility shim re-exporting sms_tool.paypal.
+  paypal_auto.py            Compatibility shim re-exporting sms_tool.paypal (28 lines).
+  paypal_link/              PayPal/Stripe/direct-card/UPI link generation and PayPal return
+                            reconciliation; internal cohesion 0.00 (see Subpackage Structure).
+  pay_link/                 Payment-link extraction state machine behind the
+                            payment_link_manager.py shim (see Subpackage Structure).
+  registration_drivers/     Browser registration drivers; highest fan-in in the package
+                            (see Subpackage Structure).
+  sentinel/                 OpenAI Sentinel token generation plus a vendored Node runner;
+                            note sms_tool/sentinel/runtime/ is source, not build output.
+  store/                    SQLite and session index persistence behind the 8-line
+                            storage.py shim (see Subpackage Structure).
   nodriver_captcha.py       Nodriver-based CAPTCHA solver adapter.
   nodriver_paypal.py        Nodriver-based PayPal browser automation helper.
   captcha_solver.py         CAPTCHA solving abstraction.
@@ -137,7 +150,7 @@ sms_tool/
   cpa_import.py             CPA API upload boundary; imports AT-only JSON and uploads normalized CPA payloads.
   import_targets.py         Import target normalization helpers.
   account_scan.py           Account health/quoter scan adapter.
-  storage.py                SQLite and session index persistence.
+  storage.py                8-line compatibility shim; re-exports sms_tool.store.
   desktop_read.py           Sanitized read-contract handlers and session metadata caches.
   desktop_serve.py          Resident JSONL desktop read server.
   doctor.py                 Offline runtime, dependency, and configuration diagnostics.
@@ -184,7 +197,7 @@ runtime/                    SQLite, debug output, caches, ignored by Git.
 | Explicit Agent Identity conversion | `sms_tool.agent_identity` | account seed, Ed25519 key gen, storage | Registration flow, payment execution |
 | SUB2API import | `sms_tool.sub2api_import` | agent identity, session converter, SUB2API API | Registration, payment, mailbox polling |
 | Account import/export conversion | `sms_tool.session_converter`, `sms_tool.codex_export`, `sms_tool.cpa_import`, `sms_tool.sub2api_import` | session JSON, account seed, CPA/SUB2API API | Registration or payment execution |
-| Account persistence | `sms_tool.storage` | session JSON and SQLite | Vendor protocol calls |
+| Account persistence | `sms_tool.store` (shim: `sms_tool.storage`) | session JSON and SQLite | Vendor protocol calls |
 | Backend task lifecycle | `SmsWorkbench.BackendTaskCoordinator` | `PythonBackendClient`, cancellation, sanitized error/result normalization | WPF control state or command argument construction |
 | Local helper services | `services/*` | Their own provider/runtime APIs | Direct account SQLite writes unless routed through CLI contracts |
 
@@ -211,6 +224,506 @@ WPF controls -> command planner -> Python CLI -> command adapter
   result models; shared contracts do not import a concrete provider.
 - Tests follow the same ownership: owner-module tests cover behavior, while
   routing tests cover only the boundary between two modules.
+
+## Subpackage Structure（2026-08-31 机械拆分）
+
+2026-08-31 的机械拆分把 `sms_tool/` 下的单体模块拆成 8 个子包。本节记录拆后的**实测状态**，
+是 `## Repository Layout` 中目录条的展开。拆分的执行方式是"按行号切片 + 复制 import 前奏 + 加兼容壳"，
+函数体未改动（`sms_tool/pay_link/base.py:1` 等 9 个子模块 docstring 自带
+`mechanical split, bodies unchanged` 指纹），因此**目录结构变了，依赖结构基本没变**——
+读本节时请把"有几个文件"和"有几条边界"分开看。
+
+### 度量口径
+
+全部数字为 2026-09-02 用 AST 全量扫描实测（364 个 `.py`、1094 条包内依赖边），
+排除 `dist/`、`runtime/`、`.venv/`、`__pycache__/`、`sessions/`、`**/bin`、`**/obj`
+（不排除则 `.py` 数翻 5 倍，结论不可用）。
+
+| 指标 | 定义 |
+| --- | --- |
+| 入边 / 外部来源 | 指向该子包的依赖边数 / 其中来自子包外部（生产 + 测试）的模块数 |
+| 出边 | 该子包指向 `sms_tool` 其它模块的依赖边数（不含 stdlib / 三方库） |
+| 内部边 | 该子包内部子模块之间的依赖边数 |
+| 内聚 | 内部边 ÷（内部边 + 出边）。**只衡量"对外依赖占比"，不衡量职责是否单一** |
+
+### 总览
+
+| 子包 | 文件 | 行数 | 入边 | 外部来源 | 出边 | 内部边 | 内聚 | 一句话定位 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `store/` | 7 | 1615 | 12 | 2 | 29 | 9 | 0.24 | 持久化核心，但被 8 行壳完全遮蔽 |
+| `pay_link/` | 7 | 1762 | 12 | **1** | 87 | 10 | 0.10 | 出边最宽、外部来源最窄的哑铃 |
+| `paypal/` | 8 | 2122 | 23 | 6 | 32 | 14 | **0.30** | 内部分层最规整，但有一个 P0 断链 |
+| `paypal_link/` | 3 | 2768 | 4 | 2 | 12 | **0** | **0.00** | 两个互不相认的大文件共用一个目录 |
+| `registration_drivers/` | 9 | 3508 | **45** | **14** | 36 | 11 | 0.23 | 全仓扇入最高，实现高度集中在 1 个文件 |
+| `sentinel/` | 4 | 689 | 17 | 8 | **9** | 3 | 0.25 | 出口最干净，最容易独立 |
+| `providers/` | 3 | 1013 | 9 | 4 | **3** | 0 | 0.00 | 半迁移，方向还与同层相反 |
+| `commands/` | 10 | 2646 | 18 | 4 | 78 | 5 | **0.06** | 编排层，低内聚是设计意图 |
+
+### sms_tool/store/
+
+**职责边界。** 拥有 SQLite schema 创建与迁移、账号邮箱的归一化与大小写不敏感去重、
+注册/支付状态的列标记、注册检查点、以及从 `sessions/session_*.json` 重建 SQLite。
+
+不负责：session JSON 的字段语义（归 `account_models.py`）、账号是否该删的业务判定
+（归 `account_cleanup.py` / `account_liveness.py`）、任何网络调用。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `accounts.py` | 483 | upsert / 查询 / 邮箱迁移 |
+| `normalize.py` | 397 | 邮箱与字段归一化 |
+| `connection.py` | 269 | 连接、schema 初始化、路径解析 |
+| `markers.py` | 268 | 配额 / 健康 / 促销状态标记 |
+| `__init__.py` | 79 | 聚合出口 |
+| `checkpoints.py` | 72 | 注册检查点 |
+| `constants.py` | 47 | `EMAIL_RE` / `EXTRA_COLUMNS` / `KNOWN_EMAIL_DOMAINS` |
+
+**对外接口。** `__init__.py:79` 的 `__all__` 共 52 个符号：25 个公共
+（`database_path`、`init_database`、`upsert_account`、`migrate_account_email`、
+`rebuild_from_session_dir` …）、27 个私有。**没有** stdlib 泄漏，是 4 个有 `__all__`
+的子包里出口质量第二好的。
+
+**依赖关系。** 内部三层：`constants` ← {`connection`, `normalize`} ← {`accounts`,
+`checkpoints`, `markers`}，无环（内部边 9）。出边 29 全部指向 `sms_tool` 父包
+（`config`、`paths`、`account_models`）。
+
+入边只有 12，**包外直接引用 `sms_tool.store.*` 的仅 2 处**：`sms_tool/storage.py`
+（兼容壳）与 `tests/test_store_modules.py`。真正的扇入是 **25 个文件（19 生产 + 6 测试），
+且 100% 经过 `storage.py` 壳**——`account_seed.py`、`cli.py`、`registration_state.py`、
+`desktop_read.py` 等 19 个生产模块全部写 `from sms_tool import storage`。
+
+**已知的债。**
+
+1. ⚠️ **故意的反向依赖，不要清理。** `store/connection.py:40` 有
+   `DELIBERATE REVERSE DEPENDENCY - do not "clean this up"` 注释，`:57` 与 `:89`
+   两处 `import sms_tool.storage as _storage` 反向取 `database_path`。原因：测试通过
+   `patch.object(storage, "database_path")` 注入临时库，每次调用重新读属性才能让内部调用方
+   也被重定向；改成绑定本地符号会让所有内部调用静默打到真实库。
+   **两点修正**：(a) 该注释块目前只存在于**工作区**，尚未提交（`git diff sms_tool/store/connection.py`
+   可见）；(b) 注释写"7 test files"，实测 **5 个**——`tests/test_account_health_queue.py:201`、
+   `test_account_models.py:38,70,98`、`test_registration_checkpoint.py:31`、
+   `test_store_modules.py:84,99,125,159`、`test_storage_dedup.py:22`。
+2. 3 处函数级反向 import 破环：`accounts.py:143`（`..mailbox_remail`）、
+   `markers.py:109`（`..account_health`）、`normalize.py:139`（`..payment_link_manager`）。
+   其中 `store → payment_link_manager → pay_link → … → storage` 是真实的潜在环。
+3. 壳比想象中薄：`storage.py` 只有 **8 行**（`from .store import *` + `__all__` 转发）。
+   （49 行的壳是 `payment_link_manager.py`，两者常被记混。）壳越薄，"谁在依赖 store"就越难
+   从 import 图上看出来——上面那 25 个文件在系统里登记的是对 `storage` 的依赖。
+
+### sms_tool/pay_link/
+
+**职责边界。** 拥有协议支付链接抽取的统一状态机：适配器编排、子进程抽取器调用、结果归一化、
+终端状态判定、运行历史脱敏落盘。
+
+不负责：具体支付方式的 HTTP 协议（在 `services/protocol-payment/`）、PayPal 链接生成
+（归 `paypal_link/`）、代理路由规划（归 `payment_routing.py`）、能力探测（归 `payment_capability.py`）。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `adapters.py` | 601 | 各支付方式适配器调用 |
+| `registry.py` | 290 | 适配器注册表 |
+| `core.py` | 250 | `generate_payment_link` / `probe_payment_method` |
+| `normalize.py` | 247 | 结果与异常归一化 |
+| `base.py` | 225 | 配置、路径、脱敏、锁 |
+| `persistence.py` | 62 | 运行历史落盘 |
+| `__init__.py` | 87 | 聚合出口 |
+
+**对外接口。** `__all__` 55 个：15 个公共（`generate_payment_link`、`probe_payment_method`、
+`build_default_payment_registry`、`register_payment_adapter`、`PAYMENT_ADAPTERS` …）、
+40 个私有。无 stdlib 泄漏，但私有占比 73%，说明拆的是命名空间不是边界。
+
+**依赖关系。** 内部方向：`base` ← `adapters` ← {`core`, `registry`}，另加
+`core` ← {`normalize`, `persistence`}。出边 **87**（8 个子包里最宽）指向 22 个父包模块。
+入边 12，**外部来源只有 1 个**：`sms_tool/payment_link_manager.py`（49 行壳，
+`:48` `from .pay_link import *`）。这是全仓最典型的"哑铃"：对外只有 1 个入口，对内 87 条出边。
+
+**已知的债。**
+
+1. **6 个子模块的 import 前奏逐字重复。** `base`/`adapters`/`core`/`normalize`/
+   `persistence`/`registry` 的**第 4–26 行完全相同**（10 个 stdlib import + 9 条 `..` 导入），
+   真正的内部依赖从第 28 行才开始。这是机械拆分把单体的 import 块复制进每个子模块的直接后果，
+   也是"出边 87"的主要来源（6 × ~14 条重复边）。**要降出边，先删这 6 × 23 行，不用改任何函数。**
+2. 声称的 "base → adapters → core/registry" 分层**不完整**：`core.py:32` 依赖 `registry`，
+   而 `registry.py:28` 又依赖 `adapters`——`adapters` 与 `core`/`registry` 之间互为可达。
+   当前靠 `from X import a, b, c` 的逐符号导入没触发 `ImportError`，但已无严格分层。
+3. 壳 `payment_link_manager.py` 第 8–45 行保留了 38 行前置 import
+   （`json`/`logging`/`subprocess`/`tempfile`… 及 9 个 `sms_tool` 模块），在
+   `from .pay_link import *` 之前执行。拆分残留，应先验证再删。
+
+### sms_tool/paypal/
+
+**职责边界。** 拥有 PayPal 浏览器自动化：策略选择（reverse 协议 → nodriver → Camoufox/Cloak）、
+步骤机、表单语义、DOM 定位原语、会话与指纹、卡片/地址/号码挑选、结果持久化。
+
+不负责：PayPal 链接生成（归 `paypal_link/`）、BA 后续授权队列（归 `paypal_authorization_queue.py`）、
+商户回跳对账（归 `paypal_reconciliation.py`）。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `orchestrator.py` | 485 | 策略选择与结果持久化 |
+| `form_steps.py` | 434 | 语义化表单字段 |
+| `dom_fields.py` | 429 | 通用定位/填写/读取原语 |
+| `flow_steps.py` | 355 | 步骤机 + 人机验证/短信闸门 |
+| `__init__.py` | 155 | 聚合出口 |
+| `session.py` | 142 | 浏览器上下文与指纹 |
+| `config_picker.py` | 109 | 卡/地址/号码挑选 |
+| `errors.py` | 13 | `_PayPalStepError` |
+
+**对外接口。** `__all__` 56 个，其中 **55 个私有，唯一公共符号是 `auto_pay`**。
+这是 8 个子包里出口最"内向"的——包内 7 层互相调用不需要对外暴露，但把 55 个 `_` 前缀符号
+塞进 `__all__` 会让 `from sms_tool.paypal import *` 的意义失效。
+
+**依赖关系。** 内部分层是 8 个子包里最规整的，严格单向：
+
+```text
+errors / dom_fields / session  ->  form_steps  ->  flow_steps  ->  orchestrator
+                                       config_picker --^
+```
+
+出边 32 指向 17 个父包模块；入边 23，外部来源 6 个
+（`codex_phone.py`、`paypal_auto.py` 壳、4 个测试文件）。
+
+**已知的债。**
+
+1. 🔴 **P0 断链（拆分引入，已实测复现）。** `orchestrator.py:233`
+   `from .nodriver_paypal import run_nodriver_pay` 与 `:244`、`:311`
+   `from .proxy_bridge import proxy_for_browser` ——两个模块都在**父级**
+   （`sms_tool/nodriver_paypal.py`、`sms_tool/proxy_bridge.py`），单点相对导入解析成
+   `sms_tool.paypal.nodriver_paypal`，运行时抛 `ModuleNotFoundError`。
+   对照 `registration_drivers/external_sessions.py:357` 的 `from ..proxy_bridge import` 才是对的。
+   调用点 `orchestrator.py:106` **没有 `try` 包裹**（AST 确认 `auto_pay` 行 30–157 内无任何
+   `Try` 覆盖 106 行），所以 reverse 协议失败后走 nodriver 兜底时，异常直接穿透 `auto_pay`，
+   `:122` 的 Camoufox/Cloak 兜底**永远到不了**。
+   测试没抓到是因为 `tests/test_paypal_orchestrator.py:71` 把 `_try_nodriver_pay` 整个
+   monkeypatch 掉了——被测函数本体从未被执行。修法：`..` 改两层 + 补一条不打桩的导入测试。
+2. 10 处"到父壳 `paypal_auto.py`"的引用**不是 import 级反向依赖**。实测 `sms_tool/paypal/`
+   内没有任何 `import paypal_auto`；那 10 处是 docstring 溯源句（`config_picker.py:3`、
+   `dom_fields.py:3`、`errors.py:3` 等）与配置键/错误串（`orchestrator.py:44,46` 的
+   `CFG["paypal_auto"]`、`config_picker.py:38`）。真正需要清理的是 `__all__` 里的 55 个私有符号，
+   不是这些文本。
+3. `dom_fields.py` 的静默失败沿用了单体时期的行为：选择器失配统一返回 `False`，
+   PayPal 前端改版后上层会看到"填表成功"而实际未填（见
+   `docs/audit-2026-09-02-round5-summary.md`）。拆分没有改变这一点。
+
+### sms_tool/paypal_link/
+
+**职责边界。** 拥有 PayPal / 直连卡 / UPI 三类链接的**生成**，以及 PayPal 商户回跳的**对账**
+（跳转链还原、远程状态判定、证据收集）。
+
+不负责：链接抽取的状态机（归 `pay_link/`）、BA 后续授权（归 `paypal_authorization_queue.py`）、
+浏览器自动化（归 `paypal/`）。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `reconciliation.py` | 1305 | 商户回跳对账 |
+| `gen_link.py` | 1255 | PayPal/Stripe/直连卡/UPI 链接生成 |
+| `__init__.py` | 208 | 聚合出口 |
+
+**对外接口。** `__all__` **166 个符号，8 个子包里最宽**：68 公共、78 私有、
+**20 个 stdlib/内建名泄漏**（`json`、`os`、`sys`、`re`、`html`、`hashlib`、`Path`、`Any`、
+`Mapping`、`Optional`、`Protocol`、`Sequence`、`Enum`、`dataclass`、`annotations`、`main`、
+`urljoin`、`parse_qs`、`unquote`、`urlsplit`）。`from sms_tool.paypal_link import *`
+会污染调用方命名空间。
+
+**依赖关系。** **内聚 0.00——内部边为 0。** `gen_link.py` 与 `reconciliation.py` 互不引用，
+只是被塞进同一目录（它们分别源自 `gen_pp_link.py` 与 `paypal_reconciliation.py` 两个不相干的单体）。
+出边 12 指向 11 个父包模块；入边 4，外部来源 2 个（`gen_pp_link.py`、`paypal_reconciliation.py`，
+两者现在都是壳）。
+
+**已知的债。**
+
+1. `_PlmProxy` 惰性代理是补丁不是设计。`gen_link.py:6-19` 定义 `_PlmProxy`，
+   `:23` `_plm = _PlmProxy()`，属性访问时才 `importlib.import_module("sms_tool.gen_pp_link")`。
+   全文件 **15 处 `_plm.*` 调用**（`:296, 328, 405, 494, 559, 570, 693, 968, 987, 1013, 1066,
+   1085, 1115, 1141`）。存在理由：拆分后 `gen_pp_link` 变成壳，`gen_link` 直接 import 父壳会成环。
+   代价是每次属性访问走一次 `sys.modules` 查找，且 monkeypatch 语义依赖"读实时属性"这一微妙假设。
+2. `__all__` 的 20 个 stdlib 泄漏来自机械 `import *` 转发。修法不是删 `__all__`，
+   而是把它收敛到 68 个公共符号——但这会打破现有 `from sms_tool.paypal_link import json` 式的
+   隐式依赖，需先 grep 确认。
+3. 内聚 0.00 意味着"这个子包"目前不是一个内聚单元。若要把 `paypal_link/` 当成一个模块来理解，
+   先要决定它究竟是"链接生成"还是"回跳对账"——两者没有共享代码。
+
+### sms_tool/registration_drivers/
+
+**职责边界。** 拥有浏览器注册的驱动抽象与各驱动实现：驱动名归一化、浏览器上下文、
+反指纹注入、外部反检测浏览器的 CDP 接入（Roxy / Cloak / Camoufox / AdsPower）、
+Playwright 状态机。
+
+不负责：注册流程的阶段编排（归 `registration_handlers.py` / `registration_state.py`）、
+并发闸门（归 `registration_concurrency.py`）、注册结果持久化（归 `store/`）。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `playwright.py` | **2035** | 唯一真实实现 |
+| `external_sessions.py` | 901 | 反检测浏览器 CDP 轨 |
+| `browser_session.py` | 373 | 浏览器上下文 |
+| `stealth.py` | 92 | 反指纹注入 |
+| `base.py` | 59 | enum + 归一化 + `BrowserRegistrationError` |
+| `roxy.py` / `camoufox.py` / `cloak.py` | 19 / 12 / 12 | 三行包装 |
+| `__init__.py` | 5 | 出口 |
+
+**对外接口。** `__all__` 只有 **3 个符号**：`BROWSER_REGISTRATION_DRIVERS`、
+`RegistrationDriver`、`normalize_registration_driver`——**全部来自 `base.py`，
+8 个实现模块一个都不导出**。这是"契约面"与"实现面"分离得最清楚的一个子包。
+
+**依赖关系。** 入边 **45 / 外部来源 14（8 生产 + 6 测试）**，是 8 个子包里扇入最高的
+（`cli.py`、`config.py`、`registration.py`、`batch_runner.py`、`browser_pool.py`、
+`account_liveness.py`、`account_recovery.py`、`scripts/_diag_camoufox_launch.py`）。
+出边 36 指向 25 个父包模块；内部边 11；内聚 0.23。
+
+**已知的债。**
+
+1. "5 个驱动"是错觉。`camoufox.py`(12)、`cloak.py`(12)、`roxy.py`(19) 都只是
+   `run_browser_registration(driver_name=...)` 的一层包装；真实实现只有
+   `playwright.py` **2035 行（占子包 58%）** 加 `external_sessions.py` 901 行（占 26%）。
+   这两个文件也是本子包待拆的全部内容。
+2. `ADSPOWER` **不是**"有 enum 没实现"。实测 AdsPower 实现完好：
+   `AdsPowerBrowserSession` 在 `external_sessions.py:689`，分派在 `:881`，
+   配置键在 `:78-82`，CLI choices 在 `cli.py:248`，校验白名单在 `config.py:448`，
+   并有 `tests/test_adspower_driver.py`（217 行）覆盖别名归一化与会话分派。
+   缺的只是"一个驱动一个文件"的对称性——它与 Roxy/Cloak/Camoufox 一起挤在
+   `external_sessions.py` 里。
+3. `BrowserRegistrationError`（`base.py:53`）是事实上的公共契约（`external_sessions.py`
+   至少 6 处抛它），但不在 `__init__.py` 的 `__all__` 里，调用方只能
+   `from sms_tool.registration_drivers.base import BrowserRegistrationError`。
+4. 内聚 0.23 偏低的主因是 `external_sessions.py` 与 `playwright.py` 各自横向触达
+   `config` / `proxy_bridge` / `browser_fingerprint_pool` 等父包模块，而非子模块之间互调。
+
+### sms_tool/sentinel/
+
+**职责边界。** 拥有 OpenAI Sentinel token 的生成：flow 页面顺序、PoW 计算、
+vendored Node runner 的子进程调度、bundle 组装、token 缓存。
+
+不负责：Sentinel 结果的使用方（注册/支付各自消费）、`oai-did` 等指纹 Cookie 的策略
+（归 `codex_sentinel.py`）。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `client.py` | 407 | flow 编排 + token 缓存 |
+| `runner.py` | 194 | Node 子进程调度 |
+| `bundle.py` | 67 | bundle 组装 |
+| `__init__.py` | 21 | 出口 |
+
+另含 vendored 资产：`runtime/sdk.js`(30 KB)、`runtime/sentinel-runner.js`(57 KB)、
+`THIRD_PARTY_NOTICES.md`(10 行)。
+
+**对外接口。** `__all__` 7 个：`SentinelToken`、`SentinelIssueError`、`FLOW_PAGE_URLS`、
+`sentinel_backend`、`issue_sentinel_token`、`issue_sentinel_flow`、`issue_sentinel_bundle`。
+**8 个子包里唯一"私有符号 0、stdlib 泄漏 0"的干净出口。**
+
+**依赖关系。** 出边 **9** 指向 7 个父包模块（8 个子包里最少，仅次于 `providers/` 的 3）；
+内部边 3；内聚 0.25。入边 17，外部来源 8 个（`auth_flow.py`、`batch_runner.py`、
+`phone_registration.py`、`registration_handlers.py`、`registration_preflight.py`、
+`paypal_extract.py`、`sentinel_tokens.py`、`tests/test_sentinel_runner.py`）。
+
+**已知的债。**
+
+1. **统计陷阱**：`sms_tool/sentinel/runtime/` 会被全仓扫描的 `runtime/` 排除规则**误伤**，
+   导致 vendored JS 资产不在统计内。任何对该目录的审计/打包都要显式放行这一路径。
+2. 双入口未收敛：根级 `sentinel_tokens.py` 与 `sentinel/` 并存，前者导入后者并缓存结果，
+   但 8 个外部来源里仍有直接走 `sentinel_tokens` 的。新代码应直接用 `sms_tool.sentinel`。
+3. `runner.py` 走子进程调 Node，异常面在进程边界——AST 静态扫描看不到
+   `sentinel-runner.js` 内部的失败模式，PoW 失败只能靠子进程退出码与 stderr 推断。
+
+### sms_tool/providers/
+
+**职责边界。** 目前只拥有 2 个邮箱 provider 的**客户端实现**（CFWorker、Smailr）。
+
+不负责：provider 的分配与轮询编排（归 `mailbox.py` / `mailbox_service.py` /
+`mailbox_strategies.py`）、OTP 抽取（归 `mail_otp.py`）。
+
+| 文件 | 行数 |
+| --- | --- |
+| `cfworker_mailbox.py` | 591 |
+| `smailr_mailbox.py` | 421 |
+| `__init__.py` | 1（仅 docstring，**无 `__all__`**） |
+
+**对外接口。** **没有包级出口。** `__init__.py` 只有一行 `"""Mailbox provider clients."""`，
+既不 `__all__` 也不 re-export；调用方必须写全路径
+`from sms_tool.providers.cfworker_mailbox import CFWorkerMailboxClient`。
+
+**依赖关系。** 内聚 **0.00**（内部边 0，两个 provider 互不引用）。出边 **3**（8 个子包最少）。
+入边 9，外部来源 4 个（`mailbox_cfworker.py`、`mailbox_smailr.py` + 2 个测试）。
+
+**已知的债。**
+
+1. **半迁移，且方向与同层相反。** `providers/` 里只有 2 个客户端；其余 6 个 provider
+   仍留在 `sms_tool/` 根下自包含：`mailbox_remail.py`(890)、`mailbox_gmail.py`(518)、
+   `mailbox_icloud_url.py`(344)、`mailbox_chongzhi.py`(264)、`outlook_imap.py`(252)、
+   `mailbox_graph.py`(38)，合计 2306 行。
+   更麻烦的是**根级 `mailbox_*.py` 现在是 providers 之上的编排层**
+   （`mailbox_cfworker.py:6` `from .providers.cfworker_mailbox import CFWorkerMailboxClient`），
+   而未迁移的 6 个没有这层拆分。所以 `providers/` 目前是"2 个客户端"而不是"provider 层"，
+   两种形态并存会让"新 provider 该放哪"没有答案。
+2. 与 `mailbox_strategies.py` 的 provider registry 概念重叠：一个按"目录"组织，
+   一个按"注册表"组织。迁移第 3 个 provider 之前必须先定这一个问题。
+3. 无 `__all__` 意味着包边界完全靠约定；一旦 `providers/` 下文件增多，
+   私有符号会像 `paypal_link/` 那样被 `import *` 无意带出。
+
+### sms_tool/commands/
+
+**职责边界。** 拥有 CLI 子命令的**编排与参数适配**：参数归一化、调用 workflow 公共函数、
+退出码边界。
+
+不负责：任何业务实现（支付协议、注册流程、持久化）、WPF 状态、直接读写 SQLite/session 文件
+（见 `## Dependency Direction`）。
+
+| 文件 | 行数 |
+| --- | --- |
+| `payment.py` | 780 |
+| `registration.py` | 616 |
+| `accounts.py` | 348 |
+| `payment_links.py` | 263 |
+| `one_click.py` | 187 |
+| `mailbox_ops.py` | 145 |
+| `omakse.py` | 130 |
+| `helpers.py` | 123 |
+| `email_change.py` | 53 |
+| `__init__.py` | 1（仅 docstring，**无 `__all__`**） |
+
+**对外接口。** 与 `providers/` 一样**没有包级出口**；`cli.py` 直接 import 具体子模块。
+这是有意的——命令模块的调用方只有 `cli.py` 一个。
+
+**依赖关系。** 出边 **78** 指向 33 个父包模块（子包里第二宽），内部边 5，
+**内聚 0.06 为 8 个子包最低**。入边 18，外部来源 4 个（`cli.py` + 3 个测试）。
+
+**已知的债。**
+
+1. **内聚 0.06 是设计意图，不是缺陷。** 编排层的价值就在于横向触达 33 个模块。
+   评价它应该用"是否含业务逻辑"和"是否直接写库"两个指标，而不是内聚——
+   拿内聚排名去推动 `commands/` 重构会拆错地方（真正该拆的是 `pay_link/` 的重复 import 前奏）。
+2. `## Repository Layout` 的命令清单**漏了 2 个模块**：`email_change.py`(53) 与 `omakse.py`(130)。
+   前者是邮箱换绑的参数适配层（见 `## Email Change Flow`），后者是 Omakase 命令适配。
+3. 无 `__all__` + 5 条内部边（如 `accounts.py` ← `registration.py`）意味着子模块可互相引用
+   任意私有符号，边界靠约定。当前规模（10 文件 / 2646 行）尚可接受，
+   再增长应先补 `__all__`。
+
+### 拆分遗留的共性问题
+
+1. **没有任何一个子包是"叶子"。** 8 个子包的出边（29 / 87 / 32 / 12 / 36 / 9 / 3 / 78）
+   **100% 指向 `sms_tool` 父包自身**，而 `sms_tool/__init__.py` 自身扇入 86。
+   拆分降低了单文件长度，没有降低包间耦合——`sms_tool` 这个扁平命名空间仍是事实上的"全局作用域"。
+2. **`__all__` 搬运的是命名空间，不是边界。** 4 个有 `__all__` 的子包合计 329 个符号，
+   其中 200 个私有（61%）。`paypal/` 55/56 私有、`paypal_link/` 泄漏 20 个 stdlib 名。
+   `from sms_tool.<pkg> import *` 在这 4 个包上都应视为未定义行为。
+3. **机械拆分的指纹仍在。** 除 9 处 `mechanical split, bodies unchanged` docstring 外，
+   `pay_link/` 6 个子模块第 4–26 行 import 前奏逐字相同（见上文）。删掉这 138 行是本轮
+   投入产出比最高的清理。
+4. **兼容壳的行数与职责都被误记。**    实测 `gen_pp_link.py` 7 行、`paypal_reconciliation.py` 7 行、`storage.py` 8 行、
+   `paypal_auto.py` 28 行、`payment_link_manager.py` 49 行——**5 个壳合计 99 行**，
+   形态统一为 `from .<pkg> import *` + `__all__` 转发
+   （`payment_link_manager.py` 多带 38 行拆分残留的前置 import）。
+   引用这些壳的文件数远多于引用子包本身的文件数（`store/` 是 25 : 2），
+   因此**任何"谁在依赖 X 子包"的统计都必须把壳算进去，否则结论会差一个数量级**。
+
+### 与 2026-09-02 快照的出入
+
+以下条目与拆分时记录的快照不一致，本节一律采用实测值：
+
+| 项 | 快照 | 实测 | 说明 |
+| --- | --- | --- | --- |
+| `storage.py` 行数 | 49 | **8** | 49 行的是 `payment_link_manager.py` |
+| `store/` 扇入 | 26 | **25** 文件（19 生产 + 6 测试） | 口径为"文本引用 `sms_tool.storage`"，与 26 基本吻合；但**直接引用 `store.*` 的只有 2 个** |
+| `connection.py` 注释中的测试数 | 7 | **5** | 见上文 store 债 1 |
+| `pay_link/` 出边 | 179 | **87** | 179 含 stdlib/三方 import；87 为指向 `sms_tool` 的边 |
+| `pay_link/` 内部方向 | base → adapters → core/registry | 同左 **+** `core` ← `registry` ← `adapters` | 存在可达环 |
+| `pay_link/` 的 `_plm.*` 清理 | 24 处已清理 | **0 处残留** | `_plm` 实际在 `paypal_link/gen_link.py`，仍有 **15 处** |
+| `paypal/` 到父壳反向依赖 | 10 条待清理 | **0 条 import 级** | 10 处均为 docstring 与配置键文本 |
+| `registration_drivers/` ADSPOWER | enum 有、模块无 | 实现在 `external_sessions.py:689` | 测试 217 行覆盖 |
+| `playwright.py` 行数 | 2032 | **2035** | — |
+| 各子包内聚 | 0.89 / 0.93 / 0.35 / 0.46 / 0.16 | 0.30 / 0.00 / 0.23 / 0.25 / 0.06 | 口径不同：本节用"内部边 ÷(内部边+出边)" |
+
+## services/protocol-payment/（vendored 抽取脚本群）
+
+上一节的 8 个子包全在 `sms_tool/` 下、都是 2026-08-31 机械拆分的产物。本节的目录**不属于那次拆分**：
+它在仓库根 `services/protocol-payment/`，不是 `sms_tool` 的子包，与 `sms_tool` 之间没有 import 级
+耦合。它的边界不是模块边界，而是**进程边界**。
+
+### 职责边界
+
+拥有 7 种支付方式（iDEAL / PIX / Kakao Pay / BLIK / TWINT / 直卡 Checkout / MoMo）的
+端到端 Checkout 协议抽取：拿 access token 与代理种子，跑完商家侧 Checkout 流程，把终端状态
+打到 stdout。
+
+不负责：抽取状态机与重试（归 `sms_tool/pay_link/`）、代理路由规划（归 `payment_routing.py`）、
+能力探测（归 `payment_capability.py`）、PayPal 链接生成（归 `paypal_link/`）、以及任何
+SQLite / session 写入——脚本群里没有任何一处直接碰账号库。
+
+| 文件 | 行数 | 角色 |
+| --- | --- | --- |
+| `blik/blik_qr_extract.py` | 3792 | BLIK 抽取（复用 iDEAL 流程） |
+| `ideal/ideal_qr_extract.py` | 3197 | iDEAL 抽取 |
+| `twint/twint_extract.py` | 3184 | TWINT 抽取 |
+| `momo/momo_qr_extract.py` | 2046 | MoMo 抽取 |
+| `kakao/kakao_extract.py` | 1519 | Kakao Pay 抽取 |
+| `direct_card/direct_card_extract.py` | 1174 | 直卡 Checkout 抽取 |
+| `momo/ac_paylink_core.py` | 851 | MoMo 链接核心（被 `run_momo.py` 复用） |
+| `pix/pix_core.py` | 839 | PIX 核心（被 `run_pix.py` 复用） |
+| `pix/pix_extract.py` | 795 | PIX 抽取 |
+| `common/protocol_core.py` | 315 | 共享终端状态上报与脱敏策略 |
+| `momo/run_momo.py` | 156 | MoMo 独立入口（`--dump-*` 自检用） |
+| `pix/run_pix.py` | 82 | PIX 独立入口 |
+| `common/extractor_helpers.py` | 26 | `is_user_already_paid_error` 等共享判定 |
+| `common/__init__.py` | 1 | 空 |
+
+合计 **14 个 `.py` / 17977 行**——比上一节 8 个子包加起来（16023 行）还大，但此前在本文件中
+只有 2 处间接提及（`## Repository Layout` 与 `## Ownership Matrix` 各 1 行）。体量与文档覆盖度
+严重不匹配。
+
+### 对外接口面（进程边界）
+
+唯一契约是进程边界：**env 变量进，stdout 的最后一段 JSON 出**。
+
+- 调用方：`sms_tool/pay_link/adapters.py:31` `_run_extractor_subprocess`，以
+  `cwd=script.parent` 起子进程、超时归口 `error_stage: adapter_subprocess`（`:59-65`）。
+- 结果解析：`adapters.py:165` 取 `_last_json_object(proc.stdout)`，并要求
+  `schema == "protocol_payment.v1"` 才认（`:166-169`）。脚本可以自由往 stdout 打日志，
+  只要最后一个 JSON 对象符合 schema——这是刻意的宽松约定。
+- 调用点在 `adapters.py:160`、`:476`、`:586` 三处。
+
+对 C# 前端**没有直接接口面**：WPF 只经 `SmsWorkbench.ProtocolPaymentExecution.cs` 拼
+Python CLI 参数，不感知这些脚本。
+
+### 依赖关系
+
+与 `sms_tool` 零 import 级耦合；内部唯一的共享代码是 `common/` 包。**这是全仓唯一真正
+满足"可独立出去"的子系统**（对比上一节：8 个子包的出边 100% 指回 `sms_tool` 父包）。
+
+### 已知的坑
+
+1. ⚠️ **`sys.path` 自注入 + 裸名 `import common` 是刻意的，不要"清理"。** 6 个脚本把自身
+   目录（或其父目录）塞进 `sys.path`：`blik:84-85`、`ideal:74-75`、`twint:73-74`
+   （`PROTOCOL_ROOT = SCRIPT_DIR.parent`）、`kakao:39-40`（`PROJECT_ROOT =
+   SCRIPT_DIR.parents[2]`）、`momo/run_momo.py:24`、`pix/run_pix.py:11`。随后以裸名
+   导入兄弟包：`blik:86-87`、`ideal:76-77`、`twint:75-76` 的
+   `from common.protocol_core import ...`。
+   存在理由：这些脚本以 `cwd=script.parent` 被当独立进程执行，`services/protocol-payment/`
+   不在任何 `sys.path` 上，也不在 installed package 里。改成正规相对导入会让子进程直接
+   `ModuleNotFoundError`。**要动这里，先改调用方的子进程启动方式，不能只改 import。**
+   副作用：`common` 是个过于通用的顶层模块名，一旦仓库根被加进 `sys.path`
+   （`kakao` 就是这么干的），理论上存在与其他 `common` 撞名的风险。
+2. **env 契约全仓无一处声明。** `adapters.py:132-158` 是一条按 `spec.key` 的 4 分支 if 链，
+   每种方式注入不同变量：`ideal` → `PP_TOKEN` + `IDEAL_PROXY_SEED_FILE` + `IDEAL_FLOW_MODE`；
+   `kakao` → `KAKAO_TOKEN` + `KAKAO_PROXY_SEED_FILE` + 3 个 `*_COUNTRY`；
+   `twint` → `PP_TOKEN` + `TWINT_PROXY_SEED_FILE` + `TWINT_FLOW_MODE`。
+   脚本侧各自 `os.environ.get` 读取，两边没有共享的 schema 或默认值表。加一种支付方式要在
+   两边同时对齐。**建议的收敛方向见 `docs/audit-2026-09-02-round5-decoupling.md` §4.4 的
+   `ProtocolScriptAdapter`。**
+3. ⚠️ **BLIK 复用 `IDEAL_` 前缀的 env 变量。** `adapters.py:156` 给 `blik` 注入的是
+   `IDEAL_PROXY_SEED_FILE` / `IDEAL_FLOW_MODE`（外加 `IDEAL_BLIK_CODE`），并没有 `BLIK_` 前缀
+   的变量。按 key 猜变量名会猜错——`blik` 走的是 iDEAL 的流程实现，这是有意的复用，不是笔误。
+4. **`promo_mode` 4 分支链被复制了 3 份。** `blik:1711`、`ideal:1254`、`twint:1247`
+   （`twint` 另有 `:1361` 一份）各自 `os.environ.get("PP_PROMO_MODE", "campaign")` 后走
+   `trial` / `campaign` / `coupon` / `code` 四分支。默认值 `campaign` 在三处硬编码，
+   改默认值要改 3 遍。
+5. **运行时产物落在脚本目录内，靠 `.gitignore` 兜底。** 各脚本自管
+   `logs/`、`dumps/`、`qr/`、`proxy_state.json`、`proxy_seeds.txt`、`token.txt`、
+   `removed_proxies.jsonl`，由 `services/protocol-payment/.gitignore` 统一忽略。
+   这意味着**子目录不是纯代码目录**，`ls` 看到的多余内容是上一次运行的残留，
+   清理前先确认没有正在跑的任务。
+6. `kakao/kakao_extract.py` 会**反向**碰 `sms_tool`（延迟导入 access-token liveness 探针）。
+   它是脚本群里唯一这么做的，源码里有注释说明是刻意的：模块加载期硬 import `sms_tool`
+   正是"看起来自包含、实际焊死在父包上"的伪拆分陷阱，所以改成运行时延迟导入。
+   这条注释是本目录里唯一显式记录了架构意图的地方，值得作为后续改动的参照。
 
 ## Boundary Rules
 
@@ -990,7 +1503,12 @@ python -m unittest discover -s tests
 
 ### Storage Layer
 
-`sms_tool/storage.py` owns:
+`sms_tool/store/` owns the implementation; `sms_tool/storage.py` is only an 8-line
+backward-compatibility shim (`from .store import *`). New code should import from
+`sms_tool.store` directly, but note that 25 files (19 production + 6 test) still reach
+persistence through the shim — see Subpackage Structure.
+
+`sms_tool/store/` owns:
 
 - SQLite schema creation and migrations.
 - Case-insensitive account deduplication.

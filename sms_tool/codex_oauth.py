@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import argparse
 from functools import lru_cache
 import hashlib

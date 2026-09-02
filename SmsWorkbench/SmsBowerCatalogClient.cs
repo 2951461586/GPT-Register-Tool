@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     internal static class SmsBowerCatalogClient
@@ -74,16 +78,16 @@ namespace SmsWorkbench
                 var tiers = service.EnumerateObject()
                     .Select(ParseOffer)
                     .Where(item => item != null && item.Count > 0)
-                    .GroupBy(item => item.Price)
-                    .Select(group => new SmsBowerPriceTier(
-                        group.Key.ToString("0.########", CultureInfo.InvariantCulture),
-                        group.Sum(item => item.Count),
-                        string.Join(",", group.Select(item => item.ProviderId).Where(value => value.Length > 0).Distinct())))
+                .GroupBy(item => item!.Price)
+                .Select(group => new SmsBowerPriceTier(
+                    group.Key.ToString("0.########", CultureInfo.InvariantCulture),
+                    group.Sum(item => item!.Count),
+                    string.Join(",", group.Select(item => item!.ProviderId).Where(value => value.Length > 0).Distinct())))
                     .OrderBy(item => item.NumericPrice)
                     .ToList();
                 if (tiers.Count == 0) continue;
 
-                metadata.TryGetValue(countryProperty.Name, out SmsBowerCountryMetadata info);
+                metadata.TryGetValue(countryProperty.Name, out SmsBowerCountryMetadata? info);
                 info ??= new SmsBowerCountryMetadata(countryProperty.Name, "");
                 countries.Add(new SmsBowerCountryChoice(
                     countryProperty.Name,
@@ -98,7 +102,7 @@ namespace SmsWorkbench
                 .ToList();
         }
 
-        private static SmsBowerProviderOffer ParseOffer(JsonProperty property)
+        private static SmsBowerProviderOffer? ParseOffer(JsonProperty property)
         {
             string priceText = property.Value.ValueKind == JsonValueKind.Object
                 ? JsonString(property.Value, "price", "")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import importlib
+import sys
 
 
 class _PlmProxy:
@@ -25,8 +26,6 @@ _plm = _PlmProxy()
 import json
 
 import os
-
-import sys
 
 from collections.abc import Mapping
 

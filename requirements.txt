@@ -16,8 +16,14 @@ cloakbrowser>=0.5.3,<0.6
 # CAPTCHA solving (Playwright-based)
 playwright>=1.40.0
 playwright-stealth>=2.0.3
-selenium>=4.20.0
 qrcode[pil]>=7.4.2
+
+# Undetected-Chrome fallback for PayPal: nodriver_captcha.solve_captcha_with_nodriver
+# (called from paypal_reverse.py) and paypal/nodriver_paypal.run_nodriver_pay
+# (called from paypal/orchestrator.py strategy selection).
+# Was previously undeclared while being imported at both sites, so the whole
+# fallback silently degraded to "not installed" on every fresh install.
+nodriver>=0.45
 
 # Test runner used by CI and the documented validation command
 pytest>=8.0

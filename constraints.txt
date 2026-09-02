@@ -4,10 +4,15 @@
 # Usage (CI / local install):
 #     python -m pip install -r requirements.txt -c constraints.txt
 #
-# This file is the version floor for the 13 direct dependencies. Their transitive
+# This file is the version floor for the 15 direct dependencies. Their transitive
 # closures are bounded by each package's own metadata, so a full lock is not required
 # to get reproducible installs. Regenerate after a deliberate major-version bump by
 # re-running `python -m pip freeze` and updating the lines below.
+#
+# `httpx` is pinned here even though no first-party module imports it: it arrives
+# transitively via `cloakbrowser`, and pinning it keeps that closure bounded.
+# `selenium` was removed (2026-09-02) - zero references in code or docs, and no
+# package requires it. See docs/audit-2026-09-02-round5-summary.md section 4.3.
 curl_cffi==0.16.0
 cryptography==50.0.1
 PyNaCl==1.6.2
@@ -19,6 +24,7 @@ browserforge==1.2.4
 cloakbrowser==0.5.9
 playwright==1.60.0
 playwright-stealth==2.0.3
-selenium==4.48.0
 qrcode[pil]==8.2
+nodriver==0.50.3
 pytest==9.1.1
+pytest-cov==7.1.0

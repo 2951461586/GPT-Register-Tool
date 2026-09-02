@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 
@@ -19,7 +23,7 @@ namespace SmsWorkbench
         string JsonPath,
         SettingFieldKind Kind,
         string DefaultValue = "",
-        IReadOnlyList<string> Options = null);
+        IReadOnlyList<string>? Options = null);
 
     public sealed partial class SettingFieldViewModel : ObservableObject
     {

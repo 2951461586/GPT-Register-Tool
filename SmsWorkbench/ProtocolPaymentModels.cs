@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Text.Json;
 
 namespace SmsWorkbench
@@ -42,7 +46,9 @@ namespace SmsWorkbench
         string CheckoutCountry,
         string ApproveCountry,
         string UpdateCountry,
-        ProtocolPaymentAccount Account);
+        // Null for a manual run with no account attached - the same state the
+        // view model exposes as IsManual.
+        ProtocolPaymentAccount? Account);
 
     public sealed record ProtocolPaymentRunResult(ProtocolPaymentResultPresentation Presentation, string Error = "");
 }

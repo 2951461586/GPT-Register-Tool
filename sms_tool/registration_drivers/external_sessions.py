@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-import json
 import os
 import time
 from typing import Any, Mapping
@@ -11,106 +10,23 @@ from urllib.parse import unquote, urlencode, urljoin, urlsplit
 
 from curl_cffi import requests as curl_requests
 
-from ..env_loader import ensure_loaded
+from ..driver_env import driver_config as _driver_config
 from ..phone_proxy import normalize_proxy_url
-from .base import BrowserRegistrationError, normalize_registration_driver
+from .base import (
+    BROWSER_REGISTRATION_DRIVERS,
+    BrowserRegistrationError,
+    normalize_registration_driver,
+)
 from .browser_session import PlaywrightBrowserSession, _playwright_proxy
 from .stealth import apply_playwright_stealth
 
 
-def _driver_config(config: Mapping[str, Any], name: str) -> Mapping[str, Any]:
-    ensure_loaded()
-    registration = config.get("registration")
-    drivers = registration.get("drivers") if isinstance(registration, Mapping) else {}
-    value = drivers.get(name) if isinstance(drivers, Mapping) else {}
-    result = dict(value) if isinstance(value, Mapping) else {}
-    # Deployment secrets override JSON values while remaining out of config
-    # persistence and diagnostic payloads.
-    env_overrides = {
-        "roxy": {
-            "api_token": ("ROXY_API_TOKEN", "str"),
-            "api_base": ("ROXY_API_BASE", "str"),
-            "profile_id": ("ROXY_PROFILE_ID", "str"),
-            "workspace_id": ("ROXY_WORKSPACE_ID", "str"),
-            "project_id": ("ROXY_PROJECT_ID", "str"),
-            "workspace_list_path": ("ROXY_WORKSPACE_LIST_PATH", "str"),
-            "open_path": ("ROXY_OPEN_PATH", "str"),
-            "open_method": ("ROXY_OPEN_METHOD", "str"),
-            "open_headless": ("ROXY_OPEN_HEADLESS", "bool"),
-            "close_path": ("ROXY_CLOSE_PATH", "str"),
-            "close_method": ("ROXY_CLOSE_METHOD", "str"),
-            "delete_path": ("ROXY_DELETE_PATH", "str"),
-            "delete_method": ("ROXY_DELETE_METHOD", "str"),
-            "keep_browser_open": ("ROXY_KEEP_BROWSER_OPEN", "bool"),
-            "delete_profile_after_run": ("ROXY_DELETE_PROFILE_AFTER_RUN", "bool"),
-            "api_retries": ("ROXY_API_RETRIES", "int"),
-            "api_retry_delay_seconds": ("ROXY_API_RETRY_DELAY", "float"),
-            "backend": ("ROXY_BACKEND", "str"),
-            "start_url": ("ROXY_START_URL", "str"),
-            "headless": ("ROXY_HEADLESS", "bool"),
-        },
-        "cloak": {
-            "license_key": ("CLOAK_LICENSE_KEY", "str"),
-            "headless": ("CLOAK_HEADLESS", "bool"),
-            "humanize": ("CLOAK_HUMANIZE", "bool"),
-            "geoip": ("CLOAK_GEOIP", "bool"),
-            "locale": ("CLOAK_LOCALE", "str"),
-            "timezone": ("CLOAK_TIMEZONE", "str"),
-            "use_proxy": ("CLOAK_USE_PROXY", "bool"),
-            "fingerprint_seed": ("CLOAK_FINGERPRINT_SEED", "str"),
-            "user_data_dir": ("CLOAK_USER_DATA_DIR", "str"),
-            "keep_browser_open": ("CLOAK_KEEP_BROWSER_OPEN", "bool"),
-            "start_url": ("CLOAK_START_URL", "str"),
-        },
-        "camoufox": {
-            "headless": ("CAMOUFOX_HEADLESS", "bool"),
-            "humanize": ("CAMOUFOX_HUMANIZE", "bool"),
-            "geoip": ("CAMOUFOX_GEOIP", "bool"),
-            "locale": ("CAMOUFOX_LOCALE", "str"),
-            "timezone": ("CAMOUFOX_TIMEZONE", "str"),
-            "use_proxy": ("CAMOUFOX_USE_PROXY", "bool"),
-            "user_data_dir": ("CAMOUFOX_USER_DATA_DIR", "str"),
-            "keep_browser_open": ("CAMOUFOX_KEEP_BROWSER_OPEN", "bool"),
-            "start_url": ("CAMOUFOX_START_URL", "str"),
-            "max_width": ("CAMOUFOX_MAX_WIDTH", "int"),
-            "max_height": ("CAMOUFOX_MAX_HEIGHT", "int"),
-        },
-        "adspower": {
-            "api_base": ("ADSPOWER_API_BASE", "str"),
-            "user_id": ("ADSPOWER_USER_ID", "str"),
-            "headless": ("ADSPOWER_HEADLESS", "bool"),
-            "keep_browser_open": ("ADSPOWER_KEEP_BROWSER_OPEN", "bool"),
-        },
-    }
-    for key, (env_name, value_type) in env_overrides.get(name, {}).items():
-        raw = os.getenv(env_name)
-        if raw is None or not str(raw).strip():
-            continue
-        text = str(raw).strip()
-        try:
-            if value_type == "bool":
-                normalized = text.lower()
-                if normalized in {"1", "true", "yes", "on", "y"}:
-                    result[key] = True
-                elif normalized in {"0", "false", "no", "off", "n"}:
-                    result[key] = False
-                else:
-                    continue
-            elif value_type == "int":
-                result[key] = int(text)
-            elif value_type == "float":
-                result[key] = float(text)
-            elif value_type == "json":
-                parsed = json.loads(text)
-                if isinstance(parsed, Mapping):
-                    result[key] = dict(parsed)
-            else:
-                result[key] = text
-        except (TypeError, ValueError, json.JSONDecodeError):
-            # Invalid optional environment values must not break importing the
-            # module; the JSON/config value remains authoritative instead.
-            continue
-    return result
+# `_driver_config` now lives in sms_tool/driver_env.py. `sms_tool.config` needed
+# this same env-overlay logic for preflight and used to import it from here,
+# which made config - imported by 64 modules - depend on the browser-driver
+# package: a cycle. It now sits below both consumers. The name is re-exported as
+# a module attribute on purpose: five call sites and the driver tests refer to
+# it, and patching `external_sessions._driver_config` must keep working.
 
 
 def _require(value: Any, code: str) -> str:
@@ -847,6 +763,26 @@ def _inject_browser_profile(
     return mutable
 
 
+# Normalized browser-driver key -> session class, for the drivers whose
+# session class takes ``config`` (every anti-detect browser). ``playwright`` is
+# handled explicitly in ``create_browser_session`` because its base session
+# wrapper does not consume a config mapping. Registered here (where the classes
+# live) so ``base`` stays free of session imports and the C import cycle stays
+# broken. The keys are asserted against ``BROWSER_REGISTRATION_DRIVERS`` below
+# so this table cannot drift from the canonical driver set in
+# ``registration_drivers.base``.
+_BROWSER_SESSION_FACTORIES: dict[str, type[PlaywrightBrowserSession]] = {
+    "cloak": CloakBrowserSession,
+    "camoufox": CamoufoxBrowserSession,
+    "roxy": RoxyBrowserSession,
+    "adspower": AdsPowerBrowserSession,
+}
+
+assert set(_BROWSER_SESSION_FACTORIES) == (BROWSER_REGISTRATION_DRIVERS - {"playwright"}), (
+    "anti-detect browser session factories must cover every browser driver except playwright"
+)
+
+
 def create_browser_session(
     driver: str,
     *,
@@ -872,26 +808,17 @@ def create_browser_session(
     }
     if driver == "playwright":
         # Only the local Playwright driver consumes the rotated screen profile;
-        # external/anti-detect browsers manage their own viewport.
+        # external/anti-detect browsers manage their own viewport. Its base
+        # session wrapper does not take a config mapping, so call it directly.
         kwargs["viewport"] = viewport
-    if driver == "cloak":
-        return CloakBrowserSession(config=config, **kwargs)
-    if driver == "camoufox":
-        return CamoufoxBrowserSession(config=config, **kwargs)
-    if driver == "adspower":
-        return AdsPowerBrowserSession(config=config, **kwargs)
-    if driver == "roxy":
-        # Single CDP-track implementation: RoxyBrowserSession attaches to the
-        # Roxy-managed Chromium over its local REST API and drives it through
-        # Playwright's connect_over_cdp -- the same contract as the other
-        # anti-detect drivers.  The legacy Selenium/Chromedriver track was
-        # removed so Roxy aligns with Cloak/Camoufox/AdsPower.
-        return RoxyBrowserSession(config=config, **kwargs)
-    # Playwright: pass user_data_dir for persistent context when available.
-    pw_user_data_dir = str(_driver_config(config, "playwright").get("user_data_dir") or "").strip()
-    if pw_user_data_dir:
-        kwargs["user_data_dir"] = pw_user_data_dir
-    return PlaywrightBrowserSession(**kwargs)
+        pw_user_data_dir = str(_driver_config(config, "playwright").get("user_data_dir") or "").strip()
+        if pw_user_data_dir:
+            kwargs["user_data_dir"] = pw_user_data_dir
+        return PlaywrightBrowserSession(**kwargs)
+    factory = _BROWSER_SESSION_FACTORIES.get(driver)
+    if factory is None:
+        raise BrowserRegistrationError("unsupported_registration_driver", driver)
+    return factory(config=config, **kwargs)
 
 
 __all__ = [

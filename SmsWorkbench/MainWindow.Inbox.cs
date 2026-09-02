@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -134,7 +138,7 @@ namespace SmsWorkbench
         {
             var args = new List<string> { "--desktop-ipc", "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString(CultureInfo.InvariantCulture) };
             string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
-            string mailboxLine = FindMailboxLineForRow(row);
+            string mailboxLine = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
             if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
             {
                 mailboxLine = row.RawLine;

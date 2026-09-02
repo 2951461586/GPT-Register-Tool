@@ -177,19 +177,10 @@ def _register_mailbox_strategies():
 
     mailbox_strategies.register_message_fetcher("chongzhi", _chongzhi_matcher, _chongzhi_fetch)
 
-    # Re-register the catch-all after all provider-specific strategies.
-    mailbox_strategies.register_message_fetcher(
-        "graph_api",
-        mailbox_strategies._graph_matcher,
-        lambda mb, *, limit, proxy, **kw: _fetch_mailbox_messages_local(
-            mb, limit=limit, proxy=proxy,
-        ),
-    )
-    mailbox_strategies.register_otp_poller(
-        "graph_api",
-        mailbox_strategies._graph_matcher,
-        mailbox_strategies._graph_poll_otp,
-    )
+    # Graph is registered once, in mailbox_strategies, with fallback=True. It
+    # used to be re-registered here so that it sorted last - which is exactly
+    # the coupling `fallback` removes: a new provider no longer has to be
+    # followed by a re-registration of the catch-all.
 
 
 # Compose once, then freeze so workflows cannot mutate provider resolution.

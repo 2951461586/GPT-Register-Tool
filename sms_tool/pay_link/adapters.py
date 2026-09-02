@@ -1,7 +1,6 @@
 """adapters submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -26,7 +25,7 @@ from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_appr
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .base import PaymentMethodSpec, _DIRECT_CARD_CURRENCY, _LOGGER, _as_bool, _blik_completion, _config_data, _last_json_object, _redact_sensitive_text, _reference_root, _tail
+from .base import PaymentMethodSpec, _protocol_cfg, _DIRECT_CARD_CURRENCY, _LOGGER, _as_bool, _blik_completion, _config_data, _last_json_object, _redact_sensitive_text, _reference_root, _tail
 
 
 def _run_extractor_subprocess(
@@ -37,7 +36,7 @@ def _run_extractor_subprocess(
     cwd: str,
     timeout: int,
     cleanup_paths: tuple[str, ...] = (),
-) -> tuple[_plm.subprocess.CompletedProcess[str] | None, str, dict[str, Any] | None]:
+) -> tuple[subprocess.CompletedProcess[str] | None, str, dict[str, Any] | None]:
     """Run an extractor CLI, returning ``(proc, combined_output, timeout_error)``.
 
     Centralizes the run + ``TimeoutExpired`` handling + temp-file cleanup shared by
@@ -45,7 +44,7 @@ def _run_extractor_subprocess(
     otherwise ``(proc, stdout+stderr, None)``. ``cleanup_paths`` are always removed.
     """
     try:
-        proc = _plm.subprocess.run(
+        proc = subprocess.run(
             command,
             cwd=cwd,
             env=env,
@@ -57,7 +56,7 @@ def _run_extractor_subprocess(
         )
         output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         return proc, output, None
-    except _plm.subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired:
         return None, "", {
             "ok": False,
             "status": "timed_out",
@@ -76,6 +75,75 @@ def _run_extractor_subprocess(
 
 
 
+# --- Protocol-script adapter registry -------------------------------------
+# Each ``build_env`` turns the shared inputs into the environment variables the
+# matching extractor script under services/protocol-payment/ reads. Keeping
+# them as one registry replaces the per-key ``if`` chain in ``_run_protocol_script``
+# and makes every method's env contract explicit. ``pix`` carries its proxies in
+# the environment (no proxy-file), so it is handled separately below.
+def _build_pix_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+    env = {"OPENAI_ACCESS_TOKEN": access_token, "PIX_PROXY": seed_proxy}
+    provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
+    promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
+    if provider_proxy:
+        env["PIX_BR_PROXY"] = provider_proxy
+    if promotion_proxy:
+        env["PIX_VN_PROXY"] = promotion_proxy
+    return env
+
+
+def _build_ideal_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+    return {"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"}
+
+
+def _build_kakao_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+    # Prefer Kakao's dedicated multi-seed file for redundancy + failover; fall
+    # back to the single stage proxy when it is missing or empty.
+    kakao_seed_pool = script.parent / "proxy_seeds.txt"
+    kakao_seed_file = (
+        str(kakao_seed_pool)
+        if kakao_seed_pool.is_file()
+        and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
+        else proxy_file
+    )
+    env: dict[str, str] = {"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file}
+    countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
+    checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
+    promotion_country = str(countries.get("promotion") or "VN").strip().upper()
+    provider_country = str(countries.get("provider") or kwargs.get("target_country") or "KR").strip().upper()
+    env.update({
+        "KAKAO_BOOTSTRAP_COUNTRY": checkout_country,
+        "KAKAO_PROMOTION_COUNTRY": promotion_country,
+        "KAKAO_PROVIDER_COUNTRY": provider_country,
+    })
+    return env
+
+
+def _build_blik_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+    blik_code = str(kwargs.get("blik_code") or "").strip()
+    return {
+        "PP_TOKEN": access_token,
+        "IDEAL_PROXY_SEED_FILE": proxy_file,
+        "IDEAL_FLOW_MODE": "single",
+        "IDEAL_BLIK_CODE": blik_code,
+    }
+
+
+def _build_twint_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+    return {"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"}
+
+
+# Protocol-payment methods whose env is built from a proxy file written by the
+# adapter. ``pix`` is dispatched explicitly in ``_run_protocol_script`` because it
+# carries proxies in the environment instead of a seed file.
+_PROTOCOL_BUILD_ENV: dict[str, Callable[..., dict[str, str]]] = {
+    "ideal": _build_ideal_env,
+    "kakao": _build_kakao_env,
+    "blik": _build_blik_env,
+    "twint": _build_twint_env,
+}
+
+
 def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
     runtime_config = kwargs.pop("runtime_config", None)
     root = _reference_root(runtime_config)
@@ -88,7 +156,7 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     except payment_egress.EgressCheckError as exc:
         return exc.to_result(spec.key)
 
-    cfg = _plm._protocol_cfg(runtime_config)
+    cfg = _protocol_cfg(runtime_config)
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
@@ -116,49 +184,20 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
         # environment (which run_pix reads as PIX_PROXY/PIX_BR_PROXY/
         # PIX_VN_PROXY) instead of argv, where they would show up in the
         # process list.
-        env["OPENAI_ACCESS_TOKEN"] = access_token
-        env["PIX_PROXY"] = seed_proxy
+        env.update(_build_pix_env(access_token, seed_proxy, proxy_file, script, kwargs))
         command.append("--quiet")
-        provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
-        promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
-        if provider_proxy:
-            env["PIX_BR_PROXY"] = provider_proxy
-        if promotion_proxy:
-            env["PIX_VN_PROXY"] = promotion_proxy
     else:
         handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
         with handle:
             handle.write(seed_proxy + "\n")
         proxy_file = handle.name
-        if spec.key == "ideal":
-            env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
-        elif spec.key == "kakao":
-            # 优先用 Kakao 专用多 Seed 文件(proxy_seeds.txt)获得冗余与失败轮换；
-            # 一条 seed 出口/ TLS 抖动进冷却时还能切换下一条。缺失时回退到 manager
-            # 传入的单条 stage 代理。
-            kakao_seed_pool = script.parent / "proxy_seeds.txt"
-            kakao_seed_file = (
-                str(kakao_seed_pool)
-                if kakao_seed_pool.is_file()
-                and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
-                else proxy_file
-            )
-            env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file})
-            countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
-            checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
-            promotion_country = str(countries.get("promotion") or "VN").strip().upper()
-            provider_country = str(countries.get("provider") or kwargs.get("target_country") or "KR").strip().upper()
-            env.update({
-                "KAKAO_BOOTSTRAP_COUNTRY": checkout_country,
-                "KAKAO_PROMOTION_COUNTRY": promotion_country,
-                "KAKAO_PROVIDER_COUNTRY": provider_country,
-            })
-        elif spec.key == "blik":
-            env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single", "IDEAL_BLIK_CODE": blik_code})
-        elif spec.key == "twint":
-            env.update({"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"})
+        builder = _PROTOCOL_BUILD_ENV.get(spec.key)
+        if builder is None:
+            Path(proxy_file).unlink(missing_ok=True)
+            return {"ok": False, "error": f"unsupported protocol payment method: {spec.key}"}
+        env.update(builder(access_token, seed_proxy, proxy_file, script, kwargs))
 
-    proc, output, timeout_err = _plm._run_extractor_subprocess(
+    proc, output, timeout_err = _run_extractor_subprocess(
         spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(proxy_file,),
     )
     if timeout_err:
@@ -231,7 +270,7 @@ def _run_wallet_adapter(
     from ..wallet_transport import ChatGPTStripeWalletTransport
 
     runtime_config = kwargs.pop("runtime_config", None)
-    cfg = _plm._protocol_cfg(runtime_config)
+    cfg = _protocol_cfg(runtime_config)
     methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
     method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
     timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
@@ -366,7 +405,7 @@ def _run_gcash_adapter(
     from ..gcash_transport import ChatGPTGCashTransport
 
     runtime_config = kwargs.pop("runtime_config", None)
-    cfg = _plm._protocol_cfg(runtime_config)
+    cfg = _protocol_cfg(runtime_config)
     methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
     method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
     timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
@@ -427,7 +466,7 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     except payment_egress.EgressCheckError as exc:
         return exc.to_result(spec.key)
 
-    cfg = _plm._protocol_cfg(runtime_config)
+    cfg = _protocol_cfg(runtime_config)
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
@@ -474,7 +513,7 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     if promo:
         command.extend(["--promo-campaign-id", promo])
 
-    proc, output, timeout_err = _plm._run_extractor_subprocess(
+    proc, output, timeout_err = _run_extractor_subprocess(
         spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
     )
     if timeout_err:
@@ -529,7 +568,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     except payment_egress.EgressCheckError as exc:
         return exc.to_result(spec.key)
 
-    cfg = _plm._protocol_cfg(runtime_config)
+    cfg = _protocol_cfg(runtime_config)
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
@@ -584,7 +623,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     if max_proxies > 1:
         command.extend(["--max-proxies", str(max_proxies)])
 
-    proc, output, timeout_err = _plm._run_extractor_subprocess(
+    proc, output, timeout_err = _run_extractor_subprocess(
         spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
     )
     if timeout_err:

@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
@@ -10,7 +14,10 @@ namespace SmsWorkbench
         private readonly IDesktopReadClient desktopRead;
         private readonly Serilog.ILogger logger;
         private readonly IPaymentBatchDialogService paymentBatchDialogs;
-        private readonly IProtocolPaymentDialogService protocolPaymentDialogs;
+        // Optional: the internal constructor overload passes null, and
+        // MainWindow.Payment.cs null-checks it before showing the dialog. That
+        // was only implicit before - the type now says it.
+        private readonly IProtocolPaymentDialogService? protocolPaymentDialogs;
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
@@ -32,11 +39,17 @@ namespace SmsWorkbench
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
         private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
-        private Geometry themeIconGeometry;
+        // Non-null from the constructor (MainWindow.xaml.cs assigns it right
+        // after InitializeComponent), but the compiler cannot see that through
+        // the property setter, so give it a real empty geometry rather than
+        // `= null!` - a null here would leave the theme button icon-less.
+        private Geometry themeIconGeometry = Geometry.Empty;
         private double sidebarAnimTarget;
         private double sidebarAnimStart;
-        private EventHandler sidebarRenderingHandler;
-        private Stopwatch sidebarAnimStopwatch;
+        // Declared here but assigned and read from MainWindow.Sidebar.cs - this
+        // is a partial class, so "no references" in this file means nothing.
+        private EventHandler? sidebarRenderingHandler;
+        private Stopwatch? sidebarAnimStopwatch;
 
         // Sun icon (light mode): circle + rays
         private static readonly Geometry SunIcon = Geometry.Parse(
@@ -93,7 +106,9 @@ namespace SmsWorkbench
             }
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        // An event with no subscribers is null - that is the framework's own
+        // contract, so the field is nullable rather than force-initialised.
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         public ObservableCollection<TaskRow> Tasks { get; } = new ObservableCollection<TaskRow>();
 
@@ -177,7 +192,7 @@ namespace SmsWorkbench
             IBackendTaskCoordinator backendTasks,
             IDesktopReadClient desktopRead,
             IPaymentBatchDialogService paymentBatchDialogs,
-            IProtocolPaymentDialogService protocolPaymentDialogs,
+            IProtocolPaymentDialogService? protocolPaymentDialogs,
             IPaymentBatchService paymentBatchService,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
@@ -198,6 +213,7 @@ namespace SmsWorkbench
             InitializeComponent();
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
             DataContext = this;
+            NavCommand = new RelayCommand<string>(OnNavigate);
 
             // Initialize theme colors on startup
             _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
@@ -321,9 +337,15 @@ namespace SmsWorkbench
         [ObservableProperty] private string status = "";
         [ObservableProperty] private string cost = "";
         [ObservableProperty] private string doneAt = "";
+        // Info IS mutated while the task runs (MainWindow.Tasks.cs) and is bound
+        // by MainWindow.xaml, so unlike Name/Task/Retry below it must raise
+        // PropertyChanged — an auto-property here silently froze the column.
+        [ObservableProperty] private string info = "";
+        // Name/Task/Retry are assigned once before the row enters the
+        // ObservableCollection and never mutated afterwards, so they need no
+        // notification. Do not "fix" them without checking for runtime writers.
         public string Name { get; set; } = "";
         public string Task { get; set; } = "";
-        public string Info { get; set; } = "";
         public string Retry { get; set; } = "0";
     }
 

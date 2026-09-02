@@ -56,6 +56,13 @@ def run_nodriver_pay(
     try:
         import nodriver as uc
     except ImportError:
+        # Say it out loud: this used to degrade silently, so this payment
+        # strategy looked selectable while never being able to run.
+        # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
+        # raise UnicodeEncodeError there.
+        print("[!] nodriver is not installed - the nodriver PayPal payment "
+              "strategy is unavailable. Run: pip install nodriver "
+              "(listed in requirements.txt)")
         return {"ok": False, "error": "nodriver not installed"}
 
     return uc.loop().run_until_complete(

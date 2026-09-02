@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 
@@ -45,7 +49,7 @@ namespace SmsWorkbench
     public sealed partial class StageMatrixViewModel : ObservableObject
     {
         private const int MaxRuns = 200;
-        private readonly IStageMatrixStore _store;
+        private readonly IStageMatrixStore? _store;
         private readonly Dictionary<string, int> _lastSequences = new(StringComparer.Ordinal);
         private static readonly string[] RegistrationStages =
         {
@@ -63,7 +67,9 @@ namespace SmsWorkbench
         public ObservableCollection<StageMatrixRun> Runs { get; } = new();
         [ObservableProperty] private string summary = "等待后端阶段事件";
 
-        public StageMatrixViewModel(IStageMatrixStore store = null)
+        // Optional: the body already reads it with a null-conditional, so a
+        // missing store is a supported state rather than a caller mistake.
+        public StageMatrixViewModel(IStageMatrixStore? store = null)
         {
             _store = store;
             foreach (BackendProgressEvent progress in store?.Load() ?? Array.Empty<BackendProgressEvent>())
@@ -86,7 +92,7 @@ namespace SmsWorkbench
                 return;
             if (progress.Sequence > 0)
                 _lastSequences[key] = progress.Sequence;
-            StageMatrixRun run = Runs.FirstOrDefault(item => item.Key == key);
+            StageMatrixRun? run = Runs.FirstOrDefault(item => item.Key == key);
             if (run == null)
             {
                 run = new StageMatrixRun(
@@ -105,7 +111,7 @@ namespace SmsWorkbench
             if (progress.Method.Length > 0)
                 run.Method = progress.Method;
 
-            StageMatrixCell cell = run.Cells.FirstOrDefault(item => item.Stage == progress.Stage);
+            StageMatrixCell? cell = run.Cells.FirstOrDefault(item => item.Stage == progress.Stage);
             if (cell == null)
             {
                 cell = new StageMatrixCell(progress.Stage);

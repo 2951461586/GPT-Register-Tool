@@ -7,6 +7,8 @@ Extracted from ``sms_tool.paypal_auto``. Owns every helper that *chooses* or
 from __future__ import annotations
 
 import json
+import random
+import re
 import time
 from pathlib import Path
 

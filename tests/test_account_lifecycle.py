@@ -7,7 +7,8 @@ def test_account_lifecycle_deletes_row_and_archives_session(tmp_path):
     database = tmp_path / "accounts.sqlite3"
     sessions = tmp_path / "sessions"
     sessions.mkdir()
-    session = sessions / "session_delete.json"
+    # Real session files are named `session_{email with '+' stripped}_{ts}.json`.
+    session = sessions / "session_delete@example.com_1786415260.json"
     session.write_text(json.dumps({"email": "delete@example.com"}), encoding="utf-8")
     config = {
         "chatgpt": {},
@@ -73,8 +74,8 @@ def test_account_lifecycle_fuzzy_deletes_at_plus_alias(tmp_path):
     """The WPF shell normalizes ``@+`` to ``+@`` (lossy), so the backend
     must handle the case where the DB stores the original ``@+`` form but
     the delete request carries the normalized ``+@`` form."""
-    database = tmp_path / "accounts.sqlite3"
     pool = tmp_path / "mailboxes.txt"
+    database = tmp_path / "accounts.sqlite3"
     # The mailbox file stores the ORIGINAL "@+" form.
     pool.write_text(
         "cierrariste7566@+oai01hotmail.com----password\n"
@@ -132,3 +133,31 @@ def test_account_lifecycle_fuzzy_match_does_not_over_delete(tmp_path):
     with sqlite3.connect(database) as conn:
         rows = conn.execute("SELECT email FROM accounts").fetchall()
     assert any("cierrariste7566other@gmail.com" in r[0] for r in rows)
+
+
+def test_account_lifecycle_session_archive_does_not_parse_every_session(tmp_path):
+    """Deleting one account must archive only its sessions, not parse all of
+    them. This guards the prefix-glob fix: before it, every delete opened all
+    ~797 session files just to find the matching few."""
+
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    # 200 unrelated session files, none for the target email.
+    for i in range(200):
+        (sessions / f"session_unrelated_{i}@example.org_17860000{i:03d}.json").write_text(
+            json.dumps({"email": f"unrelated_{i}@example.org"}), encoding="utf-8"
+        )
+    # The one matching file, using the real `email with '+' stripped` scheme.
+    match = sessions / "session_targettag@example.com_1786415260.json"
+    match.write_text(json.dumps({"email": "target+tag@example.com"}), encoding="utf-8")
+
+    config = {
+        "chatgpt": {},
+        "storage": {"sqlite_path": str(tmp_path / "accounts.sqlite3")},
+        "output": {"directory": str(sessions)},
+        "protocol_payments": {"matrix": {"cells": []}},
+    }
+    result = AccountLifecycle(config).delete(AccountDeleteRequest("target+tag@example.com"))
+    assert result.archived_sessions == (str(sessions / "_deleted" / match.name),)
+    # Unrelated files are untouched.
+    assert len(list(sessions.glob("session_unrelated_*.json"))) == 200

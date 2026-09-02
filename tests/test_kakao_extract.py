@@ -83,17 +83,27 @@ class RemovedHelpersAreGoneTests(unittest.TestCase):
 
 
 class AccountLivenessTests(unittest.TestCase):
-    def test_kakao_liveness_delegates_to_canonical_quota_probe(self):
+    def test_kakao_liveness_delegates_to_injected_probe(self):
         expected = {"ok": True, "status": "active", "status_code": 200}
-        with patch.object(kakao, "probe_account_liveness", return_value=expected) as probe:
+        try:
+            kakao.set_access_token_probe(lambda token, proxy: expected)
             result = kakao.probe_kakao_access_token("at_123", "http://proxy.example:8080")
-
+        finally:
+            kakao.set_access_token_probe(None)
         self.assertEqual(result, expected)
-        probe.assert_called_once_with(
-            {"access_token": "at_123"},
-            proxy="http://proxy.example:8080",
-            timeout=kakao.TIMEOUT,
-        )
+
+    def test_kakao_liveness_falls_back_to_lazy_sms_tool_probe(self):
+        # No probe injected: the call must reach sms_tool.account_liveness
+        # without importing it at module load. Patch the resolved function so
+        # no network is touched.
+        kakao.set_access_token_probe(None)
+        expected = {"ok": True, "status_code": 200}
+        with patch.object(
+            kakao, "_default_access_token_probe", return_value=expected
+        ) as fallback:
+            result = kakao.probe_kakao_access_token("at_123", "http://proxy.example:8080")
+        self.assertEqual(result, expected)
+        fallback.assert_called_once_with("at_123", "http://proxy.example:8080")
 
     def test_kakao_liveness_rejects_401(self):
         with patch.object(

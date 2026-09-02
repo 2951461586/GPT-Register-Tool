@@ -1,16 +1,44 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Session refresh, row selection and paging filters
-        private void RefreshSession_Click(object sender, RoutedEventArgs e)
+        // Sidebar navigation: single command routes 16 CommandParameters to the
+        // existing Click handlers (kept as-is in their partial files).
+        // Assigned in the constructor (property initializers cannot capture instance methods).
+        public RelayCommand<string> NavCommand { get; } = null!;
+
+        private void OnNavigate(string? key)
         {
-            PoolRow row = SelectedEmailRowOrNotify("刷新 Session");
-            if (row == null) return;
-            var args = new List<string> { "--email", row.Identifier, "--refresh-session" };
-            AddSessionFileArg(args, row);
-            RunBackend("刷新Session", args);
+            switch (key)
+            {
+                case "register": OneClickRegister_Click(this, new RoutedEventArgs()); break;
+                case "sms": OneClickSms_Click(this, new RoutedEventArgs()); break;
+                case "scan": OneClickScan_Click(this, new RoutedEventArgs()); break;
+                case "promotion": CheckPromotion_Click(this, new RoutedEventArgs()); break;
+                case "paylink": OpenPayPalLink_Click(this, new RoutedEventArgs()); break;
+                case "batchpay": BatchProtocolPayment_Click(this, new RoutedEventArgs()); break;
+                case "importmail": ImportChataiMailbox_Click(this, new RoutedEventArgs()); break;
+                case "inbox": ViewInbox_Click(this, new RoutedEventArgs()); break;
+                case "changeemail": ChangeEmail_Click(this, new RoutedEventArgs()); break;
+                case "importcpa": ImportPaidCpa_Click(this, new RoutedEventArgs()); break;
+                case "export": ExportAccounts_Click(this, new RoutedEventArgs()); break;
+                case "delete": DeleteSelected_Click(this, new RoutedEventArgs()); break;
+                case "refresh": Refresh_Click(this, new RoutedEventArgs()); break;
+                case "settings": Settings_Click(this, new RoutedEventArgs()); break;
+                case "theme": ToggleTheme_Click(this, new RoutedEventArgs()); break;
+                case "cancelbatch": CancelBatch_Click(this, new RoutedEventArgs()); break;
+            }
         }
+
+        // NOTE (2026-09-02): a "refresh session for one account" handler used to
+        // live here (`--email <id> --refresh-session [--session-file <path>]`).
+        // Nothing referenced it - not XAML, not the NavCommand switch - so the
+        // feature had no UI entry point and the handler was deleted. Restore
+        // from git history if that capability is wanted again.
 
         private void AddSessionFileArg(List<string> args, PoolRow row)
         {
@@ -33,9 +61,9 @@ namespace SmsWorkbench
                 : "";
         }
 
-        private PoolRow SelectedEmailRowOrNotify(string action)
+        private PoolRow? SelectedEmailRowOrNotify(string action)
         {
-            PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+            PoolRow? row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
             if (row == null)
             {
                 ShowEmailSelectionRequired(action);
@@ -68,16 +96,10 @@ namespace SmsWorkbench
             var rows = allRows.Where(r => r.IsChecked).ToList();
             if (rows.Count == 0)
             {
-                PoolRow row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+                PoolRow? row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
                 if (row != null) rows.Add(row);
             }
             return rows;
-        }
-
-        private void ApplyFilter_Click(object sender, RoutedEventArgs e)
-        {
-            currentPage = 1;
-            RefreshPagedRows();
         }
 
         private void AccountGrid_Sorting(object sender, DataGridSortingEventArgs e)
@@ -99,14 +121,6 @@ namespace SmsWorkbench
             currentPage = 1;
             RefreshPagedRows();
         }
-
-        private void ShowAll_Click(object sender, RoutedEventArgs e) => SetScope("全部");
-
-        private void ShowMailboxPool_Click(object sender, RoutedEventArgs e) => SetScope("邮箱池");
-
-        private void ShowRegistered_Click(object sender, RoutedEventArgs e) => SetScope("已注册");
-
-        private void ShowPending_Click(object sender, RoutedEventArgs e) => SetScope("待处理");
 
         private void FirstPage_Click(object sender, RoutedEventArgs e)
         {
@@ -131,13 +145,6 @@ namespace SmsWorkbench
             int pageSize = PageSizeValue();
             int count = allRows.Count(FilterRow);
             currentPage = Math.Max(1, (int)Math.Ceiling(count / (double)pageSize));
-            RefreshPagedRows();
-        }
-
-        private void SetScope(string scope)
-        {
-            ScopeFilter = scope;
-            currentPage = 1;
             RefreshPagedRows();
         }
 

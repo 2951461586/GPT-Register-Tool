@@ -4,6 +4,13 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- <Nullable> stays at `annotations` for now. Measured 2026-09-02: flipping
+         it to `enable` reports 147 distinct nullability findings across ~25
+         files, and most of them need a signature change plus a read of the
+         surrounding code - not a mechanical edit. Leaving it half-fixed would
+         add ~380 warnings of noise, which is worse than not checking at all.
+         SmsWorkbench.Contracts is already `enable` with zero warnings; migrate
+         this project file-by-file with `#nullable enable` directives. -->
     <Nullable>annotations</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>SmsWorkbench</AssemblyName>

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -137,27 +138,41 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
 
 # raw_json strings repeat verbatim between refreshes; sanitize is deterministic
 # and dominates the per-row cost, so cache parse + sanitize on the exact text.
+#
+# Each cache gets its own lock. Every one of them does check-then-act
+# (get -> miss -> build -> size check -> clear -> store); a pool refresh runs
+# these from a thread pool, so two threads can interleave between the size check
+# and the store. Under the GIL the worst case today is a wasted parse or a cache
+# that overshoots its bound, both harmless - but the pattern is one dropped GIL
+# away from being a real bug, and the lock costs ~100ns next to a json.loads.
 _SESSION_PARSE_CACHE: dict[str, Any] = {}
+_SESSION_PARSE_LOCK = threading.Lock()
 _SESSION_SANITIZE_CACHE: dict[str, dict[str, Any]] = {}
+_SESSION_SANITIZE_LOCK = threading.Lock()
 
 
 def _parsed_session(raw_json: str) -> Any:
-    cached = _SESSION_PARSE_CACHE.get(raw_json)
-    if cached is None:
-        cached = json.loads(raw_json)
-        if len(_SESSION_PARSE_CACHE) > 4096:
-            _SESSION_PARSE_CACHE.clear()
-        _SESSION_PARSE_CACHE[raw_json] = cached
-    return cached
+    with _SESSION_PARSE_LOCK:
+        cached = _SESSION_PARSE_CACHE.get(raw_json)
+        if cached is None:
+            cached = json.loads(raw_json)
+            if len(_SESSION_PARSE_CACHE) > 4096:
+                _SESSION_PARSE_CACHE.clear()
+            _SESSION_PARSE_CACHE[raw_json] = cached
+        return cached
 
 
 def _sanitized_session(raw_json: str, session: Any) -> Any:
-    cached = _SESSION_SANITIZE_CACHE.get(raw_json)
+    # sanitize() is the expensive part and needs no protection - only the dict
+    # does. Holding the lock across it would serialise the whole row scan.
+    with _SESSION_SANITIZE_LOCK:
+        cached = _SESSION_SANITIZE_CACHE.get(raw_json)
     if cached is None:
         cached = sanitize(session)
-        if len(_SESSION_SANITIZE_CACHE) > 4096:
-            _SESSION_SANITIZE_CACHE.clear()
-        _SESSION_SANITIZE_CACHE[raw_json] = cached
+        with _SESSION_SANITIZE_LOCK:
+            if len(_SESSION_SANITIZE_CACHE) > 4096:
+                _SESSION_SANITIZE_CACHE.clear()
+            _SESSION_SANITIZE_CACHE[raw_json] = cached
     return dict(cached) if isinstance(cached, dict) else cached
 
 
@@ -174,6 +189,7 @@ def _empty_session_state() -> dict[str, Any]:
 # account pool refresh reparses every session JSON on each call; unchanged
 # files hit the cache, which the resident desktop channel relies on.
 _SESSION_STATE_CACHE: dict[str, tuple[float, int, dict[str, Any]]] = {}
+_SESSION_STATE_LOCK = threading.Lock()
 
 
 def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
@@ -184,7 +200,8 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
         return _empty_session_state()
     try:
         stat = path.stat()
-        cached = _SESSION_STATE_CACHE.get(str(path))
+        with _SESSION_STATE_LOCK:
+            cached = _SESSION_STATE_CACHE.get(str(path))
         if cached and cached[0] == stat.st_mtime and cached[1] == stat.st_size:
             return dict(cached[2])
         data = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -201,7 +218,8 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
     workspace = data.get("workspace_scan") if isinstance(data.get("workspace_scan"), dict) else {}
     state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
-    _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
+    with _SESSION_STATE_LOCK:
+        _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
     return dict(state)
 
 

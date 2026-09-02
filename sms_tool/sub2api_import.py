@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import random
 import re
@@ -6,6 +8,7 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Iterable
 
 from curl_cffi import requests as curl_requests
 
@@ -26,25 +29,25 @@ DEFAULT_GROUP_NAME = "codex"
 
 
 def import_sub2api_session(
-    email="",
-    session_file="",
-    export_dir="",
-    refresh=True,
-    proxy=None,
-    timeout=300,
-    api_url="",
-    api_token="",
-    login_email="",
-    login_password="",
-    group_name="",
-    group_ids=None,
-    proxy_name="",
-    proxy_id=None,
-    priority=None,
-    concurrency=None,
-    auth_mode="",
-    verify_after_import=None,
-):
+    email: str = "",
+    session_file: str = "",
+    export_dir: str = "",
+    refresh: bool = True,
+    proxy: Any = None,
+    timeout: int = 300,
+    api_url: str = "",
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+    group_name: str = "",
+    group_ids: list[int] | None = None,
+    proxy_name: str = "",
+    proxy_id: int | None = None,
+    priority: int | None = None,
+    concurrency: int | None = None,
+    auth_mode: str = "",
+    verify_after_import: bool | None = None,
+) -> dict[str, Any]:
     cfg = _resolve_sub2api_config(
         api_url=api_url,
         api_token=api_token,
@@ -116,30 +119,30 @@ def import_sub2api_session(
 
 
 def import_sub2api_sessions(
-    emails,
-    export_dir="",
-    workers=1,
-    refresh=True,
-    proxy=None,
-    timeout=300,
-    api_url="",
-    api_token="",
-    login_email="",
-    login_password="",
-    group_name="",
-    group_ids=None,
-    proxy_name="",
-    proxy_id=None,
-    priority=None,
-    concurrency=None,
-    auth_mode="",
-    verify_after_import=None,
-):
+    emails: Iterable[str],
+    export_dir: str = "",
+    workers: int = 1,
+    refresh: bool = True,
+    proxy: Any = None,
+    timeout: int = 300,
+    api_url: str = "",
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+    group_name: str = "",
+    group_ids: list[int] | None = None,
+    proxy_name: str = "",
+    proxy_id: int | None = None,
+    priority: int | None = None,
+    concurrency: int | None = None,
+    auth_mode: str = "",
+    verify_after_import: bool | None = None,
+) -> dict[str, Any]:
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
     ordered = [None] * len(emails)
     max_workers = max(1, min(int(workers or 1), 10, len(emails) or 1))
 
-    def _run(index, item_email):
+    def _run(index: int, item_email: str) -> tuple[int, dict[str, Any]]:
         return index, import_sub2api_session(
             email=item_email,
             export_dir=export_dir,
@@ -177,7 +180,14 @@ def import_sub2api_sessions(
     }
 
 
-def _prepare_sub2api_import_data(email, session_file="", export_dir="", auth_mode="auto", proxy=None, timeout=300):
+def _prepare_sub2api_import_data(
+    email: str,
+    session_file: str = "",
+    export_dir: str = "",
+    auth_mode: str = "auto",
+    proxy: Any = None,
+    timeout: int = 300,
+) -> dict[str, Any]:
     mode = _normalize_auth_mode(auth_mode)
     direct_identity = _load_direct_agent_identity(session_file)
     if direct_identity.get("ok"):
@@ -284,7 +294,7 @@ def _prepare_sub2api_import_data(email, session_file="", export_dir="", auth_mod
     }
 
 
-def _load_direct_agent_identity(session_file):
+def _load_direct_agent_identity(session_file: str) -> dict[str, Any]:
     path = Path(str(session_file or "").strip()) if str(session_file or "").strip() else None
     if not path or not path.is_file():
         return {"ok": False, "error": "agent_identity_not_found"}
@@ -299,7 +309,7 @@ def _load_direct_agent_identity(session_file):
     return result
 
 
-def _normalize_auth_mode(value):
+def _normalize_auth_mode(value: str) -> str:
     text = str(value or "auto").strip().lower().replace("-", "_")
     if text in {"agentidentity", "agent_identity", "agent"}:
         return "agent_identity"
@@ -308,7 +318,7 @@ def _normalize_auth_mode(value):
     return "auto"
 
 
-def _is_agent_registry_disabled(result):
+def _is_agent_registry_disabled(result: Any) -> bool:
     """Check if an agent identity error result is HTTP 403 'Agent registry is
     not enabled' — a permanent condition that means the account will never
     support Agent Registry, so the caller should fall back to oauth."""
@@ -320,19 +330,19 @@ def _is_agent_registry_disabled(result):
 
 
 def upload_to_sub2api(
-    token_data,
-    origin="",
-    api_token="",
-    login_email="",
-    login_password="",
-    group_name="",
-    group_ids=None,
-    proxy_name="",
-    proxy_id=None,
-    priority=None,
-    concurrency=None,
-    verify_after_import=True,
-):
+    token_data: dict[str, Any],
+    origin: str = "",
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+    group_name: str = "",
+    group_ids: list[int] | None = None,
+    proxy_name: str = "",
+    proxy_id: int | None = None,
+    priority: int | None = None,
+    concurrency: int | None = None,
+    verify_after_import: bool = True,
+) -> dict[str, Any]:
     if not origin:
         return {"ok": False, "error": "missing_sub2api_url"}
     agent_identity_payload = is_agent_identity(token_data)
@@ -403,7 +413,13 @@ def upload_to_sub2api(
     }
 
 
-def _verify_sub2api_account_config(origin, token, account_id, group_ids=None, proxy_id=None):
+def _verify_sub2api_account_config(
+    origin: str,
+    token: str,
+    account_id: int,
+    group_ids: list[int] | None = None,
+    proxy_id: int | None = None,
+) -> dict[str, Any]:
     account_id = _as_int(account_id)
     if account_id <= 0:
         return {"ok": False, "error": "invalid_sub2api_account_id"}
@@ -436,7 +452,7 @@ def _verify_sub2api_account_config(origin, token, account_id, group_ids=None, pr
     }
 
 
-def _sub2api_account_group_ids(account):
+def _sub2api_account_group_ids(account: dict[str, Any]) -> list[int]:
     values = account.get("group_ids") or account.get("groups") or []
     if not isinstance(values, (list, tuple, set)):
         values = [values]
@@ -448,7 +464,7 @@ def _sub2api_account_group_ids(account):
     return sorted(result)
 
 
-def _imported_account_ids(data):
+def _imported_account_ids(data: Any) -> list[int]:
     if not isinstance(data, dict):
         return []
     account_ids = []
@@ -461,7 +477,7 @@ def _imported_account_ids(data):
     return account_ids
 
 
-def _probe_sub2api_account(origin, token, account_id, timeout=90):
+def _probe_sub2api_account(origin: str, token: str, account_id: int, timeout: int = 90) -> dict[str, Any]:
     account_id = _as_int(account_id)
     if account_id <= 0:
         return {"ok": False, "error": "invalid_sub2api_account_id"}
@@ -479,7 +495,7 @@ def _probe_sub2api_account(origin, token, account_id, timeout=90):
     return tested
 
 
-def _request_sub2api_test(origin, token, account_id, timeout=90):
+def _request_sub2api_test(origin: str, token: str, account_id: int, timeout: int = 90) -> dict[str, Any]:
     url = _join_url(origin, f"/api/v1/admin/accounts/{int(account_id)}/test")
     headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
     if token:
@@ -535,7 +551,13 @@ def _request_sub2api_test(origin, token, account_id, timeout=90):
     }
 
 
-def fetch_sub2api_auth_files(api_url="", api_token="", login_email="", login_password="", timeout=30):
+def fetch_sub2api_auth_files(
+    api_url: str = "",
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+    timeout: int = 30,
+) -> dict[str, Any]:
     cfg = _resolve_sub2api_config(
         api_url=api_url,
         api_token=api_token,
@@ -574,7 +596,13 @@ def fetch_sub2api_auth_files(api_url="", api_token="", login_email="", login_pas
     }
 
 
-def _build_sub2api_payload(token_data, group_ids=None, proxy_id=None, priority=None, concurrency=None):
+def _build_sub2api_payload(
+    token_data: dict[str, Any],
+    group_ids: list[int] | None = None,
+    proxy_id: int | None = None,
+    priority: int | None = None,
+    concurrency: int | None = None,
+) -> dict[str, Any]:
     identity = token_data.get("agent_identity") if isinstance(token_data.get("agent_identity"), dict) else {}
     email = str(token_data.get("email") or identity.get("email") or "").strip()
     payload = {
@@ -601,19 +629,19 @@ def _build_sub2api_payload(token_data, group_ids=None, proxy_id=None, priority=N
 
 
 def _resolve_sub2api_config(
-    api_url="",
-    api_token="",
-    login_email="",
-    login_password="",
-    group_name="",
-    group_ids=None,
-    proxy_name="",
-    proxy_id=None,
-    priority=None,
-    concurrency=None,
-    auth_mode="",
-    verify_after_import=None,
-):
+    api_url: str = "",
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+    group_name: str = "",
+    group_ids: list[int] | None = None,
+    proxy_name: str = "",
+    proxy_id: int | None = None,
+    priority: int | None = None,
+    concurrency: int | None = None,
+    auth_mode: str = "",
+    verify_after_import: bool | None = None,
+) -> dict[str, Any]:
     section = CFG.get("sub2api") if isinstance(CFG.get("sub2api"), dict) else {}
     legacy = CFG.get("sub2api_mode") if isinstance(CFG.get("sub2api_mode"), dict) else {}
     source = {**legacy, **section}
@@ -643,7 +671,7 @@ def _resolve_sub2api_config(
     }
 
 
-def _normalize_sub2api_origin(api_url):
+def _normalize_sub2api_origin(api_url: str) -> str:
     raw = str(api_url or "").strip().rstrip("/")
     if not raw:
         return ""
@@ -659,7 +687,12 @@ def _normalize_sub2api_origin(api_url):
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path.rstrip("/"), "", ""))
 
 
-def _resolve_sub2api_token(origin, api_token="", login_email="", login_password=""):
+def _resolve_sub2api_token(
+    origin: str,
+    api_token: str = "",
+    login_email: str = "",
+    login_password: str = "",
+) -> dict[str, Any]:
     token = str(api_token or "").strip()
     if token and not (_looks_like_sub2api_api_key(token) and login_email and login_password):
         return {"ok": True, "token": token}
@@ -682,15 +715,15 @@ def _resolve_sub2api_token(origin, api_token="", login_email="", login_password=
     return {"ok": True, "token": token}
 
 
-def _looks_like_sub2api_api_key(token):
+def _looks_like_sub2api_api_key(token: str) -> bool:
     return str(token or "").strip().lower().startswith("sk-")
 
 
-def _looks_like_sub2api_admin_key(token):
+def _looks_like_sub2api_admin_key(token: str) -> bool:
     return str(token or "").strip().lower().startswith("admin-")
 
 
-def _resolve_group_ids(origin, token, group_name="", group_ids=None):
+def _resolve_group_ids(origin: str, token: str, group_name: str = "", group_ids: list[int] | None = None) -> dict[str, Any]:
     parsed_ids = _parse_int_list(group_ids)
     if parsed_ids:
         return {"ok": True, "group_ids": parsed_ids}
@@ -723,7 +756,12 @@ def _resolve_group_ids(origin, token, group_name="", group_ids=None):
     return {"ok": True, "group_ids": matched}
 
 
-def _resolve_proxy_id(origin, token, proxy_name="", proxy_id=None):
+def _resolve_proxy_id(
+    origin: str,
+    token: str,
+    proxy_name: str = "",
+    proxy_id: int | None = None,
+) -> int | dict[str, Any] | None:
     parsed_id = _as_int(proxy_id)
     if parsed_id > 0:
         return parsed_id
@@ -748,7 +786,14 @@ def _resolve_proxy_id(origin, token, proxy_name="", proxy_id=None):
     return _as_int(matches[0].get("id")) or None
 
 
-def _request_json(origin, path, token="", method="GET", body=None, timeout=30):
+def _request_json(
+    origin: str,
+    path: str,
+    token: str = "",
+    method: str = "GET",
+    body: Any = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
     url = _join_url(origin, path)
     headers = {"Accept": "application/json"}
     if token:
@@ -784,20 +829,20 @@ def _request_json(origin, path, token="", method="GET", body=None, timeout=30):
         return {"ok": False, "error": str(exc)}
 
 
-def _unwrap_sub2api_response(payload):
+def _unwrap_sub2api_response(payload: Any) -> Any:
     if isinstance(payload, dict) and "code" in payload and "data" in payload:
         return payload.get("data")
     return payload
 
 
-def _parse_sub2api_account_page(data):
+def _parse_sub2api_account_page(data: Any) -> tuple[list[dict[str, Any]], int, int]:
     if isinstance(data, dict):
         items = data.get("items") or data.get("rows") or data.get("accounts") or data.get("data") or []
         return _as_list(items), _as_int(data.get("total")), _as_int(data.get("pages"))
     return _as_list(data), 0, 0
 
 
-def _sub2api_account_to_auth_file(item):
+def _sub2api_account_to_auth_file(item: Any) -> dict[str, Any]:
     item = item if isinstance(item, dict) else {}
     credentials = item.get("credentials") if isinstance(item.get("credentials"), dict) else {}
     extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
@@ -822,7 +867,7 @@ def _sub2api_account_to_auth_file(item):
     }
 
 
-def _record_sub2api_import(email, path, upload_result, auth_mode=""):
+def _record_sub2api_import(email: str, path: str, upload_result: dict[str, Any], auth_mode: str = "") -> None:
     target_email = str(email or "").strip().lower()
     if not target_email:
         return
@@ -854,7 +899,7 @@ def _record_sub2api_import(email, path, upload_result, auth_mode=""):
     upsert_account(data, json_path=record.get("json_path", ""))
 
 
-def _extract_expires_at(token_data):
+def _extract_expires_at(token_data: dict[str, Any]) -> int:
     value = (
         token_data.get("expires_at")
         or token_data.get("expiresAt")
@@ -875,11 +920,11 @@ def _extract_expires_at(token_data):
         return 0
 
 
-def _join_url(origin, path):
+def _join_url(origin: Any, path: Any) -> str:
     return str(origin or "").rstrip("/") + "/" + str(path or "").lstrip("/")
 
 
-def _parse_name_list(value):
+def _parse_name_list(value: Any) -> list[str]:
     if isinstance(value, (list, tuple)):
         source = value
     else:
@@ -894,7 +939,7 @@ def _parse_name_list(value):
     return names
 
 
-def _parse_int_list(value):
+def _parse_int_list(value: Any) -> list[int]:
     if value is None:
         return []
     if isinstance(value, (list, tuple)):
@@ -910,20 +955,20 @@ def _parse_int_list(value):
     return result
 
 
-def _as_list(value):
+def _as_list(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
     return []
 
 
-def _as_int(value):
+def _as_int(value: Any) -> int:
     try:
         return int(value)
     except Exception:
         return 0
 
 
-def _as_bool(value, default=False):
+def _as_bool(value: Any, default: bool = False) -> bool:
     if value is None or value == "":
         return bool(default)
     if isinstance(value, bool):
@@ -931,12 +976,12 @@ def _as_bool(value, default=False):
     return str(value).strip().lower() in {"1", "true", "yes", "on", "enabled"}
 
 
-def _normalize_email(value):
+def _normalize_email(value: Any) -> str:
     text = str(value or "").strip().lower()
     return text if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text) else ""
 
 
-def _sub2api_error_text(payload, status_code):
+def _sub2api_error_text(payload: Any, status_code: int) -> str:
     if isinstance(payload, dict):
         for key in ("message", "error", "detail", "reason", "raw"):
             value = str(payload.get(key) or "").strip()
@@ -945,7 +990,7 @@ def _sub2api_error_text(payload, status_code):
     return f"SUB2API HTTP {status_code}"
 
 
-def _sub2api_import_error(data):
+def _sub2api_import_error(data: Any) -> str:
     if isinstance(data, dict):
         errors = data.get("errors")
         if isinstance(errors, list) and errors:

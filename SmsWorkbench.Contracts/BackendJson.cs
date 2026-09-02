@@ -49,24 +49,26 @@ namespace SmsWorkbench
             }
         }
 
-        public static string GetString(Dictionary<string, object> data, string key)
+        public static string GetString(Dictionary<string, object>? data, string key)
         {
-            return data != null && data.TryGetValue(key, out object value) && value != null
+            return data != null && data.TryGetValue(key, out object? value) && value != null
                 ? Convert.ToString(value, CultureInfo.InvariantCulture) ?? ""
                 : "";
         }
 
-        public static bool TryGetMap(Dictionary<string, object> data, string key, out Dictionary<string, object> map)
+        public static bool TryGetMap(Dictionary<string, object>? data, string key, [NotNullWhen(true)] out Dictionary<string, object>? map)
         {
             map = null;
-            if (data == null || !data.TryGetValue(key, out object value)) return false;
+            if (data == null || !data.TryGetValue(key, out object? value)) return false;
             map = value as Dictionary<string, object>;
             return map != null;
         }
 
-        public static string NestedString(Dictionary<string, object> data, params string[] path)
+        public static string NestedString(Dictionary<string, object>? data, params string[] path)
         {
-            object current = data;
+            // `current` walks a path of nested maps; a missing key leaves it as
+            // the out-parameter default (null) which the loop reports as "".
+            object? current = data;
             foreach (string key in path)
             {
                 if (current is not Dictionary<string, object> map) return "";
@@ -75,17 +77,17 @@ namespace SmsWorkbench
             return Convert.ToString(current, CultureInfo.InvariantCulture) ?? "";
         }
 
-        public static bool GetBool(Dictionary<string, object> data, string key)
+        public static bool GetBool(Dictionary<string, object>? data, string key)
         {
-            if (data == null || !data.TryGetValue(key, out object value) || value == null) return false;
+            if (data == null || !data.TryGetValue(key, out object? value) || value == null) return false;
             if (value is bool b) return b;
             string text = Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim() ?? "";
             return text.Equals("true", StringComparison.OrdinalIgnoreCase) || text == "1";
         }
 
-        public static long GetLong(Dictionary<string, object> data, string key)
+        public static long GetLong(Dictionary<string, object>? data, string key)
         {
-            if (data == null || !data.TryGetValue(key, out object val) || val == null) return 0;
+            if (data == null || !data.TryGetValue(key, out object? val) || val == null) return 0;
             if (val is long l) return l;
             if (val is int i) return i;
             if (val is double d) return (long)d;
@@ -93,9 +95,9 @@ namespace SmsWorkbench
             return 0;
         }
 
-        public static double GetDouble(Dictionary<string, object> data, string key)
+        public static double GetDouble(Dictionary<string, object>? data, string key)
         {
-            if (data == null || !data.TryGetValue(key, out object val) || val == null) return 0;
+            if (data == null || !data.TryGetValue(key, out object? val) || val == null) return 0;
             if (val is double d) return d;
             if (val is long l) return l;
             if (val is int i) return i;
@@ -130,7 +132,7 @@ namespace SmsWorkbench
                 payload = payload.PadRight(payload.Length + ((4 - payload.Length % 4) % 4), '=');
                 string json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
                 var obj = TextToObject(json);
-                if (TryGetMap(obj, "https://api.openai.com/auth", out Dictionary<string, object> auth))
+                if (TryGetMap(obj, "https://api.openai.com/auth", out Dictionary<string, object>? auth))
                 {
                     return GetString(auth, key);
                 }

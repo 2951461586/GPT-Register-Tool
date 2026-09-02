@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using Serilog;
 using System.Diagnostics;
 using System.Text;
@@ -30,7 +34,8 @@ namespace SmsWorkbench
         private readonly IApplicationPaths _paths;
         private readonly ISettingsService _settings;
         private readonly Serilog.ILogger _logger;
-        private ResidentChannel _resident;
+        private readonly SemaphoreSlim _residentGate = new(1, 1);
+        private ResidentChannel? _resident;
 
         public DesktopReadClient(
             IBackendTaskCoordinator backend,
@@ -144,6 +149,10 @@ namespace SmsWorkbench
         {
             _resident?.Dispose();
             _resident = null;
+            // `_residentGate` is deliberately not disposed: SemaphoreSlim only
+            // allocates an OS handle if AvailableWaitHandle is touched, and
+            // disposing it here would turn a request that is mid-flight during
+            // shutdown into an ObjectDisposedException.
         }
 
         private async Task<string> ReadTemporaryTextAsync(
@@ -227,18 +236,47 @@ namespace SmsWorkbench
 
         // ── Resident channel ─────────────────────────────────────────────
 
+        /// <summary>
+        /// A failure of the resident transport. Callers catch this to fall back
+        /// to one-shot reads; a payload that the backend successfully produced
+        /// but marked <c>ok:false</c> is <em>not</em> this exception, because
+        /// re-running it through a cold start would fail identically.
+        /// </summary>
         private sealed class ResidentChannelException : Exception
         {
-            public ResidentChannelException(string message) : base(message) { }
+            public DesktopReadErrorCode Code { get; }
+
+            public ResidentChannelException(
+                string message,
+                DesktopReadErrorCode code = DesktopReadErrorCode.ChannelUnavailable)
+                : base(message)
+            {
+                Code = code;
+            }
         }
+
+        /// <summary>
+        /// Per-request ceiling on the resident channel. Overridable so the
+        /// timeout paths can be exercised without a 120-second test.
+        /// </summary>
+        internal TimeSpan ResidentRequestTimeout { get; set; } = DesktopReadProtocol.RequestTimeout;
+
+        /// <summary>
+        /// Responses the resident channel is still waiting for. Diagnostics
+        /// seam: a value that stays non-zero after requests have been given up
+        /// on is the <c>_pending</c> leak.
+        /// </summary>
+        internal int PendingResidentRequests => _resident?.PendingCount ?? 0;
 
         private async Task<JsonElement> ResidentRequestAsync(
             Dictionary<string, object> request, CancellationToken cancellationToken)
         {
-            ResidentChannel channel = GetOrStartResident();
-            if (channel == null)
-                throw new ResidentChannelException("resident channel unavailable");
-            JsonElement payload = await channel.RequestAsync(request, cancellationToken).ConfigureAwait(false);
+            ResidentChannel channel =
+                await GetOrStartResidentAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new ResidentChannelException(
+                    "resident channel unavailable", DesktopReadErrorCode.ChannelUnavailable);
+            JsonElement payload = await channel.RequestAsync(
+                request, ResidentRequestTimeout, cancellationToken).ConfigureAwait(false);
             return ExtractPayloadFromResponse(payload);
         }
 
@@ -252,27 +290,76 @@ namespace SmsWorkbench
             string error = response.TryGetProperty("error", out JsonElement errorElement)
                 ? errorElement.GetString() ?? "resident request failed"
                 : "resident request failed";
-            throw new InvalidOperationException(error);
+            DesktopReadErrorCode code = response.TryGetProperty(DesktopReadProtocol.CodeField, out JsonElement codeElement)
+                ? DesktopReadErrorCodes.Parse(codeElement.GetString())
+                : DesktopReadErrorCode.None;
+
+            // `watchdog_timeout` means the backend killed a handler that never
+            // returned; the process is exiting, so the correct response is to
+            // fall back and let the next call start a fresh one. Every other
+            // code is a real answer from a healthy backend — re-running it
+            // through a 0.6-1s cold start would produce the identical error.
+            if (code == DesktopReadErrorCode.WatchdogTimeout)
+                throw new ResidentChannelException(error, code);
+
+            throw new InvalidOperationException(
+                code == DesktopReadErrorCode.None ? error : $"[{DesktopReadErrorCodes.ToWire(code)}] {error}");
         }
 
-        private ResidentChannel GetOrStartResident()
+        private async Task<ResidentChannel?> GetOrStartResidentAsync(CancellationToken cancellationToken)
         {
             if (_paths == null || _settings == null)
                 return null; // coordinator-only construction cannot host a resident process
-            if (_resident != null && _resident.IsAlive)
-                return _resident;
-            _resident?.Dispose();
+
+            // Serialized: starting a channel now awaits a handshake, which is a
+            // far wider window than the old synchronous Process.Start, so two
+            // concurrent first calls would otherwise each spawn a backend.
+            await _residentGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                _resident = ResidentChannel.Start(_paths, _settings, _logger);
-                _logger.Information("Resident desktop-read channel started");
+                if (_resident is { IsAlive: true } existing)
+                {
+                    // Alive is not the same as responsive. A handler blocked on
+                    // IO keeps HasExited false, so without this probe every
+                    // request after the wedge pays the full 120s timeout.
+                    if (existing.ShouldProbeBeforeReuse())
+                    {
+                        try
+                        {
+                            await existing.PingAsync(cancellationToken).ConfigureAwait(false);
+                            return existing;
+                        }
+                        catch (ResidentChannelException ex)
+                        {
+                            _logger.Warning(
+                                "Resident desktop-read channel is alive but unresponsive ({Code}); restarting it",
+                                DesktopReadErrorCodes.ToWire(ex.Code));
+                        }
+                    }
+                    else
+                    {
+                        return existing;
+                    }
+                }
+
+                _resident?.Dispose();
+                _resident = await ResidentChannel.StartAsync(_paths, _settings, _logger, cancellationToken)
+                    .ConfigureAwait(false);
+                _logger.Information(
+                    "Resident desktop-read channel started (protocol {Version})", DesktopReadProtocol.Version);
                 return _resident;
             }
             catch (Exception ex)
             {
-                _logger.Warning("Resident desktop-read channel unavailable: {Message}; falling back to one-shot reads", ex.Message);
+                _logger.Warning(
+                    "Resident desktop-read channel unavailable: {Message}; falling back to one-shot reads", ex.Message);
+                _resident?.Dispose();
                 _resident = null;
                 return null;
+            }
+            finally
+            {
+                _residentGate.Release();
             }
         }
 
@@ -284,6 +371,7 @@ namespace SmsWorkbench
             private readonly Task _readLoop;
             private int _nextId;
             private bool _closed;
+            private long _lastResponseTicks = Environment.TickCount64;
 
             private ResidentChannel(Process process, Serilog.ILogger logger)
             {
@@ -301,7 +389,72 @@ namespace SmsWorkbench
 
             public bool IsAlive => !_closed && !_process.HasExited;
 
-            public static ResidentChannel Start(IApplicationPaths paths, ISettingsService settings, Serilog.ILogger logger)
+            /// <summary>
+            /// True when nothing has been in flight for a while, i.e. the next
+            /// request would be the first to notice a wedge. Deliberately
+            /// excludes the case where requests are outstanding: those are
+            /// already being timed out by their own callers.
+            /// </summary>
+            public bool ShouldProbeBeforeReuse()
+            {
+                lock (_gate)
+                {
+                    if (_pending.Count > 0) return false;
+                    return Environment.TickCount64 - Volatile.Read(ref _lastResponseTicks)
+                        > (long)DesktopReadProtocol.HeartbeatIdleThreshold.TotalMilliseconds;
+                }
+            }
+
+            public Task<JsonElement> PingAsync(CancellationToken cancellationToken) =>
+                RequestAsync(
+                    new Dictionary<string, object> { ["op"] = DesktopReadProtocol.OpPing },
+                    DesktopReadProtocol.HeartbeatTimeout,
+                    cancellationToken);
+
+            /// <summary>Outstanding responses. Diagnostics seam for the leak test.</summary>
+            internal int PendingCount
+            {
+                get
+                {
+                    lock (_gate)
+                        return _pending.Count;
+                }
+            }
+
+            /// <summary>
+            /// Refuse a backend that does not speak this protocol version. The
+            /// payloads are transport-compatible by design, but "compatible"
+            /// is exactly how a stale backend silently serves half-understood
+            /// data; the one-shot path is slower and always correct.
+            /// </summary>
+            private async Task HandshakeAsync(Serilog.ILogger logger, CancellationToken cancellationToken)
+            {
+                JsonElement response = await RequestAsync(
+                    new Dictionary<string, object> { ["op"] = DesktopReadProtocol.OpHello },
+                    DesktopReadProtocol.HandshakeTimeout,
+                    cancellationToken).ConfigureAwait(false);
+
+                JsonElement payload = response.TryGetProperty("payload", out JsonElement value)
+                    ? value
+                    : default;
+                int version = payload.ValueKind == JsonValueKind.Object
+                    && payload.TryGetProperty("protocol", out JsonElement reported)
+                    && reported.TryGetInt32(out int parsed)
+                        ? parsed
+                        : 0;
+
+                if (version == DesktopReadProtocol.Version) return;
+                logger.Warning(
+                    "Resident backend speaks desktop-read protocol {Backend} but this client speaks {Client}",
+                    version, DesktopReadProtocol.Version);
+                throw new ResidentChannelException(
+                    $"desktop-read protocol mismatch: backend {version}, client {DesktopReadProtocol.Version}",
+                    DesktopReadErrorCode.ProtocolMismatch);
+            }
+
+            public static async Task<ResidentChannel> StartAsync(
+                IApplicationPaths paths, ISettingsService settings, Serilog.ILogger logger,
+                CancellationToken cancellationToken = default)
             {
                 if (!File.Exists(paths.BackendScriptPath))
                     throw new FileNotFoundException("Backend script not found", paths.BackendScriptPath);
@@ -321,11 +474,27 @@ namespace SmsWorkbench
                 startInfo.ArgumentList.Add("--desktop-serve");
                 Process process = Process.Start(startInfo)
                     ?? throw new InvalidOperationException("resident python process did not start");
-                return new ResidentChannel(process, logger);
+                ResidentChannel channel = new(process, logger);
+                try
+                {
+                    await channel.HandshakeAsync(logger, cancellationToken).ConfigureAwait(false);
+                    return channel;
+                }
+                catch
+                {
+                    // Leave no half-started channel behind: the process keeps
+                    // running and holding the backend script open otherwise.
+                    channel.Dispose();
+                    throw;
+                }
             }
 
+            public Task<JsonElement> RequestAsync(
+                Dictionary<string, object> request, CancellationToken cancellationToken) =>
+                RequestAsync(request, DesktopReadProtocol.RequestTimeout, cancellationToken);
+
             public async Task<JsonElement> RequestAsync(
-                Dictionary<string, object> request, CancellationToken cancellationToken)
+                Dictionary<string, object> request, TimeSpan timeout, CancellationToken cancellationToken)
             {
                 int id;
                 TaskCompletionSource<JsonElement> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -345,25 +514,58 @@ namespace SmsWorkbench
                 }
                 catch (Exception)
                 {
-                    Complete(id, default);
+                    Abandon(id);
                     throw new ResidentChannelException("failed to write to resident process");
                 }
 
-                using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(120));
+                using CancellationTokenSource timeoutSource = new(timeout);
                 using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken, timeout.Token);
+                    cancellationToken, timeoutSource.Token);
                 try
                 {
                     return await completion.Task.WaitAsync(linked.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+                catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
                 {
-                    throw new ResidentChannelException("resident request timed out");
+                    Abandon(id);
+                    throw new ResidentChannelException(
+                        $"resident request {id} timed out after {timeout.TotalSeconds:0}s",
+                        DesktopReadErrorCode.Timeout);
                 }
                 catch (OperationCanceledException)
                 {
-                    throw new ResidentChannelException("resident request cancelled");
+                    Abandon(id);
+                    throw new ResidentChannelException(
+                        $"resident request {id} cancelled", DesktopReadErrorCode.Cancelled);
                 }
+            }
+
+            /// <summary>
+            /// Give up on a request and hand its slot back.
+            /// </summary>
+            /// <remarks>
+            /// This is the leak fix. <see cref="_pending"/> is only ever
+            /// drained by <see cref="Complete"/>, which runs when a response
+            /// arrives — and the two paths that reach here are precisely the
+            /// ones where no response is coming. Every timed-out or cancelled
+            /// request therefore left its
+            /// <see cref="TaskCompletionSource{TResult}"/> rooted in the
+            /// dictionary (together with the caller's continuation chain) until
+            /// the channel was disposed, which for a long-lived workbench is
+            /// never. At one timeout per slow read this grew without bound.
+            /// </remarks>
+        private void Abandon(int id)
+        {
+            TaskCompletionSource<JsonElement>? completion;
+                lock (_gate)
+                {
+                    if (!_pending.Remove(id, out completion))
+                        return; // the response won the race; Complete already resolved it
+                }
+                // Nobody is awaiting this any more. Cancel rather than leave it
+                // dangling: TrySetCanceled releases a late reader and, unlike
+                // TrySetException, produces no unobserved-exception noise.
+                completion.TrySetCanceled();
             }
 
             private async Task ReadLoopAsync(Serilog.ILogger logger)
@@ -433,11 +635,14 @@ namespace SmsWorkbench
 
             private void Complete(int id, JsonElement payload)
             {
-                TaskCompletionSource<JsonElement> completion;
-                lock (_gate)
-                {
-                    if (!_pending.Remove(id, out completion))
-                        return;
+            TaskCompletionSource<JsonElement>? completion;
+            lock (_gate)
+            {
+                if (!_pending.Remove(id, out completion))
+                    return;
+                // Any completed round trip is proof the process is
+                    // responsive, which is what ShouldProbeBeforeReuse measures.
+                    Volatile.Write(ref _lastResponseTicks, Environment.TickCount64);
                 }
                 if (payload.ValueKind != JsonValueKind.Undefined)
                     completion.TrySetResult(payload);

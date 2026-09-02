@@ -28,12 +28,16 @@ __pycache__/
 .pytest_cache/
 
 # === 一次性诊断/探测脚本（常内联明文凭据，禁止入库）===
-# 忽略仓库根目录与 scripts/ 下的 _*.py。切勿写成裸 "_*.py"：那会连带忽略所有
-# __init__.py（同样以 _ 开头），导致新建的包无法入库、无法导入。
-# scripts/ 这条是 2026-08-31 补的：此前只挡根目录，scripts/_diag_*.py 无人拦，
-# 结果 scripts/pick_final_replacements.py 带着 3 个真实凭据前缀进了公开仓库。
-/_*.py
-scripts/_*.py
+# 忽略**任意目录**下以 _ 开头的 .py，再用 ! 把 __init__.py 放行。
+# 切勿写成裸 "_*.py" 而不加例外：那会连带忽略所有 __init__.py（同样以 _ 开头），
+# 导致新建的包无法入库、无法导入。
+# 2026-08-31 补过一次 scripts/_*.py（此前只挡根目录，scripts/pick_final_replacements.py
+# 带着 3 个真实凭据前缀进了公开仓库）。2026-09-01 实测发现按目录枚举仍漏
+# services/ tests/ sms_tool/ —— 枚举是补不完的，改成全局规则 + 单点例外。
+_*.py
+!__init__.py
+# 已跟踪的合法模块，不能被上面的规则吃掉（否则对它的修改会静默停止入库）
+!/sms_tool/__main__.py
 build_log.txt
 *~
 *.bak
