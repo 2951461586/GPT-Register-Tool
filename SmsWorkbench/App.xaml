@@ -425,8 +425,7 @@
                        PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
                        PopupAnimation="None"
                        VerticalOffset="4">
-                  <Border x:Name="DropDownBorder"
-                          Background="{DynamicResource PanelBg}"
+                  <Border Background="{DynamicResource PanelBg}"
                           BorderBrush="{DynamicResource LineStrong}"
                           BorderThickness="1"
                           CornerRadius="4"

@@ -23,7 +23,7 @@ import time
 import uuid
 from pathlib import Path
 from threading import Event, RLock
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import requests
@@ -39,7 +39,35 @@ PROJECT_ROOT = SCRIPT_DIR.parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from sms_tool.account_liveness import probe_account_liveness
+
+# ── Access-token liveness probe ──────────────────────────────────────────
+# This vendored extractor checks a ChatGPT access token's health via the
+# main package's account-liveness probe. The dependency is NOT imported at
+# module load: module-load hard imports of ``sms_tool`` from a vendored
+# sub-tree are exactly the "fake split" trap (a subtree that looks
+# self-contained but is welded to the parent at import time). Instead the
+# probe is injectable, and only if nothing is injected do we lazily import
+# ``sms_tool.account_liveness`` on the first probe. ``payment_link_manager``
+# (or any future driver) should call ``set_access_token_probe`` once at
+# startup so the vendored tree stays importable on its own.
+_AccessTokenProbe = Callable[[str, str], dict[str, Any]] | None
+_access_token_probe: _AccessTokenProbe = None
+
+
+def set_access_token_probe(probe: _AccessTokenProbe) -> None:
+    """Inject the ChatGPT access-token liveness probe used by this extractor.
+
+    Pass ``None`` to revert to the lazy ``sms_tool.account_liveness`` fallback.
+    """
+    global _access_token_probe
+    _access_token_probe = probe
+
+
+def _default_access_token_probe(token: str, proxy: str) -> dict[str, Any]:
+    # Local import keeps this module importable without the parent package.
+    from sms_tool.account_liveness import probe_account_liveness
+
+    return probe_account_liveness({"access_token": token}, proxy=proxy, timeout=TIMEOUT)
 
 
 LOG_DIR = SCRIPT_DIR / "logs"
@@ -1022,11 +1050,9 @@ def ensure_running(stop_event: Event | None) -> None:
 
 
 def probe_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:
-    return probe_account_liveness(
-        {"access_token": token},
-        proxy=proxy,
-        timeout=TIMEOUT,
-    )
+    if _access_token_probe is not None:
+        return _access_token_probe(token, proxy)
+    return _default_access_token_probe(token, proxy)
 
 
 def validate_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:

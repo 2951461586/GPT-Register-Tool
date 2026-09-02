@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using Serilog;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -24,7 +28,7 @@ namespace SmsWorkbench
 
         public async Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default)
         {
             if (!File.Exists(_paths.BackendScriptPath))
@@ -131,7 +135,7 @@ namespace SmsWorkbench
             StreamReader reader,
             StringBuilder target,
             BackendOutputChannel channel,
-            IProgress<BackendOutputLine> progress)
+            IProgress<BackendOutputLine>? progress)
         {
             while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
             {

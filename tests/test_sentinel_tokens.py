@@ -82,7 +82,7 @@ class SentinelTokenTests(unittest.TestCase):
             "sentinel_source": "node_sdk_runner",
         }
 
-        with patch("sms_tool.sentinel.issue_sentinel_bundle", return_value=expected) as issue, \
+        with patch("sms_tool.sentinel.client.issue_sentinel_bundle", return_value=expected) as issue, \
              patch("sms_tool.sentinel_tokens._save_sentinel_cache") as save:
             result = sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed")
 
@@ -99,7 +99,7 @@ class SentinelTokenTests(unittest.TestCase):
             "oai_did": "other",
         }
 
-        with patch("sms_tool.sentinel.issue_sentinel_bundle", return_value=mismatched):
+        with patch("sms_tool.sentinel.client.issue_sentinel_bundle", return_value=mismatched):
             self.assertIsNone(sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed"))
 
     def test_browser_collector_keeps_authorize_tokens_on_authorize_flow(self):

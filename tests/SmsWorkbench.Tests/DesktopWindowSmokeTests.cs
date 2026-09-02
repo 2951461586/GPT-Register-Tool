@@ -456,7 +456,7 @@ public sealed class DesktopWindowSmokeTests
     private static void VerifyMailboxSelectionFileRouting(MainWindow main)
     {
         var method = typeof(MainWindow).GetMethod(
-            "TryCreateMailboxFile",
+            "TryCreateMailboxFileAsync",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
@@ -473,13 +473,21 @@ public sealed class DesktopWindowSmokeTests
         string expectedArgument)
     {
         var rows = lines.Select(line => new PoolRow { RawLine = line }).ToArray();
-        object?[] arguments = { rows, "", "", 0 };
-        Assert.True(Assert.IsType<bool>(method.Invoke(main, arguments)));
-        Assert.Equal(expectedArgument, Assert.IsType<string>(arguments[1]));
-        string path = Assert.IsType<string>(arguments[2]);
+        // TryCreateMailboxFileAsync is async and returns a MailboxFileSelection
+        // record (Arg/File/Count) instead of the old out-params. Invoke, await
+        // on the STA thread, then read the record fields via reflection because
+        // the record is private to MainWindow.
+        var task = (System.Threading.Tasks.Task)method.Invoke(
+            main, new object[] { rows, System.Threading.CancellationToken.None })!;
+        task.GetAwaiter().GetResult();
+        var selection = task.GetType().GetProperty("Result")!.GetValue(task)!;
+        var arg = Assert.IsType<string>(selection.GetType().GetProperty("Arg")!.GetValue(selection));
+        var path = Assert.IsType<string>(selection.GetType().GetProperty("File")!.GetValue(selection));
+        var count = Assert.IsType<int>(selection.GetType().GetProperty("Count")!.GetValue(selection));
+        Assert.Equal(expectedArgument, arg);
         try
         {
-            Assert.Equal(lines.Length, Assert.IsType<int>(arguments[3]));
+            Assert.Equal(lines.Length, count);
             Assert.Equal(lines, File.ReadAllLines(path, System.Text.Encoding.UTF8));
         }
         finally

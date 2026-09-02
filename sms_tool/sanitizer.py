@@ -34,6 +34,16 @@ SENSITIVE_KEYS = frozenset(str(item) for item in SENSITIVE_POLICY["sensitive_key
 _SENSITIVE_KEYS_LOWER = frozenset(item.lower() for item in SENSITIVE_KEYS)
 _SAFE_KEY_SUFFIXES = tuple(str(item) for item in SENSITIVE_POLICY.get("safe_key_suffixes") or ())
 _SENSITIVE_KEY_FRAGMENTS = tuple(str(item) for item in SENSITIVE_POLICY.get("sensitive_key_fragments") or ())
+# Dotted paths that must survive redaction. Matched as a path SUFFIX so the
+# exemption holds wherever the structure is nested.
+#
+# Why this exists: some words are credentials in one context and routing
+# metadata in another. `session_id` is the clearest case - it is a real session
+# credential in the OpenAI flows, but inside `proxy_affinity` it is the sticky
+# ID that `_restore_session()` splices back into the proxy username/password to
+# keep an account on the same exit IP. Redacting it produced
+# `sid-[REDACTED]` credentials that silently failed to connect.
+_SAFE_KEY_PATHS = tuple(str(item).lower() for item in SENSITIVE_POLICY.get("safe_key_paths") or ())
 SENSITIVE_OPTIONS = frozenset(str(item).lower() for item in SENSITIVE_POLICY.get("sensitive_options") or ())
 
 
@@ -54,22 +64,39 @@ def sanitize_text(value: Any) -> str:
     return text
 
 
-def sanitize(value: Any, *, key: str = "") -> Any:
-    """Recursively redact mappings/lists and free-form strings."""
+def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
+    """Recursively redact mappings/lists and free-form strings.
+
+    `path` is the dotted key path walked so far and is threaded down so a
+    `safe_key_paths` entry can exempt a specific nested field without giving up
+    redaction for that key name everywhere else.
+    """
     lowered = key.lower()
+    current_path = f"{path}.{lowered}" if path else lowered
+    path_is_exempt = bool(
+        _SAFE_KEY_PATHS
+        and current_path
+        and any(
+            current_path == entry or current_path.endswith(f".{entry}")
+            for entry in _SAFE_KEY_PATHS
+        )
+    )
     key_is_sensitive = (
-        lowered in _SENSITIVE_KEYS_LOWER
-        or (
-            not lowered.endswith(_SAFE_KEY_SUFFIXES)
-            and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
+        not path_is_exempt
+        and (
+            lowered in _SENSITIVE_KEYS_LOWER
+            or (
+                not lowered.endswith(_SAFE_KEY_SUFFIXES)
+                and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
+            )
         )
     )
     if key_is_sensitive:
         return REDACTED_VALUE if value not in (None, "") else value
     if isinstance(value, Mapping):
-        return {str(k): sanitize(v, key=str(k)) for k, v in value.items()}
+        return {str(k): sanitize(v, key=str(k), path=current_path) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [sanitize(item) for item in value]
+        return [sanitize(item, path=path) for item in value]
     if isinstance(value, str):
         return sanitize_text(value)
     if isinstance(value, BaseException):

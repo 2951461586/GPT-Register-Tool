@@ -10,9 +10,8 @@ from sms_tool.payment_catalog import PAYMENT_CATALOG
 
 class PaymentLinkManagerTests(unittest.TestCase):
     def setUp(self):
-        self._config_patch = patch.object(
-            manager,
-            "current_config_data",
+        self._config_patch = patch(
+            "sms_tool.pay_link.base.current_config_data",
             return_value={"chatgpt": {}, "protocol_payments": {}},
         )
         self._config_patch.start()
@@ -43,7 +42,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_native_result_has_completed_state_history(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertTrue(result["ok"])
@@ -81,7 +80,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             },
         }
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose), \
              patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate):
             result = manager.generate_payment_link(
@@ -242,7 +241,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch.object(manager, "CATALOG_METHODS", {"gopay": override}):
+        with patch("sms_tool.pay_link.registry.CATALOG_METHODS", {"gopay": override}):
             with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
                 with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
                     _proxy, values = manager._resolve_proxy_pool_routes(
@@ -294,7 +293,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         }
         config = {"chatgpt": {}, "protocol_payments": {}}
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
             with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
                 result = manager.generate_payment_link(
@@ -318,7 +317,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         }
         config = {"chatgpt": {}, "protocol_payments": {}}
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
             result = manager.generate_payment_link(
                 "token",
@@ -332,14 +331,14 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_unsupported_method_returns_failed_state(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 result = manager.generate_payment_link("token", payment_method="unknown")
         self.assertFalse(result["ok"])
         self.assertEqual(result["manager_state"], "failed")
 
     def test_native_failure_preserves_adapter_error_code(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.gen_pp_link.generate_upi_qr_link", return_value={
                     "ok": False,
                     "error": "UPI unavailable",
@@ -361,7 +360,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
@@ -386,7 +385,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
             result = manager.generate_payment_link(
                 "token", payment_method="ideal", seed_proxy="socks5h://127.0.0.1:1080",
@@ -407,7 +406,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
@@ -417,7 +416,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_blik_requires_explicit_six_digit_code_before_starting_subprocess(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run") as run:
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080"
@@ -434,7 +433,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="fatal after output",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=failed):
                     result = manager.generate_payment_link(
                         "token", payment_method="pix", seed_proxy="socks5h://127.0.0.1:1080"
@@ -455,7 +454,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
                     with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
@@ -468,7 +467,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_direct_card_requires_checkout_proxy_before_subprocess(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run") as run:
                     result = manager.generate_payment_link("token", payment_method="direct_card")
         self.assertFalse(result["ok"])
@@ -490,7 +489,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
                     with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
                         result = manager.generate_payment_link(
@@ -519,7 +518,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
                     result = manager.generate_payment_link(
                         "token",
@@ -548,7 +547,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token",
@@ -579,7 +578,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.payment_link_manager.subprocess.run", return_value=failed):
                     result = manager.generate_payment_link(
                         "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
@@ -591,16 +590,23 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_completed_status_does_not_bypass_artifact_validation_for_other_methods(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "status": "completed"}):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertFalse(result["ok"])
         self.assertIn("no link or QR data", result["error"])
 
     def test_explicit_empty_enabled_methods_disables_every_method(self):
+        # Config is injected at `pay_link.base.current_config_data`, the same
+        # seam setUp uses. It used to go through `manager.CFG`, a module-level
+        # dict no production code read - it existed only as a patch target, and
+        # it was the one reason `_config_data()` still had a CFG branch.
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(manager.CFG, {"protocol_payments": {"enabled_methods": []}}, clear=False):
-                with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch(
+                "sms_tool.pay_link.base.current_config_data",
+                return_value={"chatgpt": {}, "protocol_payments": {"enabled_methods": []}},
+            ):
+                with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertFalse(result["ok"])
         self.assertIn("disabled", result["error"])
@@ -620,7 +626,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
                     with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
@@ -646,7 +652,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stderr="",
         )
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(manager, "_state_path", return_value=Path(tmp) / "runs.jsonl"):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
                     with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
@@ -662,7 +668,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         approve_url = "https://www.paypal.com/agreements/approve?ba_token=BA-1AB23456CD789012E"
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
-            with patch.object(manager, "_state_path", return_value=runs):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
                 with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
                     "ok": True,
                     "url": approve_url,
@@ -683,7 +689,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_persist_run_replaces_nested_provider_and_qr_artifacts_with_presence(self):
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
-            with patch.object(manager, "_state_path", return_value=runs):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
                 manager._persist_run({
                     "ok": True,
                     "provider_redirect_url": "https://provider.example.test/pay/secret-session",
@@ -705,7 +711,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_persist_run_drops_raw_tail_and_redacts_embedded_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
-            with patch.object(manager, "_state_path", return_value=runs):
+            with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
                 manager._persist_run({
                     "ok": False,
                     "raw_output_tail": "Authorization: Bearer raw-tail-secret",
@@ -722,7 +728,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_persistence_failure_is_reported_without_raising(self):
         with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}):
-            with patch.object(manager, "_persist_run", side_effect=OSError("disk blocked")):
+            with patch("sms_tool.pay_link.persistence._persist_run", side_effect=OSError("disk blocked")):
                 result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertTrue(result["ok"])
         self.assertEqual(result["manager_state"], "completed")

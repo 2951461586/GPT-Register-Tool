@@ -29,7 +29,7 @@ namespace SmsWorkbench
     {
         public const string Prefix = "@@SMSWORKBENCH_V2@@";
 
-        public static bool TryParse(string line, out BackendProgressEvent value)
+        public static bool TryParse(string? line, [NotNullWhen(true)] out BackendProgressEvent? value)
         {
             value = null;
             string text = line ?? "";

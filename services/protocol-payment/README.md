@@ -3,9 +3,9 @@
 This directory vendors the protocol-only extractors used by
 `sms_tool.payment_link_manager`:
 
-- `pix/`: adapted from `F:\epsoft\pix` (callable PIX runner)
-- `ideal/`, `kakao/`, `blik/`, `twint/`: adapted from
-  `ideal-link-extractor-open-source-20260712`
+- `pix/`: adapted from an internal PIX runner mirror (callable PIX runner)
+- `ideal/`, `kakao/`, `blik/`, `twint/`: adapted from the
+  `ideal-link-extractor-open-source` upstream snapshot (2026-07-12)
 - `direct_card/`: vendored direct-card checkout short-link extractor. Builds a
   `chatgpt.com/checkout/<entity>/<cs_id>` custom-checkout link via a US checkout /
   TR promo-update / zero-amount-verify flow. Driven through its own CLI
@@ -115,3 +115,39 @@ chain through a caller-supplied transport, and returns secret-free
 `conclusive`/`unknown`/`failed` evidence. It does not change
 `generate_payment_link()` or turn a return-chain result into a newly extracted
 link.
+
+## Provenance & Licensing
+
+These extractors are **vendored adaptations**, not original work. The upstream
+snapshot each subtree derives from is recorded here so the license obligations
+are auditable; the precise upstream URL/tag is tracked in the repo's
+`docs/` provenance notes because the sources are internal mirrors rather than
+public repositories.
+
+| Subtree        | Derived from                                              | Upstream license |
+|----------------|-----------------------------------------------------------|------------------|
+| `pix/`         | internal PIX runner mirror                                | retained upstream |
+| `ideal/`       | `ideal-link-extractor-open-source` 2026-07-12 snapshot    | retained upstream |
+| `kakao/`       | `ideal-link-extractor-open-source` 2026-07-12 snapshot    | retained upstream |
+| `blik/`        | `ideal-link-extractor-open-source` 2026-07-12 snapshot    | retained upstream |
+| `twint/`       | `ideal-link-extractor-open-source` 2026-07-12 snapshot    | retained upstream |
+| `direct_card/` | vendored direct-card checkout extractor                   | GPT-Register-Tool |
+| `momo/`        | vendored MoMo scannable-QR extractor                      | GPT-Register-Tool |
+| `common/`      | shared helper layer for the vendored extractors           | GPT-Register-Tool |
+
+The `LICENSE` file in this directory governs **GPT-Register-Tool's own
+modifications** to these subtrees. It does **not** replace the upstream
+license of any code a subtree was adapted from; an upstream file that carries
+its own license header keeps that header, and that upstream license remains in
+force for the adapted portions. Before redistributing, every subtree must be
+checked against its upstream license terms.
+
+### Boundary note (reverse dependency)
+
+`kakao/kakao_extract.py` historically imported `sms_tool.account_liveness` at
+module load to probe access-token health. That is a "fake split" — a vendored
+tree that looks self-contained but is welded to the parent package on import.
+The probe is now injectable via `set_access_token_probe(...)`; when nothing is
+injected, `kakao_extract` falls back to a lazy import of
+`sms_tool.account_liveness` on first probe only. The module imports cleanly
+without the parent package present.

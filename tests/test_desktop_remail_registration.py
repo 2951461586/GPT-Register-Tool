@@ -87,14 +87,23 @@ def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     register_source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
     tasks_source = (ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
 
-    start = register_source.index("private bool TryCreateSelectedUnregisteredMailboxFile")
-    end = register_source.index("private bool IsUnregisteredMailboxRow", start)
+    # Matched on the method name only, not on `private bool ...`: these helpers
+    # became async (2026-09-02) because the backend read they depend on used to
+    # block the UI thread for up to 120s. The point of this test is the
+    # dispatch shape, not the signature.
+    # Anchor on the *definition*, not the call site: the name also appears in
+    # OneClickRegister_Click, and slicing from there picked up the wrong block.
+    start = register_source.index("TryCreateSelectedUnregisteredMailboxFileAsync(CancellationToken")
+    # `(PoolRow` identifies the definition; the bare name also appears as a call
+    # inside the block above, which would cut the slice short.
+    end = register_source.index("IsUnregisteredMailboxRowAsync(PoolRow", start)
     selected_block = register_source[start:end]
-    assert "TryCreateMailboxFile(rows, out mailboxArg, out mailboxFile, out selectedCount)" in selected_block
+    assert "TryCreateMailboxFileAsync(pending, ct)" in selected_block
     assert 'mailboxArg = "--chatai-mailbox-file"' not in selected_block
+    assert '= "--chatai-mailbox-file"' not in selected_block
 
-    assert "TryCreateMailboxFile(failedRows, out string mailboxArg, out string tempFile" in tasks_source
+    assert "TryCreateMailboxFileAsync(failedRows)" in tasks_source
     # The resolved, format-aware mailbox argument is forwarded to the planner
     # rather than hardcoding a chatai mailbox file argument inline.
     assert "CreateRerunFailedRegistration(" in tasks_source
-    assert "mailboxArg," in tasks_source
+    assert "mailbox.Arg," in tasks_source

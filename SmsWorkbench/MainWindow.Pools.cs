@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -138,7 +142,7 @@ namespace SmsWorkbench
             {
                 string key = NormalizeEmailKey(row.Identifier);
                 if (key.Length == 0) continue;
-                if (!best.TryGetValue(key, out PoolRow existing) || RowPriority(row) > RowPriority(existing))
+                if (!best.TryGetValue(key, out PoolRow? existing) || RowPriority(row) > RowPriority(existing))
                 {
                     best[key] = row;
                 }
@@ -350,6 +354,18 @@ namespace SmsWorkbench
                 refreshStatus = "oauth_present";
             }
             string provider = GetString(data, "mailbox_provider");
+            // `rawJson` is the full session blob (tens of KB per account) and both
+            // GetImportedStatus / GetPaypalAmount parse it from scratch via
+            // BackendJson.TextToObject. They used to be called twice each in the
+            // initialiser below (GetPaypalAmount at both the PayPalAmount and the
+            // PromotionStatus member, DisplayPayPalStatus likewise), i.e. 3 full
+            // JSON parses per row where 1 suffices - and this runs once per
+            // account on every pool refresh. Hoisted here so each is parsed once.
+            string importedStatus = AccountStatusInterpreter.GetImportedStatus(rawJson);
+            string paypalAmount = AccountStatusInterpreter.GetPaypalAmount(rawJson);
+            // Pure function of its arguments, but it was evaluated twice with
+            // identical arguments (PayPalStatus member and PromotionStatus member).
+            string paypalStatusDisplay = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod);
             var row = new PoolRow
             {
                 Id = "DB" + GetString(data, "id"),
@@ -363,13 +379,13 @@ namespace SmsWorkbench
                 SessionType = GetString(data, "session_type"),
                 PlanType = FirstNonEmpty(GetString(data, "plan_type"), GetString(data, "account_type")),
                 RegistrationCountry = GetString(data, "registration_country"),
-                Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, AccountStatusInterpreter.GetImportedStatus(rawJson)),
-                PayPalStatus = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
-                PayPalAmount = AccountStatusInterpreter.GetPaypalAmount(rawJson),
+                Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, importedStatus),
+                PayPalStatus = paypalStatusDisplay,
+                PayPalAmount = paypalAmount,
                 PromotionStatus = AccountStatusInterpreter.DisplayPromotionStatus(
                     GetString(data, "promotion_status"),
-                    AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod),
-                    AccountStatusInterpreter.GetPaypalAmount(rawJson)),
+                    paypalStatusDisplay,
+                    paypalAmount),
                 RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
                 TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? "已设置" : "未设置",
                 HasAccessToken = hasAccess,

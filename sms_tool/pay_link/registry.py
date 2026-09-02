@@ -1,7 +1,6 @@
 """registry submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -26,8 +25,8 @@ from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_appr
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .adapters import _run_direct_card, _run_gcash_adapter, _run_momo, _run_protocol_script, _run_regional_wallet_adapter
-from .base import GOPAY_DEFAULT_APPROVE_COUNTRIES, PAYMENT_METHODS, _LOGGER, _config_data, _reference_root, _select_kwargs
+from .adapters import _run_direct_card, _run_gcash_adapter, _run_momo, _run_protocol_script, _run_regional_wallet_adapter, _run_wallet_adapter
+from .base import GOPAY_DEFAULT_APPROVE_COUNTRIES, _protocol_cfg, PAYMENT_METHODS, _LOGGER, _config_data, _reference_root, _select_kwargs
 
 
 def build_default_payment_registry() -> PaymentAdapterRegistry:
@@ -36,7 +35,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
 
     def methods_for(adapter_key: str) -> tuple[str, ...]:
         return tuple(
-            key for key, definition in _plm.CATALOG_METHODS.items()
+            key for key, definition in CATALOG_METHODS.items()
             if definition.adapter == adapter_key
         )
 
@@ -74,7 +73,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
         )
 
     def wallet_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-        return _plm._run_wallet_adapter(PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
+        return _run_wallet_adapter(PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
 
     def gcash_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         kwargs.pop("payment_method", None)
@@ -167,7 +166,7 @@ def allowed_approve_countries(payment_method: Any) -> tuple[str, ...]:
     historical JP/TR default when the catalog does not constrain it.
     """
     method = normalize_payment_method(payment_method)
-    definition = _plm.CATALOG_METHODS.get(method)
+    definition = CATALOG_METHODS.get(method)
     if definition is not None and definition.approve_countries:
         return tuple(definition.approve_countries)
     if method == "gopay":
@@ -277,7 +276,7 @@ def _resolve_proxy_pool_routes(
 
 
 def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str]:
-    raw = _plm._protocol_cfg(runtime_config).get("enabled_methods")
+    raw = _protocol_cfg(runtime_config).get("enabled_methods")
     if isinstance(raw, str):
         values = re.split(r"[,;\s]+", raw)
     elif isinstance(raw, (list, tuple, set)):

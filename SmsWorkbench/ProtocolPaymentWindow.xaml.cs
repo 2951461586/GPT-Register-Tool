@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class ProtocolPaymentWindow : Window
@@ -15,7 +19,7 @@ namespace SmsWorkbench
 
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-        private void OnClosing(object sender, CancelEventArgs e)
+        private void OnClosing(object? sender, CancelEventArgs e)
         {
             if (!_viewModel.IsRunning) return;
             e.Cancel = true;

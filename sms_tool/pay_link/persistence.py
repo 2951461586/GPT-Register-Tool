@@ -1,7 +1,6 @@
 """persistence submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import sms_tool.payment_link_manager as _plm
 import json
 import logging
 import os
@@ -26,11 +25,11 @@ from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_appr
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .base import _STATE_LOCK, _redact_sensitive_values
+from .base import _STATE_LOCK, _redact_sensitive_values, _state_path
 
 
 def _persist_run(result: dict[str, Any]) -> None:
-    path = _plm._state_path()
+    path = _state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {}
     for key, value in result.items():
@@ -57,7 +56,7 @@ def _persist_run(result: dict[str, Any]) -> None:
 
 def _safe_persist_run(result: dict[str, Any]) -> None:
     try:
-        _plm._persist_run(result)
+        _persist_run(result)
     except (OSError, TypeError, ValueError) as exc:
         result["persistence_warning"] = f"payment run state was not persisted: {type(exc).__name__}"
 

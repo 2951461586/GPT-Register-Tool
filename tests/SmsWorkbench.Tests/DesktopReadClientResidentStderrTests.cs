@@ -54,7 +54,13 @@ public sealed class DesktopReadClientResidentStderrTests
     }
 
     /// <summary>Flood stderr, then echo each request back on stdout.</summary>
-    private const string ServeScript = """
+    /// <remarks>
+    /// Must answer <c>hello</c> with the protocol version: since the handshake
+    /// landed, a backend that does not negotiate is refused and the client
+    /// falls back to one-shot reads, which would silently turn this into a
+    /// test of the fallback path instead of the stderr pump.
+    /// </remarks>
+    private static string ServeScript => $$"""
         import sys, json
 
         chunk = "E" * 4096
@@ -71,7 +77,11 @@ public sealed class DesktopReadClientResidentStderrTests
             except Exception:
                 continue
             req_id = req.get("id")
-            sys.stdout.write(json.dumps({"id": req_id, "ok": True, "payload": {"echo": req.get("command", "accounts")}}) + "\n")
+            if req.get("op") == "hello":
+                payload = {"protocol": {{DesktopReadProtocol.Version}}, "ops": ["accounts"]}
+            else:
+                payload = {"echo": req.get("op", "accounts")}
+            sys.stdout.write(json.dumps({"id": req_id, "ok": True, "payload": payload}) + "\n")
             sys.stdout.flush()
         """;
 
@@ -86,6 +96,7 @@ public sealed class DesktopReadClientResidentStderrTests
         Directory.CreateDirectory(root);
         string script = Path.Combine(root, "serve.py");
         File.WriteAllText(script, ServeScript);
+        Assert.Contains($"\"protocol\": {DesktopReadProtocol.Version}", ServeScript);
 
         var paths = new StubPaths(root, script);
         var settings = new StubSettings(python);

@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -55,7 +59,9 @@ namespace SmsWorkbench
                     return new SettingsSaveResult(false, field.Label + " 必须是整数。");
             }
 
-            JsonNode matrix;
+            // JsonNode.Parse returns null for the literal `null`, which the
+            // `is not JsonObject` check below rejects with the real message.
+            JsonNode? matrix;
             try
             {
                 matrix = JsonNode.Parse(Find(fields, "protocol_payment_matrix").Value);
@@ -131,7 +137,7 @@ namespace SmsWorkbench
         {
             try
             {
-                JsonObject root = ReadRootIfExists();
+                JsonObject? root = ReadRootIfExists();
                 string value = root == null ? "" : Text(root, path);
                 return string.IsNullOrWhiteSpace(value) ? fallback : value;
             }
@@ -145,9 +151,9 @@ namespace SmsWorkbench
         {
             try
             {
-                JsonObject root = ReadRootIfExists();
+                JsonObject? root = ReadRootIfExists();
                 if (root == null) return Array.Empty<string>();
-                JsonNode value = GetPath(root, path);
+                JsonNode? value = GetPath(root, path);
                 if (value is JsonArray array)
                     return array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0).ToArray();
                 string single = value?.ToString() ?? "";
@@ -293,7 +299,7 @@ namespace SmsWorkbench
 
         private static string ArrayText(JsonObject root, string path)
         {
-            JsonNode value = GetPath(root, path);
+            JsonNode? value = GetPath(root, path);
             if (value is JsonArray array)
                 return string.Join(",", array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0));
             return value?.ToString() ?? "";
@@ -301,7 +307,7 @@ namespace SmsWorkbench
 
         private static string ListText(JsonObject root, string path)
         {
-            JsonNode value = GetPath(root, path);
+            JsonNode? value = GetPath(root, path);
             IEnumerable<string> entries = value is JsonArray array
                 ? array.Select(item => item?.ToString() ?? "")
                 : ParseList(value?.ToString() ?? "");
@@ -313,12 +319,18 @@ namespace SmsWorkbench
 
         private static string Text(JsonObject root, string path) => GetPath(root, path)?.ToString() ?? "";
 
-        private static string First(params string[] values)
+        // Elements may be null: Environment.GetEnvironmentVariable returns null
+        // for an unset variable, and "the env var is not set" has to be
+        // distinguishable from "it is set to empty".
+        private static string First(params string?[] values)
             => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
 
-        private static JsonNode GetPath(JsonObject root, string path)
+        /// Returns null when any segment of the dotted path is missing or is not
+        /// an object - callers use it to decide between "unset" and "set to
+        /// something", so a fabricated empty node would be wrong here.
+        private static JsonNode? GetPath(JsonObject root, string? path)
         {
-            JsonNode current = root;
+            JsonNode? current = root;
             foreach (string segment in (path ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (current is not JsonObject map || !map.TryGetPropertyValue(segment, out current)) return null;

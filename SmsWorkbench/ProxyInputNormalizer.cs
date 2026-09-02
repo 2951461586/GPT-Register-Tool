@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -57,7 +61,7 @@ namespace SmsWorkbench
             if (parts.Length == 2 && int.TryParse(parts[1], out int port))
                 return BuildUrl(scheme, parts[0], port, "", "");
             if (hasExplicitScheme
-                && Uri.TryCreate(scheme + "://" + remainder, UriKind.Absolute, out Uri legacyUri)
+                && Uri.TryCreate(scheme + "://" + remainder, UriKind.Absolute, out Uri? legacyUri)
                 && legacyUri.Host.Length > 0
                 && legacyUri.UserInfo.Length == 0
                 && legacyUri.AbsolutePath == "/"
@@ -72,7 +76,10 @@ namespace SmsWorkbench
             throw new FormatException("代理格式应为 host:port、host:port:user:password 或带 http/https/socks5/socks5h 前缀的 URL。");
         }
 
-        public static string[] NormalizeList(string value, string defaultScheme = "http")
+        // `value ?? ""` on the next line is the contract: a missing or null
+        // proxy field is normal input here, and this is the shared entry point
+        // for both pasted text and config lookups that may find nothing.
+        public static string[] NormalizeList(string? value, string defaultScheme = "http")
             => (value ?? "")
                 .Split(ListSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Select(item => item.Trim())
@@ -88,7 +95,7 @@ namespace SmsWorkbench
         public static string InferCountry(string value)
         {
             string normalized = Normalize(value);
-            if (!Uri.TryCreate(normalized, UriKind.Absolute, out Uri uri))
+            if (!Uri.TryCreate(normalized, UriKind.Absolute, out Uri? uri))
                 return "";
 
             string username = Uri.UnescapeDataString(uri.UserInfo.Split(':', 2)[0]);
@@ -113,7 +120,7 @@ namespace SmsWorkbench
 
         private static string NormalizeUrlForm(string scheme, string remainder)
         {
-            if (!Uri.TryCreate(scheme + "://" + remainder, UriKind.Absolute, out Uri uri) || uri.Port <= 0)
+            if (!Uri.TryCreate(scheme + "://" + remainder, UriKind.Absolute, out Uri? uri) || uri.Port <= 0)
                 throw new FormatException("代理 URL 无效或缺少端口。");
             string userInfo = uri.UserInfo;
             if (userInfo.Length == 0)

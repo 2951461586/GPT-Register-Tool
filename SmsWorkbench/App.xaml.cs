@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System;
 using System.IO;
 using System.Text;
@@ -13,8 +17,8 @@ namespace SmsWorkbench
 {
     public partial class App : Application
     {
-        private IHost _host;
-        private Serilog.ILogger _logger;
+        private IHost? _host;
+        private Serilog.ILogger? _logger;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -56,7 +60,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void OnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
         {
             LogCrash(e.Exception);
             e.SetObserved();

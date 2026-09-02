@@ -17,6 +17,8 @@ from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
+from .driver_env import driver_config
+
 
 class ConfigError(ValueError):
     pass
@@ -175,10 +177,15 @@ def validate_registration_driver_config(
     # Use the same environment-overlay logic as the runtime session factory so
     # preflight does not reject a driver whose credentials live in deployment
     # environment variables.
+    #
+    # This used to import `_driver_config` from
+    # `registration_drivers/external_sessions`. That made `sms_tool.config` -
+    # imported by 64 modules, so effectively every import in the package -
+    # depend on a browser-driver module that itself depends on config for proxy
+    # and runtime settings: a cycle, and the worst possible place for one. The
+    # logic moved to `sms_tool/driver_env.py`, below both consumers.
     try:
-        from .registration_drivers.external_sessions import _driver_config
-
-        selected_config = _driver_config(config, selected)
+        selected_config = driver_config(config, selected)
     except Exception:
         selected_config = dict(selected_config)
 
@@ -424,13 +431,9 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
     if registration is not None and not isinstance(registration, Mapping):
         errors.append("registration must be an object")
     if isinstance(registration, Mapping):
+        from .registration_drivers.base import KNOWN_DRIVER_ALIASES
         driver = str(registration.get("driver") or "protocol").strip().lower().replace("-", "_")
-        if driver not in {
-            "protocol", "api", "http", "playwright", "pw",
-            "browser", "browser_registration", "fingerprint", "fingerprint_browser",
-            "roxy", "roxybrowser", "roxy_browser", "cloak", "cloakbrowser", "cloak_browser",
-            "camoufox", "camou", "fox", "cf",
-        }:
+        if driver not in KNOWN_DRIVER_ALIASES:
             errors.append("registration.driver is unsupported")
         _validate_positive_numbers(registration, (
             "retry_attempts", "retry_delay_seconds", "at_stability_probe_count",
@@ -445,7 +448,8 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         if drivers is not None and not isinstance(drivers, Mapping):
             errors.append("registration.drivers must be an object")
         elif isinstance(drivers, Mapping):
-            supported_drivers = {"roxy", "cloak", "playwright", "camoufox", "adspower"}
+            from .registration_drivers.base import BROWSER_REGISTRATION_DRIVERS
+            supported_drivers = BROWSER_REGISTRATION_DRIVERS
             unknown_drivers = sorted(set(drivers) - supported_drivers)
             if unknown_drivers:
                 errors.append(f"unsupported registration driver config: {', '.join(unknown_drivers)}")

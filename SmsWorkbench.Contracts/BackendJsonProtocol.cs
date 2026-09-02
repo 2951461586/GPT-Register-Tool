@@ -8,7 +8,7 @@ namespace SmsWorkbench
 
         public const string Prefix = "@@SMSWORKBENCH_V2@@";
 
-        public static JsonElement? ExtractPayload(string standardOutput, Action<string>? onWarning = null)
+        public static JsonElement? ExtractPayload(string? standardOutput, Action<string>? onWarning = null)
         {
             string[] lines = (standardOutput ?? "").Split(LineSeparators, StringSplitOptions.None);
             bool sawEnvelope = false;
@@ -59,7 +59,7 @@ namespace SmsWorkbench
             return ExtractLegacyPayload(standardOutput);
         }
 
-        private static JsonElement? ExtractLegacyPayload(string standardOutput)
+        private static JsonElement? ExtractLegacyPayload(string? standardOutput)
         {
             string value = (standardOutput ?? "").Trim();
             // The trailing JSON (if any) parses on the first attempt; the loop

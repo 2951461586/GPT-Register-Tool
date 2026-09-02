@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Windows.Input;
 
 namespace SmsWorkbench
@@ -5,15 +9,21 @@ namespace SmsWorkbench
     public sealed partial class ProtocolPaymentViewModel : ObservableObject, IDisposable
     {
         private readonly IProtocolPaymentService _service;
-        private CancellationTokenSource _cancellation;
+        // Null whenever no run is in flight - created in RunAsync, disposed and
+        // cleared in the finally block. Cancel() reads `_cancellation == null`
+        // as "nothing running", so the null is part of the state machine and not
+        // an accident to paper over with `= null!`.
+        private CancellationTokenSource? _cancellation;
         private string _lastUrl = "";
         private string _lastQrPath = "";
 
         public ProtocolPaymentViewModel(
             IProtocolPaymentService service,
             IFileLauncher fileLauncher,
-            ProtocolPaymentAccount account,
-            IStageMatrixStore stageMatrixStore = null)
+            ProtocolPaymentAccount? account,
+            // Optional: null means "run without a stage matrix store"; the view
+            // model is constructed that way for manual (account-less) runs.
+            IStageMatrixStore? stageMatrixStore = null)
         {
             _service = service;
             FileLauncher = fileLauncher;
@@ -35,7 +45,9 @@ namespace SmsWorkbench
         }
 
         public IFileLauncher FileLauncher { get; }
-        public ProtocolPaymentAccount Account { get; }
+        // Null for a manual (account-less) run - IsManual below is literally
+        // "Account == null", so the type has to allow it.
+        public ProtocolPaymentAccount? Account { get; }
         public bool IsManual => Account == null;
         public bool IsSelectedAccount => Account != null;
         public IReadOnlyList<PaymentMethodDefinition> Methods { get; }
@@ -190,7 +202,7 @@ namespace SmsWorkbench
             StatusText = ProbeOnly ? "正在执行 Checkout / Stripe init 能力探测..." : "正在执行协议支付...";
             var progress = new Progress<BackendOutputLine>(line =>
             {
-                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progressEvent))
+                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
                 {
                     StageMatrix.Apply(progressEvent);
                     StatusText = progressEvent.Detail.Length > 0 ? progressEvent.Detail : progressEvent.Stage;
@@ -280,7 +292,10 @@ namespace SmsWorkbench
 
         private static string SelectCountry(string wanted, IReadOnlyList<PaymentProxyCountryOption> options, string fallback)
         {
-            string selected = options.FirstOrDefault(option => option.Code.Equals((wanted ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Code
+            // `?.Code` makes both lookups nullable - FirstOrDefault yields null
+            // when nothing matches. The final `??` is what collapses that to a
+            // real country code, so the local has to be nullable too.
+            string? selected = options.FirstOrDefault(option => option.Code.Equals((wanted ?? "").Trim(), StringComparison.OrdinalIgnoreCase))?.Code
                 ?? options.FirstOrDefault(option => option.Code.Equals(fallback, StringComparison.OrdinalIgnoreCase))?.Code;
             return selected ?? (options.Count > 0 ? options[0].Code : "");
         }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import random
 import threading
@@ -26,6 +27,8 @@ from ..utils import _generate_password, _random_birthdate, _random_name
 from .base import BrowserRegistrationError, normalize_registration_driver
 from .browser_session import PlaywrightBrowserSession
 from .external_sessions import _driver_config, create_browser_session
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_text(value: Any) -> str:

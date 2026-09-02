@@ -402,7 +402,11 @@ def _extract_sentinel_quickjs(proxy=None, persist=True, device_id=None):
         return None
     did = str(device_id or uuid.uuid4())
     try:
-        from .sentinel import issue_sentinel_bundle
+        # Import the submodule directly rather than the `sms_tool.sentinel`
+        # package entry point. That entry re-exports from `client`, which
+        # imports back into this module for `_extract_sentinel` - going through
+        # it made the two modules mutually dependent through the package init.
+        from .sentinel.client import issue_sentinel_bundle
 
         result = issue_sentinel_bundle(
             device_id=did,

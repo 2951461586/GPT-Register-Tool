@@ -10,7 +10,7 @@ namespace SmsWorkbench
         bool IsRunning { get; }
         Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default);
         Task<string> RunForResultAsync(BackendCommand command, CancellationToken cancellationToken = default);
         bool Cancel();

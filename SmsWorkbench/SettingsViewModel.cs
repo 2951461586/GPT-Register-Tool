@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
@@ -9,7 +13,7 @@ namespace SmsWorkbench
         private readonly ISettingsService _settingsService;
         private readonly IFileLauncher _fileLauncher;
 
-        [ObservableProperty] private SettingsCategoryViewModel selectedCategory;
+        [ObservableProperty] private SettingsCategoryViewModel? selectedCategory;
         [ObservableProperty] private string status = "";
 
         public SettingsViewModel(ISettingsService settingsService, IFileLauncher fileLauncher)
@@ -20,7 +24,7 @@ namespace SmsWorkbench
             selectedCategory = Categories.FirstOrDefault();
         }
 
-        public event EventHandler CloseRequested;
+        public event EventHandler? CloseRequested;
 
         public ObservableCollection<SettingsCategoryViewModel> Categories { get; }
 

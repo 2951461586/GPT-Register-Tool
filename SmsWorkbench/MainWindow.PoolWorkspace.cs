@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -15,7 +19,10 @@ namespace SmsWorkbench
         private int filteredCount;
         private string accountSortMember = "";
         private ListSortDirection? accountSortDirection;
-        public PoolRow SelectedRow { get; set; }
+        // Null means "no row selected". Every reader starts from
+        // SelectedRow and falls back to the grid's own selection, and the
+        // clear-selection path assigns null explicitly - so the type says so.
+        public PoolRow? SelectedRow { get; set; }
         private bool poolsRefreshRunning;
     }
 }

@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Text.Json;
 
 namespace SmsWorkbench
@@ -42,9 +46,12 @@ namespace SmsWorkbench
                 int warned = 0;
                 foreach (JsonElement check in result.Payload.Value.GetProperty("checks").EnumerateArray())
                 {
-                    string status = check.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() : "";
-                    string name = check.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() : "";
-                    string hint = check.TryGetProperty("hint", out JsonElement hintElement) ? hintElement.GetString() : "";
+                    // GetString() returns null for a JSON `null` value, not only
+                    // for a missing property - `?? ""` keeps that null out of
+                    // the interpolated failure line below.
+                    string status = check.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() ?? "" : "";
+                    string name = check.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "" : "";
+                    string hint = check.TryGetProperty("hint", out JsonElement hintElement) ? hintElement.GetString() ?? "" : "";
                     if (status == "fail")
                         fails.Add(string.IsNullOrEmpty(hint) ? name : $"{name}: {hint}");
                     else if (status == "warn")
@@ -79,7 +86,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void RerunFailed_Click(object sender, RoutedEventArgs e)
+        private async void RerunFailed_Click(object sender, RoutedEventArgs e)
         {
             var failedRows = allRows.Where(r =>
                 (r.Status.Contains("失败") || r.Status.Contains("待处理") || r.Status.Contains('缺'))
@@ -95,16 +102,18 @@ namespace SmsWorkbench
             if (MessageBox.Show($"找到 {failedRows.Count} 条失败/待处理账号，确定重新注册？\n\n流程：注册→获取 access token→存 session 入库",
                 "确认重注册", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
-            if (!TryCreateMailboxFile(failedRows, out string mailboxArg, out string tempFile, out int mailboxCount))
+            MailboxFileSelection? mailbox =
+                await TryCreateMailboxFileAsync(failedRows).ConfigureAwait(true);
+            if (mailbox is null)
             {
                 MessageBox.Show("失败记录缺少可用邮箱凭据，无法重新注册。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             var plan = BackendCommandPlanner.CreateRerunFailedRegistration(
-                mailboxArg,
-                tempFile,
-                mailboxCount,
+                mailbox.Arg,
+                mailbox.File,
+                mailbox.Count,
                 GetRegistrationProxyPool());
             RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
@@ -150,10 +159,10 @@ namespace SmsWorkbench
             Tasks.Add(task);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
-            AccountBatchProgressTracker accountProgress = string.IsNullOrWhiteSpace(progressDomain)
+            AccountBatchProgressTracker? accountProgress = string.IsNullOrWhiteSpace(progressDomain)
                 ? null
                 : new AccountBatchProgressTracker(progressDomain, progressTotal);
-            AccountBatchProgressDialog progressDialog = accountProgress == null
+            AccountBatchProgressDialog? progressDialog = accountProgress == null
                 ? null
                 : new AccountBatchProgressDialog(this, taskName, progressTotal, () => backendTasks.Cancel());
             progressDialog?.Show();
@@ -170,7 +179,7 @@ namespace SmsWorkbench
 
             var progress = new Progress<BackendOutputLine>(line =>
             {
-                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progressEvent))
+                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
                 {
                     if (accountProgress != null
                         && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
@@ -293,7 +302,7 @@ namespace SmsWorkbench
             var selected = SelectedEmailRowsOrNotify("删除");
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
-            BackendCommandPlan plan = null;
+            BackendCommandPlan? plan = null;
             try
             {
                 plan = BackendCommandPlanner.CreateBatchDeleteAccounts(

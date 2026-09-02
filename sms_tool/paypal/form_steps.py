@@ -7,6 +7,8 @@ address, ...) and delegates the mechanical work to ``dom_fields``.
 
 from __future__ import annotations
 
+import random
+import re
 import time
 
 from .dom_fields import (

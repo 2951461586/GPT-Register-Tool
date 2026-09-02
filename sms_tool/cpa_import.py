@@ -141,18 +141,18 @@ def import_cpa_sessions(
 
     results = [result for result in ordered if result is not None]
     ok_count = sum(1 for result in results if result.get("ok"))
+    # Dead block removed 2026-09-02: a second `return` sat here, after the first
+    # one, so it could never run. It referenced `import_result`, `skipped` and
+    # `auth_files_result`, none of which exist in this function - clearly copied
+    # from the auth-files path. No caller reads `emails` / `skipped` / `source`
+    # off this result (`import_targets.py` forwards it wholesale), so dropping it
+    # changes nothing at runtime and stops those names reading as live code.
     return {
         "ok": ok_count == len(emails),
         "total": len(emails),
         "success": ok_count,
         "failed": len(emails) - ok_count,
         "results": results,
-    }
-    return {
-        **import_result,
-        "emails": emails,
-        "skipped": skipped,
-        "source": {"count": len(auth_files_result.get("files", []))},
     }
 
 

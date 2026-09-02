@@ -6,7 +6,7 @@
          RID here keeps the packages.lock.json RID set consistent with both,
          otherwise restore in locked mode fails with NU1004. -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
-    <Nullable>annotations</Nullable>
+    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>SmsWorkbench.Contracts</AssemblyName>
     <RootNamespace>SmsWorkbench</RootNamespace>

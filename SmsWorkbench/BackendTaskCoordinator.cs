@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,7 +12,7 @@ namespace SmsWorkbench
     {
         private readonly IBackendClient _client;
         private readonly object _gate = new();
-        private CancellationTokenSource _activeCancellation;
+        private CancellationTokenSource? _activeCancellation;
 
         public BackendTaskCoordinator(IBackendClient client)
         {
@@ -26,7 +30,7 @@ namespace SmsWorkbench
 
         public async Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default)
         {
             CancellationTokenSource owned;

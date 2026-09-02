@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Text.Json;
 
 namespace SmsWorkbench
@@ -50,7 +54,7 @@ namespace SmsWorkbench
                 string path = PreferencesPath();
                 if (File.Exists(path))
                 {
-                    ProtocolPaymentHistoryFile saved = JsonSerializer.Deserialize<ProtocolPaymentHistoryFile>(
+                    ProtocolPaymentHistoryFile? saved = JsonSerializer.Deserialize<ProtocolPaymentHistoryFile>(
                         File.ReadAllText(path, Encoding.UTF8), JsonOptions);
                     if (saved?.Last != null)
                         return saved.Last;
@@ -74,7 +78,7 @@ namespace SmsWorkbench
             ArgumentNullException.ThrowIfNull(preferences);
             string path = PreferencesPath();
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? _paths.RootDirectory);
-            ProtocolPaymentHistoryFile saved = null;
+            ProtocolPaymentHistoryFile? saved = null;
             try
             {
                 if (File.Exists(path))
@@ -138,7 +142,7 @@ namespace SmsWorkbench
         {
             ArgumentNullException.ThrowIfNull(request);
             string transientSessionFile = "";
-            ProtocolPaymentExecutionPlan plan = null;
+            ProtocolPaymentExecutionPlan? plan = null;
             try
             {
                 string sessionFile = request.Account?.SessionFile ?? "";

@@ -1,3 +1,10 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs. Worth doing here in particular: this class is the one
+// business-rule implementation for account status and had no test coverage at
+// all, so "dictionary may not contain this key" is exactly the class of bug that
+// goes unnoticed in it.
+#nullable enable
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -98,27 +105,29 @@ namespace SmsWorkbench
         /// Extract wham_usage 5h/7d structured data from session JSON.
         /// Looks under quota.last_result.wham_usage (stored by account_liveness -> mark_quota_status).
         /// </summary>
-        public static Dictionary<string, object> ExtractWhamUsage(Dictionary<string, object> data)
+        /// Returns null when the account JSON carries no wham_usage block -
+        /// "unknown" rather than "empty", which callers render differently.
+        public static Dictionary<string, object>? ExtractWhamUsage(Dictionary<string, object>? data)
         {
             if (data == null) return null;
 
             // Path 1: data["quota"]["last_result"]["wham_usage"]
-            object quotaObj = null;
+            object? quotaObj = null;
             if (data.TryGetValue("quota", out quotaObj) && quotaObj is Dictionary<string, object> quota)
             {
-                if (quota.TryGetValue("last_result", out object lr) && lr is Dictionary<string, object> lastResult)
+                if (quota.TryGetValue("last_result", out object? lr) && lr is Dictionary<string, object> lastResult)
                 {
-                    if (lastResult.TryGetValue("wham_usage", out object wham) && wham is Dictionary<string, object> whamDict)
+                    if (lastResult.TryGetValue("wham_usage", out object? wham) && wham is Dictionary<string, object> whamDict)
                         return whamDict;
                 }
             }
 
             // Path 2: data["wham_usage"] (direct)
-            if (data.TryGetValue("wham_usage", out object direct) && direct is Dictionary<string, object> directDict)
+            if (data.TryGetValue("wham_usage", out object? direct) && direct is Dictionary<string, object> directDict)
                 return directDict;
 
             // Path 3: data["quota"]["wham_usage"]
-            if (quotaObj is Dictionary<string, object> quota2 && quota2.TryGetValue("wham_usage", out object wham2) && wham2 is Dictionary<string, object> whamDict2)
+            if (quotaObj is Dictionary<string, object> quota2 && quota2.TryGetValue("wham_usage", out object? wham2) && wham2 is Dictionary<string, object> whamDict2)
                 return whamDict2;
 
             return null;
@@ -127,13 +136,13 @@ namespace SmsWorkbench
         /// <summary>
         /// Format wham_usage into display string: "5h: 3K/10K (30%) | 7d: 12K/50K (24%)"
         /// </summary>
-        public static string FormatWhamUsageLabel(Dictionary<string, object> wham)
+        public static string FormatWhamUsageLabel(Dictionary<string, object>? wham)
         {
             if (wham == null || wham.Count == 0) return "";
             var parts = new List<string>();
             foreach (string windowKey in new[] { "5h", "7d" })
             {
-                if (wham.TryGetValue(windowKey, out object w) && w is Dictionary<string, object> window)
+                if (wham.TryGetValue(windowKey, out object? w) && w is Dictionary<string, object> window)
                 {
                     long used = BackendJson.GetLong(window, "used");
                     long limit = BackendJson.GetLong(window, "limit");
@@ -168,7 +177,7 @@ namespace SmsWorkbench
         public static bool IsPaymentLinkMethodMismatch(Dictionary<string, object> data, string paymentMethod)
         {
             string requested = PaymentMethods.Normalize(paymentMethod);
-            if (!BackendJson.TryGetMap(data, "paypal", out Dictionary<string, object> paypal) || paypal.Count == 0) return false;
+            if (!BackendJson.TryGetMap(data, "paypal", out Dictionary<string, object>? paypal) || paypal.Count == 0) return false;
             string savedMethod = PaymentMethods.Normalize(BackendJson.FirstNonEmpty(
                 BackendJson.GetString(paypal, "payment_method"),
                 BackendJson.GetString(paypal, "method"),
@@ -212,7 +221,7 @@ namespace SmsWorkbench
 
         private static bool PaymentMethodTypesContain(Dictionary<string, object> paypal, string expected)
         {
-            if (!paypal.TryGetValue("payment_method_types", out object raw) || raw == null) return false;
+            if (!paypal.TryGetValue("payment_method_types", out object? raw) || raw == null) return false;
             string target = expected.Trim().ToLowerInvariant();
             if (raw is List<object> items)
             {
@@ -349,7 +358,7 @@ namespace SmsWorkbench
 
         private static bool IsImportOk(Dictionary<string, object> data, string key)
         {
-            if (!BackendJson.TryGetMap(data, key, out Dictionary<string, object> importData)) return false;
+            if (!BackendJson.TryGetMap(data, key, out Dictionary<string, object>? importData)) return false;
             return BackendJson.GetString(importData, "ok").Equals("true", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -368,7 +377,7 @@ namespace SmsWorkbench
 
         public static string GetPaypalAmount(Dictionary<string, object> data)
         {
-            if (!BackendJson.TryGetMap(data, "paypal", out Dictionary<string, object> paypal)) return "";
+            if (!BackendJson.TryGetMap(data, "paypal", out Dictionary<string, object>? paypal)) return "";
             string currency = BackendJson.GetString(paypal, "currency").Trim().ToUpperInvariant();
             string rawAmount = BackendJson.FirstNonEmpty(
                 BackendJson.GetString(paypal, "amount_due"),

@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -15,7 +19,7 @@ namespace SmsWorkbench
 
         private void OpenPayPalLink_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedEmailRowOrNotify("打开支付链接");
+            PoolRow? row = SelectedEmailRowOrNotify("打开支付链接");
             if (row == null) return;
             if (string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
@@ -41,7 +45,7 @@ namespace SmsWorkbench
         /// ProtocolPaymentResultPresenter for JSON interpretation.
         /// Error handling is unified via BackendResultInterpreter.
         /// </summary>
-        private void ShowProtocolPaymentDialog(PoolRow selectedAccount = null)
+        private void ShowProtocolPaymentDialog(PoolRow? selectedAccount = null)
         {
             // Same single-backend-task guard as the batch dialog: the coordinator
             // rejects a concurrent run, so surface it here instead of failing
@@ -57,7 +61,7 @@ namespace SmsWorkbench
                 return;
             }
 
-            ProtocolPaymentAccount account = selectedAccount == null
+            ProtocolPaymentAccount? account = selectedAccount == null
                 ? null
                 : new ProtocolPaymentAccount(selectedAccount.Identifier, SessionFileFor(selectedAccount));
             if (protocolPaymentDialogs == null)

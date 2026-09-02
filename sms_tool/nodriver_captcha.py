@@ -30,6 +30,12 @@ def solve_captcha_with_nodriver(
     try:
         import nodriver as uc
     except ImportError:
+        # Say it out loud: this used to degrade silently, so the fallback looked
+        # available while never being able to run on a fresh install.
+        # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
+        # raise UnicodeEncodeError there.
+        print("[!] nodriver is not installed - the PayPal CAPTCHA fallback is "
+              "unavailable. Run: pip install nodriver (listed in requirements.txt)")
         return {"ok": False, "error": "nodriver not installed (pip install nodriver)"}
 
     return uc.loop().run_until_complete(

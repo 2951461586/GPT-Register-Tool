@@ -1,6 +1,11 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace SmsWorkbench
@@ -259,7 +264,7 @@ namespace SmsWorkbench
         [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
         private async Task RunAsync(CancellationToken cancellationToken)
         {
-            if (!TryCreateRequest(out PaymentBatchRequest request)) return;
+            if (!TryCreateRequest(out PaymentBatchRequest? request)) return;
             Results.Clear();
             _terminalProgressAccounts.Clear();
             _acceptProgress = true;
@@ -321,7 +326,7 @@ namespace SmsWorkbench
             }
         }
 
-        private bool TryCreateRequest(out PaymentBatchRequest request)
+        private bool TryCreateRequest([NotNullWhen(true)] out PaymentBatchRequest? request)
         {
             request = null;
             if (!int.TryParse(CanaryText.Trim(), out int canary) || canary < 0)
@@ -385,7 +390,7 @@ namespace SmsWorkbench
         private void ApplyProgress(BackendOutputLine line)
         {
             if (!_acceptProgress) return;
-            if (!BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent progress)) return;
+            if (!BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progress)) return;
             string accountRef = ResolveProgressAccount(progress.AccountRef);
             PaymentBatchResultRow? row = Results.FirstOrDefault(item => item.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
             if (row == null) return;
@@ -418,7 +423,7 @@ namespace SmsWorkbench
         private string ResolveProgressAccount(string accountRef)
         {
             if (string.IsNullOrWhiteSpace(accountRef)) return "";
-            PaymentBatchResultRow exact = Results.FirstOrDefault(row => row.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
+            PaymentBatchResultRow? exact = Results.FirstOrDefault(row => row.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
             if (exact != null) return exact.AccountRef;
             return ResolveAccountDisplay(accountRef);
         }

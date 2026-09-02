@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -39,7 +43,7 @@ namespace SmsWorkbench
             RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
-        private void ExportAccounts_Click(object sender, RoutedEventArgs e)
+        private async void ExportAccounts_Click(object sender, RoutedEventArgs e)
         {
             string format = ShowExportFormatDialog();
             if (format.Length == 0) return;
@@ -47,7 +51,7 @@ namespace SmsWorkbench
             var rows = ExportCandidateRows();
             if (format.Equals("txt", StringComparison.OrdinalIgnoreCase))
             {
-                ExportAccountsTxt(rows);
+                await ExportAccountsTxtAsync(rows).ConfigureAwait(true);
                 return;
             }
             if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
@@ -72,23 +76,21 @@ namespace SmsWorkbench
             return rows;
         }
 
-        private void ExportAccountsTxt(List<PoolRow> rows)
+        private async Task ExportAccountsTxtAsync(List<PoolRow> rows)
         {
             var lines = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
             int skipped = 0;
             foreach (PoolRow row in rows)
             {
-                if (TryBuildAccountExportLine(row, out string line))
-                {
-                    if (seen.Add(line))
-                    {
-                        lines.Add(line);
-                    }
-                }
-                else
+                string? line = await TryBuildAccountExportLineAsync(row).ConfigureAwait(true);
+                if (line is null)
                 {
                     skipped++;
+                }
+                else if (seen.Add(line))
+                {
+                    lines.Add(line);
                 }
             }
 
@@ -137,7 +139,7 @@ namespace SmsWorkbench
             int skipped = 0;
             foreach (PoolRow row in rows)
             {
-                Dictionary<string, object> item = await BuildAccountExportJsonAsync(row);
+                Dictionary<string, object>? item = await BuildAccountExportJsonAsync(row);
                 if (item != null)
                 {
                     string key = JsonExportDedupKey(item, row);
@@ -424,7 +426,7 @@ namespace SmsWorkbench
             }
 
             var results = new List<Dictionary<string, object>>();
-            if (summary.TryGetValue("results", out object rawResults) && rawResults is List<object> items)
+            if (summary.TryGetValue("results", out object? rawResults) && rawResults is List<object> items)
             {
                 foreach (object item in items)
                 {
@@ -613,7 +615,9 @@ namespace SmsWorkbench
             parent.Children.Add(card);
         }
 
-        private async Task<Dictionary<string, object>> BuildAccountExportJsonAsync(PoolRow row, CancellationToken ct = default)
+        /// Returns null when the row has no exportable account data (no session
+        /// file, or an empty/unusable payload) - the caller skips it.
+        private async Task<Dictionary<string, object>?> BuildAccountExportJsonAsync(PoolRow? row, CancellationToken ct = default)
         {
             if (row == null) return null;
             var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -735,12 +739,14 @@ namespace SmsWorkbench
             return JsonSerializer.Serialize(item);
         }
 
-        private bool TryBuildAccountExportLine(PoolRow row, out string line)
+        /// Returns the export line, or null when the row cannot be exported.
+        /// Async because the last-resort path asks the backend for the mailbox
+        /// credential line over IPC.
+        private async Task<string?> TryBuildAccountExportLineAsync(PoolRow row)
         {
-            line = "";
-            if (row == null) return false;
+            if (row == null) return null;
 
-            string source = FindMailboxLineForRow(row);
+            string source = await FindMailboxLineForRowAsync(row).ConfigureAwait(true);
             if (source.Length == 0 && !string.IsNullOrWhiteSpace(row.RawLine))
             {
                 source = row.RawLine;
@@ -748,16 +754,15 @@ namespace SmsWorkbench
 
             if (!TryParseMailboxExportParts(source, row, out string email, out string password, out string clientId, out string refreshToken))
             {
-                return false;
+                return null;
             }
 
             if (email.Length == 0 || password.Length == 0 || clientId.Length == 0 || refreshToken.Length == 0)
             {
-                return false;
+                return null;
             }
 
-            line = email + "----" + password + "----" + clientId + "----" + refreshToken;
-            return true;
+            return email + "----" + password + "----" + clientId + "----" + refreshToken;
         }
 
         private bool TryParseMailboxExportParts(string source, PoolRow row, out string email, out string password, out string clientId, out string refreshToken)

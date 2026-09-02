@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -290,7 +294,7 @@ namespace SmsWorkbench
                 Dictionary<string, object> data = JsonElementToDictionary(account);
                 string jsonPath = GetString(data, "json_path");
                 if (File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return jsonPath;
-                string rawJson = data.TryGetValue("session", out object session) ? JsonSerializer.Serialize(session) : "";
+                string rawJson = data.TryGetValue("session", out object? session) ? JsonSerializer.Serialize(session) : "";
                 if (string.IsNullOrWhiteSpace(rawJson)) return "";
                 string email = GetString(data, "email");
                 string safeEmail = Regex.Replace((email ?? "unknown").Trim(), @"[^a-zA-Z0-9_.@+-]+", "_");

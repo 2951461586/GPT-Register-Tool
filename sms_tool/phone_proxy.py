@@ -1,4 +1,4 @@
-﻿"""Dynamic proxy helpers for phone registration flows.
+"""Dynamic proxy helpers for phone registration flows.
 
 The phone-registration path must not buy SMS activations until the selected
 OpenAI/auth proxy is known to be usable.  This module keeps the provider

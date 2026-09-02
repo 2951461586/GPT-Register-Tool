@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 using System.Linq.Expressions;
 using Expr = System.Linq.Expressions.Expression;
 
@@ -97,9 +101,9 @@ namespace SmsWorkbench
                 return new AccountSortValue(PromotionStatusPresentation.SortRank(promotion), promotion);
             }
 
-            if (PropertyGetters.TryGetValue(member, out Func<PoolRow, object> getter))
+            if (PropertyGetters.TryGetValue(member, out Func<PoolRow, object>? getter))
             {
-                object value = row == null ? null : getter(row);
+                object? value = row == null ? null : getter(row);
                 return new AccountSortValue(value == null ? 1 : 0, Convert.ToString(value, CultureInfo.CurrentCulture) ?? "");
             }
             return new AccountSortValue(1, "");

@@ -22,7 +22,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_success_has_non_retryable_empty_error_contract(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
                  "ok": True,
                  "url": "https://example.test/approve",
@@ -38,7 +38,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_explicit_adapter_cancellation_is_not_collapsed_into_failure(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
                  "ok": False,
                  "status": "canceled",
@@ -58,7 +58,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_unknown_adapter_outcome_requires_reconciliation_and_is_not_retryable(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
                  "ok": False,
                  "state": "unknown",
@@ -82,7 +82,7 @@ class PaymentResultContractTests(unittest.TestCase):
             stage = "approve"
 
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=OutcomeUnknownError("response lost")):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -100,7 +100,7 @@ class PaymentResultContractTests(unittest.TestCase):
             retryable = True
 
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=StructuredUnknownError("response lost")):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -123,7 +123,7 @@ class PaymentResultContractTests(unittest.TestCase):
             "url": "https://example.test/authorize",
         }
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=[pending_without_link, pending_with_link]):
             unknown = manager.generate_payment_link("token", payment_method="paypal")
             complete = manager.generate_payment_link("token", payment_method="paypal")
@@ -137,8 +137,8 @@ class PaymentResultContractTests(unittest.TestCase):
     def test_subprocess_timeout_has_distinct_retryable_terminal_contract(self):
         timeout = subprocess.TimeoutExpired(cmd=["extractor"], timeout=3)
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
-             patch.object(manager, "_protocol_cfg", return_value={"timeout_seconds": 3}), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.adapters._protocol_cfg", return_value={"timeout_seconds": 3}), \
              patch("sms_tool.payment_link_manager.subprocess.run", side_effect=timeout):
             result = manager.generate_payment_link(
                 "token",
@@ -155,7 +155,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_keyboard_interrupt_is_returned_as_cancelled(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=KeyboardInterrupt):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -167,7 +167,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_regular_adapter_failure_gets_structured_defaults(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_upi_qr_link", return_value={
                  "ok": False,
                  "error": "UPI is unavailable",
@@ -182,7 +182,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_invalid_adapter_result_remains_a_definitive_contract_failure(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)), \
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
              patch("sms_tool.gen_pp_link.generate_pp_link", return_value={}):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -193,7 +193,7 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_validation_failure_has_structured_non_retryable_error(self):
         with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(manager, "_state_path", return_value=self._state_file(tmp)):
+             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)):
             result = manager.generate_payment_link("token", payment_method="not-supported")
 
         self.assertEqual("failed", result["manager_state"])

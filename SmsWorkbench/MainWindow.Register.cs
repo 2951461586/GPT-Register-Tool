@@ -1,3 +1,7 @@
+// Opted into nullable reference checking file-by-file - see the note in
+// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+#nullable enable
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -44,11 +48,11 @@ namespace SmsWorkbench
             NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
         }
 
-        private void ViewInbox_Click(object sender, RoutedEventArgs e)
+        private async void ViewInbox_Click(object sender, RoutedEventArgs e)
         {
-            PoolRow row = SelectedEmailRowOrNotify("查看收件箱");
+            PoolRow? row = SelectedEmailRowOrNotify("查看收件箱");
             if (row == null) return;
-            string mailboxLine = FindMailboxLineForRow(row);
+            string mailboxLine = await FindMailboxLineForRowAsync(row).ConfigureAwait(true);
             if (string.IsNullOrWhiteSpace(mailboxLine) || MailboxArgForLine(mailboxLine).Length == 0)
             {
                 MessageBox.Show("选中记录缺少可用的邮箱凭据或导入行。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -57,17 +61,19 @@ namespace SmsWorkbench
             ShowInboxDialog(row);
         }
 
-        private void OneClickRegister_Click(object sender, RoutedEventArgs e)
+        private async void OneClickRegister_Click(object sender, RoutedEventArgs e)
         {
-            if (TryCreateSelectedUnregisteredMailboxFile(out string pendingMailboxArg, out string pendingMailboxFile, out int pendingSelectedCount, out int pendingRowCount))
+            PendingMailboxSelection pending =
+                await TryCreateSelectedUnregisteredMailboxFileAsync().ConfigureAwait(true);
+            if (pending.Selection is { } pendingSelection)
             {
-                RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelectedCount);
+                RegisterOptions? selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelection.Count);
                 if (selectedOptions == null) return;
                 var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
                     "选中未注册邮箱注册",
-                    pendingMailboxArg,
-                    pendingMailboxFile,
-                    pendingSelectedCount,
+                    pendingSelection.Arg,
+                    pendingSelection.File,
+                    pendingSelection.Count,
                     selectedOptions.Workers,
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
@@ -76,21 +82,23 @@ namespace SmsWorkbench
                 RunBackend(plan.TaskName, plan.Arguments.ToList());
                 return;
             }
-            if (pendingRowCount > 0)
+            if (pending.PendingRowCount > 0)
             {
                 ShowThemedInfoDialog("邮箱记录不完整", "选中的未注册邮箱缺少可用邮箱原始记录，无法直接注册。");
                 return;
             }
 
-            if (TryCreateSelectedMailboxFile(out string selectedArg, out string selectedFile, out int selectedCount))
+            MailboxFileSelection? selected =
+                await TryCreateSelectedMailboxFileAsync().ConfigureAwait(true);
+            if (selected is { } selectedSelection)
             {
-                RegisterOptions selectedOptions = ShowSelectedRegisterOptionsDialog(selectedCount);
+                RegisterOptions? selectedOptions = ShowSelectedRegisterOptionsDialog(selectedSelection.Count);
                 if (selectedOptions == null) return;
                 var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
                     "选中邮箱注册",
-                    selectedArg,
-                    selectedFile,
-                    selectedCount,
+                    selectedSelection.Arg,
+                    selectedSelection.File,
+                    selectedSelection.Count,
                     selectedOptions.Workers,
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
@@ -100,7 +108,7 @@ namespace SmsWorkbench
                 return;
             }
 
-            RegisterOptions options = ShowRegisterOptionsDialog();
+            RegisterOptions? options = ShowRegisterOptionsDialog();
             if (options == null) return;
 
             if (options.Source == "phone")
@@ -196,16 +204,17 @@ namespace SmsWorkbench
                 return;
             }
 
-            if (!TryCreateMailboxFile(rows, out string mailboxArg, out string mailboxFile, out int mailboxCount)
-                || mailboxCount != rows.Count)
+            MailboxFileSelection? mailbox =
+                await TryCreateMailboxFileAsync(rows, ct).ConfigureAwait(true);
+            if (mailbox is null || mailbox.Count != rows.Count)
             {
                 ShowThemedInfoDialog("未选择邮箱", "一键接码需要读取邮箱验证码。请先导入并选择包含完整邮箱凭据的账号。");
                 return;
             }
 
             var plan = BackendCommandPlanner.CreateOneClickSms(
-                mailboxArg,
-                mailboxFile,
+                mailbox.Arg,
+                mailbox.File,
                 rows.Select(r => r.Identifier.Trim()).ToList(),
                 rows.Count == 1 ? SessionFileFor(rows[0]) : "",
                 GetRegistrationProxyPool());
@@ -235,7 +244,7 @@ namespace SmsWorkbench
                 return;
             }
 
-            ScanOptions options = ShowScanOptionsDialog(rows.Count);
+            ScanOptions? options = ShowScanOptionsDialog(rows.Count);
             if (options == null) return;
 
             var plan = BackendCommandPlanner.CreateAccountScan(
@@ -267,7 +276,8 @@ namespace SmsWorkbench
             RunAccountBatchBackend(plan.TaskName, plan.Arguments.ToList(), "account_promotion", rows.Count);
         }
 
-        private ScanOptions ShowScanOptionsDialog(int accountCount)
+        // Returns null when the operator cancels the dialog.
+        private ScanOptions? ShowScanOptionsDialog(int accountCount)
         {
             var dialog = new Window
             {
@@ -335,7 +345,7 @@ namespace SmsWorkbench
             Grid.SetColumnSpan(actions, 2);
             root.Children.Add(actions);
 
-            ScanOptions selected = null;
+            ScanOptions? selected = null;
             cancel.Click += (_, __) => dialog.Close();
             ok.Click += (_, __) =>
             {
@@ -400,9 +410,10 @@ namespace SmsWorkbench
             return dialog.ShowDialog() == true ? selected : "";
         }
 
-        private RegisterOptions ShowSelectedRegisterOptionsDialog(int selectedCount)
+        // Returns null when the operator cancels the dialog.
+        private RegisterOptions? ShowSelectedRegisterOptionsDialog(int selectedCount)
         {
-            RegisterOptions selected = null;
+            RegisterOptions? selected = null;
             Window dialog = CreateSelectedRegisterOptionsDialog(selectedCount, options => selected = options);
             return dialog.ShowDialog() == true ? selected : null;
         }
@@ -499,9 +510,10 @@ namespace SmsWorkbench
             return dialog;
         }
 
-        private RegisterOptions ShowRegisterOptionsDialog()
+        // Returns null when the operator cancels the dialog.
+        private RegisterOptions? ShowRegisterOptionsDialog()
         {
-            RegisterOptions selected = null;
+            RegisterOptions? selected = null;
             Window dialog = CreateRegisterOptionsDialog(options => selected = options);
             return dialog.ShowDialog() == true ? selected : null;
         }
@@ -636,16 +648,17 @@ namespace SmsWorkbench
             return Math.Max(1, Math.Min(8, CountValue()));
         }
 
-        private bool TryCreateSelectedMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount)
+        private Task<MailboxFileSelection?> TryCreateSelectedMailboxFileAsync(CancellationToken ct = default)
         {
-            return TryCreateMailboxFile(SelectedRowsOrCurrent(), out mailboxArg, out mailboxFile, out selectedCount);
+            return TryCreateMailboxFileAsync(SelectedRowsOrCurrent(), ct);
         }
 
-        private bool TryCreateMailboxFile(IEnumerable<PoolRow> rows, out string mailboxArg, out string mailboxFile, out int selectedCount)
+        /// Result of building a temporary mailbox-file for a batch. Replaces the
+        /// `out` parameters: an async method cannot declare them.
+        private sealed record MailboxFileSelection(string Arg, string File, int Count);
+
+        private async Task<MailboxFileSelection?> TryCreateMailboxFileAsync(IEnumerable<PoolRow> rows, CancellationToken ct = default)
         {
-            mailboxArg = "";
-            mailboxFile = "";
-            selectedCount = 0;
             var lines = new List<string>();
             var mailboxArgs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (PoolRow row in rows ?? Enumerable.Empty<PoolRow>())
@@ -653,7 +666,7 @@ namespace SmsWorkbench
                 string line = (row.RawLine ?? "").Trim().TrimStart('\ufeff');
                 if (MailboxArgForLine(line).Length == 0)
                 {
-                    line = FindMailboxLineForRow(row);
+                    line = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
                 }
                 string lineArg = MailboxArgForLine(line);
                 if (lineArg.Length > 0)
@@ -662,24 +675,33 @@ namespace SmsWorkbench
                     mailboxArgs.Add(lineArg);
                 }
             }
-            if (lines.Count == 0) return false;
+            if (lines.Count == 0) return null;
 
             // The legacy parser is the compatibility superset for mixed provider selections.
-            mailboxArg = mailboxArgs.Count == 1 ? mailboxArgs.First() : "--chatai-mailbox-file";
-            mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            string mailboxArg = mailboxArgs.Count == 1 ? mailboxArgs.First() : "--chatai-mailbox-file";
+            string mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
-            selectedCount = lines.Count;
-            return true;
+            return new MailboxFileSelection(mailboxArg, mailboxFile, lines.Count);
         }
 
-        private bool TryCreateSelectedUnregisteredMailboxFile(out string mailboxArg, out string mailboxFile, out int selectedCount, out int pendingRowCount)
+        /// Selection plus the count of rows that were considered, which the
+        /// caller needs to tell "nothing selected" apart from "selected rows have
+        /// no usable mailbox line".
+        private sealed record PendingMailboxSelection(MailboxFileSelection? Selection, int PendingRowCount);
+
+        private async Task<PendingMailboxSelection> TryCreateSelectedUnregisteredMailboxFileAsync(CancellationToken ct = default)
         {
-            List<PoolRow> rows = SelectedRowsOrCurrent().Where(IsUnregisteredMailboxRow).ToList();
-            pendingRowCount = rows.Count;
-            return TryCreateMailboxFile(rows, out mailboxArg, out mailboxFile, out selectedCount);
+            var pending = new List<PoolRow>();
+            foreach (PoolRow row in SelectedRowsOrCurrent())
+            {
+                if (await IsUnregisteredMailboxRowAsync(row, ct).ConfigureAwait(true)) pending.Add(row);
+            }
+            return new PendingMailboxSelection(
+                await TryCreateMailboxFileAsync(pending, ct).ConfigureAwait(true),
+                pending.Count);
         }
 
-        private bool IsUnregisteredMailboxRow(PoolRow row)
+        private async Task<bool> IsUnregisteredMailboxRowAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return false;
             if (HasRegisteredAccountState(row)) return false;
@@ -687,7 +709,10 @@ namespace SmsWorkbench
             if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return true;
             if (!string.IsNullOrWhiteSpace(row.RawRefreshToken)) return true;
             if (!string.IsNullOrWhiteSpace(row.RawLine) && MailboxArgForLine(row.RawLine).Length > 0) return true;
-            return !string.IsNullOrWhiteSpace(FindMailboxLineForRow(row));
+            // Only reached when every local field is empty, so the backend
+            // round-trip is the last resort rather than the common path.
+            string line = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
+            return !string.IsNullOrWhiteSpace(line);
         }
 
         private bool HasRegisteredAccountState(PoolRow row)
@@ -715,11 +740,15 @@ namespace SmsWorkbench
             return "";
         }
 
-        private string FindMailboxLineForRow(PoolRow row)
+        private async Task<string> FindMailboxLineForRowAsync(PoolRow? row, CancellationToken ct = default)
         {
-            if (!string.IsNullOrWhiteSpace(row?.MailboxLine)) return row.MailboxLine.Trim();
+            // The old body tested `row?.` and then dereferenced `row.` in the
+            // same expression - defensive in shape only. An explicit early
+            // return says it outright, and the compiler can then prove the rest.
+            if (row == null) return "";
+            if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return row.MailboxLine.Trim();
 
-            string fromDb = FindMailboxLineFromBackend(row);
+            string fromDb = await FindMailboxLineFromBackendAsync(row, ct).ConfigureAwait(true);
             if (fromDb.Length > 0) return fromDb;
 
             string email = (row.Identifier ?? "").Trim();
@@ -748,13 +777,23 @@ namespace SmsWorkbench
 
 
 
-        private string FindMailboxLineFromBackend(PoolRow row)
+        private async Task<string> FindMailboxLineFromBackendAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return "";
             try
             {
-                return desktopRead.ReadMailboxLineAsync(OnlyDigits(row.RawLine), row.Identifier)
-                    .GetAwaiter().GetResult().Trim();
+                // Was `.GetAwaiter().GetResult()` on the UI thread. That did not
+                // deadlock (DesktopReadClient configures ConfigureAwait(false)),
+                // but the resident-channel timeout is 120s, so a stalled backend
+                // froze the whole window - close button included - for two
+                // minutes. This was the only sync-over-async path in shipped
+                // code. ConfigureAwait(true) because the caller resumes into UI
+                // work; it is the default, stated explicitly so nobody "optimises"
+                // it away later.
+                string line = await desktopRead
+                    .ReadMailboxLineAsync(OnlyDigits(row.RawLine), row.Identifier, ct)
+                    .ConfigureAwait(true);
+                return (line ?? "").Trim();
             }
             catch (Exception ex)
             {

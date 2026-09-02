@@ -47,6 +47,10 @@ class FunctionMailboxProviderAdapter:
     matcher: Callable[[Any, Mapping[str, Any]], bool]
     message_fetcher: MessageFetcher | None = None
     otp_poller: OtpPoller | None = None
+    # True for a catch-all adapter (Graph). A fallback only wins when no
+    # specific adapter matched, so it never has to enumerate the providers it
+    # should not steal from - see _graph_matcher.
+    fallback: bool = False
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -86,13 +90,15 @@ class MailboxProviderRegistry:
         registry._adapters = list(self._adapters)
         return registry
 
-    def register_fetcher(self, name: str, matcher: Callable[..., bool], fetcher: MessageFetcher) -> None:
+    def register_fetcher(self, name: str, matcher: Callable[..., bool], fetcher: MessageFetcher, *, fallback: bool = False) -> None:
         existing = self._find(name)
-        self.register(FunctionMailboxProviderAdapter(name, matcher, fetcher, existing.otp_poller if existing else None))
+        self.register(FunctionMailboxProviderAdapter(
+            name, matcher, fetcher, existing.otp_poller if existing else None, fallback))
 
-    def register_poller(self, name: str, matcher: Callable[..., bool], poller: OtpPoller) -> None:
+    def register_poller(self, name: str, matcher: Callable[..., bool], poller: OtpPoller, *, fallback: bool = False) -> None:
         existing = self._find(name)
-        self.register(FunctionMailboxProviderAdapter(name, matcher, existing.message_fetcher if existing else None, poller))
+        self.register(FunctionMailboxProviderAdapter(
+            name, matcher, existing.message_fetcher if existing else None, poller, fallback))
 
     def resolve_fetcher(self, mailbox: Any, config: Mapping[str, Any]) -> FunctionMailboxProviderAdapter | None:
         return self._resolve(mailbox, config, require="fetch")
@@ -107,17 +113,30 @@ class MailboxProviderRegistry:
         return next((item for item in self._adapters if item.name == name), None)
 
     def _resolve(self, mailbox: Any, config: Mapping[str, Any], *, require: str) -> FunctionMailboxProviderAdapter | None:
+        """First specific adapter that matches; otherwise the first fallback.
+
+        Two passes rather than one: a catch-all must not win just because it
+        happens to be registered first, and it must not need to know which
+        providers exist in order to lose to them.
+        """
+        matched_fallback: FunctionMailboxProviderAdapter | None = None
         for adapter in self._adapters:
             supported = adapter.message_fetcher is not None if require == "fetch" else adapter.otp_poller is not None
-            if supported:
-                try:
-                    if adapter.matches(mailbox, config):
-                        return adapter
-                except Exception as exc:
-                    raise MailboxProviderResolutionError(
-                        f"mailbox provider matcher failed: {adapter.name}: {type(exc).__name__}"
-                    ) from exc
-        return None
+            if not supported:
+                continue
+            try:
+                matched = adapter.matches(mailbox, config)
+            except Exception as exc:
+                raise MailboxProviderResolutionError(
+                    f"mailbox provider matcher failed: {adapter.name}: {type(exc).__name__}"
+                ) from exc
+            if not matched:
+                continue
+            if not adapter.fallback:
+                return adapter
+            if matched_fallback is None:
+                matched_fallback = adapter
+        return matched_fallback
 
 # ── Strategy lists ─────────────────────────────────────────────────────────────
 
@@ -136,18 +155,27 @@ def register_message_fetcher(
     name: str,
     matcher: Callable[..., bool],
     fetcher: MessageFetcher,
+    *,
+    fallback: bool = False,
 ) -> None:
-    """Register a provider-specific message fetcher."""
-    DEFAULT_MAILBOX_PROVIDERS.register_fetcher(name, matcher, fetcher)
+    """Register a provider-specific message fetcher.
+
+    ``fallback=True`` marks a catch-all that only wins when nothing more
+    specific matched. Adding a provider should never require editing an
+    existing adapter.
+    """
+    DEFAULT_MAILBOX_PROVIDERS.register_fetcher(name, matcher, fetcher, fallback=fallback)
 
 
 def register_otp_poller(
     name: str,
     matcher: Callable[..., bool],
     poller: OtpPoller,
+    *,
+    fallback: bool = False,
 ) -> None:
     """Register a provider-specific OTP poller."""
-    DEFAULT_MAILBOX_PROVIDERS.register_poller(name, matcher, poller)
+    DEFAULT_MAILBOX_PROVIDERS.register_poller(name, matcher, poller, fallback=fallback)
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -176,11 +204,15 @@ def resolve_otp_poller(
 
 
 def _graph_matcher(mailbox: Any, cfg: dict) -> bool:
-    """Default matcher — only match if no provider-specific strategy applies."""
-    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    if provider in {"cfworker", "remail", "smailr", "icloud", "icloud_url", "gmail", "chongzhi"}:
-        return False
-    return True  # Catch-all for plain Graph/IMAP mailboxes
+    """Catch-all — matches every mailbox.
+
+    It used to carry an explicit exclusion set of every other provider name, so
+    adding a provider meant remembering to edit this list. Forgetting was
+    silent: Graph simply claimed the mailbox and the new provider never ran.
+    Ordering is now expressed by registering Graph with ``fallback=True``, which
+    :meth:`MailboxProviderRegistry._resolve` honours without a name list.
+    """
+    return True
 
 
 def _graph_fetch_messages(
@@ -268,6 +300,7 @@ def _chongzhi_poll_otp(mailbox: Any, **kwargs: Any) -> Optional[str]:
 register_otp_poller("chongzhi", _chongzhi_matcher, _chongzhi_poll_otp)
 
 
-# Register Graph API as the final fallback
-register_message_fetcher("graph_api", _graph_matcher, _graph_fetch_messages)
-register_otp_poller("graph_api", _graph_matcher, _graph_poll_otp)
+# Register Graph API as the catch-all. `fallback=True` - not registration order
+# and not an exclusion list - is what makes it lose to every named provider.
+register_message_fetcher("graph_api", _graph_matcher, _graph_fetch_messages, fallback=True)
+register_otp_poller("graph_api", _graph_matcher, _graph_poll_otp, fallback=True)
