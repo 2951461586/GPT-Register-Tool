@@ -595,8 +595,8 @@ def test_browser_recovery_uses_driver_from_browser_identity():
     with (
         patch("sms_tool.account_recovery.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"}, "registration": {}}),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_browser) as create_session,
-        patch("sms_tool.registration_drivers.playwright._wait_for_challenge_clear"),
-        patch("sms_tool.registration_drivers.playwright._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
+        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.browser_flow._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
         patch("sms_tool.session_refresh._save_refreshed", return_value="session.json"),
     ):
@@ -636,7 +636,7 @@ def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_p
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
-        patch("sms_tool.registration_drivers.playwright._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
         patch.object(account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):

@@ -561,7 +561,7 @@ def relogin_browser_session_account(
         }
     try:
         from .registration_drivers.external_sessions import create_browser_session
-        from .registration_drivers.playwright import _wait_for_challenge_clear
+        from .registration_drivers.browser_flow import _wait_for_challenge_clear
 
         config = CFG.data if hasattr(CFG, "data") else {}
         chat_cfg = config.get("chatgpt", {}) if isinstance(config.get("chatgpt"), dict) else {}
@@ -600,7 +600,7 @@ def relogin_browser_session_account(
             # Wait for Cloudflare challenge to clear automatically
             _wait_for_challenge_clear(page, max_wait_seconds=30)
             # Extract session info
-            from .registration_drivers.playwright import _session_payload
+            from .registration_drivers.browser_flow import _session_payload
             session_info = _session_payload(browser, chat_base, email, timeout_seconds=timeout)
             auth_body = session_info.get("body") or {}
             access_token = str(session_info.get("access_token") or "").strip()

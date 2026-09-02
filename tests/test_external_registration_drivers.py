@@ -20,31 +20,41 @@ from sms_tool.registration_drivers.external_sessions import (
 )
 from sms_tool.registration_drivers.browser_session import PlaywrightBrowserSession
 from sms_tool.registration_drivers.stealth import apply_playwright_stealth
-from sms_tool.registration_drivers.playwright import (
-    _browser_access_token_probe,
+from sms_tool.registration_drivers.browser_flow.flow_steps import (
     _browser_heartbeat,
+)
+from sms_tool.registration_drivers.browser_flow.form_steps import (
     _click_continue,
     _click_passwordless_otp,
-    _complete_profile,
+    _first_visible,
+    _quick_auth_state,
+    _safe_submit_email_form,
+)
+from sms_tool.registration_drivers.browser_flow.orchestrator import (
+    _browser_access_token_probe,
     _browser_failure_class,
+    _complete_profile,
     _fill_email,
     _fill_password_if_present,
-    _first_visible,
     _manual_challenge,
     _maybe_accept_cookies,
     _maybe_dismiss_chatgpt_onboarding,
     _poll_browser_otp,
     _post_otp_registration_state,
-    _profile_completion_required,
-    _quick_auth_state,
+    _post_registration_dwell,
     _prepare_session_page,
+    _profile_completion_required,
     _restart_email_otp_flow,
-    _safe_submit_email_form,
-    _session_context_closed,
     _session_payload,
     _wait_for_profile_completion,
     _wait_for_registration_state,
-    _post_registration_dwell,
+)
+from sms_tool.registration_drivers.browser_flow.session import (
+    _session_context_closed,
+)
+
+from browser_flow_patch import patch_bf
+from sms_tool.registration_drivers.playwright import (
     run_browser_registration,
 )
 
@@ -175,8 +185,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertNotIn("proxy", result)
         self.assertNotIn("password", result)
 
-    @patch("sms_tool.registration_drivers.playwright.random.uniform", return_value=21.5)
-    @patch("sms_tool.registration_drivers.playwright.time.sleep")
+    @patch("sms_tool.registration_drivers.browser_flow.session.random.uniform", return_value=21.5)
+    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep")
     def test_post_registration_dwell_matches_reference_range(self, sleep, _uniform):
         seconds = _post_registration_dwell({
             "registration": {"post_registration_dwell_seconds_range": "18,45"},
@@ -516,7 +526,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             {"status": 503, "body": {"error": "temporarily unavailable"}},
             {"status": 200, "body": {"accessToken": "at", "user": {"email": "user@example.com"}}},
         ]
-        with patch("sms_tool.registration_drivers.playwright.time.sleep") as sleep:
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep") as sleep:
             result = _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
         self.assertEqual(result["access_token"], "at")
         self.assertEqual(browser.fetch_json.call_count, 3)
@@ -543,7 +553,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             RuntimeError("temporary transport failure"),
             {"status": 200, "body": {"accessToken": "at", "user": {"email": "user@example.com"}}},
         ]
-        with patch("sms_tool.registration_drivers.playwright.time.sleep") as sleep:
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep") as sleep:
             result = _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
 
         self.assertEqual(result["access_token"], "at")
@@ -556,7 +566,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             {"status": 0, "body": {"error": "chatgpt_context_unavailable"}},
             {"status": 200, "body": {"accessToken": "at", "user": {"email": "user@example.com"}}},
         ]
-        with patch("sms_tool.registration_drivers.playwright.time.sleep"):
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep"):
             result = _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
         self.assertEqual(result["access_token"], "at")
         self.assertEqual(browser.fetch_json.call_count, 2)
@@ -567,7 +577,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             {"status": 200, "body": {"user": {"email": "stale@example.com"}}},
             {"status": 200, "body": {"accessToken": "at", "user": {"email": "user@example.com"}}},
         ]
-        with patch("sms_tool.registration_drivers.playwright.time.sleep"):
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep"):
             result = _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
         self.assertEqual(result["access_token"], "at")
 
@@ -592,7 +602,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     def test_session_payload_retries_closed_target_then_fails_precisely(self):
         browser = MagicMock()
         browser.fetch_json.side_effect = RuntimeError("Target page, context or browser has been closed")
-        with patch("sms_tool.registration_drivers.playwright.time.sleep"):
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.sleep"):
             with self.assertRaises(BrowserRegistrationError) as raised:
                 _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=5)
         self.assertEqual(raised.exception.code, "browser_session_context_closed")
@@ -669,7 +679,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(_maybe_dismiss_chatgpt_onboarding(page), 4)
         self.assertEqual(locator.click.call_count, 4)
 
-    @patch("sms_tool.registration_drivers.playwright._first_visible")
+    @patch_bf("_first_visible")
     def test_continue_uses_exact_accessible_name(self, first_visible):
         button = MagicMock()
         button.is_visible.return_value = True
@@ -682,7 +692,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         button.click.assert_called_once_with(no_wait_after=True)
         first_visible.assert_not_called()
 
-    @patch("sms_tool.registration_drivers.playwright._first_visible", return_value=None)
+    @patch_bf("_first_visible", return_value=None)
     def test_continue_uses_structural_submit_fallback(self, _first_visible):
         button = MagicMock()
         button.is_visible.return_value = False
@@ -698,8 +708,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
     def test_profile_completion_does_not_treat_unknown_as_complete(self):
         page = MagicMock()
-        with patch("sms_tool.registration_drivers.playwright.time.monotonic", side_effect=[0, 0, 2]), patch(
-            "sms_tool.registration_drivers.playwright._quick_auth_state", return_value="unknown"
+        with patch("sms_tool.registration_drivers.browser_flow.orchestrator.time.monotonic", side_effect=[0, 0, 2]), patch_bf("_quick_auth_state", return_value="unknown"
         ):
             self.assertFalse(_wait_for_profile_completion(page, timeout_seconds=1))
 
@@ -708,7 +717,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         live = MagicMock()
         browser = MagicMock()
         browser.select_live_page.return_value = live
-        with patch("sms_tool.registration_drivers.playwright._quick_auth_state", return_value="otp") as quick:
+        with patch_bf("_quick_auth_state", return_value="otp") as quick:
             state = _wait_for_registration_state(stale, timeout_seconds=1, browser=browser)
         self.assertEqual(state, "otp")
         quick.assert_called_once_with(live)
@@ -742,7 +751,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         }
         self.assertEqual(_quick_auth_state(page), "login_password")
 
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="profile")
+    @patch_bf("_wait_for_registration_state", return_value="profile")
     def test_post_otp_state_reprobe_allows_profile_only(self, wait_state):
         page = MagicMock()
         state = _post_otp_registration_state(page, timeout_seconds=5)
@@ -753,8 +762,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         )
         self.assertTrue(_profile_completion_required(state))
 
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._quick_auth_state", return_value="otp")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_quick_auth_state", return_value="otp")
     def test_post_otp_state_reprobe_skips_stale_otp_on_authenticated_callback(self, _quick_state, _wait_state):
         page = MagicMock()
         page.url = "https://chatgpt.com/"
@@ -772,8 +781,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             "unknown": "browser_registration_state_unknown",
         }
         for state, code in expected.items():
-            with self.subTest(state=state), patch(
-                "sms_tool.registration_drivers.playwright._wait_for_registration_state",
+            with self.subTest(state=state), patch_bf("_wait_for_registration_state",
                 return_value=state,
             ):
                 with self.assertRaises(BrowserRegistrationError) as raised:
@@ -803,7 +811,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertIn("email_value_mismatch", script)
         self.assertIn("bad.test(attrText(form))", script)
 
-    @patch("sms_tool.registration_drivers.playwright._quick_auth_state", return_value="login_password")
+    @patch_bf("_quick_auth_state", return_value="login_password")
     def test_existing_login_password_is_not_overwritten(self, _state):
         page = MagicMock()
         page.url = "https://auth.openai.com/log-in/password"
@@ -812,9 +820,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             _fill_password_if_present(page, "Password!1")
         self.assertEqual(raised.exception.code, "browser_existing_account")
 
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._click_passwordless_otp", return_value=True)
-    @patch("sms_tool.registration_drivers.playwright._quick_auth_state", return_value="login_password")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_click_passwordless_otp", return_value=True)
+    @patch_bf("_quick_auth_state", return_value="login_password")
     def test_existing_login_password_can_switch_to_passwordless_otp(self, _state, click_otp, wait_state):
         page = MagicMock()
         page.url = "https://auth.openai.com/log-in/password"
@@ -848,8 +856,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                 return None
 
         page = Page()
-        with patch("sms_tool.registration_drivers.playwright._safe_submit_email_form", return_value=False), patch(
-            "sms_tool.registration_drivers.playwright._click_continue"
+        with patch_bf("_safe_submit_email_form", return_value=False), patch_bf("_click_continue"
         ):
             with self.assertRaises(BrowserRegistrationError) as raised:
                 _fill_email(page, "user@example.com")
@@ -865,17 +872,15 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     def test_passwordless_probe_preserves_identity_provider_state(self):
         page = MagicMock()
         page.url = "https://auth.openai.com/log-in/password"
-        with patch("sms_tool.registration_drivers.playwright._quick_auth_state", return_value="password"), patch(
-            "sms_tool.registration_drivers.playwright._click_passwordless_otp", return_value=True
-        ), patch(
-            "sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="identity_provider"
+        with patch_bf("_quick_auth_state", return_value="password"), patch_bf("_click_passwordless_otp", return_value=True
+        ), patch_bf("_wait_for_registration_state", return_value="identity_provider"
         ):
             with self.assertRaises(BrowserRegistrationError) as raised:
                 _fill_password_if_present(page, "Password!1")
 
         self.assertEqual(raised.exception.code, "browser_unexpected_identity_provider")
 
-    @patch("sms_tool.registration_drivers.playwright._click_continue")
+    @patch_bf("_click_continue")
     def test_profile_requires_birthdate_and_supports_age_widget(self, click_continue):
         page = MagicMock()
         page.evaluate.return_value = {"name": True, "birth": True}
@@ -918,7 +923,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertGreaterEqual(browser.select_live_page.call_count, 1)
         self.assertGreaterEqual(page.evaluate.call_count, 1)
 
-    @patch("sms_tool.registration_drivers.playwright._browser_heartbeat")
+    @patch_bf("_browser_heartbeat")
     def test_heartbeat_otp_poll_fails_immediately_when_browser_context_closes(self, heartbeat):
         heartbeat.side_effect = BrowserRegistrationError("browser_session_context_closed")
         mailbox_service = MagicMock()
@@ -964,10 +969,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(mailbox_service.poll_otp.call_count, 2)
         self.assertGreaterEqual(browser.select_live_page.call_count, 2)
 
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._fill_email")
-    @patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False)
-    @patch("sms_tool.registration_drivers.playwright._maybe_accept_cookies")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_fill_email")
+    @patch_bf("_manual_challenge", return_value=False)
+    @patch_bf("_maybe_accept_cookies")
     def test_cloud_otp_restart_reopens_and_resubmits_email(self, accept_cookies, _challenge, fill_email, _state):
         page = MagicMock()
         browser = MagicMock()
@@ -1007,7 +1012,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(payload["body"]["accessToken"], "at")
         self.assertEqual(page.evaluate_calls, [])
 
-    @patch("sms_tool.registration_drivers.playwright._click_continue")
+    @patch_bf("_click_continue")
     def test_fill_email_retries_after_hydration_reload(self, click_continue):
         initial = MagicMock()
         reloaded = MagicMock()
@@ -1026,23 +1031,23 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         reloaded.fill.assert_called_once_with("user@example.com")
         self.assertEqual(click_continue.call_count, 2)
 
-    @patch("sms_tool.registration_drivers.playwright._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._registration_outcome", return_value=(True, "", ""))
+    @patch_bf("_browser_mailbox_snapshot", return_value={})
+    @patch_bf("_registration_outcome", return_value=(True, "", ""))
     @patch("sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200})
-    @patch("sms_tool.registration_drivers.playwright._session_payload", return_value={
+    @patch_bf("_session_payload", return_value={
         "body": {"user": {"email": "user@example.com"}}, "access_token": "at", "id_token": "id"
     })
-    @patch("sms_tool.registration_drivers.playwright._complete_profile")
-    @patch("sms_tool.registration_drivers.playwright._wait_after_otp_submit", side_effect=("invalid", "accepted"))
-    @patch("sms_tool.registration_drivers.playwright._click_resend", return_value=True)
-    @patch("sms_tool.registration_drivers.playwright._fill_otp")
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._fill_email")
-    @patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False)
+    @patch_bf("_complete_profile")
+    @patch_bf("_wait_after_otp_submit", side_effect=("invalid", "accepted"))
+    @patch_bf("_click_resend", return_value=True)
+    @patch_bf("_fill_otp")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_fill_email")
+    @patch_bf("_manual_challenge", return_value=False)
     @patch("sms_tool.mailbox._snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account")
-    @patch("sms_tool.registration_drivers.playwright.MailboxService.create")
+    @patch_bf("_ensure_mailbox_account")
+    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_otp_rejection_resends_and_uses_a_fresh_code(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
         _wait_state, fill_otp, resend, _wait_submit, _profile, _session, _probe, _outcome, _mailbox_snapshot,
@@ -1062,7 +1067,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         attempts = {"count": 0}
         fill_otp.side_effect = lambda *_args: attempts.__setitem__("count", attempts["count"] + 1)
 
-        with patch("sms_tool.registration_drivers.playwright._otp_fields", side_effect=lambda _page: object() if attempts["count"] < 2 else None):
+        with patch_bf("_otp_fields", side_effect=lambda _page: object() if attempts["count"] < 2 else None):
             result = run_browser_registration(
                 driver_name="playwright",
                 proxy=None,
@@ -1085,22 +1090,22 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(history.count("email_otp_validate"), 2)
         self.assertEqual(history.count("email_otp_wait"), 1)
 
-    @patch("sms_tool.registration_drivers.playwright._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._registration_outcome", return_value=(True, "", ""))
+    @patch_bf("_browser_mailbox_snapshot", return_value={})
+    @patch_bf("_registration_outcome", return_value=(True, "", ""))
     @patch("sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200})
-    @patch("sms_tool.registration_drivers.playwright._session_payload", return_value={
+    @patch_bf("_session_payload", return_value={
         "body": {"user": {"email": "user@example.com"}}, "access_token": "at", "id_token": "id"
     })
-    @patch("sms_tool.registration_drivers.playwright._complete_profile")
-    @patch("sms_tool.registration_drivers.playwright._wait_after_otp_submit", return_value="accepted")
-    @patch("sms_tool.registration_drivers.playwright._fill_otp")
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._fill_email")
-    @patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False)
+    @patch_bf("_complete_profile")
+    @patch_bf("_wait_after_otp_submit", return_value="accepted")
+    @patch_bf("_fill_otp")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_fill_email")
+    @patch_bf("_manual_challenge", return_value=False)
     @patch("sms_tool.mailbox._snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account")
-    @patch("sms_tool.registration_drivers.playwright.MailboxService.create")
+    @patch_bf("_ensure_mailbox_account")
+    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_accepted_otp_does_not_resend_for_stale_mounted_dom(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
         _wait_state, fill_otp, _wait_submit, _profile, _session, _probe, _outcome, _mailbox_snapshot,
@@ -1111,8 +1116,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         mailbox_service.poll_otp.return_value = "111111"
         mailbox_create.return_value = mailbox_service
 
-        with patch("sms_tool.registration_drivers.playwright._otp_fields", return_value=object()), patch(
-            "sms_tool.registration_drivers.playwright._click_resend"
+        with patch_bf("_otp_fields", return_value=object()), patch_bf("_click_resend"
         ) as resend:
             result = run_browser_registration(
                 driver_name="playwright",
@@ -1134,22 +1138,22 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
     @patch("sms_tool.browser_fingerprint_pool.detect_proxy_exit_geo",
           return_value={"country": "JP", "timezone": "Asia/Tokyo", "ip": "1.2.3.4"})
-    @patch("sms_tool.registration_drivers.playwright._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._registration_outcome", return_value=(True, "", ""))
+    @patch_bf("_browser_mailbox_snapshot", return_value={})
+    @patch_bf("_registration_outcome", return_value=(True, "", ""))
     @patch("sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200})
-    @patch("sms_tool.registration_drivers.playwright._session_payload", return_value={
+    @patch_bf("_session_payload", return_value={
         "body": {"user": {"email": "user@example.com"}}, "access_token": "at", "id_token": "id"
     })
-    @patch("sms_tool.registration_drivers.playwright._complete_profile")
-    @patch("sms_tool.registration_drivers.playwright._wait_after_otp_submit", return_value="accepted")
-    @patch("sms_tool.registration_drivers.playwright._fill_otp")
-    @patch("sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="otp")
-    @patch("sms_tool.registration_drivers.playwright._fill_email")
-    @patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False)
+    @patch_bf("_complete_profile")
+    @patch_bf("_wait_after_otp_submit", return_value="accepted")
+    @patch_bf("_fill_otp")
+    @patch_bf("_wait_for_registration_state", return_value="otp")
+    @patch_bf("_fill_email")
+    @patch_bf("_manual_challenge", return_value=False)
     @patch("sms_tool.mailbox._snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account")
-    @patch("sms_tool.registration_drivers.playwright.MailboxService.create")
+    @patch_bf("_ensure_mailbox_account")
+    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_browser_registration_records_geo_aligned_fingerprint(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
         _wait_state, fill_otp, _wait_submit, _profile, _session, _probe, _outcome, _mailbox_snapshot, _geo,
@@ -1193,32 +1197,24 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             "id_token": "id",
         }
 
-        with patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account", return_value=mailbox), patch(
-            "sms_tool.registration_drivers.playwright.MailboxService.create", return_value=MagicMock()
+        with patch_bf("_ensure_mailbox_account", return_value=mailbox), patch(
+            "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={}), patch(
             "sms_tool.mailbox._snapshot_mailbox_message"
-        ), patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False), patch(
-            "sms_tool.registration_drivers.playwright._maybe_accept_cookies",
+        ), patch_bf("_manual_challenge", return_value=False), patch_bf("_maybe_accept_cookies",
             side_effect=lambda *_args: events.append("cookies"),
-        ), patch(
-            "sms_tool.registration_drivers.playwright._fill_email",
+        ), patch_bf("_fill_email",
             side_effect=lambda *_args, **_kwargs: events.append("email"),
-        ), patch(
-            "sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="authenticated"
-        ), patch("sms_tool.registration_drivers.playwright._otp_fields", return_value=None), patch(
-            "sms_tool.registration_drivers.playwright._complete_profile"
-        ), patch(
-            "sms_tool.registration_drivers.playwright._wait_for_profile_completion", return_value=True
-        ), patch(
-            "sms_tool.registration_drivers.playwright._maybe_dismiss_chatgpt_onboarding",
+        ), patch_bf("_wait_for_registration_state", return_value="authenticated"
+        ), patch_bf("_otp_fields", return_value=None), patch_bf("_complete_profile"
+        ), patch_bf("_wait_for_profile_completion", return_value=True
+        ), patch_bf("_maybe_dismiss_chatgpt_onboarding",
             side_effect=lambda *_args, **_kwargs: events.append("onboarding"),
-        ), patch(
-            "sms_tool.registration_drivers.playwright._session_payload",
+        ), patch_bf("_session_payload",
             side_effect=lambda *_args, **_kwargs: (events.append("session") or session_result),
         ), patch(
             "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
-        ), patch(
-            "sms_tool.registration_drivers.playwright._registration_outcome", return_value=(True, "", "")
+        ), patch_bf("_registration_outcome", return_value=(True, "", "")
         ):
             result = run_browser_registration(
                 driver_name="playwright",
@@ -1250,24 +1246,18 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         }
 
         session_factory = MagicMock(return_value=_FlowSession())
-        with patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account", return_value=mailbox), patch(
-            "sms_tool.registration_drivers.playwright.MailboxService.create", return_value=MagicMock()
+        with patch_bf("_ensure_mailbox_account", return_value=mailbox), patch(
+            "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={"device_id": "device-browser"}), patch(
             "sms_tool.mailbox._snapshot_mailbox_message"
-        ), patch("sms_tool.registration_drivers.playwright._manual_challenge", return_value=False), patch(
-            "sms_tool.registration_drivers.playwright._maybe_accept_cookies"
-        ), patch("sms_tool.registration_drivers.playwright._fill_email"), patch(
-            "sms_tool.registration_drivers.playwright._wait_for_registration_state", return_value="authenticated"
-        ), patch("sms_tool.registration_drivers.playwright._otp_fields", return_value=None), patch(
-            "sms_tool.registration_drivers.playwright._quick_auth_state", return_value="authenticated"
-        ), patch("sms_tool.registration_drivers.playwright._complete_profile") as complete_profile, patch(
-            "sms_tool.registration_drivers.playwright._wait_for_profile_completion"
-        ) as wait_profile, patch(
-            "sms_tool.registration_drivers.playwright._session_payload", return_value=session_result
+        ), patch_bf("_manual_challenge", return_value=False), patch_bf("_maybe_accept_cookies"
+        ), patch_bf("_fill_email"), patch_bf("_wait_for_registration_state", return_value="authenticated"
+        ), patch_bf("_otp_fields", return_value=None), patch_bf("_quick_auth_state", return_value="authenticated"
+        ), patch_bf("_complete_profile") as complete_profile, patch_bf("_wait_for_profile_completion"
+        ) as wait_profile, patch_bf("_session_payload", return_value=session_result
         ), patch(
             "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
-        ), patch(
-            "sms_tool.registration_drivers.playwright._registration_outcome", return_value=(True, "", "")
+        ), patch_bf("_registration_outcome", return_value=(True, "", "")
         ):
             result = run_browser_registration(
                 driver_name="playwright",
@@ -1310,8 +1300,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             client_secret="mail-client-secret",
         )
 
-        with patch("sms_tool.registration_drivers.playwright._ensure_mailbox_account", return_value=mailbox), patch(
-            "sms_tool.registration_drivers.playwright.MailboxService.create", return_value=MagicMock()
+        with patch_bf("_ensure_mailbox_account", return_value=mailbox), patch(
+            "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={}):
             result = run_browser_registration(
                 driver_name="playwright",
@@ -1340,11 +1330,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
     def test_mailbox_setup_failure_is_returned_as_sanitized_browser_result(self):
         mailbox = SimpleNamespace(email="user@example.com", token="provider-secret")
-        with patch(
-            "sms_tool.registration_drivers.playwright._ensure_mailbox_account",
+        with patch_bf("_ensure_mailbox_account",
             return_value=mailbox,
         ), patch(
-            "sms_tool.registration_drivers.playwright.MailboxService.create",
+            "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create",
             side_effect=RuntimeError("mail provider token=provider-secret"),
         ):
             result = run_browser_registration(
