@@ -655,3 +655,43 @@ example 是**文档**，里面写着 35 个代码根本不读的键 —— 任�
 括号栈跟踪解析不出来。改用 `json.dump` 重写后 diff 变大（含原文件手工缩进的规范化，
 实测 212 增 / 71 删，其中真实删除只有 30 行）。
 **选了可靠性**：缩进规范化是一次性的附带改进，而解析失败的删除是功能性的错。
+
+---
+
+## 十一、C# P2 清理（2026-09-02 收尾）
+
+老板按我建议的顺序拍板：先提交 62 个文件（已完成，未 push）→ C# 这 7 项 P2。
+
+**实测：7 项里只有 3 项真要改，4 项收回。** 子代理的 P2 清单和之前 C 号环、architecture.md
+一样是过时的——它按"代码长什么样"报，没看"调用方在不在"或"是不是推荐模式"。
+
+| # | 子代理报的 | 实测 | 处置 |
+|---|---|---|---|
+| 1 | 5 处 `Process.Start` 绕过 IFileLauncher | 只有 2 处能换（打开文件/目录）；另 3 处是 notepad.exe / URL / Chrome `--incognito`，要传参，`IFileLauncher.Open` 接口不支持 | **改 2 处**为 `fileLauncher.Open(path)`；3 处加注释说明为何不走抽象 |
+| 2 | 静态 `HttpClient` 在 View 层 | `MainWindow.xaml.cs:10` 的字段**被 `SmsBower.cs:26,29` 使用**；且 `static readonly HttpClient` 是微软**推荐**模式（每次 `new` 才是反模式） | **收回**，标 NiceToHave |
+| 3 | `JsonDocument` 未 Dispose | `DesktopReadClient.cs:580` 确实没释放 | **改**为 `using JsonDocument doc` + `.RootElement.Clone()` |
+| 4 | `RunUiTaskAsync` 死参数 `ct` | 内部 `await operation()` 从不读 ct，调用点也不传 | **删参数**（附注释说明设计意图） |
+| 5 | fire-and-forget 无 catch | `RefreshPoolsAsync` 整方法体已在 `try/catch/finally` 内，子代理看的是 `_ = RefreshPoolsAsync` 那一行本身 | **收回** |
+| 6 | 账号状态分类三份复制 | `AccountStatusInterpreter`/`AccessTokenState`/`BackendResultInterpreter` | **需设计**——合并入口重构，超出"低风险机械活"，留待独立一轮 |
+| 7 | App.xaml 8 组同值重复画刷（`#58595C`） | 8 个键都指向同一颜色，**改一个不会漏改其他的**（不是漂移）；真正的漂移风险是 Theme.cs vs App.xaml，已被第九批的 `test_theme_palette_consistency.py` 覆盖 | **收回**（无害冗余） |
+
+### 改动明细（4 文件）
+
+| 文件 | 内容 |
+|---|---|
+| `MainWindow.xaml.cs` | 构造函数（主 + `internal` 链式）注入 `IFileLauncher fileLauncher` |
+| `MainWindow.Helpers.cs` | `OpenPath` 两处 `Process.Start` → `fileLauncher.Open(path)`；`RunUiTaskAsync` 删 `ct` 参数；3 处保留 Process.Start 加注释 |
+| `DesktopReadClient.cs` | `JsonDocument.Parse(line).RootElement` → `using JsonDocument doc` + `.RootElement.Clone()` |
+| `tests/SmsWorkbench.Tests/DesktopWindowSmokeTests.cs` | `new MainWindow(...)` 补第 12 个参数 `new FileLauncher()` |
+
+### 踩的坑：漏了第二个构造函数
+
+`MainWindow` 有两个构造函数——主构造（DI 入口，11 参数）和一个 `internal` 链式构造（历史遗留，
+用 `null` 占位第 6 参数）。我只改了主构造，编译报 `CS7036 未提供 fileLauncher`。
+改 internal 构造时把它也加上 `IFileLauncher fileLauncher = null` 转发给 `this(...)`。
+**教训**：改 WPF 窗口构造函数签名，先 `grep "new MainWindow("` **和** `: this(` 全找一遍，
+partial class 的构造函数可能不止一处。
+
+**验证：dotnet test = 253 passed（基线），0 错误。**
+
+下一步按老板顺序：PayPal 主干 6,361 行零测试 / `registration_drivers/playwright.py` 2032 行拆分（前置注册表第五轮已建，可拆）。

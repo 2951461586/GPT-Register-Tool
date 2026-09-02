@@ -22,6 +22,7 @@ namespace SmsWorkbench
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
         private readonly IPaymentBatchService paymentBatchService;
+        private readonly IFileLauncher fileLauncher;
         private readonly string rootDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
         private int taskSeq = 1;
@@ -223,7 +224,8 @@ namespace SmsWorkbench
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
-            Serilog.ILogger logger)
+            Serilog.ILogger logger,
+            IFileLauncher fileLauncher)
         {
             this.backendClient = backendClient;
             this.backendTasks = backendTasks;
@@ -235,6 +237,7 @@ namespace SmsWorkbench
             this.settingsDialogs = settingsDialogs;
             this.settingsService = settingsService;
             this.logger = logger;
+            this.fileLauncher = fileLauncher;
             rootDir = paths.RootDirectory;
             InitializeComponent();
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
@@ -270,7 +273,8 @@ namespace SmsWorkbench
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
-            Serilog.ILogger logger)
+            Serilog.ILogger logger,
+            IFileLauncher fileLauncher = null)
             : this(
                 paths,
                 backendClient,
@@ -282,7 +286,8 @@ namespace SmsWorkbench
                 snackbarService,
                 settingsDialogs,
                 settingsService,
-                logger)
+                logger,
+                fileLauncher)
         {
         }
 

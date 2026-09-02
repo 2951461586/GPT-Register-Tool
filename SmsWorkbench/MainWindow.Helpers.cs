@@ -11,7 +11,12 @@ namespace SmsWorkbench
         private void RunUiTask(Func<Task> operation)
             => _ = RunUiTaskAsync(operation);
 
-        private async Task RunUiTaskAsync(Func<Task> operation, CancellationToken ct = default)
+        // No cancellation token by design: callers schedule fire-and-forget UI work
+        // whose lifetime is the window itself, and a half-finished operation left
+        // dangling is worse than one that runs to completion. The window's
+        // lifetime token (_lifetimeCts) already stops the long-running backends
+        // the operation delegates to.
+        private async Task RunUiTaskAsync(Func<Task> operation)
         {
             try
             {
@@ -238,7 +243,9 @@ namespace SmsWorkbench
                         OpenWithNotepad(path);
                         return;
                     }
-                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                    // Through IFileLauncher so this stays testable and the
+                    // "does it exist yet" rule lives in exactly one place.
+                    fileLauncher.Open(path);
                     return;
                 }
                 if (Path.GetExtension(path).Length > 0)
@@ -258,7 +265,7 @@ namespace SmsWorkbench
                     return;
                 }
                 Directory.CreateDirectory(path);
-                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                fileLauncher.Open(path);
             }
             catch (Exception ex)
             {
@@ -272,6 +279,10 @@ namespace SmsWorkbench
             return extension == ".json" || extension == ".txt" || extension == ".log";
         }
 
+        // Not IFileLauncher: this needs to name the executable (notepad.exe)
+        // and pass an argument, which IFileLauncher.Open(path) cannot express.
+        // Widening the interface just for this would drag MainWindow-specific
+        // choices into a general-purpose abstraction.
         private void OpenWithNotepad(string path)
         {
             var psi = new ProcessStartInfo("notepad.exe")
