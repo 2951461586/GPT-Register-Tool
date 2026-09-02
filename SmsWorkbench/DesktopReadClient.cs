@@ -577,7 +577,11 @@ namespace SmsWorkbench
                         JsonElement response;
                         try
                         {
-                            response = JsonDocument.Parse(line).RootElement;
+                            // Parse and immediately Clone() so the element is owned
+                            // independently of the document, which we then Dispose.
+                            // Leaving the document undisposed leaked its buffer.
+                            using JsonDocument doc = JsonDocument.Parse(line);
+                            response = doc.RootElement.Clone();
                         }
                         catch (JsonException)
                         {

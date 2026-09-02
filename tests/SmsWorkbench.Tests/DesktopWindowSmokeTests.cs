@@ -231,7 +231,8 @@ public sealed class DesktopWindowSmokeTests
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
             new SettingsService(new TestApplicationPaths(rootDirectory)),
-            logger);
+            logger,
+            new FileLauncher());
         try
         {
             stage("show main window");
