@@ -150,9 +150,6 @@ def _smailr_client(proxy: str | None = None):
     )
 
 
-def _smailr_enabled() -> bool:
-    return bool(_smailr_api_key())
-
 
 def _smailr_extract_id_and_email(response: Any) -> tuple[str, str]:
     """Given a Smailr ``POST /mailboxes`` response, return ``(id, email)``."""
@@ -297,25 +294,6 @@ def _fetch_smailr_messages(
         limit=limit,
     )
 
-
-def _latest_smailr_otp_candidate(
-    mailbox: MailboxAccount,
-    *,
-    keyword: str = "",
-    issued_after_unix: int = 0,
-    seen_message_id: str = "",
-    proxy: str | None = None,
-    excluded_otps: Any = None,
-) -> dict | None:
-    from .mail_otp import _email_otp_candidate, _message_id
-    excluded_text = {str(value or "").strip() for value in (excluded_otps or ())}
-    for msg in _fetch_smailr_messages(mailbox, limit=25, proxy=proxy):
-        if seen_message_id and _message_id(msg) == seen_message_id:
-            continue
-        candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
-        if candidate and candidate.get("otp") not in excluded_text:
-            return candidate
-    return None
 
 
 def _poll_smailr_otp(

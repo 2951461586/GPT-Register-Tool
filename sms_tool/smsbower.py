@@ -221,33 +221,6 @@ class SmsBowerClient:
         except Exception:
             return False
 
-    def get_balance(self) -> str:
-        result = self._do("getBalance")
-        prefix = "ACCESS_BALANCE:"
-        if result.startswith(prefix):
-            return result[len(prefix):]
-        raise RuntimeError(f"getBalance error: {result}")
-
-    def get_services(self) -> list[dict]:
-        result = self._do("getServicesList")
-        data = json.loads(result)
-        services = data.get("services", data)
-        if isinstance(services, list):
-            return [
-                {
-                    "code": normalize_service(item.get("code") or item.get("activate_org_code") or item.get("slug") or ""),
-                    "name": item.get("name") or item.get("title") or "",
-                }
-                for item in services
-                if isinstance(item, dict)
-            ]
-        if isinstance(services, dict):
-            return [
-                {"code": str(code), "name": info.get("name", code) if isinstance(info, dict) else str(info)}
-                for code, info in services.items()
-            ]
-        return []
-
     def get_countries(self) -> list[dict]:
         result = self._do("getCountries")
         data = json.loads(result)
@@ -300,38 +273,3 @@ def _flatten_prices(data) -> list[dict]:
     return sorted(offers, key=lambda item: (_as_price(item.get("price")), str(item.get("provider_id"))))
 
 
-def acquire_and_wait_code(
-    api_key: str,
-    service: str = OPENAI_SERVICE_CODE,
-    country: str = GHANA_COUNTRY_CODE,
-    max_price: str = "",
-    timeout: int = 120,
-    poll_interval: int = 5,
-    endpoint: str = DEFAULT_ENDPOINT,
-) -> dict:
-    client = SmsBowerClient(api_key=api_key, endpoint=endpoint)
-    try:
-        activation = client.get_number(service=service, country=country, max_price=max_price)
-        print(
-            "  [smsbower] acquired "
-            f"{activation.phone} (id={activation.activation_id}, price={activation.price})"
-        )
-    except Exception as exc:
-        return {"ok": False, "error": f"acquire_failed:{exc}"}
-
-    code = client.wait_for_code(activation.activation_id, timeout=timeout, poll_interval=poll_interval)
-    if not code:
-        client.cancel(activation.activation_id)
-        return {
-            "ok": False,
-            "error": "sms_timeout",
-            "activation_id": activation.activation_id,
-            "phone": activation.phone,
-        }
-    return {
-        "ok": True,
-        "activation_id": activation.activation_id,
-        "phone": activation.phone,
-        "code": code,
-        "price": activation.price,
-    }

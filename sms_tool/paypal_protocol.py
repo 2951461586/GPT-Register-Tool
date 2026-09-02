@@ -77,15 +77,6 @@ def _make_session(proxy: Optional[str] = None) -> Any:
     return s
 
 
-def _session_cookies(s: Any) -> dict[str, str]:
-    try:
-        return dict(s.cookies.get_dict())
-    except Exception:
-        try:
-            return {c.name: c.value for c in s.cookies}
-        except Exception:
-            return {}
-
 
 # ── BA / EC Token extraction ───────────────────────────────────────────────────
 

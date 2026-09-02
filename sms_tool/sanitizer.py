@@ -64,6 +64,22 @@ def sanitize_text(value: Any) -> str:
     return text
 
 
+def mask_otp(value: Any, *, keep_tail: int = 2) -> str:
+    """Partially mask a one-time code before it reaches a log/console line.
+
+    OTPs are printed during polling and the WPF host persists every backend
+    line to ``runtime/app_*.log``. A full code stays valid for its whole
+    lifetime and is exactly the kind of value people paste into bug reports,
+    so keep only a short tail -- enough to eyeball a match, not enough to use.
+    """
+    text = str(value or "")
+    if not text:
+        return ""
+    if len(text) <= keep_tail:
+        return "*" * len(text)
+    return "*" * (len(text) - keep_tail) + text[-keep_tail:]
+
+
 def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
     """Recursively redact mappings/lists and free-form strings.
 
@@ -103,9 +119,6 @@ def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
         return sanitize_text(value)
     return value
 
-
-def sanitize_json(value: Any, **kwargs: Any) -> str:
-    return json.dumps(sanitize(value), ensure_ascii=False, default=str, **kwargs)
 
 
 def sanitize_command_args(args: Any) -> list[str]:

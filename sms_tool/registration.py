@@ -1,4 +1,62 @@
-"""Public registration facade and compatibility exports."""
+"""Public registration facade and compatibility exports.
+
+The long import block below re-exports symbols -- including underscore-prefixed
+internals -- from eight sibling modules, so callers (``cli``,
+``account_recovery`` and the test suite) can import one stable module instead of
+reaching into private modules. Those imports are intentionally "unused" inside
+this file; without ``__all__`` every static analyser counts them as dead imports
+(89 of the repo-wide 325 unused-import findings come from this single file).
+
+``__all__`` lists the **public** contract. Underscore-prefixed names are internal
+re-exports kept for existing callers and are deliberately excluded from it.
+Adding or removing a name here is a compatibility statement -- keep it honest.
+"""
+
+__all__ = [
+    "CFG",
+    "LOGIN_EMAIL_OTP_SUBJECT_KEYWORD",
+    "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD",
+    "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS",
+    "RegistrationStage",
+    "RegistrationState",
+    "RegistrationStateMachine",
+    "SyntheticResponse",
+    "auth_fingerprint_capabilities",
+    "auth_impersonate",
+    "build_session_file",
+    "chatgpt_headers",
+    "classify_error",
+    "curl_cffi_capabilities",
+    "current_auth_fingerprint",
+    "current_config_data",
+    "import_cookie_header",
+    "load_cached_sentinel",
+    "nextauth_headers",
+    "normalize_proxy_url",
+    "normalize_registration_driver",
+    "openai_auth_headers",
+    "prepare_registration_context",
+    "probe_account_liveness",
+    "refresh_proxy_sid",
+    "registration_network_preflight",
+    "registration_stage",
+    "request_with_retry",
+    "resolve_runtime_config",
+    "run_batch",
+    "run_email",
+    "run_phone",
+    "run_phone_register",
+    "runtime_config_scope",
+    "runtime_file",
+    "select_auth_fingerprint",
+    "set_fingerprint_device",
+    "set_fingerprint_geo",
+    "think_stage",
+    "track_registration",
+    "validate_config",
+    "validate_registration_driver_config",
+    "with_sentinel",
+]
 
 import sys
 import time

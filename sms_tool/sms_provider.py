@@ -7,15 +7,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass
-class SmsProviderResult:
-    ok: bool
-    provider: str = ""
-    activation_id: str = ""
-    phone: str = ""
-    code: str = ""
-    error: str = ""
-
 
 class SmsProviderAdapter(ABC):
     """Small lifecycle surface shared by static SMS URLs and rental providers."""

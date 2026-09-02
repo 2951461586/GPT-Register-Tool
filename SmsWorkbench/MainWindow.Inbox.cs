@@ -139,11 +139,11 @@ namespace SmsWorkbench
             var args = new List<string> { "--desktop-ipc", "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString(CultureInfo.InvariantCulture) };
             string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
             string mailboxLine = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
-            if (mailboxLine.Length == 0 && MailboxArgForLine(row.RawLine).Length > 0)
+            if (mailboxLine.Length == 0 && BackendCommandPlanner.MailboxArgumentForLine(row.RawLine).Length > 0)
             {
                 mailboxLine = row.RawLine;
             }
-            string mailboxArg = MailboxArgForLine(mailboxLine);
+            string mailboxArg = BackendCommandPlanner.MailboxArgumentForLine(mailboxLine);
             string tempMailboxFile = "";
             if (mailboxArg.Length > 0)
             {

@@ -22,6 +22,7 @@ from .mail_otp import (
 )
 from . import mailbox_cfworker
 from .mailbox_types import MailboxAccount
+from .sanitizer import mask_otp
 from .mailbox_parsers import (
     _looks_ms_client_id,
     _split_chatai_client_refresh,
@@ -477,12 +478,6 @@ def _load_mailbox_pool(args=None):
     return mailbox_remail.filter_dead_remail_mailboxes(pool)
 
 
-def _pick_mailbox(index=0, args=None):
-    pool = _load_mailbox_pool(args)
-    if not pool:
-        return None
-    return pool[index % len(pool)]
-
 
 def _ensure_mailbox_account(mailbox=None):
     if mailbox:
@@ -492,9 +487,6 @@ def _ensure_mailbox_account(mailbox=None):
         return mailbox_remail._create_remail_order(service_mode="code")
     return None
 
-
-def _record_key(record):
-    return (record.email or "").strip().lower()
 
 
 def _ms_oauth_refresh(mailbox, proxy=None, scope_override=None):
@@ -884,7 +876,7 @@ def _poll_chongzhi_otp(mailbox, email, password, subject_keyword="", timeout=300
                             stable_until = time.time() + settle_seconds
                     otp_code = str(candidate.get("otp") or "")
                     if otp_code:
-                        print(f" code:{otp_code}!")
+                        print(f" code:{mask_otp(otp_code)}!")
                         return otp_code
         except Exception as exc:
             print(f"[chongzhi poll error: {exc}]")
@@ -905,7 +897,7 @@ def _poll_chongzhi_otp(mailbox, email, password, subject_keyword="", timeout=300
                     if candidate:
                         otp_code = str(candidate.get("otp") or "")
                         if otp_code:
-                            print(f" code:{otp_code}! (local fallback)")
+                            print(f" code:{mask_otp(otp_code)}! (local fallback)")
                             return otp_code
             except Exception as exc:
                 print(f"[local fallback error: {exc}]")

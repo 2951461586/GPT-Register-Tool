@@ -21,6 +21,13 @@ from typing import Any
 from .helpers import unique_emails
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
 
+# Free-text markers the WPF host matches against this process's stdout.
+# They are a contract in the weakest possible form -- a bare substring, no
+# version, no schema -- and the host silently stops reacting if one changes.
+# Keep each value byte-identical to `BackendTextMarkers` in
+# SmsWorkbench.Contracts; tests/test_backend_text_markers.py asserts that.
+SAVED_SESSION_MARKER = "Saved session:"
+
 
 @dataclass(frozen=True)
 class RegistrationCommandContext:
@@ -406,7 +413,7 @@ def _persist_registration_result_core(
             marker["active_audited"] = True
         marker["import_email"] = str(session_data.get("email") or "")
         if not marker.get("saved_reported"):
-            print(f"[*] Saved session: {out_path}")
+            print(f"[*] {SAVED_SESSION_MARKER} {out_path}")
             marker["saved_reported"] = True
         marker["status"] = "complete"
         marker.pop("error_type", None)

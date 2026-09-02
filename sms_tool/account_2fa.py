@@ -355,7 +355,3 @@ def setup_totp_2fa(
     return result
 
 
-def totp_now(secret: str) -> str:
-    """Generate current 6-digit TOTP code from secret."""
-    import pyotp
-    return pyotp.TOTP(secret).now()

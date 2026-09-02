@@ -2,6 +2,16 @@
 
 import re
 
+# Stamped into SQLite's `PRAGMA user_version` by init_database() (2026-09-02,
+# round 6). Before this existed there was no way to tell which schema shape a
+# given accounts.sqlite3 was on: schema setup was three CREATE TABLE IF NOT
+# EXISTS statements plus an ALTER TABLE loop, applied blindly on every start.
+# The stamp does not migrate anything by itself -- it makes "which version is
+# this file?" answerable, which is the prerequisite for writing a real
+# migration. Bump it whenever EXTRA_COLUMNS or the CREATE TABLE statements
+# change shape.
+SCHEMA_VERSION = 1
+
 
 EXTRA_COLUMNS = {
     "source": "TEXT DEFAULT ''",

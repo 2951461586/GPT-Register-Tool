@@ -86,15 +86,6 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
     return rotate_session(normalize_proxy_url(proxy), country)
 
 
-def retarget_proxy_country(proxy: str, country: str = "") -> str:
-    """Change only the exit country while preserving the existing sticky ID.
-
-    Thin wrapper over the single-authority ``proxy_entry.retarget_region``.
-    """
-    from .proxy_entry import retarget_region
-
-    return retarget_region(normalize_proxy_url(proxy), country)
-
 
 def infer_proxy_country(proxy: str) -> str:
     """Best-effort exit-country inference from the proxy credential template.

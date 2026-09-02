@@ -42,8 +42,6 @@ namespace SmsWorkbench
         [ObservableProperty] private string currentStage = "等待";
         [ObservableProperty] private string status = "running";
         [ObservableProperty] private string elapsed = "0s";
-
-        public string DomainLabel => Domain == "registration" ? "注册" : "支付";
     }
 
     public sealed partial class StageMatrixViewModel : ObservableObject
@@ -142,11 +140,8 @@ namespace SmsWorkbench
             Summary = "等待后端阶段事件";
         }
 
-        public void ClearHistory()
-        {
-            Reset();
-            _store?.Clear();
-        }
+        // ClearHistory() removed (2026-09-02, round 6): no caller in the app and
+        // no command bound to it. Reset()/_store are still used elsewhere.
 
         private static string NormalizeStatus(string value)
         {

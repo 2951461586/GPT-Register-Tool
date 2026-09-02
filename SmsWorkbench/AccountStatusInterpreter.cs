@@ -53,32 +53,12 @@ namespace SmsWorkbench
             return "free";
         }
 
-        public static string GetQuotaStatus(Dictionary<string, object> data)
-        {
-            if (data == null) return "";
-
-            // Prefer wham_usage from quota.last_result.wham_usage (stored by refresh_local_quota_statuses)
-            string whamLabel = FormatWhamUsageLabel(ExtractWhamUsage(data));
-            if (whamLabel.Length > 0) return whamLabel;
-
-            string explicitValue = BackendJson.FirstNonEmpty(
-                BackendJson.GetString(data, "quota_status"),
-                BackendJson.GetString(data, "quota"),
-                BackendJson.GetString(data, "usage_status"),
-                BackendJson.NestedString(data, "quota", "status"),
-                BackendJson.NestedString(data, "quota", "message"),
-                BackendJson.NestedString(data, "usage", "status"),
-                BackendJson.NestedString(data, "usage", "message"),
-                BackendJson.NestedString(data, "account", "quota_status"),
-                BackendJson.NestedString(data, "auth_session", "account", "quota_status")
-            ).Trim();
-            if (explicitValue.Length > 0) return explicitValue;
-            string remaining = BackendJson.FirstNonEmpty(BackendJson.NestedString(data, "quota", "remaining"), BackendJson.NestedString(data, "usage", "remaining"));
-            string limit = BackendJson.FirstNonEmpty(BackendJson.NestedString(data, "quota", "limit"), BackendJson.NestedString(data, "usage", "limit"));
-            if (remaining.Length > 0 || limit.Length > 0) return remaining + (limit.Length > 0 ? "/" + limit : "");
-            if (BackendJson.GetString(data, "access_token").Trim().Length > 0) return "待刷新";
-            return "未知";
-        }
+        // GetQuotaStatus() removed (2026-09-02, round 6): zero callers and zero
+        // tests. It was the only consumer of FormatWhamUsageLabel /
+        // ExtractWhamUsage, so those are now unreferenced too and are removed
+        // with it. The quota keys it read (quota_status, usage.remaining/limit,
+        // auth_session.account.quota_status) are still written by the Python
+        // side; revive this shape if quota display comes back.
 
         public static string GetAccessTokenProbeStatusCode(Dictionary<string, object> data)
         {
@@ -101,65 +81,14 @@ namespace SmsWorkbench
                 BackendJson.FirstNonEmpty(BackendJson.GetString(data, "error"), BackendJson.NestedString(data, "session", "error")));
         }
 
-        /// <summary>
-        /// Extract wham_usage 5h/7d structured data from session JSON.
-        /// Looks under quota.last_result.wham_usage (stored by account_liveness -> mark_quota_status).
-        /// </summary>
-        /// Returns null when the account JSON carries no wham_usage block -
-        /// "unknown" rather than "empty", which callers render differently.
-        public static Dictionary<string, object>? ExtractWhamUsage(Dictionary<string, object>? data)
-        {
-            if (data == null) return null;
+        // ExtractWhamUsage / FormatWhamUsageLabel removed (2026-09-02, round 6).
+        // They existed only to feed the quota label produced by GetQuotaStatus,
+        // which itself had no callers. The Python side still writes
+        // quota.last_result.wham_usage, so re-adding quota display means
+        // reviving these three together.
 
-            // Path 1: data["quota"]["last_result"]["wham_usage"]
-            object? quotaObj = null;
-            if (data.TryGetValue("quota", out quotaObj) && quotaObj is Dictionary<string, object> quota)
-            {
-                if (quota.TryGetValue("last_result", out object? lr) && lr is Dictionary<string, object> lastResult)
-                {
-                    if (lastResult.TryGetValue("wham_usage", out object? wham) && wham is Dictionary<string, object> whamDict)
-                        return whamDict;
-                }
-            }
-
-            // Path 2: data["wham_usage"] (direct)
-            if (data.TryGetValue("wham_usage", out object? direct) && direct is Dictionary<string, object> directDict)
-                return directDict;
-
-            // Path 3: data["quota"]["wham_usage"]
-            if (quotaObj is Dictionary<string, object> quota2 && quota2.TryGetValue("wham_usage", out object? wham2) && wham2 is Dictionary<string, object> whamDict2)
-                return whamDict2;
-
-            return null;
-        }
-
-        /// <summary>
-        /// Format wham_usage into display string: "5h: 3K/10K (30%) | 7d: 12K/50K (24%)"
-        /// </summary>
-        public static string FormatWhamUsageLabel(Dictionary<string, object>? wham)
-        {
-            if (wham == null || wham.Count == 0) return "";
-            var parts = new List<string>();
-            foreach (string windowKey in new[] { "5h", "7d" })
-            {
-                if (wham.TryGetValue(windowKey, out object? w) && w is Dictionary<string, object> window)
-                {
-                    long used = BackendJson.GetLong(window, "used");
-                    long limit = BackendJson.GetLong(window, "limit");
-                    double percent = BackendJson.GetDouble(window, "percent");
-                    if (used > 0 || limit > 0)
-                        parts.Add($"{windowKey}: {FmtTokenCount(used)}/{FmtTokenCount(limit)} ({percent:F0}%)");
-                }
-            }
-            return parts.Count > 0 ? string.Join(" | ", parts) : "";
-        }
-
-        public static string FmtTokenCount(long n)
-        {
-            if (n >= 1_000_000) return $"{n / 1_000_000.0:F1}M";
-            if (n >= 1_000) return $"{n / 1_000.0:F1}K";
-            return n.ToString(CultureInfo.InvariantCulture);
-        }
+        // FmtTokenCount removed (2026-09-02, round 6): its only caller was
+        // FormatWhamUsageLabel, removed above.
 
         public static bool IsPaymentLinkMethodMismatch(string rawJson, string paymentMethod)
         {
@@ -262,30 +191,28 @@ namespace SmsWorkbench
         public static bool LooksAtInvalidError(string error)
         {
             string text = (error ?? "").ToLowerInvariant();
-            return text.Contains("token_invalidated")
-                || text.Contains("token_expired")
-                || text.Contains("authentication token has been invalidated")
-                || text.Contains("could not validate your token")
-                || LooksPhoneVerificationError(text)
-                || LooksAccountDeactivatedError(text)
-                || text.Contains("oauth_refresh_http_401");
+            foreach (string marker in BackendTextMarkers.AtInvalid)
+            {
+                if (text.Contains(marker, StringComparison.Ordinal)) return true;
+            }
+            return LooksAccountDeactivatedError(text);
         }
 
         public static bool LooksPhoneVerificationError(string error)
         {
             string text = (error ?? "").ToLowerInvariant();
-            return text.Contains("secondary_phone_verification_required")
-                || text.Contains("add_phone_required");
+            return text.Contains("secondary_phone_verification_required", StringComparison.Ordinal)
+                || text.Contains("add_phone_required", StringComparison.Ordinal);
         }
 
         public static bool LooksAccountDeactivatedError(string error)
         {
             string text = (error ?? "").ToLowerInvariant();
-            return text.Contains("account_deactivated")
-                || text.Contains("account_deatived")
-                || text.Contains("deleted or deactivated")
-                || text.Contains("account has been deleted")
-                || text.Contains("account has been deactivated");
+            foreach (string marker in BackendTextMarkers.AccountDeactivated)
+            {
+                if (text.Contains(marker, StringComparison.Ordinal)) return true;
+            }
+            return false;
         }
 
         public static string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")

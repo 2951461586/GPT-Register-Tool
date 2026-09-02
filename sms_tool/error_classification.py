@@ -109,9 +109,4 @@ def classify_error(value) -> str:
     return "unknown"
 
 
-def is_account_failure(value) -> bool:
-    return classify_error(value) == "account"
 
-
-def is_network_failure(value) -> bool:
-    return classify_error(value) == "network"

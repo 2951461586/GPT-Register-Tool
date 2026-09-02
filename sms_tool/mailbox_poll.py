@@ -11,6 +11,8 @@ import time
 import logging
 from typing import Callable, Iterable, Optional
 
+from .sanitizer import mask_otp
+
 logger = logging.getLogger(__name__)
 
 # Default configuration fallbacks (overridable via config).
@@ -73,7 +75,7 @@ def _poll_otp_with_settle(
                         stable_until = time.time() + settle_seconds
                 otp_code = str(candidate.get("otp") or "")
                 if otp_code:
-                    print(f" code:{otp_code}!")
+                    print(f" code:{mask_otp(otp_code)}!")
                     return otp_code
         except reraise or ():
             raise

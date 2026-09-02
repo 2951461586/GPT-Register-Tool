@@ -69,14 +69,6 @@ class ProtocolEnvironmentProfile:
             "accept-language": self.lang_full,
         }
 
-    def apply_to(self, headers: dict[str, str]) -> dict[str, str]:
-        """Merge fingerprint headers into an existing headers dict."""
-        result = dict(headers)
-        result.update(self.headers)
-        if self.user_agent:
-            result["User-Agent"] = self.user_agent
-        return result
-
 
 def _build_profiles() -> list[ProtocolEnvironmentProfile]:
     """Build validated profiles from the auth_headers profile tables."""

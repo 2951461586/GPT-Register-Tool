@@ -473,6 +473,13 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 ):
                     if key in raw and not isinstance(raw.get(key), bool):
                         errors.append(f"registration.drivers.{name}.{key} must be a boolean")
+        # Per-stage wall-clock ceilings (seconds). No shipped config shard sets
+        # this key yet, so the branch normally runs against an empty mapping and
+        # reports nothing -- that is expected, not dead code: it is the guard
+        # that fires the moment an operator configures a stage timeout.
+        # `config.example.json` carries an empty `stage_timeouts` object so the
+        # supported stage names are discoverable; the authoritative list is the
+        # `valid_stages` set right below.
         stage_timeouts = registration.get("stage_timeouts", {})
         if stage_timeouts is not None and not isinstance(stage_timeouts, Mapping):
             errors.append("registration.stage_timeouts must be an object")

@@ -17,6 +17,7 @@ from .config import CFG
 from .mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from .mailbox_types import MailboxAccount
 from .paths import project_path, runtime_file
+from .sanitizer import mask_otp
 
 logger = logging.getLogger(__name__)
 
@@ -848,7 +849,7 @@ def _poll_remail_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix
                     best_ts = recv_ts
 
             if best_code:
-                print(f" code:{best_code}!")
+                print(f" code:{mask_otp(best_code)}!")
                 return best_code
 
             # Fallback: full normalisation + OTP extraction (without detail
@@ -862,7 +863,7 @@ def _poll_remail_otp(mailbox, subject_keyword="", timeout=300, issued_after_unix
                 excluded_otps=excluded_otps,
             )
             if candidate:
-                print(f" code:{candidate['otp']}!")
+                print(f" code:{mask_otp(candidate['otp'])}!")
                 return candidate["otp"]
 
             # Respect server-side rate limit hint

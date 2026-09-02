@@ -24,9 +24,6 @@ def safe_exception(value: BaseException | Any) -> str:
     return sanitize_text(value)
 
 
-def safe_command_display(args: Any) -> str:
-    return " ".join(sanitize_command_args(args))
-
 
 class SanitizingTextIO:
     """Text stream proxy that guarantees policy enforcement at process output."""

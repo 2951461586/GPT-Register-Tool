@@ -477,9 +477,6 @@ def nextauth_headers(did: str = "", **kwargs) -> dict[str, str]:
     return openai_auth_headers(did, family="nextauth", include_trace=False, **kwargs)
 
 
-def auth_api_headers(did: str = "", **kwargs) -> dict[str, str]:
-    return openai_auth_headers(did, family="auth", **kwargs)
-
 
 def chatgpt_headers(did: str = "", **kwargs) -> dict[str, str]:
     return openai_auth_headers(did, family="chatgpt", **kwargs)

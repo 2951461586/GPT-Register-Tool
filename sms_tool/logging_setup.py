@@ -21,13 +21,26 @@ _ROOT_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 
 def _default_log_path() -> Path:
-    # runtime/ is git-ignored local state; fall back to a local logs/ dir if unavailable.
-    try:
-        from .paths import runtime_file
+    """Resolve ``<runtime dir>/logs/sms_tool.log``.
 
-        return runtime_file("logs", "sms_tool.log")
+    ``paths.runtime_file(cfg, filename)`` takes the **config** as its first
+    argument, not a directory. The previous call passed ``"logs"`` there, which
+    raised ``AttributeError`` on ``cfg.get``; the broad ``except Exception``
+    then silently fell back to a repo-root ``logs/`` directory. It went
+    unnoticed for as long as ``configure_logging`` had zero callers.
+    Resolve via ``runtime_dir`` so the log lands in the git-ignored runtime tree.
+    """
+    from .paths import PROJECT_ROOT
+
+    try:
+        from .config import current_config_data
+        from .paths import runtime_dir
+
+        directory = runtime_dir(current_config_data()) / "logs"
     except Exception:  # pragma: no cover - defensive fallback only
-        return Path("logs") / "sms_tool.log"
+        directory = PROJECT_ROOT / "runtime" / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / "sms_tool.log"
 
 
 def configure_logging(
@@ -61,8 +74,11 @@ def configure_logging(
         fh = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
         fh.setFormatter(fmt)
         root.addHandler(fh)
-    except OSError as exc:  # pragma: no cover - last-resort only
-        # Never let logging setup crash the application.
+    except Exception as exc:  # pragma: no cover - last-resort only
+        # Never let logging setup crash the application. Broad on purpose:
+        # OSError (permissions/full disk) is the expected case, but a broken
+        # path resolver must not take the CLI down either -- it reports and
+        # continues, which is strictly better than the old silent fallback.
         print(f"[logging] could not open log file: {exc}")
 
     if to_console:

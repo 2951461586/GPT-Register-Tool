@@ -11,14 +11,9 @@ namespace SmsWorkbench
         // so the CLI contract lives in exactly one module that can be unit
         // tested without WPF.
 
-        private void RegisterFromPool_Click(object sender, RoutedEventArgs e)
-        {
-            var plan = BackendCommandPlanner.CreatePoolRegistration(
-                CountValue(),
-                GetRegistrationProxyPool(),
-                workers: 4);
-            RunBackend(plan.TaskName, plan.Arguments.ToList());
-        }
+        // RegisterFromPool_Click removed (2026-09-02, round 6): dead event
+        // handler, no XAML subscriber. BackendCommandPlanner.CreatePoolRegistration
+        // stays -- it is unit-tested on the Contracts side.
 
         private void ImportChataiMailbox_Click(object sender, RoutedEventArgs e)
         {
@@ -53,7 +48,7 @@ namespace SmsWorkbench
             PoolRow? row = SelectedEmailRowOrNotify("查看收件箱");
             if (row == null) return;
             string mailboxLine = await FindMailboxLineForRowAsync(row).ConfigureAwait(true);
-            if (string.IsNullOrWhiteSpace(mailboxLine) || MailboxArgForLine(mailboxLine).Length == 0)
+            if (string.IsNullOrWhiteSpace(mailboxLine) || BackendCommandPlanner.MailboxArgumentForLine(mailboxLine).Length == 0)
             {
                 MessageBox.Show("选中记录缺少可用的邮箱凭据或导入行。", "格式不匹配", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -180,11 +175,7 @@ namespace SmsWorkbench
             RunBackend(defaultPlan.TaskName, defaultPlan.Arguments.ToList());
         }
 
-        private void AddRegistrationAtOnlyArgs(List<string> args)
-        {
-            args.Add("--registration-at-only");
-            AddNoPhoneRegistrationArgs(args);
-        }
+        // AddRegistrationAtOnlyArgs removed (2026-09-02, round 6): no caller.
 
         private void AddNoPhoneRegistrationArgs(List<string> args)
         {
@@ -362,53 +353,9 @@ namespace SmsWorkbench
             return dialog.ShowDialog() == true ? selected : null;
         }
 
-        private string ShowPaymentMethodDialog(string title, string labelText = "支付方式")
-        {
-            var dialog = new Window
-            {
-                Title = title,
-                Owner = this,
-                Width = 360,
-                Height = 170,
-                MinWidth = 320,
-                MinHeight = 150,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
-            };
-            var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var label = new TextBlock { Text = labelText, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var box = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
-            AddPaymentMethodItems(box);
-            box.SelectedIndex = 0;
-            Grid.SetRow(label, 0);
-            Grid.SetColumn(label, 0);
-            Grid.SetRow(box, 0);
-            Grid.SetColumn(box, 1);
-            root.Children.Add(label);
-            root.Children.Add(box);
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-            var ok = new Button { Content = "开始", Width = 72, Style = (Style)FindResource("PrimaryButton") };
-            var cancel = new Button { Content = "取消", Width = 72 };
-            actions.Children.Add(ok);
-            actions.Children.Add(cancel);
-            Grid.SetRow(actions, 1);
-            Grid.SetColumnSpan(actions, 2);
-            root.Children.Add(actions);
-            string selected = "";
-            ok.Click += (_, __) =>
-            {
-                selected = NormalizePaymentMethod(((box.SelectedItem as ComboBoxItem)?.Tag as string) ?? "paypal");
-                dialog.DialogResult = true;
-                dialog.Close();
-            };
-            cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
-            dialog.Content = root;
-            return dialog.ShowDialog() == true ? selected : "";
-        }
+        // ShowPaymentMethodDialog removed (2026-09-02, round 6): no caller. It
+        // was superseded by ShowSelectedRegisterOptionsDialog / the protocol
+        // payment window, which own their own payment-method pickers.
 
         // Returns null when the operator cancels the dialog.
         private RegisterOptions? ShowSelectedRegisterOptionsDialog(int selectedCount)
@@ -664,11 +611,11 @@ namespace SmsWorkbench
             foreach (PoolRow row in rows ?? Enumerable.Empty<PoolRow>())
             {
                 string line = (row.RawLine ?? "").Trim().TrimStart('\ufeff');
-                if (MailboxArgForLine(line).Length == 0)
+                if (BackendCommandPlanner.MailboxArgumentForLine(line).Length == 0)
                 {
                     line = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
                 }
-                string lineArg = MailboxArgForLine(line);
+                string lineArg = BackendCommandPlanner.MailboxArgumentForLine(line);
                 if (lineArg.Length > 0)
                 {
                     lines.Add(line.Trim());
@@ -708,7 +655,7 @@ namespace SmsWorkbench
             if (IsCfWorkerRow(row)) return true;
             if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return true;
             if (!string.IsNullOrWhiteSpace(row.RawRefreshToken)) return true;
-            if (!string.IsNullOrWhiteSpace(row.RawLine) && MailboxArgForLine(row.RawLine).Length > 0) return true;
+            if (!string.IsNullOrWhiteSpace(row.RawLine) && BackendCommandPlanner.MailboxArgumentForLine(row.RawLine).Length > 0) return true;
             // Only reached when every local field is empty, so the backend
             // round-trip is the last resort rather than the common path.
             string line = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
@@ -724,21 +671,13 @@ namespace SmsWorkbench
                 || status.Contains("已导入");
         }
 
-        private string MailboxArgForLine(string line)
-        {
-            string value = (line ?? "").Trim().TrimStart('\ufeff');
-            if (value.Length == 0 || value.StartsWith("#")) return "";
-            if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
-                || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
-                || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
-            if (value.StartsWith("remail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
-            if (value.StartsWith("smailr://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
-            if (value.StartsWith("gmail://", StringComparison.OrdinalIgnoreCase)) return "--mailbox-file";
-            if (MailboxPoolFileStore.TryParseICloudUrlLine(value, out _, out _)) return "--mailbox-file";
-            if (value.Contains("----") && value.Split(new[] { "----" }, StringSplitOptions.None).Length >= 4) return "--chatai-mailbox-file";
-            if (value.Contains("---") && value.Split(new[] { "---" }, StringSplitOptions.None).Length >= 3) return "--mailbox-file";
-            return "";
-        }
+        // MailboxArgForLine used to live here as a private copy of
+        // BackendCommandPlanner.MailboxArgumentForLine. The two had already
+        // drifted in form (literal BOM vs '﻿', array vs string Split, and a
+        // different iCloud parser that was itself a one-line forward to
+        // MailboxCredentialLineParser), and only the Contracts copy had tests.
+        // Callers now use the shared one so the six existing tests actually
+        // guard the production path.
 
         private async Task<string> FindMailboxLineForRowAsync(PoolRow? row, CancellationToken ct = default)
         {
@@ -766,7 +705,7 @@ namespace SmsWorkbench
                         value.StartsWith("gmail://" + candidate, StringComparison.OrdinalIgnoreCase)
                         || value.StartsWith(candidate + "----", StringComparison.OrdinalIgnoreCase)
                         || value.StartsWith(candidate + "---", StringComparison.OrdinalIgnoreCase));
-                    if (matched && MailboxArgForLine(value).Length > 0)
+                    if (matched && BackendCommandPlanner.MailboxArgumentForLine(value).Length > 0)
                     {
                         return value;
                     }
