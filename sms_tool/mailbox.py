@@ -36,6 +36,7 @@ from .mailbox_graph import MailboxTokenExpiredError
 from . import mailbox_chongzhi
 from . import mailbox_icloud_url
 from . import mailbox_smailr
+from . import mailbox_mailnest
 from . import mailbox_strategies
 
 # MailboxAccount and parsers moved to mailbox_types/mailbox_parsers.
@@ -97,6 +98,21 @@ def _register_mailbox_strategies():
             excluded_otps=excluded_otps,
             poll_interval=None,
         ),
+    )
+
+    # MailNest API mailboxes. MailNest Graph-token accounts are parsed as
+    # provider=mailnest_graph and intentionally fall through to Graph fallback.
+    mailbox_strategies.register_message_fetcher(
+        "mailnest",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_mailnest.API_PROVIDER,
+        lambda mb, *, limit, proxy, include_body, email_cfg, **kw: mailbox_mailnest._fetch_mailnest_messages(
+            mb, limit=limit, proxy=proxy, include_body=include_body, email_cfg=email_cfg,
+        ),
+    )
+    mailbox_strategies.register_otp_poller(
+        "mailnest",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_mailnest.API_PROVIDER,
+        lambda mb, **kw: mailbox_mailnest._poll_mailnest_otp(mb, **kw),
     )
 
     # smailr
@@ -271,6 +287,7 @@ def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: Confi
     defaults = {
         "remail": 90,
         "smailr": 10,
+        "mailnest": 10,
         "cfworker": 10,
         mailbox_icloud_url.PROVIDER: 90,
     }
@@ -320,6 +337,10 @@ def _create_smailr_mailboxes(args=None):
     count = max(1, int(getattr(args, "count", 1) or 1))
     domain = getattr(args, "smailr_domain", None) or None
     return mailbox_smailr.create_smailr_mailboxes(count, domain=domain)
+
+
+def _create_mailnest_mailboxes(args=None):
+    return mailbox_mailnest._create_mailnest_mailboxes(args)
 
 
 def _default_nb_register_token_file():
@@ -435,6 +456,12 @@ def _mailbox_from_config(args=None):
     email = (getattr(args, "email", None) or _email_cfg().get("email") or "").strip().lower()
     if not email and remail_token:
         email = str(remail_cfg.get("delivery_email") or "").strip().lower()
+    mailnest_cfg = mailbox_mailnest._mailnest_cfg(_email_cfg())
+    mailnest_email = str(mailnest_cfg.get("email") or "").strip().lower()
+    use_mailnest_config = False
+    if not email and mailnest_email:
+        email = mailnest_email
+        use_mailnest_config = True
     if not email:
         return None
     if remail_token:
@@ -444,6 +471,13 @@ def _mailbox_from_config(args=None):
             provider="remail",
             token=remail_token,
             order_no=str(remail_cfg.get("order_no") or "").strip(),
+        )
+    if use_mailnest_config:
+        return MailboxAccount(
+            email=mailnest_email,
+            source="mailnest_config",
+            provider=mailbox_mailnest.API_PROVIDER,
+            auth_mode=mailbox_mailnest._mailnest_mode(args, _email_cfg()),
         )
     return MailboxAccount(
         email=email,
@@ -472,6 +506,8 @@ def _load_mailbox_pool(args=None):
         pool = _create_cfworker_mailboxes(args)
     elif getattr(args, "buy_smailr_mailbox", False):
         pool = _create_smailr_mailboxes(args)
+    elif getattr(args, "buy_mailnest_mailbox", False):
+        pool = _create_mailnest_mailboxes(args)
     elif getattr(args, "chatai_mailbox_file", None):
         pool = _parse_chatai_mailbox_file(args.chatai_mailbox_file)
     elif getattr(args, "mailbox_file", None):
@@ -582,6 +618,10 @@ def mailbox_has_inbox_credentials(mailbox):
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if provider == "smailr":
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
+    if provider == mailbox_mailnest.API_PROVIDER:
+        return bool(getattr(mailbox, "email", ""))
+    if provider == mailbox_mailnest.GRAPH_PROVIDER:
+        return bool(getattr(mailbox, "refresh_token", "") and getattr(mailbox, "email", ""))
     if provider == mailbox_icloud_url.PROVIDER:
         return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
     if mailbox_gmail.is_gmail_mailbox(mailbox):

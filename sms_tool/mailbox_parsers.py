@@ -3,6 +3,7 @@ from pathlib import Path
 
 from .mailbox_types import MailboxAccount
 from . import mailbox_icloud_url
+from . import mailbox_mailnest
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MS_CLIENT_ID_RE = re.compile(
@@ -63,6 +64,10 @@ def _is_gmail_line(line):
 
 def _is_remail_line(line):
     return line.lower().startswith("remail://")
+
+
+def _is_mailnest_line(line):
+    return line.lower().startswith("mailnest://")
 
 
 def _is_smailr_line(line):
@@ -138,6 +143,52 @@ def _parse_remail_line(line, source_path, line_no):
         token=service_token,
         order_no=order_no,
         purchase_id=purchase_id,
+    )
+
+
+def _parse_mailnest_line(line, source_path, line_no):
+    payload = line.split("://", 1)[1].strip() if "://" in line else line.strip()
+    if "----" in payload:
+        parts = [part.strip() for part in payload.split("----", 4)]
+        email = _normalize_mailbox_email(parts[0] if parts else "")
+        password = parts[1] if len(parts) >= 2 else ""
+        client_id = parts[2] if len(parts) >= 3 else ""
+        refresh_token = parts[3] if len(parts) >= 4 else ""
+        access_token = parts[4] if len(parts) >= 5 else ""
+        if not email or not client_id or not refresh_token:
+            print(f"[!] Skip malformed MailNest Graph mailbox line {source_path}:{line_no}")
+            return None
+        return MailboxAccount(
+            email=email.lower(),
+            password=password,
+            refresh_token=refresh_token,
+            access_token=access_token,
+            source=str(source_path),
+            provider=mailbox_mailnest.GRAPH_PROVIDER,
+            token=client_id,
+            auth_mode="oauth_refresh",
+        )
+
+    parts = [part.strip() for part in payload.split("---")]
+    email = _normalize_mailbox_email(parts[0] if parts else "")
+    mode = parts[1].replace("-", "_").lower() if len(parts) >= 2 and parts[1] else mailbox_mailnest.TEMPORARY_MODE
+    if mode in {"user", "private", "private_mailbox"}:
+        mode = mailbox_mailnest.USER_MAILBOX_MODE
+    mailbox_id = parts[2] if len(parts) >= 3 else ""
+    if mode not in mailbox_mailnest.VALID_API_MODES:
+        print(f"[!] Skip malformed MailNest mailbox mode {source_path}:{line_no}")
+        return None
+    if not email:
+        print(f"[!] Skip malformed MailNest email {source_path}:{line_no}")
+        return None
+    return MailboxAccount(
+        email=email.lower(),
+        source=str(source_path),
+        provider=mailbox_mailnest.API_PROVIDER,
+        token=mailbox_id,
+        order_no=mailbox_id,
+        purchase_id=mailbox_id,
+        auth_mode=mode,
     )
 
 
@@ -244,6 +295,8 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
         return None
     if _is_remail_line(line):
         return _parse_remail_line(line, source_path, line_no)
+    if _is_mailnest_line(line):
+        return _parse_mailnest_line(line, source_path, line_no)
     if _is_smailr_line(line):
         return _parse_smailr_line(line, source_path, line_no)
     if _is_icloud_url_line(line):
@@ -298,6 +351,11 @@ def _parse_mailbox_token_file(path):
             continue
         if _is_remail_line(line):
             account = _parse_remail_line(line, token_path, line_no)
+            if account:
+                records.append(account)
+            continue
+        if _is_mailnest_line(line):
+            account = _parse_mailnest_line(line, token_path, line_no)
             if account:
                 records.append(account)
             continue

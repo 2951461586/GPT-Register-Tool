@@ -234,6 +234,9 @@ def build_parser():
     parser.add_argument("--cfworker-domain", default=None, help="CF Worker mailbox domain, default cfworker_domain in config.json")
     parser.add_argument("--buy-smailr-mailbox", action="store_true", help="Use Smailr disposable mailboxes before registration")
     parser.add_argument("--smailr-domain", default=None, help="Smailr mailbox domain, default smailr.default_domain in config.json")
+    parser.add_argument("--buy-mailnest-mailbox", action="store_true", help="Use MailNest API mailboxes before registration")
+    parser.add_argument("--mailnest-mode", choices=["temporary", "exclusive", "user_mailbox"], default=None, help="MailNest mailbox mode; user_mailbox uses uploaded Outlook Graph accounts")
+    parser.add_argument("--mailnest-project-code", default=None, help="MailNest temporary-mailbox project code, default mailnest.project_code")
     parser.add_argument("--remail-service-mode", choices=["code", "purchase"], default=None, help="ReMail service mode override")
     parser.add_argument("--remail-supply", choices=["private_first", "public_only"], default=None, help="ReMail inventory policy")
     parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
@@ -610,6 +613,7 @@ def main():
         or args.remail_service_mode
         or args.buy_cfworker_mailbox
         or args.buy_smailr_mailbox
+        or args.buy_mailnest_mailbox
     )
     if not mailboxes and explicit_mailbox_source:
         print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
@@ -625,6 +629,10 @@ def main():
         effective_count = len(mailboxes)
         if effective_count != requested_count:
             print(f"[!] Requested {requested_count} mailbox(es), ReMail returned {effective_count}; registering returned mailboxes only.")
+    elif getattr(args, "buy_mailnest_mailbox", False):
+        effective_count = len(mailboxes)
+        if effective_count != requested_count:
+            print(f"[!] Requested {requested_count} mailbox(es), MailNest returned {effective_count}; registering returned mailboxes only.")
     elif getattr(args, "buy_cfworker_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:

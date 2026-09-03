@@ -149,6 +149,15 @@
       "reuse_existing_on_level_error": true,
       "timeout": 30
     },
+    "mailnest": {
+      "enabled": false,
+      "base_url": "https://mailnest.top",
+      "api_key": "",
+      "project_code": "chatgpt001",
+      "mode": "temporary",
+      "email": "",
+      "timeout": 30
+    },
     "otp_poll_interval": 2,
     "sentinel_version": "20260219f9f6",
     "sentinel_backend": "node_runner",
