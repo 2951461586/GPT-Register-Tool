@@ -40,8 +40,8 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 
 ### 适用场景
 
-- 从邮箱池、ReMail 或 CFWorker 执行批量邮箱注册。
-- 统一轮询 Microsoft、Gmail、iCloud 接码链接、ReMail、CFWorker 等邮箱的 OTP。
+- 从邮箱池、ReMail、MailNest 或 CFWorker 执行批量邮箱注册。
+- 统一轮询 Microsoft、Gmail、iCloud 接码链接、ReMail、MailNest、CFWorker 等邮箱的 OTP。
 - 管理本地账号、Session、额度状态和支付链接。
 - 按阶段选择代理出口并提取 PayPal 或其他本地支付方式链接。
 - 将账号数据导出为 Codex、CPA、SUB2API 等目标格式。
@@ -53,7 +53,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | 桌面端 | WPF、.NET 10、C#、Generic Host、CommunityToolkit.Mvvm、WPF-UI |
 | 业务核心 | Python 3、curl_cffi、requests、httpx、PyNaCl（Ed25519） |
 | 数据存储 | JSON、JSONL、SQLite |
-| 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
+| 邮箱协议 | ReMail API、MailNest API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
 | 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
 | 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser、AdsPower |
 
@@ -199,6 +199,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 统一 mailbox seam 支持：
 
 - ReMail。
+- MailNest：支持 `email----password----client_id----refresh_token` Graph 令牌号直接导入，也支持通过 MailNest API 购买临时/独占邮箱或读取已上传私有邮箱。
 - Smailr（`smailr.com`、`loc.cc`、`mail.nodeloc.cc`、`nodeloc.cc`），支持受等级限制时复用已有未绑定邮箱、详情正文补取和 10 秒服务端时钟偏差。
 - CFWorker 域名邮箱。
 - Microsoft Graph/OAuth。
@@ -320,7 +321,7 @@ sms_tool/gcash_provider.py / gcash_transport.py
 
 sms_tool/mailbox.py
   邮箱统一路由
-  -> ReMail / CFWorker / Graph / IMAP / Gmail
+  -> ReMail / MailNest / CFWorker / Graph / IMAP / Gmail
 
 sms_tool/payment_link_manager.py
   协议支付管理器
@@ -356,6 +357,7 @@ services/
 | `sms_tool/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
+| `sms_tool/mailbox_mailnest.py` | MailNest API 下单、用户邮箱收件、Graph 令牌格式支持 |
 | `sms_tool/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
 | `sms_tool/mailbox_graph.py` | Microsoft OAuth 与 Graph 边界 |
 | `sms_tool/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
@@ -420,6 +422,38 @@ services/
     "remail_otp_resend_after_seconds": 30
   }
 }
+```
+
+### MailNest
+
+官网：[https://mailnest.top](https://mailnest.top)
+
+MailNest 有两种接入方式：
+
+- Graph 令牌号直接导入：在邮箱文件中写入 `mailnest://email----password----client_id----refresh_token`，会走 Microsoft Graph OAuth 刷新和 Graph 收信。可以直接在 <https://mailnest.top/buy-account> 购买。
+- MailNest API 收信：配置 API Key 后，使用 `--buy-mailnest-mailbox` 购买临时/独占邮箱，或用 `--mailnest-mode user_mailbox` 读取已上传到 MailNest 的私有 Outlook 邮箱。API Key 获取页面 <https://mailnest.top/account>。
+
+```json
+{
+  "email_registration": {
+    "mailnest": {
+      "enabled": true,
+      "base_url": "https://mailnest.top",
+      "api_key": "",
+      "project_code": "chatgpt001",
+      "mode": "temporary",
+      "email": "",
+      "timeout": 30
+    },
+    "mailnest_otp_issued_after_grace_seconds": 10
+  }
+}
+```
+
+`api_key` 也可以用环境变量提供：
+
+```powershell
+$env:MAILNEST_API_KEY = "YOUR_API_KEY"
 ```
 
 ### 注册与收件代理
@@ -533,6 +567,28 @@ python chatgpt_phone_reg.py --buy-remail-mailbox --remail-service-mode purchase 
 ```
 
 该模式跳过 Codex OAuth RT 和手机验证，只在 Session 已落盘且 AT 探活返回 HTTP 200 后计为成功。
+
+### MailNest API 邮箱注册
+
+```powershell
+python chatgpt_phone_reg.py --buy-mailnest-mailbox --mailnest-mode temporary --mailnest-project-code chatgpt001 --count 1 --workers 1
+```
+
+`--mailnest-mode exclusive` 会购买 MailNest 独占邮箱；`--mailnest-mode user_mailbox` 会从 MailNest 已上传的私有 Outlook 邮箱列表取邮箱并通过 `/api/v1/email/user-mailbox/receive` 收信，不会购买新邮箱。
+
+### MailNest Graph 令牌号注册
+
+邮箱文件每行使用：
+
+```text
+mailnest://email----password----client_id----refresh_token
+```
+
+然后执行：
+
+```powershell
+python chatgpt_phone_reg.py --mailbox-file mailnest_graph.txt --count 1 --workers 1
+```
 
 ### CFWorker 邮箱注册
 

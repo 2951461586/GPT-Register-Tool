@@ -298,7 +298,7 @@ def _pool_line_payload(account, raw_line: str) -> dict[str, Any]:
     # chatai/chongzhi and Gmail-OAuth lines store the OAuth client id in the
     # generic token slot; surface it explicitly so callers need no format
     # knowledge.
-    client_id = account.token if provider in {"chatai", "chongzhi"} or (
+    client_id = account.token if provider in {"chatai", "chongzhi", "mailnest_graph"} or (
         provider == "gmail" and account.auth_mode == "oauth_refresh"
     ) else ""
     return {
@@ -482,6 +482,19 @@ def _mailbox_line(mailbox: dict[str, Any]) -> str:
         purchase = str(mailbox.get("purchase_id") or "").strip()
         # Keep the canonical ReMail line format used by mailbox_parsers.
         return "remail://" + "---".join(filter(None, (email, token, order, purchase)))
+    if provider == "mailnest":
+        mode = str(mailbox.get("auth_mode") or "temporary").strip().replace("-", "_")
+        token = str(mailbox.get("token") or mailbox.get("order_no") or mailbox.get("purchase_id") or "").strip()
+        return "mailnest://" + "---".join(filter(None, (email, mode, token)))
+    if provider == "mailnest_graph":
+        password = str(mailbox.get("password") or "").strip()
+        refresh = str(mailbox.get("refresh_token") or "").strip()
+        access = str(mailbox.get("access_token") or "").strip()
+        client = str(mailbox.get("client_id") or mailbox.get("clientId") or mailbox.get("token") or "").strip()
+        if client and refresh:
+            line = f"mailnest://{email}----{password}----{client}----{refresh}"
+            return f"{line}----{access}" if access else line
+        return ""
     if provider == "gmail":
         client = str(mailbox.get("client_id") or mailbox.get("token") or "").strip()
         secret = str(mailbox.get("client_secret") or "").strip()

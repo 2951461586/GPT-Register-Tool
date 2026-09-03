@@ -229,4 +229,4 @@ def _requires_openai_sender_filter(mailbox):
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     email = str(getattr(mailbox, "email", "") or "").strip().lower()
     domain = email.rsplit("@", 1)[1] if "@" in email else ""
-    return provider in {"gmail", "graph", "chatai", "outlook"} or domain in GMAIL_DOMAINS or domain in OUTLOOK_DOMAINS
+    return provider in {"gmail", "graph", "chatai", "mailnest_graph", "outlook"} or domain in GMAIL_DOMAINS or domain in OUTLOOK_DOMAINS

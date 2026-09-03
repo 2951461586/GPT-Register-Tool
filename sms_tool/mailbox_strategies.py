@@ -178,7 +178,7 @@ def resolve_otp_poller(
 def _graph_matcher(mailbox: Any, cfg: dict) -> bool:
     """Default matcher — only match if no provider-specific strategy applies."""
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    if provider in {"cfworker", "remail", "smailr", "icloud", "icloud_url", "gmail", "chongzhi"}:
+    if provider in {"cfworker", "remail", "mailnest", "smailr", "icloud", "icloud_url", "gmail", "chongzhi"}:
         return False
     return True  # Catch-all for plain Graph/IMAP mailboxes
 
