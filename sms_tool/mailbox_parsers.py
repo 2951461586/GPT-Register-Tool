@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from .mailbox_types import MailboxAccount
-from . import mailbox_icloud_url
+from .providers import mailbox_icloud_url
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MS_CLIENT_ID_RE = re.compile(
@@ -89,29 +89,6 @@ def _is_icloud_url_line(line):
     return mailbox_icloud_url.is_icloud_url_line(line)
 
 
-def _is_chongzhi_line(line):
-    """Detect chongzhi.art credential format: email--------password----..."""
-    return "--------" in line and "@" in line.split("--------", 1)[0]
-
-
-def _parse_chongzhi_line(line, source_path, line_no):
-    """Parse chongzhi.art credential: email--------password----client_id----refresh_token"""
-    from . import mailbox_chongzhi
-    parsed = mailbox_chongzhi._parse_chongzhi_credential_line(line)
-    if not parsed:
-        print(f"[!] Skip malformed chongzhi line {source_path}:{line_no}")
-        return None
-    email, password, client_id, refresh_token = parsed
-    return MailboxAccount(
-        email=email,
-        password=password,
-        refresh_token=refresh_token,
-        source=str(source_path),
-        provider="chongzhi",
-        token=client_id,
-    )
-
-
 def _parse_cfworker_line(line, source_path, line_no):
     email = line.split("://", 1)[1].strip() if "://" in line else line
     email = _normalize_mailbox_email(email)
@@ -128,7 +105,10 @@ def _parse_remail_line(line, source_path, line_no):
     service_token = parts[1] if len(parts) >= 2 else ""
     order_no = parts[2] if len(parts) >= 3 else ""
     purchase_id = parts[3] if len(parts) >= 4 else ""
-    if not email or not service_token or not order_no:
+    # Older persisted ReMail rows may contain only ``email---token``.  The
+    # provider can use that token first and recover the current order identity
+    # through the API Key when necessary, so keep this compatibility form.
+    if not email or not service_token:
         print(f"[!] Skip malformed ReMail mailbox line {source_path}:{line_no}")
         return None
     return MailboxAccount(
@@ -252,8 +232,6 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
         return _parse_cfworker_line(line, source_path, line_no)
     if _is_gmail_line(line):
         return _parse_gmail_line(line, source_path, line_no)
-    if _is_chongzhi_line(line):
-        return _parse_chongzhi_line(line, source_path, line_no)
     if "----" in line:
         parts = line.split("----", 3)
         if len(parts) < 4:

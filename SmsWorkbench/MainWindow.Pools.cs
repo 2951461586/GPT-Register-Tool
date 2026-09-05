@@ -259,7 +259,7 @@ namespace SmsWorkbench
         private static string MailboxPoolStatus(string provider, string authMode)
         {
             if (provider == "gmail") return authMode == "oauth_refresh" ? "已授权" : "可收信";
-            if (provider is "chatai" or "graph" or "chongzhi") return "已授权";
+            if (provider is "chatai" or "graph") return "已授权";
             return "可收信";
         }
 
@@ -361,8 +361,12 @@ namespace SmsWorkbench
             // PromotionStatus member, DisplayPayPalStatus likewise), i.e. 3 full
             // JSON parses per row where 1 suffices - and this runs once per
             // account on every pool refresh. Hoisted here so each is parsed once.
-            string importedStatus = AccountStatusInterpreter.GetImportedStatus(rawJson);
-            string paypalAmount = AccountStatusInterpreter.GetPaypalAmount(rawJson);
+            string importedStatus = FirstNonEmpty(
+                GetString(data, "imported_status"),
+                AccountStatusInterpreter.GetImportedStatus(rawJson));
+            string paypalAmount = FirstNonEmpty(
+                GetString(data, "paypal_amount"),
+                AccountStatusInterpreter.GetPaypalAmount(rawJson));
             // Pure function of its arguments, but it was evaluated twice with
             // identical arguments (PayPalStatus member and PromotionStatus member).
             string paypalStatusDisplay = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod);
@@ -408,10 +412,10 @@ namespace SmsWorkbench
             return normalized switch
             {
                 "remail" when domain is "outlook.com" or "hotmail.com" or "live.com" or "msn.com" => "remail/outlook",
+                "remail" when domain == "icloud.com" => "remail/icloud",
                 "remail" => "remail",
                 "icloud_url" or "icloud" => "icloud",
                 "cf_worker" or "cfworker" => "cfworker",
-                "chongzhi" when domain is "outlook.com" or "hotmail.com" or "live.com" or "msn.com" => "outlook",
                 "microsoft" or "graph" or "outlook" => "outlook",
                 "gmail" => "gmail",
                 "smailr" => "smailr",

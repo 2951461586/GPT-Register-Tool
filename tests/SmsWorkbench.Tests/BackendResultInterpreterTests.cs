@@ -407,6 +407,23 @@ public sealed class BackendResultInterpreterTests
     }
 
     [Fact]
+    public void BatchSummaryLabelIncludesPartialTimeouts()
+    {
+        using var document = JsonDocument.Parse("{\"total\":20,\"success\":17,\"failed\":3,\"timed_out\":2}");
+        Assert.Equal("完成 17/20，失败 3，超时 2", BackendResultInterpreter.BatchSummaryLabel(document.RootElement));
+    }
+
+    [Fact]
+    public void BatchSummaryLabelIncludesLiveness401AndMailboxAuthFailures()
+    {
+        using var liveness = JsonDocument.Parse("{\"total\":5,\"success\":3,\"failed\":2,\"liveness_401\":2}");
+        Assert.Equal("完成 3/5，失败 2，401 2", BackendResultInterpreter.BatchSummaryLabel(liveness.RootElement));
+
+        using var mailbox = JsonDocument.Parse("{\"total\":5,\"success\":2,\"failed\":3,\"mailbox_auth_invalid\":3}");
+        Assert.Equal("完成 2/5，失败 3，邮箱认证失败 3", BackendResultInterpreter.BatchSummaryLabel(mailbox.RootElement));
+    }
+
+    [Fact]
     public void Cancelled_ReturnsCancelledState()
     {
         var cancelled = BackendResultInterpreter.Cancelled("test");

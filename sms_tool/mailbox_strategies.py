@@ -251,6 +251,7 @@ def _graph_poll_otp(
     )
     from .mailbox_poll import _poll_otp_with_settle
     from .mailbox import MailboxTokenExpiredError
+    from .providers.mailbox_graph import MailboxAuthInvalidError
 
     keyword = (subject_keyword or "").lower()
 
@@ -268,36 +269,49 @@ def _graph_poll_otp(
         excluded_otps=excluded_otps,
         log_prefix='graph poll',
         is_newer=_candidate_is_newer,
-        reraise=(MailboxTokenExpiredError,),
+        reraise=(MailboxTokenExpiredError, MailboxAuthInvalidError),
     )
 
 
-def _chongzhi_matcher(mailbox: Any, cfg: Mapping[str, Any]) -> bool:
-    from .mailbox_chongzhi import chongzhi_enabled
-    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    return provider == "chongzhi" or (
-        not provider
-        and chongzhi_enabled(dict(cfg))
-        and bool(str(getattr(mailbox, "password", "") or "").strip())
+def _icloud_poll_otp(
+    mailbox: Any,
+    *,
+    subject_keyword: str = "",
+    timeout: int = 300,
+    issued_after_unix: int = 0,
+    proxy: str | None = None,
+    excluded_otps: Any = None,
+    **kwargs: Any,
+) -> Optional[str]:
+    """Poll iCloud through its own fetcher, never through Graph fallback."""
+    from .mailbox import (
+        _latest_email_otp_candidate,
+        _candidate_is_newer,
+        _otp_poll_interval,
+        _email_otp_settle_seconds,
     )
+    from .mailbox_poll import _poll_otp_with_settle
+    from .mailbox import MailboxTokenExpiredError
+    from .providers.mailbox_graph import MailboxAuthInvalidError
 
+    keyword = (subject_keyword or "").lower()
 
-def _chongzhi_poll_otp(mailbox: Any, **kwargs: Any) -> Optional[str]:
-    from .mailbox import _poll_chongzhi_otp
-    email = str(getattr(mailbox, "email", "") or "").strip()
-    password = str(getattr(mailbox, "password", "") or "").strip()
-    if not email or not password:
-        raise ValueError("chongzhi mailbox requires email and password")
-    return _poll_chongzhi_otp(
-        mailbox, email=email, password=password,
-        subject_keyword=str(kwargs.get("subject_keyword") or ""),
-        timeout=int(kwargs.get("timeout") or 300),
-        issued_after_unix=int(kwargs.get("issued_after_unix") or 0),
-        proxy=kwargs.get("proxy"),
+    def _fetch_candidate():
+        return _latest_email_otp_candidate(
+            mailbox, keyword=keyword,
+            issued_after_unix=issued_after_unix, proxy=proxy,
+        )
+
+    return _poll_otp_with_settle(
+        _fetch_candidate,
+        timeout=timeout,
+        interval=_otp_poll_interval(),
+        settle_seconds=_email_otp_settle_seconds(),
+        excluded_otps=excluded_otps,
+        log_prefix="icloud poll",
+        is_newer=_candidate_is_newer,
+        reraise=(MailboxTokenExpiredError, MailboxAuthInvalidError),
     )
-
-
-register_otp_poller("chongzhi", _chongzhi_matcher, _chongzhi_poll_otp)
 
 
 # Register Graph API as the catch-all. `fallback=True` - not registration order

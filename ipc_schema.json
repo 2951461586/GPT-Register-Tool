@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "ops": ["hello", "ping", "accounts", "mailbox-pool", "pools", "account", "account-file", "mailbox-file", "payment-url-file"],
+  "error_codes": ["bad_request", "unknown_operation", "backend_error", "watchdog_timeout", "internal"]
+}

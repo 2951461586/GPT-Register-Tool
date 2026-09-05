@@ -1,5 +1,7 @@
 import threading
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 
 from sms_tool.batch_runner import run_batch_impl, select_registration_proxy_base, select_registration_proxy_pool
@@ -7,6 +9,29 @@ from sms_tool.storage import _status
 
 
 class BatchErrorClassificationTests(unittest.TestCase):
+    def test_worker_exception_is_redacted_in_result_and_console_output(self):
+        def fail(**_kwargs):
+            raise RuntimeError(
+                "proxy=http://user:pass@proxy.example:8080 access_token=sk-live_secret"
+            )
+
+        output = StringIO()
+        with redirect_stdout(output), patch(
+            "sms_tool.batch_runner.CFG", {"email_registration": {}}
+        ):
+            result = run_batch_impl(
+                count=1,
+                workers=1,
+                max_attempts=1,
+                run_email_func=fail,
+            )[0]
+
+        self.assertNotIn("user:pass", output.getvalue())
+        self.assertNotIn("sk-live_secret", output.getvalue())
+        self.assertNotIn("user:pass", result["error"])
+        self.assertNotIn("sk-live_secret", result["error"])
+        self.assertIn("RuntimeError", result["error"])
+
     def test_retryable_network_failure_gets_fresh_proxy_and_second_attempt(self):
         calls = []
 
@@ -257,6 +282,20 @@ class BatchErrorClassificationTests(unittest.TestCase):
         )
 
         self.assertEqual(status, "rate_limited")
+
+    def test_storage_marks_transport_unknown_at_probe_as_pending(self):
+        status = _status(
+            {
+                "success": False,
+                "registration_state": "at_probe_pending",
+                "error": "access_token_probe_failed:Error",
+            },
+            {},
+            "at-token",
+            has_refresh_token=False,
+        )
+
+        self.assertEqual(status, "pending")
 
 
 if __name__ == "__main__":

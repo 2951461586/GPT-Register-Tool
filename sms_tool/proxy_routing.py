@@ -40,10 +40,10 @@ def _section(config: Mapping[str, Any] | None, name: str) -> Mapping[str, Any]:
 def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
     """Return only the pool owned by ``lane``.
 
-    The compatibility fallbacks are intentionally one-way: browser
-    registration may fall back to the legacy registration pool, while health
-    checks may fall back to the legacy default.  Health never falls back to a
-    saved account affinity unless the caller explicitly asks for it.
+    The compatibility fallbacks are intentionally one-way: browser/protocol
+    registration own their corresponding pools, while health operations use
+    the registration pool as a legacy fallback. Persisted accounts can further
+    restore their exact registration affinity in ``select_operation_proxy``.
     """
     proxy = _section(config, "proxy")
     health = _section(config, "account_health")
@@ -81,11 +81,19 @@ def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
         # so post-registration checks reuse the signup egress. Fall back to the
         # registration pool; the isolated-health-lane behaviour is kept only if
         # an explicit health/account_health proxy list is configured.
-        return (
-            parse_proxy_pool(proxy.get("health"))
-            or parse_proxy_pool(proxy.get("registration"))
-            or parse_proxy_pool(proxy.get("default"))
-        )
+        values = parse_proxy_pool(proxy.get("health"))
+        if values:
+            return values
+        # Keep the registration endpoint first for deterministic affinity, but
+        # include the complete configured pool. Previously the scalar
+        # ``proxy.registration`` short-circuited this fallback and silently
+        # collapsed all health probes onto one exit, making transient TLS
+        # failures look like account failures.
+        values = parse_proxy_pool(proxy.get("registration"))
+        for item in parse_proxy_pool(proxy.get("pool")):
+            if item not in values:
+                values.append(item)
+        return values or parse_proxy_pool(proxy.get("default"))
     return []
 
 
@@ -111,9 +119,11 @@ def select_operation_proxy(
     explicit: str | None = None,
     config: Mapping[str, Any] | None = None,
 ) -> str | None:
-    """Choose a stable proxy for a health operation without stale affinity."""
+    """Choose the account's registration identity for health operations."""
     # Opt-in: reuse the account's registration proxy for probes so the
-    # fingerprint/proxy pair stays identical to signup time.
+    # proxy/fingerprint pair stays identical to signup time. This is the
+    # production default for the desktop configuration because presenting a
+    # saved AT from a different egress can trigger upstream revocation.
     if _use_registration_affinity(config) and isinstance(account, Mapping) and account.get("identity_context"):
         try:
             from .account_identity import resolve_account_proxy

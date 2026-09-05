@@ -77,7 +77,7 @@ def _find_existing_account_email(conn, email):
     if not canonical:
         return ""
     row = conn.execute(
-        "SELECT email FROM accounts WHERE lower(email)=lower(?) LIMIT 1",
+        "SELECT email FROM accounts WHERE email=? LIMIT 1",
         (canonical,),
     ).fetchone()
     if row is not None:
@@ -286,6 +286,9 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return explicit
     if _looks_at_invalid(data, paypal):
         return "at_invalid"
+    registration_state = str(_get(data, "registration_state")).strip().lower()
+    if registration_state in {"at_probe_pending", "at_probe_transport_unknown"} and access_token:
+        return "pending"
     if data.get("success") is False and not has_refresh_token:
         return "failed" if data.get("error") else "pending"
     if not data.get("success") and data.get("error") and not has_refresh_token:

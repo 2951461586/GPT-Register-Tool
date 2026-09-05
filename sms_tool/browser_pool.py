@@ -47,6 +47,7 @@ class BrowserSlot:
     uses: int = 0
     last_used: float = 0.0
     last_error: str = ""
+    in_use: bool = False
 
     def needs_recycle(self, max_uses: int) -> bool:
         if self.health == BrowserHealth.FAILED:
@@ -282,8 +283,14 @@ class BrowserProcessPool:
                 resident = self._residents.get(s.slot_id)
                 return resident is not None and self._resident_proxy.get(s.slot_id) == requested_proxy
 
+            available = [slot for slot in self._slots if not slot.in_use]
+            if not available:
+                # The semaphore should make this unreachable, but retaining the
+                # guard prevents accidental resident sharing if callers misuse
+                # the pool or a future synchronization change races here.
+                raise BrowserRegistrationError("browser_pool_slot_unavailable")
             candidates = sorted(
-                self._slots,
+                available,
                 key=lambda s: (
                     s.health != BrowserHealth.HEALTHY,
                     not _has_resident(s),
@@ -297,10 +304,12 @@ class BrowserProcessPool:
                 slot.uses = 0
                 slot.health = BrowserHealth.HEALTHY
                 slot.last_error = ""
+            slot.in_use = True
             return slot
 
     def _release_slot(self, slot: BrowserSlot) -> None:
         with self._lock:
+            slot.in_use = False
             if self.pool_config.recycle_on_error and slot.health == BrowserHealth.FAILED:
                 slot.generation += 1
                 slot.uses = 0
@@ -324,6 +333,7 @@ class BrowserProcessPool:
                         "health": s.health.value,
                         "uses": s.uses,
                         "last_error": s.last_error,
+                        "in_use": s.in_use,
                     }
                     for s in self._slots
                 ],
@@ -331,14 +341,18 @@ class BrowserProcessPool:
 
     def close(self) -> None:
         """Mark the pool as closed and tear down every resident browser."""
-        self._closed = True
-        for resident in list(self._residents.values()):
+        with self._lock:
+            self._closed = True
+            residents = list(self._residents.values())
+            self._residents.clear()
+            self._resident_proxy.clear()
+            for slot in self._slots:
+                slot.in_use = False
+        for resident in residents:
             try:
                 resident.close()
             except Exception:
                 pass
-        self._residents.clear()
-        self._resident_proxy.clear()
 
 
 __all__ = [

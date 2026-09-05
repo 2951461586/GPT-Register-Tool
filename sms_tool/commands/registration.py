@@ -302,7 +302,12 @@ def _persist_registration_result_core(
     data[_PERSISTENCE_KEY] = marker
 
     try:
-        if not data.get("success", False):
+        deferred_probe = (
+            str(data.get("registration_state") or "").strip().lower()
+            in {"at_probe_pending", "at_probe_transport_unknown"}
+            and bool(str(data.get("access_token") or "").strip())
+        )
+        if not data.get("success", False) and not deferred_probe:
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             if not marker.get("failure_reported"):
@@ -318,7 +323,7 @@ def _persist_registration_result_core(
                 marker["failure_audited"] = True
             if "account_deactivated" in failed_error.lower() and not marker.get("dead_remail_recorded"):
                 try:
-                    from ..mailbox_remail import record_dead_remail_account
+                    from ..providers.mailbox_remail import record_dead_remail_account
 
                     record_dead_remail_account(data, reason="account_deactivated")
                 except Exception:
@@ -334,7 +339,9 @@ def _persist_registration_result_core(
             marker.pop("error_type", None)
             return marker
 
-        data["registration_state"] = "pending"
+        # Keep transport-unknown AT probes resumable. The account already has
+        # an auth session, so persisting it is safer than replaying signup.
+        data["registration_state"] = "at_probe_pending" if deferred_probe else "pending"
         if not marker.get("pending_audited"):
             record_registration_audit(
                 data,
@@ -354,7 +361,7 @@ def _persist_registration_result_core(
             return marker
 
         session_data["batch_id"] = batch_id
-        session_data["registration_state"] = "active"
+        session_data["registration_state"] = "at_probe_pending" if deferred_probe else "active"
         out_pattern = ctx.runtime_config.get("output", {}).get(
             "filename_pattern", "session_{email}_{timestamp}.json"
         )
@@ -385,7 +392,7 @@ def _persist_registration_result_core(
         if not marker.get("db_completed"):
             marker["db_saved"] = 1 if ctx.upsert_account(session_data, json_path=out_path) else 0
             marker["db_completed"] = True
-        if marker.get("db_saved") and not marker.get("account_health_enqueued"):
+        if marker.get("db_saved") and not deferred_probe and not marker.get("account_health_enqueued"):
             try:
                 from ..account_health_queue import enqueue_post_registration_checks
 
@@ -407,7 +414,7 @@ def _persist_registration_result_core(
             record_registration_audit(
                 data,
                 batch_id=batch_id,
-                state="active",
+                state="at_probe_pending" if deferred_probe else "active",
                 runtime_config=ctx.runtime_config,
             )
             marker["active_audited"] = True
@@ -469,7 +476,7 @@ def save_registration_results(
     print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
     quality = None
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
-        from ..mailbox_remail import record_remail_batch_quality
+        from ..providers.mailbox_remail import record_remail_batch_quality
         quality = record_remail_batch_quality(batch_id, results, requested=effective_count)
         print(
             f"[*] ReMail quality: deactivated={quality['account_deactivated']}/"

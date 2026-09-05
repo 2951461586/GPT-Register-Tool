@@ -17,7 +17,7 @@ from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_au
 from .http_client import request_with_retry
 from .http_utils import _absolute_url
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
-from . import mailbox_gmail
+from .providers import mailbox_gmail
 from .storage import upsert_account
 
 
@@ -963,6 +963,9 @@ def _mailbox_from_data(data):
         purchase_total_cost=str(mailbox.get("purchase_total_cost") or "").strip(),
         balance_after=str(mailbox.get("balance_after") or "").strip(),
     )
+    from .mailbox_quarantine import is_mailbox_quarantined
+    if is_mailbox_quarantined(result):
+        return None
     if not mailbox_has_inbox_credentials(result):
         # Safe account snapshots intentionally omit iCloud OTP URLs.  Resolve
         # those credentials from the configured mailbox pool at use time rather

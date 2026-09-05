@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from contextlib import contextmanager
 
 from sms_tool import account_recovery
 from sms_tool import codex_oauth
@@ -12,6 +13,36 @@ def test_chatgpt_email_relogin_validates_account_input():
 
     assert invalid == {"ok": False, "mode": "chatgpt_email_otp", "error": "invalid_account"}
     assert missing_email == {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_email"}
+
+
+def test_refresh_local_quota_uses_light_probe_before_browser(monkeypatch):
+    calls = []
+
+    @contextmanager
+    def browser(_account, **_kwargs):
+        calls.append("browser")
+        yield lambda *args, **kwargs: {"status": 200, "body": {}}
+
+    def probe(_account, **kwargs):
+        calls.append("browser-fetch" if kwargs.get("browser_fetch") else "light")
+        return {"ok": True, "status": "active", "status_code": 200, "quota_status": "可用"}
+
+    account = {
+        "email": "fast@example.com",
+        "access_token": "at",
+        "identity_context": {"browser_identity": {"driver": "camoufox"}},
+    }
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(account_recovery, "probe_account_liveness", side_effect=probe),
+        patch.object(account_recovery, "browser_fetch_for_account", side_effect=browser),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(account_recovery, "clear_stale_promotion_at_marker"),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["fast@example.com"])
+
+    assert result["ok"]
+    assert calls == ["light"]
 
 
 def test_chatgpt_email_relogin_requires_saved_mailbox():
@@ -189,6 +220,50 @@ def test_refresh_local_quota_statuses_classifies_terminal_account_without_relogi
     assert result["relogin_attempted"] == 0
     probe.assert_not_called()
     relogin.assert_not_called()
+
+
+def test_health_status_codes_distinguish_relogin_otp_and_timeout(monkeypatch):
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
+    timed_out = account_recovery._timed_out_health_result("timeout@example.com", "batch_timeout")
+
+    assert timed_out["health_status"] == "batch_timeout"
+    assert timed_out["timed_out"] is True
+    assert account_recovery._health_status_code(
+        {"ok": False, "status": "token_invalid"},
+        {"ok": False, "error": "email_otp_timeout"},
+    ) == "relogin_otp_failed"
+    assert account_recovery._health_status_code({"ok": True, "status": "active"}, {}) == "active"
+
+
+def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_is_quarantined(monkeypatch):
+    account = {"email": "user@example.com", "access_token": "at"}
+    monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *args, **kwargs: {
+        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
+    })
+    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda: False)
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
+
+    result = account_recovery.refresh_local_quota_statuses(
+        ["user@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
+    )
+
+    row = result["results"][0]
+    assert row["liveness_401"] is True
+    assert row["relogin_attempted"] is False
+    assert row["mailbox_auth_invalid"] is False
+    assert row["relogin"]["error"] == "mailbox_pool_repair_required"
+    assert result["liveness_401"] == 1
+    assert result["relogin_attempted"] == 0
+
+
+def test_relogin_otp_failure_enters_cooldown(tmp_path, monkeypatch):
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 1800}})
+    account = {"email": "known@example.com", "quota_status": "legacy/OTP failure", "quota_updated_at": int(__import__('time').time())}
+    assert account_recovery._relogin_cooldown_active(account)
+    account = {"email": "new@example.com"}
+    account_recovery._record_relogin_failure(account["email"], {"ok": False, "mode": "chatgpt_email_otp", "error": "otp_timeout"})
+    assert account_recovery._relogin_cooldown_active(account)
 
 
 def test_relogin_auto_uses_refresh_cookie_email_then_oauth():
@@ -479,7 +554,7 @@ def test_recovery_proxy_uses_registration_country_and_pool():
 def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogin():
     cleared = {"called": False}
 
-    def fake_clear(email):
+    def fake_clear(email, **kwargs):
         cleared["called"] = True
         return True
 
@@ -512,7 +587,7 @@ def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogi
     assert cleared["called"]
 
 
-def test_refresh_local_quota_statuses_skips_promotion_clear_without_relogin():
+def test_refresh_local_quota_statuses_clears_promotion_marker_after_verified_probe():
     with (
         patch.object(
             account_recovery,
@@ -530,7 +605,31 @@ def test_refresh_local_quota_statuses_skips_promotion_clear_without_relogin():
         result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
 
     assert result["ok"]
-    clear_marker.assert_not_called()
+    clear_marker.assert_called_once()
+
+
+def test_liveness_transport_failure_retries_configured_pool(monkeypatch):
+    account = {"email": "retry@example.com", "access_token": "at"}
+    calls = []
+
+    def fake_probe(account, proxy=None, timeout=30, browser_fetch=None):
+        calls.append(proxy)
+        if len(calls) < 2:
+            return {"ok": False, "status_code": 0, "error": "curl: (35) connection reset", "quota_status": "检测失败"}
+        return {"ok": True, "status_code": 200, "status": "active", "quota_status": "可用"}
+
+    monkeypatch.setattr(account_recovery, "CFG", {
+        "proxy": {"registration": "http://registration.example:8080", "pool": [
+            "http://pool-a.example:8080", "http://pool-b.example:8080"
+        ]},
+        "account_health": {"use_registration_affinity": True},
+    })
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", fake_probe)
+    result = account_recovery._probe_liveness_with_retries(
+        account, proxy="http://127.0.0.1:7897", timeout=5
+    )
+    assert result["ok"]
+    assert calls == ["http://registration.example:8080", "http://pool-a.example:8080"]
 
 
 def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():
@@ -653,6 +752,40 @@ def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_p
     assert probe.call_args.kwargs.get("browser_fetch") is not None
 
 
+def test_browser_liveness_reuses_persisted_geo_aligned_profile():
+    """Follow-up browser probes reopen the registration locale/timezone."""
+    from unittest.mock import MagicMock, patch
+
+    identity = create_registration_identity(
+        "http://proxy.example:8080",
+        pool_index=0,
+        fingerprint_key="chrome146",
+        device_id="device-jp",
+        account_key="browser@example.com",
+        browser_identity={"driver": "camoufox", "profile_id": "browser@example.com"},
+    )
+    identity.update({"geo_country": "JP", "geo_timezone": "Asia/Tokyo", "fingerprint_seed": "device-jp"})
+    account = {"email": "browser@example.com", "access_token": "at_123", "identity_context": identity}
+    mock_browser = MagicMock()
+    mock_browser.fetch_json = MagicMock(return_value={"status_code": 200, "body": {}})
+    mock_browser.page = MagicMock()
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_browser)
+    mock_session.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
+        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+
+    assert result["ok"]
+    assert create_session.call_args.kwargs["locale"] == "ja-JP"
+    assert create_session.call_args.kwargs["timezone_id"] == "Asia/Tokyo"
+
+
 def test_refresh_local_quota_statuses_falls_back_to_curl_when_no_browser_identity():
     """Liveness probe uses curl_cffi when no browser_identity is present."""
     from unittest.mock import patch
@@ -681,3 +814,32 @@ def test_refresh_local_quota_statuses_falls_back_to_curl_when_no_browser_identit
     create_session.assert_not_called()
     # Must NOT have passed browser_fetch
     assert "browser_fetch" not in probe.call_args.kwargs or probe.call_args.kwargs.get("browser_fetch") is None
+
+
+def test_browser_liveness_does_not_downgrade_to_curl_when_context_unavailable():
+    """A browser account must fail closed instead of changing its fingerprint."""
+    from unittest.mock import patch
+
+    account = {
+        "email": "browser@example.com",
+        "access_token": "at_123",
+        "identity_context": create_registration_identity(
+            "http://proxy.example:8080",
+            pool_index=0,
+            fingerprint_key="chrome146",
+            device_id="device-123",
+            browser_identity={"driver": "camoufox", "profile_id": "browser@example.com"},
+        ),
+    }
+
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", side_effect=RuntimeError("unavailable")),
+        patch.object(account_recovery, "probe_account_liveness") as probe,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+
+    assert not result["ok"]
+    assert result["results"][0]["probe"].get("browser_fallback") == "unavailable"
+    probe.assert_called_once()

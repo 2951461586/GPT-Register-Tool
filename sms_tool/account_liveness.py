@@ -18,7 +18,7 @@ from .account_identity import account_identity, bind_account_identity
 from .auth_headers import auth_impersonate, chatgpt_headers
 from .config import CFG
 from .phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
-from .proxy_routing import select_operation_proxy
+from .proxy_routing import proxy_pool_for, select_operation_proxy
 
 
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -50,7 +50,8 @@ def browser_fetch_for_account(
     fingerprint and cookies instead of falling back to curl_cffi.
 
     Yields ``None`` when no ``browser_identity`` is present or when the browser
-    session cannot be opened, so callers can fall back to curl_cffi.
+    session cannot be opened. Browser callers fail closed in that case instead
+    of downgrading to a different fingerprint.
     """
     identity = account_identity(account)
     browser_identity = identity.get("browser_identity") or {}
@@ -61,10 +62,28 @@ def browser_fetch_for_account(
         return
 
     cfg = config or CFG
+    # Reconstruct the same browser profile/locale selected at registration.
+    # Follow-up calls must not silently switch to a generic desktop fingerprint.
+    locale = "en-US"
+    timezone_id = "America/New_York"
+    try:
+        from .browser_fingerprint_pool import select_browser_profile
+
+        stored_geo = {
+            "country": str(identity.get("geo_country") or "").strip().upper(),
+            "timezone": str(identity.get("geo_timezone") or "").strip(),
+        }
+        geo = {key: value for key, value in stored_geo.items() if value}
+        seed = str(identity.get("fingerprint_seed") or identity.get("device_id") or "").strip()
+        profile = select_browser_profile(geo, seed=seed, config=cfg)
+        locale = str(profile.get("navigator_language") or locale)
+        timezone_id = str(profile.get("timezone_iana") or timezone_id)
+    except Exception:
+        pass
     health_proxy = select_operation_proxy(
         account,
         operation="health_browser",
-        explicit=proxy,
+        explicit=(proxy if not proxy_pool_for(cfg, "health_browser") else None),
         config=cfg,
     )
     chat_cfg = cfg.get("chatgpt", {}) if isinstance(cfg, dict) else {}
@@ -85,8 +104,8 @@ def browser_fetch_for_account(
             proxy=health_proxy,
             headless=True,
             timeout_ms=max(10_000, int(timeout) * 1000),
-            locale="en-US",
-            timezone_id="America/New_York",
+            locale=locale,
+            timezone_id=timezone_id,
             browser_identity=dict(browser_identity) if browser_identity else None,
         )
         browser = session.__enter__()
@@ -153,7 +172,8 @@ def probe_account_liveness(
 
     had_identity_context = bool(account.get("identity_context"))
     identity = bind_account_identity(account)
-    # Health probes deliberately do not restore registration proxy affinity.
+    # Health probes restore the registration proxy affinity so the access token
+    # is presented from the same egress identity used during signup.
     resolved_proxy = select_operation_proxy(
         account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
         operation="liveness",

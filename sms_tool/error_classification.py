@@ -56,6 +56,9 @@ MAILBOX_ERROR_MARKERS = (
     "outlook otp timeout",
     "email_otp_poll_timeout",
     "mailbox otp timeout",
+    "mailbox_transport_unavailable",
+    "relogin_mailbox_transport_failed",
+    "remail poll transport",
 )
 
 AUTH_STATE_ERROR_MARKERS = (
@@ -107,6 +110,5 @@ def classify_error(value) -> str:
     if any(marker in text for marker in AUTH_STATE_ERROR_MARKERS):
         return "auth_state"
     return "unknown"
-
 
 

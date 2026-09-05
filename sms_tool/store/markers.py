@@ -22,7 +22,7 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         if not lookup_email:
             return False
         row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            "SELECT raw_json,json_path FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
         if row is None:
@@ -52,14 +52,28 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         data["quota"] = quota
         data["quota_status"] = str(quota_status or "")
         data["quota_updated_at"] = now
+        verified_active = False
+        if isinstance(quota_result, dict):
+            try:
+                verified_active = bool(quota_result.get("ok")) and 200 <= int(quota_result.get("status_code") or 0) < 300
+            except (TypeError, ValueError):
+                verified_active = False
+            if verified_active:
+                data["at_probe_status_code"] = "200"
+                token_probe = data.get("token_probe") if isinstance(data.get("token_probe"), dict) else {}
+                token_probe.update({"ok": True, "status": "active", "status_code": 200, "updated_at": now})
+                data["token_probe"] = token_probe
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
             """
             UPDATE accounts
-            SET quota_status=?, updated_at=?, raw_json=?
-            WHERE lower(email)=lower(?)
+            SET quota_status=?,
+                status=CASE WHEN status='at_invalid' AND ? THEN 'registered' ELSE status END,
+                error=CASE WHEN status='at_invalid' AND ? THEN '' ELSE error END,
+                updated_at=?, raw_json=?
+            WHERE email=?
             """,
-            (str(quota_status or ""), now, raw_json, lookup_email),
+            (str(quota_status or ""), int(verified_active), int(verified_active), now, raw_json, lookup_email),
         )
         conn.commit()
     finally:
@@ -89,7 +103,7 @@ def mark_account_health_result(
         if not lookup_email:
             return False
         row = conn.execute(
-            "SELECT raw_json, json_path FROM accounts WHERE lower(email)=lower(?)",
+            "SELECT raw_json, json_path FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
         if row is None:
@@ -136,7 +150,7 @@ def mark_account_health_result(
                 terminal_state=CASE WHEN ? THEN 'account_deactivated' ELSE terminal_state END,
                 updated_at=?,
                 raw_json=?
-            WHERE lower(email)=lower(?)
+            WHERE email=?
             """,
             (plan_type, plan_type, int(terminal), int(terminal), int(terminal), now, raw_json, lookup_email),
         )
@@ -165,7 +179,7 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
         if not lookup_email:
             return False
         row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            "SELECT raw_json,json_path FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
         if row is None:
@@ -194,9 +208,20 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
         data["promotion"] = promotion
         data["promotion_status"] = str(promotion_status or "")
         data["promotion_updated_at"] = now
+        # Promotion and liveness are separate contracts. A promotion 401 is
+        # retained under promotion.last_result and must not downgrade the
+        # shared account/AT status.
+        promotion_code = ""
+        if isinstance(promotion_result, dict):
+            promotion_code = str(promotion_result.get("status_code") or "").strip()
+            if not promotion_code and str(promotion_result.get("error") or "").strip().lower() in {
+                "token_invalid", "access_token_invalid", "token_invalidated"
+            }:
+                promotion_code = "401"
+        promotion["status_code"] = promotion_code
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
-            "UPDATE accounts SET updated_at=?, raw_json=? WHERE lower(email)=lower(?)",
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE email=?",
             (now, raw_json, lookup_email),
         )
         conn.commit()
@@ -208,8 +233,8 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
 
 
 
-def clear_stale_promotion_at_marker(email, *, runtime_config: ConfigInput = None):
-    """Clear a stale ``AT失效`` promotion marker after a verified relogin.
+def clear_stale_promotion_at_marker(email, *, verified_at: int | None = None, runtime_config: ConfigInput = None):
+    """Clear an older ``AT失效`` promotion marker after a verified liveness probe.
 
     The promotion (优惠) probe label predates the replacement access token.
     Keep ``promotion.last_result`` for later inspection but stop surfacing the
@@ -225,7 +250,7 @@ def clear_stale_promotion_at_marker(email, *, runtime_config: ConfigInput = None
         if not lookup_email:
             return False
         row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE lower(email)=lower(?)",
+            "SELECT raw_json,json_path FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
         if row is None:
@@ -242,6 +267,13 @@ def clear_stale_promotion_at_marker(email, *, runtime_config: ConfigInput = None
                     data = {**file_data, **data}
             except Exception:
                 pass
+        cutoff = int(verified_at or now)
+        try:
+            promotion_updated_at = int(data.get("promotion_updated_at") or 0)
+        except (TypeError, ValueError):
+            promotion_updated_at = 0
+        if promotion_updated_at > cutoff:
+            return False
         changed = False
         if str(data.get("promotion_status") or "").strip() == "AT失效":
             data["promotion_status"] = ""
@@ -256,7 +288,7 @@ def clear_stale_promotion_at_marker(email, *, runtime_config: ConfigInput = None
         data["promotion_updated_at"] = now
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
-            "UPDATE accounts SET updated_at=?, raw_json=? WHERE lower(email)=lower(?)",
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE email=?",
             (now, raw_json, lookup_email),
         )
         conn.commit()

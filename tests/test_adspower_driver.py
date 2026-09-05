@@ -14,6 +14,7 @@ from sms_tool.registration_drivers.external_sessions import (
     AdsPowerBrowserSession,
     create_browser_session,
 )
+from sms_tool.config import ConfigError, validate_registration_driver_config
 
 
 class _Resp:
@@ -82,6 +83,14 @@ def test_create_browser_session_dispatches_adspower():
         locale="en-US", timezone_id="UTC",
     )
     assert isinstance(session, AdsPowerBrowserSession)
+
+
+def test_adspower_id_is_validated_before_browser_or_mailbox_work():
+    with pytest.raises(ConfigError, match="^adspower_user_id_missing$"):
+        validate_registration_driver_config(
+            {"registration": {"drivers": {"adspower": {}}}},
+            "adspower",
+        )
 
 
 # --------------------------------------------------------------------------

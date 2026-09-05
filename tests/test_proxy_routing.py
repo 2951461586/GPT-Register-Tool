@@ -62,3 +62,18 @@ def test_health_pool_avoids_registration_exit_when_alternative_exists():
         },
     }
     assert select_operation_proxy(account, operation="liveness", config=config) == "http://clean-health.example:8000"
+
+
+def test_health_fallback_keeps_full_registration_pool():
+    config = {
+        "proxy": {
+            "registration": "http://registration.example:8000",
+            "pool": ["http://pool-a.example:8000", "http://pool-b.example:8000"],
+        },
+        "account_health": {},
+    }
+    assert proxy_pool_for(config, "liveness") == [
+        "http://registration.example:8000",
+        "http://pool-a.example:8000",
+        "http://pool-b.example:8000",
+    ]

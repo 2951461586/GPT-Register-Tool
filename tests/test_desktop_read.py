@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from sms_tool.desktop_read import (
+    _mailbox_line,
     create_account_file,
     create_mailbox_file,
     create_payment_url_file,
@@ -117,6 +118,21 @@ def test_public_read_prefers_current_token_plan_over_stale_database(tmp_path):
     assert row["account_type"] == "plus"
 
 
+def test_lightweight_account_read_skips_full_session_sanitization(tmp_path, monkeypatch):
+    session, _ = _seed(tmp_path)
+    from sms_tool import desktop_read
+
+    def fail_sanitize(*args, **kwargs):
+        raise AssertionError("list reads must not sanitize the full session")
+
+    monkeypatch.setattr(desktop_read, "sanitize", fail_sanitize)
+    rows = desktop_read.read_accounts(_config(tmp_path), include_session=False)
+
+    assert rows[0]["imported_status"] == ""
+    assert rows[0]["paypal_amount"] == ""
+    assert "session" not in rows[0]
+
+
 def test_public_read_exposes_latest_access_token_probe_status_code(tmp_path):
     session = {
         "email": "invalid-at@example.test",
@@ -163,6 +179,14 @@ def test_smailr_mailbox_line_falls_back_to_source_id(tmp_path):
     assert result["ok"] is True
     line = Path(result["path"]).read_text(encoding="utf-8").strip()
     assert line == "smailr://reuse@smailr.com---b2432eb0-2bd2-43a3-93ac-20c57ff4f76e"
+
+
+def test_remail_mailbox_line_never_emits_incomplete_pickup_credential():
+    assert _mailbox_line({
+        "email": "user@icloud.com",
+        "provider": "remail",
+        "purchase_id": "1063043",
+    }) == ""
 
 
 def test_public_read_prefers_newer_relogin_probe_over_stale_401(tmp_path):

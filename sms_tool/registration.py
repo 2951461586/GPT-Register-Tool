@@ -205,6 +205,7 @@ def run_email(
     runtime_config=None,
     registration_driver=None,
     proxy_metadata=None,
+    batch_id=None,
 ):
     """Run the staged email-registration workflow."""
     config = resolve_runtime_config(runtime_config, workflow="registration")
@@ -214,7 +215,7 @@ def run_email(
     validate_registration_driver_config(config.data, selected_driver, proxy=proxy)
     if selected_driver != "protocol":
         from .registration_drivers.playwright import run_browser_registration
-        return run_browser_registration(
+        result = run_browser_registration(
             driver_name=selected_driver,
             proxy=proxy, password=password, mailbox=mailbox, config=config.data,
             browser_headless=browser_headless, enroll_2fa=enroll_2fa,
@@ -224,10 +225,13 @@ def run_email(
             # this point creates fingerprint and egress drift on a new account.
             probe_fn=None,
         )
+        if isinstance(result, dict) and batch_id:
+            result["batch_id"] = str(batch_id)
+        return result
     from .registration_handlers import RegistrationEmailWorkflow
 
     flow = RegistrationStateMachine(registration_stage)
-    return RegistrationEmailWorkflow(
+    result = RegistrationEmailWorkflow(
         flow,
         proxy=proxy,
         password=password,
@@ -241,6 +245,9 @@ def run_email(
         config=config.data,
         operations=sys.modules[__name__],
     ).run()
+    if isinstance(result, dict) and batch_id:
+        result["batch_id"] = str(batch_id)
+    return result
 
 
 def run_phone(*args, **kwargs):

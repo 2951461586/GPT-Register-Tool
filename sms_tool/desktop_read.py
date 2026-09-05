@@ -78,7 +78,45 @@ def _numeric_timestamp(value: Any) -> float:
         return 0.0
 
 
-def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _imported_status(session: Any) -> str:
+    if not isinstance(session, dict):
+        return ""
+    imported = []
+    for key, label in (("cpa_import", "CPA"), ("sub2api_import", "SUB2")):
+        value = session.get(key)
+        if isinstance(value, dict) and _truthy(value.get("ok")):
+            imported.append(label)
+    return "已导入" + "/".join(imported) if imported else ""
+
+
+def _paypal_amount(session: Any) -> str:
+    if not isinstance(session, dict) or not isinstance(session.get("paypal"), dict):
+        return ""
+    paypal = session["paypal"]
+    currency = str(paypal.get("currency") or "").strip().upper()
+    raw_amount = next(
+        (str(paypal.get(key) or "").strip() for key in ("amount_due", "due", "expected_amount")
+         if str(paypal.get(key) or "").strip()),
+        "",
+    )
+    if not raw_amount:
+        return ""
+    try:
+        from decimal import Decimal, InvalidOperation
+        display = Decimal(raw_amount) / Decimal("100")
+        text = f"{display:.2f}"
+    except (InvalidOperation, ValueError):
+        text = raw_amount
+    return f"{text} {currency}".strip()
+
+
+def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> dict[str, Any]:
     result = {key: record.get(key) for key in _PUBLIC_COLUMNS}
     file_state = _session_file_state(record)
     has_access = bool(str(record.get("access_token") or "").strip()) or file_state["has_access_token"]
@@ -122,16 +160,20 @@ def _record_payload(record: dict[str, Any]) -> dict[str, Any]:
                 promotion_status = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
-            public_session = _sanitized_session(raw_json, session)
-            if isinstance(public_session, dict):
-                public_session.pop("quota", None)
-                public_session.pop("quota_status", None)
-                public_session.pop("quota_updated_at", None)
-                public_session.pop("wham_usage", None)
-            result["session"] = public_session
+            result["imported_status"] = _imported_status(session)
+            result["paypal_amount"] = _paypal_amount(session)
+            if include_session:
+                public_session = _sanitized_session(raw_json, session)
+                if isinstance(public_session, dict):
+                    public_session.pop("quota", None)
+                    public_session.pop("quota_status", None)
+                    public_session.pop("quota_updated_at", None)
+                    public_session.pop("wham_usage", None)
+                result["session"] = public_session
         except (TypeError, ValueError):
-            result["session"] = {}
-    else:
+            if include_session:
+                result["session"] = {}
+    elif include_session:
         result["session"] = {}
     return result
 
@@ -223,9 +265,9 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     return dict(state)
 
 
-def read_accounts(runtime_config: ConfigInput = None) -> list[dict[str, Any]]:
+def read_accounts(runtime_config: ConfigInput = None, *, include_session: bool = True) -> list[dict[str, Any]]:
     config = resolve_runtime_config(runtime_config, workflow="storage")
-    return [_record_payload(row) for row in list_account_records(runtime_config=config)]
+    return [_record_payload(row, include_session=include_session) for row in list_account_records(runtime_config=config)]
 
 
 def read_account(account_id: str = "", email: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
@@ -313,10 +355,9 @@ def _read_pool_lines(path: Path) -> list[dict[str, Any]]:
 
 def _pool_line_payload(account, raw_line: str) -> dict[str, Any]:
     provider = str(account.provider or "").strip().lower()
-    # chatai/chongzhi and Gmail-OAuth lines store the OAuth client id in the
-    # generic token slot; surface it explicitly so callers need no format
-    # knowledge.
-    client_id = account.token if provider in {"chatai", "chongzhi"} or (
+    # chatai and Gmail-OAuth lines store the OAuth client id in the generic
+    # token slot; surface it explicitly so callers need no format knowledge.
+    client_id = account.token if provider == "chatai" or (
         provider == "gmail" and account.auth_mode == "oauth_refresh"
     ) else ""
     return {
@@ -499,6 +540,11 @@ def _mailbox_line(mailbox: dict[str, Any]) -> str:
         order = str(mailbox.get("order_no") or "").strip()
         purchase = str(mailbox.get("purchase_id") or "").strip()
         # Keep the canonical ReMail line format used by mailbox_parsers.
+        # A pickup credential is mandatory.  Emitting a partial line such as
+        # ``remail://email---order`` only defers the failure to the parser and
+        # makes selected-mailbox registration look like a malformed-file bug.
+        if not token:
+            return ""
         return "remail://" + "---".join(filter(None, (email, token, order, purchase)))
     if provider == "gmail":
         client = str(mailbox.get("client_id") or mailbox.get("token") or "").strip()

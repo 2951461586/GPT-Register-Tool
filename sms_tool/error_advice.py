@@ -28,6 +28,10 @@ _ERROR_ADVICE: dict[str, str] = {
     "account_health_queue_full": (
         "账号健康队列已满。降低并发或稍后重试；不要继续堆任务，否则会持续失败。"
     ),
+    "mailbox_transport_unavailable": (
+        "邮箱收信代理连接被上游关闭。先切换邮箱代理池中的其他出口，确认 ReMail 连通性后再重试，"
+        "不要重复使用同一条故障代理。"
+    ),
     "oauth_state_mismatch": (
         "OAuth state 不匹配，可能是并发撞车、时钟漂移或回调被改写。重新发起 OAuth 流程，"
         "避免同一账号并行登录。"
@@ -38,6 +42,5 @@ _ERROR_ADVICE: dict[str, str] = {
         "Approve 被风控拦截，重建 checkout 或换出口国/代理后重试。"
     ),
 }
-
 
 

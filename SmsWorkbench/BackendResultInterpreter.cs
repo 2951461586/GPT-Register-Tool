@@ -94,6 +94,11 @@ public static class BackendResultInterpreter
             string statusCode = BackendJson.GetString(probe, "status_code");
             return statusCode.Length > 0 ? "AT有效 / HTTP " + statusCode : "AT有效";
         }
+        string error = BackendJson.GetString(probe, "error");
+        if (error.Contains("mailbox_transport", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("RemoteDisconnected", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("ProxyError", StringComparison.OrdinalIgnoreCase))
+            return "邮箱代理/收信链路失败";
         string failedCode = BackendJson.GetString(probe, "status_code");
         return failedCode.Length > 0 ? "测活失败 / HTTP " + failedCode : "测活失败";
     }
@@ -266,5 +271,29 @@ public static class BackendResultInterpreter
     public static BackendExecutionResult StartupFailed(string taskName, string message)
     {
         return new BackendExecutionResult(false, $"[启动失败] {message}", "failed", null);
+    }
+
+    /// <summary>Returns a compact, sanitized summary for account batch payloads.</summary>
+    public static string BatchSummaryLabel(JsonElement? payload)
+    {
+        if (!payload.HasValue || payload.Value.ValueKind != JsonValueKind.Object)
+            return "";
+        JsonElement root = payload.Value;
+        if (!root.TryGetProperty("total", out JsonElement total) || !total.TryGetInt32(out int totalValue))
+            return "";
+        int success = root.TryGetProperty("success", out JsonElement successElement) && successElement.TryGetInt32(out int successValue) ? successValue : 0;
+        int failed = root.TryGetProperty("failed", out JsonElement failedElement) && failedElement.TryGetInt32(out int failedValue) ? failedValue : Math.Max(0, totalValue - success);
+        int unauthorized = root.TryGetProperty("unauthorized", out JsonElement unauthorizedElement) && unauthorizedElement.TryGetInt32(out int unauthorizedValue) ? unauthorizedValue : 0;
+        int liveness401 = root.TryGetProperty("liveness_401", out JsonElement liveness401Element) && liveness401Element.TryGetInt32(out int liveness401Value) ? liveness401Value : 0;
+        int mailboxAuthInvalid = root.TryGetProperty("mailbox_auth_invalid", out JsonElement mailboxAuthElement) && mailboxAuthElement.TryGetInt32(out int mailboxAuthValue) ? mailboxAuthValue : 0;
+        int timedOut = root.TryGetProperty("timed_out", out JsonElement timeoutElement) && timeoutElement.TryGetInt32(out int timeoutValue) ? timeoutValue : 0;
+        if (unauthorized == 0) unauthorized = liveness401;
+        return timedOut > 0
+            ? $"完成 {success}/{totalValue}，失败 {failed}，超时 {timedOut}"
+            : mailboxAuthInvalid > 0
+                ? $"完成 {success}/{totalValue}，失败 {failed}，邮箱认证失败 {mailboxAuthInvalid}"
+            : unauthorized > 0
+                ? $"完成 {success}/{totalValue}，失败 {failed}，401 {unauthorized}"
+                : $"完成 {success}/{totalValue}，失败 {failed}";
     }
 }

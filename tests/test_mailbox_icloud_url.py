@@ -9,6 +9,7 @@ from sms_tool import mailbox as mailbox_module
 from sms_tool import mailbox_icloud_url, mailbox_parsers
 from sms_tool.mail_otp import _email_otp_candidate
 from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
 
 
 class _Response:
@@ -79,6 +80,19 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         candidate = _email_otp_candidate(mailbox, messages[0], keyword="login code")
         self.assertEqual(candidate["otp"], "654321")
         self.assertNotIn("123456", messages[0]["body"]["content"])
+
+    def test_account_login_failure_page_fails_fast_and_quarantines(self):
+        page = "<div class='card'><p>账号登录失败，应用专用密码可能失效</p></div>"
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://icloud-api.example/show/secret/target@icloud.com",
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)), \
+             patch.object(mailbox_icloud_url, "record_mailbox_auth_invalid") as quarantine:
+            with self.assertRaisesRegex(MailboxAuthInvalidError, "mailbox_auth_invalid"):
+                mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+        quarantine.assert_called_once()
 
     def test_card_page_tolerates_unescaped_sender_address(self):
         page = """

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import atexit
 
 from .dom_fields import _browser_heartbeat
 from .form_steps import _fill_email, _fill_password_if_present, _maybe_accept_cookies
@@ -113,6 +114,23 @@ _BROWSER_POOL: Any = None
 _BROWSER_POOL_KEY: tuple[Any, ...] | None = None
 
 
+def close_browser_process_pool() -> None:
+    """Close the process-wide browser pool and discard its cache."""
+    global _BROWSER_POOL, _BROWSER_POOL_KEY
+    with _BROWSER_POOL_LOCK:
+        pool = _BROWSER_POOL
+        _BROWSER_POOL = None
+        _BROWSER_POOL_KEY = None
+    if pool is not None:
+        try:
+            pool.close()
+        except Exception:
+            pass
+
+
+atexit.register(close_browser_process_pool)
+
+
 @contextmanager
 def _browser_session_scope(
     *,
@@ -142,7 +160,9 @@ def _browser_session_scope(
     """
     from ...browser_pool import BrowserProcessPool, PoolConfig
 
-    if not PoolConfig.from_config(config).enabled:
+    pool_config = PoolConfig.from_config(config)
+    if not pool_config.enabled:
+        close_browser_process_pool()
         session = session_factory(
             driver_name, config=config, proxy=proxy, headless=headless,
             timeout_ms=timeout_ms, locale=locale, timezone_id=timezone_id,
@@ -155,9 +175,18 @@ def _browser_session_scope(
     global _BROWSER_POOL, _BROWSER_POOL_KEY
     # The pool owns the browser processes, so it is keyed only by the knobs
     # that shape a process.  Everything per-account is supplied per session.
-    key = (driver_name, headless, timeout_ms)
+    key = (
+        driver_name,
+        headless,
+        timeout_ms,
+        pool_config.max_concurrent,
+        pool_config.max_uses_per_process,
+        pool_config.recycle_on_error,
+        id(session_factory),
+    )
     with _BROWSER_POOL_LOCK:
         if _BROWSER_POOL is None or _BROWSER_POOL_KEY != key:
+            old_pool = _BROWSER_POOL
             _BROWSER_POOL = BrowserProcessPool(
                 config,
                 driver=driver_name,
@@ -168,6 +197,11 @@ def _browser_session_scope(
                 session_factory=session_factory,
             )
             _BROWSER_POOL_KEY = key
+            if old_pool is not None:
+                try:
+                    old_pool.close()
+                except Exception:
+                    pass
         pool = _BROWSER_POOL
     with pool.session(
         proxy=proxy,

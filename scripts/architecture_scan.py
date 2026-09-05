@@ -39,6 +39,36 @@ def main() -> int:
         text = re.sub(r"#if LEGACY_DELETE_CODE.*?#endif", "", text, flags=re.S)
         if "SqliteNative." in text and path.name != "MainWindow.Tasks.cs":
             warnings.append(f"{path.relative_to(ROOT)}: WPF direct SQLite access (migration debt)")
+    storage_accounts = PY_ROOT / "store" / "accounts.py"
+    try:
+        storage_text = storage_accounts.read_text(encoding="utf-8")
+        if re.search(r"(?:from|import)\s+[^\n]*mailbox_(?:remail|gmail|smailr|cfworker|graph|chongzhi|icloud)", storage_text):
+            failures.append("sms_tool/store/accounts.py imports a concrete mailbox provider")
+    except OSError:
+        failures.append("cannot read sms_tool/store/accounts.py")
+    # Provider implementations have one physical home. Top-level mailbox_* and
+    # outlook_imap modules are compatibility facades and must not grow logic.
+    for name in ("cfworker", "gmail", "graph", "icloud_url", "remail", "smailr"):
+        facade = ROOT / "sms_tool" / f"mailbox_{name}.py"
+        implementation = ROOT / "sms_tool" / "providers" / f"mailbox_{name}.py"
+        if not implementation.is_file():
+            failures.append(f"missing provider implementation: {implementation.relative_to(ROOT)}")
+        try:
+            tree = ast.parse(facade.read_text(encoding="utf-8"))
+            if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for node in tree.body):
+                failures.append(f"{facade.relative_to(ROOT)} is a compatibility facade but defines implementation symbols")
+        except (OSError, SyntaxError):
+            failures.append(f"cannot parse provider facade: {facade.relative_to(ROOT)}")
+    outlook_facade = ROOT / "sms_tool" / "outlook_imap.py"
+    if not (ROOT / "sms_tool" / "providers" / "outlook_imap.py").is_file():
+        failures.append("missing provider implementation: sms_tool/providers/outlook_imap.py")
+    else:
+        try:
+            tree = ast.parse(outlook_facade.read_text(encoding="utf-8"))
+            if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for node in tree.body):
+                failures.append("sms_tool/outlook_imap.py is a compatibility facade but defines implementation symbols")
+        except (OSError, SyntaxError):
+            failures.append("cannot parse provider facade: sms_tool/outlook_imap.py")
     if warnings:
         print("Architecture scan warnings:")
         print("\n".join(warnings))

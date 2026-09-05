@@ -21,7 +21,7 @@ from .account_liveness import account_chatgpt_id, browser_fetch_for_account
 from .auth_headers import auth_impersonate, chatgpt_headers
 from .config import CFG
 from .phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
-from .proxy_routing import select_operation_proxy
+from .proxy_routing import parse_proxy_pool, proxy_pool_for, select_operation_proxy
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
@@ -132,6 +132,7 @@ def check_account_promotion(
     timezone_offset_min: str = "-",
     *,
     browser_fetch: Any = None,
+    proxy_pool: str | list[str] | None = None,
 ) -> dict[str, Any]:
     """Probe accounts/check for one account and return plan + promotion detail.
 
@@ -146,12 +147,12 @@ def check_account_promotion(
 
     had_identity_context = bool(account.get("identity_context")) if isinstance(account, dict) else False
     identity = bind_account_identity(account)
-    # Promotion checks are separate account operations; do not reuse a saved
-    # browser-registration exit that may now be blocked or contaminated.
+    # Promotion checks must reuse the saved registration egress/fingerprint
+    # pair; presenting the same AT from a different exit can trigger revocation.
     resolved_proxy = select_operation_proxy(
         account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
         operation="promotion",
-        explicit=proxy,
+        explicit=(proxy_pool or proxy),
         config=CFG,
     )
 
@@ -221,6 +222,7 @@ def refresh_promotion_statuses(
     workers: int = 4,
     proxy: str | None = None,
     timeout: int = 20,
+    proxy_pool: str | list[str] | None = None,
 ) -> dict[str, Any]:
     """Probe plan/promotion for saved accounts and persist ``promotion_status``."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -252,9 +254,34 @@ def refresh_promotion_statuses(
         email = str(account.get("email") or "").strip().lower()
         try:
             with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
-                probe = check_account_promotion(
-                    account, proxy=proxy, timeout=timeout, browser_fetch=browser_fetch
-                )
+                browser_identity = account_identity(account).get("browser_identity") or {}
+                if browser_identity and browser_fetch is None:
+                    probe = {
+                        "ok": False,
+                        "promotion_status": "检测失败",
+                        "error": "browser_context_unavailable",
+                    }
+                else:
+                    # Stateless/imported accounts have no persisted identity
+                    # affinity. Rotate through the supplied health pool when a
+                    # proxy-only timeout occurs so one dead exit does not make
+                    # the same account fail on every run.
+                    candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
+                    probe = None
+                    for index, candidate in enumerate(candidates):
+                        probe = check_account_promotion(
+                            account,
+                            proxy=candidate,
+                            timeout=timeout,
+                            browser_fetch=browser_fetch,
+                        )
+                        if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
+                            break
+                    probe = probe or {
+                        "ok": False,
+                        "promotion_status": "检测失败",
+                        "error": "no_promotion_proxy_available",
+                    }
             label = str(probe.get("promotion_status") or "")
             persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
             result = {"email": email, "ok": bool(probe.get("ok")), "promotion_status": label, "persisted": bool(persisted), "probe": probe}
@@ -276,14 +303,70 @@ def refresh_promotion_statuses(
             results.append(future.result())
 
     success = sum(1 for item in results if item.get("ok"))
-    _emit_account_batch_event(run_id, "batch_completed", "completed", total=len(results), detail=f"完成 {len(results)} 个账号")
+    unauthorized = sum(1 for item in results if _promotion_status_code(item) == 401)
+    transport_failed = sum(1 for item in results if _promotion_failure_class(item) == "transport")
+    persist_failed = sum(1 for item in results if not item.get("persisted"))
+    _emit_account_batch_event(
+        run_id,
+        "batch_completed",
+        "completed" if success == len(results) else "failed",
+        total=len(results),
+        detail=f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，传输失败 {transport_failed}",
+    )
     return {
         "ok": success == len(results) if results else False,
         "total": len(results),
         "success": success,
         "failed": len(results) - success,
+        "unauthorized": unauthorized,
+        "transport_failed": transport_failed,
+        "persist_failed": persist_failed,
         "results": results,
     }
+
+
+def _promotion_proxy_candidates(account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None) -> list[str | None]:
+    """Return deterministic candidates for stateless promotion probes."""
+    if isinstance(account, dict) and account.get("identity_context"):
+        return [proxy]
+    values = parse_proxy_pool(proxy_pool)
+    if not values:
+        values = parse_proxy_pool(proxy)
+    if not values:
+        values = proxy_pool_for(CFG, "promotion")
+    if len(values) <= 1:
+        return values or [proxy]
+    email = str((account or {}).get("email") or "").strip().lower()
+    start = sum(email.encode("utf-8")) % len(values) if email else 0
+    return values[start:] + values[:start]
+
+
+def _retryable_promotion_transport(probe: dict[str, Any] | None) -> bool:
+    if not isinstance(probe, dict) or probe.get("ok"):
+        return False
+    if probe.get("status_code"):
+        return False
+    error = str(probe.get("error") or "").lower()
+    return any(marker in error for marker in ("curl: (5)", "curl: (7)", "curl: (28)", "timed out", "timeout"))
+
+
+def _promotion_status_code(item: dict[str, Any]) -> int:
+    try:
+        return int((item.get("probe") or {}).get("status_code") or 0)
+    except (TypeError, ValueError, AttributeError):
+        return 0
+
+
+def _promotion_failure_class(item: dict[str, Any]) -> str:
+    if item.get("ok"):
+        return "ok"
+    code = _promotion_status_code(item)
+    if code == 401:
+        return "unauthorized"
+    probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+    if not code and _retryable_promotion_transport(probe):
+        return "transport"
+    return "probe"
 
 
 def _emit_account_batch_event(

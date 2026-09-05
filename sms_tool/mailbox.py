@@ -10,8 +10,8 @@ from pathlib import Path
 from curl_cffi import requests as curl_requests
 
 from .config import ConfigInput, current_config_data, resolve_runtime_config
-from . import outlook_imap
-from . import mailbox_gmail
+from .providers import outlook_imap
+from .providers import mailbox_gmail
 from .mail_otp import (
     _candidate_is_newer,
     _email_otp_candidate,
@@ -20,9 +20,8 @@ from .mail_otp import (
     _message_received_ts,
     _message_recipients,
 )
-from . import mailbox_cfworker
+from .providers import mailbox_cfworker
 from .mailbox_types import MailboxAccount
-from .sanitizer import mask_otp
 from .mailbox_parsers import (
     _looks_ms_client_id,
     _split_chatai_client_refresh,
@@ -31,12 +30,12 @@ from .mailbox_parsers import (
     _parse_mailbox_password_file,
     _parse_chatai_mailbox_file,
 )
-from . import mailbox_remail
-from . import mailbox_graph
-from .mailbox_graph import MailboxTokenExpiredError
-from . import mailbox_chongzhi
-from . import mailbox_icloud_url
-from . import mailbox_smailr
+from .providers import mailbox_remail
+from .providers import mailbox_graph
+from .providers.mailbox_graph import MailboxTokenExpiredError
+from .mailbox_quarantine import filter_quarantined_mailboxes, prune_quarantine_against_pool
+from .providers import mailbox_icloud_url
+from .providers import mailbox_smailr
 from . import mailbox_strategies
 
 # MailboxAccount and parsers moved to mailbox_types/mailbox_parsers.
@@ -97,6 +96,7 @@ def _register_mailbox_strategies():
             proxy=proxy,
             excluded_otps=excluded_otps,
             poll_interval=None,
+            proxy_candidates=kw.get("proxy_candidates"),
         ),
     )
 
@@ -135,7 +135,7 @@ def _register_mailbox_strategies():
     mailbox_strategies.register_otp_poller(
         "icloud",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_icloud_url.PROVIDER,
-        mailbox_strategies._graph_poll_otp,
+        mailbox_strategies._icloud_poll_otp,
     )
 
     # Gmail
@@ -154,29 +154,6 @@ def _register_mailbox_strategies():
         )
 
     mailbox_strategies.register_message_fetcher("gmail", _gmail_matcher, _gmail_fetch)
-
-    # chongzhi
-    def _chongzhi_matcher(mb, cfg):
-        provider = str(getattr(mb, "provider", "") or "")
-        return provider == "chongzhi" or (
-            mailbox_chongzhi.chongzhi_enabled(cfg) and bool(getattr(mb, "password", ""))
-        )
-
-    def _chongzhi_fetch(mb, *, limit, proxy, email_cfg, **kw):
-        email = str(getattr(mb, "email", "") or "").strip()
-        password = str(getattr(mb, "password", "") or "").strip()
-        if email and password:
-            try:
-                msgs = mailbox_chongzhi.fetch_chongzhi_messages(
-                    email, password, folder="all", proxy=proxy, email_cfg=email_cfg,
-                )
-                if msgs:
-                    return msgs
-            except Exception:
-                pass
-        return _fetch_mailbox_messages_local(mb, limit=limit, proxy=proxy)
-
-    mailbox_strategies.register_message_fetcher("chongzhi", _chongzhi_matcher, _chongzhi_fetch)
 
     # Graph is registered once, in mailbox_strategies, with fallback=True. It
     # used to be re-registered here so that it sorted last - which is exactly
@@ -255,6 +232,42 @@ def _configured_mailbox_proxy(runtime_config: ConfigInput = None):
 
 def _resolve_mailbox_proxy(proxy=None, runtime_config: ConfigInput = None):
     return _configured_mailbox_proxy(runtime_config) or _normalize_mailbox_proxy(proxy)
+
+
+def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
+    """Build ordered mailbox routes with the operation proxy as a failover.
+
+    The mailbox proxy remains authoritative for normal traffic.  When it
+    drops an upstream connection, provider pollers may move to the operation
+    proxy instead of retrying the same dead local route for the full OTP wait.
+    """
+    config = _config_data(runtime_config)
+    email_cfg = _email_cfg(runtime_config)
+    proxy_cfg = config.get("proxy") if isinstance(config.get("proxy"), Mapping) else {}
+    values = []
+    remail_cfg = email_cfg.get("remail") if isinstance(email_cfg.get("remail"), Mapping) else {}
+    configured_pool = (
+        config.get("mailbox_proxy_pool")
+        or email_cfg.get("mailbox_proxy_pool")
+        or remail_cfg.get("proxy_pool")
+    )
+    raw_values = configured_pool if isinstance(configured_pool, (list, tuple)) else re.split(r"[\r\n,;]+", str(configured_pool or ""))
+    items = raw_values if isinstance(raw_values, (list, tuple)) else [raw_values]
+    for item in items:
+        normalized = _normalize_mailbox_proxy(item)
+        if normalized and normalized not in values:
+            values.append(normalized)
+    primary = _configured_mailbox_proxy(runtime_config)
+    if primary and primary not in values:
+        values.insert(0, primary)
+    fallback_enabled = email_cfg.get("mailbox_proxy_fallback_to_operation_proxy", True)
+    if isinstance(fallback_enabled, str):
+        fallback_enabled = fallback_enabled.strip().lower() not in {"0", "false", "no", "off"}
+    if fallback_enabled:
+        operation = _normalize_mailbox_proxy(proxy)
+        if operation and operation not in values:
+            values.append(operation)
+    return values or [_normalize_mailbox_proxy(proxy)]
 
 
 def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: ConfigInput = None):
@@ -475,7 +488,9 @@ def _load_mailbox_pool(args=None):
         else:
             configured = _email_cfg().get("token_file")
             pool = _parse_mailbox_token_file(configured or _default_nb_register_token_file())
-    return mailbox_remail.filter_dead_remail_mailboxes(pool)
+    pool = mailbox_remail.filter_dead_remail_mailboxes(pool)
+    prune_quarantine_against_pool(pool)
+    return filter_quarantined_mailboxes(pool)
 
 
 
@@ -696,10 +711,11 @@ def _fetch_mailbox_messages(
     runtime_config: ConfigInput = None,
     registry=None,
 ):
-    proxy = _resolve_mailbox_proxy(proxy, runtime_config)
+    proxy_candidates = _mailbox_proxy_candidates(proxy, runtime_config)
+    proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, runtime_config)
     cfg = _email_cfg(runtime_config)
 
-    # Try registered provider strategies in order (cfworker → remail → icloud → gmail → chongzhi → Graph API fallback)
+    # Try registered provider strategies in order (cfworker → remail → icloud → gmail → Graph API fallback)
     fetcher = mailbox_strategies.resolve_message_fetcher(mailbox, cfg, registry=registry)
     if fetcher is not None:
         try:
@@ -737,41 +753,28 @@ def _poll_email_otp(
     cfg = _email_cfg(runtime_config)
     provider = str(getattr(mailbox, "provider", "") or "")
 
-    # Chongzhi credentials are only selected explicitly.  Older unlabelled
-    # mailbox records may still use the provider when the integration is
-    # enabled and a password is present; labelled providers must keep their
-    # own strategy (notably ReMail) even when the account also has a login
-    # password.
-    if provider == "chongzhi" or (
-        not provider
-        and mailbox_chongzhi.chongzhi_enabled(cfg)
-        and getattr(mailbox, "password", "")
-    ):
-        email = str(getattr(mailbox, "email", "") or "").strip()
-        password = str(getattr(mailbox, "password", "") or "").strip()
-        if email and password:
-            return _poll_chongzhi_otp(
-                mailbox, email=email, password=password,
-                subject_keyword=subject_keyword, timeout=timeout,
-                issued_after_unix=issued_after_unix, proxy=proxy,
-            )
-
     issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config)
-    proxy = _resolve_mailbox_proxy(proxy, runtime_config)
+    proxy_candidates = _mailbox_proxy_candidates(proxy, runtime_config)
+    proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, runtime_config)
 
     # Try registered OTP pollers in order (cfworker -> remail -> Graph API fallback graph_otp_poll)
     poller = mailbox_strategies.resolve_otp_poller(mailbox, cfg, registry=registry)
     if poller is not None:
         try:
+            poll_kwargs = {
+                "subject_keyword": subject_keyword,
+                "timeout": timeout,
+                "issued_after_unix": issued_after_unix,
+                "proxy": proxy,
+                "excluded_otps": excluded_otps,
+                "runtime_config": runtime_config,
+                "registry": registry,
+            }
+            if provider.strip().lower() == "remail":
+                poll_kwargs["proxy_candidates"] = proxy_candidates
             return poller(
                 mailbox,
-                subject_keyword=subject_keyword,
-                timeout=timeout,
-                issued_after_unix=issued_after_unix,
-                proxy=proxy,
-                excluded_otps=excluded_otps,
-                runtime_config=runtime_config,
-                registry=registry,
+                **poll_kwargs,
             )
         except Exception as exc:
             print(f"[poll_otp error via strategy: {exc}]")
@@ -831,86 +834,8 @@ def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, see
     )
 
 
-def _poll_chongzhi_otp(mailbox, email, password, subject_keyword="", timeout=300, issued_after_unix=0, proxy=None):
-    """Poll for OTP via chongzhi.art API, falling back to local mailbox on failure."""
-    keyword = (subject_keyword or "").lower()
-    deadline = time.time() + timeout
-    interval = _otp_poll_interval()
-    settle_seconds = _email_otp_settle_seconds()
-    local_fallback_attempted = False
-
-    while time.time() < deadline:
-        # Try chongzhi.art first
-        try:
-            messages = mailbox_chongzhi.fetch_chongzhi_messages(
-                email, password, folder="all", proxy=proxy, email_cfg=_email_cfg(),
-            )
-            if messages:
-                candidate = _latest_email_otp_candidate(
-                    mailbox, keyword=keyword,
-                    issued_after_unix=issued_after_unix,
-                    proxy=proxy, override_messages=messages,
-                )
-                # Also check chongzhi pre-extracted OTP
-                if not candidate:
-                    otp = mailbox_chongzhi.chongzhi_latest_otp(
-                        messages, keyword=keyword, issued_after_unix=issued_after_unix,
-                    )
-                    if otp:
-                        candidate = {"otp": otp, "received_ts": 0}
-                if candidate:
-                    # Settle: wait a bit and check again for newer OTP
-                    stable_until = time.time() + settle_seconds
-                    while settle_seconds > 0 and time.time() < stable_until and time.time() < deadline:
-                        time.sleep(min(interval, max(0.0, stable_until - time.time())))
-                        newer_msgs = mailbox_chongzhi.fetch_chongzhi_messages(
-                            email, password, folder="all", proxy=proxy, email_cfg=_email_cfg(),
-                        )
-                        newer_candidate = _latest_email_otp_candidate(
-                            mailbox, keyword=keyword,
-                            issued_after_unix=issued_after_unix,
-                            proxy=proxy, override_messages=newer_msgs,
-                        )
-                        if newer_candidate and _candidate_is_newer(newer_candidate, candidate):
-                            candidate = newer_candidate
-                            stable_until = time.time() + settle_seconds
-                    otp_code = str(candidate.get("otp") or "")
-                    if otp_code:
-                        print(f" code:{mask_otp(otp_code)}!")
-                        return otp_code
-        except Exception as exc:
-            print(f"[chongzhi poll error: {exc}]")
-
-        # If chongzhi returns no messages and we haven't tried local yet,
-        # fall back to local Graph API / IMAP for this poll cycle.
-        if not local_fallback_attempted:
-            local_fallback_attempted = True
-            try:
-                # Temporarily bypass chongzhi routing to use local fetch
-                local_messages = _fetch_mailbox_messages_local(mailbox, limit=25, proxy=proxy)
-                if local_messages:
-                    candidate = _latest_email_otp_candidate(
-                        mailbox, keyword=keyword,
-                        issued_after_unix=issued_after_unix,
-                        proxy=proxy, override_messages=local_messages,
-                    )
-                    if candidate:
-                        otp_code = str(candidate.get("otp") or "")
-                        if otp_code:
-                            print(f" code:{mask_otp(otp_code)}! (local fallback)")
-                            return otp_code
-            except Exception as exc:
-                print(f"[local fallback error: {exc}]")
-
-        print(".", end="", flush=True)
-        time.sleep(interval)
-
-    print(" timeout")
-    return None
-
-
 def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
-    """Fetch messages using local Graph API / IMAP only (skip chongzhi.art)."""
+    """Fetch messages using local Graph API / IMAP only."""
     proxy = _resolve_mailbox_proxy(proxy)
     if getattr(mailbox, "provider", "") == "cfworker":
         return mailbox_cfworker._fetch_cfworker_messages(

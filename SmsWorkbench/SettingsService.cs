@@ -77,7 +77,11 @@ namespace SmsWorkbench
             {
                 JsonObject root = ReadRoot();
                 foreach (SettingFieldViewModel field in fields.Where(field => field.Definition.JsonPath.Length > 0))
+                {
+                    if (field.Key is "python_path" or "token_file")
+                        field.Value = NormalizePathSetting(field.Value, field.Definition.DefaultValue);
                     SetPath(root, field.Definition.JsonPath, ToJsonValue(field));
+                }
 
                 // Registration must never silently fall back to a direct
                 // connection when the settings box is left blank.
@@ -85,6 +89,12 @@ namespace SmsWorkbench
                     First(Find(fields, "registration_proxy").Value.Trim(), LocalProxy));
                 string mailboxProxy = ProxyInputNormalizer.Normalize(
                     First(Find(fields, "mailbox_proxy").Value.Trim(), LocalProxy));
+                string[] mailboxPool = ProxyInputNormalizer.NormalizeList(
+                        Find(fields, "mailbox_proxy_pool").Value)
+                    .Where(value => !string.Equals(value, mailboxProxy, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                var orderedMailboxPool = new List<string> { mailboxProxy };
+                orderedMailboxPool.AddRange(mailboxPool);
                 string[] registrationPool = ProxyInputNormalizer.NormalizeList(
                         Find(fields, "registration_proxy_pool").Value)
                     .Where(value => !string.Equals(value, registrationProxy, StringComparison.OrdinalIgnoreCase))
@@ -96,6 +106,7 @@ namespace SmsWorkbench
                 SetPath(root, "proxy.default", registrationProxy);
                 SetPath(root, "proxy.pool", ToArray(orderedRegistrationPool));
                 SetPath(root, "mailbox_proxy", mailboxProxy);
+                SetPath(root, "mailbox_proxy_pool", ToArray(orderedMailboxPool));
                 SetPath(root, "phone_reuse.proxy", registrationProxy);
 
                 // The shared protocol proxy pool is intentionally no longer
@@ -216,7 +227,7 @@ namespace SmsWorkbench
             return builder.ToString();
         }
 
-        private static string ReadValue(JsonObject root, SettingDefinition definition)
+        private string ReadValue(JsonObject root, SettingDefinition definition)
         {
             string value = definition.Key switch
             {
@@ -232,6 +243,10 @@ namespace SmsWorkbench
                     Text(root, "email_registration.mailbox_proxy"),
                     Text(root, "proxy.mailbox"),
                     LocalProxy),
+                "mailbox_proxy_pool" => First(
+                    ListText(root, "mailbox_proxy_pool"),
+                    Text(root, "mailbox_proxy"),
+                    LocalProxy),
                 "smailr_api_key" => First(
                     Text(root, definition.JsonPath),
                     Environment.GetEnvironmentVariable("SMAILR_API_KEY")),
@@ -245,10 +260,52 @@ namespace SmsWorkbench
                     Text(root, "paypal.billing_region"),
                     Text(root, "paypal.billing_country"),
                     "DE").ToUpperInvariant(),
+                "token_file" or "python_path" => NormalizePathSetting(
+                    Text(root, definition.JsonPath), definition.DefaultValue),
                 _ => Text(root, definition.JsonPath)
             };
             return string.IsNullOrWhiteSpace(value) ? definition.DefaultValue : value;
         }
+
+        /// <summary>
+        /// Keep paths inside the repository portable by storing them relative to
+        /// the application root. External absolute paths remain absolute because
+        /// a relative value cannot represent a location outside this checkout.
+        /// </summary>
+        private string NormalizePathSetting(string raw, string fallback)
+        {
+            string value = (raw ?? "").Trim();
+            if (value.Length == 0) return fallback;
+
+            string expanded;
+            try
+            {
+                expanded = Environment.ExpandEnvironmentVariables(value);
+                if (Path.IsPathRooted(expanded))
+                {
+                    string root = Path.GetFullPath(_paths.RootDirectory)
+                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    string candidate = Path.GetFullPath(expanded);
+                    string rootPrefix = root + Path.DirectorySeparatorChar;
+                    if (string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase))
+                        return ".";
+                    if (candidate.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                        return NormalizePathSeparators(Path.GetRelativePath(root, candidate));
+                    return value;
+                }
+            }
+            catch (Exception)
+            {
+                // Preserve an invalid operator-entered path for the existing
+                // runtime error message rather than failing the whole settings save.
+                return value;
+            }
+
+            return NormalizePathSeparators(value);
+        }
+
+        private static string NormalizePathSeparators(string value)
+            => value.Replace('\\', '/');
 
         private JsonObject ReadRoot()
         {

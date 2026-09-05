@@ -124,6 +124,18 @@ class ReMailOrderTests(unittest.TestCase):
         self.assertEqual(kwargs["params"], {"serviceMode": "code", "supply": "private_first"})
         self.assertEqual(kwargs["json"], {"projectId": 2, "emailSuffix": "outlook.com"})
 
+    def test_icloud_order_without_service_token_is_rejected_explicitly(self):
+        order = {
+            "id": 1063043,
+            "orderNo": "OR-ICLOUD-1",
+            "deliveryEmail": "user@icloud.com",
+            "productType": "icloud",
+            "serviceToken": None,
+            "serviceMode": "purchase",
+        }
+        with self.assertRaisesRegex(RuntimeError, "iCloud order has no serviceToken"):
+            mailbox_remail._mailbox_from_order(order, service_mode="purchase")
+
     def test_create_order_retries_transient_5xx_with_stable_idempotency_key(self):
         responses = [
             FakeResponse({"error": "bad gateway"}, 502),
@@ -258,6 +270,19 @@ class ReMailOrderTests(unittest.TestCase):
         self.assertEqual(records[0].token, "st-token-1")
         self.assertEqual(records[0].order_no, "R1")
         self.assertEqual(records[0].purchase_id, "101")
+
+    def test_parse_legacy_remail_line_without_order_for_token_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "legacy-remail.txt"
+            path.write_text(
+                "remail://user1@outlook.com---st-token-1\n",
+                encoding="utf-8",
+            )
+            records = mailbox_parsers._parse_mailbox_token_file(path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].token, "st-token-1")
+        self.assertEqual(records[0].order_no, "")
 
     def test_http_error_redacts_api_key_and_service_token(self):
         token = "st-private-token"
@@ -397,12 +422,7 @@ class ReMailPickupTests(unittest.TestCase):
             provider="remail",
             token="service-token",
         )
-        with patch.object(mailbox_router, "_email_cfg", return_value={
-            "chongzhi": {"enabled": True},
-        }), patch.object(
-            mailbox_router,
-            "_poll_chongzhi_otp",
-        ) as chongzhi_poll, patch.object(
+        with patch.object(
             mailbox_remail,
             "_poll_remail_otp",
             return_value="654321",
@@ -411,7 +431,6 @@ class ReMailPickupTests(unittest.TestCase):
 
         self.assertEqual(code, "654321")
         remail_poll.assert_called_once()
-        chongzhi_poll.assert_not_called()
 
     def test_inbox_mode_fetches_detail_even_when_summary_has_code(self):
         summary = {
@@ -452,6 +471,101 @@ class ReMailPickupTests(unittest.TestCase):
         self.assertEqual(get.call_args_list[1].args[0], "https://remail.example/v1/open/orders/R1")
         self.assertEqual(get.call_args_list[1].kwargs["headers"]["Authorization"], "Bearer rk-secret-key")
         self.assertEqual(get.call_args_list[2].kwargs["params"]["token"], "st-current-token")
+
+    def test_poll_401_stops_and_quarantines_mailbox_after_refresh_failure(self):
+        pickup_error = mailbox_remail.ReMailHttpError(
+            401,
+            {"message": "Credential is invalid or expired.", "requestId": "req-401"},
+        )
+
+        with patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error) as pickup, \
+             patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=RuntimeError("expired order")), \
+             patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine, \
+             patch.object(mailbox_remail.time, "sleep", return_value=None):
+            with self.assertRaises(mailbox_remail.ReMailCredentialError) as caught:
+                mailbox_remail._poll_remail_otp(self.account, timeout=30)
+
+        self.assertEqual(caught.exception.code, "mailbox_auth_invalid")
+        self.assertEqual(caught.exception.email, self.account.email)
+        self.assertEqual(caught.exception.request_id, "req-401")
+        pickup.assert_called_once()
+        quarantine.assert_called_once_with(self.account, reason="mailbox_auth_invalid")
+
+    def test_mailbox_proxy_candidates_keep_local_primary_and_operation_fallback(self):
+        config = {
+            "mailbox_proxy": "http://127.0.0.1:7897",
+            "mailbox_proxy_pool": ["http://mailbox-a.example:8080"],
+            "email_registration": {
+                "mailbox_proxy_fallback_to_operation_proxy": True,
+            },
+        }
+        with patch.object(mailbox_router, "_config_data", return_value=config):
+            candidates = mailbox_router._mailbox_proxy_candidates(
+                "http://registration.example:8080",
+                config,
+            )
+
+        self.assertEqual(candidates, [
+            "http://127.0.0.1:7897",
+            "http://mailbox-a.example:8080",
+            "http://registration.example:8080",
+        ])
+
+    def test_poll_401_does_not_quarantine_when_provider_api_key_is_invalid(self):
+        pickup_error = mailbox_remail.ReMailHttpError(
+            401,
+            {"message": "Credential is invalid or expired.", "requestId": "req-pickup"},
+        )
+        api_error = mailbox_remail.ReMailHttpError(
+            401,
+            {"message": "API key is invalid", "requestId": "req-api"},
+        )
+        with patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error), \
+             patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=api_error), \
+             patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine, \
+             patch.object(mailbox_remail.time, "sleep", return_value=None):
+            with self.assertRaises(mailbox_remail.ReMailCredentialError) as caught:
+                mailbox_remail._poll_remail_otp(self.account, timeout=30)
+
+        self.assertEqual(caught.exception.code, "remail_api_auth_invalid")
+        self.assertEqual(caught.exception.request_id, "req-api")
+        quarantine.assert_not_called()
+
+    def test_poll_transport_errors_rotate_and_fail_fast(self):
+        error = mailbox_remail.ReMailTransportError(
+            email=self.account.email,
+            proxy="http://proxy-a.example:8080",
+            detail="RemoteDisconnected",
+        )
+        calls = []
+
+        def pickup(_mailbox, proxy=None):
+            calls.append(proxy)
+            raise error
+
+        with patch.object(mailbox_remail, "_remail_cfg", return_value={
+            "preflight_enabled": False,
+            "transport_retry_attempts": 3,
+        }), patch.object(mailbox_remail, "_remail_proxy_tracker", return_value=None), \
+             patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup), \
+             patch.object(mailbox_remail.time, "sleep", return_value=None):
+            with self.assertRaises(mailbox_remail.ReMailTransportError) as caught:
+                mailbox_remail._poll_remail_otp(
+                    self.account,
+                    timeout=30,
+                    proxy_candidates=[
+                        "http://proxy-a.example:8080",
+                        "http://proxy-b.example:8080",
+                    ],
+                )
+
+        self.assertEqual(caught.exception.code, "mailbox_transport_unavailable")
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(calls, [
+            "http://proxy-a.example:8080",
+            "http://proxy-b.example:8080",
+            "http://proxy-a.example:8080",
+        ])
 
     def test_expired_code_order_reports_that_api_key_cannot_read_old_inbox(self):
         expired_order = order_payload()

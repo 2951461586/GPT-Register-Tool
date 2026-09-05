@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "shards": {
+    "runtime": "runtime.json",
+    "proxy": "proxy.json",
+    "payment": "payment.json"
+  },
+  "ownership": {
+    "runtime": "runtime",
+    "timeouts": "runtime",
+    "storage": "runtime",
+    "output": "runtime",
+    "account_health": "runtime",
+    "registration": "runtime",
+    "chatgpt": "runtime",
+    "email_registration": "runtime",
+    "codex_oauth": "runtime",
+    "proxy": "proxy",
+    "mailbox_proxy": "proxy",
+    "mailbox_proxy_pool": "proxy",
+    "phone_reuse": "proxy",
+    "paypal_browser": "proxy",
+    "paypal": "payment",
+    "paypal_nocard": "payment",
+    "upi": "payment",
+    "omakse": "payment",
+    "protocol_payments": "payment",
+    "kakao": "payment",
+    "momo": "payment",
+    "cpa_mode": "payment",
+    "sub2api": "payment"
+  }
+}

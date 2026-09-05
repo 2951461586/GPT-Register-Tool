@@ -43,6 +43,7 @@ namespace SmsWorkbench
             // proxy.json
             ["proxy"] = ProxyShard,
             ["mailbox_proxy"] = ProxyShard,
+            ["mailbox_proxy_pool"] = ProxyShard,
             ["phone_reuse"] = ProxyShard,
             ["paypal_browser"] = ProxyShard,
             // payment.json

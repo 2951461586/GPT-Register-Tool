@@ -1,15 +1,24 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import uuid
+import threading
 
 from .error_classification import classify_error
 from .config import CFG
 from .paypal_proxy import infer_proxy_country
-from .phone_proxy import probe_proxy_with_scheme_detection, refresh_proxy_sid
+from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection, refresh_proxy_sid
+from .sanitizer import sanitize_text
+from .proxy_health import ProxyHealthTracker
+from .registration_retry_guard import RegistrationRetryGuard
 
 
 def _registration_proxy_candidates(proxy_pool, fallback=None):
-    candidates = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
-    fallback = str(fallback or "").strip()
+    candidates = []
+    for item in (proxy_pool or []):
+        value = normalize_proxy_url(str(item or "").strip())
+        if value:
+            candidates.append(value)
+    fallback = normalize_proxy_url(str(fallback or "").strip())
     if fallback and fallback not in candidates:
         candidates.insert(0, fallback)
     return list(dict.fromkeys(candidates))
@@ -19,6 +28,9 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
     candidates = _registration_proxy_candidates(proxy_pool, fallback)
     if len(candidates) <= 1:
         return candidates
+
+    tracker = ProxyHealthTracker(CFG)
+    candidates = tracker.rank(candidates)
 
     def check(base: str) -> bool:
         candidate = refresh_proxy_sid(base)
@@ -31,8 +43,12 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
     # the probe cache is lock-guarded for concurrent workers.
     with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as executor:
         outcomes = list(executor.map(check, candidates))
-    healthy = [base for base, ok in zip(candidates, outcomes) if ok]
-    return healthy or candidates
+    healthy = []
+    for base, ok in zip(candidates, outcomes):
+        tracker.record(base, ok=ok, error="proxy_preflight_failed" if not ok else "")
+        if ok:
+            healthy.append(base)
+    return tracker.rank(healthy or candidates)
 
 
 def select_registration_proxy_base(proxy_pool, fallback=None):
@@ -90,11 +106,19 @@ def run_batch_impl(
     explicit_registration_driver = registration_driver is not None
     registration_driver = normalize_registration_driver(registration_driver, CFG)
     mailboxes = _unique_mailboxes(mailboxes)
-    proxy_pool = [str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()]
-    if proxy and str(proxy).strip() not in proxy_pool:
-        proxy_pool.insert(0, str(proxy).strip())
+    proxy_pool = [normalize_proxy_url(str(item or "").strip()) for item in (proxy_pool or [])]
+    proxy_pool = list(dict.fromkeys(item for item in proxy_pool if item))
+    proxy = normalize_proxy_url(str(proxy or "").strip()) or None
+    if proxy and proxy not in proxy_pool:
+        proxy_pool.insert(0, proxy)
     if not proxy_pool and proxy:
-        proxy_pool = [str(proxy).strip()]
+        proxy_pool = [proxy]
+    batch_id = uuid.uuid4().hex
+    try:
+        from .desktop_ipc import emit_event
+        emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_started", "status": "running", "total": int(count or 0)})
+    except Exception:
+        emit_event = None
     original_pool = list(proxy_pool)
     proxy_pool = select_registration_proxy_pool(proxy_pool, proxy)
     pool_indices = {value: index for index, value in enumerate(original_pool)}
@@ -103,11 +127,27 @@ def run_batch_impl(
         print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
         count = len(mailboxes)
     results = []
+    progress_lock = threading.Lock()
+    completed_count = 0
+    retry_guard = RegistrationRetryGuard(CFG)
     print(f"\n{'=' * 60}")
     print(f"  ChatGPT Email Batch Registration - {count} accounts")
     print(f"{'=' * 60}\n")
 
     workers = max(1, min(int(workers or 1), 20, int(count or 1)))
+    if registration_driver != "protocol":
+        # Headless contexts are expensive and the auth stage is intentionally
+        # serialized by the registration gate. Cap the default browser fan-out
+        # so queued workers do not hold stale pages while waiting for auth.
+        registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
+        raw_limit = registration_cfg.get("browser_worker_limit", 2)
+        try:
+            browser_limit = max(1, min(int(raw_limit or 2), 8))
+        except (TypeError, ValueError):
+            browser_limit = 2
+        if workers > browser_limit:
+            print(f"[*] Browser worker limit: {workers} -> {browser_limit}")
+            workers = browser_limit
     max_attempts = max(1, min(int(max_attempts or 1), 3))
     retry_delay_seconds = max(0.0, float(retry_delay_seconds or 0.0))
 
@@ -151,6 +191,19 @@ def run_batch_impl(
         print(f"  Account {i + 1}/{count}")
         print(f"{'#' * 40}")
         mailbox = mailboxes[i] if mailboxes else None
+        mailbox_email = str(getattr(mailbox, "email", "") or "").strip()
+        guard_state = retry_guard.check(mailbox_email)
+        if guard_state.get("deferred"):
+            return i, {
+                "success": False,
+                "email": mailbox_email,
+                "error": "registration_retry_cooldown",
+                "failure_class": "auth_state",
+                "retryable": True,
+                "deferred": True,
+                "retry_after_seconds": int(guard_state.get("remaining_seconds") or 0),
+                "registration_state": "retry_pending",
+            }
         # Pin each account to a stable proxy egress for its entire lifetime.
         # Previously the index shifted on every retry (proxy_pool[(i+attempt-1)
         # % n]), which rotated the egress on each retry and looked like proxy
@@ -170,6 +223,7 @@ def run_batch_impl(
                 pool_index=pool_indices.get(base_proxy, i % len(proxy_pool) if proxy_pool else -1),
                 expected_country=expected_country,
             )
+            proxy_metadata["attempt"] = attempt
             sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
             try:
                 call_kwargs = dict(
@@ -181,6 +235,7 @@ def run_batch_impl(
                     registration_mode=registration_mode,
                     browser_headless=browser_headless,
                     enroll_2fa=enroll_2fa,
+                    batch_id=batch_id,
                 )
                 if explicit_registration_driver or registration_driver != "protocol":
                     call_kwargs["registration_driver"] = registration_driver
@@ -188,18 +243,31 @@ def run_batch_impl(
                     call_kwargs["proxy_metadata"] = proxy_metadata
                 result = run_email_func(**call_kwargs)
             except Exception as e:
-                import traceback; traceback.print_exc()
+                # Worker exceptions may contain proxy credentials or tokens.
+                # Keep operator output useful without emitting the raw exception
+                # or traceback into WPF/CLI logs.
+                safe_error = sanitize_text(f"{type(e).__name__}: {e}")
+                print(f"[!] Registration worker failed: {safe_error[:500]}")
                 failure_class = classify_error(str(e))
                 result = {
                     "success": False,
-                    "error": str(e),
+                    "error": safe_error,
                     "failure_class": failure_class,
                     "dropped": True if failure_class == "account" else False if failure_class in {"network", "mailbox", "auth_state"} else None,
                 }
             if not isinstance(result, dict):
                 result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
+            tracker = ProxyHealthTracker(CFG)
+            tracker.record(
+                worker_proxy,
+                ok=bool(result.get("success")),
+                error=str(result.get("error") or result.get("failure_class") or "")[:120],
+            )
             result["registration_attempts"] = attempt
+            result["proxy_rotation_count"] = max(0, attempt - 1)
+            result["batch_id"] = batch_id
             if result.get("success", False):
+                retry_guard.record(mailbox_email, success=True)
                 return i, result
             result.setdefault("failure_class", classify_error(result))
             if result["failure_class"] in {"network", "mailbox", "auth_state", "rate_limit"}:
@@ -210,6 +278,13 @@ def run_batch_impl(
             # pool member. Rate limits and mailbox outcomes are terminal for
             # this account and must not consume another proxy.
             if result["failure_class"] not in {"network", "auth_state"} or attempt >= max_attempts:
+                result["retryable"] = result["failure_class"] in {"network", "auth_state"}
+                retry_guard.record(
+                    mailbox_email,
+                    failure_class=result.get("failure_class"),
+                    error=result.get("error"),
+                    success=False,
+                )
                 return i, result
             print(
                 f"[!] Retryable {result['failure_class']} failure; "
@@ -221,6 +296,32 @@ def run_batch_impl(
         return i, result
 
     def _notify_result(index, result):
+        nonlocal completed_count
+        with progress_lock:
+            completed_count += 1
+            done = completed_count
+        if emit_event is not None:
+            try:
+                emit_event({
+                    "domain": "registration", "batch_id": batch_id,
+                    "account_ref": str(result.get("email") or ""),
+                    "operation": "registration", "stage": "account_completed",
+                    "status": "success" if result.get("success") else "failed",
+                    "attempt": int(result.get("registration_attempts") or 0),
+                })
+                emit_event({
+                    "domain": "registration",
+                    "batch_id": batch_id,
+                    "operation": "registration",
+                    "stage": "batch_progress",
+                    "status": "running" if done < int(count or 0) else "completed",
+                    "completed": done,
+                    "total": int(count or 0),
+                    "success": bool(result.get("success")),
+                    "failure_class": str(result.get("failure_class") or "")[:80],
+                })
+            except Exception:
+                pass
         if on_result is None:
             return
         try:
@@ -231,14 +332,29 @@ def run_batch_impl(
                 f"{type(exc).__name__}; batch continues."
             )
 
+    def _close_browser_pool():
+        if registration_driver == "protocol":
+            return
+        try:
+            from .registration_drivers.browser_flow.flow_steps import close_browser_process_pool
+
+            close_browser_process_pool()
+        except Exception:
+            pass
+
     if workers <= 1:
-        for i in range(count):
-            _, result = _run_one(i)
-            results.append(result)
-            _notify_result(i, result)
-        if prewarm_executor is not None:
-            prewarm_executor.shutdown(wait=True)
-        return results
+        try:
+            for i in range(count):
+                _, result = _run_one(i)
+                results.append(result)
+                _notify_result(i, result)
+            if emit_event is not None:
+                emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(results)})
+            return results
+        finally:
+            if prewarm_executor is not None:
+                prewarm_executor.shutdown(wait=True)
+            _close_browser_pool()
 
     # Pulse-wave scheduling: when enabled, split the batch into discrete
     # waves with IP-ban detection between waves.
@@ -247,28 +363,37 @@ def run_batch_impl(
     pulse_config = PulseConfig.from_config(CFG)
     if pulse_config.enabled:
         try:
-            return run_pulse_batch(
+            pulse_results = run_pulse_batch(
                 count,
                 run_one_fn=_run_one,
                 on_result=_notify_result,
                 workers=workers,
                 pulse_config=pulse_config,
             )
+            if emit_event is not None:
+                emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(pulse_results)})
+            return pulse_results
         finally:
             # The all-at-once path shuts the prewarm pool down at the end of
             # the function; the pulse path returns early and used to leak the
             # executor threads for the rest of the process lifetime.
             if prewarm_executor is not None:
                 prewarm_executor.shutdown(wait=True)
+            _close_browser_pool()
 
     ordered = [None] * count
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_run_one, i) for i in range(count)]
-        for future in as_completed(futures):
-            i, result = future.result()
-            ordered[i] = result
-            _notify_result(i, result)
-    results.extend(result for result in ordered if result is not None)
-    if prewarm_executor is not None:
-        prewarm_executor.shutdown(wait=True)
-    return results
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_run_one, i) for i in range(count)]
+            for future in as_completed(futures):
+                i, result = future.result()
+                ordered[i] = result
+                _notify_result(i, result)
+        results.extend(result for result in ordered if result is not None)
+        if emit_event is not None:
+            emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(results)})
+        return results
+    finally:
+        if prewarm_executor is not None:
+            prewarm_executor.shutdown(wait=True)
+        _close_browser_pool()

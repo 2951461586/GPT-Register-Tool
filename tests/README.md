@@ -6,6 +6,9 @@ The test suite is offline by default. Run it with:
 python -m pytest -q
 python -m compileall -q sms_tool services/protocol-payment
 dotnet test GPTRegisterTool.slnx -c Release --nologo
+python scripts/config_schema_check.py
+python scripts/ipc_schema_check.py
+python scripts/docs_consistency_scan.py
 ```
 
 Live Checkout, Stripe confirmation, browser, mailbox-provider, proxy, and
@@ -23,7 +26,10 @@ payment requests are never part of the default suite.
 - `test_registration_stage_concurrency.py` covers stage-to-resource mapping, bounded admission, and wait metrics.
 - `test_chatai_mailbox_graph.py` covers Chatai/Microsoft Graph mailbox proxy/scope behavior.
 - `test_mail_otp_web.py` covers the standalone `services/mail-otp-web` mailbox-line parser.
-- `test_cfworker_mailbox.py` covers CFWorker mailbox endpoint fallback and OTP extraction.
+- `test_cfworker_mailbox.py` covers the `sms_tool.providers.mailbox_cfworker` implementation and OTP extraction.
+- `test_account_events.py` covers storage fact dispatch without provider coupling.
+- `test_config_schema_check.py` and `test_ipc_schema_check.py` guard cross-language manifests.
+- `test_docs_consistency.py` guards current release pointers and documented provider paths.
 - `test_email_otp_filtering.py` covers message recipient, subject, and body OTP filtering.
 - `test_storage_dedup.py` covers SQLite account upsert and email normalization behavior.
 - `test_gen_pp_link.py` covers hosted Stripe/PayPal link generation error handling.
@@ -51,6 +57,8 @@ payment requests are never part of the default suite.
   the migration release.
 - Patch the owning seam (`account_seed`, Checkout transport, browser bridge,
   persistence adapter) instead of provider internals from an unrelated test.
+- New provider tests import the implementation from `sms_tool.providers`; top-level
+  `mailbox_*` imports are compatibility coverage only.
 - Keep one focused test owner for each contract. Cross-module integration tests
   should verify routing only, not duplicate every owner-module unit case.
 - Network and live-browser smoke tests must stay opt-in through environment

@@ -123,23 +123,37 @@ def _auth_session_access_token(body):
     )
 
 
-def _fetch_auth_session(session, chat_base, base_headers, attempts=6, delay=2.0):
+def _fetch_auth_session(session, chat_base, base_headers, attempts=4, delay=0.5):
+    """Fetch the post-signup session with a short, bounded readiness poll.
+
+    The old six-round poll used the global HTTP retry policy on every round,
+    which multiplied a single slow edge response into multi-minute waits.  A
+    session endpoint is cheap to retry, so each round is now one request with
+    a small backoff and explicit timing metadata for diagnostics.
+    """
+    started = time.monotonic()
+    try:
+        request_timeout = max(5, min(int((CFG.get("timeouts") or {}).get("auth_session", 12)), 30))
+    except (TypeError, ValueError):
+        request_timeout = 12
     last = {"status_code": 0, "body": {}, "cookie_header": _cookie_header(session)}
     for attempt in range(1, max(1, int(attempts or 1)) + 1):
         r = request_with_retry(session, "get", f"{chat_base}/api/auth/session", label="Auth session",
             headers={**base_headers, "Accept": "application/json", "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate=auth_impersonate())
+            impersonate=auth_impersonate(), attempts=1, timeout=request_timeout)
         body = _json_or_raw(r, limit=1000)
         last = {
             "status_code": r.status_code,
             "body": body,
             "cookie_header": _cookie_header(session),
+            "attempts": attempt,
+            "duration_ms": int((time.monotonic() - started) * 1000),
         }
         print(f"  Auth session: {r.status_code}" + (f" attempt={attempt}" if attempt > 1 else ""))
         if r.status_code == 200 and _auth_session_access_token(body):
             return last
         if attempt < attempts:
-            time.sleep(delay)
+            time.sleep(min(max(0.0, float(delay or 0)), 2.0))
     return last
 # ==========================================
 # Core Email Registration Flow

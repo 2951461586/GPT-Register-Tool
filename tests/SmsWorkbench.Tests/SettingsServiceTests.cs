@@ -339,6 +339,53 @@ public sealed class SettingsServiceTests
     }
 
     [Fact]
+    public void PathSettingsLoadAndSaveAsRepositoryRelativePaths()
+    {
+        using var fixture = new TemporaryDirectory();
+        string configPath = Path.Combine(fixture.Path, "config.json");
+        string pythonPath = Path.Combine(fixture.Path, ".venv", "Scripts", "python.exe");
+        string mailboxPath = Path.Combine(fixture.Path, "data", "mailbox_tokens.txt");
+        File.WriteAllText(configPath, $$"""
+            {
+              "runtime": { "python_path": "{{pythonPath.Replace("\\", "\\\\")}}" },
+              "email_registration": { "token_file": "{{mailboxPath.Replace("\\", "\\\\")}}" }
+            }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+
+        Assert.Equal(".venv/Scripts/python.exe", Field(categories, "python_path").Value);
+        Assert.Equal("data/mailbox_tokens.txt", Field(categories, "token_file").Value);
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal(".venv/Scripts/python.exe", root["runtime"]!["python_path"]!.GetValue<string>());
+        Assert.Equal("data/mailbox_tokens.txt", root["email_registration"]!["token_file"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ExternalPythonPathRemainsAbsolute()
+    {
+        using var fixture = new TemporaryDirectory();
+        string externalPath = Path.Combine(Path.GetTempPath(), "python.exe");
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), $$"""
+            { "runtime": { "python_path": "{{externalPath.Replace("\\", "\\\\")}}" } }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+
+        Assert.Equal(externalPath, Field(categories, "python_path").Value);
+        SettingsSaveResult result = service.Save(categories);
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal(externalPath, root["runtime"]!["python_path"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void UpdateConfigPreservesUnknownFieldsAndWritesAtomically()
     {
         using var fixture = new TemporaryDirectory();

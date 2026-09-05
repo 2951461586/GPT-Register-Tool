@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from sms_tool import gen_pp_link
 from sms_tool import paypal_proxy
 
@@ -32,6 +34,11 @@ class PayPalProxyTests(unittest.TestCase):
             ["http", "socks5h"],
         )
 
+    # These two drive the real `_probe_proxy_network` and fake the layer *below*
+    # it (paypal_proxy.requests.Session).  Neither reaches the network -- their
+    # targets are unroutable hosts such as proxy.example / proxy:1000 -- so they
+    # opt out of the conftest probe guard, which guards the layer above.
+    @pytest.mark.allow_proxy_probe
     def test_proxy_probe_error_redacts_authenticated_proxy(self):
         class FailingSession:
             trust_env = True
@@ -175,6 +182,7 @@ class PayPalProxyTests(unittest.TestCase):
 
             self.assertEqual(ranked, [good])
 
+    @pytest.mark.allow_proxy_probe
     def test_proxy_probe_reports_country_mismatch(self):
         class FakeResponse:
             status_code = 200

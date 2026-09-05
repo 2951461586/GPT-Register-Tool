@@ -98,24 +98,15 @@ namespace SmsWorkbench
             return configured.Length > 0 ? configured : LocalNonPaymentProxy;
         }
 
-        // Account liveness (测活) must not inherit the rotating/paid registration
-        // egress. A proxy-side 402 / quota failure there is an inconclusive probe,
-        // not a dead account, so liveness routes through a fixed local egress
-        // (default http://127.0.0.1:7897) unless an explicit proxy.liveness is set.
-        private string GetLivenessProxy()
-        {
-            string configured = FirstNonEmpty(
-                settingsService.GetString("proxy.liveness"),
-                settingsService.GetString("liveness_proxy"));
-            return configured.Length > 0 ? configured : LocalNonPaymentProxy;
-        }
-
         private List<string> GetLivenessProxyPool()
         {
-            string primary = GetLivenessProxy().Trim();
-            return primary.Length > 0
-                ? new List<string> { primary }
-                : new List<string>();
+            // Access-token/session operations must preserve the registration
+            // proxy + fingerprint identity. The backend rebinds each account's
+            // saved affinity; this pool is only the legacy fallback for rows
+            // that predate identity_context.
+            List<string> registration = GetRegistrationProxyPool();
+            if (registration.Count > 0) return registration;
+            return new List<string> { LocalNonPaymentProxy };
         }
 
         private string GetConfiguredCfWorkerDomain()
