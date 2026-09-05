@@ -20,7 +20,7 @@ from pathlib import Path
 
 from browser_flow_patch import copy_targets, patch_bf
 
-PKG_DIR = Path(r"F:\epsoft\GPT-Register-Tool\sms_tool\registration_drivers\browser_flow")
+PKG_DIR = Path(__file__).resolve().parents[1] / "sms_tool" / "registration_drivers" / "browser_flow"
 PKG_DOTTED = "sms_tool.registration_drivers.browser_flow"
 
 

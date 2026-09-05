@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
-    releases = sorted((ROOT / "docs").glob("release-v*.md"), key=lambda p: p.name)
+    def release_key(path: Path) -> tuple[int, ...]:
+        match = re.search(r"release-v(\d+(?:\.\d+)+)\.md$", path.name)
+        return tuple(int(part) for part in match.group(1).split(".")) if match else ()
+
+    releases = sorted((ROOT / "docs").glob("release-v*.md"), key=release_key)
     if not releases:
         print("No release notes found")
         return 1
