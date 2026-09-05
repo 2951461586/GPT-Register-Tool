@@ -27,6 +27,7 @@ from .session_refresh import _load_seed_session
 from .storage import upsert_account
 from .workspace_scan import inspect_workspace, parse_workspace_fallback_ids
 from .error_classification import classify_error
+from .config import CFG
 
 _GMAIL_SCAN_LOCKS = {}
 _GMAIL_SCAN_LOCKS_GUARD = threading.Lock()
@@ -702,6 +703,8 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
             relogin_on_401=bool(relogin_on_401),
             relogin_timeout=max(int(timeout or 120), 60),
             relogin_mode=relogin_mode,
+            batch_timeout=max(300, int((CFG.get("account_health") or {}).get("batch_timeout_seconds") or 900)),
+            account_timeout=max(60, int((CFG.get("account_health") or {}).get("account_timeout_seconds") or 360)),
         )
         if quota.get("total", 0):
             print(f"[*] Local quota refreshed: {quota.get('success', 0)}/{quota.get('total', 0)}")

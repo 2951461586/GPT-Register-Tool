@@ -35,6 +35,8 @@ WPF selected rows / CLI --email-file
 ```text
 chatgpt_phone_reg.py        Compatibility entrypoint; delegates to sms_tool.cli.
 config.example.json         Portable config template. Copy to config.json locally.
+config_schema.json          Cross-language config ownership manifest.
+ipc_schema.json             Resident desktop-read protocol manifest.
 README.md                   Setup and operations guide.
 requirements.txt            Only Python dependency manifest.
 start_proxy_pool.py         Standalone SOCKS5 proxy-pool server entrypoint.
@@ -52,19 +54,15 @@ sms_tool/
   mailbox_strategies.py     Typed provider adapter protocol and immutable provider registry.
   mailbox_types.py          Shared mailbox dataclass and type definitions.
   mailbox_parsers.py        Mailbox import format parsing.
-  mailbox_remail.py         ReMail order, pickup, adaptive OTP polling, and message normalization.
-  mailbox_smailr.py         Smailr mailbox creation/reuse and OTP polling facade.
-  mailbox_cfworker.py       CFWorker domain mailbox creation/fetch/OTP polling.
-  mailbox_graph.py          Microsoft OAuth refresh boundary.
-  mailbox_gmail.py          Gmail IMAP receive + SMTP send adapter.
-  mailbox_icloud_url.py     Per-account iCloud OTP URL receive adapter.
-  mailbox_chongzhi.py       Chongzhi mailbox provider adapter.
-  outlook_imap.py           Outlook IMAP fallback fetcher.
+  providers/                All mailbox provider implementations and low-level provider clients.
+    mailbox_remail.py       ReMail order, pickup, adaptive OTP polling, and message normalization.
+    mailbox_smailr.py       Smailr mailbox creation/reuse and OTP polling facade.
+    mailbox_cfworker.py     CFWorker domain mailbox creation/fetch/OTP polling.
+    mailbox_graph.py        Microsoft OAuth refresh boundary.
+    mailbox_gmail.py        Gmail IMAP receive + SMTP send adapter.
+    mailbox_icloud_url.py   Per-account iCloud OTP URL receive adapter.
+    outlook_imap.py         Outlook IMAP folder discovery and message normalization.
   mail_otp.py               Shared OTP extraction/candidate filtering.
-  providers/                External provider clients. Half-migrated: only 2 of 8 mailbox
-                            providers live here; see Subpackage Structure.
-    cfworker_mailbox.py     CFWorker mailbox provider implementation.
-    smailr_mailbox.py       Smailr mailbox provider implementation.
   commands/                 CLI subcommand helpers; no package-level __all__.
     helpers.py              Shared command-level utilities.
     payment.py              Protocol-payment argument adaptation and exit-code boundary.
@@ -73,6 +71,11 @@ sms_tool/
     accounts.py             Account maintenance/import/export command adaptation.
     mailbox_ops.py          Inbox view and Gmail send command adaptation.
     one_click.py            One-click SMS and account-scan command adaptation.
+docs/
+  CONTEXT.md                Domain vocabulary and ownership rules.
+  adr/                      Accepted architecture decisions.
+  current/                  Current-state documentation entry points.
+  audits/                   Historical audit interpretation and snapshots.
     omakse.py               Omakase command adaptation.
     email_change.py         Email-change argument adaptation.
   http_client.py            curl_cffi retry/transport handling.
@@ -235,7 +238,7 @@ WPF controls -> command planner -> Python CLI -> command adapter
 
 ### 度量口径
 
-全部数字为 2026-09-02 用 AST 全量扫描实测（364 个 `.py`、1094 条包内依赖边），
+除 providers 行外，数字为 2026-09-02 用 AST 全量扫描实测；providers 行于 2026-09-04 迁移后更新。
 排除 `dist/`、`runtime/`、`.venv/`、`__pycache__/`、`sessions/`、`**/bin`、`**/obj`
 （不排除则 `.py` 数翻 5 倍，结论不可用）。
 
@@ -256,7 +259,7 @@ WPF controls -> command planner -> Python CLI -> command adapter
 | `paypal_link/` | 3 | 2768 | 4 | 2 | 12 | **0** | **0.00** | 两个互不相认的大文件共用一个目录 |
 | `registration_drivers/` | 9 | 3508 | **45** | **14** | 36 | 11 | 0.23 | 全仓扇入最高，实现高度集中在 1 个文件 |
 | `sentinel/` | 4 | 689 | 17 | 8 | **9** | 3 | 0.25 | 出口最干净，最容易独立 |
-| `providers/` | 3 | 1013 | 9 | 4 | **3** | 0 | 0.00 | 半迁移，方向还与同层相反 |
+| `providers/` | 11 | 3770 | 由 mailbox seam 使用 | 统一邮箱 provider 实现 | — | — | — | 全部 provider 适配器集中目录 |
 | `commands/` | 10 | 2646 | 18 | 4 | 78 | 5 | **0.06** | 编排层，低内聚是设计意图 |
 
 ### sms_tool/store/
@@ -526,7 +529,7 @@ vendored Node runner 的子进程调度、bundle 组装、token 缓存。
 
 ### sms_tool/providers/
 
-**职责边界。** 目前只拥有 2 个邮箱 provider 的**客户端实现**（CFWorker、Smailr）。
+**职责边界。** 统一拥有全部 active 邮箱 provider 的**客户端与适配器实现**（CFWorker、Smailr、ReMail、Gmail、Graph、iCloud URL、Outlook IMAP）。Chongzhi 已移除。
 
 不负责：provider 的分配与轮询编排（归 `mailbox.py` / `mailbox_service.py` /
 `mailbox_strategies.py`）、OTP 抽取（归 `mail_otp.py`）。
@@ -535,25 +538,19 @@ vendored Node runner 的子进程调度、bundle 组装、token 缓存。
 | --- | --- |
 | `cfworker_mailbox.py` | 591 |
 | `smailr_mailbox.py` | 421 |
-| `__init__.py` | 1（仅 docstring，**无 `__all__`**） |
+| `mailbox_*.py` / `outlook_imap.py` | provider-specific adapters |
+| `__init__.py` | package description and explicit module exports |
 
-**对外接口。** **没有包级出口。** `__init__.py` 只有一行 `"""Mailbox provider clients."""`，
-既不 `__all__` 也不 re-export；调用方必须写全路径
-`from sms_tool.providers.cfworker_mailbox import CFWorkerMailboxClient`。
+**对外接口。** provider registry 通过 `mailbox.py` / `mailbox_strategies.py` 暴露稳定 seam；
+具体 provider 模块可直接导入。顶层 `mailbox_*.py` 文件只保留兼容 facade，不再承载实现。
 
-**依赖关系。** 内聚 **0.00**（内部边 0，两个 provider 互不引用）。出边 **3**（8 个子包最少）。
-入边 9，外部来源 4 个（`mailbox_cfworker.py`、`mailbox_smailr.py` + 2 个测试）。
+**依赖关系。** provider 实现只依赖 shared mailbox types/parsers/OTP helpers 与 provider-local low-level clients；
+不依赖 WPF，不直接写账号存储。兼容 facade 不应成为新代码的导入目标。
 
 **已知的债。**
 
-1. **半迁移，且方向与同层相反。** `providers/` 里只有 2 个客户端；其余 6 个 provider
-   仍留在 `sms_tool/` 根下自包含：`mailbox_remail.py`(890)、`mailbox_gmail.py`(518)、
-   `mailbox_icloud_url.py`(344)、`mailbox_chongzhi.py`(264)、`outlook_imap.py`(252)、
-   `mailbox_graph.py`(38)，合计 2306 行。
-   更麻烦的是**根级 `mailbox_*.py` 现在是 providers 之上的编排层**
-   （`mailbox_cfworker.py:6` `from .providers.cfworker_mailbox import CFWorkerMailboxClient`），
-   而未迁移的 6 个没有这层拆分。所以 `providers/` 目前是"2 个客户端"而不是"provider 层"，
-   两种形态并存会让"新 provider 该放哪"没有答案。
+1. 迁移已完成。新 provider 必须放在 `sms_tool/providers/`；顶层兼容 facade 只用于旧调用者，
+   不得添加新的业务逻辑。
 2. 与 `mailbox_strategies.py` 的 provider registry 概念重叠：一个按"目录"组织，
    一个按"注册表"组织。迁移第 3 个 provider 之前必须先定这一个问题。
 3. 无 `__all__` 意味着包边界完全靠约定；一旦 `providers/` 下文件增多，
@@ -585,6 +582,17 @@ vendored Node runner 的子进程调度、bundle 组装、token 缓存。
 
 **依赖关系。** 出边 **78** 指向 33 个父包模块（子包里第二宽），内部边 5，
 **内聚 0.06 为 8 个子包最低**。入边 18，外部来源 4 个（`cli.py` + 3 个测试）。
+
+### Recent deepening seams (2026-09-04)
+
+- `payment_batch_setup.py` owns method-owned stage-pool selection so the batch
+  orchestrator does not also implement configuration precedence.
+- `registration_drivers/browser_flow/context.py` owns browser driver settings,
+  headless selection, URLs, locale/timezone, and OTP timeout preparation.
+- `account_events.py` owns post-persistence facts; `store/` no longer imports a
+  concrete mailbox provider for side effects.
+- `config_schema.json` and `ipc_schema.json` are checked against both Python and
+  C# protocol/config declarations by repository guard scripts.
 
 **已知的债。**
 
@@ -838,6 +846,16 @@ two method-owned pools (`Checkout` and `Approve`) and is saved under
   `http://127.0.0.1:7897` and never inherits the rotating registration proxy
   (`mailbox._resolve_mailbox_proxy`). This keeps inbox fetches on a stable local
   egress independent of the registration session.
+- **Access-token/session checks → registration identity.** Account liveness,
+  promotion checks, recovery, and other operations that present a saved AT or
+  session restore `identity_context.proxy_affinity` from the matching
+  registration pool and call `bind_account_identity` to restore the saved
+  protocol fingerprint. Browser-registered accounts reopen their persisted
+  browser profile and geo-aligned locale/timezone; if that browser context
+  cannot be opened, the check fails closed instead of downgrading to curl with
+  a different fingerprint. These operations must not use the local mailbox
+  proxy, because an egress/fingerprint change can trigger upstream AT
+  revocation.
 - **Payment traffic → independent method-owned pools.** PayPal and protocol-payment
   modules resolve their own payment configuration. Batch protocol payment uses
   `checkout_proxy_pool` for Checkout/JIT and `approve_proxy_pool` for the

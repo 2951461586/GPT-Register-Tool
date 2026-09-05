@@ -1,6 +1,13 @@
 # 无头浏览器注册：能力盘点与缺口分析
 
-调研日期：2026-08-29（只读调研，未改动业务代码）
+初始调研日期：2026-08-29（只读基线）
+
+> **状态更新（2026-09-04）**：本审计中的历史快照已被后续代码取代。当前有效驱动为
+> `protocol`、`playwright`、`roxy`、`cloak`、`camoufox`、`adspower`；Roxy Selenium、
+> `browser_use`、`skyvern` 不属于当前注册驱动。浏览器进程池已接线，并增加了槽位占用保护、
+> 批次结束回收和 AdsPower `user_id` 前置校验；批量异常输出已统一脱敏，协议注册明确为 AT-only。
+> 请以 `sms_tool/registration_drivers/base.py`、
+> `external_sessions.py` 和 `browser_flow/flow_steps.py` 为运行时真相。
 参考项目：
 
 - <https://github.com/asz798838958/aBaiFreeGPT>（Camoufox 有头 VNC / 无头批量、OOM 恢复、脉冲调度、account-proxy slot、邮箱租约、TOTP 自动绑定）

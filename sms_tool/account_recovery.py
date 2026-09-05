@@ -10,15 +10,19 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from .account_identity import resolve_account_proxy
+from .account_identity import account_identity, resolve_account_proxy
 from .account_liveness import browser_fetch_for_account, probe_account_liveness
 from .config import CFG
+from .http_client import is_transient_transport_error
+from .proxy_routing import proxy_pool_for
+from .paths import runtime_file
 from .storage import (
     clear_stale_promotion_at_marker,
     get_account_record,
@@ -26,6 +30,8 @@ from .storage import (
     mark_quota_status,
     upsert_account,
 )
+from .mailbox_quarantine import mailbox_relogin_allowed
+from .providers.mailbox_graph import MailboxAuthInvalidError
 
 
 def refresh_local_quota_statuses(
@@ -36,7 +42,11 @@ def refresh_local_quota_statuses(
     relogin_on_401: bool = False,
     relogin_timeout: int = 180,
     relogin_mode: str = "auto",
+    batch_timeout: int = 900,
+    account_timeout: int = 360,
 ) -> dict[str, Any]:
+    if relogin_on_401:
+        _refresh_mailbox_quarantine_state()
     accounts = _local_quota_accounts(emails)
     run_id = uuid.uuid4().hex
     _emit_account_batch_event(
@@ -49,11 +59,52 @@ def refresh_local_quota_statuses(
     # The liveness probe is a single light GET, so a modestly higher ceiling keeps
     # a full-pool scan responsive; heavy 401 relogins only run for invalid tokens.
     max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
+    # A normal liveness probe is a single HTTP request. Browser sessions are a
+    # bounded fallback for 401/Cloudflare responses and must not consume the
+    # whole batch's worker pool while they start and tear down.
+    browser_slots = threading.BoundedSemaphore(max(1, min(2, max_workers)))
+    # Recovery is materially heavier than the probe (mailbox/OAuth/browser).
+    # Keep it in a separate two-slot lane so enabling the 401 checkbox cannot
+    # starve lightweight probes for the rest of the batch.
+    relogin_slots = threading.BoundedSemaphore(2)
+    batch_deadline = time.monotonic() + max(30, int(batch_timeout or 900))
     ordered: list[dict[str, Any] | None] = [None] * len(accounts)
+    snapshot_path = runtime_file(CFG, "account_liveness_batches") / f"{run_id}.json"
+
+    def persist_snapshot(*, terminal: bool = False) -> None:
+        """Persist completed rows while workers are still running.
+
+        The WPF process can be killed at its outer deadline; keeping this
+        snapshot beside runtime state makes the already completed probes
+        recoverable instead of losing the whole batch envelope.
+        """
+        rows = [item for item in ordered if item is not None]
+        timed_out_rows = [item for item in rows if item.get("timed_out")]
+        payload = {
+            "run_id": run_id,
+            "total": len(accounts),
+            "completed": max(0, len(rows) - len(timed_out_rows)),
+            "unfinished": len(timed_out_rows) + max(0, len(accounts) - len(rows)),
+            "partial": bool(timed_out_rows or len(rows) < len(accounts)),
+            "terminal": bool(terminal),
+            "updated_at": int(time.time()),
+            "results": rows,
+        }
+        try:
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            temp = snapshot_path.with_suffix(snapshot_path.suffix + ".tmp")
+            temp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            temp.replace(snapshot_path)
+        except OSError:
+            pass
 
     def run(index: int, account: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         email = str(account.get("email") or "").strip()
+        account_deadline = min(batch_deadline, time.monotonic() + max(30, int(account_timeout or 360)))
         try:
+            if time.monotonic() >= account_deadline:
+                return index, _timed_out_health_result(email, "account_timeout_before_probe")
+            probe_timeout = max(5, min(int(timeout or 30), int(account_deadline - time.monotonic())))
             if is_permanently_deactivated(account):
                 probe = {
                     "ok": False,
@@ -64,29 +115,88 @@ def refresh_local_quota_statuses(
                     "terminal": True,
                 }
             else:
-                with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
-                    probe = probe_account_liveness(
-                        account, proxy=proxy, timeout=timeout, browser_fetch=browser_fetch
-                    )
-            relogin: dict[str, Any] = {}
-            if relogin_on_401 and _probe_is_token_invalid(probe) and email:
-                relogin = relogin_codex_account(
-                    account,
-                    proxy=proxy,
-                    timeout=max(int(relogin_timeout or timeout or 180), int(timeout or 30)),
-                    mode=relogin_mode,
+                # Fast path: use the canonical lightweight quota endpoint for
+                # every account, including accounts that have a browser
+                # identity. This avoids opening a browser for healthy tokens.
+                probe = _probe_liveness_with_retries(
+                    account, proxy=proxy, timeout=probe_timeout, browser_fetch=None
                 )
-                if relogin.get("ok"):
-                    probe = dict(relogin.get("probe") or {})
-                    if email:
+                if not isinstance(probe, dict):
+                    probe = {
+                        "ok": False,
+                        "status": "unknown",
+                        "quota_status": "检测失败",
+                        "error": "invalid_probe_result",
+                    }
+                browser_identity = account_identity(account).get("browser_identity") or {}
+                if browser_identity and _needs_browser_fallback(probe):
+                    remaining = max(0.0, account_deadline - time.monotonic())
+                    acquired = browser_slots.acquire(timeout=min(1.0, remaining))
+                    if acquired:
                         try:
-                            clear_stale_promotion_at_marker(email)
-                        except Exception:
-                            pass
+                            with browser_fetch_for_account(account, proxy=proxy, timeout=probe_timeout) as browser_fetch:
+                                if browser_fetch is not None:
+                                    browser_probe = probe_account_liveness(
+                                        account,
+                                        proxy=proxy,
+                                        timeout=probe_timeout,
+                                        browser_fetch=browser_fetch,
+                                    )
+                                    if browser_probe.get("ok") or int(browser_probe.get("status_code") or 0) != 0:
+                                        probe = browser_probe
+                                else:
+                                    probe = {**probe, "browser_fallback": "unavailable"}
+                        finally:
+                            browser_slots.release()
+                    else:
+                        probe = {**probe, "browser_fallback": "concurrency_limited"}
+            initial_status = str(probe.get("quota_status") or probe.get("status") or "unknown")
+            liveness_401 = _probe_is_token_invalid(probe)
+            relogin_attempted = False
+            mailbox_auth_invalid = False
+            if email and relogin_on_401 and liveness_401:
+                # Persist the probe before the optional recovery path. A stuck
+                # OTP/browser recovery must never hide the fact that the AT
+                # probe already completed.
+                mark_quota_status(email, initial_status, quota_result=probe)
+            relogin: dict[str, Any] = {}
+            if relogin_on_401 and liveness_401 and email and not mailbox_relogin_allowed():
+                relogin = {"ok": False, "mode": "disabled", "error": "mailbox_pool_repair_required"}
+            elif relogin_on_401 and liveness_401 and email and _relogin_cooldown_active(account):
+                relogin = {"ok": False, "mode": "cooldown", "error": "relogin_cooldown"}
+            elif relogin_on_401 and liveness_401 and email and time.monotonic() < account_deadline:
+                if relogin_slots.acquire(blocking=False):
+                    try:
+                        relogin_attempted = True
+                        remaining = max(30, int(account_deadline - time.monotonic()))
+                        relogin = relogin_codex_account(
+                            account,
+                            proxy=proxy,
+                            timeout=min(max(int(relogin_timeout or timeout or 180), int(timeout or 30)), remaining),
+                            mode=relogin_mode,
+                        )
+                        if relogin.get("ok"):
+                            probe = dict(relogin.get("probe") or {})
+                            if email:
+                                try:
+                                    _clear_promotion_marker_after_probe(email)
+                                except Exception:
+                                    pass
+                        elif relogin:
+                            _record_relogin_failure(email, relogin)
+                        mailbox_auth_invalid = str(relogin.get("error") or "") == "mailbox_auth_invalid"
+                    finally:
+                        relogin_slots.release()
+                else:
+                    relogin = {"ok": False, "mode": "concurrency_limited", "error": "relogin_concurrency_limited"}
+            if time.monotonic() >= account_deadline and not probe.get("ok"):
+                probe = {**probe, "status": "timeout", "error": probe.get("error") or "account_timeout"}
             status = str(probe.get("quota_status") or probe.get("status") or "未知")
             if relogin and not relogin.get("ok"):
                 status = _relogin_failure_quota_status(relogin)
             persisted = mark_quota_status(email, status, quota_result=probe) if email else False
+            if email and isinstance(probe, dict) and probe.get("ok"):
+                _clear_promotion_marker_after_probe(email)
             probe_ok = bool(probe.get("ok"))
             result = {
                 "ok": probe_ok and bool(persisted),
@@ -96,6 +206,10 @@ def refresh_local_quota_statuses(
                 **({"relogin": relogin} if relogin else {}),
                 "probe_ok": probe_ok,
                 "persisted": bool(persisted),
+                "health_status": _health_status_code(probe, relogin),
+                "liveness_401": bool(liveness_401),
+                "relogin_attempted": bool(relogin_attempted),
+                "mailbox_auth_invalid": bool(mailbox_auth_invalid),
             }
         except Exception as exc:
             result = {
@@ -105,6 +219,10 @@ def refresh_local_quota_statuses(
                 "probe": {"ok": False, "error": str(exc)[:200]},
                 "probe_ok": False,
                 "persisted": False,
+                "health_status": "probe_failed",
+                "liveness_401": False,
+                "relogin_attempted": False,
+                "mailbox_auth_invalid": False,
             }
         _emit_account_batch_event(
             run_id,
@@ -116,20 +234,30 @@ def refresh_local_quota_statuses(
         )
         return index, result
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(run, index, account) for index, account in enumerate(accounts)]
-        for future in as_completed(futures):
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    futures = [executor.submit(run, index, account) for index, account in enumerate(accounts)]
+    try:
+        for future in as_completed(futures, timeout=max(30, int(batch_timeout or 900))):
             index, result = future.result()
             ordered[index] = result
+            persist_snapshot()
+    except TimeoutError:
+        for index, future in enumerate(futures):
+            if ordered[index] is None:
+                future.cancel()
+                ordered[index] = _timed_out_health_result(
+                    str(accounts[index].get("email") or "").strip(), "batch_timeout"
+                )
+        persist_snapshot()
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
     results = [item for item in ordered if item is not None]
     success = sum(1 for item in results if item.get("ok"))
     persisted = sum(1 for item in results if item.get("persisted"))
     account_deactivated = sum(1 for item in results if _item_is_account_deactivated(item))
-    at_invalid = sum(
-        1
-        for item in results
-        if not _item_is_account_deactivated(item) and _probe_is_token_invalid(item.get("probe"))
-    )
+    # Count the original liveness result, even when an optional relogin later
+    # replaces the probe with a fresh HTTP 200 result.
+    at_invalid = sum(1 for item in results if item.get("liveness_401"))
     probe_failed = sum(
         1
         for item in results
@@ -140,17 +268,21 @@ def refresh_local_quota_statuses(
     relogin_results = [item.get("relogin") for item in results if isinstance(item.get("relogin"), dict)]
     relogin_success = sum(1 for item in relogin_results if item.get("ok"))
     relogin_deactivated = sum(1 for item in relogin_results if _looks_account_deactivated(item))
+    mailbox_auth_invalid = sum(1 for item in results if item.get("mailbox_auth_invalid"))
+    relogin_attempted = sum(1 for item in results if item.get("relogin_attempted"))
     _emit_account_batch_event(
         run_id,
         "batch_completed",
         "completed",
         total=len(results),
-        detail=f"完成 {len(results)} 个账号",
+        detail=f"完成 {sum(1 for item in results if not item.get('timed_out'))} 个账号",
     )
+    persist_snapshot(terminal=True)
     return {
-        "ok": success == len(results),
+        "ok": success == len(results) and len(results) == len(accounts),
         "mode": "local",
         "total": len(results),
+        "completed": len(results) - sum(1 for item in results if item.get("timed_out")),
         "success": success,
         "failed": len(results) - success,
         "persisted": persisted,
@@ -158,12 +290,84 @@ def refresh_local_quota_statuses(
         "at_invalid": at_invalid,
         "account_deactivated": account_deactivated,
         "probe_failed": probe_failed,
-        "relogin_attempted": len(relogin_results),
+        "relogin_attempted": relogin_attempted,
         "relogin_success": relogin_success,
         "relogin_failed": len(relogin_results) - relogin_success,
         "relogin_account_deactivated": relogin_deactivated,
+        "liveness_401": at_invalid,
+        "mailbox_auth_invalid": mailbox_auth_invalid,
         "results": results,
+        "timed_out": sum(1 for item in results if item.get("timed_out") or item.get("health_status") in {"batch_timeout", "account_timeout"}),
+        "batch_timed_out": sum(1 for item in results if item.get("health_status") == "batch_timeout"),
+        "account_timed_out": sum(1 for item in results if item.get("health_status") == "account_timeout"),
+        "partial": len(results) < len(accounts) or any(item.get("timed_out") for item in results),
+        "unfinished": sum(1 for item in results if item.get("timed_out")) + max(0, len(accounts) - len(results)),
+        "snapshot_path": str(snapshot_path),
     }
+
+
+def _probe_liveness_with_retries(
+    account: dict[str, Any],
+    *,
+    proxy: str | None,
+    timeout: int,
+    browser_fetch: Any = None,
+) -> dict[str, Any]:
+    """Retry transport-only failures against the configured liveness pool."""
+    has_affinity = bool((account.get("identity_context") or {}).get("proxy_affinity"))
+    configured = proxy_pool_for(CFG, "liveness")
+    candidates = configured[:3] if configured and not has_affinity else [None]
+    if not candidates:
+        candidates = [proxy]
+    last: dict[str, Any] = {}
+    for candidate in candidates:
+        effective_proxy = None if has_affinity else (candidate or proxy)
+        last = probe_account_liveness(
+            account, proxy=effective_proxy, timeout=timeout, browser_fetch=browser_fetch
+        )
+        if int(last.get("status_code") or 0) != 0 or last.get("ok"):
+            return last
+        if not is_transient_transport_error(last.get("error")):
+            return last
+    return last
+
+
+def _needs_browser_fallback(probe: dict[str, Any]) -> bool:
+    """Return true only for auth/challenge failures a browser can address."""
+    if not isinstance(probe, dict) or probe.get("ok"):
+        return False
+    try:
+        status_code = int(probe.get("status_code") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    if status_code in {0, 401, 403} or str(probe.get("status") or "").strip().lower() in {"unknown", "token_invalid"}:
+        return True
+    error = str(probe.get("error") or "").lower()
+    return any(marker in error for marker in ("cloudflare", "challenge", "cf-", "invalid_probe_result"))
+
+
+def _clear_promotion_marker_after_probe(email: str) -> None:
+    """Clear a stale promotion 401 while remaining compatible with test seams."""
+    try:
+        clear_stale_promotion_at_marker(email, verified_at=int(time.time()))
+    except TypeError:
+        # Older injected test doubles only accept the original email argument.
+        try:
+            clear_stale_promotion_at_marker(email)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _refresh_mailbox_quarantine_state() -> None:
+    """Prune records for credentials removed or replaced in the repaired pool."""
+    try:
+        from .mailbox import _load_mailbox_pool
+
+        _load_mailbox_pool()
+    except Exception:
+        pass
 
 
 def _emit_account_batch_event(
@@ -376,6 +580,13 @@ def relogin_chatgpt_email_account(
             timeout=timeout,
             persist=persist,
         )
+    except MailboxAuthInvalidError:
+        return {
+            "ok": False,
+            "mode": "chatgpt_email_otp",
+            "error": "mailbox_auth_invalid",
+            "mailbox_auth_invalid": True,
+        }
     except Exception as exc:
         return {
             "ok": False,
@@ -435,6 +646,14 @@ def relogin_codex_account(
         attempt = _safe_relogin_result(result)
         attempt.setdefault("mode", strategy)
         attempts.append(attempt)
+        if str(result.get("error") or "") == "mailbox_auth_invalid":
+            return {
+                "ok": False,
+                "mode": strategy,
+                "error": "mailbox_auth_invalid",
+                "mailbox_auth_invalid": True,
+                "attempts": attempts,
+            }
         if result.get("terminal") or _looks_account_deactivated(result):
             _persist_permanent_deactivation(account, result)
             return {
@@ -916,6 +1135,123 @@ def _item_is_account_deactivated(value: Any) -> bool:
     return _looks_account_deactivated(value.get("probe")) or _looks_account_deactivated(value.get("relogin"))
 
 
+def _timed_out_health_result(email: str, reason: str) -> dict[str, Any]:
+    """Return a stable result for an account skipped by a health deadline."""
+    probe = {
+        "ok": False,
+        "mode": "local",
+        "status": "timeout",
+        "quota_status": "health_timeout",
+        "error": str(reason or "health_timeout"),
+    }
+    persisted = mark_quota_status(email, probe["quota_status"], quota_result=probe) if email else False
+    return {
+        "ok": False,
+        "email": email,
+        "quota_status": probe["quota_status"],
+        "probe": probe,
+        "probe_ok": False,
+        "persisted": bool(persisted),
+        "health_status": "batch_timeout" if reason == "batch_timeout" else "account_timeout",
+        "timed_out": True,
+        "timeout_reason": str(reason or "health_timeout"),
+        "liveness_401": False,
+        "relogin_attempted": False,
+        "mailbox_auth_invalid": False,
+    }
+
+
+def _relogin_guard_path():
+    return runtime_file(CFG, "account_relogin_guard.json")
+
+
+def _relogin_cooldown_seconds() -> int:
+    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    try:
+        return max(60, int(health.get("relogin_cooldown_seconds") or 1800))
+    except (TypeError, ValueError):
+        return 1800
+
+
+def _relogin_cooldown_active(account: dict[str, Any]) -> bool:
+    email = _normalize_email(account.get("email"))
+    if not email:
+        return False
+    # Existing pools may only contain a localized/legacy label. OTP is kept as
+    # an ASCII marker so known mailbox failures do not immediately loop again.
+    quota = account.get("quota") if isinstance(account.get("quota"), dict) else {}
+    status = str(account.get("quota_status") or quota.get("status") or "").strip().lower()
+    try:
+        updated_at = int(account.get("quota_updated_at") or quota.get("updated_at") or 0)
+    except (TypeError, ValueError):
+        updated_at = 0
+    # Legacy localized OTP labels are only a cooldown signal when they were
+    # written inside the current cooldown window. Never turn an old historical
+    # failure into a permanent skip.
+    if updated_at and time.time() - updated_at < _relogin_cooldown_seconds():
+        if status in {"relogin_cooldown", "relogin_otp_failed"} or ("otp" in status and any(marker in status for marker in ("fail", "失", "ʧ"))):
+            return True
+    try:
+        data = json.loads(_relogin_guard_path().read_text(encoding="utf-8"))
+        until = float((data.get(email) or {}).get("cooldown_until") or 0)
+        return until > time.time()
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
+    if not email or str(relogin.get("mode") or "").lower() == "cooldown":
+        return
+    text = json.dumps(relogin, ensure_ascii=False).lower()
+    if not any(marker in text for marker in ("otp", "mailbox", "email")):
+        return
+    path = _relogin_guard_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        if not isinstance(data, dict):
+            data = {}
+    except (OSError, ValueError, TypeError):
+        data = {}
+    key = _normalize_email(email)
+    data[key] = {
+        "failure_class": "relogin_otp_failed",
+        "last_error": str(relogin.get("error") or "relogin_failed")[:200],
+        "cooldown_until": int(time.time() + _relogin_cooldown_seconds()),
+        "updated_at": int(time.time()),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
+    temp.replace(path)
+
+
+def _health_status_code(probe: dict[str, Any], relogin: dict[str, Any]) -> str:
+    if _item_is_account_deactivated({"probe": probe, "relogin": relogin}):
+        return "account_deactivated"
+    if relogin and not relogin.get("ok"):
+        if str(relogin.get("mode") or "") == "cooldown":
+            return "relogin_cooldown"
+        if str(relogin.get("error") or "") == "mailbox_pool_repair_required":
+            return "mailbox_relogin_blocked"
+        if str(relogin.get("error") or "") == "mailbox_auth_invalid":
+            return "mailbox_auth_invalid"
+        if str(relogin.get("error") or "") == "relogin_concurrency_limited":
+            return "relogin_concurrency_limited"
+        text = json.dumps(relogin, ensure_ascii=False).lower()
+        if "mailbox_transport" in text or "mailbox_transport_unavailable" in text:
+            return "relogin_mailbox_transport_failed"
+        if "otp" in text or "mailbox" in text:
+            return "relogin_otp_failed"
+        return "relogin_failed"
+    if _probe_is_token_invalid(probe):
+        return "token_invalid"
+    if probe.get("status") == "timeout":
+        return "probe_timeout"
+    if probe.get("ok"):
+        return "active"
+    return "probe_failed"
+
+
 def _normalize_relogin_mode(value: Any) -> str:
     text = str(value or "").strip().lower().replace("-", "_")
     if text in {"web", "web_session", "session", "chatgpt_session"}:
@@ -932,12 +1268,18 @@ def _normalize_relogin_mode(value: Any) -> str:
 def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
     text = json.dumps(relogin or {}, ensure_ascii=False).lower()
     if "account_deactivated" in text or "deleted or deactivated" in text:
-        return "账号停用"
+        return "account_deactivated"
     if "add_phone" in text or "phone_verification" in text:
-        return "需手机验证"
+        return "phone_verification_required"
+    if "mailbox_transport" in text or "mailbox_transport_unavailable" in text:
+        return "relogin_mailbox_transport_failed"
+    if "mailbox_auth_invalid" in text:
+        return "mailbox_auth_invalid"
     if "mailbox" in text or "email_otp" in text or "otp" in text:
-        return "收信/OTP失败"
-    return "重登失败"
+        return "relogin_otp_failed"
+    if "cooldown" in text:
+        return "relogin_cooldown"
+    return "relogin_failed"
 
 
 def _normalize_email(value: Any) -> str:

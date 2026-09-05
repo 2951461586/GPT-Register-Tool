@@ -77,3 +77,7 @@ scripts/installer/payload.zip
 
 # === 本地日志（不入库）===
 logs/
+
+# Optional local workspace for operator-only state; keep its guide tracked.
+local/*
+!local/README.md

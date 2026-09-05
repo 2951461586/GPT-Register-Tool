@@ -272,7 +272,10 @@ def build_parser():
     parser.add_argument("--check-promotion-after-registration", action="store_true", help="After registration, probe saved successful accounts for Plus trial/discount eligibility")
     parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
     parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
+    parser.add_argument("--mailbox-pool-repaired", action="store_true", help="Acknowledge repaired mailbox credentials and reopen automatic 401 relogin")
     parser.add_argument("--quota-relogin-timeout", type=int, default=180, help="Timeout in seconds for --quota-auto-relogin")
+    parser.add_argument("--quota-batch-timeout", type=int, default=840, help="Maximum total seconds for a local quota batch")
+    parser.add_argument("--quota-account-timeout", type=int, default=120, help="Maximum seconds allowed per local quota account")
     parser.add_argument("--quota-workers", type=int, default=4, help="Concurrent workers for quota refresh")
     parser.add_argument("--sub2api-url", default=None, help="SUB2API base URL, defaults to sub2api.api_url in config.json")
     parser.add_argument("--sub2api-token", default=None, help="SUB2API bearer access token, defaults to sub2api.api_token in config.json")
@@ -457,7 +460,7 @@ def main():
             read_mailbox_pool,
         )
         if args.desktop_read == "accounts":
-            payload = {"ok": True, "accounts": read_accounts(CFG)}
+            payload = {"ok": True, "accounts": read_accounts(CFG, include_session=False)}
         elif args.desktop_read == "account":
             payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
         elif args.desktop_read == "mailbox-pool":
@@ -959,4 +962,3 @@ def _omakse_extract(args):
 
 def _omakse_us_pay(args):
     return omakse_commands.omakse_us_pay(args, omakse_commands.OmakseCommandContext(runtime_config=CFG))
-

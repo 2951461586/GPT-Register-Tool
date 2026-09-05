@@ -49,6 +49,7 @@ SHARD_OWNERSHIP: dict[str, str] = {
     # proxy.json
     "proxy": "proxy",
     "mailbox_proxy": "proxy",
+    "mailbox_proxy_pool": "proxy",
     "phone_reuse": "proxy",
     "paypal_browser": "proxy",
     # payment.json
@@ -199,6 +200,10 @@ def validate_registration_driver_config(
         configured = selected_config.get(key)
         if not str(configured or "").strip():
             raise ConfigError(error_code)
+    if selected == "adspower":
+        user_id = str(selected_config.get("user_id") or selected_config.get("profile_id") or "").strip()
+        if not user_id:
+            raise ConfigError("adspower_user_id_missing")
     # ``proxy`` stays in the signature for call-site stability; every remaining
     # driver consumes the registration proxy locally, so there is no
     # "provider-native proxy setting required" case left to validate.
@@ -399,6 +404,8 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 errors.append(f"proxy.{key} must be a proxy list")
         if "health" in proxy and not isinstance(proxy.get("health"), (str, list, tuple)):
             errors.append("proxy.health must be a proxy list")
+    if "mailbox_proxy_pool" in config and not isinstance(config.get("mailbox_proxy_pool"), (str, list, tuple)):
+        errors.append("mailbox_proxy_pool must be a proxy list")
 
     account_health = config.get("account_health", {})
     if account_health is not None and not isinstance(account_health, Mapping):
@@ -438,6 +445,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         _validate_positive_numbers(registration, (
             "retry_attempts", "retry_delay_seconds", "at_stability_probe_count",
             "at_stability_probe_delay_seconds", "at_probe_timeout_seconds", "browser_timeout_seconds",
+            "browser_worker_limit",
         ), "registration", errors)
         if "browser_headless" in registration and not isinstance(registration.get("browser_headless"), bool):
             errors.append("registration.browser_headless must be a boolean")
@@ -534,6 +542,15 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         errors.append("email_registration must be an object")
     if isinstance(email, Mapping):
         _validate_positive_numbers(email, ("otp_timeout", "otp_poll_interval"), "email_registration", errors)
+
+    codex_oauth = config.get("codex_oauth", {})
+    if codex_oauth is not None and not isinstance(codex_oauth, Mapping):
+        errors.append("codex_oauth must be an object")
+    elif isinstance(codex_oauth, Mapping):
+        # Optional whole-flow ceiling retained for compatibility with older
+        # runtime shards; stage-specific budgets remain authoritative when set.
+        # Empty-string values in legacy shards mean "unset".
+        _ = codex_oauth.get("registration_timeout")
 
     payments = config.get("protocol_payments", {})
     if payments is not None and not isinstance(payments, Mapping):

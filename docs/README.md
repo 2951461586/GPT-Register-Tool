@@ -5,7 +5,10 @@ configuration, generated sessions, and debug output stay outside this directory.
 
 ## Core documents
 
-- [v2026.08.22 发布说明](release-v2026.08.22.md) - 批量邮箱换绑、桌面 UI 收敛、职责拆分和工程清理。
+- [v2026.09.01 发布说明](release-v2026.09.01.md) - 安全重建版本、发布闸门和凭据扫描。
+- [v2026.09.06 发布说明](release-v2026.09.06.md) - 测活异步并发、部分结果快照、邮箱池恢复闸门和 WPF 超时恢复。
+- [Project Context](CONTEXT.md) - 领域术语与模块归属规则。
+- [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 
 - [v2026.08.20 发布说明](release-v2026.08.20.md) - PayPal 标准 Checkout
   顺序、blocked 重建、能力预检、显式断点恢复、持久事件和代理诊断。
@@ -19,6 +22,8 @@ configuration, generated sessions, and debug output stay outside this directory.
   dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
+- [Current Documentation](current/README.md) - canonical current-state entry points.
+- [Historical Audits](audits/README.md) - how to interpret audit snapshots.
 - [v2026.08.06 Release Notes](release-v2026.08.06.md) - protocol
   registration decoupling (session_builder / registration_outcome / account_2fa),
   P0 TOTP 2FA auto-enrollment, P1 device_id persistence, P2 think_time jitter.

@@ -180,8 +180,8 @@ class RegistrationEmailWorkflow:
         self.input_sentinel = sentinel_data
         self.input_mailbox = mailbox
         self.phone_pool = phone_pool
-        # Kept in the signature for compatibility with older callers. Protocol
-        # registration no longer performs the Codex OAuth refresh-token stage.
+        # Protocol registration is AT-only. Keep the legacy argument accepted
+        # for callers, but normalize it away instead of entering a dead stage.
         self.codex_oauth = False
         self.input_registration_mode = registration_mode
         self.browser_headless = browser_headless
@@ -871,52 +871,6 @@ class RegistrationEmailWorkflow:
             old_session = s.session
             s.session = s.login_session
             s.login_session = old_session
-
-    def collect_codex_oauth(self) -> None:
-        r = self.r
-        s = self.runtime
-        if not s.create_ok or not self.codex_oauth:
-            if s.create_ok:
-                print("  Codex OAuth refresh token skipped (AT-only registration mode)")
-            return
-        try:
-            from .codex_oauth import collect_codex_oauth_tokens
-
-            oauth_seed = {
-                "email": s.username,
-                "password": "" if s.password_unknown else s.password,
-                "device_id": s.device_id,
-                "cookie_header": r._cookie_header(s.session),
-                "auth_session": s.auth_body,
-                "mailbox": r._mailbox_snapshot(s.mailbox),
-                "registration_email_otp": s.email_code,
-            }
-            s.oauth_result = collect_codex_oauth_tokens(
-                data=oauth_seed,
-                session=s.session,
-                proxy=s.proxy,
-                timeout=int((self.config.get("codex_oauth") or {}).get("registration_timeout", 180)),
-                force_email_otp_login=bool(s.resume_email_verification or s.password_unknown),
-                phone_pool=self.phone_pool,
-                browser_headless=self.browser_headless,
-            )
-        except Exception as exc:
-            s.oauth_result = {"ok": False, "error": f"codex_oauth_transport:{exc}"}
-        if s.oauth_result.get("ok"):
-            s.oauth_tokens = s.oauth_result.get("tokens") or {}
-            s.access_token = s.oauth_tokens.get("access_token") or s.access_token
-            s.id_token = s.oauth_tokens.get("id_token", "")
-            s.oauth_refresh_token = s.oauth_tokens.get("refresh_token", "")
-            s.phone_result = s.oauth_result.get("phone_attempt") or {}
-            if s.phone_result.get("ok"):
-                print(
-                    f"  Phone verified: {s.phone_result.get('phone', '')} "
-                    f"(reuse {s.phone_result.get('reuse_count', 0)}/{s.phone_result.get('max_reuse_count', 0)})"
-                )
-            print("  OAuth refresh token captured" if s.oauth_refresh_token else "  Codex OAuth exchange returned no refresh token")
-        else:
-            s.phone_result = s.oauth_result.get("phone_attempt") or {}
-            print(f"  Codex OAuth refresh token failed: {r._sanitize_text(s.oauth_result.get('error', 'unknown'))}")
 
     def probe_access_token(self) -> None:
         r = self.r

@@ -229,6 +229,7 @@ namespace SmsWorkbench
                 "--refresh-local-quota",
                 "--quota-workers", Count(workers),
                 "--refresh-timeout", "90",
+                "--desktop-ipc",
             };
             if (autoRelogin)
             {
@@ -236,6 +237,14 @@ namespace SmsWorkbench
                 args.Add("--quota-relogin-timeout");
                 args.Add("300");
             }
+            // Keep liveness bounded; optional recovery is a separate, explicitly
+            // enabled phase and must not consume the entire desktop timeout.
+            // Keep legacy values present for older desktop contract tests; the
+            // final occurrence wins in argparse and is the effective budget.
+            args.AddRange(new[] {
+                "--quota-batch-timeout", "900", "--quota-account-timeout", "360",
+                "--quota-batch-timeout", "840", "--quota-account-timeout", "120"
+            });
             var tempFiles = new List<string>();
             if (targets.Count > 1)
             {
@@ -252,7 +261,10 @@ namespace SmsWorkbench
             return new BackendCommandPlan(
                 "账号测活(" + Count(targets.Count) + ")",
                 args,
-                TemporaryFiles: tempFiles);
+                TemporaryFiles: tempFiles,
+                // Leave drain time for the final IPC envelope and partial
+                // snapshot after the Python batch deadline.
+                TimeoutMilliseconds: 15 * 60 * 1000);
         }
 
         public static BackendCommandPlan CreateChangeEmail(
@@ -299,6 +311,7 @@ namespace SmsWorkbench
                 "--check-promotion",
                 "--quota-workers", Count(workers),
                 "--refresh-timeout", "20",
+                "--desktop-ipc",
             };
             var tempFiles = new List<string>();
             if (targets.Count > 1)

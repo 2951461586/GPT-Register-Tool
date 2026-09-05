@@ -4,6 +4,7 @@
     "chat_base_url": "https://chatgpt.com"
   },
   "mailbox_proxy": "http://127.0.0.1:7897",
+  "mailbox_proxy_pool": [],
   "proxy": {
     "registration": "http://127.0.0.1:7897",
     "browser_registration_pool": [
@@ -24,6 +25,7 @@
     "driver": "protocol",
     "browser_headless": true,
     "browser_timeout_seconds": 90,
+    "browser_worker_limit": 2,
     "browser_locale": "en-US",
     "browser_timezone": "America/New_York",
     "post_registration_dwell_seconds_range": "18,45",
@@ -104,7 +106,15 @@
       "network": 4,
       "at_probe": 4
     },
-    "stage_timeouts": {},
+    "stage_timeouts": {
+      "auth_flow": 60,
+      "user_register": 45,
+      "email_otp_wait": 300,
+      "email_otp_validate": 45,
+      "create_account": 90,
+      "auth_session": 90,
+      "access_token_probe": 60
+    },
     "pulse": {
       "enabled": true,
       "wave_size": 4,
@@ -115,7 +125,7 @@
     },
     "browser_process_pool": {
       "enabled": true,
-      "max_concurrent": 4,
+      "max_concurrent": 2,
       "max_uses_per_process": 10,
       "recycle_on_error": true
     }
@@ -138,6 +148,10 @@
       "service_mode": "purchase",
       "supply": "private_first",
       "email_suffix": "outlook.com",
+      "preflight_enabled": true,
+      "transport_retry_attempts": 3,
+      "transport_retry_backoff_seconds": 1,
+      "proxy_health_file": "runtime/remail_proxy_health.json",
       "otp_poll_interval": 1,
       "batch_timeout": 200,
       "exclude_dead_history": true,
@@ -201,16 +215,11 @@
     "oauth_client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753",
     "oauth_scope": "https://graph.microsoft.com/.default offline_access",
     "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages",
-    "chongzhi": {
-      "enabled": true,
-      "api_url": "https://www.chongzhi.art/api/mailbox/fetch",
-      "rate_limit_seconds": 32,
-      "timeout": 30
-    }
+    "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
   },
   "timeouts": {
     "request": 20,
+    "auth_session": 12,
     "http_retries": 3,
     "retry_delay": 2,
     "token_cache_ttl": 300
@@ -533,8 +542,7 @@
     "allow_passwordless_takeover": false,
     "auto_phone_verification": false,
     "require_registration_refresh_token": true,
-    "require_registration_phone_verification": true,
-    "registration_timeout": 180
+    "require_registration_phone_verification": true
   },
   "phone_reuse": {
     "source": "smsbower",
@@ -567,6 +575,10 @@
     "filename_pattern": "session_{email}_{timestamp}.json"
   },
   "account_health": {
+    "use_registration_affinity": true,
+    "batch_timeout_seconds": 900,
+    "account_timeout_seconds": 360,
+    "relogin_cooldown_seconds": 1800,
     "post_registration_enabled": true,
     "post_registration_deep_liveness": true,
     "proxy_pool": [

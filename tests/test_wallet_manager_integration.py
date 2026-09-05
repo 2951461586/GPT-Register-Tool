@@ -18,7 +18,16 @@ def _overlay(**overrides):
     at ``current_config_data``, the seam the production code actually reads.
     Merging (not replacing) matters: these tests override one nested branch such
     as ``protocol_payments.methods.gopay`` and rely on the rest of the real
-    config still being visible.
+    config still being visible.  Do NOT try to "clean up" the merged config by
+    emptying ``protocol_payments.proxy_pools``: ``stage_routes`` reference those
+    pools **by name**, and ``validate_config`` rejects a config whose routes
+    point at unknown pools.
+
+    Consequence to keep in mind: the merged config carries the real proxy pool,
+    so any test that neither injects a ``transport`` nor passes an explicit
+    ``proxy`` will make the route planner probe the real paid endpoints.
+    ``tests/conftest.py::_no_real_proxy_probe`` turns that into an immediate
+    failure instead of a weather-dependent flake -- see the comment there.
     """
     from sms_tool.pay_link.base import current_config_data
 
@@ -96,11 +105,28 @@ class WalletManagerIntegrationTests(unittest.TestCase):
             "provider_redirect_url": "https://app.midtrans.com/snap/v4/redirection/fixture",
             "link_type": "gopay_protocol",
         }
+        # An injected transport is what keeps this test off the network: it sets
+        # `ignore_configured_routes`, so the planner ignores the real
+        # `stage_routes` / named pools and ends up with an empty pool, which it
+        # never probes.  Without it the merged real config hands the planner the
+        # live paid proxy pool (us.ipwo.net) and the test probes it for real --
+        # it only "passed" before because those probes usually succeed.
+        #
+        # Note `proxy="..."` does NOT work here: it binds to the `default_proxy`
+        # parameter, not to `options`, so it neither marks the route explicit nor
+        # empties the pool -- it just becomes the single candidate and gets
+        # probed.
+        #
+        # The transport itself is unused: registry._run_wallet_adapter is mocked.
         with tempfile.TemporaryDirectory() as tmp, \
              _overlay(protocol_payments={"enabled_methods": ["gopay"]}), \
              patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
              patch("sms_tool.pay_link.registry._run_wallet_adapter", return_value=adapter_result) as adapter:
-            result = manager.generate_payment_link("token", payment_method="gopay")
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="gopay",
+                transport=object(),
+            )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["manager_state"], "completed")

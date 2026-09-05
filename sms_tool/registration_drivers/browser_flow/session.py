@@ -222,6 +222,37 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
         diagnostics["title"] = _safe_text(page.title())[:120]
     except Exception:
         pass
+    # Record bounded DOM landmarks, never page content, cookies, or tokens.
+    # These fields distinguish a slow SPA transition from a wrong page or
+    # challenge when a selector-based state probe times out.
+    try:
+        state = page.evaluate(
+            """() => ({
+                ready_state: document.readyState || '',
+                email_inputs: document.querySelectorAll(
+                    "input[type=email], input[name=email], input[name=username], input#email-input, input[autocomplete=email]"
+                ).length,
+                password_inputs: document.querySelectorAll("input[type=password]").length,
+                buttons: document.querySelectorAll("button").length,
+                challenge: !!document.querySelector(
+                    "iframe[src*='challenge'], iframe[src*='turnstile'], [data-testid*='challenge'], .cf-turnstile"
+                ),
+                auth_path: /\\/auth\\//i.test(location.pathname || ''),
+                chat_path: /chatgpt\\.com/i.test(location.host || '') && !/\\/auth\\//i.test(location.pathname || '')
+            })"""
+        )
+        if isinstance(state, Mapping):
+            diagnostics.update({
+                "ready_state": str(state.get("ready_state") or "")[:20],
+                "email_inputs": int(state.get("email_inputs") or 0),
+                "password_inputs": int(state.get("password_inputs") or 0),
+                "button_count": int(state.get("buttons") or 0),
+                "challenge_present": bool(state.get("challenge")),
+                "auth_path": bool(state.get("auth_path")),
+                "chat_path": bool(state.get("chat_path")),
+            })
+    except Exception:
+        pass
     return diagnostics
 
 

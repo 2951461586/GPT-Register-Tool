@@ -195,6 +195,32 @@ def test_running_item_owned_by_current_process_is_not_recovered():
     assert items[0]["last_error"] == ""
 
 
+def test_recover_account_health_queue_expires_old_pending_jobs():
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        account_health_queue,
+        "queue_path",
+        return_value=Path(tmp) / "queue.json",
+    ):
+        account_health_queue._write_unlocked(
+            [
+                {
+                    "id": "old-pending",
+                    "email": "missing@example.com",
+                    "kind": "plan",
+                    "status": "pending",
+                    "created_at": int(time.time()) - 7200,
+                    "updated_at": int(time.time()) - 7200,
+                }
+            ]
+        )
+        summary = account_health_queue.recover_account_health_queue(pending_ttl_seconds=3600)
+        saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
+
+    assert summary["expired"] == 1
+    assert saved[0]["status"] == "failed"
+    assert saved[0]["last_error"] == "queue_item_expired"
+
+
 def test_storage_persists_unified_health_result_without_token():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "accounts.sqlite3"

@@ -112,10 +112,10 @@ namespace SmsWorkbench
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
-        private void RunAccountBatchBackend(string taskName, List<string> args, string domain, int total)
-            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total, ct: _lifetimeCts.Token));
+        private void RunAccountBatchBackend(string taskName, List<string> args, string domain, int total, int? timeoutMs = null)
+            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total, timeoutMs, ct: _lifetimeCts.Token));
 
-        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, CancellationToken ct = default)
+        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, int? timeoutMs = null, CancellationToken ct = default)
         {
             if (backendTasks.IsRunning)
             {
@@ -177,15 +177,28 @@ namespace SmsWorkbench
                     BackendCommand.Create(
                         taskName,
                         args,
-                        BackendTaskTimeoutMs,
+                        timeoutMs ?? BackendTaskTimeoutMs,
                         new Dictionary<string, string> { ["SMSWORKBENCH_EVENTS"] = "1" }),
                     progress);
 
                 // Use BackendResultInterpreter to normalize the outcome
                 BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(
-                    result, taskName, BackendTaskTimeoutSeconds);
+                    result, taskName, (timeoutMs ?? BackendTaskTimeoutMs) / 1000);
+
+                // A killed Python process may not emit its terminal envelope.
+                // Recover the rows already persisted by the liveness workers so
+                // the operator still gets a useful partial result dialog.
+                if (result.TimedOut && taskName.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase))
+                {
+                    string snapshot = TryReadLatestLivenessSnapshot();
+                    if (snapshot.Length > 0)
+                        CaptureBackendLine(snapshot);
+                }
 
                 task.Status = interpreted.IsSuccess ? "完成" : "失败";
+                string batchSummary = BackendResultInterpreter.BatchSummaryLabel(interpreted.Payload);
+                if (batchSummary.Length > 0)
+                    task.Info = batchSummary;
                 task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusText = taskName + " 已结束";
@@ -222,6 +235,28 @@ namespace SmsWorkbench
             finally
             {
                 progressDialog?.Close();
+            }
+        }
+
+        private string TryReadLatestLivenessSnapshot()
+        {
+            try
+            {
+                string directory = Path.Combine(rootDir, "runtime", "account_liveness_batches");
+                if (!Directory.Exists(directory)) return "";
+                string? latest = Directory.GetFiles(directory, "*.json")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(latest)) return "";
+                using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(latest));
+                JsonElement root = doc.RootElement;
+                return root.TryGetProperty("results", out _) && root.TryGetProperty("total", out _)
+                    ? root.GetRawText()
+                    : "";
+            }
+            catch
+            {
+                return "";
             }
         }
 

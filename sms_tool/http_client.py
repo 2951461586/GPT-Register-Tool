@@ -74,6 +74,10 @@ TRANSIENT_MARKERS = (
     "curl: (35)",
     "curl: (52)",
     "curl: (56)",
+    # Firefox/Camoufox reports an interrupted navigation as NS_ERROR_ABORT;
+    # this is a transport-level retry, not an account or mailbox failure.
+    "ns_error_abort",
+    "navigation aborted",
 )
 
 

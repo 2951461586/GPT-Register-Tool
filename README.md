@@ -355,11 +355,11 @@ services/
 | `sms_tool/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
 | `sms_tool/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
-| `sms_tool/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
-| `sms_tool/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
-| `sms_tool/mailbox_graph.py` | Microsoft OAuth 与 Graph 边界 |
-| `sms_tool/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
-| `sms_tool/mailbox_icloud_url.py` | iCloud 接码链接收件、HTML/API 正文解析与 OTP 归一化 |
+| `sms_tool/providers/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
+| `sms_tool/providers/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
+| `sms_tool/providers/mailbox_graph.py` | Microsoft OAuth 与 Graph 边界 |
+| `sms_tool/providers/mailbox_gmail.py` | Gmail IMAP/SMTP 与 OAuth |
+| `sms_tool/providers/mailbox_icloud_url.py` | iCloud 接码链接收件、HTML/API 正文解析与 OTP 归一化 |
 | `sms_tool/payment_link_manager.py` | 支付方法注册、状态机与统一结果 |
 | `sms_tool/payment_flow.py` | 支付阶段词汇与各支付方式流程 profile |
 | `sms_tool/payment_routing.py` | 支付方式独立代理池、阶段路由和脱敏执行计划 |
@@ -436,6 +436,8 @@ services/
 ```
 
 注册流量走 JP 动态代理（`proxy.registration` / `proxy.pool`），worker 会刷新动态 Session 使各并发出口 IP 不同；邮箱 OTP 收取固定走 `mailbox_proxy`（默认 `http://127.0.0.1:7897`），不会继承注册代理；支付流量走各支付方式自己的 Checkout / Approve 池。三者互不覆盖，支付池在桌面端“批量协议支付”窗口显示和保存。
+
+账号测活、查优惠、恢复等携带已保存 Access Token 或 session 的操作例外：必须恢复该账号注册时的代理 affinity 与指纹画像（浏览器账号还会复用持久化浏览器 profile），不可切换到本地邮箱代理；浏览器上下文无法恢复时应失败闭环，避免用不匹配的出口继续请求导致 AT 被上游撤销。
 
 ### 协议支付代理池
 
@@ -652,7 +654,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.08.22.md)
+- [最新发布说明](docs/release-v2026.09.06.md)
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

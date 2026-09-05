@@ -138,13 +138,10 @@ def upsert_account(
         conn.commit()
     finally:
         conn.close()
-    if status == "account_deactivated" and row["mailbox_provider"].strip().lower() == "remail":
-        try:
-            from ..mailbox_remail import record_dead_remail_account
+    if status == "account_deactivated":
+        from ..account_events import notify_account_deactivated
 
-            record_dead_remail_account(data, reason="account_deactivated")
-        except Exception as exc:
-            print(f"[!] Failed to update ReMail dead-account history: {exc}")
+        notify_account_deactivated(row)
     return True
 
 
@@ -204,7 +201,7 @@ def list_paypal_accounts(email="", *, runtime_config: ConfigInput = None):
     """
     params = []
     if email:
-        query += " WHERE lower(email)=lower(?)"
+        query += " WHERE email=?"
         params.append(email)
     query += " ORDER BY updated_at DESC"
     conn = _connect(runtime_config=runtime_config)
@@ -233,7 +230,7 @@ def get_account_record(email, *, runtime_config: ConfigInput = None):
     try:
         lookup_email = _find_existing_account_email(conn, email) or _normalize_account_email(email)
         row = conn.execute(
-            "SELECT * FROM accounts WHERE lower(email)=lower(?)",
+            "SELECT * FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
     finally:

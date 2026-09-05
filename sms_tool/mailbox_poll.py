@@ -1,7 +1,6 @@
 """Common OTP polling loop with settle-stability detection.
 
-Shared template used by _poll_email_otp, _poll_chongzhi_otp and
-mailbox_cfworker polling to avoid duplicating the deadline/interval/settle
+Shared template used by _poll_email_otp and provider polling to avoid duplicating the deadline/interval/settle
 logic across providers.
 """
 

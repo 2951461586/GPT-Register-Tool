@@ -41,6 +41,12 @@ class BrowserDriverSpec:
     # ``protocol`` is the HTTP/API path and is not a browser driver; the rest
     # map 1:1 to a browser session class.
     is_browser: bool = True
+    supports_headless: bool = True
+    supports_context_reuse: bool = False
+    supports_proxy_rotation: bool = True
+    supports_browser_fetch: bool = True
+    supports_profile_persistence: bool = True
+    supports_crash_recovery: bool = True
 
 
 # Canonical driver registry. This is the only place the driver vocabulary and
@@ -50,9 +56,15 @@ DRIVERS: dict[str, BrowserDriverSpec] = {
         "protocol",
         frozenset({"protocol", "api", "http"}),
         is_browser=False,
+        supports_headless=False,
+        supports_proxy_rotation=True,
+        supports_browser_fetch=False,
+        supports_profile_persistence=False,
+        supports_crash_recovery=False,
     ),
     RegistrationDriver.PLAYWRIGHT.value: BrowserDriverSpec(
         "playwright", frozenset({"playwright", "pw"}),
+        supports_context_reuse=True,
     ),
     RegistrationDriver.ROXY.value: BrowserDriverSpec(
         "roxy",
@@ -102,6 +114,21 @@ def normalize_registration_driver(value: Any = None, config: Mapping[str, Any] |
 def driver_choices() -> list[str]:
     """Argparse choices for ``--registration-driver`` (and any CLI mirror)."""
     return sorted(DRIVERS)
+
+
+def driver_capabilities(value: Any = None, config: Mapping[str, Any] | None = None) -> dict[str, bool]:
+    """Return stable capability metadata for orchestration and diagnostics."""
+    key = normalize_registration_driver(value, config)
+    spec = DRIVERS[key]
+    return {
+        "is_browser": bool(spec.is_browser),
+        "supports_headless": bool(spec.supports_headless),
+        "supports_context_reuse": bool(spec.supports_context_reuse),
+        "supports_proxy_rotation": bool(spec.supports_proxy_rotation),
+        "supports_browser_fetch": bool(spec.supports_browser_fetch),
+        "supports_profile_persistence": bool(spec.supports_profile_persistence),
+        "supports_crash_recovery": bool(spec.supports_crash_recovery),
+    }
 
 
 class BrowserRegistrationError(RuntimeError):

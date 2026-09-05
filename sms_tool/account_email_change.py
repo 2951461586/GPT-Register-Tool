@@ -117,15 +117,15 @@ def allocate_target_mailboxes(request: EmailChangeRequest, count: int) -> list[M
         return []
     args = _build_provider_args(request, count)
     if provider == "remail":
-        from .mailbox_remail import _create_remail_mailboxes
+        from .providers.mailbox_remail import _create_remail_mailboxes
 
         mailboxes = _create_remail_mailboxes(args, service_mode=request.service_mode or "purchase")
     elif provider == "cfworker":
-        from .mailbox_cfworker import _create_cfworker_mailboxes
+        from .providers.mailbox_cfworker import _create_cfworker_mailboxes
 
         mailboxes = _create_cfworker_mailboxes(args)
     elif provider == "smailr":
-        from .mailbox_smailr import create_smailr_mailboxes
+        from .providers.mailbox_smailr import create_smailr_mailboxes
 
         mailboxes = create_smailr_mailboxes(count=count, domain=request.smailr_domain, proxy=request.proxy)
     elif provider in {"icloud", "outlook", "hotmail"}:

@@ -40,6 +40,28 @@ class RegistrationProgressTests(unittest.TestCase):
             failed = [item for item in stored["events"] if item["stage"] == "failed"]
             self.assertEqual(1, len(failed))
 
+    def test_persist_includes_batch_and_retry_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({
+                    "success": False,
+                    "error": "browser_registration_state_unknown",
+                    "batch_id": "batch-1",
+                    "registration_attempts": 2,
+                    "failure_class": "auth_state",
+                    "retryable": True,
+                    "registration_state": "retry_pending",
+                    "proxy_audit": {"pool_index": 0},
+                })
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(stored["batch_id"], "batch-1")
+            self.assertEqual(stored["attempt"], 2)
+            self.assertEqual(stored["failure_class"], "auth_state")
+            self.assertTrue(stored["retryable"])
+            self.assertEqual(stored["proxy_pool_index"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,8 @@ from .flow_steps import _browser_session_scope, _poll_browser_otp, _restart_emai
 from .form_steps import _complete_profile, _fill_email, _fill_otp, _fill_password_if_present, _maybe_accept_cookies, _maybe_dismiss_chatgpt_onboarding
 from .page_state import _ensure_signup_page_ready, _manual_challenge, _post_otp_registration_state, _profile_completion_required, _wait_after_otp_submit, _wait_for_challenge_clear, _wait_for_profile_completion, _wait_for_registration_state
 from .session import _bind_totp_in_browser, _browser_access_token_probe, _browser_diagnostics, _browser_failure_class, _post_registration_dwell, _safe_proxy_audit, _session_payload
+from .context import prepare_browser_context
+from .recovery import is_navigation_retryable, probe_pending, stage_timeout
 
 from ...mailbox import _ensure_mailbox_account
 from ...mailbox_service import MailboxService
@@ -18,11 +20,39 @@ from ...registration_outcome import _browser_mailbox_snapshot, _mailbox_snapshot
 from ...registration_progress import registration_stage
 from ...registration_state import RegistrationState, RegistrationStateMachine
 from ...utils import _generate_password, _random_birthdate, _random_name
-from ..base import BrowserRegistrationError, normalize_registration_driver
+from ..base import BrowserRegistrationError, driver_capabilities, normalize_registration_driver
 from ..external_sessions import _driver_config, create_browser_session
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
+
+
+def _goto_with_retry(page: Any, url: str, *, timeout_ms: int, attempts: int = 2) -> int:
+    """Navigate with bounded recovery for transient proxy/edge failures.
+
+    Camoufox can abort a ``domcontentloaded`` navigation after the document
+    has already committed. A retry using ``commit`` lets the state classifier
+    inspect that document instead of treating the abort as an account failure.
+    """
+    last_error = None
+    for attempt in range(1, max(1, int(attempts or 1)) + 1):
+        try:
+            wait_until = "domcontentloaded" if attempt == 1 else "commit"
+            page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+            return attempt
+        except Exception as exc:
+            last_error = exc
+            if attempt >= attempts or not is_navigation_retryable(exc):
+                raise
+            registration_stage(
+                "auth_flow_retry",
+                detail=f"goto_retry={attempt};wait_until={wait_until};error={type(exc).__name__}",
+            )
+            try:
+                page.wait_for_timeout(min(2_000, max(250, timeout_ms // 20)))
+            except Exception:
+                time.sleep(0.5)
+    raise last_error
 
 
 def run_browser_registration(
@@ -68,25 +98,18 @@ def run_browser_registration(
     email = str(getattr(mailbox, "email", "") or "").strip()
     if not email:
         return {"success": False, "error": "mailbox_required", "registration_driver": driver_name}
-    email_cfg = config.get("email_registration") if isinstance(config.get("email_registration"), Mapping) else {}
     password = str(password or "").strip()
     if not password:
         password = _generate_password()
     full_name = " ".join(_random_name())
     birthdate = _random_birthdate()
-    selected_cfg = _driver_config(config, driver_name)
-    if browser_headless is not None:
-        headless = bool(browser_headless)
-    elif "open_headless" in selected_cfg:
-        headless = bool(selected_cfg.get("open_headless"))
-    elif "headless" in selected_cfg:
-        headless = bool(selected_cfg.get("headless"))
-    else:
-        headless = bool(_config_value(config, "browser_headless", True))
-    timeout = int(_config_value(config, "browser_timeout_seconds", 90) or 90)
-    locale = str(_config_value(config, "browser_locale", "en-US") or "en-US")
-    timezone_id = str(_config_value(config, "browser_timezone", "America/New_York") or "America/New_York")
-    otp_timeout = int(email_cfg.get("otp_timeout") or 300)
+    context = prepare_browser_context(config, driver_name, browser_headless)
+    selected_cfg = context.driver_config
+    headless = context.headless
+    timeout = context.timeout
+    locale = context.locale
+    timezone_id = context.timezone_id
+    otp_timeout = context.otp_timeout
     try:
         mailbox_service = MailboxService.create(config)
     except Exception as exc:
@@ -105,16 +128,23 @@ def run_browser_registration(
     device_context = get_device_context(email, runtime_config=config)
     device_id = str((device_context or {}).get("device_id") or uuid.uuid4())
     machine.transition(RegistrationState.IDENTITY_READY)
-    chat_cfg = config.get("chatgpt") if isinstance(config.get("chatgpt"), Mapping) else {}
-    chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-    auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
-    start_url = str((selected_cfg or {}).get("start_url") or f"{chat_base}/auth/login")
+    chat_base = context.chat_base
+    auth_base = context.auth_base
+    start_url = context.start_url
     page = None
     diagnostics = {"driver": driver_name, "url_host": "", "title": ""}
     account_key = email
+    attempt_number = 1
+    try:
+        attempt_number = max(1, int((proxy_metadata or {}).get("attempt") or 1))
+    except (TypeError, ValueError):
+        attempt_number = 1
+    profile_key = account_key if attempt_number == 1 else f"{account_key}__retry{attempt_number}"
     browser_identity: dict[str, Any] = {
         "driver": driver_name,
-        "profile_id": account_key,
+        # Failed attempts get an isolated on-disk profile so stale auth pages
+        # cannot make the next retry miss the signup email field.
+        "profile_id": profile_key,
     }
     # --- Browser fingerprint pool + exit-geo alignment -----------------------
     # Mirror turb-gpt-free-register's BROWSER_PROFILE_POOL + _detect_exit_geo:
@@ -161,7 +191,7 @@ def run_browser_registration(
             page = browser.page
             browser.add_device_cookie(device_id, chat_base, auth_base)
             machine.transition(RegistrationState.AUTH_FLOW)
-            page.goto(start_url, wait_until="domcontentloaded", timeout=timeout * 1_000)
+            _goto_with_retry(page, start_url, timeout_ms=timeout * 1_000)
             _maybe_accept_cookies(page)
             # P1 risk-control: replay a real browser's ChatGPT first-screen
             # request sequence (mirrors turb-gpt-free-register's
@@ -170,17 +200,49 @@ def run_browser_registration(
             from ...chatgpt_bootstrap import run_anonymous_bootstrap
 
             _anon_bootstrap = run_anonymous_bootstrap(page, config)
-            _ensure_signup_page_ready(page, timeout_seconds=min(45, timeout), config=config)
+            try:
+                _ensure_signup_page_ready(
+                    page,
+                    timeout_seconds=stage_timeout(config, "auth_flow", min(45, timeout), maximum=120),
+                    config=config,
+                )
+            except BrowserRegistrationError as exc:
+                # A committed SPA document can miss the email field while its
+                # auth shell is still mounting. Reuse the same proxy once, but
+                # reload the document before allowing the batch retry policy to
+                # consume another mailbox attempt.
+                if exc.code != "browser_email_field_missing":
+                    raise
+                registration_stage("auth_flow_retry", detail="signup_ready_reload")
+                try:
+                    page.reload(wait_until="commit", timeout=max(5_000, timeout * 1_000))
+                except Exception:
+                    pass
+                _ensure_signup_page_ready(
+                    page,
+                    timeout_seconds=stage_timeout(config, "auth_flow", min(30, timeout), maximum=120),
+                    config=config,
+                )
             from ...mailbox import _snapshot_mailbox_message
             _snapshot_mailbox_message(mailbox, proxy=proxy)
             started = int(time.time())
             _fill_email(page, email, config=config)
             machine.transition(RegistrationState.USER_REGISTER)
-            state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
+            state = _wait_for_registration_state(
+                page,
+                stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+                browser=browser,
+                config=config,
+            )
             if state == "challenge":
                 if not _wait_for_challenge_clear(page, max_wait_seconds=30):
                     raise BrowserRegistrationError("manual_challenge_required")
-                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
+                state = _wait_for_registration_state(
+                    page,
+                    stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+                    browser=browser,
+                    config=config,
+                )
                 if state == "challenge":
                     raise BrowserRegistrationError("manual_challenge_required")
             if state == "identity_provider":
@@ -197,11 +259,21 @@ def run_browser_registration(
                 password_used = False
             machine.transition(RegistrationState.EMAIL_OTP_SEND)
             if password_used:
-                state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
+                state = _wait_for_registration_state(
+                    page,
+                    stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+                    browser=browser,
+                    config=config,
+                )
                 if state == "challenge":
                     if not _wait_for_challenge_clear(page, max_wait_seconds=30):
                         raise BrowserRegistrationError("manual_challenge_required")
-                    state = _wait_for_registration_state(page, min(timeout, 30), browser=browser, config=config)
+                    state = _wait_for_registration_state(
+                        page,
+                        stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+                        browser=browser,
+                        config=config,
+                    )
                     if state == "challenge":
                         raise BrowserRegistrationError("manual_challenge_required")
                 if state == "login_password":
@@ -261,7 +333,12 @@ def run_browser_registration(
                     excluded_otps.add(str(otp))
                     machine.transition(RegistrationState.EMAIL_OTP_VALIDATE)
                     _fill_otp(page, str(otp))
-                    outcome = _wait_after_otp_submit(page, timeout_seconds=min(30, timeout))
+                    outcome = _wait_after_otp_submit(
+                        page,
+                        timeout_seconds=stage_timeout(
+                            config, "email_otp_validate", min(30, timeout), maximum=120
+                        ),
+                    )
                     # Match the reference Roxy state machine: absence of an explicit
                     # validation error is accepted even when the old OTP DOM remains
                     # mounted during a slow SPA navigation.
@@ -286,15 +363,43 @@ def run_browser_registration(
             state = _post_otp_registration_state(
                 page,
                 browser=browser,
-                timeout_seconds=min(30, max(5, timeout)),
+                timeout_seconds=stage_timeout(
+                    config, "create_account", min(30, max(5, timeout)), maximum=120
+                ),
                 config=config,
             )
+            if state == "unknown":
+                registration_stage("create_account_retry", detail="state_probe_retry")
+                state = _post_otp_registration_state(
+                    page,
+                    browser=browser,
+                    timeout_seconds=stage_timeout(
+                        config, "create_account", min(45, max(10, timeout)), maximum=120
+                    ),
+                    config=config,
+                )
             page = getattr(browser, "page", None) or page
             machine.transition(RegistrationState.CREATE_ACCOUNT)
             profile_required = _profile_completion_required(state)
             if profile_required:
                 _complete_profile(page, full_name, birthdate)
-                if not _wait_for_profile_completion(page, timeout_seconds=min(30, max(5, timeout)), config=config):
+                profile_done = _wait_for_profile_completion(
+                    page,
+                    timeout_seconds=stage_timeout(
+                        config, "create_account", min(30, max(5, timeout)), maximum=120
+                    ),
+                    config=config,
+                )
+                if not profile_done:
+                    registration_stage("create_account_retry", detail="profile_completion_retry")
+                    profile_done = _wait_for_profile_completion(
+                        page,
+                        timeout_seconds=stage_timeout(
+                            config, "create_account", min(20, max(5, timeout)), maximum=120
+                        ),
+                        config=config,
+                    )
+                if not profile_done:
                     raise BrowserRegistrationError("browser_profile_submit_timeout")
                 page.wait_for_timeout(2_000)
             if _manual_challenge(page):
@@ -304,10 +409,17 @@ def run_browser_registration(
             if hasattr(browser, "ensure_chatgpt_context"):
                 page = _prepare_session_page(browser, page, timeout)
             elif chat_host and chat_host not in str(page.url or "").lower():
-                page.goto(chat_base, wait_until="domcontentloaded", timeout=timeout * 1_000)
+                _goto_with_retry(page, chat_base, timeout_ms=timeout * 1_000)
             _maybe_dismiss_chatgpt_onboarding(page, config=config)
             machine.transition(RegistrationState.AUTH_SESSION)
-            session_info = _session_payload(browser, chat_base, email, timeout_seconds=timeout)
+            session_info = _session_payload(
+                browser,
+                chat_base,
+                email,
+                timeout_seconds=stage_timeout(
+                    config, "auth_session", timeout, minimum=15, maximum=120
+                ),
+            )
             auth_body = session_info["body"]
             access_token = session_info["access_token"]
             machine.transition(RegistrationState.ACCESS_TOKEN_PROBE)
@@ -336,6 +448,10 @@ def run_browser_registration(
                 stage_fn=registration_stage, sleep_fn=time.sleep,
             )
             success, error, warning = _registration_outcome(True, {}, access_token, probe)
+            # A token plus a transport-unknown probe means the account was
+            # created but the final check could not reach the endpoint. Keep a
+            # resumable persistence state instead of discarding the account.
+            at_probe_pending = probe_pending(access_token, probe, success)
             if success:
                 _post_registration_dwell(config)
             machine.transition(RegistrationState.TOTP_ENROLL)
@@ -417,7 +533,10 @@ def run_browser_registration(
                 "registration_driver": driver_name,
                 "registration_mode": "browser",
                 "registration_country": infer_proxy_country(proxy),
-                "registration_success_basis": "at_http_200" if success else "",
+                "registration_success_basis": (
+                    "at_http_200" if success else "at_probe_pending" if at_probe_pending else ""
+                ),
+                "registration_state": "at_probe_pending" if at_probe_pending else ("active" if success else "failed"),
                 "registration_warning": _safe_text(warning),
                 "access_token": access_token,
                 "id_token": session_info.get("id_token", ""),
@@ -445,6 +564,7 @@ def run_browser_registration(
                 "mailbox": _mailbox_snapshot(mailbox),
                 "browser_diagnostics": _browser_diagnostics(page, driver_name),
                 "proxy_audit": _safe_proxy_audit(proxy_metadata),
+                "driver_capabilities": driver_capabilities(driver_name),
             }
             machine.transition(RegistrationState.COMPLETED)
             result["registration_machine"] = machine.snapshot()
@@ -464,6 +584,7 @@ def run_browser_registration(
             "registration_machine": machine.snapshot(),
             "browser_diagnostics": diagnostics,
             "proxy_audit": _safe_proxy_audit(proxy_metadata),
+            "driver_capabilities": driver_capabilities(driver_name),
         }
     except Exception as exc:
         if machine.state is not RegistrationState.FAILED:
@@ -481,6 +602,7 @@ def run_browser_registration(
             "registration_machine": machine.snapshot(),
             "browser_diagnostics": diagnostics,
             "proxy_audit": _safe_proxy_audit(proxy_metadata),
+            "driver_capabilities": driver_capabilities(driver_name),
         }
 
 

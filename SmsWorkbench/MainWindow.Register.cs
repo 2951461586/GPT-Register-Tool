@@ -244,7 +244,7 @@ namespace SmsWorkbench
                 options.Workers,
                 options.AutoRelogin,
                 GetLivenessProxyPool());
-            RunAccountBatchBackend(plan.TaskName, plan.Arguments.ToList(), "account_scan", rows.Count);
+            RunAccountBatchBackend(plan.TaskName, plan.Arguments.ToList(), "account_scan", rows.Count, plan.TimeoutMilliseconds);
         }
 
         private void CheckPromotion_Click(object sender, RoutedEventArgs e)

@@ -128,19 +128,3 @@ def test_the_real_graph_adapter_loses_when_registered_first():
         MailboxAccount("user@example.com", provider="cfworker"), {})
     assert resolved is not None
     assert resolved.name == "cfworker"
-
-
-def test_chongzhi_polling_uses_injected_registry_adapter():
-    called = {}
-    def fake_poll(mailbox, **kwargs):
-        called.update(kwargs)
-        return "654321"
-    registry = MailboxProviderRegistry()
-    registry.register(FunctionMailboxProviderAdapter(
-        "chongzhi", lambda mailbox, _config: mailbox.provider == "chongzhi",
-        otp_poller=fake_poll,
-    ))
-    service = MailboxService.create(_config(), registry)
-    mailbox = MailboxAccount("user@example.com", password="secret", provider="chongzhi")
-    assert service.poll_otp(mailbox, timeout=17) == "654321"
-    assert called["timeout"] == 17

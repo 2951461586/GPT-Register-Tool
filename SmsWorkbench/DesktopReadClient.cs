@@ -460,7 +460,9 @@ namespace SmsWorkbench
                     throw new FileNotFoundException("Backend script not found", paths.BackendScriptPath);
                 var startInfo = new ProcessStartInfo
                 {
-                    FileName = settings.GetString("runtime.python_path", "python"),
+                    FileName = PythonPathResolver.Resolve(
+                        paths,
+                        settings.GetString("runtime.python_path", "python")),
                     WorkingDirectory = paths.RootDirectory,
                     UseShellExecute = false,
                     RedirectStandardInput = true,

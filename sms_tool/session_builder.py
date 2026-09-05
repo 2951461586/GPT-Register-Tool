@@ -102,6 +102,9 @@ def build_session_file(data):
 
     return {
         "email": data.get("email") or mailbox.get("email") or "",
+        "success": bool(data.get("success")) if "success" in data else bool(access_token),
+        "status": data.get("status") or ("registered" if access_token else "pending"),
+        "registration_state": data.get("registration_state") or ("active" if access_token else "failed"),
         "phone": data.get("phone", ""),
         "password": data.get("password", ""),
         "session_token": session_token or "",

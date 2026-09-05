@@ -24,8 +24,7 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
     except ImportError:
         logger.debug("[%s] playwright-stealth is unavailable; continuing without the optional init script", label)
         return None
-    try:
-        return Stealth(
+    kwargs = dict(
             # Keep the provider's native UA, client hints, platform, and WebGL.
             navigator_user_agent=False,
             navigator_user_agent_data=False,
@@ -49,6 +48,25 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
             error_prototype=True,
             init_scripts_only=True,
         )
+    # playwright-stealth warns when navigator_platform is disabled while its
+    # default override remains populated.  Explicitly clear that override when
+    # supported by the installed version; retain compatibility with older
+    # releases that do not expose the keyword.
+    try:
+        import inspect
+        if "navigator_platform_override" in inspect.signature(Stealth).parameters:
+            kwargs["navigator_platform_override"] = None
+    except Exception:
+        pass
+    try:
+        return Stealth(**kwargs)
+    except TypeError:
+        kwargs.pop("navigator_platform_override", None)
+        try:
+            return Stealth(**kwargs)
+        except Exception as exc:
+            logger.debug("[%s] could not construct playwright-stealth: %s", label, type(exc).__name__)
+            return None
     except Exception as exc:
         logger.debug("[%s] could not construct playwright-stealth: %s", label, type(exc).__name__)
         return None

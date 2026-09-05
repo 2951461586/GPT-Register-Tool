@@ -268,7 +268,10 @@ def _post_otp_registration_state(
     config: Mapping[str, Any] | None = None,
 ) -> str:
     """Re-probe the destination after OTP before deciding on profile work."""
-    probe_timeout = min(30, max(1, int(timeout_seconds or 1)))
+    # OTP callbacks can take longer than the initial 30s SPA transition. The
+    # caller supplies the stage budget; cap only the upper bound to prevent a
+    # malformed config from blocking a worker indefinitely.
+    probe_timeout = max(1, min(int(timeout_seconds or 1), 120))
     state = _wait_for_registration_state(
         page,
         probe_timeout,

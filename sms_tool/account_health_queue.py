@@ -17,6 +17,7 @@ from .account_health import (
     liveness_health_result,
     plan_health_result,
 )
+from .config import CFG
 from .paths import runtime_file
 
 
@@ -26,10 +27,12 @@ _WORKER: threading.Thread | None = None
 _TRANSIENT: dict[str, dict[str, Any]] = {}
 _ACTIVE = {"pending", "running"}
 _TERMINAL = {"completed", "failed", "cancelled"}
+_PENDING_TTL_SECONDS = 6 * 60 * 60
+_BROWSER_FALLBACK_SLOTS = threading.BoundedSemaphore(2)
 
 
 def queue_path() -> Path:
-    return runtime_file(None, "account_health") / "queue.json"
+    return runtime_file(CFG, "account_health") / "queue.json"
 
 
 def enqueue_account_health(
@@ -192,19 +195,30 @@ def process_account_health_jobs(
             try:
                 value = future.result()
                 result = value.to_dict() if isinstance(value, AccountHealthResult) else dict(value or {})
-                updated = _update(
-                    item["id"],
-                    status="completed",
-                    result=result,
-                    last_error="",
-                )
+                try:
+                    updated = _update(
+                        item["id"],
+                        status="completed",
+                        result=result,
+                        last_error="",
+                    )
+                except KeyError:
+                    updated = {**item, "status": "completed", "result": result}
             except Exception as exc:
-                updated = _update(
-                    item["id"],
-                    status="failed",
-                    result={},
-                    last_error=f"{type(exc).__name__}:{str(exc)[:300]}",
-                )
+                try:
+                    updated = _update(
+                        item["id"],
+                        status="failed",
+                        result={},
+                        last_error=f"{type(exc).__name__}:{str(exc)[:300]}",
+                    )
+                except KeyError:
+                    updated = {
+                        **item,
+                        "status": "failed",
+                        "result": {},
+                        "last_error": f"{type(exc).__name__}:{str(exc)[:300]}",
+                    }
             _TRANSIENT.pop(str(item.get("id") or ""), None)
             _emit(updated, str(updated.get("status") or "failed"))
             results.append(updated)
@@ -219,6 +233,7 @@ def process_account_health_jobs(
 
 
 def start_account_health_worker(*, workers: int = 2) -> bool:
+    recover_account_health_queue()
     global _WORKER
     with _WORKER_LOCK:
         if _WORKER is not None and _WORKER.is_alive():
@@ -231,6 +246,37 @@ def start_account_health_worker(*, workers: int = 2) -> bool:
         )
         _WORKER.start()
         return True
+
+
+def recover_account_health_queue(*, pending_ttl_seconds: int = _PENDING_TTL_SECONDS) -> dict[str, int]:
+    """Recover dead workers and expire abandoned pending jobs at startup."""
+    now = int(time.time())
+    recovered = 0
+    expired = 0
+    with _LOCK:
+        items = _load_unlocked()
+        changed = False
+        for item in items:
+            status = str(item.get("status") or "").strip().lower()
+            age = now - int(item.get("updated_at") or item.get("created_at") or 0)
+            if status == "pending" and age > max(60, int(pending_ttl_seconds or _PENDING_TTL_SECONDS)):
+                item["status"] = "failed"
+                item["last_error"] = "queue_item_expired"
+                item["updated_at"] = now
+                expired += 1
+                changed = True
+            elif status == "running":
+                pid = int(item.get("worker_pid") or 0)
+                if age > 1800 or not _pid_alive(pid):
+                    item["status"] = "pending"
+                    item["last_error"] = "recovered_interrupted_worker"
+                    item["updated_at"] = now
+                    item.pop("worker_pid", None)
+                    recovered += 1
+                    changed = True
+        if changed:
+            _write_unlocked(items)
+    return {"recovered": recovered, "expired": expired}
 
 
 def _background_loop(*, workers: int) -> None:
@@ -263,11 +309,20 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
     account = _account_payload(record)
     transient = _TRANSIENT.get(str(job.get("id") or ""), {})
     proxy = transient.get("proxy")
+    from .account_identity import account_identity
+    from .account_liveness import browser_fetch_for_account
+
+    browser_identity = account_identity(account).get("browser_identity") or {}
     if job.get("kind") == HealthCheckKind.PLAN.value:
         from .account_promotion import check_account_promotion
         from .storage import mark_promotion_status
 
-        probe = check_account_promotion(account, proxy=proxy)
+        with browser_fetch_for_account(account, proxy=proxy) as browser_fetch:
+            probe = (
+                {"ok": False, "promotion_status": "检测失败", "error": "browser_context_unavailable"}
+                if browser_identity and browser_fetch is None
+                else check_account_promotion(account, proxy=proxy, browser_fetch=browser_fetch)
+            )
         result = plan_health_result(email, probe)
         label_saved = mark_promotion_status(
             email,
@@ -278,7 +333,7 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
         return result.with_persisted(persisted)
 
     from .account_liveness import probe_account_liveness
-    from .account_recovery import is_permanently_deactivated, relogin_codex_account
+    from .account_recovery import _needs_browser_fallback, is_permanently_deactivated, relogin_codex_account
     from .storage import mark_quota_status
 
     if is_permanently_deactivated(account):
@@ -292,6 +347,19 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
         final = initial
     else:
         initial = probe_account_liveness(account, proxy=proxy)
+        if browser_identity and _needs_browser_fallback(initial):
+            acquired = _BROWSER_FALLBACK_SLOTS.acquire(timeout=1.0)
+            if acquired:
+                try:
+                    with browser_fetch_for_account(account, proxy=proxy) as browser_fetch:
+                        if browser_fetch is not None:
+                            initial = probe_account_liveness(account, proxy=proxy, browser_fetch=browser_fetch)
+                        else:
+                            initial = {**initial, "browser_fallback": "unavailable"}
+                finally:
+                    _BROWSER_FALLBACK_SLOTS.release()
+            else:
+                initial = {**initial, "browser_fallback": "concurrency_limited"}
         recovery = {}
         final = initial
         if int(initial.get("status_code") or 0) == 401 or initial.get("status") == "token_invalid":

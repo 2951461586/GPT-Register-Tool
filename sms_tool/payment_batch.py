@@ -29,6 +29,7 @@ from .payment_link_manager import (
 from .payment_routing import PaymentRoutePlanner
 from .payment_contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
 from .payment_catalog import PAYMENT_METHODS
+from .payment_batch_setup import apply_configured_stage_pools
 
 # Minimum spacing between "running" checkpoint rewrites of the batch report
 # (terminal states always persist immediately).
@@ -126,29 +127,9 @@ def run_payment_batch(
     max_workers = max(1, min(int(workers or 1), cap, len(selected) or 1))
     retry_count = max(0, min(int(retries or 0), 5))
     base_kwargs = dict(payment_kwargs or {})
-    method_configs = protocol_cfg.get("methods") if isinstance(protocol_cfg.get("methods"), Mapping) else {}
-    canonical_method_cfg = method_configs.get(method) if isinstance(method_configs.get(method), Mapping) else {}
-    legacy_method_cfg = CFG.get(method) if isinstance(CFG.get(method), Mapping) else {}
-    for stage in ("checkout", "approve"):
-        pool_key = f"{stage}_proxy_pool"
-        # Custom transports (used by local adapters/tests) provide their own
-        # routing contract; do not silently replace their explicit stage proxy
-        # with the process-wide configured pool.
-        if base_kwargs.get("transport") is not None:
-            continue
-        if parse_proxy_pool(base_kwargs.get(pool_key)) or str(base_kwargs.get(f"{stage}_proxy") or "").strip():
-            # An explicit pool is authoritative.  Legacy single-proxy values
-            # remain supported, but the configured two-pool contract is used
-            # for ordinary batch runs when no explicit pool was supplied.
-            if parse_proxy_pool(base_kwargs.get(pool_key)):
-                continue
-        configured_pool = (
-            canonical_method_cfg.get(pool_key)
-            or legacy_method_cfg.get(pool_key)
-        )
-        if not proxy and parse_proxy_pool(configured_pool):
-            base_kwargs[pool_key] = configured_pool
-            base_kwargs.pop(f"{stage}_proxy", None)
+    base_kwargs = apply_configured_stage_pools(
+        base_kwargs, protocol_config=protocol_cfg, legacy_config=CFG, method=method, proxy=proxy
+    )
     run_signature = _batch_run_signature(
         method=method,
         probe_only=probe_only,

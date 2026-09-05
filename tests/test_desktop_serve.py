@@ -60,7 +60,8 @@ class DesktopServeTests(unittest.TestCase):
             captured["extra_files"] = extra_files
             return {"files": [{"path": "mailbox.txt", "lines": []}]}
 
-        def fake_accounts(config):
+        def fake_accounts(config, **kwargs):
+            self.assertFalse(kwargs.get("include_session"))
             return [{"id": "9"}]
 
         with patch.object(desktop_serve, "read_mailbox_pool", fake_pool), \

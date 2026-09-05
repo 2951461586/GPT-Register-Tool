@@ -1,5 +1,6 @@
 """Tests for accounts/check plan + promotion (优惠) parsing and labels."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -7,6 +8,8 @@ from sms_tool import cli
 from sms_tool import account_promotion
 from sms_tool.account_promotion import parse_accounts_check, promotion_status_label
 from sms_tool.account_identity import create_registration_identity
+from sms_tool.desktop_read import read_account
+from sms_tool.storage import get_account_record, mark_promotion_status, mark_quota_status, upsert_account
 
 
 def test_parse_plus_trial_eligible():
@@ -121,6 +124,39 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
     assert len(terminal) == 2
     assert {event["account_ref"] for event in terminal} == {"a@example.com", "b@example.com"}
     assert all(event["total"] == 2 for event in terminal)
+
+
+def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkeypatch):
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
+        "email": email,
+        "access_token": "at",
+        "raw_json": json.dumps({"access_token": "at"}),
+    })
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    calls = []
+
+    def probe(account, **kwargs):
+        calls.append(kwargs["proxy"])
+        if len(calls) == 1:
+            return {
+                "ok": False,
+                "promotion_status": "检测失败",
+                "error": "Failed to perform, curl: (28) Connection timed out",
+            }
+        return {"ok": True, "promotion_status": "Free·无优惠"}
+
+    monkeypatch.setattr(account_promotion, "check_account_promotion", probe)
+    result = account_promotion.refresh_promotion_statuses(
+        ["rotate@example.com"],
+        workers=1,
+        proxy="http://dead.example:8080",
+        proxy_pool="http://dead.example:8080\nhttp://healthy.example:8080",
+        timeout=5,
+    )
+
+    assert result["success"] == 1
+    assert len(calls) == 2
+    assert set(calls) == {"http://dead.example:8080", "http://healthy.example:8080"}
 
 
 def test_parse_missing_accounts():
@@ -303,3 +339,57 @@ def test_promotion_surfaces_real_browser_http_errors_not_zero():
 
     assert result["status_code"] == 401
     assert result["promotion_status"] == "AT失效"
+
+
+def test_promotion_401_stays_in_promotion_namespace(tmp_path):
+    config = {
+        "chatgpt": {},
+        "storage": {"sqlite_path": str(tmp_path / "accounts.sqlite3")},
+        "runtime": {"directory": str(tmp_path)},
+    }
+    session_path = tmp_path / "session.json"
+    session = {
+        "email": "promotion-invalid@example.test",
+        "access_token": "expired-at",
+        "status": "registered",
+        "success": True,
+    }
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(session, json_path=str(session_path), runtime_config=config)
+
+    assert mark_promotion_status(
+        session["email"],
+        "AT失效",
+        {"ok": False, "status_code": 401, "error": "token_invalid"},
+        runtime_config=config,
+    )
+
+    record = get_account_record(session["email"], runtime_config=config)
+    assert record["status"] == "registered"
+    public = read_account(email=session["email"], runtime_config=config)
+    assert public["promotion_status"] == "AT失效"
+    assert public.get("at_probe_status_code", "") != "401"
+
+
+def test_liveness_200_restores_shared_at_status_after_promotion_401(tmp_path):
+    config = {
+        "chatgpt": {},
+        "storage": {"sqlite_path": str(tmp_path / "accounts.sqlite3")},
+        "runtime": {"directory": str(tmp_path)},
+    }
+    session = {
+        "email": "promotion-recovered@example.test",
+        "access_token": "at",
+        "status": "at_invalid",
+        "success": True,
+    }
+    assert upsert_account(session, runtime_config=config)
+    assert mark_quota_status(
+        session["email"],
+        "可用",
+        {"ok": True, "status_code": 200, "status": "active"},
+        runtime_config=config,
+    )
+    record = get_account_record(session["email"], runtime_config=config)
+    assert record["status"] == "registered"
+    assert record["quota_status"] == "可用"

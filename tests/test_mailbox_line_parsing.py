@@ -38,7 +38,6 @@ SAMPLE_LINES = [
     "gmail://user@gmail.com----cid-1----sec-1----refresh-1",
     "cfworker://user@example.com",
     "user@liziai.cloud",
-    "user@example.com--------pw-1----cid-1----refresh-1",   # chongzhi (8 hyphens)
     "user@example.com----pw-1----cid-1----refresh-1",       # chatai (4 hyphens)
     "user@example.com---pw-1---refresh-1---access-1",       # graph (3 hyphens)
     "user@icloud.com----https://mail.example/messages/secret/user%40icloud.com",
@@ -101,15 +100,6 @@ class MailboxLineFormatTests(unittest.TestCase):
                 "-", (getattr(account, field) or "")[:1],
                 f"{field} was built from a mis-split chatai line",
             )
-
-    def test_chatai_and_chongzhi_shapes_stay_distinguishable(self):
-        """8 hyphens is chongzhi, 4 is chatai - they must not collide."""
-        chongzhi = parse_mailbox_pool_line(
-            "user@example.com--------pw-1----cid-1----refresh-1", "s", 1)
-        chatai = parse_mailbox_pool_line(
-            "user@example.com----pw-1----cid-1----refresh-1", "s", 1)
-        self.assertEqual(chongzhi.provider, "chongzhi")
-        self.assertEqual(chatai.provider, "chatai")
 
     def test_blank_and_comment_lines_are_skipped_by_every_loader(self):
         path = _write("\n# a comment\n   \nuser@example.com---pw-1---refresh-1\n")

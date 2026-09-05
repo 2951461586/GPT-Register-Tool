@@ -60,6 +60,7 @@ class MailboxService:
     ) -> str | None:
         from .mailbox import (
             _email_cfg,
+            _mailbox_proxy_candidates,
             _provider_otp_issued_after,
             _resolve_mailbox_proxy,
         )
@@ -67,7 +68,8 @@ class MailboxService:
         with runtime_config_scope(self.config, workflow="mailbox"):
             config = _email_cfg(self.config)
             issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, self.config)
-            resolved_proxy = _resolve_mailbox_proxy(proxy, self.config)
+            proxy_candidates = _mailbox_proxy_candidates(proxy, self.config)
+            resolved_proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, self.config)
             adapter = self.providers.resolve_poller(mailbox, config)
             if adapter is None:
                 raise RuntimeError("no mailbox OTP poller resolved")
@@ -77,6 +79,7 @@ class MailboxService:
                 timeout=timeout,
                 issued_after_unix=issued_after_unix,
                 proxy=resolved_proxy,
+                proxy_candidates=proxy_candidates,
                 excluded_otps=excluded_otps,
                 runtime_config=self.config,
                 registry=self.providers,

@@ -261,6 +261,26 @@ def test_concurrency_is_bounded_by_max_concurrent():
     assert pool._semaphore._value == 2
 
 
+def test_concurrent_sessions_reserve_distinct_slots():
+    config = {"registration": {"browser_process_pool": {"enabled": True, "max_concurrent": 2}}}
+    factory = RecordingFactory()
+    pool = BrowserProcessPool(config, session_factory=factory)
+    entered = threading.Barrier(2)
+    slots = []
+
+    def worker():
+        with pool.session() as (_browser, slot):
+            slots.append(slot.slot_id)
+            entered.wait(timeout=2)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+    assert sorted(slots) == [0, 1]
+
+
 def test_healthy_slot_is_preferred_over_degraded():
     factory = RecordingFactory()
     pool = _pool(session_factory=factory)
@@ -323,6 +343,29 @@ def test_scope_bypasses_pool_when_disabled():
         assert isinstance(browser, FakeBrowser)
     assert pw._BROWSER_POOL is None
     assert len(factory.calls) == 1
+
+
+def test_disabling_pool_closes_previous_residents():
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
+
+    enabled = {"registration": {"browser_process_pool": {"enabled": True}}}
+    disabled = {"registration": {"browser_process_pool": {"enabled": False}}}
+    factory = RecordingFactory()
+    with pw._browser_session_scope(
+        driver_name="camoufox", config=enabled, proxy="http://1.1.1.1:1", headless=True,
+        timeout_ms=1000, locale="en-US", timezone_id="UTC", browser_identity=None,
+        viewport=None, session_factory=factory,
+    ):
+        pass
+    resident = factory.browsers[0]
+    with pw._browser_session_scope(
+        driver_name="camoufox", config=disabled, proxy=None, headless=True,
+        timeout_ms=1000, locale="en-US", timezone_id="UTC", browser_identity=None,
+        viewport=None, session_factory=factory,
+    ):
+        pass
+    assert resident.process_closed is True
+    assert pw._BROWSER_POOL is None
 
 
 def test_scope_uses_a_process_wide_pool_when_enabled():

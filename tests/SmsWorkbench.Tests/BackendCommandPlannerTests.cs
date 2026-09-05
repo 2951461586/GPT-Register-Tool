@@ -233,6 +233,7 @@ public sealed class BackendCommandPlannerTests
 
         Assert.Contains("--email-file", plan.Arguments);
         Assert.DoesNotContain("--email", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Single(plan.TempFiles);
     }
 
@@ -251,6 +252,12 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--quota-auto-relogin", plan.Arguments);
         Assert.Contains("--quota-relogin-timeout", plan.Arguments);
         Assert.Contains("300", plan.Arguments);
+        Assert.Contains("--quota-batch-timeout", plan.Arguments);
+        Assert.Contains("900", plan.Arguments);
+        Assert.Contains("--quota-account-timeout", plan.Arguments);
+        Assert.Contains("360", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
+        Assert.Equal(15 * 60 * 1000, plan.TimeoutMilliseconds);
     }
 
     [Fact]
@@ -265,6 +272,18 @@ public sealed class BackendCommandPlannerTests
 
         Assert.DoesNotContain("--quota-auto-relogin", plan.Arguments);
         Assert.DoesNotContain("--quota-relogin-timeout", plan.Arguments);
+    }
+
+    [Fact]
+    public void CreatePromotionCheck_UsesVersionedIpcEnvelope()
+    {
+        var plan = BackendCommandPlanner.CreatePromotionCheck(
+            emails: new[] { "user@example.com" },
+            workers: 4,
+            proxyPool: Array.Empty<string>());
+
+        Assert.Contains("--check-promotion", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
     }
 
     [Fact]

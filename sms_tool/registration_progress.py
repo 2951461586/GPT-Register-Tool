@@ -33,6 +33,7 @@ class RegistrationProgress:
         self.events: list[dict[str, Any]] = []
         self.sequence = 0
         self.last_stage = "started"
+        self._stage_started_monotonic = time.monotonic()
         # The concurrency gate is owned by this progress object, never by a
         # ContextVar: pool workers are reused, so context-local ownership leaks
         # into the next account on the same worker.
@@ -55,13 +56,18 @@ class RegistrationProgress:
             lease.release()
 
     def stage(self, name: str, status: str = "running", detail: str = "") -> None:
-        self.last_stage = str(name or "unknown")
+        next_stage = str(name or "unknown")
+        now_mono = time.monotonic()
+        duration_ms = int(max(0.0, now_mono - self._stage_started_monotonic) * 1000)
+        self.last_stage = next_stage
+        self._stage_started_monotonic = now_mono
         self.sequence += 1
         event = {
             "stage": self.last_stage,
             "status": str(status or "running"),
             "at": int(time.time()),
             "sequence": self.sequence,
+            "duration_ms": duration_ms,
         }
         if detail:
             event["detail"] = _sanitize_text(detail)[:240]
@@ -95,11 +101,25 @@ class RegistrationProgress:
         last_event = self.events[-1] if self.events else {}
         if last_event.get("stage") != terminal_stage or last_event.get("status") != terminal_status:
             self.stage(terminal_stage, terminal_status, final_error)
+        proxy_audit = (result or {}).get("proxy_audit")
+        pool_index = -1
+        if isinstance(proxy_audit, dict):
+            try:
+                pool_index = int(proxy_audit.get("pool_index"))
+            except (TypeError, ValueError):
+                pool_index = -1
         row = _sanitize({
             "run_id": self.run_id,
             "email": self.email or str((result or {}).get("email") or ""),
+            "batch_id": str((result or {}).get("batch_id") or ""),
+            "attempt": int((result or {}).get("registration_attempts") or 0),
             "success": success,
             "error": final_error,
+            "failure_class": str((result or {}).get("failure_class") or "")[:80],
+            "retryable": bool((result or {}).get("retryable")),
+            "registration_state": str((result or {}).get("registration_state") or "")[:40],
+            "registration_driver": str((result or {}).get("registration_driver") or "")[:32],
+            "proxy_pool_index": pool_index,
             "started_at": self.started_at,
             "finished_at": int(time.time()),
             "last_stage": self.last_stage,
@@ -119,6 +139,56 @@ def registration_stage(name: str, status: str = "running", detail: str = "") -> 
     waited_ms = progress.enter_stage_gate(name)
     wait_detail = f"stage_queue_wait_ms={waited_ms:.1f}" if waited_ms >= 1 else ""
     progress.stage(name, status, detail or wait_detail)
+
+
+def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *, path=None) -> dict[str, Any]:
+    """Aggregate token-free registration quality metrics from progress rows.
+
+    The helper is intentionally pure when ``records`` is supplied, making it
+    suitable for tests and dashboards.  When omitted it reads the bounded tail
+    of ``registration_progress.jsonl`` from the runtime directory.
+    """
+    if records is None:
+        target = path or runtime_file(CFG, "registration_progress.jsonl")
+        records = []
+        try:
+            lines = target.read_text(encoding="utf-8").splitlines()[-2000:]
+            records = [json.loads(line) for line in lines if line.strip()]
+        except (OSError, ValueError, TypeError):
+            records = []
+    rows = [row for row in records if isinstance(row, dict)]
+    durations: list[float] = []
+    retry_count = 0
+    failure_count = 0
+    stage_samples: dict[str, list[float]] = {}
+    for row in rows:
+        if not row.get("success"):
+            failure_count += 1
+        for event in row.get("events") or []:
+            if not isinstance(event, dict):
+                continue
+            stage = str(event.get("stage") or "")
+            duration = float(event.get("duration_ms") or 0)
+            if duration > 0:
+                stage_samples.setdefault(stage, []).append(duration)
+                if stage == "auth_session":
+                    durations.append(duration)
+            if "retry" in stage:
+                retry_count += 1
+    def stats(values: list[float]) -> dict[str, float]:
+        if not values:
+            return {"count": 0, "average_ms": 0.0, "p95_ms": 0.0}
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, max(0, int(round(len(ordered) * 0.95)) - 1))
+        return {"count": len(values), "average_ms": round(sum(values) / len(values), 1), "p95_ms": round(ordered[index], 1)}
+    return {
+        "runs": len(rows),
+        "success_rate": round((sum(1 for row in rows if row.get("success")) / len(rows)), 4) if rows else 0.0,
+        "failure_count": failure_count,
+        "retry_count": retry_count,
+        "auth_session": stats(durations),
+        "stages": {name: stats(values) for name, values in stage_samples.items()},
+    }
 
 
 def _mailbox_email(kwargs: dict[str, Any]) -> str:

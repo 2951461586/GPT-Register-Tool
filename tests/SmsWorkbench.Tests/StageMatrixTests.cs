@@ -158,6 +158,7 @@ public sealed class StageMatrixTests
 
     [Theory]
     [InlineData("remail", "user@outlook.com", "remail/outlook")]
+    [InlineData("remail", "user@icloud.com", "remail/icloud")]
     [InlineData("icloud_url", "user@icloud.com", "icloud")]
     [InlineData("cf_worker", "user@example.com", "cfworker")]
     public void MailboxTypeDisplayDoesNotExposeSqlitePrefix(string provider, string email, string expected)

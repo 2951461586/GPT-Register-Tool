@@ -24,7 +24,9 @@ namespace SmsWorkbench
         }
 
         /// <summary>Python interpreter used for backend commands (settings: runtime.python_path).</summary>
-        public string PythonExecutable => _settings.GetString("runtime.python_path", "python");
+        public string PythonExecutable => PythonPathResolver.Resolve(
+            _paths,
+            _settings.GetString("runtime.python_path", "python"));
 
         public async Task<BackendCommandResult> RunAsync(
             BackendCommand command,
@@ -88,6 +90,14 @@ namespace SmsWorkbench
                 payload = BackendJsonProtocol.ExtractPayload(
                     output,
                     message => _logger.Warning(message));
+                // Some Python dependencies write warnings to stderr.  A
+                // desktop IPC envelope must remain discoverable even when a
+                // warning was emitted on that channel, so retry extraction on
+                // the combined sanitized streams before declaring no payload.
+                if (!payload.HasValue && !string.IsNullOrWhiteSpace(error))
+                    payload = BackendJsonProtocol.ExtractPayload(
+                        output + Environment.NewLine + error,
+                        message => _logger.Warning(message));
             }
             catch (JsonException exception)
             {

@@ -206,12 +206,12 @@ def _payload_for(op: str, request: dict[str, Any]) -> dict[str, Any]:
     config = load_runtime_config()
 
     if op == "accounts":
-        return {"ok": True, "accounts": read_accounts(config)}
+        return {"ok": True, "accounts": read_accounts(config, include_session=False)}
     if op == "mailbox-pool":
         return {"ok": True, **read_mailbox_pool(config, extra_files=tuple(extra_files))}
     if op == "pools":
         pool = read_mailbox_pool(config, extra_files=tuple(extra_files))
-        return {"ok": True, "accounts": read_accounts(config), **pool}
+        return {"ok": True, "accounts": read_accounts(config, include_session=False), **pool}
     if op == "account":
         return {"ok": True, "account": read_account(account_id, email, config)}
     if op == "account-file":

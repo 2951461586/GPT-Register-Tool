@@ -220,6 +220,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
         emails=emails,
         workers=max(1, int(args.quota_workers or args.workers or 4)),
         proxy=args.proxy,
+        proxy_pool=getattr(args, "proxy_pool", None),
         timeout=max(5, int(args.refresh_timeout or 20)),
     )
     from ..desktop_ipc import emit_result
@@ -235,6 +236,11 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
 def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     from ..account_recovery import refresh_local_quota_statuses
     from ..cpa_import import refresh_cpa_quota_statuses
+
+    if bool(getattr(args, "mailbox_pool_repaired", False)):
+        from ..mailbox_quarantine import mark_mailbox_pool_repaired
+
+        mark_mailbox_pool_repaired()
 
     emails = read_email_file(args.email_file)
     if args.email:
@@ -260,6 +266,8 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             relogin_on_401=bool(getattr(args, "quota_auto_relogin", False)),
             relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 180) or 180)),
             relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
+            batch_timeout=max(30, int(getattr(args, "quota_batch_timeout", 840) or 840)),
+            account_timeout=max(30, int(getattr(args, "quota_account_timeout", 120) or 120)),
         )
         fallback_emails = [
             item.get("email")

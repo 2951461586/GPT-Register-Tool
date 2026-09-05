@@ -95,7 +95,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
 def gmail_send(args: Any) -> None:
     from ..codex_oauth import _mailbox_from_data
     from ..mailbox import _mailbox_from_config
-    from ..mailbox_gmail import is_gmail_mailbox, send_gmail_message
+    from ..providers.mailbox_gmail import is_gmail_mailbox, send_gmail_message
     from ..session_refresh import _load_seed_session
 
     with contextlib.redirect_stdout(sys.stderr):
