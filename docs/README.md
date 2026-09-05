@@ -7,6 +7,7 @@ configuration, generated sessions, and debug output stay outside this directory.
 
 - [v2026.09.01 发布说明](release-v2026.09.01.md) - 安全重建版本、发布闸门和凭据扫描。
 - [v2026.09.06 发布说明](release-v2026.09.06.md) - 测活异步并发、部分结果快照、邮箱池恢复闸门和 WPF 超时恢复。
+- [v2026.09.06.1 发布说明](release-v2026.09.06.1.md) - 修复 GitHub Actions Windows 工作目录、路径和配置检测测试兼容性。
 - [Project Context](CONTEXT.md) - 领域术语与模块归属规则。
 - [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 

@@ -157,8 +157,9 @@ class ConfigDirectoryTest(unittest.TestCase):
         不报错，只是静默指到别的地方去。配置里写 Unix 路径就会踩到。
         """
         self.assertFalse(Path("/srv/out").is_absolute())
-        self.assertEqual(paths.PROJECT_ROOT / "/srv/out", Path("F:/srv/out"))
-        self.assertEqual(paths.project_path("/srv/out"), Path("F:/srv/out"))
+        expected = Path(f"{paths.PROJECT_ROOT.drive}/srv/out")
+        self.assertEqual(paths.PROJECT_ROOT / "/srv/out", expected)
+        self.assertEqual(paths.project_path("/srv/out"), expected)
         self.assertNotIn("GPT-Register-Tool", str(paths.project_path("/srv/out")))
 
     def test_a_missing_bucket_falls_back_to_the_default(self):

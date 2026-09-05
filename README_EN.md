@@ -63,7 +63,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
-- [v2026.09.06 release notes](./docs/release-v2026.09.06.md)
+- [v2026.09.06.1 release notes](./docs/release-v2026.09.06.1.md)
 - [Directory map](./docs/directory-map.md)
 - [Proxy guide](./PROXY_GUIDE.md)
 
