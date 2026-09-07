@@ -8,6 +8,7 @@ Sensitive values are replaced in full; no token or secret prefix is retained.
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections.abc import Mapping
 from functools import lru_cache
@@ -55,6 +56,9 @@ _TEXT_PATTERNS = tuple(
     (re.compile(str(item["pattern"])), _python_replacement(str(item.get("replacement") or REDACTED_VALUE)))
     for item in SENSITIVE_POLICY["text_patterns"]
 )
+_EMAIL_PATTERN = re.compile(
+    r"(?i)(?<![A-Z0-9._%+\-])([A-Z0-9._%+\-]{1,64})@([A-Z0-9.\-]+\.[A-Z]{2,})"
+)
 
 
 def sanitize_text(value: Any) -> str:
@@ -62,6 +66,15 @@ def sanitize_text(value: Any) -> str:
     for pattern, replacement in _TEXT_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
+
+
+def sanitize_log_text(value: Any) -> str:
+    """Sanitize credentials and mask account emails in persisted log text."""
+    text = sanitize_text(value)
+    return _EMAIL_PATTERN.sub(
+        lambda match: mask_account(f"{match.group(1)}@{match.group(2)}"),
+        text,
+    )
 
 
 def mask_otp(value: Any, *, keep_tail: int = 2) -> str:
@@ -78,6 +91,24 @@ def mask_otp(value: Any, *, keep_tail: int = 2) -> str:
     if len(text) <= keep_tail:
         return "*" * len(text)
     return "*" * (len(text) - keep_tail) + text[-keep_tail:]
+
+
+def account_reference(value: Any) -> str:
+    """Stable, non-reversible account reference for persisted telemetry."""
+    canonical = str(value or "").strip().lower()
+    if not canonical:
+        return ""
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def mask_account(value: Any) -> str:
+    """Readable but non-identifying account label for operator output."""
+    text = str(value or "").strip()
+    if "@" not in text:
+        return account_reference(text)
+    local, domain = text.rsplit("@", 1)
+    visible = local[:2] if len(local) > 2 else local[:1]
+    return f"{visible}***@{domain}"
 
 
 def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:

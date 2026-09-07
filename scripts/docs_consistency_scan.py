@@ -13,7 +13,8 @@ def main() -> int:
         match = re.search(r"release-v(\d+(?:\.\d+)+)\.md$", path.name)
         return tuple(int(part) for part in match.group(1).split(".")) if match else ()
 
-    releases = sorted((ROOT / "docs").glob("release-v*.md"), key=release_key)
+    # Release notes live in docs/releases/ (archived 2026-09-06).
+    releases = sorted((ROOT / "docs" / "releases").glob("release-v*.md"), key=release_key)
     if not releases:
         print("No release notes found")
         return 1

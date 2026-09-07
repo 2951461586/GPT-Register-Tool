@@ -25,12 +25,14 @@ Usage:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import math
 import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,6 +91,7 @@ PAT_JSON_TEMPLATE = (
 )
 # http://user:pass@host
 PAT_PROXY = re.compile(r"(?i)\b(?:https?|socks5h?)://[^\s/@]+:[^\s/@]+@")
+PAT_EXAMPLE_URL = re.compile(r"""(?i)\b(?:https?|socks[45]h?)://[^\s"'<>]+""")
 # Documented placeholders, not real credentials.  The password part is allowed
 # to carry a suffix -- config.example.json uses socks5h://user:pass-JP@gate:1000.
 PAT_PROXY_PLACEHOLDER = re.compile(r"(?i)://(?:user|username|your[_-]?user|login|account|name|u):[^@]*@")
@@ -132,7 +135,7 @@ def load_sensitive_keys() -> set[str]:
 
 TEXT_SUFFIXES = {
     ".py", ".cs", ".json", ".js", ".ts", ".ps1", ".sh", ".md", ".txt",
-    ".yml", ".yaml", ".xml", ".config", ".props", ".ini", ".toml", ".env",
+    ".yml", ".yaml", ".xml", ".config", ".props", ".ini", ".toml", ".env", ".example",
 }
 MAX_FILE_BYTES = 4 * 1024 * 1024
 
@@ -177,7 +180,7 @@ def iter_scannable_lines(text: str, suffix: str):
     """Yield (lineno, line), skipping comments and docstrings.
 
     Docstring examples are the single largest false-positive source here
-    (e.g. ``{"totp_secret": "JBSWY3DPEHPK3PXP"}`` in account_2fa.py).
+    (e.g. ``{"totp_secret": "JBSWY3DPEHPK3PXP"}`` in accounts/account_2fa.py).
     """
     in_docstring = False
     for number, line in enumerate(text.splitlines(), 1):
@@ -198,16 +201,17 @@ def iter_scannable_lines(text: str, suffix: str):
         yield number, line
 
 
-def scan_file(path: Path, sensitive_keys: set[str]) -> list[tuple[str, int, str, int, str]]:
+def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) -> list[tuple[str, int, str, int, str]]:
     """Return (relpath, lineno, varname, length, prefix) findings."""
     if path.suffix.lower() not in TEXT_SUFFIXES:
         return []
-    try:
-        if path.stat().st_size > MAX_FILE_BYTES:
+    if text is None:
+        try:
+            if path.stat().st_size > MAX_FILE_BYTES:
+                return []
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
             return []
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return []
 
     try:
         rel = path.relative_to(ROOT).as_posix()
@@ -229,6 +233,16 @@ def scan_file(path: Path, sensitive_keys: set[str]) -> list[tuple[str, int, str,
 
     findings: list[tuple[str, int, str, int, str]] = []
     for number, line in iter_scannable_lines(text, path.suffix.lower()):
+        # Templates may contain local/documentation endpoints, never an
+        # operator's public IP. Do not echo the address in hook diagnostics.
+        if ".example." in path.name or path.name.endswith(".example"):
+            for match in PAT_EXAMPLE_URL.finditer(line):
+                try:
+                    address = ipaddress.ip_address(urlsplit(match.group(0)).hostname or "")
+                except ValueError:
+                    continue
+                if address.is_global:
+                    findings.append((rel, number, "example-public-ip", 0, ""))
         # Vendor prefixes are checked on the raw line: a token like
         # ROXY_TOKEN = "cfat_..." is not pure hex, so the name-based patterns
         # below would never see it.
@@ -257,14 +271,25 @@ def scan_file(path: Path, sensitive_keys: set[str]) -> list[tuple[str, int, str,
 
 def staged_files() -> list[Path]:
     out = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "-z"],
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
         cwd=str(ROOT), capture_output=True, text=True,
     )
     if out.returncode != 0:
         print(f"precommit-guard: git diff failed: {out.stderr.strip()}", file=sys.stderr)
         raise SystemExit(1)
     names = [n for n in out.stdout.split("\0") if n]
-    return [ROOT / n for n in names if (ROOT / n).is_file()]
+    return [ROOT / n for n in names]
+
+
+def staged_text(path: Path) -> str:
+    """Scan the bytes about to be committed, not an unstaged replacement."""
+    rel = path.relative_to(ROOT).as_posix()
+    result = subprocess.run(
+        ["git", "show", f":{rel}"], cwd=str(ROOT), capture_output=True,
+    )
+    if result.returncode:
+        raise RuntimeError(f"cannot read staged file: {rel}")
+    return result.stdout.decode("utf-8", errors="replace")
 
 
 def tracked_files() -> list[Path]:
@@ -294,8 +319,13 @@ def main(argv: list[str]) -> int:
         if name_is_blocked(rel):
             failures.append(f"{rel}: filename is a local/runtime artefact (must stay gitignored)")
             continue
-        for rel_path, lineno, var, length, prefix in scan_file(path, sensitive_keys):
-            shown = f"{prefix}... (len={length})" if prefix else "(credentials in URL)"
+        try:
+            content = None if check_all else staged_text(path)
+        except RuntimeError as exc:
+            failures.append(str(exc))
+            continue
+        for rel_path, lineno, var, length, prefix in scan_file(path, sensitive_keys, text=content):
+            shown = f"{prefix}... (len={length})" if prefix else "(value omitted)"
             failures.append(f"{rel_path}:{lineno}: hardcoded secret in '{var}' -> {shown}")
 
     # de-duplicate, keep order

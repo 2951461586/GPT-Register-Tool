@@ -20,6 +20,7 @@ from ..paths import project_path, runtime_file
 from ..sanitizer import mask_otp
 from ..phone_proxy import redact_proxy_url
 from ..proxy_health import ProxyHealthTracker
+from ..desktop_ipc import progress_dots_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -754,6 +755,12 @@ def _pickup_remail_messages_with_recovery(mailbox, proxy=None):
         try:
             _recover_remail_service_token(mailbox, proxy=proxy)
         except ReMailHttpError as recovery_error:
+            if recovery_error.status_code in {404, 410}:
+                raise ReMailCredentialError(
+                    code="mailbox_auth_invalid",
+                    email=getattr(mailbox, "email", ""),
+                    detail="ReMail order no longer exists; repair the mailbox pool",
+                ) from None
             if recovery_error.status_code == 401:
                 raise ReMailCredentialError(
                     code="remail_api_auth_invalid",
@@ -958,6 +965,9 @@ def _poll_remail_otp(
     proxy_index = 0
     active_proxy = candidates[proxy_index] if candidates else proxy
     transport_failures = 0
+    # Unnewlined dots glue themselves to the head of the next line another
+    # thread flushes, which breaks the host's line-anchored envelope parsing.
+    dots = progress_dots_enabled()
 
     if _remail_preflight_enabled():
         try:
@@ -1093,7 +1103,8 @@ def _poll_remail_otp(
             continue
         except Exception as exc:
             print(f"[remail poll error: {exc}]")
-        print(".", end="", flush=True)
+        if dots:
+            print(".", end="", flush=True)
         time.sleep(interval)
     print(" timeout")
     return None

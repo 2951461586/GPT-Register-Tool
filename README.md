@@ -17,6 +17,13 @@
 
 GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 OTP 注册、账号与 Session 管理、代理配置、协议支付链接提取和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
+当前维护约定：[注册架构](docs/current/registration-architecture.md)、
+[配置分片优先级](docs/current/configuration.md)、
+[日志关联与只读运行目录清单](docs/current/telemetry-and-runtime.md)。
+已有分片时只读取分片，不合并旧 `config.json`。排查优先使用
+`python -m sms_tool --help` 和 `python scripts/registration_inventory.py`，
+后者不会联网、注册账号或清理文件。
+
 ## 赞助商
 <img width="5728" height="672" alt="F31720B0BE73735E400C05B8F165FF1C" src="https://github.com/user-attachments/assets/5f3b5b22-5132-4bc4-b8b8-3a0e92b47f37" />
 
@@ -298,7 +305,7 @@ sms_tool/registration_concurrency.py
   注册阶段资源门控
   -> 网络、AT 探测和支付阶段并发上限与等待指标
 
-sms_tool/account_liveness.py / account_recovery.py
+sms_tool/accounts/account_liveness.py / accounts/account_recovery.py
   账号存活与恢复
   -> 无副作用额度探测、显式 OAuth 恢复和状态持久化
 
@@ -352,8 +359,8 @@ services/
 | `sms_tool/cli.py` | CLI 参数与高层任务编排 |
 | `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
 | `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
-| `sms_tool/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
-| `sms_tool/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
+| `sms_tool/accounts/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
+| `sms_tool/accounts/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/providers/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
 | `sms_tool/providers/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |
@@ -651,10 +658,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 
 ## 文档索引
 
+- [文档总索引](docs/README.md)
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
+- [架构决策记录（ADR）](docs/adr/README.md)
+- [注册恢复与协作取消](docs/current/registration-recovery.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/release-v2026.09.06.1.md)
+- [最新发布说明](docs/releases/release-v2026.09.08.md)
+- [历史发布说明](docs/releases/)（`docs/releases/` 目录，文件名即版本）
 - [代理指南](PROXY_GUIDE.md)
 
 ## 许可证与使用责任

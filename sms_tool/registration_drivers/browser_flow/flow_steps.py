@@ -6,11 +6,10 @@ import threading
 import time
 import atexit
 
-from .dom_fields import _browser_heartbeat
-from .form_steps import _fill_email, _fill_password_if_present, _maybe_accept_cookies
-from .page_state import _manual_challenge, _wait_for_challenge_clear, _wait_for_registration_state
+from . import dom_fields, form_steps, page_state
 
 from ...mailbox_service import MailboxService
+from ...error_classification import is_terminal_registration_error
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from contextlib import contextmanager
@@ -36,8 +35,11 @@ def _poll_browser_otp(
     # the signature so callers and tests keep a stable seam.
     deadline = time.monotonic() + max(1, int(timeout or 1))
     while time.monotonic() < deadline:
+        from ...registration_cancel import registration_cancel_requested
+        if registration_cancel_requested():
+            raise BrowserRegistrationError("registration_cancelled")
         remaining = max(1, int(deadline - time.monotonic()))
-        page = _browser_heartbeat(browser, page)
+        page = dom_fields._browser_heartbeat(browser, page)
         try:
             otp = mailbox_service.poll_otp(
                 mailbox,
@@ -47,11 +49,13 @@ def _poll_browser_otp(
                 proxy=proxy,
                 excluded_otps=excluded_otps,
             )
-        except Exception:
+        except Exception as exc:
+            if is_terminal_registration_error(exc):
+                raise
             otp = None
         if otp:
             return otp
-        page = _browser_heartbeat(browser, page)
+        page = dom_fields._browser_heartbeat(browser, page)
     return None
 
 
@@ -77,24 +81,24 @@ def _restart_email_otp_flow(
             page.goto(start_url, wait_until="domcontentloaded", timeout=max(5_000, int(timeout_seconds) * 1_000))
         else:
             raise
-    _maybe_accept_cookies(page)
-    if _manual_challenge(page):
-        if not _wait_for_challenge_clear(page, max_wait_seconds=30):
+    form_steps._maybe_accept_cookies(page)
+    if page_state._manual_challenge(page):
+        if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
             raise BrowserRegistrationError("manual_challenge_required")
-    _fill_email(page, email, config=config)
-    state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
+    form_steps._fill_email(page, email, config=config)
+    state = page_state._wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
     if state in {"challenge", "identity_provider"}:
-        if state == "challenge" and _wait_for_challenge_clear(page, max_wait_seconds=30):
-            state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
+        if state == "challenge" and page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
+            state = page_state._wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
         if state in {"challenge", "identity_provider"}:
             raise BrowserRegistrationError("manual_challenge_required" if state == "challenge" else "browser_unexpected_identity_provider")
     if state == "login_password":
         raise BrowserRegistrationError("browser_existing_account")
     if state == "password":
-        _fill_password_if_present(page, password, config=config)
-        state = _wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
+        form_steps._fill_password_if_present(page, password, config=config)
+        state = page_state._wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
     if state == "challenge":
-        if not _wait_for_challenge_clear(page, max_wait_seconds=30):
+        if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
             raise BrowserRegistrationError("manual_challenge_required")
     if state == "identity_provider":
         raise BrowserRegistrationError("browser_unexpected_identity_provider")

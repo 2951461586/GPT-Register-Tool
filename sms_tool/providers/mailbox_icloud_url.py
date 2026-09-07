@@ -14,7 +14,13 @@ from urllib.parse import parse_qsl, unquote_to_bytes, urlencode, urljoin, urlspl
 from curl_cffi import requests as curl_requests
 
 from ..mail_otp import _extract_otp_from_text, _message_received_ts
-from ..mailbox_quarantine import record_mailbox_auth_invalid
+from ..mailbox_errors import MailboxEndpointUnavailableError
+from ..mailbox_quarantine import (
+    TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS,
+    raise_if_mailbox_quarantined,
+    record_mailbox_auth_invalid,
+    record_mailbox_endpoint_unavailable,
+)
 from .mailbox_graph import MailboxAuthInvalidError
 
 
@@ -88,6 +94,7 @@ def snapshot_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = N
 
 
 def _fetch_icloud_url_page(mailbox, *, limit: int, proxy: str | None) -> tuple[str, str, str]:
+    raise_if_mailbox_quarantined(mailbox)
     url = str(getattr(mailbox, "token", "") or "").strip()
     email = str(getattr(mailbox, "email", "") or "").strip().lower()
     if not email or not _valid_mailbox_url(url):
@@ -95,6 +102,19 @@ def _fetch_icloud_url_page(mailbox, *, limit: int, proxy: str | None) -> tuple[s
 
     page_url = _with_message_limit(url, limit)
     page = _request(page_url, proxy=proxy)
+    if page.status_code in {404, 410}:
+        record_mailbox_endpoint_unavailable(mailbox)
+        raise MailboxEndpointUnavailableError(page.status_code)
+    if page.status_code == 401:
+        # A 401 here is usually a rotated/expired forwarding token, not a dead
+        # credential.  Quarantine it only briefly: a permanent entry froze OTP
+        # recovery for the whole pool (see mailbox_quarantine.py).
+        record_mailbox_auth_invalid(
+            mailbox,
+            reason=f"icloud_http_{page.status_code}",
+            cooldown_seconds=TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS,
+        )
+        raise MailboxAuthInvalidError(detail=f"iCloud inbox HTTP {page.status_code}")
     if page.status_code < 200 or page.status_code >= 300:
         raise RuntimeError(f"iCloud OTP URL fetch failed: HTTP {page.status_code}")
     text = str(page.text or "")
@@ -202,6 +222,8 @@ def _fetch_yangyang_items(
 ) -> list[dict[str, Any]]:
     _detail_base, _detail_suffix, page_base = paths
     listing = _request(urljoin(page_url, page_base), proxy=proxy)
+    if listing.status_code in {404, 410}:
+        raise MailboxEndpointUnavailableError(listing.status_code)
     if listing.status_code < 200 or listing.status_code >= 300:
         raise RuntimeError(f"iCloud OTP URL list failed: HTTP {listing.status_code}")
     try:

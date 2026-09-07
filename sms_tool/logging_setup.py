@@ -1,16 +1,26 @@
 """Central logging configuration for ``sms_tool``.
 
 Call :func:`configure_logging` once at process start (CLI entry points such as
-``chatgpt_phone_reg.py`` / ``cli``). It installs a :class:`RotatingFileHandler`
-that writes to ``runtime/logs/sms_tool.log`` (size-capped, rotated) so Python-side
-output is observable instead of being swallowed by the WPF stdout capture. The
-previous state was 534 ``print()`` calls with zero rotation and zero persistence.
+``chatgpt_phone_reg.py`` / ``cli``). It installs two size-capped, rotated
+handlers under ``runtime/logs/`` so Python-side output is observable instead of
+being swallowed by the WPF stdout capture:
 
-The call is idempotent: a second invocation is a no-op.
+- ``sms_tool.log`` — the operator log. :class:`HumanLogFormatter` renders one
+  normalized line per record (``HH:MM:SS [*] [模块] 消息``), translates
+  registration stage records into named phases, and never prints envelope
+  metadata (schema_version/command_id/run_id) or raw JSON.
+- ``sms_tool.jsonl`` — the machine log. :class:`CorrelatedJsonFormatter` keeps
+  the full telemetry envelope for tooling and audits.
+
+The previous state was 534 ``print()`` calls with zero rotation and zero
+persistence. The call is idempotent: a second invocation is a no-op.
 """
 from __future__ import annotations
 
 import logging
+import json
+import re
+from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -18,6 +28,161 @@ _CONFIGURED = False
 _DEFAULT_MAX_BYTES = 5 * 1024 * 1024  # 5 MiB
 _DEFAULT_BACKUPS = 5
 _ROOT_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+_STRUCTURED_RECORD_FIELDS = (
+    "event",
+    "stage",
+    "status",
+    "previous_stage",
+    "previous_stage_duration_ms",
+    "duration_ms",
+    "driver",
+    "failure_code",
+    "failure_class",
+    "batch_id",
+    "account_ref",
+)
+
+class CorrelatedJsonFormatter(logging.Formatter):
+    """One JSON envelope; sanitize both message arguments and exception text."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        from .sanitizer import sanitize, sanitize_log_text
+        from .telemetry import correlation_fields
+
+        payload = {
+            **correlation_fields(),
+            "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": sanitize_log_text(super().format(record)),
+        }
+        for field in _STRUCTURED_RECORD_FIELDS:
+            if hasattr(record, field):
+                payload[field] = sanitize(getattr(record, field), key=field)
+        return json.dumps(payload, ensure_ascii=True)
+
+
+_LEVEL_MARKERS = {
+    logging.DEBUG: "[.]",
+    logging.INFO: "[*]",
+    logging.WARNING: "[!]",
+    logging.ERROR: "[x]",
+    logging.CRITICAL: "[x]",
+}
+
+# Logger name -> operator-facing module label. Matched by dotted prefix, most
+# specific first (the tuple is pre-sorted by length below).
+_MODULE_LABELS = {
+    "sms_tool.registration_progress": "注册",
+    "sms_tool.registration_handlers": "注册",
+    "sms_tool.registration_retry_guard": "注册",
+    "sms_tool.registration_drivers": "浏览器注册",
+    "sms_tool.registration": "注册",
+    "sms_tool.batch_runner": "批量注册",
+    "sms_tool.commands.one_click": "一键接码",
+    "sms_tool.commands.registration": "注册",
+    "sms_tool.commands.accounts": "账号",
+    "sms_tool.accounts.account_liveness": "账号测活",
+    "sms_tool.accounts.account_health_queue": "账号测活",
+    "sms_tool.accounts.account_scan": "账号测活",
+    "sms_tool.accounts.account_recovery": "账号测活",
+    "sms_tool.accounts.account_promotion": "优惠检测",
+    "sms_tool.codex_oauth": "Codex 授权",
+    "sms_tool.mailbox": "邮箱",
+    "sms_tool.providers": "邮箱",
+    "sms_tool.phone": "接码",
+    "proxy_bridge": "代理桥接",
+    "sms_tool.proxy": "代理",
+    "sms_tool.http_client": "HTTP",
+    # Routed by logging.captureWarnings(): Python ``warnings`` output becomes
+    # one formatted log line instead of raw multi-line stderr noise (which the
+    # WPF panel renders without any formatter).
+    "py.warnings": "告警",
+}
+_MODULE_LABELS_SORTED = tuple(
+    sorted(_MODULE_LABELS.items(), key=lambda item: -len(item[0]))
+)
+
+_STAGE_LABELS = {
+    "created": "已创建",
+    "mailbox_ready": "邮箱就绪",
+    "sentinel": "Sentinel 令牌",
+    "identity_ready": "身份信息就绪",
+    "auth_flow": "授权流程",
+    "user_register": "提交注册",
+    "email_otp_send": "发送邮箱验证码",
+    "email_otp_resend": "重发邮箱验证码",
+    "email_otp_wait": "等待邮箱验证码",
+    "email_otp_validate": "校验邮箱验证码",
+    "create_account": "创建账号",
+    "auth_session": "建立会话",
+    "codex_oauth": "Codex 授权",
+    "access_token_probe": "访问令牌探测",
+    "access_token_stability_wait": "令牌稳定性等待",
+    "totp_enroll": "绑定 TOTP",
+    "finalize": "收尾",
+    "completed": "完成",
+    "failed": "失败",
+    "started": "开始",
+}
+_STAGE_SUFFIX_LABELS = (("_retry", "重试"), ("_reload", "重新加载"))
+_STATUS_LABELS = {
+    "running": "进行中",
+    "success": "成功",
+    "failed": "失败",
+    "cancelled": "已取消",
+    "retry_pending": "待重试",
+}
+_STAGE_LINE = re.compile(r"^Registration stage=(\S+) status=(\S+)")
+# warnings -> py.warnings message shape: ``<file>:<lineno>: <Category>: <text>
+# followed by an optional indented copy of the offending source line. Keep the
+# category and the first text line; drop the absolute path and source echo.
+_WARNING_LINE = re.compile(r"^[^\n]*\.py:\d+:\s*(\w+):\s*(.*)$", re.S)
+
+
+def module_label(logger_name: str) -> str:
+    """Operator-facing Chinese label for a dotted logger name."""
+    name = str(logger_name or "")
+    for prefix, label in _MODULE_LABELS_SORTED:
+        if name == prefix or name.startswith(prefix + "."):
+            return label
+    return name.rpartition(".")[2] or name or "-"
+
+
+def stage_display(stage: str, status: str) -> str:
+    """Render one stage record as ``阶段 · 中文名 (code) — 状态``."""
+    code = str(stage or "unknown")
+    label = _STAGE_LABELS.get(code)
+    if label is None:
+        for suffix, suffix_label in _STAGE_SUFFIX_LABELS:
+            base = code[: -len(suffix)] if code.endswith(suffix) else ""
+            if base and base in _STAGE_LABELS:
+                label = f"{_STAGE_LABELS[base]}（{suffix_label}）"
+                break
+    status_label = _STATUS_LABELS.get(str(status or ""), str(status or "进行中"))
+    if label is None:
+        return f"阶段 · {code} — {status_label}"
+    return f"阶段 · {label} ({code}) — {status_label}"
+
+
+class HumanLogFormatter(logging.Formatter):
+    """Operator log line: ``HH:MM:SS [*] [模块] 消息``, stage-aware, sanitized."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        from .sanitizer import sanitize_log_text
+
+        message = sanitize_log_text(super().format(record))
+        stage_match = _STAGE_LINE.match(message)
+        if stage_match:
+            message = stage_display(stage_match.group(1), stage_match.group(2))
+        elif record.name == "py.warnings":
+            warning_match = _WARNING_LINE.match(message)
+            if warning_match:
+                text = warning_match.group(2).splitlines()[0].strip()
+                message = f"{warning_match.group(1)}: {text}" if text else warning_match.group(1)
+        marker = _LEVEL_MARKERS.get(record.levelno, "[*]")
+        stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+        return f"{stamp} {marker} [{module_label(record.name)}] {message}"
 
 
 def _default_log_path() -> Path:
@@ -64,6 +229,11 @@ def configure_logging(
     if _CONFIGURED:
         return
 
+    # Route the warnings module through logging so library warnings render as
+    # normalized ``[!] [告警] ...`` lines instead of raw ``path:line:`` stderr
+    # noise leaking into the WPF output panel.
+    logging.captureWarnings(True)
+
     root = logging.getLogger()
     root.setLevel(level)
     fmt = logging.Formatter(_ROOT_FORMAT)
@@ -71,9 +241,14 @@ def configure_logging(
     try:
         path = Path(log_path) if log_path else _default_log_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        fh = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
-        fh.setFormatter(fmt)
-        root.addHandler(fh)
+        human = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
+        human.setFormatter(HumanLogFormatter("%(message)s"))
+        root.addHandler(human)
+        machine = RotatingFileHandler(
+            path.with_suffix(".jsonl"), maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+        )
+        machine.setFormatter(CorrelatedJsonFormatter("%(message)s"))
+        root.addHandler(machine)
     except Exception as exc:  # pragma: no cover - last-resort only
         # Never let logging setup crash the application. Broad on purpose:
         # OSError (permissions/full disk) is the expected case, but a broken

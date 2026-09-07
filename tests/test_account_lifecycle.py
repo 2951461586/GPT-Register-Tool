@@ -1,6 +1,6 @@
 import json
 
-from sms_tool.account_lifecycle import AccountDeleteRequest, AccountLifecycle
+from sms_tool.accounts.account_lifecycle import AccountDeleteRequest, AccountLifecycle
 
 
 def test_account_lifecycle_deletes_row_and_archives_session(tmp_path):

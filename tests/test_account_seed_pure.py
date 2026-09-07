@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/account_seed.py`` (2026-09-03, round 7).
+"""Behaviour tests for ``sms_tool/accounts/account_seed.py`` (2026-09-03, round 7).
 
 72 lines, **zero test files import it** (AST audit) -- yet it is on the money
 path: ``payment_auth.py`` (2 call sites), ``payment_batch.py`` (2) and
@@ -37,7 +37,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from sms_tool import account_seed
+from sms_tool.accounts import account_seed
 
 
 def _write(path: Path, payload, encoding: str = "utf-8") -> Path:

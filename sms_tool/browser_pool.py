@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum

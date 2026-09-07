@@ -195,6 +195,37 @@ def test_progress_object_owns_its_gate_and_releases_on_track_exit():
         assert progress._lease is None
 
 
+def test_browser_admission_reuses_auth_lease_at_stage_transition():
+    from sms_tool import registration_progress
+
+    registration_concurrency.registration_stage_metrics(reset=True)
+    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
+        registration_concurrency, "_stage_gates", {}
+    ), patch.object(registration_progress, "_current") as current:
+        progress = registration_progress.RegistrationProgress("a@example.com")
+        current.get.return_value = progress
+        waited = registration_progress.admit_registration_stage("auth_flow")
+        lease = progress._lease
+        registration_progress.registration_stage("auth_flow")
+        try:
+            assert waited >= 0
+            assert progress._lease is lease
+            metrics = registration_concurrency.registration_stage_metrics(reset=True)
+            assert metrics["auth"]["transitions"] == 1
+        finally:
+            progress.release_stage_gate()
+
+
+def test_browser_orchestrator_admits_before_opening_session():
+    import inspect
+    from sms_tool.registration_drivers.browser_flow import orchestrator
+
+    source = inspect.getsource(orchestrator.run_browser_registration)
+    assert source.index('admit_registration_stage("auth_flow")') < source.index(
+        "with flow_steps._browser_session_scope("
+    )
+
+
 def test_track_registration_releases_gate_even_when_the_call_fails():
     from sms_tool import registration_progress
 

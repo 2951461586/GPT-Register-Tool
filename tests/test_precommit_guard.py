@@ -11,6 +11,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import textwrap
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -31,12 +32,12 @@ def run_guard_on(tmp_path: Path, filename: str, content: str) -> list[str]:
     values that make sensitive_field_scan fail, i.e. the test was reddening an
     unrelated gate. tmp_path works now that scan_file tolerates out-of-repo paths.
     """
-    target = Path(tmp_path) / filename
-    target.write_text(content, encoding="utf-8")
-    try:
+    # Older callers still pass ROOT/runtime. Never overwrite a local file
+    # there, even when a fixture name happens to collide with operator data.
+    with tempfile.TemporaryDirectory(prefix="secret_guard_") as directory:
+        target = Path(directory) / filename
+        target.write_text(content, encoding="utf-8")
         return precommit_guard.scan_file(target, precommit_guard.load_sensitive_keys())
-    finally:
-        target.unlink(missing_ok=True)
 
 
 # --------------------------------------------------------------- filename gate
@@ -189,6 +190,28 @@ def test_findings_never_contain_the_full_value() -> None:
     assert findings
     rendered = " ".join(str(part) for row in findings for part in row)
     assert secret not in rendered, "guard must not print full secret values"
+
+
+# -------------------------------------------------------------- staged scan
+
+
+def test_staged_files_include_rename_entries(monkeypatch) -> None:
+    """A secret introduced via `git mv` plus edit must not escape scanning."""
+    captured = {}
+
+    class Result:
+        returncode = 0
+        stdout = "new_name.py\0"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Result()
+
+    monkeypatch.setattr(precommit_guard.subprocess, "run", fake_run)
+    files = precommit_guard.staged_files()
+    assert "--diff-filter=ACMR" in captured["cmd"], "renamed+modified files must be scanned"
+    assert files == [precommit_guard.ROOT / "new_name.py"]
 
 
 # -------------------------------------------------------------- repository gate

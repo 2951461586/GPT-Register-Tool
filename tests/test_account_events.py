@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from sms_tool.account_events import notify_account_deactivated
+from sms_tool.accounts.account_events import notify_account_deactivated
 
 
 def test_storage_event_dispatches_only_for_remail():

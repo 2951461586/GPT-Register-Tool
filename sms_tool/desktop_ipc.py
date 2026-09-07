@@ -1,3 +1,24 @@
+"""stdout IPC bridge to the C# WPF host (SmsWorkbench).
+
+Python writes to stdout; the host parses it. Ordinary log lines and protocol
+frames share that pipe, so every frame is a single line prefixed with
+``IPC_PREFIX`` -- that sentinel is the only thing separating the two. Keep
+frames on one line: a pretty-printed payload will be read as log noise.
+
+Two frame kinds exist:
+
+* ``emit_result`` -- one terminal result per invocation. Its payload is passed
+  through ``sanitize`` and wrapped as-is; it is **not** run through
+  ``normalize_stage_event``.
+* ``emit_event`` -- streaming progress. Every event is normalised by
+  ``normalize_stage_event`` first, which is the cross-domain contract both
+  sides agree on; a payload that skips it will not match the host's parser.
+
+Both are inert unless enabled: ``emit_result`` needs ``enabled=True``, and
+``emit_event`` defaults to the ``SMSWORKBENCH_EVENTS`` environment variable.
+That is what keeps plain CLI runs byte-identical to before this module existed.
+"""
+
 import json
 import os
 import threading
@@ -77,6 +98,20 @@ def emit_result(payload, *, enabled=False):
 
 def desktop_events_enabled():
     return os.environ.get(EVENT_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def progress_dots_enabled():
+    """Whether interactive progress dots may be written to stdout.
+
+    Dots are emitted with ``end=""`` so they carry no newline of their own:
+    whatever line another worker flushes next gets the dots glued to its head.
+    Under the desktop host stdout is the IPC channel, and that gluing defeats
+    every line-anchored parse on the C# side -- the envelope prefix, the JSON
+    folding in ``BackendLogFolder`` and progress-event parsing all test the
+    *start* of a line, so one stray dot turns a structured frame into raw
+    noise. Terminal runs keep the dots; IPC runs drop them.
+    """
+    return not desktop_events_enabled()
 
 
 def emit_event(payload, *, enabled=None):

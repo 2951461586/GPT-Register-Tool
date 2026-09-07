@@ -1,10 +1,10 @@
 from unittest.mock import patch
 from contextlib import contextmanager
 
-from sms_tool import account_recovery
+from sms_tool.accounts import account_recovery
 from sms_tool import codex_oauth
 from sms_tool.mailbox import MailboxAccount
-from sms_tool.account_identity import create_registration_identity
+from sms_tool.accounts.account_identity import create_registration_identity
 
 
 def test_chatgpt_email_relogin_validates_account_input():
@@ -128,6 +128,133 @@ def test_refresh_local_quota_statuses_recovers_401():
     assert relogin.call_args.kwargs["mode"] == "codex_oauth"
 
 
+def test_relogin_lane_follows_requested_concurrency():
+    """Regression: the relogin lane was pinned at two slots *and* acquired
+    non-blocking, so with more than two 401 accounts in a batch every extra
+    account was dropped instead of queued -- surfaced in the UI as
+    "重登跳过：并发槽已满" while the operator had asked for 8 workers.
+    """
+    import threading
+    import time
+
+    emails = [f"acct{index}@example.com" for index in range(8)]
+    attempted: list[str] = []
+    attempted_lock = threading.Lock()
+
+    def slow_relogin(_account, **_kwargs):
+        # The mocked relogin has to actually hold its slot: if it returned
+        # instantly the eight workers would never contend and this test would
+        # pass even with the old two-slot, non-blocking lane.
+        time.sleep(0.05)
+        with attempted_lock:
+            attempted.append("relogin")
+        return {
+            "ok": True,
+            "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"},
+        }
+
+    with (
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            side_effect=lambda *args, **_kwargs: {"email": args[0] if args else "", "access_token": "old_at"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "quota_status": "invalid"},
+        ),
+        patch.object(account_recovery, "relogin_codex_account", side_effect=slow_relogin),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            emails,
+            relogin_on_401=True,
+            relogin_mode="codex_oauth",
+            workers=8,
+        )
+
+    # Every account gets a relogin; none may be skipped for want of a slot.
+    assert len(attempted) == 8
+    assert result["relogin_attempted"] == 8
+    assert result["relogin_success"] == 8
+    assert result["relogin_failed"] == 0
+
+
+def test_account_deadline_does_not_mask_confirmed_401_after_relogin():
+    """Regression: when recovery ran past its deadline, the timeout branch
+    rewrote the already-confirmed 401 probe to status "timeout" -- the panel
+    then showed 网络超时 for accounts whose AT was provably revoked, and the
+    relogin note no longer matched the displayed classification."""
+    import threading  # noqa: F401  (documents the threaded executor context)
+
+    clock = {"t": 1000.0}
+
+    def slow_failed_relogin(_account, **_kwargs):
+        clock["t"] += 70.0  # burn past the 60s relogin budget
+        return {"ok": False, "mode": "chatgpt_email_otp", "error": "existing_login_otp_poll_timeout"}
+
+    with (
+        patch.object(account_recovery.time, "monotonic", side_effect=lambda: clock["t"]),
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "slow@example.com", "access_token": "old_at", "password": "pw"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效"},
+        ),
+        patch.object(account_recovery, "relogin_codex_account", side_effect=slow_failed_relogin),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        # Hermetic: the 掉号 marker fires for this password-only account and
+        # must not leak a synthetic test row into the production database.
+        patch.object(account_recovery, "upsert_account", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["slow@example.com"],
+            workers=1,
+            relogin_on_401=True,
+            relogin_timeout=60,
+            account_timeout=30,
+            batch_timeout=300,
+        )
+
+    probe = result["results"][0]["probe"]
+    assert probe["status"] == "token_invalid"
+    assert result["results"][0]["relogin"]["error"] == "existing_login_otp_poll_timeout"
+
+
+def test_account_deadline_still_marks_undetermined_probe_as_timeout():
+    """Guard rails both ways: a probe without a definitive classification is
+    still stamped as a timeout once the account budget is gone."""
+    clock = {"t": 1000.0}
+
+    def slow_probe(*_args, **_kwargs):
+        clock["t"] += 40.0  # past the 30s account budget
+        return {"ok": False, "status": "unknown", "quota_status": "检测失败"}
+
+    with (
+        patch.object(account_recovery.time, "monotonic", side_effect=lambda: clock["t"]),
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            return_value={"email": "hang@example.com", "access_token": "old_at"},
+        ),
+        patch.object(account_recovery, "probe_account_liveness", side_effect=slow_probe),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["hang@example.com"],
+            workers=1,
+            account_timeout=30,
+            batch_timeout=300,
+        )
+
+    assert result["results"][0]["probe"]["status"] == "timeout"
+
+
 def test_refresh_local_quota_statuses_does_not_count_persisted_401_as_success():
     with (
         patch.object(
@@ -146,6 +273,9 @@ def test_refresh_local_quota_statuses_does_not_count_persisted_401_as_success():
             },
         ),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
+        # The account carries no recovery material, so the 掉号 marker fires;
+        # keep the test hermetic by stubbing the upsert.
+        patch.object(account_recovery, "upsert_account", return_value=True),
     ):
         result = account_recovery.refresh_local_quota_statuses(["invalid@example.com"])
 
@@ -241,8 +371,11 @@ def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_
     monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *args, **kwargs: {
         "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
     })
-    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda: False)
+    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: False)
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
+    # No recovery material on this account, so the 掉号 marker would fire;
+    # stub the upsert to keep the test hermetic.
+    monkeypatch.setattr(account_recovery, "upsert_account", lambda *args, **kwargs: True)
 
     result = account_recovery.refresh_local_quota_statuses(
         ["user@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
@@ -255,6 +388,246 @@ def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_
     assert row["relogin"]["error"] == "mailbox_pool_repair_required"
     assert result["liveness_401"] == 1
     assert result["relogin_attempted"] == 0
+
+
+def test_token_invalid_without_recovery_material_is_marked_dropped():
+    account = {"email": "drop@example.com", "access_token": "dead_at"}
+    persisted = []
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效"},
+        ),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(
+            account_recovery,
+            "upsert_account",
+            side_effect=lambda data, json_path="": persisted.append(data) or True,
+        ),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["drop@example.com"])
+
+    assert not result["ok"]
+    assert result["results"][0]["probe"]["dropped"] == "token_revoked"
+    assert persisted, "unrecoverable revoked token must be persisted as 掉号"
+    assert persisted[0]["status"] == "at_invalid"
+    assert persisted[0]["error"] == "token_revoked_unrecoverable"
+    assert persisted[0]["terminal_failure"]["code"] == "token_revoked"
+
+
+def test_password_alone_is_not_relogin_material():
+    """The auto cascade has no password-login strategy, so a stored password
+    must not shield an account from 掉号 marking; a mailbox *provider* still
+    counts because ReMail rehydrates credentials supplier-side by email."""
+    assert not account_recovery._has_relogin_material(
+        {"email": "a@example.com", "password": "pw", "session_token": "st"}
+    )
+    assert account_recovery._has_relogin_material({"email": "a@example.com", "mailbox_provider": "remail"})
+    assert account_recovery._has_relogin_material({"email": "a@example.com", "mailbox": {"provider": "icloud_url"}})
+    assert account_recovery._has_relogin_material({"email": "a@example.com", "refresh_token": "rt"})
+
+
+def test_token_invalid_with_password_only_is_marked_dropped():
+    account = {"email": "pwonly@example.com", "access_token": "dead_at", "password": "pw"}
+    persisted = []
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效"},
+        ),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(
+            account_recovery,
+            "upsert_account",
+            side_effect=lambda data, json_path="": persisted.append(data) or True,
+        ),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["pwonly@example.com"])
+
+    assert result["results"][0]["probe"]["dropped"] == "token_revoked"
+    assert persisted and persisted[0]["status"] == "at_invalid"
+
+
+def test_relogin_skips_second_otp_poll_after_first_times_out():
+    """Both OTP strategies poll the same mailbox; once the first poll window
+    elapsed with no mail, the second cannot succeed. Skipping it halves the
+    per-account cascade cost that was starving the batch budget."""
+
+    def fail(error):
+        return {"ok": False, "error": error}
+
+    with (
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=(None, [])),
+        patch.object(
+            account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")
+        ),
+        patch.object(
+            account_recovery, "relogin_web_session_account", return_value=fail("web_session_access_token_probe_failed:401")
+        ),
+        patch.object(
+            account_recovery, "relogin_chatgpt_email_account", return_value=fail("existing_login_otp_poll_timeout")
+        ),
+        patch.object(account_recovery, "relogin_local_codex_account") as codex,
+        patch.object(
+            account_recovery, "relogin_browser_session_account", return_value=fail("browser_session_access_token_missing")
+        ),
+    ):
+        result = account_recovery.relogin_codex_account(
+            {"email": "otp@example.com", "access_token": "dead_at"}, mode="auto"
+        )
+
+    assert result["error"] == "all_relogin_methods_failed"
+    codex.assert_not_called()
+    skipped = [a for a in result["attempts"] if a.get("skipped")]
+    assert skipped and skipped[0]["mode"] == "codex_oauth_pkce"
+
+
+def test_relogin_runs_second_otp_poll_when_first_fails_for_other_reasons():
+    def fail(error):
+        return {"ok": False, "error": error}
+
+    with (
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=(None, [])),
+        patch.object(
+            account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")
+        ),
+        patch.object(
+            account_recovery, "relogin_web_session_account", return_value=fail("web_session_access_token_probe_failed:401")
+        ),
+        patch.object(
+            account_recovery, "relogin_chatgpt_email_account", return_value=fail("mailbox_transport_unavailable")
+        ),
+        patch.object(
+            account_recovery, "relogin_local_codex_account", return_value=fail("passwordless_email_otp_poll_timeout")
+        ) as codex,
+        patch.object(
+            account_recovery, "relogin_browser_session_account", return_value=fail("browser_session_access_token_missing")
+        ),
+    ):
+        result = account_recovery.relogin_codex_account(
+            {"email": "otp2@example.com", "access_token": "dead_at"}, mode="auto"
+        )
+
+    assert result["error"] == "all_relogin_methods_failed"
+    codex.assert_called_once()
+
+
+def test_dropped_account_skips_probe_and_relogin():
+    """Regression: the 掉号 synthetic probe keeps status token_invalid, which
+    re-armed the relogin cascade on every later batch — already-marked
+    accounts burned a full 5-strategy relogin each run."""
+    account = {
+        "email": "gone@example.com",
+        "access_token": "dead_at",
+        "raw_json": '{"terminal_failure": {"code": "token_revoked", "reason": "token_invalid_no_relogin_material"}}',
+    }
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(account_recovery, "probe_account_liveness") as probe_mock,
+        patch.object(account_recovery, "relogin_codex_account") as relogin_mock,
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(account_recovery, "upsert_account", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["gone@example.com"], relogin_on_401=True
+        )
+
+    probe_mock.assert_not_called()
+    relogin_mock.assert_not_called()
+    item = result["results"][0]
+    assert item["probe"]["status"] == "token_invalid"
+    assert item["probe"]["terminal"] is True
+    assert item["relogin_attempted"] is False
+
+
+def test_token_invalid_with_mailbox_material_is_not_marked_when_breaker_closed(monkeypatch):
+    account = {"email": "keep@example.com", "access_token": "at", "mailbox_token": "mt"}
+    monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
+        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
+    })
+    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: False)
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
+    dropped = []
+    monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
+
+    result = account_recovery.refresh_local_quota_statuses(
+        ["keep@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
+    )
+
+    assert dropped == []
+    assert "dropped" not in result["results"][0]["probe"]
+    assert result["results"][0]["relogin"]["error"] == "mailbox_pool_repair_required"
+
+
+def test_token_invalid_during_relogin_cooldown_is_not_marked(monkeypatch):
+    account = {"email": "cool@example.com", "access_token": "at"}
+    monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
+        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
+    })
+    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: True)
+    monkeypatch.setattr(account_recovery, "_relogin_cooldown_active", lambda acc: True)
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
+    dropped = []
+    monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
+
+    result = account_recovery.refresh_local_quota_statuses(
+        ["cool@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
+    )
+
+    assert dropped == []
+    assert result["results"][0]["relogin"]["error"] == "relogin_cooldown"
+
+
+def test_token_revoked_drop_skips_probe_and_relogin_on_later_runs():
+    account = {
+        "email": "gone@example.com",
+        "access_token": "dead",
+        "terminal_failure": {"code": "token_revoked", "reason": "token_invalid_no_relogin_material", "updated_at": 1},
+    }
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(account_recovery, "probe_account_liveness") as probe,
+        patch.object(account_recovery, "relogin_codex_account") as relogin,
+        patch.object(account_recovery, "mailbox_relogin_allowed", side_effect=lambda email=None: False),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(account_recovery, "upsert_account", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["gone@example.com"], relogin_on_401=True)
+
+    probe.assert_not_called()
+    relogin.assert_not_called()
+    assert result["at_invalid"] == 1
+    assert result["results"][0]["probe"]["error"] == "token_revoked_unrecoverable"
+
+
+def test_relogin_terminal_deactivation_is_not_double_marked(monkeypatch):
+    """A terminal relogin answer is persisted by the relogin chain itself via
+    _persist_permanent_deactivation; the 掉号 marker must not pile on."""
+    account = {"email": "term@example.com", "access_token": "at"}
+    monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
+        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
+    })
+    monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: True)
+    monkeypatch.setattr(account_recovery, "relogin_codex_account", lambda *a, **k: {
+        "ok": False, "mode": "chatgpt_email_otp", "error": "account_deactivated", "terminal": True,
+    })
+    monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
+    dropped = []
+    monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
+
+    result = account_recovery.refresh_local_quota_statuses(
+        ["term@example.com"], relogin_on_401=True, batch_timeout=60, account_timeout=60
+    )
+
+    assert dropped == []
+    assert result["results"][0]["relogin"]["terminal"] is True
 
 
 def test_relogin_otp_failure_enters_cooldown(tmp_path, monkeypatch):
@@ -692,10 +1065,10 @@ def test_browser_recovery_uses_driver_from_browser_identity():
     mock_browser.cookie_header.return_value = ""
 
     with (
-        patch("sms_tool.account_recovery.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"}, "registration": {}}),
+        patch("sms_tool.accounts.account_recovery.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"}, "registration": {}}),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_browser) as create_session,
-        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
-        patch("sms_tool.registration_drivers.browser_flow._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
+        patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.browser_flow.session._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
         patch("sms_tool.session_refresh._save_refreshed", return_value="session.json"),
     ):
@@ -735,7 +1108,7 @@ def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_p
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
-        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
         patch.object(account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
@@ -776,7 +1149,7 @@ def test_browser_liveness_reuses_persisted_geo_aligned_profile():
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
-        patch("sms_tool.registration_drivers.browser_flow._wait_for_challenge_clear"),
+        patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
         result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])

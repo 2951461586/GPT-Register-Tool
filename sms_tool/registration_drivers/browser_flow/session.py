@@ -7,9 +7,9 @@ import os
 import random
 import time
 
-from .dom_fields import _safe_text, _session_context_closed, _session_error_marker, _terminal_session_error
+from . import dom_fields
 
-from ...account_liveness import CODEX_USAGE_URL, account_chatgpt_id, quota_result_from_payload
+from ...accounts.account_liveness import CODEX_USAGE_URL, account_chatgpt_id, quota_result_from_payload
 from ..base import BrowserRegistrationError
 from ..browser_session import PlaywrightBrowserSession
 from collections.abc import Mapping
@@ -50,51 +50,75 @@ def _browser_access_token_probe(browser: Any, account: Mapping[str, Any], *, tim
     account_id = account_chatgpt_id(account)
     if account_id:
         headers["Chatgpt-Account-Id"] = account_id
-    try:
-        try:
-            payload = browser.fetch_json(
-                CODEX_USAGE_URL,
-                timeout_ms=max(5_000, int(timeout or 30) * 1_000),
-                headers=headers,
-            )
-        except TypeError as exc:
-            # Compatibility for small third-party browser adapters that have
-            # not adopted the optional headers parameter yet.
-            if "headers" not in str(exc):
-                raise
-            payload = browser.fetch_json(
-                CODEX_USAGE_URL,
-                timeout_ms=max(5_000, int(timeout or 30) * 1_000),
-            )
-        status_code = int(payload.get("status") or payload.get("status_code") or 0) if isinstance(payload, Mapping) else 0
-        if os.environ.get("CAMOUFOX_PROBE_TRACE"):
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        if attempt:
+            # A transport exception (navigation race, transiently closed
+            # context) is recoverable; an HTTP answer is not, so only
+            # exceptions reach this retry.
             logger.warning(
-                "[AT_PROBE_TRACE] raw payload status=%s body=%s",
-                status_code,
-                str(payload.get("body"))[:300] if isinstance(payload, Mapping) else payload,
+                "browser access-token probe transport failed, retrying once: %s",
+                _probe_error_text(last_exc, token),
             )
-        result = quota_result_from_payload(
-            payload,
-            status_code=status_code,
-            mode="browser",
-            account_id=account_id,
-            transport_ok=200 <= status_code < 300,
-        )
-        error = str(result.get("error") or "")
-        if token and token in error:
-            error = error.replace(token, "[REDACTED]")
-        result["error"] = _safe_text(error)
-        return result
-    except Exception as exc:
-        return {
-            "ok": False,
-            "mode": "browser",
-            "status": "unknown",
-            "quota_status": "检测失败",
-            "status_code": 0,
-            "error": _safe_text(type(exc).__name__),
-            **({"account_id": account_id} if account_id else {}),
-        }
+            time.sleep(2.0)
+        try:
+            try:
+                payload = browser.fetch_json(
+                    CODEX_USAGE_URL,
+                    timeout_ms=max(5_000, int(timeout or 30) * 1_000),
+                    headers=headers,
+                )
+            except TypeError as exc:
+                # Compatibility for small third-party browser adapters that have
+                # not adopted the optional headers parameter yet.
+                if "headers" not in str(exc):
+                    raise
+                payload = browser.fetch_json(
+                    CODEX_USAGE_URL,
+                    timeout_ms=max(5_000, int(timeout or 30) * 1_000),
+                )
+            status_code = int(payload.get("status") or payload.get("status_code") or 0) if isinstance(payload, Mapping) else 0
+            if os.environ.get("CAMOUFOX_PROBE_TRACE"):
+                logger.warning(
+                    "[AT_PROBE_TRACE] raw payload status=%s body=%s",
+                    status_code,
+                    str(payload.get("body"))[:300] if isinstance(payload, Mapping) else payload,
+                )
+            result = quota_result_from_payload(
+                payload,
+                status_code=status_code,
+                mode="browser",
+                account_id=account_id,
+                transport_ok=200 <= status_code < 300,
+            )
+            error = str(result.get("error") or "")
+            if token and token in error:
+                error = error.replace(token, "[REDACTED]")
+            result["error"] = dom_fields._safe_text(error)
+            return result
+        except Exception as exc:
+            last_exc = exc
+    return {
+        "ok": False,
+        "mode": "browser",
+        "status": "unknown",
+        "quota_status": "检测失败",
+        "status_code": 0,
+        # Playwright failures arrive as a bare ``Error`` type name; the real
+        # cause (timeout, closed context, navigation interrupted) only exists
+        # in the message, so record it instead of the class name.
+        "error": _probe_error_text(last_exc, token),
+        **({"account_id": account_id} if account_id else {}),
+    }
+
+
+def _probe_error_text(exc: Exception | None, token: str) -> str:
+    message = dom_fields._safe_text(str(exc or "")).strip()
+    if not message:
+        message = type(exc).__name__ if exc is not None else "unknown"
+    if token and token in message:
+        message = message.replace(token, "[REDACTED]")
+    return message[:300]
 
 
 def _session_payload(
@@ -132,7 +156,7 @@ def _session_payload(
             raise
         except Exception as exc:
             last_fetch_error = type(exc).__name__
-            if _session_context_closed(f"{type(exc).__name__}: {exc}"):
+            if dom_fields._session_context_closed(f"{type(exc).__name__}: {exc}"):
                 consecutive_closed += 1
                 if consecutive_closed >= 2:
                     raise BrowserRegistrationError("browser_session_context_closed", last_fetch_error) from exc
@@ -153,15 +177,15 @@ def _session_payload(
         if not isinstance(body, dict):
             body = {}
         last_body_keys = sorted(str(key) for key in body.keys())[:30]
-        error_marker = _session_error_marker(body)
+        error_marker = dom_fields._session_error_marker(body)
         last_error_marker = error_marker
-        if _session_context_closed(error_marker):
+        if dom_fields._session_context_closed(error_marker):
             consecutive_closed += 1
             if consecutive_closed >= 2:
                 raise BrowserRegistrationError("browser_session_context_closed", f"http_{last_status or 'unknown'}")
         else:
             consecutive_closed = 0
-        terminal_error = _terminal_session_error(last_status, error_marker)
+        terminal_error = dom_fields._terminal_session_error(last_status, error_marker)
         if terminal_error:
             raise BrowserRegistrationError(terminal_error, f"http_{last_status or 'unknown'}")
         candidate = body.get("session") if isinstance(body.get("session"), dict) else body
@@ -213,13 +237,15 @@ def _session_payload(
 
 
 def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
-    diagnostics = {"driver": driver, "url_host": "", "title": ""}
+    diagnostics = {"driver": driver, "url_host": "", "url_path": "", "title": ""}
     try:
-        diagnostics["url_host"] = str(urlsplit(str(page.url or "")).hostname or "")
+        parsed = urlsplit(str(page.url or ""))
+        diagnostics["url_host"] = str(parsed.hostname or "")
+        diagnostics["url_path"] = str(parsed.path or "")[:120]
     except Exception:
         pass
     try:
-        diagnostics["title"] = _safe_text(page.title())[:120]
+        diagnostics["title"] = dom_fields._safe_text(page.title())[:120]
     except Exception:
         pass
     # Record bounded DOM landmarks, never page content, cookies, or tokens.
@@ -233,6 +259,9 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
                     "input[type=email], input[name=email], input[name=username], input#email-input, input[autocomplete=email]"
                 ).length,
                 password_inputs: document.querySelectorAll("input[type=password]").length,
+                verification_inputs: document.querySelectorAll(
+                    "input[inputmode=numeric], input[autocomplete=one-time-code], input[name*=code i]"
+                ).length,
                 buttons: document.querySelectorAll("button").length,
                 challenge: !!document.querySelector(
                     "iframe[src*='challenge'], iframe[src*='turnstile'], [data-testid*='challenge'], .cf-turnstile"
@@ -246,6 +275,7 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
                 "ready_state": str(state.get("ready_state") or "")[:20],
                 "email_inputs": int(state.get("email_inputs") or 0),
                 "password_inputs": int(state.get("password_inputs") or 0),
+                "verification_inputs": int(state.get("verification_inputs") or 0),
                 "button_count": int(state.get("buttons") or 0),
                 "challenge_present": bool(state.get("challenge")),
                 "auth_path": bool(state.get("auth_path")),
@@ -289,6 +319,8 @@ def _post_registration_dwell(config: Mapping[str, Any]) -> float:
 
 def _browser_failure_class(code: str) -> str:
     value = str(code or "").lower()
+    if "registration_cancelled" in value:
+        return "cancelled"
     if any(marker in value for marker in ("rate_limited", "rate_limit")):
         return "rate_limit"
     if any(marker in value for marker in ("existing_account", "session_account_not_linked")):
@@ -300,7 +332,7 @@ def _browser_failure_class(code: str) -> str:
         "session_access_token_missing", "session_unauthorized", "session_forbidden",
         "session_access_denied", "session_oauth_callback_failed", "session_token_refresh_failed",
         "chatgpt_context_unavailable", "profile_", "passwordless_otp", "otp_restart_state",
-        "registration_state_unknown", "auth_state",
+        "registration_state_unknown", "email_verification", "email_field", "auth_state",
     )):
         return "auth_state"
     if "proxy_blocked" in value or "proxy_country_mismatch" in value:
@@ -313,7 +345,9 @@ def _browser_failure_class(code: str) -> str:
     return "network"
 
 
-def _bind_totp_in_browser(page: Any, access_token: str, device_id: str) -> dict[str, Any]:
+def _bind_totp_in_browser(
+    page: Any, access_token: str, device_id: str, *, chat_base: str,
+) -> dict[str, Any]:
     """Enroll and activate TOTP 2FA through the browser's fetch API.
 
     Routes the MFA enroll and activate HTTP requests through
@@ -321,7 +355,7 @@ def _bind_totp_in_browser(page: Any, access_token: str, device_id: str) -> dict[
     cookies, fingerprint, and Cloudflare clearance.  Returns a dict
     with ``ok``, ``totp_secret``, and optionally ``error``.
     """
-    chat_base = "https://chatgpt.com"
+    chat_base = chat_base.rstrip("/")
     enroll_script = """
     async ([url, accessToken, deviceId]) => {
         const r = await fetch(url, {
@@ -331,7 +365,6 @@ def _bind_totp_in_browser(page: Any, access_token: str, device_id: str) -> dict[
                 "oai-device-id": deviceId,
                 "oai-language": "en-US",
                 "Content-Type": "application/json",
-                "Referer": "https://chatgpt.com/",
             },
             credentials: "include",
             body: JSON.stringify({"factor_type": "totp"}),
@@ -349,7 +382,6 @@ def _bind_totp_in_browser(page: Any, access_token: str, device_id: str) -> dict[
                 "oai-device-id": deviceId,
                 "oai-language": "en-US",
                 "Content-Type": "application/json",
-                "Referer": "https://chatgpt.com/",
             },
             credentials: "include",
             body: JSON.stringify({"code": code, "factor_type": "totp", "session_id": sessionId}),

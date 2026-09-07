@@ -3,6 +3,9 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 
 from .config import CFG
+from .backoff import bounded_cooldown, transport_backoff
+from .error_classification import is_terminal_registration_error
+from .sanitizer import sanitize_text
 
 
 class SessionCircuitOpen(RuntimeError):
@@ -22,7 +25,7 @@ def _retry_after_seconds(response, default=300.0):
         pass
     try:
         seconds = float(str(value).strip())
-        return max(1.0, min(seconds, 3600.0))
+        return bounded_cooldown(seconds, default)
     except (TypeError, ValueError):
         pass
     try:
@@ -145,14 +148,21 @@ def request_with_retry(session, method, url, *, label="", attempts=None, retry_d
             return response
         except Exception as error:
             last_error = error
-            if not is_transient_transport_error(error):
+            # Terminal markers are pure error classification, not registration
+            # policy. This used to call registration_retry_decision(error,
+            # failure_class="network"), which is exactly equivalent: "network"
+            # is in RETRYABLE_CLASSES, so .retryable collapsed to `not terminal`.
+            # Asking classification directly keeps the transport layer free of
+            # any import back edge into the policy layer. Do not "restore" the
+            # policy call here -- that reintroduces the layering violation.
+            if not is_transient_transport_error(error) or is_terminal_registration_error(error):
                 raise
             if attempt >= max_attempts:
                 raise
             # Exponential backoff: base_delay * 2^(attempt-1), capped at 15s
-            delay = min(base_delay * (2 ** (attempt - 1)), 15.0)
+            delay = transport_backoff(attempt, base_delay)
             prefix = f"  {label} " if label else "  "
-            print(f"{prefix}transport retry {attempt}/{max_attempts}: {error}")
+            print(f"{prefix}transport retry {attempt}/{max_attempts}: {sanitize_text(error)}")
             if delay:
                 time.sleep(delay)
     raise last_error

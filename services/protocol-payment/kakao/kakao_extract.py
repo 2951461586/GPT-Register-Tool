@@ -65,7 +65,7 @@ def set_access_token_probe(probe: _AccessTokenProbe) -> None:
 
 def _default_access_token_probe(token: str, proxy: str) -> dict[str, Any]:
     # Local import keeps this module importable without the parent package.
-    from sms_tool.account_liveness import probe_account_liveness
+    from sms_tool.accounts.account_liveness import probe_account_liveness
 
     return probe_account_liveness({"access_token": token}, proxy=proxy, timeout=TIMEOUT)
 

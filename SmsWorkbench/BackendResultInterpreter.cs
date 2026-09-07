@@ -28,6 +28,34 @@ public static class BackendResultInterpreter
     public static Dictionary<string, object>? TryExtractScanSummary(string output)
     {
         string text = output ?? "";
+
+        // Desktop mode returns results wrapped in an IPC v2 envelope, and
+        // "results"/"total" live inside the envelope's *payload*, not at its
+        // root. The raw-text scan below therefore could never match on
+        // desktop: starting at the payload's brace swallowed the envelope's
+        // trailing brace (the parse threw and the catch swallowed it), and
+        // starting at the envelope root parsed fine but had no results/total.
+        // That is why the same command worked from the CLI -- where
+        // desktop_ipc emits bare JSON with no envelope -- and showed no
+        // summary in the UI.
+        JsonElement? payload = null;
+        try
+        {
+            payload = BackendJsonProtocol.ExtractPayload(text);
+        }
+        catch (JsonException)
+        {
+            // Malformed envelope JSON: fall through to the raw-text scan so a
+            // partially truncated envelope does not lose the whole summary.
+        }
+        if (payload.HasValue)
+        {
+            Dictionary<string, object>? unwrapped = TryReadSummary(payload.Value);
+            if (unwrapped != null) return unwrapped;
+        }
+
+        // No envelope (plain CLI output), or an envelope whose payload carries
+        // no summary: keep the historical raw-text scan.
         int end = text.LastIndexOf('}');
         if (end < 0) return null;
         for (int start = text.LastIndexOf('{', end); start >= 0; start = start > 0 ? text.LastIndexOf('{', start - 1) : -1)
@@ -44,6 +72,48 @@ public static class BackendResultInterpreter
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Backend commands whose terminal result is a per-account rows payload
+    /// ("results" + "total") that the operator reviews in the result dialog.
+    /// Both the liveness scan ("账号测活(N)") and the promotion check
+    /// ("账号优惠检测(N)") emit that shape, but only the liveness task name
+    /// used to be matched -- so the promotion check finished silently with its
+    /// rows never shown.
+    /// </summary>
+    public static bool IsAccountScanResultTask(string taskName)
+    {
+        string name = taskName ?? "";
+        return name.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("账号优惠检测", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Dialog / heading title for the per-account result dialog.</summary>
+    public static string AccountScanResultTitle(string taskName)
+    {
+        string name = taskName ?? "";
+        return name.StartsWith("账号优惠检测", StringComparison.OrdinalIgnoreCase)
+            ? "账号优惠检测"
+            : "账号测活";
+    }
+
+    /// <summary>
+    /// Reads "results"/"total" from an already-parsed JSON object, which is how
+    /// the IPC v2 payload arrives. Returns null when both keys are absent.
+    /// </summary>
+    private static Dictionary<string, object>? TryReadSummary(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        if (!element.TryGetProperty("results", out _) || !element.TryGetProperty("total", out _)) return null;
+        try
+        {
+            return BackendJson.TextToObject(element.GetRawText());
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -78,6 +148,78 @@ public static class BackendResultInterpreter
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// True when the rows come from 账号优惠检测. Those rows carry a
+    /// <c>promotion_status</c> badge (可试用Plus-50% / Free·无优惠 / 已订阅·plus)
+    /// that the liveness rendering path would otherwise relabel as
+    /// "AT有效 / HTTP 200" and hide completely.
+    /// </summary>
+    public static bool IsPromotionRows(IEnumerable<Dictionary<string, object>> rows)
+    {
+        if (rows == null) return false;
+        foreach (Dictionary<string, object> row in rows)
+        {
+            if (row != null && BackendJson.GetString(row, "promotion_status").Trim().Length > 0)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Human-readable status for one result row. Promotion rows lead with their
+    /// own badge; everything else keeps the probe/scan labelling.
+    /// </summary>
+    public static string ResultRowStatus(Dictionary<string, object> row)
+    {
+        if (row == null) return "未知";
+        string promotion = BackendJson.GetString(row, "promotion_status").Trim();
+        if (promotion.Length > 0) return promotion;
+        if (BackendJson.TryGetMap(row, "probe", out var probe))
+        {
+            return IsProbeDeactivated(row) ? "账号停用" : ProbeStatusLabel(probe);
+        }
+        return ScanStatusLabel(BackendJson.GetString(row, "scan_status"));
+    }
+
+    /// <summary>
+    /// Summary line for promotion rows, grouped by badge. A promotion row is
+    /// "successful" when the probe succeeded -- the badge (including
+    /// "Free·无优惠") is the actual answer, not a failure.
+    /// </summary>
+    public static string PromotionSummary(IEnumerable<Dictionary<string, object>> rows)
+    {
+        int total = 0;
+        int ok = 0;
+        int tokenInvalid = 0;
+        int failed = 0;
+        var badges = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (rows != null)
+        {
+            foreach (Dictionary<string, object> row in rows)
+            {
+                if (row == null) continue;
+                total++;
+                if (IsProbeSucceeded(row)) ok++;
+                else if (IsProbeReturned401(row)) tokenInvalid++;
+                else failed++;
+                string badge = BackendJson.GetString(row, "promotion_status").Trim();
+                if (badge.Length == 0) badge = "未知";
+                badges.TryGetValue(badge, out int count);
+                badges[badge] = count + 1;
+            }
+        }
+        var text = new System.Text.StringBuilder();
+        text.Append("总数：").Append(total)
+            .Append("    检测成功：").Append(ok)
+            .Append("    AT失效：").Append(tokenInvalid)
+            .Append("    其他失败：").Append(failed);
+        foreach (KeyValuePair<string, int> badge in badges.OrderByDescending(b => b.Value))
+        {
+            text.Append("    ").Append(badge.Key).Append('：').Append(badge.Value);
+        }
+        return text.ToString();
     }
 
     /// <summary>

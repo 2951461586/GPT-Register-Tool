@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 
 from curl_cffi import requests as curl_requests
 
+from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
+from .registration_result import build_registration_result
+from .registration_operations import RegistrationOperations
+from .registration_runtime import RegistrationRuntimeState
 from .registration_state import (
     RegistrationContext,
     RegistrationStage,
@@ -99,62 +103,6 @@ class RegistrationAbort(RuntimeError):
     """Expected workflow failure that is converted to a sanitized result."""
 
 
-@dataclass
-class RegistrationRuntimeState:
-    """Mutable outputs shared by otherwise independent registration stages."""
-
-    proxy: str = ""
-    mailbox: Any = None
-    mailbox_service: Any = None
-    sentinel_data: Mapping[str, Any] = field(default_factory=dict, repr=False)
-    context: RegistrationContext | None = None
-    session: Any = None
-    login_session: Any = None
-    auth_base: str = ""
-    chat_base: str = ""
-    base_headers: dict[str, Any] = field(default_factory=dict)
-    username: str = ""
-    password: str = field(default="", repr=False)
-    password_unknown: bool = False
-    full_name: str = ""
-    birthdate: str = ""
-    registration_mode: str = ""
-    device_id: str = ""
-    session_logging_id: str = ""
-    flow_invocation_id: str = ""
-    sentinel_token: str = field(default="", repr=False)
-    sentinel_authorize_token: str = field(default="", repr=False)
-    sentinel_so_token: str = field(default="", repr=False)
-    auth_flow_started: int = 0
-    csrf_token: str = field(default="", repr=False)
-    signup_state: dict[str, Any] = field(default_factory=dict)
-    reg_response: Any = None
-    reg_data: dict[str, Any] = field(default_factory=dict)
-    resume_email_verification: bool = False
-    otp_issued_after: int = 0
-    email_cfg: dict[str, Any] = field(default_factory=dict)
-    email_code: str = field(default="", repr=False)
-    otp_data: dict[str, Any] = field(default_factory=dict)
-    create_data: dict[str, Any] = field(default_factory=dict)
-    create_ok: bool = False
-    existing_account: bool = False
-    auth_session: dict[str, Any] = field(default_factory=dict)
-    auth_body: dict[str, Any] = field(default_factory=dict)
-    access_token: str = field(default="", repr=False)
-    oauth_result: dict[str, Any] = field(default_factory=dict)
-    oauth_tokens: dict[str, Any] = field(default_factory=dict, repr=False)
-    phone_result: dict[str, Any] = field(default_factory=dict)
-    oauth_refresh_token: str = field(default="", repr=False)
-    id_token: str = field(default="", repr=False)
-    at_probe: dict[str, Any] = field(default_factory=dict)
-    success: bool = False
-    error: str = ""
-    registration_warning: str = ""
-    post_registration_ready: bool = False
-    totp_secret: str = field(default="", repr=False)
-    twofa_result: dict[str, Any] = field(default_factory=dict, repr=False)
-
-
 class RegistrationEmailWorkflow:
     """Email-registration stage handlers with one failure and cleanup policy."""
 
@@ -172,7 +120,7 @@ class RegistrationEmailWorkflow:
         browser_headless: bool | None = None,
         enroll_2fa: bool = True,
         config: Mapping[str, Any] | None = None,
-        operations: Any,
+        operations: RegistrationOperations,
     ) -> None:
         self.machine = machine
         self.input_proxy = proxy
@@ -193,7 +141,7 @@ class RegistrationEmailWorkflow:
         self._timing_open = False
 
     @property
-    def r(self) -> Any:
+    def r(self) -> RegistrationOperations:
         return self._operations
 
     def run(self) -> dict[str, Any]:
@@ -203,6 +151,7 @@ class RegistrationEmailWorkflow:
         config_scope = r.runtime_config_scope(self.config, workflow="registration")
         config_scope.__enter__()
         try:
+            ensure_not_cancelled()
             self._bootstrap()
             resumed = self._resume_post_create()
             if resumed is not None:
@@ -229,6 +178,20 @@ class RegistrationEmailWorkflow:
             )
             result["registration_machine"] = self.machine.snapshot()
             return result
+        except RegistrationCancelled:
+            # Cooperative cancellation: report the same cancelled contract the
+            # batch runner and the browser path use, not an internal error.
+            if self.machine.state is not RegistrationState.FAILED:
+                self.machine.fail("registration_cancelled")
+            result = r._failure_result(
+                "registration_cancelled",
+                email=self.runtime.username,
+                mailbox=self.runtime.mailbox,
+                password=self.runtime.password,
+            )
+            result["registration_state"] = "cancelled"
+            result["registration_machine"] = self.machine.snapshot()
+            return result
         except Exception as exc:
             error = f"registration_internal_error:{type(exc).__name__}:{exc}"
             if self.machine.state is not RegistrationState.FAILED:
@@ -247,6 +210,10 @@ class RegistrationEmailWorkflow:
 
     def _run_stage(self, state: RegistrationState, label: str, handler: Callable[[], Any]) -> Any:
         r = self.r
+        # Checked before _tick: cancellation must surface as
+        # RegistrationCancelled, not be reclassified as a stage transport
+        # failure, and must not leave an open timing entry behind.
+        ensure_not_cancelled()
         r._tick(label)
         self._timing_open = True
         try:
@@ -257,6 +224,10 @@ class RegistrationEmailWorkflow:
                 timeout_seconds=self._stage_timeout(state),
             )
         except RegistrationAbort:
+            raise
+        except RegistrationCancelled:
+            # Raised from inside a handler (e.g. the OTP poll loop). Must not
+            # be reclassified as a stage transport failure.
             raise
         except RegistrationStageOverrun as exc:
             raise RegistrationAbort(f"{state.value}_stage_budget_exceeded:{exc}") from exc
@@ -292,7 +263,7 @@ class RegistrationEmailWorkflow:
         stage that can legitimately block for minutes hands the smaller of the
         two limits to the poll that actually blocks.
         """
-        timeout = int(self.runtime.email_cfg.get("otp_timeout", 300) or 300)
+        timeout = int(self.runtime.otp.email_cfg.get("otp_timeout", 300) or 300)
         budget = self._stage_timeout(RegistrationState.EMAIL_OTP_WAIT)
         if budget is None:
             return timeout
@@ -390,6 +361,7 @@ class RegistrationEmailWorkflow:
         s = self.runtime
         if self.config is None:
             self.config = r.current_config_data()
+        s.email_cfg = dict(self.config.get("email_registration") or {})
         r.validate_config(self.config, workflow="registration")
         s.proxy = r._resolve_proxy_scheme(self.input_proxy, cfg=self.config)
         preflight = r.registration_network_preflight(proxy=s.proxy, proxy_attempts=2)
@@ -898,12 +870,9 @@ class RegistrationEmailWorkflow:
             s.access_token,
             s.at_probe,
         )
-        require_refresh_token = r._registration_requires_refresh_token(self.config) if self.codex_oauth else False
-        require_phone = r._registration_requires_phone_verification(self.phone_pool, self.config) if self.codex_oauth else False
-        s.post_registration_ready = (
-            (not require_refresh_token or bool(s.oauth_refresh_token))
-            and (not require_phone or bool(s.phone_result.get("ok")))
-        )
+        # Email registration is AT-only. OAuth/phone recovery remains in its
+        # own entry points; these impossible branches added hidden dependencies.
+        s.post_registration_ready = True
 
     def enroll_totp(self) -> None:
         r = self.r
@@ -948,7 +917,7 @@ class RegistrationEmailWorkflow:
             return refreshed_token
 
         try:
-            from .account_2fa import setup_totp_2fa
+            from .accounts.account_2fa import setup_totp_2fa
 
             s.twofa_result = setup_totp_2fa(
                 session=s.session,
@@ -983,7 +952,7 @@ class RegistrationEmailWorkflow:
 
         fingerprint = current_auth_fingerprint()
         token_telemetry = access_token_telemetry(s.access_token)
-        from .account_identity import create_registration_identity, complete_registration_identity
+        from .accounts.account_identity import create_registration_identity, complete_registration_identity
         identity_context = complete_registration_identity(
             create_registration_identity(
                 s.proxy,
@@ -995,19 +964,25 @@ class RegistrationEmailWorkflow:
             device_id=s.device_id,
             auth_session_logging_id=s.session_logging_id,
         )
-        result = {
-            "success": s.success,
-            "error": r._sanitize_text(s.error),
-            "email": s.username,
-            "source": "register",
-            "register_method": "email" if s.registration_mode != "phone" else "phone",
-            "session_type": "at_only" if s.registration_mode == "at_only" else "web",
-            "plan_type": "unknown",
-            "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
-            "password": "" if s.password_unknown else s.password,
-            "name": s.full_name,
-            "birthdate": s.birthdate,
-            "response": {
+        result = build_registration_result(
+            success=s.success,
+            registration_mode=s.registration_mode,
+            registration_state="active" if s.success else ("terminal" if "account_deactivated" in s.error else "failed"),
+            email=s.username,
+            error=s.error,
+            register_method="email" if s.registration_mode != "phone" else "phone",
+            session_type="at_only" if s.registration_mode == "at_only" else "web",
+            password="" if s.password_unknown else s.password,
+            name=s.full_name,
+            birthdate=s.birthdate,
+            access_token=s.access_token or "",
+            id_token=s.id_token,
+            auth_session=s.auth_body,
+            cookie_header=s.auth_session.get("cookie_header", ""),
+            device_id=s.device_id,
+            identity_context=identity_context,
+            auth_fingerprint_profile=str(fingerprint.get("impersonate") or ""),
+            response={
                 "register": s.reg_data,
                 "email_otp": s.otp_data,
                 "create_account": s.create_data,
@@ -1016,37 +991,31 @@ class RegistrationEmailWorkflow:
                 "codex_oauth": r._oauth_result_summary(s.oauth_result),
                 "access_token_probe": s.at_probe,
             },
-            "auth_session": s.auth_body,
-            "access_token": s.access_token or "",
-            "id_token": s.id_token,
-            "oauth_refresh_token": s.oauth_refresh_token,
-            "refresh_token_status": "oauth_present" if s.oauth_refresh_token else "no_rt",
-            "quota_status": s.at_probe.get("quota_status", ""),
-            "quota": {
-                "status": s.at_probe.get("quota_status", ""),
-                "updated_at": int(time.time()),
-                "last_result": s.at_probe,
-            } if s.at_probe else {},
-            "totp_secret": s.totp_secret or "",
-            "totp_enrolled": bool(s.totp_secret) or bool(s.twofa_result.get("already_enrolled")),
-            "twofa_enrolled_at": int(time.time()) if (s.totp_secret or s.twofa_result.get("already_enrolled")) else 0,
-            "twofa_enrollment": s.twofa_result or {"ok": False, "reason": "skipped"},
-            "registration_success_basis": "at_http_200" if s.success else "",
-            "registration_state": "active" if s.success else ("terminal" if "account_deactivated" in s.error else "failed"),
-            "access_token_telemetry": token_telemetry,
-            "auth_fingerprint_profile": str(fingerprint.get("impersonate") or ""),
-            "sentinel_version": sentinel_version(),
-            "registration_country": infer_proxy_country(s.proxy),
-            "registration_warning": r._sanitize_text(s.registration_warning),
-            "post_registration_ready": s.post_registration_ready,
-            "cookie_header": s.auth_session.get("cookie_header", ""),
-            "registration_mode": s.registration_mode,
-            "device_id": s.device_id,
-            "auth_session_logging_id": s.session_logging_id,
-            "identity_context": identity_context,
-            "timing": r._timing_summary(),
-            "mailbox": r._mailbox_snapshot(s.mailbox),
-        }
+            quota_status=s.at_probe.get("quota_status", ""),
+            totp_secret=s.totp_secret or "",
+            twofa_enrollment=s.twofa_result or {"ok": False, "reason": "skipped"},
+            registration_success_basis="at_http_200" if s.success else "",
+            registration_country=infer_proxy_country(s.proxy),
+            registration_warning=s.registration_warning,
+            post_registration_ready=s.post_registration_ready,
+            mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
+            extra={
+                "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
+                "oauth_refresh_token": s.oauth_refresh_token,
+                "refresh_token_status": "oauth_present" if s.oauth_refresh_token else "no_rt",
+                "quota": {
+                    "status": s.at_probe.get("quota_status", ""),
+                    "updated_at": int(time.time()),
+                    "last_result": s.at_probe,
+                } if s.at_probe else {},
+                "totp_enrolled": bool(s.totp_secret) or bool(s.twofa_result.get("already_enrolled")),
+                "twofa_enrolled_at": int(time.time()) if (s.totp_secret or s.twofa_result.get("already_enrolled")) else 0,
+                "access_token_telemetry": token_telemetry,
+                "sentinel_version": sentinel_version(),
+                "auth_session_logging_id": s.session_logging_id,
+                "timing": r._timing_summary(),
+            },
+        )
         self.machine.transition(RegistrationState.COMPLETED)
         if r._retain_registration_checkpoint(s.success, s.access_token, s.at_probe):
             print("  [Checkpoint] Retaining post-create state for AT probe retry")
@@ -1062,7 +1031,8 @@ class RegistrationEmailWorkflow:
 
     def _close_sessions(self) -> None:
         seen: set[int] = set()
-        for session in (self.runtime.session, self.runtime.login_session):
+        resources = self.runtime.resources
+        for session in (resources.session, resources.login_session):
             if session is None or id(session) in seen:
                 continue
             seen.add(id(session))

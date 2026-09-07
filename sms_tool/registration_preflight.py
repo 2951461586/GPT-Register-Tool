@@ -13,7 +13,7 @@ from .auth_headers import (
     openai_auth_headers,
 )
 from .config import CFG
-from .account_liveness import CODEX_USAGE_URL
+from .accounts.account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
 from .sentinel.bundle import sentinel_version
 

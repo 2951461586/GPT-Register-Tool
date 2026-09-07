@@ -74,9 +74,36 @@ class ConfigureLoggingTests(unittest.TestCase):
             for h in logging.getLogger().handlers
             if id(h) not in before and isinstance(h, RotatingFileHandler)
         ]
-        self.assertEqual(len(rotating), 1)
-        self.assertGreater(rotating[0].maxBytes, 0)
-        self.assertGreater(rotating[0].backupCount, 0)
+        # Human stage log (sms_tool.log) + machine envelope log (sms_tool.jsonl).
+        self.assertEqual(len(rotating), 2)
+        names = sorted(Path(h.baseFilename).name for h in rotating)
+        self.assertEqual(names, ["sms_tool.jsonl", "sms_tool.log"])
+        for handler in rotating:
+            self.assertGreater(handler.maxBytes, 0)
+            self.assertGreater(handler.backupCount, 0)
+
+    def test_human_log_normalizes_stages_and_jsonl_keeps_the_envelope(self):
+        before = set(map(id, logging.getLogger().handlers))
+        logging_setup.configure_logging(to_console=False)
+        added = [
+            h
+            for h in logging.getLogger().handlers
+            if id(h) not in before and isinstance(h, RotatingFileHandler)
+        ]
+        by_suffix = {Path(h.baseFilename).suffix: h for h in added}
+        logging.getLogger("sms_tool.registration_progress").info(
+            "Registration stage=%s status=%s", "create_account", "running"
+        )
+        for handler in added:
+            handler.flush()
+        try:
+            human = Path(by_suffix[".log"].baseFilename).read_text(encoding="utf-8", errors="replace")
+            machine = Path(by_suffix[".jsonl"].baseFilename).read_text(encoding="utf-8", errors="replace")
+        except OSError:  # pragma: no cover - environment cannot host the file
+            self.skipTest("log files are not readable in this environment")
+        self.assertIn("阶段 · 创建账号 (create_account) — 进行中", human)
+        self.assertNotIn("schema_version", human)
+        self.assertIn('"schema_version": 1', machine)
 
     def test_is_idempotent(self):
         logging_setup.configure_logging(to_console=False)
@@ -123,6 +150,39 @@ class ConfigureLoggingTests(unittest.TestCase):
         except OSError:  # pragma: no cover - environment cannot host the file
             self.skipTest("log file is not readable in this environment")
         self.assertIn(marker, content)
+
+    def test_warnings_module_is_captured_and_formatted(self):
+        """Library warnings must render as ``[!] [告警] ...`` log lines instead of
+        raw ``path:line:`` stderr noise leaking into the WPF output panel."""
+        import warnings as warnings_module
+
+        # configure_logging wires warnings -> logging via captureWarnings.
+        source = Path(logging_setup.__file__).read_text(encoding="utf-8")
+        self.assertIn("captureWarnings(True)", source)
+
+        # pytest installs its own showwarning during test calls, so drive the
+        # exact integration point captureWarnings uses: py.warnings receives
+        # warnings.formatwarning() output.
+        before = set(map(id, logging.getLogger().handlers))
+        logging_setup.configure_logging(to_console=False)
+        added = [
+            h
+            for h in logging.getLogger().handlers
+            if id(h) not in before and isinstance(h, RotatingFileHandler)
+        ]
+        by_suffix = {Path(h.baseFilename).suffix: h for h in added}
+        message = warnings_module.formatwarning(
+            "captured-warning-marker", UserWarning, __file__, 1
+        )
+        logging.getLogger("py.warnings").warning("%s", message)
+        for handler in added:
+            handler.flush()
+        try:
+            human = Path(by_suffix[".log"].baseFilename).read_text(encoding="utf-8", errors="replace")
+        except OSError:  # pragma: no cover - environment cannot host the file
+            self.skipTest("log files are not readable in this environment")
+        self.assertIn("[!] [告警] UserWarning: captured-warning-marker", human)
+        self.assertNotIn("test_logging_setup.py:", human)
 
 
 class EntryPointWiringTests(unittest.TestCase):

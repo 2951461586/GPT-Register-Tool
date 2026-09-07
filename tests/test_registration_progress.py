@@ -1,4 +1,5 @@
 import json
+import logging
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,45 @@ from sms_tool import registration_progress
 
 
 class RegistrationProgressTests(unittest.TestCase):
+    def test_duration_is_attached_to_stage_being_exited(self):
+        progress = registration_progress.RegistrationProgress("user@example.com")
+        with patch.object(
+            registration_progress.time,
+            "monotonic",
+            side_effect=[progress._stage_started_monotonic + 1.25],
+        ):
+            progress.stage("auth_flow")
+
+        self.assertEqual(progress.events[0]["stage"], "started")
+        self.assertEqual(progress.events[0]["duration_ms"], 1250)
+        self.assertEqual(progress.events[1]["stage"], "auth_flow")
+        self.assertEqual(progress.events[1]["duration_ms"], 0)
+
+    def test_first_log_record_carries_the_progress_run_id(self):
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                from sms_tool.logging_setup import CorrelatedJsonFormatter
+
+                records.append(json.loads(CorrelatedJsonFormatter().format(record)))
+
+        handler = Capture()
+        logger = logging.getLogger(registration_progress.__name__)
+        old_level = logger.level
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        token = registration_progress.current_run_id.set("bound-run")
+        try:
+            registration_progress.RegistrationProgress(run_id="bound-run")
+        finally:
+            registration_progress.current_run_id.reset(token)
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+
+        self.assertTrue(records)
+        self.assertEqual(records[0]["run_id"], "bound-run")
+
     def test_decorator_attaches_and_persists_stage_history(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "progress.jsonl"
@@ -26,6 +66,24 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertTrue(stored["success"])
             self.assertEqual([item["stage"] for item in stored["events"]][-3:], ["auth_flow", "access_token_probe", "completed"])
 
+    def test_invalid_driver_still_persists_a_failed_row(self):
+        """Driver/config resolution failures must not vanish before tracking starts."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+
+            @registration_progress.track_registration
+            def run(**kwargs):
+                raise ValueError("unsupported_registration_driver")
+
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                with self.assertRaises(ValueError):
+                    run(registration_driver="not-a-driver")
+
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertFalse(stored["success"])
+            self.assertEqual(stored["registration_driver"], "not-a-driver")
+            self.assertEqual(stored["events"][-1]["status"], "failed")
+
     def test_persist_does_not_duplicate_an_existing_terminal_failure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "progress.jsonl"
@@ -39,6 +97,22 @@ class RegistrationProgressTests(unittest.TestCase):
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             failed = [item for item in stored["events"] if item["stage"] == "failed"]
             self.assertEqual(1, len(failed))
+
+    def test_persist_does_not_duplicate_successful_completed_stage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            progress.stage("completed", "success")
+
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({"success": True})
+
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            completed = [
+                item for item in stored["events"] if item["stage"] == "completed"
+            ]
+            self.assertEqual(1, len(completed))
+            self.assertEqual("success", completed[0]["status"])
 
     def test_persist_includes_batch_and_retry_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -61,6 +135,65 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertEqual(stored["failure_class"], "auth_state")
             self.assertTrue(stored["retryable"])
             self.assertEqual(stored["proxy_pool_index"], 0)
+
+    def test_constructor_preserves_batch_and_attempt_when_result_omits_them(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress(
+                "user@example.com", batch_id="batch-2", attempt=2
+            )
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({"success": False, "error": "registration_cancelled", "registration_state": "cancelled"})
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(stored["batch_id"], "batch-2")
+            self.assertEqual(stored["attempt"], 2)
+            self.assertEqual(stored["events"][-1]["status"], "cancelled")
+
+    def test_progress_row_uses_account_reference_and_rotates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            registration_progress._append_progress_row(
+                path, {"account_ref": "first"}, max_bytes=30, backups=2
+            )
+            registration_progress._append_progress_row(
+                path, {"account_ref": "second"}, max_bytes=30, backups=2
+            )
+
+            self.assertTrue(path.with_name("progress.jsonl.1").is_file())
+            self.assertIn("second", path.read_text(encoding="utf-8"))
+
+    def test_failed_row_persists_browser_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({
+                    "success": False,
+                    "error": "browser_email_verification_stuck",
+                    "browser_diagnostics": {
+                        "driver": "camoufox",
+                        "url_path": "/u/email-verification",
+                        "verification_inputs": 1,
+                    },
+                })
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(stored["browser_diagnostics"]["url_path"], "/u/email-verification")
+            self.assertEqual(stored["browser_diagnostics"]["driver"], "camoufox")
+
+    def test_success_and_undiagnosed_rows_omit_browser_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({
+                    "success": True,
+                    "browser_diagnostics": {"driver": "camoufox", "url_path": "/"},
+                })
+                progress_no_diag = registration_progress.RegistrationProgress("second@example.com")
+                progress_no_diag.persist({"success": False, "error": "browser_email_otp_timeout"})
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            self.assertNotIn("browser_diagnostics", rows[0])
+            self.assertNotIn("browser_diagnostics", rows[1])
 
 
 if __name__ == "__main__":

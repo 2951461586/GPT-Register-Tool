@@ -3,7 +3,7 @@ from unittest.mock import patch
 from unittest.mock import Mock
 
 from sms_tool import auth_headers
-from sms_tool.account_identity import (
+from sms_tool.accounts.account_identity import (
     bind_account_identity,
     create_registration_identity,
     resolve_account_proxy,
@@ -106,6 +106,22 @@ def test_session_file_preserves_registration_identity_context():
     assert "proxy-secret" not in str(session["identity_context"])
 
 
+def test_session_file_forwards_register_method_session_type_plan_type():
+    # Dropping these keys in the builder made every stored account fall back
+    # to register_method/session_type "unknown" in accounts.sqlite3.
+    session = build_session_file({
+        "email": "method@example.com",
+        "access_token": "at-secret",
+        "register_method": "email",
+        "session_type": "web",
+        "plan_type": "plus",
+    })
+
+    assert session["register_method"] == "email"
+    assert session["session_type"] == "web"
+    assert session["plan_type"] == "plus"
+
+
 def test_registration_identity_allocates_canonical_profile_from_shared_pool():
     from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
 
@@ -116,7 +132,7 @@ def test_registration_identity_allocates_canonical_profile_from_shared_pool():
     profile = type("Profile", (), {"name": pool_profile_name})()
     pool = type("Pool", (), {"next": lambda self, proxy=None: profile})()
 
-    with patch("sms_tool.account_identity.shared_fingerprint_pool", return_value=pool):
+    with patch("sms_tool.accounts.account_identity.shared_fingerprint_pool", return_value=pool):
         identity = create_registration_identity(
             "http://proxy.example:8080",
             config={"registration": {"fingerprint_pool": {}}},

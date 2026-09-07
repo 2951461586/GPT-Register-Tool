@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from .account_seed import extract_access_token, load_account_seed
+from .accounts.account_seed import extract_access_token, load_account_seed
 from .token_telemetry import access_token_telemetry
 
 
@@ -24,8 +24,8 @@ def ensure_payment_access_token(
     ``access_token`` is intentionally present for the in-process payment caller.
     Use :func:`public_payment_auth_result` before reporting or persistence.
     """
-    from .account_liveness import probe_account_liveness
-    from .account_recovery import (
+    from .accounts.account_liveness import probe_account_liveness
+    from .accounts.account_recovery import (
         is_permanently_deactivated,
         relogin_codex_account,
     )

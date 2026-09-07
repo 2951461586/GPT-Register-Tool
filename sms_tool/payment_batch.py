@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
-from .account_seed import load_account_seed
+from .accounts.account_seed import load_account_seed
 from .config import CFG
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
@@ -241,7 +241,7 @@ def run_payment_batch(
                 manual_token = str(token_value or "").strip()
                 break
         if manual_token:
-            from .account_liveness import probe_account_liveness
+            from .accounts.account_liveness import probe_account_liveness
             probe = probe_account_liveness({"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout)
             auth = {
                 "ok": int(probe.get("status_code") or 0) == 200,
@@ -295,7 +295,7 @@ def run_payment_batch(
             # 白浪费一次 probe + 一次恢复链。这里显式落库，让后续批次过滤掉它。
             if auth.get("terminal") or row["decision"] == "account_deactivated":
                 try:
-                    from .account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
+                    from .accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
                     seed_data, _ = load_account_seed(email=email)
                     if seed_data is not None and is_permanently_deactivated(seed_data):
                         _persist_permanent_deactivation(seed_data)

@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import account_creation, cli, registration
+from sms_tool import cli, registration
+
+from sms_tool.accounts import account_creation
 
 
 def test_registration_has_no_payment_generation_entrypoint():

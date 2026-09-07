@@ -111,6 +111,9 @@ def _poll_registration_email_otp(
     resend_after_seconds=None,
     poll_otp_fn=None,
 ):
+    from .registration_cancel import ensure_not_cancelled
+
+    ensure_not_cancelled()
     poll_otp_fn = poll_otp_fn or _poll_email_otp
     total_timeout = max(0, int(timeout or 0))
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
@@ -150,6 +153,9 @@ def _poll_registration_email_otp(
     )
     if code:
         return code
+    # Cancellation arriving during the first poll window must not pay for a
+    # resend request plus the remaining window.
+    ensure_not_cancelled()
     registration_stage("email_otp_resend")
     try:
         response = resend_callback()

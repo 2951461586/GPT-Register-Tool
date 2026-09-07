@@ -5,8 +5,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from .dom_fields import _click_continue, _click_first_visible, _click_passwordless_otp, _first_visible, _is_openai_auth_url, _otp_fields, _unexpected_identity_provider
-from .page_state import _quick_auth_state, _wait_for_registration_state
+from . import dom_fields, page_state
 
 from ...humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
@@ -52,7 +51,7 @@ def _safe_submit_email_form(page, email: str) -> bool:
 
 def _maybe_accept_cookies(page) -> bool:
     """Dismiss the localized cookie banner before interacting with auth forms."""
-    return _click_first_visible(
+    return dom_fields._click_first_visible(
         page,
         (
             "button:has-text('Accept all')",
@@ -71,7 +70,7 @@ def _maybe_dismiss_chatgpt_onboarding(page, config: Mapping[str, Any] | None = N
         return 0
     try:
         url = str(getattr(page, "url", "") or "")
-        if url and not _is_openai_auth_url(url):
+        if url and not dom_fields._is_openai_auth_url(url):
             return 0
         host = str(urlsplit(url).hostname or "").lower()
         if host and host != "chatgpt.com" and not host.endswith(".chatgpt.com"):
@@ -97,7 +96,7 @@ def _maybe_dismiss_chatgpt_onboarding(page, config: Mapping[str, Any] | None = N
     )
     clicks = 0
     for _ in range(4):
-        if not _click_first_visible(page, selectors, timeout_ms=400):
+        if not dom_fields._click_first_visible(page, selectors, timeout_ms=400):
             break
         clicks += 1
         _pause = humanize_delay("click", config=config)
@@ -149,11 +148,7 @@ def _submit_email_via_nextauth(page, email: str) -> bool:
 
 
 def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> None:
-    selectors = (
-        "input[type='email']", "input[name='email']", "input[name='username']",
-        "input#email-input", "input[autocomplete='email']",
-    )
-    selector = ", ".join(selectors)
+    selector = dom_fields.EDITABLE_EMAIL_SELECTOR
     is_mock_page = type(page).__module__.startswith("unittest.mock")
     for attempt in range(3):
         field = page.locator(selector).first
@@ -163,7 +158,12 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
             if attempt == 0:
                 raise BrowserRegistrationError("browser_email_field_missing")
             return
-        field.fill(email)
+        try:
+            field.fill(email, timeout=5_000)
+        except Exception as exc:
+            if page_state._manual_challenge(page):
+                raise BrowserRegistrationError("manual_challenge_required") from exc
+            raise BrowserRegistrationError("browser_email_field_not_editable") from exc
         try:
             raw_value = field.input_value()
             value = raw_value.strip().lower() if isinstance(raw_value, str) else ""
@@ -174,15 +174,15 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                 continue
             raise BrowserRegistrationError("browser_email_value_mismatch")
         if not _safe_submit_email_form(page, email):
-            _click_continue(page)
+            dom_fields._click_continue(page)
         page.wait_for_timeout(800)
         if is_mock_page:
             if attempt == 0:
                 page.locator(selector).count()
                 field = page.locator(selector).first
                 field.wait_for(state="visible", timeout=30_000)
-                field.fill(email)
-                _click_continue(page)
+                field.fill(email, timeout=5_000)
+                dom_fields._click_continue(page)
             return
         submitted_at = time.monotonic()
         nextauth_attempted = False
@@ -192,7 +192,7 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                 try:
                     current = str(page.url or "")
                     parsed = urlsplit(current)
-                    if _unexpected_identity_provider(current):
+                    if dom_fields._unexpected_identity_provider(current):
                         raise BrowserRegistrationError("browser_unexpected_identity_provider")
                     if parsed.hostname == "auth.openai.com" or parsed.path.rstrip("/") != "/auth/login":
                         return
@@ -205,9 +205,9 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                         nextauth_attempted = True
                         if _submit_email_via_nextauth(page, email):
                             return
-                    if _otp_fields(page) is not None:
+                    if dom_fields._otp_fields(page) is not None:
                         return
-                    if _first_visible(page, ("input[type='password']", "input[name='password']"), 500) is not None:
+                    if dom_fields._first_visible(page, ("input[type='password']", "input[name='password']"), 500) is not None:
                         return
                 except BrowserRegistrationError:
                     # Preserve explicit state classifications raised while the
@@ -226,7 +226,7 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                 field = page.locator(selector).first
                 field.wait_for(state="visible", timeout=30_000)
                 field.fill(email)
-                _click_continue(page)
+                dom_fields._click_continue(page)
                 continue
             return
         except BrowserRegistrationError:
@@ -238,15 +238,15 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
 def _fill_password_if_present(
     page, password: str, config: Mapping[str, Any] | None = None
 ) -> bool:
-    state = _quick_auth_state(page)
+    state = page_state._quick_auth_state(page)
     path = str(urlsplit(str(getattr(page, "url", "") or "")).path or "").lower()
     if state == "login_password" or "/log-in/password" in path or "/login/password" in path:
         # Existing accounts may still expose the same passwordless OTP route
         # used by the reference driver.  Try that explicit action first; only
         # classify the mailbox as an existing account when the route is absent
         # or does not reach OTP/authenticated state.
-        if _click_passwordless_otp(page):
-            next_state = _wait_for_registration_state(page, 20, config=config)
+        if dom_fields._click_passwordless_otp(page):
+            next_state = page_state._wait_for_registration_state(page, 20, config=config)
             if next_state in {"otp", "authenticated"}:
                 return False
             if next_state == "challenge":
@@ -255,8 +255,8 @@ def _fill_password_if_present(
                 raise BrowserRegistrationError("browser_unexpected_identity_provider")
             raise BrowserRegistrationError("browser_passwordless_otp_state_unknown")
         raise BrowserRegistrationError("browser_existing_account")
-    if _click_passwordless_otp(page):
-        next_state = _wait_for_registration_state(page, 20, config=config)
+    if dom_fields._click_passwordless_otp(page):
+        next_state = page_state._wait_for_registration_state(page, 20, config=config)
         if next_state in {"otp", "authenticated"}:
             return False
         if next_state == "challenge":
@@ -266,16 +266,16 @@ def _fill_password_if_present(
         if next_state == "login_password":
             raise BrowserRegistrationError("browser_existing_account")
         raise BrowserRegistrationError("browser_passwordless_otp_state_unknown")
-    field = _first_visible(page, ("input[type='password']", "input[name='password']", "input[autocomplete='new-password']"))
+    field = dom_fields._first_visible(page, ("input[type='password']", "input[name='password']", "input[autocomplete='new-password']"))
     if field is None:
         return False
     field.fill(password)
-    _click_continue(page)
+    dom_fields._click_continue(page)
     return True
 
 
 def _fill_otp(page, code: str) -> None:
-    fields = _otp_fields(page)
+    fields = dom_fields._otp_fields(page)
     if fields is None:
         raise BrowserRegistrationError("browser_otp_field_missing")
     count = fields.count()
@@ -289,7 +289,7 @@ def _fill_otp(page, code: str) -> None:
     else:
         for index, digit in enumerate(str(code)[:count]):
             fields.nth(index).fill(digit)
-    _click_continue(page)
+    dom_fields._click_continue(page)
 
 
 def _complete_profile(page, name: str, birthdate: str) -> None:
@@ -372,7 +372,7 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
             raise BrowserRegistrationError("browser_profile_birthdate_missing")
         if not result.get("name"):
             raise BrowserRegistrationError("browser_profile_name_missing")
-        _click_continue(page)
+        dom_fields._click_continue(page)
         return
     except BrowserRegistrationError:
         raise
@@ -380,10 +380,10 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
         pass
 
     # Conservative fallback for simple native forms.
-    name_field = _first_visible(page, ("input[name='name']", "input[autocomplete='name']", "input[placeholder*='name' i]"))
-    date_field = _first_visible(page, ("input[type='date']", "input[name*='birth' i]", "input[placeholder*='birth' i]"))
+    name_field = dom_fields._first_visible(page, ("input[name='name']", "input[autocomplete='name']", "input[placeholder*='name' i]"))
+    date_field = dom_fields._first_visible(page, ("input[type='date']", "input[name*='birth' i]", "input[placeholder*='birth' i]"))
     if name_field is None or date_field is None:
         raise BrowserRegistrationError("browser_profile_fields_missing")
     name_field.fill(name)
     date_field.fill(birthdate)
-    _click_continue(page)
+    dom_fields._click_continue(page)

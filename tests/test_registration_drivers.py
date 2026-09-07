@@ -1,5 +1,9 @@
+import contextlib
+import io
 import json
 import os
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -213,10 +217,10 @@ class RegistrationDriverTests(unittest.TestCase):
                     )
                 browser_run.assert_not_called()
 
-    # 注：这个 patch 历史上就拦不到默认参数（session_factory=create_browser_session
-    # 在函数定义时已绑定原函数对象）。测试真正生效的是下面显式传入的 session_factory。
-    # 保留 patch 仅为保证符号存在性；拆分后目标改到 orchestrator 的副本。
-    @patch("sms_tool.registration_drivers.browser_flow.orchestrator.create_browser_session")
+    # run_browser_registration 现在在调用时才解析 session_factory 默认值
+    # （external_sessions.create_browser_session），所以 patch 源模块对默认调用
+    # 也真正生效；本测试仍显式传入 session_factory 作为稳定 seam。
+    @patch("sms_tool.registration_drivers.external_sessions.create_browser_session")
     def test_missing_playwright_dependency_is_sanitized(self, session_cls):
         session_cls.side_effect = RuntimeError("browser_dependency_missing:playwright")
         mailbox = type("Mailbox", (), {
@@ -297,6 +301,61 @@ class RegistrationDriverTests(unittest.TestCase):
         self.assertEqual(calls[1]["proxy_metadata"]["pool_index"], 0)
         self.assertEqual(calls[0]["proxy_metadata"]["expected_country"], "US")
         self.assertNotIn("proxy", calls[0]["proxy_metadata"])
+
+
+class BrowserWorkerLimitTests(unittest.TestCase):
+    """``registration.browser_worker_limit`` is an optional extra cap.
+
+    Unset/0 follows the requested worker count (UI allows 1-8); an explicit
+    positive value still clamps. Regression guard for the old hardcoded 2.
+    """
+
+    def _run_batch(self, registration_cfg, *, workers=4, count=4):
+        active = 0
+        peak = 0
+        lock = threading.Lock()
+
+        def run_email(**kwargs):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.05)
+            with lock:
+                active -= 1
+            return {"success": True, "email": kwargs["mailbox"].email}
+
+        mailboxes = [SimpleNamespace(email=f"user{i}@example.com") for i in range(count)]
+        stdout = io.StringIO()
+        with patch("sms_tool.batch_runner.CFG", {
+            "registration": registration_cfg,
+            "email_registration": {},
+        }):
+            with contextlib.redirect_stdout(stdout):
+                result = run_batch_impl(
+                    count=count,
+                    workers=workers,
+                    mailboxes=mailboxes,
+                    registration_driver="camoufox",
+                    run_email_func=run_email,
+                )
+        return result, peak, stdout.getvalue()
+
+    def test_unset_limit_follows_the_requested_worker_count(self):
+        result, peak, out = self._run_batch({"driver": "camoufox"})
+        self.assertEqual(peak, 4)
+        self.assertTrue(all(item["success"] for item in result))
+        self.assertNotIn("Browser worker limit", out)
+
+    def test_zero_limit_follows_the_requested_worker_count(self):
+        _, peak, out = self._run_batch({"driver": "camoufox", "browser_worker_limit": 0})
+        self.assertEqual(peak, 4)
+        self.assertNotIn("Browser worker limit", out)
+
+    def test_explicit_limit_still_caps_workers(self):
+        _, peak, out = self._run_batch({"driver": "camoufox", "browser_worker_limit": 3})
+        self.assertEqual(peak, 3)
+        self.assertIn("Browser worker limit: 4 -> 3", out)
 
 
 if __name__ == "__main__":

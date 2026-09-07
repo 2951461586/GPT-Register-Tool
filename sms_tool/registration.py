@@ -40,6 +40,13 @@ __all__ = [
     "refresh_proxy_sid",
     "registration_network_preflight",
     "registration_stage",
+    "request_registration_cancel",
+    "clear_registration_cancel",
+    "registration_cancel_requested",
+    "RegistrationCancelled",
+    "cancellable_sleep",
+    "cancel_scope",
+    "ensure_not_cancelled",
     "request_with_retry",
     "resolve_runtime_config",
     "run_batch",
@@ -58,7 +65,6 @@ __all__ = [
     "with_sentinel",
 ]
 
-import sys
 import time
 
 from curl_cffi import requests as curl_requests
@@ -122,7 +128,7 @@ from .auth_flow import (
     _totp_factor_id,
     _with_query_param,
 )
-from .account_creation import (
+from .accounts.account_creation import (
     _auth_session_access_token,
     _cookie_header,
     _create_account_continue_url,
@@ -157,6 +163,15 @@ from .registration_outcome import (
 )
 from .registration_preflight import _resolve_proxy_scheme, registration_network_preflight
 from .registration_progress import registration_stage, track_registration
+from .registration_cancel import (
+    RegistrationCancelled,
+    cancellable_sleep,
+    cancel_scope,
+    clear_registration_cancel,
+    ensure_not_cancelled,
+    registration_cancel_requested,
+    request_registration_cancel,
+)
 from .registration_state import (
     RegistrationStage,
     RegistrationState,
@@ -167,7 +182,7 @@ from .registration_state import (
 )
 from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from .session_builder import build_session_file
-from . import account_liveness
+from .accounts import account_liveness
 from .utils import (
     _generate_password,
     _print_timings,
@@ -181,6 +196,7 @@ from .utils import (
     think_stage,
 )
 from .registration_drivers.base import normalize_registration_driver
+from .registration_operations import RegistrationOperations
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = f"{REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD}|{LOGIN_EMAIL_OTP_SUBJECT_KEYWORD}"
@@ -206,6 +222,7 @@ def run_email(
     registration_driver=None,
     proxy_metadata=None,
     batch_id=None,
+    registration_attempt=0,
 ):
     """Run the staged email-registration workflow."""
     config = resolve_runtime_config(runtime_config, workflow="registration")
@@ -243,7 +260,7 @@ def run_email(
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
         config=config.data,
-        operations=sys.modules[__name__],
+        operations=RegistrationOperations.bind(globals()),
     ).run()
     if isinstance(result, dict) and batch_id:
         result["batch_id"] = str(batch_id)
@@ -317,6 +334,7 @@ def run_batch(
     enroll_2fa=True,
     on_result=None,
     registration_driver=None,
+    cancel_event=None,
 ):
     """Compatibility entry point for callers importing ``registration.run_batch``."""
     from .batch_runner import run_batch_impl
@@ -336,6 +354,7 @@ def run_batch(
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
         registration_driver=registration_driver,
+        cancel_event=cancel_event,
         run_email_func=run_email,
     )
 

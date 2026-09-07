@@ -25,7 +25,7 @@
     "driver": "protocol",
     "browser_headless": true,
     "browser_timeout_seconds": 90,
-    "browser_worker_limit": 2,
+    "browser_worker_limit": 0,
     "browser_locale": "en-US",
     "browser_timezone": "America/New_York",
     "post_registration_dwell_seconds_range": "18,45",
@@ -125,7 +125,7 @@
     },
     "browser_process_pool": {
       "enabled": true,
-      "max_concurrent": 2,
+      "max_concurrent": 4,
       "max_uses_per_process": 10,
       "recycle_on_error": true
     }
@@ -578,7 +578,7 @@
     "use_registration_affinity": true,
     "batch_timeout_seconds": 900,
     "account_timeout_seconds": 360,
-    "relogin_cooldown_seconds": 1800,
+    "relogin_cooldown_seconds": 300,
     "post_registration_enabled": true,
     "post_registration_deep_liveness": true,
     "proxy_pool": [
@@ -621,10 +621,10 @@
     "max_checkout_retries": 3,
     "stage_proxies": {
       "checkout": "socks5h://user:pass-JP@gate:1000",
-      "provider": "http://107.150.109.49:11001",
-      "stripe_init": "http://107.150.109.49:11001",
-      "approve": "http://107.150.109.49:11001",
-      "confirm": "http://107.150.109.49:11001"
+      "provider": "http://127.0.0.1:7897",
+      "stripe_init": "http://127.0.0.1:7897",
+      "approve": "http://127.0.0.1:7897",
+      "confirm": "http://127.0.0.1:7897"
     },
     "target_country": "JP",
     "require_zero_due": true,

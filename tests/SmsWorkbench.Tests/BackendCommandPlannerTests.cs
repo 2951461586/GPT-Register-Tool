@@ -20,6 +20,7 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--workers", plan.Arguments);
         Assert.Contains("3", plan.Arguments);
         Assert.Contains("--no-phone-reuse", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("--proxy", plan.Arguments);
         Assert.Contains("http://proxy1:8080", plan.Arguments);
     }
@@ -49,6 +50,7 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--no-phone-reuse", plan.Arguments);
         Assert.Contains("--mailbox-file", plan.Arguments);
         Assert.Contains("C:\\test.txt", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
     }
 
     [Fact]
@@ -124,6 +126,7 @@ public sealed class BackendCommandPlannerTests
 
         Assert.Equal("手机号注册 (SMSBower)", plan.TaskName);
         Assert.Contains("--phone-register", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("--count", plan.Arguments);
         Assert.Contains("2", plan.Arguments);
     }
@@ -142,6 +145,7 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--cfworker-domain", plan.Arguments);
         Assert.Contains("example.cloud", plan.Arguments);
         Assert.Contains("--registration-at-only", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
     }
 
     [Fact]
@@ -151,6 +155,7 @@ public sealed class BackendCommandPlannerTests
             count: 10, workers: 2, proxyPool: Array.Empty<string>());
 
         Assert.Contains("--target-at200", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("10", plan.Arguments);
         Assert.Contains("--buy-remail-mailbox", plan.Arguments);
         Assert.Contains("--remail-service-mode", plan.Arguments);
@@ -167,6 +172,7 @@ public sealed class BackendCommandPlannerTests
             proxyPool: Array.Empty<string>());
 
         Assert.Contains("--buy-smailr-mailbox", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("--smailr-domain", plan.Arguments);
         Assert.Contains("smailr.com", plan.Arguments);
     }
@@ -253,10 +259,48 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--quota-relogin-timeout", plan.Arguments);
         Assert.Contains("300", plan.Arguments);
         Assert.Contains("--quota-batch-timeout", plan.Arguments);
-        Assert.Contains("900", plan.Arguments);
+        Assert.Contains("1680", plan.Arguments);
         Assert.Contains("--quota-account-timeout", plan.Arguments);
-        Assert.Contains("360", plan.Arguments);
+        Assert.Contains("120", plan.Arguments);
+        Assert.Single(plan.Arguments.Where(a => a == "--quota-batch-timeout"));
+        Assert.Single(plan.Arguments.Where(a => a == "--quota-account-timeout"));
         Assert.Contains("--desktop-ipc", plan.Arguments);
+        // Recovery must outlive the widened 1680s batch deadline.
+        Assert.Equal(30 * 60 * 1000, plan.TimeoutMilliseconds);
+    }
+
+    [Fact]
+    public void CreateAccountScan_AutoRelogin_WidensBatchBudget()
+    {
+        var plan = BackendCommandPlanner.CreateAccountScan(
+            emails: new[] { "user@example.com" },
+            sessionFile: "",
+            workers: 4,
+            autoRelogin: true,
+            proxyPool: Array.Empty<string>());
+
+        // Each flag is emitted exactly once. Recovery needs room for an OTP
+        // round trip per account; the probe-only figure is 840.
+        var args = plan.Arguments.ToList();
+        Assert.Single(args.Where(a => a == "--quota-batch-timeout"));
+        Assert.Single(args.Where(a => a == "--quota-account-timeout"));
+        Assert.Equal("1680", args[args.IndexOf("--quota-batch-timeout") + 1]);
+        // The per-account figure still bounds the probe phase only.
+        Assert.Equal("120", args[args.IndexOf("--quota-account-timeout") + 1]);
+    }
+
+    [Fact]
+    public void CreateAccountScan_NoRelogin_KeepsProbeOnlyBudget()
+    {
+        var plan = BackendCommandPlanner.CreateAccountScan(
+            emails: new[] { "user@example.com" },
+            sessionFile: "",
+            workers: 4,
+            autoRelogin: false,
+            proxyPool: Array.Empty<string>());
+
+        var args = plan.Arguments.ToList();
+        Assert.Equal("840", args[args.LastIndexOf("--quota-batch-timeout") + 1]);
         Assert.Equal(15 * 60 * 1000, plan.TimeoutMilliseconds);
     }
 

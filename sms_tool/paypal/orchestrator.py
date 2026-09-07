@@ -10,8 +10,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from ..account_seed import extract_access_token as _extract_access_token
-from ..account_seed import load_account_seed as _load_seed
+from ..accounts.account_seed import extract_access_token as _extract_access_token
+from ..accounts.account_seed import load_account_seed as _load_seed
 from ..config import CFG
 from ..gen_pp_link import generate_pp_link
 from ..paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT

@@ -51,7 +51,7 @@ def _smailr_api_key() -> str:
 
 
 def _smailr_base_url() -> str:
-    from .smailr_mailbox import _normalize_base_url
+    from .smailr_client import _normalize_base_url
     return _normalize_base_url(str(_smailr_cfg().get("base_url") or "https://smailr.com"))
 
 
@@ -140,7 +140,7 @@ def _take_reusable_smailr_mailbox(client: Any, domain: str, reserved: set[str]) 
 
 
 def _smailr_client(proxy: str | None = None):
-    from .smailr_mailbox import SmailrClient
+    from .smailr_client import SmailrClient
     merged_proxy = proxy or _smailr_proxy() or None
     return SmailrClient(
         api_key=_smailr_api_key(),
@@ -214,7 +214,7 @@ def create_smailr_mailboxes(
     if domain not in SMAILR_LV1_DOMAINS:
         raise ValueError("smailr domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS))
 
-    from .smailr_mailbox import SmailrClient
+    from .smailr_client import SmailrClient
     client = SmailrClient(
         api_key=api_key,
         base_url=base_url,
@@ -283,7 +283,7 @@ def _fetch_smailr_messages(
     email_cfg: dict | None = None,
 ) -> list[dict]:
     """Retrieve up to *limit* shaped mails for a Smailr mailbox."""
-    from .smailr_mailbox import fetch_messages
+    from .smailr_client import fetch_messages
     mb_id = mailbox.token or ""
     if not mb_id:
         raise ValueError("smailr mailbox.token (id) is empty — cannot fetch messages")
@@ -306,7 +306,7 @@ def _poll_smailr_otp(
     excluded_otps: Any = None,
     **kwargs: Any,
 ) -> str | None:
-    from .smailr_mailbox import poll_otp
+    from .smailr_client import poll_otp
     mb_id = mailbox.token or ""
     if not mb_id:
         raise ValueError("smailr mailbox.token (id) is empty — cannot poll for OTP")

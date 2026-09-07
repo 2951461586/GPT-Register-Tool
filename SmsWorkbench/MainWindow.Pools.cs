@@ -38,14 +38,35 @@ namespace SmsWorkbench
         /// </summary>
         private void RefreshPools()
         {
-            _ = RefreshPoolsAsync(_lifetimeCts.Token);
+            _ = RefreshPoolsAsync(ct: _lifetimeCts.Token);
         }
 
-        private async Task RefreshPoolsAsync(CancellationToken ct = default)
+        /// <summary>
+        /// Refresh that keeps the operator's place in the grid. Used by the
+        /// mid-batch hot refresh: rebuilding <c>allRows</c> from scratch drops
+        /// both the checkbox state and the current page, and a 25-account
+        /// liveness batch would otherwise yank the view back to page one and
+        /// clear the selection two dozen times.
+        /// </summary>
+        private void RefreshPoolsPreservingView()
+        {
+            _ = RefreshPoolsAsync(preserveView: true, ct: _lifetimeCts.Token);
+        }
+
+        private async Task RefreshPoolsAsync(bool preserveView = false, CancellationToken ct = default)
         {
             if (poolsRefreshRunning)
                 return;
             poolsRefreshRunning = true;
+            // Snapshot before the clear: rows are rebuilt from scratch below,
+            // so identity has to be carried across by email.
+            HashSet<string>? checkedIds = preserveView
+                ? allRows.Where(r => r.IsChecked)
+                         .Select(r => (r.Identifier ?? "").Trim().ToLowerInvariant())
+                         .Where(id => id.Length > 0)
+                         .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
+            int restorePage = preserveView ? currentPage : 1;
             try
             {
                 allRows.Clear();
@@ -64,7 +85,18 @@ namespace SmsWorkbench
                     await LoadSessionPoolAsync();
                 }
                 DeduplicateRows();
-                currentPage = 1;
+                if (checkedIds != null)
+                {
+                    foreach (PoolRow row in allRows)
+                    {
+                        string id = (row.Identifier ?? "").Trim();
+                        if (id.Length > 0 && checkedIds.Contains(id))
+                            row.IsChecked = true;
+                    }
+                }
+                // RefreshPagedRows already clamps an out-of-range page, so a
+                // restored page stays valid even when the row count shrinks.
+                currentPage = restorePage;
                 UpdateOverview();
                 RefreshPagedRows();
                 StatusText = $"共 {allRows.Count} 条；当前筛选 {filteredCount} 条";

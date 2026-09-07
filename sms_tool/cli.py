@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 
 from .config import CFG, initialize_runtime_config
-from .diagnostics import install_safe_stdio
+from .diagnostics import install_safe_stdio, safe_print
+from .desktop_ipc import emit_result
 from .paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
 from .batch_runner import run_batch_impl as run_batch
@@ -27,6 +28,7 @@ from .commands import payment_links as payment_link_commands
 from .commands import registration as registration_commands
 from .commands.email_change import run_change_email
 from .proxy_routing import proxy_pool_for
+from .sanitizer import sanitize_text
 
 # `mailbox` and `registration` import `curl_cffi` at module top, so they must NOT
 # be imported eagerly at the top of this file — otherwise `import sms_tool.cli`
@@ -273,7 +275,7 @@ def build_parser():
     parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
     parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
     parser.add_argument("--mailbox-pool-repaired", action="store_true", help="Acknowledge repaired mailbox credentials and reopen automatic 401 relogin")
-    parser.add_argument("--quota-relogin-timeout", type=int, default=180, help="Timeout in seconds for --quota-auto-relogin")
+    parser.add_argument("--quota-relogin-timeout", type=int, default=300, help="Timeout in seconds for --quota-auto-relogin")
     parser.add_argument("--quota-batch-timeout", type=int, default=840, help="Maximum total seconds for a local quota batch")
     parser.add_argument("--quota-account-timeout", type=int, default=120, help="Maximum seconds allowed per local quota account")
     parser.add_argument("--quota-workers", type=int, default=4, help="Concurrent workers for quota refresh")
@@ -443,14 +445,11 @@ def main():
         if getattr(args, "json_output", False):
             print(json.dumps(report, ensure_ascii=False, indent=2))
         elif getattr(args, "desktop_ipc", False):
-            from .desktop_ipc import emit_result
-
             emit_result(dict(report), enabled=True)
         else:
             print_doctor_report(report)
         raise SystemExit(0 if getattr(args, "desktop_ipc", False) else report["failed"])
     if args.desktop_read:
-        from .desktop_ipc import emit_result
         from .desktop_read import (
             create_account_file,
             create_mailbox_file,
@@ -475,7 +474,7 @@ def main():
         emit_result(payload, enabled=True)
         return
     if args.delete_account:
-        from .account_lifecycle import AccountDeleteRequest, AccountLifecycle
+        from .accounts.account_lifecycle import AccountDeleteRequest, AccountLifecycle
         from .commands.helpers import read_email_file, unique_emails
         emails = read_email_file(args.email_file)
         if args.email:
@@ -501,14 +500,12 @@ def main():
                 for email, result in zip(emails, results)
             ],
         }
-        from .desktop_ipc import emit_result
         emit_result(payload, enabled=bool(args.desktop_ipc))
         if failures:
             raise SystemExit(3)
         return
     if args.change_email:
-        from .account_email_change import EmailChangeRequest, change_email_batch, load_change_email_accounts
-        from .desktop_ipc import emit_result
+        from .accounts.account_email_change import EmailChangeRequest, change_email_batch, load_change_email_accounts
         run_change_email(
             args,
             load_accounts=load_change_email_accounts,
@@ -602,7 +599,7 @@ def main():
     try:
         _preflight_registration_before_mailbox(args)
     except Exception as exc:
-        print(f"[Error] {exc}")
+        _emit_registration_error(args, str(exc), exit_code=2)
         raise SystemExit(2) from None
 
     if getattr(args, "target_at200", 0):
@@ -626,10 +623,20 @@ def main():
         or args.buy_smailr_mailbox
     )
     if not mailboxes and explicit_mailbox_source:
-        print("[Error] no mailbox account was found from the requested source; check the selected mailbox row or mailbox file format")
+        _emit_registration_error(
+            args,
+            "no mailbox account was found from the requested source; "
+            "check the selected mailbox row or mailbox file format",
+            exit_code=2,
+        )
         raise SystemExit(2)
     if not mailboxes and not _remail_enabled():
-        print("[Error] no mailbox account was found; set email_registration.token_file, pass --email/--email-refresh-token, or configure ReMail")
+        _emit_registration_error(
+            args,
+            "no mailbox account was found; set email_registration.token_file, "
+            "pass --email/--email-refresh-token, or configure ReMail",
+            exit_code=2,
+        )
         raise SystemExit(2)
     requested_count = max(1, int(args.count or 1))
     if not getattr(args, "registration_batch_id", None):
@@ -697,8 +704,6 @@ def main():
             register_seconds=time.time() - register_started,
         )
         if bool(getattr(args, "desktop_ipc", False)):
-            from .desktop_ipc import emit_result
-
             emit_result(report, enabled=True)
         return
 
@@ -762,8 +767,6 @@ def main():
         register_seconds=register_seconds,
     )
     if bool(getattr(args, "desktop_ipc", False)):
-        from .desktop_ipc import emit_result
-
         emit_result(report, enabled=True)
 
 
@@ -788,9 +791,28 @@ def _save_registration_results(
     )
 
 
-def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20):
+def _emit_registration_error(args, error: str, *, exit_code: int) -> dict:
+    """Emit one standard terminal registration failure at the CLI boundary."""
+    safe_error = sanitize_text(error)[:500]
+    payload = {
+        "ok": False,
+        "total": 0,
+        "success": 0,
+        "failed": 1,
+        "batch_id": str(getattr(args, "registration_batch_id", "") or ""),
+        "error": safe_error,
+        "exit_code": int(exit_code),
+    }
+    if bool(getattr(args, "desktop_ipc", False)):
+        emit_result(payload, enabled=True)
+    else:
+        safe_print(f"[Error] {safe_error}")
+    return payload
+
+
+def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
     return registration_commands.check_registered_promotions(
-        emails, workers=workers, proxy=proxy, timeout=timeout
+        emails, workers=workers, proxy=proxy, timeout=timeout, proxy_pool=proxy_pool
     )
 
 

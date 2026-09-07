@@ -29,12 +29,185 @@ public sealed class BackendResultInterpreterTests
     }
 
     [Fact]
+    public void TryExtractScanSummary_ReadsResultsFromV2EnvelopePayload()
+    {
+        // Desktop mode wraps the backend result in an IPC v2 envelope, so
+        // "results"/"total" live in the payload, not at the last `{...}` root.
+        string output = """
+            [info] scanning accounts...
+            @@SMSWORKBENCH_V2@@{"schema":"smsworkbench.ipc.v2","version":2,"type":"progress","payload":{"stage":"scan"}}
+            @@SMSWORKBENCH_V2@@{"schema":"smsworkbench.ipc.v2","version":2,"type":"result","payload":{"results":[{"email":"a@example.com","status":"alive"}],"total":5,"alive":3,"account_deactivated":1}}
+            """;
+        var summary = BackendResultInterpreter.TryExtractScanSummary(output);
+        Assert.NotNull(summary);
+        Assert.Equal("5", BackendJson.GetString(summary, "total"));
+        Assert.Equal("3", BackendJson.GetString(summary, "alive"));
+    }
+
+    [Fact]
+    public void TryExtractScanSummary_FallsBackToRawScanWithoutEnvelope()
+    {
+        // Same data emitted bare (CLI mode) must keep working.
+        string output = """
+            [info] scanning accounts...
+            {"results": [{"email": "a@example.com", "status": "alive"}], "total": 5, "alive": 3, "account_deactivated": 1}
+            """;
+        var summary = BackendResultInterpreter.TryExtractScanSummary(output);
+        Assert.NotNull(summary);
+        Assert.Equal("5", BackendJson.GetString(summary, "total"));
+        Assert.Equal("3", BackendJson.GetString(summary, "alive"));
+    }
+
+    [Fact]
+    public void TryExtractScanSummary_ReadsResultsFromPromotionEnvelopePayload()
+    {
+        // 查优惠 emits the same rows/total shape through the same envelope, so
+        // the promotion check must resolve to a summary too.
+        string output = """
+            @@SMSWORKBENCH_V2@@{"schema":"smsworkbench.ipc.v2","version":2,"type":"result","payload":{"ok":true,"total":2,"success":2,"failed":0,"results":[{"email":"a@example.com","promotion_status":"eligible"},{"email":"b@example.com","promotion_status":"not_eligible"}]}}
+            """;
+        var summary = BackendResultInterpreter.TryExtractScanSummary(output);
+        Assert.NotNull(summary);
+        Assert.Equal("2", BackendJson.GetString(summary, "total"));
+    }
+
+    [Fact]
+    public void TryExtractScanSummary_SurvivesMalformedEnvelopeJson()
+    {
+        // A truncated envelope must not throw out of the interpreter; it falls
+        // back to the raw-text scan and simply reports no summary.
+        string output = """
+            @@SMSWORKBENCH_V2@@{"schema":"smsworkbench.ipc.v2","version":2,"type":"result","pay
+            """;
+        Assert.Null(BackendResultInterpreter.TryExtractScanSummary(output));
+    }
+
+    [Fact]
     public void TryExtractScanSummary_IgnoresJsonWithoutResults()
     {
         string output = """
             {"some": "data"}
             """;
         Assert.Null(BackendResultInterpreter.TryExtractScanSummary(output));
+    }
+
+    // ── Promotion-aware row rendering ───────────────────────────────────
+
+    private static Dictionary<string, object> Row(params (string Key, object Value)[] pairs)
+    {
+        var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string key, object value) in pairs) row[key] = value;
+        return row;
+    }
+
+    [Fact]
+    public void IsPromotionRows_DetectsThePromotionBadge()
+    {
+        Assert.True(BackendResultInterpreter.IsPromotionRows(new[]
+        {
+            Row(("email", "a@example.com"), ("promotion_status", "Free·无优惠")),
+        }));
+    }
+
+    [Fact]
+    public void IsPromotionRows_ReturnsFalseForLivenessRows()
+    {
+        Assert.False(BackendResultInterpreter.IsPromotionRows(new[]
+        {
+            Row(("email", "a@example.com"), ("probe", Row(("ok", true)))),
+        }));
+    }
+
+    [Fact]
+    public void IsPromotionRows_HandlesEmptyAndNull()
+    {
+        Assert.False(BackendResultInterpreter.IsPromotionRows(new List<Dictionary<string, object>>()));
+        Assert.False(BackendResultInterpreter.IsPromotionRows(null!));
+    }
+
+    [Fact]
+    public void ResultRowStatus_LeadsWithThePromotionBadge()
+    {
+        // Without this the panel showed "AT有效 / HTTP 200" and hid the answer.
+        var row = Row(
+            ("email", "a@example.com"),
+            ("ok", true),
+            ("promotion_status", "可试用Plus-50%×3month"),
+            ("probe", Row(("ok", true), ("status_code", "200"))));
+        Assert.Equal("可试用Plus-50%×3month", BackendResultInterpreter.ResultRowStatus(row));
+    }
+
+    [Fact]
+    public void ResultRowStatus_KeepsProbeLabellingForLiveness()
+    {
+        var alive = Row(("probe", Row(("ok", true), ("status_code", "200"))));
+        Assert.Equal("AT有效 / HTTP 200", BackendResultInterpreter.ResultRowStatus(alive));
+
+        var dead = Row(("probe", Row(("status", "account_deactivated"))));
+        Assert.Equal("账号停用", BackendResultInterpreter.ResultRowStatus(dead));
+    }
+
+    [Fact]
+    public void ResultRowStatus_FallsBackToScanStatusWithoutProbe()
+    {
+        Assert.Equal("正常", BackendResultInterpreter.ResultRowStatus(Row(("scan_status", "alive"))));
+    }
+
+    [Fact]
+    public void PromotionSummary_GroupsBadgesAndCounts()
+    {
+        var rows = new[]
+        {
+            Row(("email", "a@example.com"), ("ok", true), ("promotion_status", "可试用Plus-50%"),
+                ("probe", Row(("ok", true)))),
+            Row(("email", "b@example.com"), ("ok", true), ("promotion_status", "Free·无优惠"),
+                ("probe", Row(("ok", true)))),
+            Row(("email", "c@example.com"), ("ok", false), ("promotion_status", "AT失效"),
+                ("probe", Row(("ok", false), ("status_code", "401")))),
+        };
+        string summary = BackendResultInterpreter.PromotionSummary(rows);
+
+        Assert.Contains("总数：3", summary);
+        Assert.Contains("检测成功：2", summary);
+        Assert.Contains("AT失效：1", summary);
+        Assert.Contains("可试用Plus-50%：1", summary);
+        Assert.Contains("Free·无优惠：1", summary);
+    }
+
+    [Fact]
+    public void PromotionSummary_HandlesEmpty()
+    {
+        Assert.Contains("总数：0", BackendResultInterpreter.PromotionSummary(new List<Dictionary<string, object>>()));
+    }
+
+    // ── Result-dialog gate ──────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("账号测活(3)", true)]
+    [InlineData("账号测活", true)]
+    [InlineData("账号优惠检测(12)", true)]
+    [InlineData("账号优惠检测", true)]
+    [InlineData("批量邮箱换绑(4)", false)]
+    [InlineData("协议注册(2)", false)]
+    [InlineData("", false)]
+    public void IsAccountScanResultTask_CoversLivenessAndPromotion(string taskName, bool expected)
+    {
+        Assert.Equal(expected, BackendResultInterpreter.IsAccountScanResultTask(taskName));
+    }
+
+    [Theory]
+    [InlineData("账号测活(3)", "账号测活")]
+    [InlineData("账号优惠检测(12)", "账号优惠检测")]
+    [InlineData("协议注册(2)", "账号测活")]
+    public void AccountScanResultTitle_MatchesTaskFamily(string taskName, string expected)
+    {
+        Assert.Equal(expected, BackendResultInterpreter.AccountScanResultTitle(taskName));
+    }
+
+    [Fact]
+    public void IsAccountScanResultTask_AcceptsNullTaskName()
+    {
+        Assert.False(BackendResultInterpreter.IsAccountScanResultTask(null!));
     }
 
     // ── Deactivation detection ──────────────────────────────────────────

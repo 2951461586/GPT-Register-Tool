@@ -32,7 +32,7 @@ class _RecordingCamoufox:
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
-        _RecordingCamoufox.seen_env = os.environ.get(ENV)
+        _RecordingCamoufox.seen_env = kwargs.get("env", {}).get(ENV)
 
     def __enter__(self):
         context = MagicMock()
@@ -58,6 +58,7 @@ class CamoufoxContentSandboxTests(unittest.TestCase):
 
         with patch.object(camoufox.sync_api, "Camoufox", _RecordingCamoufox):
             session.__enter__()
+        session.close()
         return {
             "during": _RecordingCamoufox.seen_env,
             "after": os.environ.get(ENV),
@@ -91,6 +92,12 @@ class CamoufoxContentSandboxTests(unittest.TestCase):
         result = self._launch(disable_content_sandbox=False)
         self.assertIsNone(result["during"])
         self.assertIsNone(result["after"])
+
+    def test_disabled_workaround_preserves_existing_environment(self):
+        os.environ[ENV] = "0"
+        result = self._launch(disable_content_sandbox=False)
+        self.assertEqual(result["during"], "0")
+        self.assertEqual(result["after"], "0")
 
 
 if __name__ == "__main__":

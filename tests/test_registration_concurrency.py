@@ -4,7 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from sms_tool import account_creation, auth_flow, batch_runner, otp_strategy, registration
+from sms_tool import auth_flow, batch_runner, otp_strategy, registration
+
+from sms_tool.accounts import account_creation
 from sms_tool.auth_flow import _ensure_authorize_context
 from sms_tool.auth_flow import _protocol_diagnostic
 from sms_tool.mailbox import _parse_chatai_mailbox_file
@@ -46,7 +48,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                  "at_stability_probe_count": 2,
                  "at_stability_probe_delay_seconds": 10,
              }}), \
-             patch("sms_tool.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
+             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
              patch.object(registration, "registration_stage", side_effect=stages.append), \
              patch.object(registration.time, "sleep") as sleep:
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
@@ -330,7 +332,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.account_creation.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.accounts.account_creation.request_with_retry", side_effect=fake_request):
             ok, _ = _validate_email_otp(
                 Mock(),
                 "https://auth.openai.com",

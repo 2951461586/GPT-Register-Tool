@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from sms_tool.account_liveness import (
+from sms_tool.accounts.account_liveness import (
     CODEX_USAGE_URL,
     probe_account_liveness,
     browser_fetch_for_account,

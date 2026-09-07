@@ -3,7 +3,7 @@ import time
 from argparse import Namespace
 from pathlib import Path
 
-from sms_tool.account_email_change import (
+from sms_tool.accounts.account_email_change import (
     EmailChangeRequest,
     change_email_batch,
     change_email_begin,
@@ -70,7 +70,7 @@ def test_batch_keeps_order_and_runs_concurrently(monkeypatch):
         seen.append((account["email"], target.email))
         return {"ok": True, "email": account["email"], "target_email": target.email}
 
-    monkeypatch.setattr("sms_tool.account_email_change.change_one_account", one)
+    monkeypatch.setattr("sms_tool.accounts.account_email_change.change_one_account", one)
     result = change_email_batch(accounts, request, allocate=lambda req, count: targets)
     assert result["ok"] and result["success"] == 2
     assert [item["email"] for item in result["results"]] == ["a@example.com", "b@example.com"]

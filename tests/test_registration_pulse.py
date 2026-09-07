@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import threading
 
 from sms_tool import registration_pulse as pulse_module
 from sms_tool.registration_pulse import (
@@ -151,7 +152,8 @@ def test_wave_delay_is_applied_between_waves_only(no_sleep):
         pulse_config=PulseConfig(enabled=True, wave_size=2, wave_delay_seconds=9),
     )
     # 4 accounts / wave_size 2 => 2 waves => exactly one inter-wave gap.
-    assert no_sleep == [9]
+    # The gap sleeps in bounded cancellable slices, so assert the total.
+    assert abs(sum(no_sleep) - 9) < 0.01
 
 
 def test_ip_ban_pauses_before_next_wave(no_sleep):
@@ -168,9 +170,10 @@ def test_ip_ban_pauses_before_next_wave(no_sleep):
             ban_threshold=2, ban_pause_seconds=30,
         ),
     )
-    assert 30 in no_sleep
-    # Pause is inserted before the wave gap.
-    assert no_sleep.index(30) < no_sleep.index(3)
+    # Both the ban pause (30s) and the wave gap (3s) sleep in bounded
+    # cancellable slices, so assert the combined duration. The pause being
+    # skipped entirely is covered by test_no_pause_when_below_threshold.
+    assert abs(sum(no_sleep) - 33) < 0.01
 
 
 def test_no_pause_when_below_threshold(no_sleep):
@@ -186,7 +189,8 @@ def test_no_pause_when_below_threshold(no_sleep):
             ban_threshold=2, ban_pause_seconds=30,
         ),
     )
-    assert 30 not in no_sleep
+    # Below the threshold no 30s ban pause is inserted: only the 3s wave gap.
+    assert abs(sum(no_sleep) - 3) < 0.01
 
 
 def test_max_waves_reports_skipped_accounts_instead_of_dropping_them():
@@ -251,3 +255,18 @@ def test_zero_count_returns_empty():
         workers=2,
         pulse_config=PulseConfig(enabled=True),
     ) == []
+
+
+def test_cancel_event_marks_remaining_accounts_cancelled():
+    event = threading.Event()
+    event.set()
+    results = run_pulse_batch(
+        3,
+        run_one_fn=lambda idx: (idx, _ok(idx)),
+        workers=2,
+        pulse_config=PulseConfig(enabled=True, wave_size=2, wave_delay_seconds=0),
+        cancel_event=event,
+    )
+    assert len(results) == 3
+    assert all(item["registration_state"] == "cancelled" for item in results)
+    assert all(item["failure_class"] == "cancelled" for item in results)

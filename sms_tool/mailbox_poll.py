@@ -11,6 +11,8 @@ import logging
 from typing import Callable, Iterable, Optional
 
 from .sanitizer import mask_otp
+from .mailbox_errors import MailboxEndpointUnavailableError
+from .desktop_ipc import progress_dots_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,9 @@ def _poll_otp_with_settle(
 
     excluded = {str(value or "").strip() for value in (excluded_otps or ())}
     deadline = time.time() + timeout
+    # Resolved once: the loop runs for the whole poll window and the answer
+    # cannot change mid-flight, but os.environ lookups per tick add up.
+    dots = progress_dots_enabled()
 
     while time.time() < deadline:
         try:
@@ -76,11 +81,14 @@ def _poll_otp_with_settle(
                 if otp_code:
                     print(f" code:{mask_otp(otp_code)}!")
                     return otp_code
+        except MailboxEndpointUnavailableError:
+            raise
         except reraise or ():
             raise
         except Exception as e:
             print(f"[{log_prefix} error: {e}]")
-        print(".", end="", flush=True)
+        if dots:
+            print(".", end="", flush=True)
         time.sleep(interval)
     print(" timeout")
     return None

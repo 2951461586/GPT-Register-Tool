@@ -8,6 +8,15 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
+EMAIL_SELECTORS = (
+    "input[type='email']", "input[name='email']", "input[name='username']",
+    "input#email-input", "input[autocomplete='email']",
+)
+EDITABLE_EMAIL_SELECTOR = ", ".join(
+    selector + ":visible:not(:disabled):not([readonly]):not([aria-disabled='true'])"
+    for selector in EMAIL_SELECTORS
+)
+
 
 def _safe_text(value: Any) -> str:
     return sanitize_text(str(value or ""))[:500]
@@ -51,10 +60,12 @@ def _unexpected_identity_provider(url: str) -> bool:
 
 
 def _first_visible(page, selectors: tuple[str, ...], timeout_ms: int = 5_000):
+    # This is a total probe budget, not a fresh timeout for every fallback.
+    per_selector_timeout = max(1, timeout_ms // max(1, len(selectors)))
     for selector in selectors:
         try:
             locator = page.locator(selector).first
-            locator.wait_for(state="visible", timeout=timeout_ms)
+            locator.wait_for(state="visible", timeout=per_selector_timeout)
             if locator.is_visible():
                 return locator
         except Exception:

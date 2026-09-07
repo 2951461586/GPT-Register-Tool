@@ -8,6 +8,7 @@ module only resolves targets from argparse values and orchestrates workers.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import public_oauth_result, read_email_file, unique_emails
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
 
     workers = max(1, min(int(args.workers or 1), 4, len(emails)))
     print(f"[*] One-click SMS RT refresh: {len(emails)} account(s), workers={workers}")
+    logger.info("one-click SMS RT refresh started: accounts=%d workers=%d", len(emails), workers)
 
     def _run_one(index, email):
         print(f"\n[{index + 1}/{len(emails)}] One-click SMS: {email}")
@@ -95,8 +99,10 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             phone = str(result.get("phone") or "").strip()
             phone_suffix = f" phone={phone}" if phone else ""
             print(f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}{phone_suffix}")
+            logger.info("one-click SMS %s: RT stored (%s)", email, result.get("refresh_token_status", ""))
         else:
             print(f"[FAIL] {email}: {result.get('error', 'unknown')}")
+            logger.warning("one-click SMS %s failed: %s", email, result.get("error", "unknown"))
             ctx.persist_failure(data, json_path, email, result)
         result.setdefault("email", email)
         return index, result
@@ -115,6 +121,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
 
     results = [result for result in ordered if result is not None]
     ok_count = sum(1 for result in results if result.get("ok"))
+    logger.info("one-click SMS RT refresh finished: ok=%d/%d", ok_count, len(emails))
     summary = {
         "ok": ok_count == len(emails),
         "total": len(emails),
@@ -129,7 +136,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
 
 def one_click_scan(args: Any) -> None:
     """Batch OAuth probe accounts without sending SMS."""
-    from ..account_scan import scan_accounts
+    from ..accounts.account_scan import scan_accounts
     from ..session_refresh import _load_seed_session
     from ..storage import list_paypal_accounts
 

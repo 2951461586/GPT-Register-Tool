@@ -9,6 +9,7 @@ the legacy CLI's replaceable hooks explicit so tests can keep patching
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import webbrowser
 from collections.abc import Callable
@@ -17,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -208,7 +211,7 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
 
 
 def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
-    from ..account_promotion import refresh_promotion_statuses
+    from ..accounts.account_promotion import refresh_promotion_statuses
 
     emails = read_email_file(args.email_file)
     if args.email:
@@ -225,16 +228,21 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
     )
     from ..desktop_ipc import emit_result
 
+    _print_promotion_summary(result)
     if bool(getattr(args, "desktop_ipc", False)):
         emit_result(result, enabled=True)
     else:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    logger.info(
+        "promotion check finished: ok=%s success=%s/%s",
+        bool(result.get("ok")), int(result.get("success") or 0), int(result.get("total") or 0),
+    )
     if not result.get("ok"):
         raise SystemExit(3)
 
 
 def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
-    from ..account_recovery import refresh_local_quota_statuses
+    from ..accounts.account_recovery import refresh_local_quota_statuses
     from ..cpa_import import refresh_cpa_quota_statuses
 
     if bool(getattr(args, "mailbox_pool_repaired", False)):
@@ -264,7 +272,7 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             proxy=args.proxy,
             timeout=max(5, int(args.refresh_timeout or 30)),
             relogin_on_401=bool(getattr(args, "quota_auto_relogin", False)),
-            relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 180) or 180)),
+            relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 300) or 300)),
             relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
             batch_timeout=max(30, int(getattr(args, "quota_batch_timeout", 840) or 840)),
             account_timeout=max(30, int(getattr(args, "quota_account_timeout", 120) or 120)),
@@ -294,13 +302,152 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     from ..desktop_ipc import emit_result
 
     emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))
+    _print_quota_summary(result)
     if not result.get("ok"):
         raise SystemExit(3)
 
 
+def _print_promotion_summary(result):
+    """Staged operator lines for 账号优惠检测: one summary + failures only.
+
+    Mirror of :func:`_print_quota_summary`. Without it the promotion check
+    printed nothing between the task-start line and the folded result envelope,
+    because every per-account detail lived only in the structured payload.
+    """
+    results = result.get("results") if isinstance(result.get("results"), list) else []
+    rows = [item for item in results if isinstance(item, dict)]
+    ok = sum(1 for item in rows if item.get("ok"))
+    print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}")
+    logger.info("promotion check finished: ok=%s/%s", ok, len(rows))
+    for item in rows:
+        if item.get("ok"):
+            continue
+        email = str(item.get("email") or "").strip()
+        probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+        raw_reason = str(item.get("promotion_status") or probe.get("error") or item.get("error") or "failed")
+        print(f"[!] {email}: {_probe_reason_label(raw_reason)}")
+        logger.warning("promotion check failed for %s: %s", email, raw_reason)
+
+
+def _print_quota_summary(result):
+    """One staged summary line plus per-account failures for the log panel.
+
+    The machine-readable result already went out through ``emit_result``;
+    stdout only needs the operator story, not the full JSON dump.
+    """
+    results = result.get("results") if isinstance(result.get("results"), list) else []
+    rows = [item for item in results if isinstance(item, dict)]
+    ok = sum(1 for item in rows if item.get("ok"))
+    deactivated = sum(
+        1
+        for item in rows
+        if str((item.get("probe") or {}).get("status") or "").strip().lower()
+        == "account_deactivated"
+    )
+    other_failed = len(rows) - ok - deactivated
+    print(
+        f"[*] 测活完成：共 {len(rows)} 个账号，正常 {ok}，掉号 {deactivated}，其他失败 {other_failed}"
+    )
+    logger.info("liveness check finished: ok=%s/%s deactivated=%s", ok, len(rows), deactivated)
+    for item in rows:
+        email = str(item.get("email") or "").strip()
+        relogin = item.get("relogin") if isinstance(item.get("relogin"), dict) else {}
+        if item.get("ok"):
+            # A silent 401 -> relogin -> 200 recovery is otherwise invisible in
+            # the panel; surface it so operators know the token rotated.
+            if relogin.get("ok"):
+                print(f"[+] {email}: 重登成功，令牌已刷新")
+                logger.info("liveness relogin recovered %s", email)
+            continue
+        probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+        raw_reason = str(probe.get("status") or probe.get("error") or relogin.get("error") or item.get("error") or "failed")
+        reason = _probe_reason_label(raw_reason)
+        note = _relogin_panel_note(relogin)
+        dropped = "（已标记掉号：令牌吊销且无可恢复凭据）" if str(probe.get("dropped") or "") == "token_revoked" else ""
+        line = f"{reason}{note}{dropped}"
+        print(f"[!] {email}: {line}")
+        logger.warning("liveness check failed for %s: %s", email, line)
+
+
+# Ordered longest-prefix-first: "curl: (28) ..." must win over a bare
+# "timed out" so the operator sees 网络超时 and not a raw curl string.
+_PROBE_REASON_LABELS = (
+    ("account_deactivated", "账号已注销"),
+    ("account_deatived", "账号已注销"),
+    # 优惠检测 already hands us a Chinese badge (AT失效 / 缺少AT / 检测失败);
+    # match those before the English needles so they do not fall through to the
+    # "检测失败（...）" tail.
+    ("at失效", "AT 失效（HTTP 401）"),
+    ("缺少at", "缺少 Access Token"),
+    ("检测失败", "检测失败"),
+    ("token_invalid", "AT 失效（HTTP 401）"),
+    ("health_timeout", "探测超时"),
+    ("scan_failed", "探测失败"),
+    ("mailbox_transport", "邮箱链路失败"),
+    ("mailbox_auth_invalid", "邮箱授权失效"),
+    ("mailbox_pool_repair_required", "邮箱池熔断中"),
+    ("remotedisconnected", "连接被远端断开"),
+    ("proxyerror", "代理连接失败"),
+    ("curl: (28)", "网络超时"),
+    ("curl: (7)", "无法连接代理"),
+    ("curl: (35)", "TLS 握手失败"),
+    ("curl: (56)", "连接被中断"),
+    ("timed out", "网络超时"),
+    ("timeout", "网络超时"),
+    ("unauthorized", "AT 失效（HTTP 401）"),
+    ("401", "AT 失效（HTTP 401）"),
+)
+
+
+def _probe_reason_label(reason: str) -> str:
+    """Chinese operator label for a raw probe/relogin reason string.
+
+    The raw values (``token_invalid``, ``curl: (28) timed out``, ...) used to be
+    printed verbatim, which is what filled the panel with English noise. The
+    structured result dialog still carries the untranslated value, so nothing
+    is lost for diagnosis.
+    """
+    text = str(reason or "").strip()
+    if not text:
+        return "检测失败"
+    lowered = text.lower()
+    for needle, label in _PROBE_REASON_LABELS:
+        if needle in lowered:
+            return label
+    if lowered.startswith("http "):
+        return f"HTTP {text.split()[1]}" if len(text.split()) > 1 else text
+    # Unknown reasons keep a short raw tail; truncating avoids dumping a
+    # Cloudflare HTML page into the panel.
+    return f"检测失败（{text[:60]}）"
+
+
+def _relogin_panel_note(relogin: dict) -> str:
+    """Chinese operator note for a failed/skipped relogin on a 401 probe.
+
+    Without this the relogin gate result only exists inside the structured
+    result popup, which made a globally breaker-disabled recovery look like an
+    unexplained mass token_invalid.
+    """
+    if not relogin or relogin.get("ok"):
+        return ""
+    error = str(relogin.get("error") or "")
+    mode = str(relogin.get("mode") or "")
+    if relogin.get("terminal") or "account_deactivated" in error:
+        return " → 重登确认账号已注销，已标记掉号"
+    if error == "mailbox_pool_repair_required" or mode == "disabled":
+        return " → 重登未执行：邮箱池熔断中（修复后用 --mailbox-pool-repaired 确认）"
+    if mode == "cooldown" or "cooldown" in error:
+        return " → 重登跳过：冷却中"
+    if mode == "concurrency_limited":
+        return " → 重登跳过：并发槽已满"
+    if error:
+        return f" → 重登失败：{error[:80]}"
+    return " → 重登未完成"
+
+
 def quota_usage(args: Any) -> None:
     """Fetch wham/usage 5h/7d quota for a single account and return structured JSON."""
-    from ..account_liveness import probe_account_liveness
+    from ..accounts.account_liveness import probe_account_liveness
     from ..storage import get_account_record
 
     email = (getattr(args, "email", None) or "").strip()
