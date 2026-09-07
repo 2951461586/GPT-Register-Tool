@@ -63,7 +63,8 @@ class RegistrationStateMachine:
         safe_detail = sanitize_text(detail)
         self.state = state
         self.history.append(RegistrationTransition(state, safe_detail))
-        self.stage_callback(state.value, "running", safe_detail)
+        status = "success" if state is RegistrationState.COMPLETED else "running"
+        self.stage_callback(state.value, status, safe_detail)
 
     def fail(self, detail: str = "") -> None:
         detail = sanitize_text(detail)

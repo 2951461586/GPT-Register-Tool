@@ -120,7 +120,7 @@ def mark_account_health_result(
                     data = {**file_data, **data}
             except Exception:
                 pass
-        from ..account_health import sanitize_health_details
+        from ..accounts.account_health import sanitize_health_details
 
         safe_result = sanitize_health_details(dict(health_result))
         check = str(safe_result.get("check") or "unknown")

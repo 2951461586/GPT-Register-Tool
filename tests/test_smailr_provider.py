@@ -4,7 +4,7 @@ from curl_cffi.requests.exceptions import SSLError
 
 from sms_tool import mailbox_smailr
 from sms_tool.mailbox_parsers import _parse_mailbox_token_file
-from sms_tool.providers.smailr_mailbox import SmailrClient, SmailrError, fetch_messages, poll_otp, _normalize_message
+from sms_tool.providers.smailr_client import SmailrClient, SmailrError, fetch_messages, poll_otp, _normalize_message
 
 
 class FakeResponse:
@@ -22,7 +22,7 @@ def test_smailr_normalizes_openapi_server_url_and_redacts_errors():
     client = SmailrClient("nm_test_secret", "https://smailr.com/api/v1")
     assert client.base_url == "https://smailr.com"
     assert client._headers()["Authorization"] == "Bearer nm_test_secret"
-    with patch("sms_tool.providers.smailr_mailbox.curl_requests.request", return_value=FakeResponse({"error": "nm_test_secret"}, 403)):
+    with patch("sms_tool.providers.smailr_client.curl_requests.request", return_value=FakeResponse({"error": "nm_test_secret"}, 403)):
         try:
             client.list_mailboxes()
         except SmailrError as exc:
@@ -43,7 +43,7 @@ def test_smailr_create_and_fetch_nested_responses_and_mail_detail():
             return FakeResponse({"data": [{"id": "mail-1", "subject": "OpenAI code"}]})
         return FakeResponse({"data": {"id": "mail-1", "body_text": "Your verification code is 729660"}})
 
-    with patch("sms_tool.providers.smailr_mailbox.curl_requests.request", side_effect=request):
+    with patch("sms_tool.providers.smailr_client.curl_requests.request", side_effect=request):
         client = SmailrClient("nm_test")
         created = client.create_mailbox("otp")
         assert created["id"] == "mb-1"
@@ -73,7 +73,7 @@ def test_smailr_fetches_detail_when_list_body_is_only_a_preview():
             "body_html": "Your verification code is 123456",
         }})
 
-    with patch("sms_tool.providers.smailr_mailbox.curl_requests.request", side_effect=request):
+    with patch("sms_tool.providers.smailr_client.curl_requests.request", side_effect=request):
         messages = fetch_messages(SmailrClient("nm_test"), "mb-1", "otp@smailr.com", limit=1)
 
     assert len(calls) == 2
@@ -111,7 +111,7 @@ def test_smailr_poll_otp_falls_back_when_provider_subject_is_mojibake():
         return candidate.get("otp") if candidate else None
 
     with patch(
-        "sms_tool.providers.smailr_mailbox.fetch_messages",
+        "sms_tool.providers.smailr_client.fetch_messages",
         return_value=[message],
     ), patch(
         "sms_tool.mailbox_poll._poll_otp_with_settle",
@@ -133,9 +133,9 @@ def test_smailr_retries_tls_handshake_failure_before_create():
     response = FakeResponse({"data": {"id": "mb-1", "email": "otp@smailr.com"}}, 201)
 
     with patch(
-        "sms_tool.providers.smailr_mailbox.curl_requests.request",
+        "sms_tool.providers.smailr_client.curl_requests.request",
         side_effect=[tls_error, response],
-    ) as request, patch("sms_tool.providers.smailr_mailbox.time.sleep") as sleep:
+    ) as request, patch("sms_tool.providers.smailr_client.time.sleep") as sleep:
         client = SmailrClient(
             "nm_test",
             retry_attempts=3,
@@ -150,9 +150,9 @@ def test_smailr_retries_tls_handshake_failure_before_create():
 
 def test_smailr_does_not_retry_permanent_http_failure():
     with patch(
-        "sms_tool.providers.smailr_mailbox.curl_requests.request",
+        "sms_tool.providers.smailr_client.curl_requests.request",
         return_value=FakeResponse({"error": "invalid api key"}, 401),
-    ) as request, patch("sms_tool.providers.smailr_mailbox.time.sleep") as sleep:
+    ) as request, patch("sms_tool.providers.smailr_client.time.sleep") as sleep:
         client = SmailrClient(
             "nm_test",
             retry_attempts=3,
@@ -177,7 +177,7 @@ def test_smailr_default_domain_uses_documented_optional_domain_id():
         return FakeResponse({"data": {"id": "mb-1", "email": "otp@smailr.com"}}, 201)
 
     with patch.object(mailbox_smailr, "_smailr_cfg", return_value={"default_domain": "smailr.com"}), \
-         patch("sms_tool.providers.smailr_mailbox.curl_requests.request", side_effect=request):
+         patch("sms_tool.providers.smailr_client.curl_requests.request", side_effect=request):
         accounts = mailbox_smailr.create_smailr_mailboxes(
             1,
             local_part="otp",
@@ -202,7 +202,7 @@ def test_smailr_non_default_domain_uses_configured_domain_id():
     with patch.object(mailbox_smailr, "_smailr_cfg", return_value={
         "default_domain": "smailr.com",
         "domain_ids": {"loc.cc": "domain-loc"},
-    }), patch("sms_tool.providers.smailr_mailbox.curl_requests.request", side_effect=request):
+    }), patch("sms_tool.providers.smailr_client.curl_requests.request", side_effect=request):
         accounts = mailbox_smailr.create_smailr_mailboxes(
             1,
             local_part="otp",
@@ -250,10 +250,10 @@ def test_smailr_reuses_empty_existing_mailbox_when_server_default_requires_highe
         "default_domain": "smailr.com",
         "reuse_existing_on_level_error": True,
     }), patch(
-        "sms_tool.providers.smailr_mailbox.SmailrClient.create_mailbox",
+        "sms_tool.providers.smailr_client.SmailrClient.create_mailbox",
         side_effect=level_error,
     ), patch(
-        "sms_tool.providers.smailr_mailbox.SmailrClient.list_mailboxes",
+        "sms_tool.providers.smailr_client.SmailrClient.list_mailboxes",
         return_value=[existing],
     ), patch("sms_tool.storage.get_account_record", return_value={}):
         accounts = mailbox_smailr.create_smailr_mailboxes(
@@ -281,9 +281,9 @@ def test_smailr_reuses_requested_non_default_domain_without_domain_id():
         "default_domain": "nodeloc.cc",
         "reuse_existing_on_level_error": True,
     }), patch(
-        "sms_tool.providers.smailr_mailbox.SmailrClient.create_mailbox",
+        "sms_tool.providers.smailr_client.SmailrClient.create_mailbox",
     ) as create, patch(
-        "sms_tool.providers.smailr_mailbox.SmailrClient.list_mailboxes",
+        "sms_tool.providers.smailr_client.SmailrClient.list_mailboxes",
         return_value=[existing],
     ), patch("sms_tool.storage.get_account_record", return_value={}):
         accounts = mailbox_smailr.create_smailr_mailboxes(

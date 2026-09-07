@@ -1,7 +1,7 @@
 """Behaviour tests for ``sms_tool/mailbox_poll.py`` (2026-09-03, round 7).
 
 88 lines, three production call sites (``mailbox_cfworker.py:143``,
-``mailbox_strategies.py:263``, ``providers/smailr_mailbox.py:409``) -- and
+``mailbox_strategies.py:263``, ``providers/smailr_client.py:409``) -- and
 **zero real executions**. ``tests/test_smailr_provider.py`` mentions the symbol,
 but only to ``patch`` it out with a stub. So the shared OTP polling template that
 every mailbox provider goes through has never actually run under test.

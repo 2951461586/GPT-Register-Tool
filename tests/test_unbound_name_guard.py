@@ -185,7 +185,11 @@ def _unresolved_relative_imports(path: Path) -> list[tuple[int, str, str]]:
         module = node.module or ""
         candidate_file = base / (module.replace(".", "/") + ".py") if module \
             else base / "__init__.py"
-        candidate_pkg = (base / module / "__init__.py") if module else None
+        # Dotted targets are nested packages: `from .a.b import x` lives at
+        # <base>/a/b/__init__.py, NOT at a single directory literally named
+        # "a.b".  Forgetting the replace() here makes every nested relative
+        # import look unresolved.
+        candidate_pkg = (base / Path(module.replace(".", "/")) / "__init__.py") if module else None
         if candidate_file.exists():
             continue
         if candidate_pkg is not None and candidate_pkg.exists():

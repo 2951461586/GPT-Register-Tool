@@ -146,6 +146,10 @@ namespace SmsWorkbench
                 }
             }
 
+            // Machine consumers read the raw stream (backendOutput above); the
+            // panel gets the folded operator story instead of envelopes, JSON
+            // blocks and banner bars.
+            var logFolder = new BackendLogFolder();
             var progress = new Progress<BackendOutputLine>(line =>
             {
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
@@ -153,7 +157,15 @@ namespace SmsWorkbench
                     if (accountProgress != null
                         && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
                     {
-                        accountProgress.Update(progressEvent);
+                        // Update only returns true for a terminal per-account
+                        // event, i.e. one account really finished and was
+                        // persisted backend-side. That is the moment its grid
+                        // row goes stale, so reload it instead of waiting for
+                        // the whole batch -- this is what the scan commands
+                        // were missing versus registration's "Saved session:"
+                        // marker.
+                        if (accountProgress.Update(progressEvent))
+                            RefreshPoolsThrottled(preserveView: true);
                         progressDialog?.Update(
                             accountProgress.Completed,
                             accountProgress.Total,
@@ -163,15 +175,24 @@ namespace SmsWorkbench
                     task.Info = progressEvent.Detail.Length > 0
                         ? $"{progressEvent.Stage}: {progressEvent.Detail}"
                         : progressEvent.Stage;
+                    // The event itself never reaches the panel (we return
+                    // below); emit its operator-facing stage line here so the
+                    // scan commands read as staged output instead of a wall of
+                    // raw backend lines.
+                    string? stageLine = BackendLogPresenter.ProgressEventLine(progressEvent);
+                    if (stageLine != null)
+                        UiLog(stageLine);
                     return;
                 }
                 CaptureBackendLine(line.Text);
-                UiLog(line.Text);
+                foreach (string display in logFolder.Feed(line.Text))
+                    UiLog(display);
                 RefreshPoolsAfterHotPersistence(line.Text);
             });
             try
             {
-                Log("启动：python " + safeArgs);
+                logger?.Information("启动：python {Args}", safeArgs);
+                Log(BackendLogPresenter.TaskStartLine(taskName));
                 StatusText = taskName + " 运行中";
                 BackendCommandResult result = await backendTasks.RunAsync(
                     BackendCommand.Create(
@@ -204,14 +225,14 @@ namespace SmsWorkbench
                 StatusText = taskName + " 已结束";
                 RefreshPools();
                 ScrollTaskGridToBottom();
-                if (taskName.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase))
+                if (BackendResultInterpreter.IsAccountScanResultTask(taskName))
                 {
                     string output;
                     lock (backendOutputLock)
                     {
                         output = backendOutput.ToString();
                     }
-                    ShowAccountScanResultDialog(output);
+                    ShowAccountScanResultDialog(output, BackendResultInterpreter.AccountScanResultTitle(taskName));
                 }
             }
             catch (OperationCanceledException)
@@ -262,7 +283,8 @@ namespace SmsWorkbench
 
         private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000, CancellationToken ct = default)
         {
-            Log("启动：python " + FormatBackendArgsForDisplay(args));
+            logger?.Information("启动：python {Args}", FormatBackendArgsForDisplay(args));
+            Log(BackendLogPresenter.TaskStartLine(taskName));
             return await backendTasks.RunForResultAsync(
                 BackendCommand.Create(taskName, args, timeoutMs));
         }
@@ -278,11 +300,34 @@ namespace SmsWorkbench
                 || !line.Contains(BackendTextMarkers.SavedSession, StringComparison.OrdinalIgnoreCase))
                 return;
 
+            // Registration adds rows, so jumping to page one is the useful
+            // behaviour there. Mid-batch scan refreshes must not do that.
+            RefreshPoolsThrottled(preserveView: false);
+        }
+
+        /// <summary>
+        /// Rate-limited pool reload shared by both hot-refresh signals: the
+        /// "Saved session:" text marker (registration) and the terminal
+        /// per-account IPC event (scan / promotion). A backend can finish
+        /// several accounts inside 750ms; one reload per burst is enough.
+        /// <para>
+        /// A reload is not free: <c>read_accounts</c> took ~1.3s to build an
+        /// 862-row response when this was measured, so the window is only a
+        /// floor. <c>RefreshPoolsAsync</c> also drops a reload that arrives
+        /// while another is still in flight, which is what actually paces a
+        /// batch that completes accounts faster than the read can keep up.
+        /// </para>
+        /// </summary>
+        private void RefreshPoolsThrottled(bool preserveView)
+        {
             DateTime now = DateTime.UtcNow;
             if ((now - lastHotPersistenceRefreshUtc).TotalMilliseconds < 750)
                 return;
             lastHotPersistenceRefreshUtc = now;
-            RefreshPools();
+            if (preserveView)
+                RefreshPoolsPreservingView();
+            else
+                RefreshPools();
         }
 
         private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();

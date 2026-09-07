@@ -10,6 +10,7 @@ explicit so tests can continue patching ``sms_tool.cli`` symbols.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -20,6 +21,10 @@ from typing import Any
 
 from .helpers import unique_emails
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
+from ..sanitizer import mask_account
+from ..diagnostics import safe_print
+
+logger = logging.getLogger(__name__)
 
 # Free-text markers the WPF host matches against this process's stdout.
 # They are a contract in the weakest possible form -- a bare substring, no
@@ -111,34 +116,44 @@ def registration_phone_pool(args: Any):
     )
     if not phone_pool.phones:
         if explicit:
-            print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
+            safe_print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
             raise SystemExit(2)
         return None
 
     if auto_enable and not explicit:
         first = phone_pool.phones[0] if phone_pool.phones else None
         source = first.provider if first else "configured"
-        print(f"[*] Auto-enabled phone verification ({source} mode)")
+        safe_print(f"[*] Auto-enabled phone verification ({source} mode)")
     print_phone_pool_status(phone_pool)
     return phone_pool
 
 
-def check_registered_promotions(emails, workers=4, proxy=None, timeout=20):
-    from ..account_promotion import refresh_promotion_statuses
+def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
+    """Probe plan/promotion for saved accounts.
+
+    ``proxy_pool`` is threaded through so this entry point accepts the same
+    health-pool rotation as ``commands/accounts.py::check_promotion``. It
+    previously had no such parameter, so a pool supplied by the caller was
+    silently dropped on this path.
+    """
+    from ..accounts.account_promotion import refresh_promotion_statuses
     from ..sanitizer import sanitize
 
     targets = unique_emails(emails)
     if not targets:
         report = {"ok": True, "total": 0, "success": 0, "failed": 0, "trial_eligible": 0, "results": []}
-        print("[*] Promotion check: no saved successful account to probe.")
+        safe_print("[*] Promotion check: no saved successful account to probe.")
+        logger.info("promotion check: no saved successful account to probe")
         return report
 
-    print(f"[*] Promotion check: probing {len(targets)} saved successful account(s)...")
+    safe_print(f"[*] Promotion check: probing {len(targets)} saved successful account(s)...")
+    logger.info("promotion check: probing %d saved successful account(s)", len(targets))
     try:
         report = refresh_promotion_statuses(
             emails=targets,
             workers=max(1, int(workers or 1)),
             proxy=proxy,
+            proxy_pool=proxy_pool,
             timeout=max(5, int(timeout or 20)),
         )
     except Exception as exc:
@@ -151,29 +166,30 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20):
             "results": [],
             "error": str(sanitize(exc)),
         }
-        print(f"[!] Promotion check failed: {report['error']}")
+        safe_print(f"[!] Promotion check failed: {report['error']}")
+        logger.warning("promotion check failed: %s", report["error"])
         return report
 
     results = report.get("results") if isinstance(report.get("results"), list) else []
-    trial_eligible = sum(
-        1
-        for item in results
-        if isinstance(item, dict)
-        and isinstance(item.get("probe"), dict)
-        and bool(item["probe"].get("plus_trial_eligible"))
-    )
+    # refresh_promotion_statuses owns this count now. It used to be recounted
+    # here, which left the other CLI entry point with no such key at all.
+    trial_eligible = int(report.get("trial_eligible") or 0)
     report["trial_eligible"] = trial_eligible
-    print(
+    safe_print(
         "[*] Promotion check: "
         f"success={int(report.get('success') or 0)}/{int(report.get('total') or 0)} "
         f"trial_eligible={trial_eligible}"
+    )
+    logger.info(
+        "promotion check finished: success=%s/%s trial_eligible=%s",
+        int(report.get("success") or 0), int(report.get("total") or 0), trial_eligible,
     )
     for item in results:
         if not isinstance(item, dict):
             continue
         email = str(item.get("email") or "").strip()
         label = str(item.get("promotion_status") or "检测失败").strip()
-        print(f"    {email}: {label}")
+        safe_print(f"    {mask_account(email)}: {label}")
     return report
 
 
@@ -311,7 +327,10 @@ def _persist_registration_result_core(
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             if not marker.get("failure_reported"):
-                print(f"[!] Registration failed for {failed_email}: {failed_error[:500]}")
+                safe_print(
+                    f"[!] Registration failed for {mask_account(failed_email)}: "
+                    f"{failed_error[:500]}"
+                )
                 marker["failure_reported"] = True
             if not marker.get("failure_audited"):
                 record_registration_audit(
@@ -333,7 +352,7 @@ def _persist_registration_result_core(
                 failed_error == "phone_already_registered_or_login_redirect"
                 and not marker.get("skip_reported")
             ):
-                print("    Skipped: phone number already registered, not saving to database")
+                safe_print("    Skipped: phone number already registered, not saving to database")
                 marker["skip_reported"] = True
             marker["status"] = "complete"
             marker.pop("error_type", None)
@@ -354,7 +373,7 @@ def _persist_registration_result_core(
         session_data = ctx.build_session_file(data)
         if not session_data.get("access_token"):
             if not marker.get("missing_token_reported"):
-                print("[!] Successful registration has no access_token; session file was not saved")
+                safe_print("[!] Successful registration has no access_token; session file was not saved")
                 marker["missing_token_reported"] = True
             marker["status"] = "complete"
             marker.pop("error_type", None)
@@ -394,19 +413,25 @@ def _persist_registration_result_core(
             marker["db_completed"] = True
         if marker.get("db_saved") and not deferred_probe and not marker.get("account_health_enqueued"):
             try:
-                from ..account_health_queue import enqueue_post_registration_checks
+                from ..accounts.account_health_queue import enqueue_post_registration_checks
 
                 health_jobs = enqueue_post_registration_checks(
                     session_data,
                     source="registration",
                     config=ctx.runtime_config,
+                    # An explicit post-registration promotion check runs once
+                    # for the whole batch below. Do not enqueue the same plan
+                    # probe per account a second time.
+                    include_plan=not bool(
+                        getattr(args, "check_promotion_after_registration", False)
+                    ),
                 )
                 marker["account_health_jobs"] = [
                     str(item.get("id") or "") for item in health_jobs if item.get("id")
                 ]
                 marker["account_health_enqueued"] = True
             except Exception as exc:
-                print(
+                safe_print(
                     "[!] Post-registration health queue warning: "
                     f"{type(exc).__name__}"
                 )
@@ -420,7 +445,7 @@ def _persist_registration_result_core(
             marker["active_audited"] = True
         marker["import_email"] = str(session_data.get("email") or "")
         if not marker.get("saved_reported"):
-            print(f"[*] {SAVED_SESSION_MARKER} {out_path}")
+            safe_print(f"[*] {SAVED_SESSION_MARKER} {out_path}")
             marker["saved_reported"] = True
         marker["status"] = "complete"
         marker.pop("error_type", None)
@@ -428,7 +453,7 @@ def _persist_registration_result_core(
     except Exception as exc:
         marker["status"] = "failed"
         marker["error_type"] = type(exc).__name__
-        print(
+        safe_print(
             "[!] Immediate registration persistence failed "
             f"({marker['error_type']}); it will be retried during finalization."
         )
@@ -458,6 +483,7 @@ def save_registration_results(
     saved_count = 0
     db_saved_count = 0
     import_emails = []
+    health_job_ids: list[str] = []
     for data in filter(None, results):
         outcome = persist_registration_result(
             args,
@@ -470,15 +496,20 @@ def save_registration_results(
         db_saved_count += int(outcome.get("db_saved") or 0)
         if outcome.get("import_email"):
             import_emails.append(outcome["import_email"])
+        health_job_ids.extend(
+            str(item)
+            for item in (outcome.get("account_health_jobs") or [])
+            if str(item or "")
+        )
 
     success_count = sum(1 for r in results if r and r.get("success"))
-    print(f"[*] SQLite index: {ctx.database_path()} ({db_saved_count} record(s) upserted)")
-    print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
+    safe_print(f"[*] SQLite index: {ctx.database_path()} ({db_saved_count} record(s) upserted)")
+    safe_print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
     quality = None
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         from ..providers.mailbox_remail import record_remail_batch_quality
         quality = record_remail_batch_quality(batch_id, results, requested=effective_count)
-        print(
+        safe_print(
             f"[*] ReMail quality: deactivated={quality['account_deactivated']}/"
             f"{quality['requested']} halt={quality['halt_replenishment']}"
         )
@@ -498,19 +529,31 @@ def save_registration_results(
     if getattr(args, "import_cpa", False):
         ctx.import_registered_accounts(args, import_emails)
     return {
+        "ok": success_count == effective_count,
         "batch_id": batch_id,
+        "total": int(effective_count),
         "success": success_count,
+        "failed": max(0, int(effective_count) - success_count),
         "session_saved": saved_count,
         "db_saved": db_saved_count,
         "quality": quality,
         "promotion": promotion_report,
+        "health": {
+            "queued": len(dict.fromkeys(health_job_ids)),
+            "promotion_completed": promotion_report is not None,
+            "promotion_ok": (
+                bool(promotion_report.get("ok"))
+                if isinstance(promotion_report, dict)
+                else None
+            ),
+        },
     }
 
 
 def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
     """Bounded ReMail replenishment mode for a stable AT-200 target."""
     if not (getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None)):
-        print("[Error] --target-at200 requires --buy-remail-mailbox or --remail-service-mode")
+        safe_print("[Error] --target-at200 requires --buy-remail-mailbox or --remail-service-mode")
         raise SystemExit(2)
     target = max(1, int(args.target_at200 or 1))
     max_purchases = max(target, int(args.max_mailbox_purchases or target * 2))
@@ -605,6 +648,9 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
     report = {
         "ok": active >= target,
         "batch_id": args.registration_batch_id,
+        "total": purchased,
+        "success": active,
+        "failed": max(0, purchased - active),
         "target_at200": target,
         "active": active,
         "purchased": purchased,

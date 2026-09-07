@@ -1,5 +1,14 @@
 from sms_tool.diagnostics import SanitizingTextIO, safe_print
-from sms_tool.sanitizer import POLICY_SCHEMA, SENSITIVE_POLICY, sanitize, sanitize_command_args, sanitize_text
+from sms_tool.sanitizer import (
+    POLICY_SCHEMA,
+    SENSITIVE_POLICY,
+    account_reference,
+    mask_account,
+    sanitize,
+    sanitize_command_args,
+    sanitize_log_text,
+    sanitize_text,
+)
 
 
 def test_sanitizer_removes_complete_token_secret_and_card_values():
@@ -45,6 +54,17 @@ def test_safe_print_sanitizes_operator_output(capsys):
     output = capsys.readouterr().out
     assert "user:pass" not in output
     assert "[REDACTED]" in output
+
+
+def test_account_labels_are_masked_and_persisted_refs_are_stable():
+    assert mask_account("User.Name@example.com") == "Us***@example.com"
+    assert account_reference("User.Name@example.com") == account_reference(
+        " user.name@EXAMPLE.COM "
+    )
+    assert "user.name" not in account_reference("User.Name@example.com")
+    assert "user.name@example.com" not in sanitize_log_text(
+        "failed user.name@example.com"
+    )
 
 
 def test_sanitizing_stdio_enforces_policy_for_legacy_prints():
@@ -125,7 +145,7 @@ def test_path_exemption_is_surgical_not_global():
 def test_exempted_affinity_still_rebuilds_a_usable_proxy():
     # End-to-end guard for the bug above: a sanitized identity_context must
     # still round-trip into the exact proxy it was captured from.
-    from sms_tool.account_identity import create_registration_identity, resolve_account_proxy
+    from sms_tool.accounts.account_identity import create_registration_identity, resolve_account_proxy
 
     proxy = "http://user-region-US-sid-NEW5678-t-5:proxy-secret@proxy.example:443"
     identity = create_registration_identity(

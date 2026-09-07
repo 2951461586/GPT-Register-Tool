@@ -19,7 +19,7 @@ import os
 import sys
 
 from sms_tool.config import initialize_runtime_config
-from sms_tool.account_liveness import probe_account_liveness
+from sms_tool.accounts.account_liveness import probe_account_liveness
 
 
 def _resolve_session(arg_session: str | None, latest: bool) -> str:

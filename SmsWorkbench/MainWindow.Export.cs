@@ -416,12 +416,12 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private void ShowAccountScanResultDialog(string backendOutput)
+        private void ShowAccountScanResultDialog(string backendOutput, string title = "账号测活")
         {
             var summary = BackendResultInterpreter.TryExtractScanSummary(backendOutput);
             if (summary == null)
             {
-                ShowThemedInfoDialog("账号测活", "账号测活已结束，但未解析到结果汇总。请查看下方日志确认详情。");
+                ShowThemedInfoDialog(title, title + "已结束，但未解析到结果汇总。请查看下方日志确认详情。");
                 return;
             }
 
@@ -438,12 +438,15 @@ namespace SmsWorkbench
             }
 
             bool directProbe = results.Any(r => BackendJson.TryGetMap(r, "probe", out _));
+            // Promotion rows carry their own badge; without this the panel would
+            // show "AT有效 / HTTP 200" and hide the actual 优惠 answer.
+            bool isPromotion = BackendResultInterpreter.IsPromotionRows(results);
             var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BackendJson.GetBool(r, "has_rt")).ToList();
             var noRtRows = directProbe ? results : results.Where(r => !BackendJson.GetBool(r, "has_rt")).ToList();
 
             var dialog = new Window
             {
-                Title = "账号测活结果",
+                Title = title + "结果",
                 Owner = this,
                 Width = 740,
                 MinWidth = 740,
@@ -462,14 +465,16 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             header.Children.Add(new TextBlock
             {
-                Text = "测活完成",
+                Text = title + "完成",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
             header.Children.Add(new TextBlock
             {
-                Text = directProbe
+                Text = isPromotion
+                    ? BackendResultInterpreter.PromotionSummary(results)
+                    : directProbe
                     ? FormatDirectProbeSummary(results, summary)
                     : "总数：" + BackendJson.GetString(summary, "total")
                         + "    正常：" + BackendJson.GetString(summary, "alive")
@@ -486,7 +491,10 @@ namespace SmsWorkbench
             var body = new StackPanel();
             if (noRtRows.Count > 0)
             {
-                AddScanResultSection(body, directProbe ? "AT 测活结果" : "未接码号结果", noRtRows);
+                AddScanResultSection(
+                    body,
+                    isPromotion ? title + "结果" : (directProbe ? "AT 测活结果" : "未接码号结果"),
+                    noRtRows);
             }
             if (rtRows.Count > 0)
             {
@@ -496,7 +504,7 @@ namespace SmsWorkbench
             {
                 body.Children.Add(new TextBlock
                 {
-                    Text = "没有可展示的测活明细。",
+                    Text = "没有可展示的" + title + "明细。",
                     Foreground = (Brush)FindResource("TextSub")
                 });
             }
@@ -583,9 +591,7 @@ namespace SmsWorkbench
                 string error;
                 if (BackendJson.TryGetMap(row, "probe", out var probe))
                 {
-                    status = BackendResultInterpreter.IsProbeDeactivated(row)
-                        ? "账号停用"
-                        : BackendResultInterpreter.ProbeStatusLabel(probe);
+                    status = BackendResultInterpreter.ResultRowStatus(row);
                     if (BackendJson.TryGetMap(row, "relogin", out var relogin)
                         && !BackendJson.GetBool(relogin, "ok"))
                     {

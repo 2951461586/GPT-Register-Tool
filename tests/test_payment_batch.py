@@ -55,7 +55,7 @@ class PaymentBatchTests(unittest.TestCase):
         progress_events = []
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(payment_batch, "ensure_payment_access_token", side_effect=AssertionError("persisted auth must not run")), \
-             patch("sms_tool.account_liveness.probe_account_liveness", return_value=auth_probe) as probe, \
+             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value=auth_probe) as probe, \
              patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
              patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "manual.json"):
             report = payment_batch.run_payment_batch(

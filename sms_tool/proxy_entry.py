@@ -324,7 +324,7 @@ def proxy_to_url(entry: ProxyEntry) -> str:
 #     both historical implementations so seconds/days sessions rotate too.
 
 _USER_REGION_RE = re.compile(r"(^|-)region-[A-Za-z]{2}(?=-|$)")
-_USER_SID_RE = re.compile(r"(?<=-sid-)[A-Za-z0-9]+(?=-t-|-|$)")
+_USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
 _KOOKEEY_PW_RE = re.compile(
     r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$"
 )

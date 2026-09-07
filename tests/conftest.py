@@ -26,6 +26,11 @@ from sms_tool.store import reset_database_init_cache
 
 
 @pytest.fixture(autouse=True)
+def _mark_test_telemetry(monkeypatch):
+    monkeypatch.setenv("SMS_TOOL_EVENT_SOURCE", "test")
+
+
+@pytest.fixture(autouse=True)
 def _restore_cwd():
     """Tests that chdir must not leak it into the next test."""
     origin = Path.cwd()
@@ -49,6 +54,22 @@ def _reset_logging_configured():
     """
     yield
     logging_setup._CONFIGURED = False
+
+
+@pytest.fixture(autouse=True)
+def _reset_registration_cancel():
+    """Reset the process-global registration cancel flag around every test.
+
+    ``sms_tool.registration_cancel._cancel_event`` is a module-level Event.
+    A test that requests cancellation and does not clear it would cancel
+    every later registration test in the same session -- the same
+    green-alone, red-in-full-run shape as the logging flag above.
+    """
+    from sms_tool import registration_cancel
+
+    registration_cancel.clear_registration_cancel()
+    yield
+    registration_cancel.clear_registration_cancel()
 
 
 @pytest.fixture(autouse=True)

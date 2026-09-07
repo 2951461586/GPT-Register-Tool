@@ -1,3 +1,29 @@
+"""Mailbox facade: provider registration, proxy resolution, OTP polling.
+
+This is the entry point the registration flow uses to obtain a mailbox account
+(``_ensure_mailbox_account``) and to read its OTP (``_poll_email_otp`` /
+``_poll_cfworker_otp``). It aggregates every backend behind one shape so the
+workflow never branches on which provider it is talking to.
+
+Layout, which is the result of two earlier splits:
+
+* providers themselves live under ``sms_tool/providers/`` and are wired in by
+  ``_register_mailbox_strategies``;
+* ``MailboxAccount`` lives in ``mailbox_types``, token/password file parsing in
+  ``mailbox_parsers``, quarantine bookkeeping in ``mailbox_quarantine``.
+
+Two traps worth knowing before editing:
+
+* ``CFG`` below is a **deprecated monkeypatch hook** deliberately left as
+  ``None``. Production composition injects runtime config through
+  ``MailboxService``; do not start reading configuration from this module.
+* Provider-specific config accessors (``_gmail_cfg``, ``_cfworker_cfg``,
+  ``_outlook_imap_*``, ...) are read through ``_config_data`` on every call
+  rather than cached at import, so a caller's patch or runtime-config scope
+  still applies. Hoisting them to module constants would silently freeze them.
+
+"""
+
 import argparse
 import json
 import os
@@ -10,7 +36,7 @@ from pathlib import Path
 from curl_cffi import requests as curl_requests
 
 from .config import ConfigInput, current_config_data, resolve_runtime_config
-from .providers import outlook_imap
+from .providers import outlook_imap_client
 from .providers import mailbox_gmail
 from .mail_otp import (
     _candidate_is_newer,
@@ -541,7 +567,7 @@ def _outlook_imap_folders():
         return [part.strip() for part in configured.split(",") if part.strip()]
     if isinstance(configured, list):
         return [str(part).strip() for part in configured if str(part).strip()]
-    return list(outlook_imap.DEFAULT_FOLDERS)
+    return list(outlook_imap_client.DEFAULT_FOLDERS)
 
 
 def _gmail_imap_enabled():
@@ -670,9 +696,9 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
         graph_error = exc
 
     imap_messages = []
-    if _outlook_imap_enabled() and outlook_imap.is_outlook_mailbox(mailbox):
+    if _outlook_imap_enabled() and outlook_imap_client.is_outlook_mailbox(mailbox):
         try:
-            imap_messages = outlook_imap.fetch_outlook_imap_messages(
+            imap_messages = outlook_imap_client.fetch_outlook_imap_messages(
                 mailbox,
                 token_fetcher=lambda scope: _ms_oauth_refresh(
                     mailbox, proxy=proxy, scope_override=scope,
@@ -884,9 +910,9 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
         graph_error = exc
 
     imap_messages = []
-    if _outlook_imap_enabled() and outlook_imap.is_outlook_mailbox(mailbox):
+    if _outlook_imap_enabled() and outlook_imap_client.is_outlook_mailbox(mailbox):
         try:
-            imap_messages = outlook_imap.fetch_outlook_imap_messages(
+            imap_messages = outlook_imap_client.fetch_outlook_imap_messages(
                 mailbox,
                 token_fetcher=lambda scope: _ms_oauth_refresh(mailbox, proxy=proxy, scope_override=scope),
                 folders=_outlook_imap_folders(),

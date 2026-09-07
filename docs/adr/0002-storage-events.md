@@ -4,5 +4,5 @@
 - Date: 2026-09-04
 
 The storage module persists account state and emits domain facts through
-`sms_tool.account_events`. Provider-specific history or cleanup is handled by
+`sms_tool.accounts.account_events`. Provider-specific history or cleanup is handled by
 the event dispatcher, so storage does not import mailbox implementations.

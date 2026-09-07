@@ -166,8 +166,13 @@ def test_hot_persistence_is_visible_in_sqlite_and_finalization_is_idempotent(tmp
     )
 
     assert callback_db_visible and callback_db_visible[0]["email"] == "quick@example.com"
+    assert report["ok"] is True
+    assert report["total"] == 2
+    assert report["success"] == 2
+    assert report["failed"] == 0
     assert report["session_saved"] == 2
     assert report["db_saved"] == 2
+    assert report["health"]["promotion_completed"] is False
     assert sorted(upsert_calls) == ["quick@example.com", "slow@example.com"]
     assert len(list(tmp_path.glob("session_*.json"))) == 2
 
@@ -213,7 +218,7 @@ def test_successful_persistence_enqueues_post_registration_health(tmp_path):
     result = _result("health@example.com")
 
     with patch(
-        "sms_tool.account_health_queue.enqueue_post_registration_checks",
+        "sms_tool.accounts.account_health_queue.enqueue_post_registration_checks",
         return_value=[{"id": "plan-job"}, {"id": "deep-job"}],
     ) as enqueue:
         marker = persist_registration_result(_args(), result, tmp_path, ctx)
@@ -221,3 +226,19 @@ def test_successful_persistence_enqueues_post_registration_health(tmp_path):
     assert marker["account_health_enqueued"] is True
     assert marker["account_health_jobs"] == ["plan-job", "deep-job"]
     enqueue.assert_called_once()
+
+
+def test_explicit_promotion_check_does_not_enqueue_duplicate_plan_job(tmp_path):
+    cfg = _runtime_cfg(tmp_path / "accounts.sqlite3")
+    cfg["account_health"] = {"post_registration_enabled": True}
+    ctx = _context(cfg, lambda _data, *, json_path: bool(json_path))
+    args = _args()
+    args.check_promotion_after_registration = True
+
+    with patch(
+        "sms_tool.accounts.account_health_queue.enqueue_post_registration_checks",
+        return_value=[{"id": "deep-job"}],
+    ) as enqueue:
+        persist_registration_result(args, _result("health@example.com"), tmp_path, ctx)
+
+    assert enqueue.call_args.kwargs["include_plan"] is False

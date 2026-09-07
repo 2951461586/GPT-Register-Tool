@@ -57,13 +57,58 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 The supported desktop build command is `SmsWorkbench/build_dotnet.ps1`. Its output is written to `dist/net10/SmsWorkbench.exe`.
 
+## Configuration ownership
+
+The active configuration lives in `proxy.json`, `runtime.json` and
+`payment.json`. If any shard exists, only existing shards are merged, in that
+order. Legacy `config.json` is used and migrated only when no shards exist.
+Do not edit a legacy file expecting it to override active shards.
+
+`config_schema.json` is a shared ownership manifest, not JSON Schema. Runtime
+validation remains in Python config/driver preflight. Local configuration files
+contain credentials and must stay ignored. See
+[configuration ownership](docs/current/configuration.md).
+
+## Tests and release checks
+
+From a configured source checkout:
+
+```powershell
+python -m sms_tool --help
+python -m pytest -q
+dotnet test GPTRegisterTool.slnx -c Release
+python scripts/precommit_guard.py --all
+python scripts/architecture_scan.py
+python scripts/config_schema_check.py
+python scripts/ipc_schema_check.py
+python scripts/docs_consistency_scan.py
+```
+
+Default tests are offline. Live signup, mailbox spending and payment actions
+require separate authorization. Use `scripts/build_installer.ps1 -Version <tag>`
+only from the intended clean release revision; never include local runtime
+data in release assets.
+
+## Logs and local inventory
+
+Backend JSON file logs and registration progress include `schema_version`,
+`source`, `command_id` and `run_id`. Desktop process logs include `command_id`.
+Explicit test rows are excluded from quality metrics; historical mixed rows do
+not establish a reliable live success rate.
+
+`python scripts/registration_inventory.py` prints provider candidate counts and
+runtime file-category totals only. It does not test credentials, create
+accounts, move or delete files. See
+[telemetry and runtime data](docs/current/telemetry-and-runtime.md).
+
 ## Documentation
 
 The Chinese README contains the complete feature, configuration, architecture, CLI, testing, and release documentation:
 
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
-- [v2026.09.06.1 release notes](./docs/release-v2026.09.06.1.md)
+- [v2026.09.08 release notes](./docs/releases/release-v2026.09.08.md)
+- [Documentation index](./docs/README.md) (Chinese; release notes and audits archived under `docs/releases/` and `docs/audits/`)
 - [Directory map](./docs/directory-map.md)
 - [Proxy guide](./PROXY_GUIDE.md)
 
@@ -78,6 +123,11 @@ The desktop **Settings -> Registration & mailbox -> Registration driver** select
 - `roxy`: create/open a RoxyBrowser profile through its local API and attach over CDP.
 - `cloak`: use the installed CloakBrowser Python SDK.
 - `camoufox`: use the installed Camoufox anti-detect browser (default browser driver).
-- `adspower`: create/open an AdsPower environment through its local API and attach over CDP.
+- `adspower`: open an existing AdsPower environment through its local API and attach over CDP.
 
 Each driver reuses the mailbox OTP, session extraction, AT HTTP 200 probe, and persistence boundary. Provider credentials and lifecycle flags are configured in their own Settings sections. Missing required fields produce sanitized configuration errors; browser drivers do not bypass CAPTCHA and return `manual_challenge_required` when a human challenge is encountered.
+
+Browser session implementation now lives in `external_sessions/` behind the
+same factory import. Camoufox cleans up only profiles it created temporarily;
+configured persistent profiles are never deleted. See
+[registration architecture](docs/current/registration-architecture.md).

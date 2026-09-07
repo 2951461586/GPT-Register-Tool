@@ -11,5 +11,5 @@ __all__ = [
     "mailbox_icloud_url",
     "mailbox_remail",
     "mailbox_smailr",
-    "outlook_imap",
+    "outlook_imap_client",
 ]

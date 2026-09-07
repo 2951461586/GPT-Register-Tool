@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .config import CFG
+from .registration_cancel import cancellable_sleep
 
 
 # Failure signatures that indicate OTP delivery was blocked, most likely
@@ -111,6 +112,7 @@ def run_pulse_batch(
     on_result: Callable[[int, dict[str, Any]], None] | None = None,
     workers: int = 4,
     pulse_config: PulseConfig | None = None,
+    cancel_event=None,
 ) -> list[dict[str, Any]]:
     """Run registrations in pulse waves with IP-ban detection.
 
@@ -128,7 +130,28 @@ def run_pulse_batch(
     remaining = list(range(count))
     wave_number = 0
 
+    def cancelled() -> bool:
+        from .registration_cancel import registration_cancel_requested
+
+        return (cancel_event is not None and cancel_event.is_set()) or registration_cancel_requested()
+
     while remaining:
+        if cancelled():
+            for idx in remaining:
+                skipped = {
+                    "success": False,
+                    "error": "registration_cancelled",
+                    "failure_class": "cancelled",
+                    "retryable": False,
+                    "dropped": False,
+                    "registration_state": "cancelled",
+                    "registration_attempts": 0,
+                }
+                results[idx] = skipped
+                if on_result:
+                    on_result(idx, skipped)
+            remaining = []
+            break
         wave_number += 1
         if max_waves > 0 and wave_number > max_waves:
             # Emit a terminal result for every skipped account instead of
@@ -182,11 +205,15 @@ def run_pulse_batch(
             )
             if remaining and pulse_config.ban_pause_seconds > 0:
                 print(f"[Pulse] Pausing {pulse_config.ban_pause_seconds}s before next wave for proxy rotation")
-                time.sleep(pulse_config.ban_pause_seconds)
+                # Wake early on cancellation; the loop head then emits terminal
+                # cancelled results for every remaining account.
+                if cancellable_sleep(pulse_config.ban_pause_seconds, requested=cancelled):
+                    continue
 
         # Inter-wave delay
         if remaining and wave_delay > 0:
-            time.sleep(wave_delay)
+            if cancellable_sleep(wave_delay, requested=cancelled):
+                continue
 
     return [r for r in results if r is not None]
 

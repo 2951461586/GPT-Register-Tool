@@ -69,10 +69,11 @@ rules:
 
 ## Verification
 
-Check the configured PayPal proxy without running a real checkout:
+Check the configured checkout/approve/update proxy exits without running a real
+checkout:
 
 ```powershell
-python -m sms_tool.gen_pp_link --dry-run
+python -m sms_tool.cli --test-payment-proxies
 ```
 
 Check a local SOCKS5 exit manually:

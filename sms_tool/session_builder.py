@@ -121,6 +121,13 @@ def build_session_file(data):
         "paypal_status": paypal_status,
         "registration_mode": data.get("registration_mode", ""),
         "registration_driver": data.get("registration_driver", ""),
+        # Both registration paths emit these on the result contract
+        # (registration_result.build_registration_result); dropping them here
+        # made every stored account default to register_method/session_type
+        # "unknown" in accounts.sqlite3.
+        "register_method": data.get("register_method", ""),
+        "session_type": data.get("session_type", ""),
+        "plan_type": data.get("plan_type", ""),
         "proxy_audit": data.get("proxy_audit") or {},
         "oauth_refresh_token": oauth_refresh_token or "",
         "refresh_token_status": refresh_token_status,

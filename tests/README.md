@@ -26,7 +26,7 @@ payment requests are never part of the default suite.
 - `test_registration_stage_concurrency.py` covers stage-to-resource mapping, bounded admission, and wait metrics.
 - `test_chatai_mailbox_graph.py` covers Chatai/Microsoft Graph mailbox proxy/scope behavior.
 - `test_mail_otp_web.py` covers the standalone `services/mail-otp-web` mailbox-line parser.
-- `test_cfworker_mailbox.py` covers the `sms_tool.providers.mailbox_cfworker` implementation and OTP extraction.
+- `test_cfworker_client.py` covers the `sms_tool.providers.mailbox_cfworker` implementation and OTP extraction.
 - `test_account_events.py` covers storage fact dispatch without provider coupling.
 - `test_config_schema_check.py` and `test_ipc_schema_check.py` guard cross-language manifests.
 - `test_docs_consistency.py` guards current release pointers and documented provider paths.

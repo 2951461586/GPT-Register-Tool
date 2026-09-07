@@ -1,4 +1,4 @@
-from sms_tool.account_cleanup import account_cleanup_reason, select_removable_accounts
+from sms_tool.accounts.account_cleanup import account_cleanup_reason, select_removable_accounts
 
 
 def test_cleanup_keeps_unknown_transport_failure():

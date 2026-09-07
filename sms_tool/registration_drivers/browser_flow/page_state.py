@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from .dom_fields import _body_text, _browser_heartbeat, _first_visible, _hard_proxy_block, _is_openai_auth_url, _otp_fields, _otp_page_state, _unexpected_identity_provider
+from . import dom_fields
 
 from ...humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
@@ -13,8 +13,15 @@ from typing import Any
 from urllib.parse import urlsplit
 
 
+def _raise_if_registration_cancelled() -> None:
+    from ...registration_cancel import registration_cancel_requested
+
+    if registration_cancel_requested():
+        raise BrowserRegistrationError("registration_cancelled")
+
+
 def _manual_challenge(page) -> bool:
-    text = _body_text(page)
+    text = dom_fields._body_text(page)
     markers = (
         "verify you are human", "captcha", "security challenge", "unusual activity",
         "checking your browser", "just a moment", "performing security verification",
@@ -39,12 +46,10 @@ def _ensure_signup_page_ready(
     if not callable(getattr(page, "locator", None)):
         return
     deadline = time.monotonic() + max(5, int(timeout_seconds or 45))
-    selector = (
-        "input[type='email'], input[name='email'], input[name='username'], "
-        "input#email-input, input[autocomplete='email']"
-    )
+    selector = dom_fields.EDITABLE_EMAIL_SELECTOR
     while time.monotonic() < deadline:
-        if _hard_proxy_block(page):
+        _raise_if_registration_cancelled()
+        if dom_fields._hard_proxy_block(page):
             raise BrowserRegistrationError("browser_proxy_blocked")
         if _manual_challenge(page):
             if not _wait_for_challenge_clear(
@@ -54,7 +59,8 @@ def _ensure_signup_page_ready(
                 raise BrowserRegistrationError("manual_challenge_required")
             continue
         try:
-            if page.locator(selector).first.is_visible():
+            field = page.locator(selector).first
+            if field.is_visible() and field.is_editable():
                 return
         except Exception:
             pass
@@ -65,10 +71,17 @@ def _ensure_signup_page_ready(
             page.wait_for_timeout(int(_settle * 1000))
         except Exception:
             time.sleep(_settle)
-    if _hard_proxy_block(page):
+    if dom_fields._hard_proxy_block(page):
         raise BrowserRegistrationError("browser_proxy_blocked")
     if _manual_challenge(page):
         raise BrowserRegistrationError("manual_challenge_required")
+    try:
+        if page.locator(", ".join(dom_fields.EMAIL_SELECTORS)).first.is_visible():
+            raise BrowserRegistrationError("browser_email_field_not_editable")
+    except BrowserRegistrationError:
+        raise
+    except Exception:
+        pass
     raise BrowserRegistrationError("browser_email_field_missing")
 
 
@@ -82,6 +95,7 @@ def _wait_for_challenge_clear(page, max_wait_seconds: int = 30, *, poll_interval
     """
     deadline = time.monotonic() + max(1, int(max_wait_seconds))
     while time.monotonic() < deadline:
+        _raise_if_registration_cancelled()
         if not _manual_challenge(page):
             return True
         try:
@@ -138,13 +152,46 @@ def _quick_auth_state(page) -> str:
         return "password"
     if state.get("profile") and any(item in path for item in ("about-you", "profile", "create-account")):
         return "profile"
-    if _is_openai_auth_url(url):
+    if dom_fields._is_openai_auth_url(url):
         host = str(urlsplit(url).hostname or "").lower()
         if (host == "chatgpt.com" or host.endswith(".chatgpt.com")) and "/auth/" not in path:
             return "authenticated"
     if state.get("email"):
         return "email"
     return "unknown"
+
+
+def _email_verification_route(page: Any) -> bool:
+    """Return whether the adopted page is still on OpenAI's verification route."""
+    try:
+        parsed = urlsplit(str(getattr(page, "url", "") or ""))
+        host = str(parsed.hostname or "").lower()
+        path = str(parsed.path or "").lower().rstrip("/")
+        return host == "auth.openai.com" and path.endswith("/email-verification")
+    except Exception:
+        return False
+
+
+def _advance_email_verification(page) -> bool:
+    """Click one explicit verification continuation control, if present.
+
+    The verification SPA occasionally keeps the OTP route mounted after a
+    successful code submission. Only well-known continuation labels are
+    eligible; social-login and generic submit controls are deliberately
+    excluded.
+    """
+    return dom_fields._click_first_visible(
+        page,
+        (
+            "button:has-text('Continue')",
+            "button:has-text('Continue to ChatGPT')",
+            "button:has-text('Verify')",
+            "button:has-text('Done')",
+            "button:has-text('继续')",
+            "button:has-text('完成')",
+        ),
+        timeout_ms=500,
+    )
 
 
 def _wait_for_registration_state(
@@ -164,9 +211,10 @@ def _wait_for_registration_state(
     """
     deadline = time.monotonic() + max(1, int(timeout_seconds or 30))
     while time.monotonic() < deadline:
+        _raise_if_registration_cancelled()
         if browser is not None:
             try:
-                page = _browser_heartbeat(browser, page)
+                page = dom_fields._browser_heartbeat(browser, page)
             except BrowserRegistrationError:
                 raise
             except Exception:
@@ -182,15 +230,20 @@ def _wait_for_registration_state(
                 parsed = urlsplit(current_url)
                 current_host = str(parsed.hostname or "").lower()
                 current_path = str(parsed.path or "").lower()
-                if _unexpected_identity_provider(current_url):
+                if dom_fields._unexpected_identity_provider(current_url):
                     return "identity_provider"
+                if _email_verification_route(page):
+                    # Keep the initial OTP state separate from the post-submit
+                    # route. This lets the caller perform one explicit
+                    # continuation/reprobe instead of collapsing into unknown.
+                    return "email_verification"
                 if (
                     (current_host == "chatgpt.com" or current_host.endswith(".chatgpt.com"))
                     and "/auth/" not in current_path
                 ):
                     return "authenticated"
                 if any(marker in current_path for marker in ("about-you", "profile", "create-account")):
-                    profile_field = _first_visible(
+                    profile_field = dom_fields._first_visible(
                         page,
                         (
                             "input[name='name']", "input[autocomplete='name']",
@@ -213,15 +266,15 @@ def _wait_for_registration_state(
         if _manual_challenge(page):
             return "challenge"
         try:
-            if _unexpected_identity_provider(str(page.url or "")):
+            if dom_fields._unexpected_identity_provider(str(page.url or "")):
                 return "identity_provider"
         except Exception:
             pass
-        if _first_visible(page, ("input[type='password']", "input[name='password']")) is not None:
+        if dom_fields._first_visible(page, ("input[type='password']", "input[name='password']")) is not None:
             return "password"
-        if _otp_fields(page) is not None and not wait_for_otp_transition:
+        if dom_fields._otp_fields(page) is not None and not wait_for_otp_transition:
             return "otp"
-        if _first_visible(
+        if dom_fields._first_visible(
             page,
             (
                 "input[name='name']", "input[autocomplete='name']",
@@ -233,7 +286,9 @@ def _wait_for_registration_state(
         ) is not None:
             return "profile"
         try:
-            if "chatgpt.com" in str(page.url or "").lower() and "/auth/" not in str(page.url or "").lower():
+            parsed = urlsplit(str(page.url or ""))
+            host = (parsed.hostname or "").lower()
+            if (host == "chatgpt.com" or host.endswith(".chatgpt.com")) and "/auth/" not in parsed.path.lower():
                 return "authenticated"
         except Exception:
             pass
@@ -257,6 +312,10 @@ def _profile_completion_required(state: str) -> bool:
         raise BrowserRegistrationError("browser_unexpected_identity_provider")
     if state == "login_password":
         raise BrowserRegistrationError("browser_existing_account")
+    if state == "email_verification":
+        raise BrowserRegistrationError("browser_email_verification_stuck")
+    if state == "email_verification_stuck":
+        raise BrowserRegistrationError("browser_email_verification_stuck")
     raise BrowserRegistrationError("browser_registration_state_unknown")
 
 
@@ -279,7 +338,7 @@ def _post_otp_registration_state(
         wait_for_otp_transition=True,
         config=config,
     )
-    if state != "otp":
+    if state not in {"otp", "email_verification"}:
         return state
 
     # A patched or legacy waiter may still report the old OTP state.  Inspect
@@ -290,8 +349,27 @@ def _post_otp_registration_state(
         if _manual_challenge(page):
             return "challenge"
         current_url = str(getattr(page, "url", "") or "")
-        if _unexpected_identity_provider(current_url):
+        if dom_fields._unexpected_identity_provider(current_url):
             return "identity_provider"
+        if _email_verification_route(page):
+            if _advance_email_verification(page):
+                # Live batches show the post-OTP SPA can sit on its
+                # email-verification route well past 20s before routing on;
+                # a 20s budget misclassified slow-but-healthy signups as
+                # stuck. Allow up to 45s (still bounded by the stage budget).
+                deadline = time.monotonic() + min(45, probe_timeout)
+                while time.monotonic() < deadline:
+                    state = _wait_for_registration_state(
+                        page,
+                        min(5, max(1, int(deadline - time.monotonic()))),
+                        browser=browser,
+                        wait_for_otp_transition=True,
+                        config=config,
+                    )
+                    if state != "email_verification":
+                        return state
+                return "email_verification_stuck"
+            return "email_verification_stuck"
         parsed = urlsplit(current_url)
         host = str(parsed.hostname or "").lower()
         path = str(parsed.path or "").lower()
@@ -306,24 +384,31 @@ def _post_otp_registration_state(
     return "unknown"
 
 
-def _wait_after_otp_submit(page, timeout_seconds: int = 30) -> str:
-    """Return accepted unless the OTP page reports an explicit validation error."""
+def _wait_after_otp_submit(
+    page, timeout_seconds: int = 30, *, require_transition: bool = False
+) -> str:
+    """Wait for OTP acceptance, optionally requiring destination evidence."""
     deadline = time.monotonic() + max(1, int(timeout_seconds or 30))
     last: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        if _otp_fields(page) is None:
+        _raise_if_registration_cancelled()
+        if dom_fields._otp_fields(page) is None:
             return "accepted"
-        last = _otp_page_state(page)
+        if require_transition:
+            state = _quick_auth_state(page)
+            if state in {"authenticated", "profile"}:
+                return "accepted"
+        last = dom_fields._otp_page_state(page)
         if any(str(item.get("aria_invalid") or "").lower() == "true" for item in last.get("inputs", [])):
             return "invalid"
         if last.get("errors"):
             return "invalid"
         page.wait_for_timeout(500)
-    if _otp_fields(page) is None:
+    if dom_fields._otp_fields(page) is None:
         return "accepted"
     if any(str(item.get("aria_invalid") or "").lower() == "true" for item in last.get("inputs", [])) or last.get("errors"):
         return "invalid"
-    return "accepted"
+    return "pending" if require_transition else "accepted"
 
 
 def _wait_for_profile_completion(
@@ -334,6 +419,7 @@ def _wait_for_profile_completion(
         return True
     deadline = time.monotonic() + max(1, int(timeout_seconds or 1))
     while time.monotonic() < deadline:
+        _raise_if_registration_cancelled()
         state = _quick_auth_state(page)
         if state in {"authenticated", "otp", "email"}:
             return True

@@ -1,7 +1,7 @@
 import json
 
-from sms_tool.account_models import AccountSessionModel
-from sms_tool.account_identity import create_registration_identity
+from sms_tool.accounts.account_models import AccountSessionModel
+from sms_tool.accounts.account_identity import create_registration_identity
 from sms_tool import storage
 
 

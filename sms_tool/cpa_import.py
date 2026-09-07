@@ -8,7 +8,7 @@ from pathlib import Path
 from curl_cffi import CurlMime
 from curl_cffi import requests as curl_requests
 
-from .account_liveness import (
+from .accounts.account_liveness import (
     CODEX_QUOTA_HEADERS,
     CODEX_USAGE_URL,
     chatgpt_id_from_token as _extract_chatgpt_account_id_from_token,

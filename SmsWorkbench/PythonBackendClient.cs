@@ -39,10 +39,12 @@ namespace SmsWorkbench
             using var timeout = new CancellationTokenSource(command.Timeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
             using var process = new Process { StartInfo = CreateStartInfo(command), EnableRaisingEvents = true };
+            string commandId = Guid.NewGuid().ToString("N");
+            process.StartInfo.Environment["SMS_TOOL_COMMAND_ID"] = commandId;
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();
 
-            _logger.Information("Starting backend command {CommandName} via {Python}", command.Name, PythonExecutable);
+            _logger.Information("Starting backend command {CommandName} via {Python}; command_id={CommandId}", command.Name, PythonExecutable, commandId);
             try
             {
                 if (!process.Start())
@@ -111,13 +113,24 @@ namespace SmsWorkbench
                     command.Name);
                 payload = null;
             }
-            _logger.Information(
-                "Backend command {CommandName} exited with code {ExitCode}; payload={HasPayload}; timedOut={TimedOut}",
+            _logger.Write(
+                ExitLogLevel(exitCode, payload.HasValue, timedOut),
+                "Backend command {CommandName} exited with code {ExitCode}; payload={HasPayload}; timedOut={TimedOut}; command_id={CommandId}",
                 command.Name,
                 exitCode,
                 payload.HasValue,
-                timedOut);
+                timedOut,
+                commandId);
             return new BackendCommandResult(exitCode, output, error, payload, timedOut);
+        }
+
+        public static Serilog.Events.LogEventLevel ExitLogLevel(int exitCode, bool hasPayload, bool timedOut)
+        {
+            if (timedOut || exitCode < 0)
+                return Serilog.Events.LogEventLevel.Error;
+            if (exitCode != 0 || !hasPayload)
+                return Serilog.Events.LogEventLevel.Warning;
+            return Serilog.Events.LogEventLevel.Information;
         }
 
         private ProcessStartInfo CreateStartInfo(BackendCommand command)

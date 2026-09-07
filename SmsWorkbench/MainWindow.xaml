@@ -1,4 +1,4 @@
-<ui:FluentWindow x:Class="SmsWorkbench.MainWindow"
+﻿<ui:FluentWindow x:Class="SmsWorkbench.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -772,10 +772,10 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="优惠状态" Width="150" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
+                <DataGridTemplateColumn Header="优惠状态" Width="230" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionStatus, Converter={StaticResource StatusSeverityConverter}}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionStatus, Converter={StaticResource StatusSeverityConverter}}" ToolTip="{Binding PromotionStatus}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding PromotionStatus}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -856,8 +856,8 @@ Loaded="TaskGrid_Loaded">
                 </Button>
                 <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogText, Mode=OneWay}" Background="{DynamicResource LogBg}" Foreground="{DynamicResource LogText}" BorderThickness="0"
                          FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                         TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         TextWrapping="Wrap"
                          VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="220" Padding="8,8,8,8"/>
               </Grid>
             </Border>

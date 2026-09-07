@@ -1,8 +1,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import account_liveness
-from sms_tool.account_identity import create_registration_identity
+from sms_tool.accounts import account_liveness
+from sms_tool.accounts.account_identity import create_registration_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]

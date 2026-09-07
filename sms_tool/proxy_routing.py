@@ -126,7 +126,7 @@ def select_operation_proxy(
     # saved AT from a different egress can trigger upstream revocation.
     if _use_registration_affinity(config) and isinstance(account, Mapping) and account.get("identity_context"):
         try:
-            from .account_identity import resolve_account_proxy
+            from .accounts.account_identity import resolve_account_proxy
 
             saved = resolve_account_proxy(account, config=config)
             if saved:
@@ -168,7 +168,7 @@ def select_operation_proxy(
         # behavior only when no dedicated health lane is configured; once a
         # health pool exists it always wins and prevents stale signup exits.
         try:
-            from .account_identity import resolve_account_proxy
+            from .accounts.account_identity import resolve_account_proxy
 
             saved = resolve_account_proxy(account, fallback_proxy=explicit, config=config)
             if saved:

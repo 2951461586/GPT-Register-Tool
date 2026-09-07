@@ -1,72 +1,22 @@
-r"""Playwright 浏览器注册流程实现。
+r"""ChatGPT 注册浏览器流程实现（Playwright / 反检测浏览器共用编排）。
 
-历史上全部实现都在 ``registration_drivers/playwright.py``（2035 行单文件）。
-本包按职责分层拆开，原模块退化为 re-export 薄壳，保证外部 import 与测试
-monkeypatch 面不变。分层（由低到高）：
+历史上全部实现都在 ``registration_drivers/playwright.py``（2035 行单文件），
+2026-09-05 按职责分层拆开，由低到高：
 
-    dom_fields -> page_state -> form_steps -> flow_steps -> orchestrator
-                             \-> session
+    dom_fields  ->  page_state  ->  form_steps  ->  flow_steps  ->  orchestrator
+                                                  \-> session
+
+本包 ``__init__`` 只 re-export 三个公共入口符号。
+
+设计取舍（2026-09-06 起生效）：这里刻意**不**再 re-export 内部 ``_*`` 辅助函数。
+原因是本仓历史上所有 ``patch("...browser_flow._xxx")`` 都依赖"调用点与被调函数
+同在一个模块全局"这一巧合；包级 re-export 制造了同一函数的多个命名空间副本，
+patch 必须打遍所有副本才生效（曾经需要 tests/browser_flow_patch.py 整套多副本
+打补丁机制来补救）。现在各层调用点一律走**定义模块的命名空间**
+（``form_steps._fill_email(...)``），patch 只需、也只能打在源模块上——打错位置
+会响亮地 AttributeError，而不是静默放过。
 """
 
-from .dom_fields import (
-    _body_text,
-    _browser_heartbeat,
-    _click_continue,
-    _click_first_visible,
-    _click_passwordless_otp,
-    _click_resend,
-    _config_value,
-    _first_visible,
-    _hard_proxy_block,
-    _is_openai_auth_url,
-    _otp_fields,
-    _otp_page_state,
-    _page_is_alive,
-    _prepare_session_page,
-    _safe_text,
-    _session_context_closed,
-    _session_error_marker,
-    _terminal_session_error,
-    _unexpected_identity_provider,
-)
-from .page_state import (
-    _ensure_signup_page_ready,
-    _manual_challenge,
-    _post_otp_registration_state,
-    _profile_completion_required,
-    _quick_auth_state,
-    _wait_after_otp_submit,
-    _wait_for_challenge_clear,
-    _wait_for_profile_completion,
-    _wait_for_registration_state,
-)
-from .form_steps import (
-    _complete_profile,
-    _fill_email,
-    _fill_otp,
-    _fill_password_if_present,
-    _maybe_accept_cookies,
-    _maybe_dismiss_chatgpt_onboarding,
-    _safe_submit_email_form,
-    _submit_email_via_nextauth,
-)
-from .session import (
-    _bind_totp_in_browser,
-    _browser_access_token_probe,
-    _browser_diagnostics,
-    _browser_failure_class,
-    _post_registration_dwell,
-    _safe_proxy_audit,
-    _session_payload,
-)
-from .flow_steps import (
-    _BROWSER_POOL,
-    _BROWSER_POOL_KEY,
-    _BROWSER_POOL_LOCK,
-    _browser_session_scope,
-    _poll_browser_otp,
-    _restart_email_otp_flow,
-)
 from .orchestrator import (
     build_browser_session_file,
     run_browser_registration,
@@ -74,56 +24,7 @@ from .orchestrator import (
 )
 
 __all__ = [
-    "_BROWSER_POOL",
-    "_BROWSER_POOL_KEY",
-    "_BROWSER_POOL_LOCK",
-    "_bind_totp_in_browser",
-    "_body_text",
-    "_browser_access_token_probe",
-    "_browser_diagnostics",
-    "_browser_failure_class",
-    "_browser_heartbeat",
-    "_browser_session_scope",
-    "_click_continue",
-    "_click_first_visible",
-    "_click_passwordless_otp",
-    "_click_resend",
-    "_complete_profile",
-    "_config_value",
-    "_ensure_signup_page_ready",
-    "_fill_email",
-    "_fill_otp",
-    "_fill_password_if_present",
-    "_first_visible",
-    "_hard_proxy_block",
-    "_is_openai_auth_url",
-    "_manual_challenge",
-    "_maybe_accept_cookies",
-    "_maybe_dismiss_chatgpt_onboarding",
-    "_otp_fields",
-    "_otp_page_state",
-    "_page_is_alive",
-    "_poll_browser_otp",
-    "_post_otp_registration_state",
-    "_post_registration_dwell",
-    "_prepare_session_page",
-    "_profile_completion_required",
-    "_quick_auth_state",
-    "_restart_email_otp_flow",
-    "_safe_proxy_audit",
-    "_safe_submit_email_form",
-    "_safe_text",
-    "_session_context_closed",
-    "_session_error_marker",
-    "_session_payload",
-    "_submit_email_via_nextauth",
-    "_terminal_session_error",
-    "_unexpected_identity_provider",
-    "_wait_after_otp_submit",
-    "_wait_for_challenge_clear",
-    "_wait_for_profile_completion",
-    "_wait_for_registration_state",
-    "build_browser_session_file",
     "run_browser_registration",
     "run_playwright_registration",
+    "build_browser_session_file",
 ]

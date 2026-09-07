@@ -2,6 +2,7 @@ import json
 
 from sms_tool import desktop_ipc
 from sms_tool.registration_progress import RegistrationProgress
+from sms_tool.sanitizer import account_reference
 
 
 def test_emit_event_is_opt_in_and_sanitized(monkeypatch, capsys):
@@ -28,7 +29,7 @@ def test_registration_progress_emits_realtime_stage(monkeypatch, capsys):
     lines = capsys.readouterr().out.strip().splitlines()
     payload = json.loads(lines[-1][len(desktop_ipc.EVENT_PREFIX):])["payload"]
     assert payload["domain"] == "registration"
-    assert payload["account_ref"] == "user@example.com"
+    assert payload["account_ref"] == account_reference("user@example.com")
     assert payload["stage"] == "email_otp_wait"
 
 

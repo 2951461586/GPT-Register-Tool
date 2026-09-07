@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import time
 
-from ..account_models import AccountSessionModel
+from ..accounts.account_models import AccountSessionModel
 from ..config import ConfigInput
 
 from .connection import _connect, init_database
@@ -139,7 +139,7 @@ def upsert_account(
     finally:
         conn.close()
     if status == "account_deactivated":
-        from ..account_events import notify_account_deactivated
+        from ..accounts.account_events import notify_account_deactivated
 
         notify_account_deactivated(row)
     return True

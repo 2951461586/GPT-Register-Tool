@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from .paths import runtime_file
+from .registration_policy import RETRYABLE_CLASSES, registration_retry_decision
+from .sanitizer import sanitize_text
 
 
 _LOCK = threading.Lock()
@@ -22,7 +24,7 @@ class RegistrationRetryGuard:
     need a durable cooldown across WPF/CLI invocations.
     """
 
-    RETRYABLE_CLASSES = frozenset({"network", "auth_state"})
+    RETRYABLE_CLASSES = RETRYABLE_CLASSES
 
     def __init__(
         self,
@@ -76,14 +78,14 @@ class RegistrationRetryGuard:
             data = self._read()
             if success:
                 data.pop(key, None)
-            elif str(failure_class or "").strip().lower() in self.RETRYABLE_CLASSES:
+            elif registration_retry_decision(error, failure_class=str(failure_class or "").strip().lower()).retryable:
                 previous = data.get(key) if isinstance(data.get(key), Mapping) else {}
                 same_class = str(previous.get("failure_class") or "") == str(failure_class or "")
                 consecutive = int(previous.get("consecutive") or 0) + 1 if same_class else 1
                 data[key] = {
                     "consecutive": consecutive,
                     "failure_class": str(failure_class or "")[:40],
-                    "last_error": str(error or "")[:160],
+                    "last_error": sanitize_text(error)[:160],
                     "last_attempt_at": int(time.time()),
                     "cooldown_until": int(time.time() + self.cooldown_seconds)
                     if consecutive >= self.threshold else 0,

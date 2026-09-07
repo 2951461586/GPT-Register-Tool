@@ -13,6 +13,8 @@ import time
 
 import requests as _requests
 
+from .desktop_ipc import progress_dots_enabled
+
 # ─── SMS code extraction ──────────────────────────────────────────────────────
 
 
@@ -67,6 +69,9 @@ def _poll_sms_code(
     deadline = time.time() + timeout
     baseline_raw = baseline.get("raw", "")
     attempt = 0
+    # Unnewlined dots glue themselves to the head of the next line another
+    # thread flushes, which breaks the host's line-anchored envelope parsing.
+    dots = progress_dots_enabled()
 
     print(f"[*] Polling SMS (timeout={timeout}s, interval={poll_interval}s)...")
 
@@ -95,7 +100,8 @@ def _poll_sms_code(
             print(f"[sms poll error: {e}]")
 
         remaining = int(deadline - time.time())
-        print(f". [{attempt}/{timeout//poll_interval}]", end="", flush=True)
+        if dots:
+            print(f". [{attempt}/{timeout//poll_interval}]", end="", flush=True)
         time.sleep(poll_interval)
 
     print(f"\n[!] SMS poll timeout after {timeout}s")

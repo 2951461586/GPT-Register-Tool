@@ -62,6 +62,48 @@ def test_cli_main_uses_registration_proxy_for_direct_registration():
     assert captured == ["http://registration.example:8080"]
 
 
+def test_cli_registration_emits_standard_desktop_result():
+    report = {
+        "ok": True,
+        "total": 1,
+        "success": 1,
+        "failed": 0,
+        "batch_id": "batch",
+    }
+    config = {"proxy": {}, "storage": {}, "email_registration": {}}
+    with patch.object(cli, "CFG", config), \
+         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only", "--desktop-ipc"]), \
+         patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]), \
+         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
+         patch.object(cli, "_registration_phone_pool", return_value=None), \
+         patch.object(cli, "run_batch", return_value=[{"success": True, "email": "account@example.com"}]), \
+         patch.object(cli, "_save_registration_results", return_value=report), \
+         patch.object(cli, "emit_result") as emit:
+        cli.main()
+
+    emit.assert_called_once_with(report, enabled=True)
+
+
+def test_cli_registration_preflight_failure_emits_standard_desktop_result():
+    config = {"proxy": {}, "storage": {}, "email_registration": {}}
+    with patch.object(cli, "CFG", config), \
+         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--desktop-ipc"]), \
+         patch.object(cli, "_preflight_registration_before_mailbox", side_effect=RuntimeError("route_failed")), \
+         patch.object(cli, "emit_result") as emit:
+        try:
+            cli.main()
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("preflight failure did not exit")
+
+    payload = emit.call_args.args[0]
+    assert payload["ok"] is False
+    assert payload["success"] == 0
+    assert payload["failed"] == 1
+    assert payload["error"] == "route_failed"
+
+
 def test_cli_preflights_before_claiming_mailbox_and_promotes_healthy_proxy():
     args = SimpleNamespace(
         proxy="http://first.example:8080",

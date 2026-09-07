@@ -8,20 +8,39 @@
   policy creates a fresh context.
 - Unknown post-OTP state gets one extended state probe; profile completion gets
   one bounded follow-up probe.
+- The OpenAI `/email-verification` route is classified separately. The runner
+  may click one explicit continuation control, reload once, and then ends with
+  `browser_email_verification_stuck` instead of hiding the cause as
+  `browser_registration_state_unknown`.
+- OTP acceptance in the browser runner requires destination evidence. A still
+  mounted OTP form without a route transition is recorded as `pending` and is
+  resolved by the post-OTP state probe.
 - A token with an unknown AT probe status is persisted as `at_probe_pending`.
   It is not treated as a dead account and is not sent through the post-
   registration health queue until the probe succeeds.
 
 ## Concurrency
 
-Browser registration defaults to at most two workers. Operators can raise the
-limit with `registration.browser_worker_limit` after measuring queue wait and
-proxy health. Stage gates remain authoritative for shared auth/network work.
+Browser registration follows the requested worker count (the desktop UI allows
+1-8). `registration.browser_worker_limit` is an optional extra cap: unset or 0
+means no extra limit, a positive value still wins. When the browser process
+pool is enabled, keep `registration.browser_process_pool.max_concurrent` at or
+above the worker count or it becomes the effective cap. Stage gates remain
+authoritative for shared auth/network work.
+
+The auth-stage admission lease is acquired before allocating a browser process
+or context. A run waiting for serialized auth work therefore does not consume a
+browser slot. The same stage-group lease is reused as the run enters the first
+auth stage.
 
 Repeated retryable failures are tracked in
 `runtime/registration_retry_guard.json`. The same mailbox is cooled down after
 two consecutive `network` or `auth_state` failures so a later batch cannot
 spin on the same broken browser state.
+
+Registration batches also expose cooperative cancellation through
+`request_registration_cancel()`. Remaining accounts receive a `cancelled`
+terminal result, and browser polling loops stop at their next bounded check.
 
 ## Observability
 
@@ -30,10 +49,19 @@ failures. Desktop IPC emits `batch_progress` events with completed/total counts
 and sanitized failure classes. Proxy preflight and registration outcomes update
 `runtime/registration_proxy_health.json` using host/port keys only.
 
+Browser failure landmarks include the URL host/path and verification-input
+count, which distinguishes a stalled verification route from a proxy or
+browser-process failure without recording page content or secrets.
+
 Each progress row also carries `batch_id`, attempt number, driver, proxy slot,
 failure class, retryability, and registration state. Browser results include
 driver capability metadata so orchestration can distinguish Camoufox's
 full-process recycle from Playwright context reuse.
+
+When synchronous promotion checking is requested, the registration command
+does not enqueue a duplicate promotion-plan job. Account-health queue jobs use
+renewable leases and heartbeats; expired or interrupted `running` jobs are
+recovered for a later worker instead of remaining stuck indefinitely.
 
 ## Account Health
 

@@ -15,7 +15,7 @@ from email.utils import formataddr
 
 from curl_cffi import requests as curl_requests
 
-from .outlook_imap import discover_imap_folders, imap_message_to_graph_shape
+from .outlook_imap_client import discover_imap_folders, imap_message_to_graph_shape
 
 
 GMAIL_DOMAINS = {"gmail.com", "googlemail.com"}

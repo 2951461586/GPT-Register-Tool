@@ -4,7 +4,7 @@ import subprocess
 import sys
 from unittest.mock import patch
 
-from sms_tool.account_liveness import CODEX_USAGE_URL
+from sms_tool.accounts.account_liveness import CODEX_USAGE_URL
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "probe_account_liveness.py"

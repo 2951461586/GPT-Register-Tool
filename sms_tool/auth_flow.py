@@ -1,8 +1,9 @@
 import json
+import logging
 import time
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
-from .account_creation import _validate_email_otp
+from .accounts.account_creation import _validate_email_otp
 from .auth_headers import auth_impersonate, openai_auth_headers
 from .config import current_config_data
 from .http_client import request_with_retry
@@ -10,6 +11,8 @@ from .http_utils import _absolute_url, _follow_continue_url, _json_or_raw
 from .mailbox import _poll_email_otp
 from .phone_proxy import redact_proxy_url
 
+
+logger = logging.getLogger(__name__)
 
 _PASSKEY_CLIENT_CAPABILITIES = "11111"
 _CC_CAPS = "login_methods"
@@ -155,10 +158,28 @@ def _protocol_diagnostic(*, response=None, final_url="", session=None, sentinel_
 
 
 def _print_protocol_diagnostic(stage, diagnostic):
+    """Surface the cookie/URL/protocol snapshot for one auth stage.
+
+    The snapshot is a diagnosis aid, not operator signal: on a healthy stage it
+    is a wall of cookie-presence booleans, and because it is emitted as
+    ``Protocol diagnostic[...]: {json}`` -- line head is not ``{`` -- the host's
+    JSON folder never folds it, so every stage of every account lands in the
+    panel as ~330 characters. Keep healthy stages on the debug log; print only
+    when the stage did not behave, which is when someone actually needs to read
+    it.
+    """
     safe = dict(diagnostic or {})
     url = urlparse(str(safe.get("final_url") or ""))
     safe["final_url"] = f"{url.scheme}://{url.netloc}{url.path}" if url.scheme and url.netloc else str(url.path or "")
-    print(f"  Protocol diagnostic[{stage}]: {json.dumps(safe, ensure_ascii=False, sort_keys=True)}")
+    line = f"  Protocol diagnostic[{stage}]: {json.dumps(safe, ensure_ascii=False, sort_keys=True)}"
+    status = safe.get("http_status")
+    status = status if isinstance(status, int) and not isinstance(status, bool) else 0
+    # 2xx is success, 3xx is the ordinary OAuth redirect hop. Anything else --
+    # including a missing status, meaning no usable response -- is worth a line.
+    if 200 <= status < 400:
+        logger.debug(line.strip())
+        return
+    print(line)
 
 
 def _authorize_continue_sentinel(

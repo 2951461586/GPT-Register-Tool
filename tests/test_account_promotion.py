@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import cli
-from sms_tool import account_promotion
-from sms_tool.account_promotion import parse_accounts_check, promotion_status_label
-from sms_tool.account_identity import create_registration_identity
+from sms_tool.accounts import account_promotion
+from sms_tool.accounts.account_promotion import parse_accounts_check, promotion_status_label
+from sms_tool.accounts.account_identity import create_registration_identity
 from sms_tool.desktop_read import read_account
 from sms_tool.storage import get_account_record, mark_promotion_status, mark_quota_status, upsert_account
 
@@ -163,18 +163,144 @@ def test_parse_missing_accounts():
     assert parse_accounts_check({})["ok"] is False
 
 
+def _trial_probe(**overrides):
+    probe = {
+        "ok": True,
+        "current_plan_type": "free",
+        "has_active_subscription": False,
+        "plus_trial_eligible": True,
+        "plus_trial_discount_percentage": 100,
+        "plus_trial_duration_num_periods": 1,
+        "plus_trial_duration_period": "month",
+        "promotion_status": "可试用Plus·-100%·×1month",
+    }
+    probe.update(overrides)
+    return probe
+
+
+def test_trial_label_appends_payment_methods_when_present():
+    label = promotion_status_label(_trial_probe(payment_methods_label="银行卡/MoMo/UPI"))
+    assert label == "可试用Plus·-100%·×1month｜可支付:银行卡/MoMo/UPI"
+
+
+def test_trial_label_unchanged_without_payment_methods():
+    assert promotion_status_label(_trial_probe()) == "可试用Plus·-100%·×1month"
+    # Non-trial results never carry the suffix even if a stale label lingers.
+    paid = {"ok": True, "current_plan_type": "plus", "has_active_subscription": True,
+            "payment_methods_label": "银行卡"}
+    assert "可支付" not in promotion_status_label(paid)
+
+
+def test_payment_method_display_names():
+    assert account_promotion.payment_method_display("card") == "银行卡"
+    assert account_promotion.payment_method_display("momo") == "MoMo"
+    assert account_promotion.payment_method_display("upi") == "UPI"
+    assert account_promotion.payment_method_display("gcash") == "GCash"
+    assert account_promotion.payment_method_display("kakao") == "Kakao Pay"
+    assert account_promotion.payment_method_display("some_future_wallet") == "some_future_wallet"
+    assert account_promotion.payment_method_display("") == ""
+
+
+def test_refresh_probes_payment_methods_for_trial_accounts(monkeypatch):
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
+        "email": email,
+        "access_token": "at",
+        "registration_country": "VN",
+        "raw_json": json.dumps({"access_token": "at", "registration_country": "VN"}),
+    })
+    persisted = {}
+    monkeypatch.setattr(
+        "sms_tool.storage.mark_promotion_status",
+        lambda email, label, **kwargs: persisted.update(email=email, label=label, probe=kwargs.get("promotion_result")) or True,
+    )
+    monkeypatch.setattr(
+        account_promotion, "check_account_promotion",
+        lambda account, **kwargs: _trial_probe(),
+    )
+    capability_calls = []
+
+    def fake_capability_probe(token, method, **kwargs):
+        capability_calls.append({"method": method, **kwargs})
+        return {
+            "ok": True,
+            "ordered_payment_method_types": ["card", "momo"],
+            "payment_method_types": ["card", "momo", "upi"],
+            "custom_payment_methods": [],
+            "checkout_country": "VN",
+            "currency": "VND",
+        }
+
+    monkeypatch.setattr(
+        "sms_tool.payment_capability.payment_method_capability_probe", fake_capability_probe
+    )
+
+    result = account_promotion.refresh_promotion_statuses(["trial@example.com"], workers=1)
+
+    assert result["success"] == 1
+    assert len(capability_calls) == 1
+    assert capability_calls[0]["method"] == "direct_card"
+    assert capability_calls[0]["billing_country"] == "VN"
+    assert capability_calls[0]["currency"] == "VND"
+    assert persisted["label"] == "可试用Plus·-100%·×1month｜可支付:银行卡/MoMo/UPI"
+    assert persisted["probe"]["payment_methods"] == ["card", "momo", "upi"]
+
+
+def test_refresh_skips_payment_probe_for_non_trial_accounts(monkeypatch):
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        account_promotion, "check_account_promotion",
+        lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠", "plus_trial_eligible": False},
+    )
+    called = []
+    monkeypatch.setattr(
+        "sms_tool.payment_capability.payment_method_capability_probe",
+        lambda *args, **kwargs: called.append(1) or {},
+    )
+
+    result = account_promotion.refresh_promotion_statuses(["free@example.com"], workers=1)
+
+    assert result["success"] == 1
+    assert result["trial_eligible"] == 0
+    assert called == []
+
+
+def test_payment_probe_failure_keeps_the_trial_label(monkeypatch):
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    persisted = {}
+    monkeypatch.setattr(
+        "sms_tool.storage.mark_promotion_status",
+        lambda email, label, **kwargs: persisted.update(label=label) or True,
+    )
+    monkeypatch.setattr(
+        account_promotion, "check_account_promotion",
+        lambda account, **kwargs: _trial_probe(),
+    )
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("checkout_transport_failed")
+
+    monkeypatch.setattr("sms_tool.payment_capability.payment_method_capability_probe", boom)
+
+    result = account_promotion.refresh_promotion_statuses(["trial@example.com"], workers=1)
+
+    assert result["success"] == 1
+    assert persisted["label"] == "可试用Plus·-100%·×1month"
+
+
 def test_post_registration_promotion_stage_deduplicates_and_counts_trials():
     result = {
         "ok": True,
         "total": 2,
         "success": 2,
         "failed": 0,
+        "trial_eligible": 1,
         "results": [
             {"email": "one@example.com", "promotion_status": "可试用Plus", "probe": {"plus_trial_eligible": True}},
             {"email": "two@example.com", "promotion_status": "Free·无优惠", "probe": {"plus_trial_eligible": False}},
         ],
     }
-    with patch("sms_tool.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
+    with patch("sms_tool.accounts.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
         report = cli._check_registered_promotions(
             ["ONE@example.com", "one@example.com", "two@example.com"],
             workers=3,
@@ -186,6 +312,35 @@ def test_post_registration_promotion_stage_deduplicates_and_counts_trials():
     assert refresh.call_args.kwargs["emails"] == ["one@example.com", "two@example.com"]
     assert refresh.call_args.kwargs["workers"] == 3
     assert refresh.call_args.kwargs["timeout"] == 17
+
+
+def test_post_registration_promotion_stage_forwards_proxy_pool():
+    result = {"ok": True, "total": 0, "success": 0, "failed": 0, "trial_eligible": 0, "results": []}
+    with patch("sms_tool.accounts.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
+        cli._check_registered_promotions(
+            ["one@example.com"],
+            proxy=None,
+            proxy_pool=["http://pool-a:8080", "http://pool-b:8080"],
+        )
+
+    assert refresh.call_args.kwargs["proxy_pool"] == ["http://pool-a:8080", "http://pool-b:8080"]
+
+
+def test_refresh_reports_trial_eligible_for_trial_accounts(monkeypatch):
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        account_promotion, "check_account_promotion",
+        lambda account, **kwargs: _trial_probe(),
+    )
+    monkeypatch.setattr(
+        "sms_tool.payment_capability.payment_method_capability_probe",
+        lambda *args, **kwargs: {},
+    )
+
+    result = account_promotion.refresh_promotion_statuses(["trial@example.com"], workers=1)
+
+    assert result["trial_eligible"] == 1
 
 
 def test_registration_save_invokes_optional_promotion_stage(tmp_path):

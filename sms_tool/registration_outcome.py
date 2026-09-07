@@ -12,9 +12,10 @@
 import time
 from collections.abc import Mapping
 
-from .account_liveness import probe_account_liveness
+from .accounts.account_liveness import probe_account_liveness
 from .config import CFG
 from .error_classification import classify_error
+from .registration_policy import registration_retry_decision
 from .registration_progress import registration_stage
 from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from .utils import _timing_summary
@@ -180,7 +181,12 @@ def _browser_mailbox_snapshot(mailbox):
 
 
 def _failure_result(error, email="", mailbox=None, password=""):
-    result = {"success": False, "error": _sanitize_text(error), "failure_class": classify_error(_sanitize_text(error)), "timing": _timing_summary()}
+    decision = registration_retry_decision(error)
+    result = {
+        "success": False, "error": _sanitize_text(error),
+        "failure_class": decision.failure_class, "retryable": decision.retryable,
+        "error_advice": decision.advice, "timing": _timing_summary(),
+    }
     if email:
         result["email"] = email
     if password:

@@ -3,10 +3,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config, runtime_config_scope
 from .mailbox_strategies import DEFAULT_MAILBOX_PROVIDERS, MailboxProviderRegistry
+from .mailbox_errors import MailboxEndpointUnavailableError
+from .mailbox_quarantine import (
+    raise_if_mailbox_quarantined, record_mailbox_auth_invalid,
+    record_mailbox_endpoint_unavailable,
+)
+
+
+@contextmanager
+def _mailbox_access(mailbox: Any):
+    raise_if_mailbox_quarantined(mailbox)
+    try:
+        yield
+    except MailboxEndpointUnavailableError:
+        record_mailbox_endpoint_unavailable(mailbox)
+        raise
+    except Exception as exc:
+        if getattr(exc, "code", "") == "mailbox_auth_invalid":
+            record_mailbox_auth_invalid(mailbox)
+        raise
 
 
 @dataclass(frozen=True)
@@ -32,7 +52,7 @@ class MailboxService:
     ) -> list[Any]:
         from .mailbox import _email_cfg, _resolve_mailbox_proxy
 
-        with runtime_config_scope(self.config, workflow="mailbox"):
+        with runtime_config_scope(self.config, workflow="mailbox"), _mailbox_access(mailbox):
             config = _email_cfg(self.config)
             resolved_proxy = _resolve_mailbox_proxy(proxy, self.config)
             adapter = self.providers.resolve_fetcher(mailbox, config)
@@ -65,7 +85,7 @@ class MailboxService:
             _resolve_mailbox_proxy,
         )
 
-        with runtime_config_scope(self.config, workflow="mailbox"):
+        with runtime_config_scope(self.config, workflow="mailbox"), _mailbox_access(mailbox):
             config = _email_cfg(self.config)
             issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, self.config)
             proxy_candidates = _mailbox_proxy_candidates(proxy, self.config)

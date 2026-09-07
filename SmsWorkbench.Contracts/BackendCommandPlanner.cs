@@ -40,6 +40,7 @@ namespace SmsWorkbench
         {
             var args = new List<string>
             {
+                "--desktop-ipc",
                 "--count", Count(count),
                 "--workers", Count(workers),
             };
@@ -67,6 +68,7 @@ namespace SmsWorkbench
             RequireArgument(mailboxFile, nameof(mailboxFile));
             var args = new List<string>
             {
+                "--desktop-ipc",
                 mailboxArgument, mailboxFile,
                 "--count", Count(count),
                 "--workers", Count(workers),
@@ -101,7 +103,7 @@ namespace SmsWorkbench
             bool disable2fa = false,
             bool checkPromotion = false)
         {
-            var args = new List<string> { "--phone-register", "--count", Count(count) };
+            var args = new List<string> { "--desktop-ipc", "--phone-register", "--count", Count(count) };
             AppendNo2fa(args, disable2fa);
             AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
@@ -118,6 +120,7 @@ namespace SmsWorkbench
         {
             var args = new List<string>
             {
+                "--desktop-ipc",
                 "--buy-cfworker-mailbox",
                 "--cfworker-domain", RequireArgument(domain, nameof(domain)),
                 "--count", Count(count),
@@ -139,6 +142,7 @@ namespace SmsWorkbench
         {
             var args = new List<string>
             {
+                "--desktop-ipc",
                 "--target-at200", Count(count),
                 "--buy-remail-mailbox",
                 "--remail-service-mode", "purchase",
@@ -161,6 +165,7 @@ namespace SmsWorkbench
         {
             var args = new List<string>
             {
+                "--desktop-ipc",
                 "--buy-smailr-mailbox",
                 "--smailr-domain", RequireArgument(domain, nameof(domain)),
                 "--count", Count(count),
@@ -239,11 +244,18 @@ namespace SmsWorkbench
             }
             // Keep liveness bounded; optional recovery is a separate, explicitly
             // enabled phase and must not consume the entire desktop timeout.
-            // Keep legacy values present for older desktop contract tests; the
-            // final occurrence wins in argparse and is the effective budget.
+            //
+            // Recovery widens the batch ceiling. The OTP poll window alone is
+            // 180s (email.otp_timeout), and the flat 840s batch budget truncated
+            // recovery long before a queued account could use it -- every
+            // recovery died as `*_otp_poll_timeout`. The per-account figure
+            // stays at 120s on purpose: it bounds the *probe* phase only, and a
+            // slow probe must still disqualify an account from recovery.
+            // Emit each flag exactly once; argparse keeps the last occurrence,
+            // so duplicate pairs only obscured which budget was effective.
+            string batchTimeout = Count(autoRelogin ? 1680 : 840);
             args.AddRange(new[] {
-                "--quota-batch-timeout", "900", "--quota-account-timeout", "360",
-                "--quota-batch-timeout", "840", "--quota-account-timeout", "120"
+                "--quota-batch-timeout", batchTimeout, "--quota-account-timeout", "120"
             });
             var tempFiles = new List<string>();
             if (targets.Count > 1)
@@ -263,8 +275,10 @@ namespace SmsWorkbench
                 args,
                 TemporaryFiles: tempFiles,
                 // Leave drain time for the final IPC envelope and partial
-                // snapshot after the Python batch deadline.
-                TimeoutMilliseconds: 15 * 60 * 1000);
+                // snapshot after the Python batch deadline. Recovery runs a
+                // wider batch deadline (1680s) and needs the host to outlive
+                // it; a probe-only scan keeps the original 15 minutes.
+                TimeoutMilliseconds: (autoRelogin ? 30 : 15) * 60 * 1000);
         }
 
         public static BackendCommandPlan CreateChangeEmail(

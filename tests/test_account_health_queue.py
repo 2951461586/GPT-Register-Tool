@@ -6,8 +6,10 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import account_health_queue, storage
-from sms_tool.account_health import (
+from sms_tool import storage
+
+from sms_tool.accounts import account_health_queue
+from sms_tool.accounts.account_health import (
     HealthState,
     liveness_health_result,
     plan_health_result,
@@ -221,6 +223,58 @@ def test_recover_account_health_queue_expires_old_pending_jobs():
     assert saved[0]["last_error"] == "queue_item_expired"
 
 
+def test_expired_running_lease_is_recovered_even_when_pid_is_alive():
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        account_health_queue,
+        "queue_path",
+        return_value=Path(tmp) / "queue.json",
+    ):
+        account_health_queue._write_unlocked(
+            [{
+                "id": "expired-lease",
+                "email": "owner@example.com",
+                "kind": "plan",
+                "status": "running",
+                "worker_pid": os.getpid(),
+                "lease_id": "old",
+                "lease_expires_at": int(time.time()) - 1,
+                "updated_at": int(time.time()),
+            }]
+        )
+        summary = account_health_queue.recover_account_health_queue()
+        saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
+
+    assert summary["recovered"] == 1
+    assert saved[0]["status"] == "pending"
+    assert "lease_id" not in saved[0]
+
+
+def test_worker_claim_installs_and_clears_lease():
+    observed = {}
+
+    def handler(job):
+        path = account_health_queue.queue_path()
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        observed.update(saved[0])
+        return {"ok": True, "email": job["email"], "check": job["kind"], "state": "healthy"}
+
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        account_health_queue,
+        "queue_path",
+        return_value=Path(tmp) / "queue.json",
+    ):
+        account_health_queue.enqueue_account_health(
+            "lease@example.com", "plan", auto_start=False
+        )
+        account_health_queue.process_account_health_jobs(handler=handler)
+        saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
+
+    assert observed["lease_id"]
+    assert observed["lease_expires_at"] > observed["updated_at"]
+    assert saved[0]["status"] == "completed"
+    assert "lease_id" not in saved[0]
+
+
 def test_storage_persists_unified_health_result_without_token():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "accounts.sqlite3"
@@ -259,12 +313,12 @@ def test_deep_liveness_runs_light_probe_recovery_and_final_probe():
         patch("sms_tool.storage.get_account_record", side_effect=records),
         patch("sms_tool.storage.mark_quota_status", return_value=True),
         patch("sms_tool.storage.mark_account_health_result", return_value=True) as persist,
-        patch("sms_tool.account_recovery.is_permanently_deactivated", return_value=False),
+        patch("sms_tool.accounts.account_recovery.is_permanently_deactivated", return_value=False),
         patch(
-            "sms_tool.account_recovery.relogin_codex_account",
+            "sms_tool.accounts.account_recovery.relogin_codex_account",
             return_value={"ok": True, "mode": "chatgpt_email_otp"},
         ) as recover,
-        patch("sms_tool.account_liveness.probe_account_liveness", side_effect=probes) as probe,
+        patch("sms_tool.accounts.account_liveness.probe_account_liveness", side_effect=probes) as probe,
     ):
         result = account_health_queue._handle_job(
             {

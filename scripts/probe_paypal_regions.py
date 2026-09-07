@@ -32,7 +32,7 @@ import sys
 import uuid
 from typing import Any
 
-from sms_tool.account_seed import extract_access_token, load_account_seed
+from sms_tool.accounts.account_seed import extract_access_token, load_account_seed
 from sms_tool.gen_pp_link import (
     CHATGPT_TIMEOUT,
     CURRENCY_MAP,

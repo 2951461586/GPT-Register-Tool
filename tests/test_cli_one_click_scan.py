@@ -22,7 +22,7 @@ class OneClickScanCliTests(unittest.TestCase):
             quota_auto_relogin=True,
         )
 
-        with patch("sms_tool.account_scan.scan_accounts", return_value={"failed": 0, "results": []}) as scan:
+        with patch("sms_tool.accounts.account_scan.scan_accounts", return_value={"failed": 0, "results": []}) as scan:
             cli._one_click_scan(args)
 
         kwargs = scan.call_args.kwargs

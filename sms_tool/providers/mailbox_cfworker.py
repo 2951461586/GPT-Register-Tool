@@ -3,7 +3,7 @@ import time
 
 from ..mail_otp import _email_otp_candidate, _message_id
 from ..mailbox_types import MailboxAccount
-from .cfworker_mailbox import CFWorkerMailboxClient
+from .cfworker_client import CFWorkerMailboxClient
 
 
 def _cfworker_cfg(email_cfg):

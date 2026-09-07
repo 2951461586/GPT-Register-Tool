@@ -60,8 +60,8 @@ def main() -> int:
         except (OSError, SyntaxError):
             failures.append(f"cannot parse provider facade: {facade.relative_to(ROOT)}")
     outlook_facade = ROOT / "sms_tool" / "outlook_imap.py"
-    if not (ROOT / "sms_tool" / "providers" / "outlook_imap.py").is_file():
-        failures.append("missing provider implementation: sms_tool/providers/outlook_imap.py")
+    if not (ROOT / "sms_tool" / "providers" / "outlook_imap_client.py").is_file():
+        failures.append("missing provider implementation: sms_tool/providers/outlook_imap_client.py")
     else:
         try:
             tree = ast.parse(outlook_facade.read_text(encoding="utf-8"))
@@ -69,6 +69,46 @@ def main() -> int:
                 failures.append("sms_tool/outlook_imap.py is a compatibility facade but defines implementation symbols")
         except (OSError, SyntaxError):
             failures.append("cannot parse provider facade: sms_tool/outlook_imap.py")
+    # Account workflows have one physical home: sms_tool/accounts/.
+    # No forwarding shell is kept at sms_tool/account_*.py on purpose -- a
+    # shell would silently absorb the 50+ `patch("sms_tool.accounts.*")`
+    # targets without production code ever reading it.
+    stray_accounts = sorted(p.name for p in PY_ROOT.glob("account_*.py"))
+    if stray_accounts:
+        failures.append(
+            "account workflow modules must live in sms_tool/accounts/, "
+            f"found at package root: {', '.join(stray_accounts)}"
+        )
+    if not (PY_ROOT / "accounts" / "__init__.py").is_file():
+        failures.append("missing sms_tool/accounts/__init__.py")
+    # providers/ naming contract: low-level `_client` modules must never
+    # import the registration-facing `mailbox_*` flows that compose them.
+    for client in (PY_ROOT / "providers").glob("*_client.py"):
+        try:
+            tree = ast.parse(client.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            failures.append(f"cannot parse provider client: {client.relative_to(ROOT)}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                # Only the *providers-local* mailbox_* flows are upper layer.
+                # sms_tool/mailbox_poll.py is shared polling infrastructure that
+                # a client is allowed to reuse.
+                # NOTE: ast.ImportFrom stores the module name WITHOUT the leading
+                # dots -- the relative depth lives in ``node.level``.  Matching
+                # on ".mailbox_" would silently never fire.
+                # ``node.level == 1`` from inside providers/ resolves to
+                # ``sms_tool.providers.<module>`` -- that IS the upper layer.
+                # ``node.level == 2`` resolves to ``sms_tool.<module>``, which is
+                # shared infrastructure (mailbox_poll) that a client may reuse.
+                resolved_is_provider_flow = (
+                    node.level == 1 and node.module.startswith("mailbox_")
+                ) or node.module.startswith("sms_tool.providers.mailbox_")
+                if resolved_is_provider_flow:
+                    failures.append(
+                        f"{client.relative_to(ROOT)} is a low-level client but imports "
+                        f"the upper layer {node.module!r} (layering inversion)"
+                    )
     if warnings:
         print("Architecture scan warnings:")
         print("\n".join(warnings))

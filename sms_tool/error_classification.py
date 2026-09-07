@@ -53,6 +53,9 @@ ACCOUNT_ERROR_MARKERS = (
 )
 
 MAILBOX_ERROR_MARKERS = (
+    "mailbox_auth_invalid",
+    "mailbox_endpoint_unavailable",
+    "remail_api_auth_invalid",
     "outlook otp timeout",
     "email_otp_poll_timeout",
     "mailbox otp timeout",
@@ -62,10 +65,14 @@ MAILBOX_ERROR_MARKERS = (
 )
 
 AUTH_STATE_ERROR_MARKERS = (
+    "browser_email_field_not_editable",
     "invalid_auth_step",
     "invalid_state",
     "sign-in session is no longer valid",
     "signup_auth_state",
+    "browser_registration_state_unknown",
+    "browser_email_verification_stuck",
+    "browser_auth_state",
 )
 
 RATE_LIMIT_ERROR_MARKERS = (
@@ -74,6 +81,18 @@ RATE_LIMIT_ERROR_MARKERS = (
     "registration_rate_limit_circuit_open",
     "too many requests",
     "http_429",
+)
+
+CANCELLED_ERROR_MARKERS = ("registration_cancelled", "cancelled_by_user")
+
+# Hard stops: retrying cannot change the outcome. Kept beside classify_error
+# because this is pure classification -- the transport layer needs it and must
+# not import registration policy to get it.
+TERMINAL_ERROR_MARKERS = (
+    "manual_challenge_required", "browser_proxy_blocked", "mailbox_auth_invalid",
+    "mailbox_endpoint_unavailable", "remail_api_auth_invalid", "invalid_grant",
+    "registration_cancelled", "session_circuit_open", "registration_rate_limit",
+    "http_429", "stage_budget_exceeded",
 )
 
 
@@ -99,6 +118,8 @@ def error_text(value) -> str:
 
 def classify_error(value) -> str:
     text = error_text(value)
+    if any(marker in text for marker in CANCELLED_ERROR_MARKERS):
+        return "cancelled"
     if any(marker in text for marker in ACCOUNT_ERROR_MARKERS):
         return "account"
     if any(marker in text for marker in MAILBOX_ERROR_MARKERS):
@@ -112,3 +133,11 @@ def classify_error(value) -> str:
     return "unknown"
 
 
+def is_terminal_registration_error(value) -> bool:
+    """True when the error is a hard stop: no retry can change the outcome.
+
+    Pure classification, so it lives here instead of in ``registration_policy``.
+    That is what lets the transport layer (``http_client``) consult it without
+    a top-level import back edge into the policy layer.
+    """
+    return any(marker in error_text(value) for marker in TERMINAL_ERROR_MARKERS)
