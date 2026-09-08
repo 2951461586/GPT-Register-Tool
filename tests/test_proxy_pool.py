@@ -21,6 +21,7 @@ from sms_tool.proxy_pool import (
     _build_socks5_reply,
     _encode_socks5_addr,
 )
+from sms_tool.proxy_health import ProxyHealthTracker
 
 
 class TestUpstreamProxy(unittest.TestCase):
@@ -128,16 +129,32 @@ class TestPickUpstream(unittest.TestCase):
         pick = server._pick_upstream()
         self.assertEqual(pick.label, "b")
 
-    def test_fail_open_all_unhealthy(self):
-        u1 = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=False)
-        u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b", healthy=False)
+    def test_fail_open_half_open_returns_single_candidate(self):
+        """P0-3 half-open: when the whole pool is unhealthy, _pick_upstream returns
+        a single candidate for incremental probing instead of mass-resurrecting every
+        dead upstream (which would spray all of them with live traffic at once)."""
+        u1 = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=False, fail_count=2)
+        u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b", healthy=False, fail_count=2)
         server = self._make_server([u1, u2])
 
         pick = server._pick_upstream()
         self.assertIsNotNone(pick)
-        # after fail-open, both should be reset to healthy
-        self.assertTrue(u1.healthy)
-        self.assertTrue(u2.healthy)
+        self.assertIn(pick, (u1, u2))
+        # The pool is NOT mass-resurrected: both upstreams stay unhealthy, only one
+        # candidate is handed back for a probe.
+        self.assertFalse(u1.healthy)
+        self.assertFalse(u2.healthy)
+
+    def test_fail_open_half_open_rotates_candidates(self):
+        """Across successive half-open picks the candidates rotate among the dead
+        set, so recovery of each upstream is discovered incrementally."""
+        u1 = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=False, fail_count=2)
+        u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b", healthy=False, fail_count=2)
+        server = self._make_server([u1, u2])
+
+        picks = [server._pick_upstream().label for _ in range(4)]
+        # Both candidates appear, round-robin among the dead set.
+        self.assertEqual(sorted(set(picks)), ["a", "b"])
 
     def test_no_upstreams(self):
         server = self._make_server([])
@@ -177,6 +194,138 @@ class TestPickUpstream(unittest.TestCase):
 
         pick = server._pick_upstream()
         self.assertEqual(pick.label, "lo")
+
+
+class TestHealthStrategy(unittest.TestCase):
+    """P0-3: consecutive-failure threshold + hysteresis recovery."""
+
+    def _make_server(self, fail_threshold=3, target="cloudflare.com", port=443):
+        return Socks5Server(
+            "127.0.0.1", 0, [], stats_port=0,
+            health_check_target_host=target,
+            health_check_target_port=port,
+            health_check_fail_threshold=fail_threshold,
+        )
+
+    def test_constructor_wires_probe_target_and_threshold(self):
+        server = self._make_server(fail_threshold=5, target="example.com", port=8443)
+        self.assertEqual(server._health_check_target_host, "example.com")
+        self.assertEqual(server._health_check_target_port, 8443)
+        self.assertEqual(server._health_check_fail_threshold, 5)
+
+    def test_healthy_survives_single_failure(self):
+        server = self._make_server(fail_threshold=3)
+        u = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=True)
+        server._apply_health(u, False)
+        self.assertTrue(u.healthy)
+        self.assertEqual(u.fail_count, 1)
+
+    def test_death_only_after_threshold_consecutive_failures(self):
+        server = self._make_server(fail_threshold=3)
+        u = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=True)
+        server._apply_health(u, False)  # 1
+        self.assertTrue(u.healthy)
+        server._apply_health(u, False)  # 2
+        self.assertTrue(u.healthy)
+        server._apply_health(u, False)  # 3 -> threshold reached
+        self.assertFalse(u.healthy)
+        self.assertEqual(u.fail_count, 3)
+
+    def test_recovery_requires_consecutive_successes(self):
+        server = self._make_server(fail_threshold=3)
+        u = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=False, fail_count=3)
+        # One lucky success is not enough (hysteresis): fail_count decrements by 1,
+        # but the upstream stays unhealthy until it reaches fail_count == 0.
+        server._apply_health(u, True)
+        self.assertEqual(u.fail_count, 2)
+        self.assertFalse(u.healthy)
+        server._apply_health(u, True)
+        self.assertEqual(u.fail_count, 1)
+        self.assertFalse(u.healthy)
+        server._apply_health(u, True)
+        self.assertEqual(u.fail_count, 0)
+        self.assertTrue(u.healthy)
+
+    def test_recovery_interrupted_by_failure_resets_progress(self):
+        server = self._make_server(fail_threshold=3)
+        u = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=False, fail_count=3)
+        server._apply_health(u, True)  # -> 2
+        server._apply_health(u, True)  # -> 1
+        self.assertFalse(u.healthy)
+        server._apply_health(u, False)  # -> 2 again
+        self.assertEqual(u.fail_count, 2)
+        self.assertFalse(u.healthy)
+
+    def test_success_on_healthy_does_not_mark_unhealthy(self):
+        server = self._make_server(fail_threshold=3)
+        u = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=True, fail_count=0)
+        server._apply_health(u, True)
+        self.assertTrue(u.healthy)
+        self.assertEqual(u.fail_count, 0)
+
+
+class TestHealthSyncP1_2(unittest.TestCase):
+    """P1-2 one-way sync: SOCKS5 pool health events mirror into ProxyHealthTracker."""
+
+    def _make_server_with_tracker(self, fail_threshold=3):
+        import tempfile
+        from pathlib import Path
+
+        d = Path(tempfile.mkdtemp())
+        tracker = ProxyHealthTracker({}, path=d / "registration_proxy_health.json")
+        server = Socks5Server(
+            "127.0.0.1", 0, [], stats_port=0,
+            health_check_fail_threshold=fail_threshold,
+            health_tracker=tracker,
+        )
+        return server, tracker
+
+    def test_proxy_url_format_no_auth(self):
+        u = UpstreamProxy(host="1.2.3.4", port=1080)
+        self.assertEqual(u.proxy_url, "socks5://1.2.3.4:1080")
+
+    def test_proxy_url_format_with_auth(self):
+        u = UpstreamProxy(host="1.2.3.4", port=1080, username="u", password="p")
+        self.assertEqual(u.proxy_url, "socks5://u:p@1.2.3.4:1080")
+
+    def test_proxy_url_key_matches_tracker_key(self):
+        u = UpstreamProxy(host="1.2.3.4", port=1080, username="u", password="p")
+        self.assertTrue(
+            ProxyHealthTracker.key(u.proxy_url).startswith("1.2.3.4:1080#sid-")
+        )
+
+    def test_apply_health_failure_mirrors_to_tracker(self):
+        server, tracker = self._make_server_with_tracker()
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label="a", healthy=True)
+        server._apply_health(u, False, error="probe timeout")
+        data = tracker._read()
+        self.assertEqual(int(data["1.2.3.4:1080"]["failure"]), 1)
+        self.assertEqual(data["1.2.3.4:1080"]["last_error"], "probe timeout")
+
+    def test_apply_health_threshold_mirrors_cooldown(self):
+        server, tracker = self._make_server_with_tracker()
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label="a", healthy=True)
+        for _ in range(3):
+            server._apply_health(u, False, error="x")
+        row = tracker._read()["1.2.3.4:1080"]
+        self.assertGreaterEqual(int(row["failure"]), 3)
+        self.assertGreater(float(row["cooldown_until"]), 0)
+
+    def test_apply_health_success_resets_cooldown_in_tracker(self):
+        server, tracker = self._make_server_with_tracker()
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label="a", healthy=True)
+        for _ in range(3):
+            server._apply_health(u, False, error="x")
+        server._apply_health(u, True)
+        row = tracker._read()["1.2.3.4:1080"]
+        self.assertEqual(float(row["cooldown_until"]), 0)
+
+    def test_apply_health_without_tracker_is_noop(self):
+        server = Socks5Server("127.0.0.1", 0, [], stats_port=0)
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label="a", healthy=True)
+        # Must not raise even when no tracker is configured.
+        server._apply_health(u, False, error="x")
+        self.assertEqual(u.fail_count, 1)
 
 
 class TestStatsJson(unittest.TestCase):

@@ -76,6 +76,17 @@ DECLARED_NOT_IMPORTED: dict[str, str] = {
     ),
     "pytest": "test runner, invoked as `pytest`, never imported by source.",
     "pytest-cov": "pytest plugin, selected with --cov on the command line.",
+    # IANA timezone database. Windows ships none, and Python's ``zoneinfo`` needs
+    # it installed to construct *any* IANA key. We never `import tzdata` directly
+    # (it is a data package consumed by ``zoneinfo``), so it looks "unused" to a
+    # source scanner. But without it every ``ZoneInfo(...)`` raises and the
+    # timezone-offset logic silently degrades — that is exactly the class of bug
+    # this guard exists to catch, hence the explicit reason rather than a delete.
+    "tzdata": (
+        "data package backing ``zoneinfo`` (declared DST/offsets in "
+        "sms_tool/geo/clock.py). Never imported directly; pin it or Windows "
+        "installs compute the wrong timezone offset."
+    ),
 }
 
 

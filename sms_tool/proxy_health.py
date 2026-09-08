@@ -15,6 +15,10 @@ from .paths import runtime_file
 
 _FILE_LOCK = threading.Lock()
 
+# Additive-smoothing prior for the success rate used by ``ProxyHealthTracker.rank``.
+# 1 == Laplace. See the ``rank`` docstring for why the raw ratio is not enough.
+_SMOOTHING_PRIOR = 1.0
+
 
 class ProxyHealthTracker:
     """Persist bounded success/failure counters without proxy credentials."""
@@ -78,6 +82,25 @@ class ProxyHealthTracker:
             self._write(data)
 
     def rank(self, proxies: list[str]) -> list[str]:
+        """Order candidates worst-last: cooling, then worst success rate, then most failed.
+
+        P2-4: the success rate is additively smoothed (Laplace, prior=1) instead of
+        the raw ``success / (success + failure)``. The raw ratio had two defects:
+
+        * a proxy with **one** lucky success scored 1.0 and outranked a proven
+          8-of-10 endpoint at 0.8, so a single fluke could pin traffic to an
+          untested endpoint;
+        * every never-used proxy collapsed onto 0.0, identical to a proxy with
+          zero successes and zero *recorded* failures -- so cold start silently
+          degenerated to config order and a newly added endpoint could only win
+          once an incumbent had already failed.
+
+        Smoothing puts an unproven proxy at a neutral 0.5: behind proven-good
+        endpoints, ahead of ones carrying a failure record. It therefore gets its
+        turn without random churn, and low-sample endpoints can no longer spike
+        to the top. Ties (including all-fresh pools) still fall back to config
+        order, because :func:`sorted` is stable.
+        """
         with self._lock:
             data = self._read()
         now = time.time()
@@ -88,7 +111,8 @@ class ProxyHealthTracker:
                 return (1, cooldown, 0)
             success = int(row.get("success", 0) or 0)
             failure = int(row.get("failure", 0) or 0)
-            return (0, -(success / max(1, success + failure)), failure)
+            rate = (success + _SMOOTHING_PRIOR) / (success + failure + 2 * _SMOOTHING_PRIOR)
+            return (0, -rate, failure)
         return sorted(dict.fromkeys(proxies), key=score)
 
 

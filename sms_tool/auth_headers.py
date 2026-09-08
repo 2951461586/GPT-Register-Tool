@@ -8,6 +8,7 @@ import re
 import threading
 import time
 import uuid
+from collections import Counter
 from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlparse
 
@@ -21,7 +22,17 @@ DEFAULT_SEC_CH_UA = ""
 # path defaults to firefox144. Chrome is retained as a fallback pool entry for
 # A/B comparison and recovery. Firefox does not emit Sec-CH-UA client hints, so
 # its sec_ch_ua is intentionally blank (see family-aware header building below).
+#
+# P0-2: the pool was a 2-entry round-robin (firefox144 / chrome146 only), which
+# made the Nth account's fingerprint trivially predictable and left hundreds of
+# device-derived hardware silhouettes sharing just two browser versions. The
+# matrix below spans the Firefox / Chrome / Safari(macOS) / Safari(iOS) families
+# that curl_cffi actually supports; selection is weighted-random (see
+# _FAMILY_WEIGHTS) with Firefox kept dominant because of the CF-edge constraint
+# above. The two original profiles are kept byte-for-byte identical so existing
+# persisted-account attribution (which keys on the profile *name*) is untouched.
 AUTH_FINGERPRINT_PROFILES = {
+    # ── Firefox family (primary) ──────────────────────────────────────────────
     "firefox144": {
         "name": "firefox144",
         "impersonate": "firefox144",
@@ -33,6 +44,40 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
+    "firefox147": {
+        "name": "firefox147",
+        "impersonate": "firefox147",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
+            "rv:147.0) Gecko/20100101 Firefox/147.0"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "firefox135": {
+        "name": "firefox135",
+        "impersonate": "firefox135",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
+            "rv:135.0) Gecko/20100101 Firefox/135.0"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "firefox133": {
+        "name": "firefox133",
+        "impersonate": "firefox133",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
+            "rv:133.0) Gecko/20100101 Firefox/133.0"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    # ── Chrome family (CF-edge fallback, minority weight) ─────────────────────
     "chrome146": {
         "name": "chrome146",
         "impersonate": "chrome146",
@@ -43,6 +88,129 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua": '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome145": {
+        "name": "chrome145",
+        "impersonate": "chrome145",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="145", "Google Chrome";v="145", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome142": {
+        "name": "chrome142",
+        "impersonate": "chrome142",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="142", "Google Chrome";v="142", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome136": {
+        "name": "chrome136",
+        "impersonate": "chrome136",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome131": {
+        "name": "chrome131",
+        "impersonate": "chrome131",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome124": {
+        "name": "chrome124",
+        "impersonate": "chrome124",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    # ── Safari family, macOS (WebKit, no Sec-CH-UA client hints) ──────────────
+    "safari18_0": {
+        "name": "safari18_0",
+        "impersonate": "safari18_0",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
+    "safari17_0": {
+        "name": "safari17_0",
+        "impersonate": "safari17_0",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
+    "safari184": {
+        "name": "safari184",
+        "impersonate": "safari184",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
+    # ── Safari family, iOS (distinct navigator.platform + touch points) ───────
+    "safari18_0_ios": {
+        "name": "safari18_0_ios",
+        "impersonate": "safari18_0_ios",
+        "user_agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?1",
+        "sec_ch_ua_platform": '"iOS"',
+    },
+    "safari17_2_ios": {
+        "name": "safari17_2_ios",
+        "impersonate": "safari17_2_ios",
+        "user_agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?1",
+        "sec_ch_ua_platform": '"iOS"',
+    },
+    "safari184_ios": {
+        "name": "safari184_ios",
+        "impersonate": "safari184_ios",
+        "user_agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Mobile/15E148 Safari/604.1"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?1",
+        "sec_ch_ua_platform": '"iOS"',
     },
 }
 
@@ -65,6 +233,81 @@ def _browser_version(impersonate: str) -> str:
     """Extract the numeric major version from an impersonate token (e.g. '144')."""
     match = re.match(r"^[a-z]+(\d+)", str(impersonate or "").lower())
     return match.group(1) if match else ""
+
+
+# ──────────────────── Family-level hardware constants ─────────────────────────
+#
+# Platform-class fields must agree with the User-Agent's claimed OS. A UA that
+# says "macOS" but reports navigator.platform "Win32" (and sec_ch_ua_platform
+# "Windows") is a free contradiction for Cloudflare to flag at zero cost — the
+# exact trap the reference project warns about in fingerprint.py:1541-1547.
+#
+# These fields used to be hardcoded "Win32" / "10.0.0" strings inside
+# sentinel_fingerprint(), which only held because every profile was a Windows
+# desktop browser. The table below is now the single source of truth so the
+# protocol path and the browser-profile path never disagree. P0-2 extends it
+# (safari/macos, safari/ios) when the version matrix lands — until then the
+# current two profiles stay byte-identical to the old hardcoded output.
+#
+# NOTE: per-account device_memory / hardware_concurrency / device_pixel_ratio /
+# screen stay in _device_profile() (derived from the account device id). That
+# per-account variation is intentional anti-correlation and is NOT family-fixed;
+# only the platform-class constants that must match the UA live in this table.
+# Platform-class constants per OS. The protocol path (and, eventually, the
+# browser path) both read these so a UA claiming macOS never reports a Windows
+# platform. P1-1 introduced this table; P0-2 extended it with macOS/iOS Safari.
+# navigator.vendor is browser-specific (Firefox/Edge empty, Chrome "Google
+# Inc.", Safari "Apple Computer, Inc.") so it lives in _VENDOR_BY_FAMILY.
+_HARDWARE_PROFILES = {
+    "windows": {
+        "navigator_platform": "Win32",
+        "max_touch_points": 0,
+        "sec_ch_ua_platform_version": "10.0.0",
+    },
+    "macos": {
+        "navigator_platform": "MacIntel",
+        "max_touch_points": 0,
+        "sec_ch_ua_platform_version": "14.5.0",
+    },
+    "ios": {
+        "navigator_platform": "iPhone",
+        "max_touch_points": 5,
+        "sec_ch_ua_platform_version": "17.2.0",
+    },
+}
+
+_VENDOR_BY_FAMILY = {
+    "firefox": "",
+    "chrome": "Google Inc.",
+    "safari": "Apple Computer, Inc.",
+    "edge": "",
+}
+
+
+def _platform_class(impersonate: str) -> str:
+    """Map an impersonate token to its platform class (windows/macos/ios)."""
+    token = str(impersonate or "").lower()
+    if token.endswith("_ios"):
+        return "ios"
+    if token.endswith("_android"):
+        return "android"
+    if _browser_family(token) == "safari":
+        return "macos"
+    return "windows"
+
+
+def hardware_profile_for_family(impersonate: str) -> dict[str, object]:
+    """Return platform-class hardware constants for an impersonate token.
+
+    Combines the OS platform class (platform string, touch points, platform
+    version) with the browser family's vendor. Unknown tokens degrade to the
+    Windows desktop profile rather than to a half-empty dict, and the returned
+    dict always carries every key callers expect.
+    """
+    cls = _platform_class(impersonate)
+    hw = dict(_HARDWARE_PROFILES.get(cls, _HARDWARE_PROFILES["windows"]))
+    hw["navigator_vendor"] = _VENDOR_BY_FAMILY.get(_browser_family(impersonate), "")
+    return hw
 _AUTH_FINGERPRINT_LOCAL = threading.local()
 
 _GEO_PROFILES = {
@@ -79,10 +322,29 @@ _GEO_PROFILES = {
 }
 
 
-def set_fingerprint_geo(country: str = "") -> dict[str, str]:
-    """Bind the current account fingerprint's locale to the proxy exit region."""
+def set_fingerprint_geo(
+    country: str = "",
+    *,
+    timezone: str = "",
+    lang: str = "",
+    lang_full: str = "",
+) -> dict[str, str]:
+    """Bind the current account fingerprint's locale to the proxy exit region.
+
+    ``timezone`` / ``lang`` / ``lang_full`` override the curated table entry and
+    exist because ``_GEO_PROFILES`` only covers a handful of markets: a measured
+    exit anywhere else used to fall back to the UTC/en-US default while still
+    *claiming* that country -- the "Brazilian IP, US Eastern clock" mismatch
+    this whole resolver chain was built to remove.  Callers that already
+    resolved the exit (``fingerprint_pool``) pass the measurement through here
+    instead of letting it be recomputed and then discarded.
+    """
     code = str(country or "").strip().upper()
     profile = dict(_GEO_PROFILES.get(code) or {"timezone": "UTC", "lang": "en-US", "lang_full": "en-US,en;q=0.9"})
+    for key, value in (("timezone", timezone), ("lang", lang), ("lang_full", lang_full)):
+        trimmed = str(value or "").strip()
+        if trimmed:
+            profile[key] = trimmed
     _AUTH_FINGERPRINT_LOCAL.geo_profile = profile
     _AUTH_FINGERPRINT_LOCAL.geo_country = code
     return profile
@@ -197,15 +459,46 @@ def _configured_auth_profiles():
     return names or defaults or [AUTH_IMPERSONATE]
 
 
+# P0-2: weighted-random selection. Firefox stays the majority share because
+# Chrome is challenged (HTTP 403) at ChatGPT's Cloudflare edge (see the note on
+# AUTH_FINGERPRINT_PROFILES); the reference project's 35% Chrome weight is
+# deliberately NOT copied. Each family's weight is split evenly across its
+# versions, so adding more Firefox versions raises diversity without diluting
+# Firefox's overall share.
+_FAMILY_WEIGHTS = {"firefox": 50, "chrome": 25, "safari": 18, "edge": 7}
+
+
+def fingerprint_profile_weights(names) -> dict[str, float]:
+    """Return a {name: weight} map for the given profile names.
+
+    Each family's weight is divided across its members so the family's aggregate
+    share is preserved regardless of version count. Unknown families fall back to
+    the chrome weight so a typo never silently zeroes a profile out.
+    """
+    names = [str(n) for n in names]
+    fam_counts = Counter(_browser_family(n) for n in names)
+    weights: dict[str, float] = {}
+    for name in names:
+        fam = _browser_family(name)
+        base = _FAMILY_WEIGHTS.get(fam, _FAMILY_WEIGHTS["chrome"])
+        weights[name] = base / max(1, fam_counts[fam])
+    return weights
+
+
 def select_auth_fingerprint(rotate=False):
     cfg = _auth_fingerprint_config()
     mode = str(cfg.get("mode") or "fixed").strip().lower()
     names = _configured_auth_profiles()
     configured = str(cfg.get("profile") or AUTH_IMPERSONATE).strip().lower()
     if rotate and mode in {"rotate", "random", "per_account"}:
+        weights = fingerprint_profile_weights(names)
         previous = getattr(_AUTH_FINGERPRINT_LOCAL, "profile_name", "")
-        choices = [name for name in names if name != previous] or names
-        name = random.SystemRandom().choice(choices)
+        # Avoid repeating the immediately-previous profile for a more even spread,
+        # but fall back to the full set if there is only one candidate.
+        candidates = [name for name in names if name != previous] or names
+        name = random.SystemRandom().choices(
+            candidates, weights=[weights[n] for n in candidates], k=1
+        )[0]
     else:
         name = configured if configured in names else names[0]
     _AUTH_FINGERPRINT_LOCAL.profile_name = name
@@ -313,6 +606,22 @@ def curl_cffi_capabilities() -> dict[str, object]:
     return {"version": installed_version, "version_ok": version_ok, **profiles}
 
 
+def _timezone_offset_minutes(tz_name: str) -> int:
+    """UTC offset in minutes for the profile's declared timezone.
+
+    Single authority: ``sms_tool.geo.clock``.  On Windows the IANA database is
+    only available when the ``tzdata`` package is installed; without it this
+    degrades to ``0`` and the clock module logs a one-time warning, which is
+    still better than disagreeing with the requirements token silently.
+    """
+    try:
+        from .geo.clock import offset_minutes_for_timezone
+
+        return offset_minutes_for_timezone(tz_name, 0)
+    except Exception:
+        return 0
+
+
 def sentinel_fingerprint() -> dict[str, object]:
     """Return the browser environment shared by auth headers and Sentinel SDK."""
     fingerprint = current_auth_fingerprint()
@@ -324,19 +633,29 @@ def sentinel_fingerprint() -> dict[str, object]:
     _AUTH_FINGERPRINT_LOCAL.session_id = session_id
     device = _device_profile(_device_seed() or session_id)
     is_chrome = family == "chrome"
+    # Platform-class constants come from the family table, not a hardcoded
+    # "Win32". This keeps the UA (which names the OS) and the reported platform
+    # in agreement; P0-2 populates the table for non-desktop families.
+    hw = hardware_profile_for_family(impersonate)
     return {
         **fingerprint,
         "screen": device["screen"],
         "lang": geo["lang"],
         "lang_full": geo["lang_full"],
-        "navigator_platform": "Win32",
-        # Firefox's navigator.vendor is empty; Chrome reports "Google Inc."
-        "navigator_vendor": "Google Inc." if is_chrome else "",
+        "navigator_platform": hw["navigator_platform"],
+        "navigator_vendor": hw["navigator_vendor"],
         "hardware_concurrency": device["hardware_concurrency"],
         "device_memory": device["device_memory"],
-        "max_touch_points": 0,
+        "max_touch_points": hw["max_touch_points"],
         "device_pixel_ratio": device["device_pixel_ratio"],
         "timezone": geo["timezone"],
+        # The Sentinel PoW payload carries ``timezoneOffsetMinutes`` next to the
+        # declared IANA zone (``sentinel/runner.py``).  The protocol profile
+        # never set it, so every registration sent ``0`` — a UTC offset on a
+        # New York clock, which is a contradiction the server can check for
+        # free.  Derived from the same zone name via the same helper the
+        # requirements token uses, so the two halves of the proof agree.
+        "timezone_offset_minutes": _timezone_offset_minutes(geo["timezone"]),
         "session_id": session_id,
         "js_heap_size_limit": device["js_heap_size_limit"],
         "time_origin": device["time_origin"],
@@ -349,7 +668,7 @@ def sentinel_fingerprint() -> dict[str, object]:
         "sec_ch_ua_arch": "x86" if is_chrome else "",
         "sec_ch_ua_bitness": "64" if is_chrome else "",
         "sec_ch_ua_model": "" if is_chrome else "",
-        "sec_ch_ua_platform_version": "10.0.0",
+        "sec_ch_ua_platform_version": hw["sec_ch_ua_platform_version"],
     }
 
 

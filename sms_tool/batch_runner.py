@@ -3,6 +3,7 @@ import time
 import uuid
 import threading
 
+from .batch_circuit_breaker import BatchCircuitBreaker
 from .error_classification import classify_error
 from .config import CFG
 from .paypal_proxy import infer_proxy_country
@@ -134,6 +135,19 @@ def run_batch_impl(
     progress_lock = threading.Lock()
     completed_count = 0
     retry_guard = RegistrationRetryGuard(CFG)
+    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
+    # P2-2: whole-batch stop for environment failures (proxy pool down, signup
+    # page changed shape, ...). Neither the per-account retry guard nor the
+    # per-proxy health tracker can see this pattern, so a dead environment used
+    # to walk through the entire mailbox list before anyone noticed.
+    try:
+        breaker_threshold = max(1, int(registration_cfg.get("batch_circuit_breaker_threshold") or 3))
+    except (TypeError, ValueError):
+        breaker_threshold = 3
+    breaker_enabled = registration_cfg.get("batch_circuit_breaker_enabled", True) not in (
+        False, 0, "0", "false", "False", "no",
+    )
+    breaker = BatchCircuitBreaker(breaker_threshold, enabled=breaker_enabled)
     safe_print(f"\n{'=' * 60}")
     safe_print(f"  ChatGPT Email Batch Registration - {count} accounts")
     safe_print(f"{'=' * 60}\n")
@@ -144,7 +158,6 @@ def run_batch_impl(
         # serialized by the registration gate. ``browser_worker_limit`` is now
         # an optional extra cap: unset or 0 follows the requested worker count
         # (already clamped to 1..8 above); a positive value still wins.
-        registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
         raw_limit = registration_cfg.get("browser_worker_limit")
         browser_limit = 0
         if raw_limit not in (None, "", 0, "0"):
@@ -212,6 +225,21 @@ def run_batch_impl(
 
         if _cancel_requested():
             return i, _cancelled()
+        if breaker.tripped:
+            # Parked, not attempted -- this mailbox is NOT consumed.
+            _parked_mailbox = mailboxes[i] if mailboxes else None
+            return i, {
+                "success": False,
+                "email": str(getattr(_parked_mailbox, "email", "") or "").strip(),
+                "error": "batch_circuit_breaker_open",
+                "failure_class": "environment",
+                "retryable": True,
+                "dropped": False,
+                "deferred": True,
+                "registration_state": "batch_paused",
+                "registration_attempts": 0,
+                "batch_id": batch_id,
+            }
         safe_print(f"\n{'#' * 40}")
         safe_print(f"  Account {i + 1}/{count}")
         safe_print(f"{'#' * 40}")
@@ -296,6 +324,7 @@ def run_batch_impl(
             result["batch_id"] = batch_id
             if result.get("success", False):
                 retry_guard.record(mailbox_email, success=True)
+                breaker.record_success()
                 return i, result
             result.setdefault("failure_class", classify_error(result))
             if result["failure_class"] in {"network", "mailbox", "auth_state", "rate_limit"}:
@@ -315,6 +344,26 @@ def run_batch_impl(
                     error=result.get("error"),
                     success=False,
                 )
+                # P2-2: only terminal per-account verdicts feed the breaker, so
+                # the retries inside one account cannot inflate the streak.
+                if breaker.record(result["failure_class"]):
+                    safe_print(
+                        f"[!] Batch paused after {breaker.consecutive} consecutive "
+                        f"{result['failure_class']} failures -- remaining accounts "
+                        f"are parked (mailboxes not consumed)."
+                    )
+                    if emit_event is not None:
+                        try:
+                            emit_event({
+                                "domain": "registration", "batch_id": batch_id,
+                                "operation": "registration", "stage": "batch_paused",
+                                "status": "paused",
+                                "failure_class": str(result.get("failure_class") or ""),
+                                "consecutive": int(breaker.consecutive),
+                                "total": int(count or 0),
+                            })
+                        except Exception:
+                            pass
                 return i, result
             safe_print(
                 f"[!] Retryable {result['failure_class']} failure; "

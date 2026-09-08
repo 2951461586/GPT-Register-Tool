@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import unittest
 from unittest.mock import patch
 
@@ -97,6 +98,133 @@ class TestProxyForBrowser(unittest.TestCase):
             self.assertTrue(url.startswith("socks5h://127.0.0.1:"))
         finally:
             closer()
+
+
+# Long enough to blow any sane assertion budget, short enough that a regression
+# fails in seconds instead of hanging the suite.
+_HANG_SECONDS = 5.0
+
+
+class _FakeWriter:
+    """Minimal asyncio.StreamWriter stand-in."""
+
+    def __init__(self):
+        self.written = b""
+        self.closed = False
+        self.wait_closed_called = False
+
+    def write(self, data: bytes) -> None:
+        self.written += data
+
+    async def drain(self) -> None:
+        return None
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def wait_closed(self) -> None:
+        self.wait_closed_called = True
+
+
+class _ScriptedReader:
+    """StreamReader stand-in returning canned lines, then EOF."""
+
+    def __init__(self, *lines: bytes):
+        self._lines = list(lines)
+
+    async def readline(self) -> bytes:
+        return self._lines.pop(0) if self._lines else b""
+
+
+class _HangingReader:
+    """Accepts the socket but never answers the CONNECT — the P1-4 hang.
+
+    Deliberately finite (not ``sleep(3600)``): if the timeout is ever removed
+    again this has to surface as a slow, failing test, not a hung suite.
+    """
+
+    async def readline(self) -> bytes:
+        await asyncio.sleep(_HANG_SECONDS)
+        return b""
+
+
+class TestHttpUpstreamConnectTimeout(unittest.TestCase):
+    """P1-4: the HTTP CONNECT branch must be bounded like the SOCKS branch."""
+
+    def setUp(self):
+        self.upstream = parse_proxy("http://user:pass@upstream.example:8080")
+        self.bridge = LocalProxyBridge(upstream=self.upstream, connect_timeout=0.05)
+
+    def _run(self, coro):
+        return asyncio.run(coro)
+
+    def test_tcp_connect_is_bounded(self):
+        async def _never_connects(*args, **kwargs):
+            await asyncio.sleep(_HANG_SECONDS)
+            return _ScriptedReader(), _FakeWriter()
+
+        async def _scenario():
+            with patch("asyncio.open_connection", new=_never_connects):
+                started = time.monotonic()
+                with self.assertRaises(ConnectionError) as ctx:
+                    await self.bridge._connect_http_upstream(self.upstream, "chat.example", 443)
+                return str(ctx.exception), time.monotonic() - started
+
+        message, elapsed = self._run(_scenario())
+        self.assertIn("connect failed", message)
+        self.assertLess(elapsed, 2.0, f"connect was not bounded: {elapsed:.1f}s")
+
+    def test_unanswered_connect_response_is_bounded_and_closes_the_socket(self):
+        writer = _FakeWriter()
+
+        async def _accepts_but_stays_silent(*args, **kwargs):
+            return _HangingReader(), writer
+
+        async def _scenario():
+            with patch("asyncio.open_connection", new=_accepts_but_stays_silent):
+                started = time.monotonic()
+                with self.assertRaises(ConnectionError):
+                    await self.bridge._connect_http_upstream(self.upstream, "chat.example", 443)
+                return time.monotonic() - started
+
+        elapsed = self._run(_scenario())
+        self.assertLess(elapsed, 2.0, f"CONNECT response was not bounded: {elapsed:.1f}s")
+        self.assertTrue(writer.closed, "a timed-out CONNECT must not leak the socket")
+
+    def test_successful_connect_returns_the_streams(self):
+        reader = _ScriptedReader(b"HTTP/1.1 200 Connection established\r\n", b"\r\n")
+        writer = _FakeWriter()
+
+        async def _ok(*args, **kwargs):
+            return reader, writer
+
+        async def _scenario():
+            with patch("asyncio.open_connection", new=_ok):
+                return await self.bridge._connect_http_upstream(self.upstream, "chat.example", 443)
+
+        got_r, got_w = self._run(_scenario())
+        self.assertIs(got_r, reader)
+        self.assertIs(got_w, writer)
+        self.assertFalse(writer.closed)
+        self.assertIn(b"CONNECT chat.example:443 HTTP/1.1", writer.written)
+        self.assertIn(b"Proxy-Authorization: Basic ", writer.written)
+
+    def test_non_2xx_closes_the_socket(self):
+        reader = _ScriptedReader(b"HTTP/1.1 403 Forbidden\r\n", b"\r\n")
+        writer = _FakeWriter()
+
+        async def _forbidden(*args, **kwargs):
+            return reader, writer
+
+        async def _scenario():
+            with patch("asyncio.open_connection", new=_forbidden):
+                with self.assertRaises(ConnectionError) as ctx:
+                    await self.bridge._connect_http_upstream(self.upstream, "chat.example", 443)
+            return str(ctx.exception)
+
+        message = self._run(_scenario())
+        self.assertIn("403", message)
+        self.assertTrue(writer.closed)
 
 
 class TestAsyncProxyForBrowser(unittest.TestCase):

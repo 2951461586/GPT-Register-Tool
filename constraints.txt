@@ -13,12 +13,18 @@
 # transitively via `cloakbrowser`, and pinning it keeps that closure bounded.
 # `selenium` was removed (2026-09-02) - zero references in code or docs, and no
 # package requires it. See docs/audit-2026-09-02-round5-summary.md section 4.3.
+# `tzdata` is the IANA timezone database: Windows ships none, and Python's
+# `zoneinfo` cannot construct *any* IANA key without it installed. It is a data
+# package (never imported directly), so it looks unused to a source scanner, but
+# omitting it silently breaks every timezone-offset computation. See
+# sms_tool/geo/clock.py.
 curl_cffi==0.16.0
 cryptography==50.0.1
 PyNaCl==1.6.2
 httpx[http2,socks]==0.28.1
 requests==2.34.2
 PyOTP==2.10.0
+tzdata==2026.3
 camoufox[geoip]==0.5.4
 browserforge==1.2.4
 cloakbrowser==0.5.9

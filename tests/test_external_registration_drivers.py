@@ -19,10 +19,14 @@ from sms_tool.registration_drivers.external_sessions import (
     verify_browser_proxy_country,
 )
 from sms_tool.registration_drivers.browser_session import PlaywrightBrowserSession
+from sms_tool.registration_drivers import external_sessions
+from sms_tool.registration_drivers.external_sessions import _BROWSER_SESSION_FACTORIES
+from sms_tool.registration_drivers.external_sessions.profiles import _inject_screen_size
 from sms_tool.registration_drivers.stealth import apply_playwright_stealth
 # Direct-call imports come from each symbol's DEFINING module: browser_flow
 # no longer re-exports private helpers, so orchestrator-level names no longer
 # exist for anything the orchestrator itself imports.
+from sms_tool.registration_drivers.browser_flow import flow_steps
 from sms_tool.registration_drivers.browser_flow.dom_fields import (
     _browser_heartbeat,
     _click_continue,
@@ -1510,6 +1514,283 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         rendered = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("provider-secret", rendered)
         self.assertNotIn("user:secret@proxy.example", rendered)
+
+
+_SESSION_KWARGS = {
+    "proxy": None,
+    "headless": True,
+    "timeout_ms": 10_000,
+    "locale": "en-US",
+    "timezone_id": "America/New_York",
+}
+
+
+class _RecordingSession:
+    """Stand-in driver factory that remembers the config it was handed."""
+
+    def __init__(self, config=None, **kwargs):
+        self.config = config
+        self.kwargs = kwargs
+
+
+class TestPooledScreenSizeInjection(unittest.TestCase):
+    """P1-3: BROWSER_PROFILE_POOL used to reach Playwright only.
+
+    Camoufox was pinned to a hardcoded Screen(max_width=1280, max_height=900),
+    so the largest fingerprint investment in the codebase never reached it.
+    Provider-owned drivers (roxy/cloak/adspower) must stay untouched -- their
+    fingerprint belongs to the provider profile.
+    """
+
+    def _driver_cfg(self, config, driver):
+        return (config.get("registration") or {}).get("drivers", {}).get(driver, {})
+
+    def test_camoufox_fills_both_axes_when_unset(self):
+        config = {"registration": {"drivers": {"camoufox": {}}}}
+        result = _inject_screen_size(config, "camoufox", (1680, 1050))
+        cfg = self._driver_cfg(result, "camoufox")
+        self.assertEqual(cfg["max_width"], 1680)
+        self.assertEqual(cfg["max_height"], 1050)
+
+    def test_camoufox_builds_the_branch_when_absent(self):
+        result = _inject_screen_size({}, "camoufox", (1512, 982))
+        self.assertEqual(
+            self._driver_cfg(result, "camoufox"), {"max_width": 1512, "max_height": 982}
+        )
+
+    def test_explicit_operator_config_wins(self):
+        # This can only fill blanks; it must never override a chosen value.
+        config = {"registration": {"drivers": {"camoufox": {"max_width": 1920}}}}
+        result = _inject_screen_size(config, "camoufox", (1680, 1050))
+        cfg = self._driver_cfg(result, "camoufox")
+        self.assertEqual(cfg["max_width"], 1920)  # untouched
+        self.assertEqual(cfg["max_height"], 1050)  # filled
+
+    def test_non_camoufox_drivers_are_untouched(self):
+        config = {"registration": {"drivers": {"roxy": {"api_key": "k"}}}}
+        for driver in ("roxy", "cloak", "adspower", "playwright"):
+            with self.subTest(driver=driver):
+                self.assertIs(_inject_screen_size(config, driver, (1680, 1050)), config)
+
+    def test_missing_or_degenerate_size_is_a_noop(self):
+        config = {"registration": {"drivers": {"camoufox": {}}}}
+        for size in (None, (0, 900), (1680, 0), (-1, 900)):
+            with self.subTest(size=size):
+                self.assertIs(_inject_screen_size(config, "camoufox", size), config)
+
+    def test_unrelated_config_keys_survive(self):
+        config = {
+            "registration": {
+                "browser_timeout_seconds": 5,
+                "drivers": {"camoufox": {"headless": True}, "roxy": {"api_key": "k"}},
+            },
+            "mailbox": {"kind": "imap"},
+        }
+        result = _inject_screen_size(config, "camoufox", (2056, 1329))
+        self.assertEqual(result["registration"]["browser_timeout_seconds"], 5)
+        self.assertEqual(self._driver_cfg(result, "roxy"), {"api_key": "k"})
+        self.assertTrue(self._driver_cfg(result, "camoufox")["headless"])
+        self.assertEqual(result["mailbox"], {"kind": "imap"})
+
+    def test_input_config_is_never_mutated(self):
+        config = {"registration": {"drivers": {"camoufox": {}}}}
+        _inject_screen_size(config, "camoufox", (1680, 1050))
+        self.assertEqual(config, {"registration": {"drivers": {"camoufox": {}}}})
+
+    # ── end to end through the session factory ──
+
+    def test_camoufox_session_receives_the_pooled_size(self):
+        with patch.dict(_BROWSER_SESSION_FACTORIES, {"camoufox": _RecordingSession}):
+            session = create_browser_session(
+                "camoufox",
+                config={"registration": {}},
+                viewport=(1680, 1050),
+                **_SESSION_KWARGS,
+            )
+        self.assertEqual(self._driver_cfg(session.config, "camoufox")["max_width"], 1680)
+        self.assertEqual(self._driver_cfg(session.config, "camoufox")["max_height"], 1050)
+
+    def test_provider_driver_config_is_left_alone(self):
+        with patch.dict(_BROWSER_SESSION_FACTORIES, {"roxy": _RecordingSession}):
+            session = create_browser_session(
+                "roxy",
+                config={"registration": {"drivers": {"roxy": {"api_key": "k"}}}},
+                viewport=(1680, 1050),
+                **_SESSION_KWARGS,
+            )
+        self.assertEqual(
+            self._driver_cfg(session.config, "roxy"), {"api_key": "k"}
+        )
+
+    def test_playwright_keeps_taking_the_size_as_its_viewport(self):
+        with patch.object(external_sessions, "PlaywrightBrowserSession", _RecordingSession):
+            session = create_browser_session(
+                "playwright",
+                config={"registration": {}},
+                viewport=(1440, 900),
+                **_SESSION_KWARGS,
+            )
+        self.assertEqual(session.kwargs["viewport"], (1440, 900))
+
+    def test_provider_managed_driver_logs_a_notice(self):
+        config = {
+            "registration": {
+                "browser_profile_pool": {"profiles": [{"screen_width": 1440}]},
+                "drivers": {"roxy": {"api_key": "k"}},
+            }
+        }
+        with patch.dict(_BROWSER_SESSION_FACTORIES, {"roxy": _RecordingSession}):
+            with self.assertLogs("sms_tool.registration_drivers.external_sessions", "INFO") as logs:
+                create_browser_session(
+                    "roxy", config=config, viewport=(1680, 1050), **_SESSION_KWARGS
+                )
+        self.assertTrue(any("browser_profile_pool" in line for line in logs.output))
+
+    def test_screen_managed_driver_logs_no_notice(self):
+        # Camoufox does consume the pool, so a "pool has no effect" notice
+        # here would be actively misleading.
+        with self.assertNoLogs("sms_tool.registration_drivers.external_sessions", "INFO"):
+            with patch.dict(_BROWSER_SESSION_FACTORIES, {"camoufox": _RecordingSession}):
+                create_browser_session(
+                    "camoufox", config={"registration": {}}, viewport=(1680, 1050), **_SESSION_KWARGS
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# ─────────────────── P2-3: exit-country probe for every driver ───────────────────
+#
+# The probe used to run for roxy/cloak only. It now runs for every browser
+# driver, but only provider drivers abort on a mismatch -- for the local ones
+# the country is evidence, not a gate.
+
+
+class _CountryProbeAbort(Exception):
+    """Sentinel that stops the flow right after the egress-country probe."""
+
+
+class _AbortingSession:
+    def __init__(self, *args, **kwargs):
+        self.page = MagicMock()
+
+    def add_device_cookie(self, *args, **kwargs):
+        raise _CountryProbeAbort
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+_COUNTRY_CONFIG = {
+    "chatgpt": {"auth_base_url": "https://auth.openai.com", "chat_base_url": "https://chatgpt.com"},
+    "registration": {"browser_timeout_seconds": 5},
+    "email_registration": {"otp_timeout": 5},
+}
+
+
+class TestExitCountryProbeCoversAllDrivers(unittest.TestCase):
+    """P2-3: the probe runs for every driver; only provider drivers abort.
+
+    ``run_browser_registration`` never propagates -- it classifies and returns
+    a failure dict -- so these assert on that dict plus the log stream.
+    """
+
+    def _run(self, driver, verification, config=None):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def scope(**_kwargs):
+            yield _AbortingSession()
+
+        with patch.object(flow_steps, "_browser_session_scope", scope), patch.object(
+            external_sessions, "verify_browser_proxy_country", return_value=verification
+        ) as verify, patch("sms_tool.storage.get_device_context", return_value={}):
+            with self.assertLogs(
+                "sms_tool.registration_drivers.browser_flow.orchestrator", "WARNING"
+            ) as logs:
+                result = run_browser_registration(
+                    driver_name=driver,
+                    proxy=None,
+                    password="Password!1",
+                    mailbox=SimpleNamespace(email="user@example.com"),
+                    config=config or dict(_COUNTRY_CONFIG),
+                    session_factory=MagicMock(),
+                    # Only the batch path carries proxy metadata today; without
+                    # it the observed country has nowhere to go.
+                    proxy_metadata={"expected_country": "US"},
+                )
+        return result, verify, [r.getMessage() for r in logs.records]
+
+    def _mismatch(self):
+        return {"ok": False, "error": "country_mismatch:DE", "actual_country": "DE"}
+
+    def test_provider_driver_mismatch_still_aborts(self):
+        result, _, _ = self._run("roxy", self._mismatch())
+        self.assertFalse(result["success"])
+        self.assertIn("roxy_proxy_country_mismatch", result["error"])
+        self.assertIn("country_mismatch:DE", result["error"])
+
+    def test_local_driver_mismatch_does_not_abort(self):
+        for driver in ("camoufox", "playwright"):
+            with self.subTest(driver=driver):
+                result, _, _ = self._run(driver, self._mismatch())
+                self.assertNotIn("proxy_country_mismatch", result["error"], driver)
+                # ... but the observed country is still recorded for auditing.
+                self.assertEqual(result["proxy_audit"].get("actual_country"), "DE", driver)
+
+    def test_local_driver_mismatch_is_logged(self):
+        _, _, messages = self._run("camoufox", self._mismatch())
+        self.assertTrue(any("country_mismatch:DE" in m for m in messages))
+
+    def test_probe_now_runs_for_local_drivers(self):
+        # The whole point of P2-3: this used to be roxy/cloak only.
+        for driver in ("camoufox", "playwright", "roxy", "cloak"):
+            with self.subTest(driver=driver):
+                _, verify, _ = self._run(driver, {"ok": True, "actual_country": "US"})
+                self.assertEqual(verify.call_count, 1, driver)
+
+    def test_probe_can_be_switched_off(self):
+        config = dict(_COUNTRY_CONFIG)
+        config["registration"] = dict(config["registration"], browser_proxy_country_check="off")
+        _, verify, _ = self._run("roxy", self._mismatch(), config=config)
+        verify.assert_not_called()
+
+    def test_probe_can_be_promoted_to_blocking(self):
+        config = dict(_COUNTRY_CONFIG)
+        config["registration"] = dict(
+            config["registration"], browser_proxy_country_check="blocking"
+        )
+        result, _, _ = self._run("camoufox", self._mismatch(), config=config)
+        self.assertIn("camoufox_proxy_country_mismatch", result["error"])
+
+    def test_clean_probe_records_the_country_without_warning_about_it(self):
+        result, _, messages = self._run("camoufox", {"ok": True, "actual_country": "US"})
+        self.assertEqual(result["proxy_audit"].get("actual_country"), "US")
+        self.assertFalse(any("country_mismatch" in m for m in messages))
+
+    # ── the probe now runs on every registration, so it must be bounded ──
+
+    def test_probe_bounds_its_fetch_with_the_timeout(self):
+        # timeout_seconds used to be accepted and ignored. page.evaluate is not
+        # governed by Playwright's default timeout, so an unresponsive geo
+        # endpoint would hang the registration.
+        page = MagicMock()
+        page.evaluate.return_value = {"country": "US", "status": 200}
+        verify_browser_proxy_country(SimpleNamespace(page=page), timeout_seconds=7)
+        script = page.evaluate.call_args[0][0]
+        self.assertIn("7000", script)
+        self.assertIn("AbortController", script)
+        self.assertIn("signal: controller.signal", script)
+
+    def test_probe_survives_a_junk_timeout(self):
+        page = MagicMock()
+        page.evaluate.return_value = {"country": "US", "status": 200}
+        verify_browser_proxy_country(SimpleNamespace(page=page), timeout_seconds="abc")
+        self.assertIn("20000", page.evaluate.call_args[0][0])
 
 
 if __name__ == "__main__":

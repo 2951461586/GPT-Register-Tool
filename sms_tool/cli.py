@@ -28,6 +28,7 @@ from .commands import payment_links as payment_link_commands
 from .commands import registration as registration_commands
 from .commands.email_change import run_change_email
 from .proxy_routing import proxy_pool_for
+from .proxy_health import ProxyHealthTracker
 from .sanitizer import sanitize_text
 
 # `mailbox` and `registration` import `curl_cffi` at module top, so they must NOT
@@ -83,7 +84,7 @@ def _registration_proxy_lane(registration_driver: object = None) -> str:
     return "protocol_registration" if driver == "protocol" else "browser_registration"
 
 
-def _configured_registration_proxy(registration_driver: object = None) -> str:
+def _configured_registration_proxy(registration_driver: object = None, tracker=None) -> str:
     proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
     lane = _registration_proxy_lane(registration_driver)
     lane_keys = (
@@ -93,8 +94,15 @@ def _configured_registration_proxy(registration_driver: object = None) -> str:
     )
     if CFG.get("registration_proxy") and not any(proxy_cfg.get(key) for key in (*lane_keys, "registration", "pool")):
         return str(CFG["registration_proxy"]).strip()
-    values = proxy_pool_for(CFG, _registration_proxy_lane(registration_driver))
+    values = proxy_pool_for(CFG, lane)
     if values:
+        # P2-1: when more than one candidate exists, pick the healthiest via the
+        # shared ProxyHealthTracker instead of always pinning the first. On a fresh
+        # tracker (no health data) rank() preserves input order, so behaviour is
+        # unchanged for a single-account run that has never recorded failures.
+        if len(values) > 1:
+            tracker = tracker or ProxyHealthTracker(CFG)
+            return tracker.rank(values)[0]
         return values[0]
     return str(
         proxy_cfg.get("default")

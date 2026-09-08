@@ -11,6 +11,7 @@ from sms_tool.browser_pool import BrowserProcessPool
 from sms_tool.proxy_entry import rotate_session
 from sms_tool.registration_drivers import external_sessions as es
 from sms_tool.registration_drivers.external_sessions import managed
+from sms_tool.registration_drivers.browser_flow import form_steps
 from sms_tool.registration_drivers.browser_flow.session import _bind_totp_in_browser
 
 
@@ -108,3 +109,66 @@ def test_totp_uses_configured_origin_for_both_requests():
         script, args = call.args
         assert args[0].startswith("https://chat.example/backend-api/")
         assert "https://chatgpt.com" not in script
+
+
+def test_totp_requests_carry_an_in_page_deadline():
+    """P0-4: ``page.evaluate`` is not governed by Playwright's default timeout.
+
+    Without an in-page abort the MFA enroll/activate fetches could block a
+    registration worker forever; the budget has to reach the page, not just
+    the Python side.
+    """
+    page = MagicMock()
+    page.evaluate.side_effect = [
+        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXP", "session_id": "test"}},
+        {"status": 200, "body": {"success": True}},
+    ]
+    assert _bind_totp_in_browser(
+        page, "tok", "did", chat_base="https://chat.example/", budget_ms=1234,
+    )["ok"]
+    assert page.evaluate.call_count == 2
+    for call in page.evaluate.call_args_list:
+        script, args = call.args
+        assert "AbortController" in script
+        assert "signal: controller.signal" in script
+        assert args[-1] == 1234
+
+
+@pytest.mark.parametrize("bad", [0, -5, "abc", None])
+def test_totp_deadline_falls_back_on_invalid_budget(bad):
+    page = MagicMock()
+    page.evaluate.side_effect = [
+        {"status": 200, "body": {"secret": "JBSWY3DPEHPK3PXP", "session_id": "test"}},
+        {"status": 200, "body": {"success": True}},
+    ]
+    assert _bind_totp_in_browser(
+        page, "tok", "did", chat_base="https://chat.example/", budget_ms=bad,
+    )["ok"]
+    for call in page.evaluate.call_args_list:
+        assert call.args[1][-1] == 20_000
+
+
+def test_nextauth_email_submit_carries_an_in_page_deadline():
+    page = MagicMock()
+    page.evaluate.return_value = {"ok": True}
+    assert form_steps._submit_email_via_nextauth(page, "a@example.com", budget_ms=4321) is True
+    script, payload = page.evaluate.call_args.args
+    assert "AbortController" in script
+    assert payload["budgetMs"] == 4321
+
+
+@pytest.mark.parametrize("bad", [0, -5, "abc", None])
+def test_nextauth_deadline_falls_back_on_invalid_budget(bad):
+    """P0-4: an invalid nextauth budget must not degrade into an instant abort.
+
+    The budget reaches the page as ``budgetMs`` and drives
+    ``setTimeout(() => controller.abort(), budgetMs)``.  A zero/negative/NaN
+    value would abort the csrf and signin requests before they ever leave the
+    page, so a misconfigured budget surfaces as "email submit failed" rather
+    than a timeout -- the failure mode this guard exists to prevent.
+    """
+    page = MagicMock()
+    page.evaluate.return_value = {"ok": True}
+    assert form_steps._submit_email_via_nextauth(page, "a@example.com", budget_ms=bad) is True
+    _, payload = page.evaluate.call_args.args
+    assert payload["budgetMs"] == 20_000

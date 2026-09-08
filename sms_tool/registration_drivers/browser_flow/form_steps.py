@@ -107,18 +107,49 @@ def _maybe_dismiss_chatgpt_onboarding(page, config: Mapping[str, Any] | None = N
     return clicks
 
 
-def _submit_email_via_nextauth(page, email: str) -> bool:
+# ``page.evaluate`` is not governed by Playwright's default timeout: two bare
+# in-page fetches here could hang a worker indefinitely when the auth origin
+# stopped responding.  Same fix shape as ``external_sessions.probe`` (P2-3).
+_NEXTAUTH_FETCH_BUDGET_MS = 20_000
+
+
+def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_FETCH_BUDGET_MS) -> bool:
     """Recover the ChatGPT SPA state when UI submit only updates ?email=.
 
     This stays inside the adopted Roxy browser context, preserving its cookies,
     fingerprint and network route while obtaining the same authorize redirect
     used by the reference Roxy implementation.
+
+    ``budget_ms`` bounds the in-page fetches (and their JSON body reads) via an
+    ``AbortController`` + deadline race.
     """
     try:
-        result = page.evaluate("""async ({email, did, logId}) => {
+        parsed_budget = int(budget_ms)
+    except (TypeError, ValueError):
+        parsed_budget = 0
+    budget = parsed_budget if parsed_budget > 0 else _NEXTAUTH_FETCH_BUDGET_MS
+    try:
+        result = page.evaluate("""async ({email, did, logId, budgetMs}) => {
+          const withDeadline = (promise, ms) => Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), Math.max(1, ms)))
+          ]);
+          const fetchJson = async (url, options) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), budgetMs);
+            try {
+              const response = await withDeadline(fetch(url, Object.assign({}, options, {signal: controller.signal})), budgetMs);
+              const body = await withDeadline(response.json(), budgetMs).catch(() => ({}));
+              return {ok: response.ok, status: response.status, body: body};
+            } catch (error) {
+              return {ok: false, status: 0, body: {}, error: String((error && error.message) || error)};
+            } finally {
+              clearTimeout(timer);
+            }
+          };
           try {
-            const csrfResponse = await fetch('/api/auth/csrf', {credentials: 'include', headers: {'accept': 'application/json'}});
-            const csrf = await csrfResponse.json();
+            const csrfResponse = await fetchJson('/api/auth/csrf', {credentials: 'include', headers: {'accept': 'application/json'}});
+            const csrf = csrfResponse.body;
             if (!csrfResponse.ok || !csrf.csrfToken) return {ok: false, stage: 'csrf'};
             const query = new URLSearchParams({
               prompt: 'login', 'ext-oai-did': did,
@@ -127,12 +158,12 @@ def _submit_email_via_nextauth(page, email: str) -> bool:
               screen_hint: 'login_or_signup', login_hint: email
             });
             const body = new URLSearchParams({callbackUrl: 'https://chatgpt.com/', csrfToken: csrf.csrfToken, json: 'true'});
-            const response = await fetch('/api/auth/signin/openai?' + query.toString(), {
+            const response = await fetchJson('/api/auth/signin/openai?' + query.toString(), {
               method: 'POST', credentials: 'include',
               headers: {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded'},
               body: body.toString()
             });
-            const data = await response.json();
+            const data = response.body;
             if (!response.ok || !data.url) return {ok: false, stage: 'signin', status: response.status};
             const target = new URL(data.url, location.href);
             for (const [key, value] of [['screen_hint','login_or_signup'], ['login_hint',email], ['ext-oai-did',did], ['auth_session_logging_id',logId]]) {
@@ -141,7 +172,7 @@ def _submit_email_via_nextauth(page, email: str) -> bool:
             location.assign(target.toString());
             return {ok: true};
           } catch (error) { return {ok: false, stage: 'exception'}; }
-        }""", {"email": str(email), "did": str(uuid.uuid4()), "logId": str(uuid.uuid4())})
+        }""", {"email": str(email), "did": str(uuid.uuid4()), "logId": str(uuid.uuid4()), "budgetMs": budget})
         return bool(isinstance(result, dict) and result.get("ok"))
     except Exception:
         return False

@@ -165,7 +165,10 @@ def run_browser_registration(
     _browser_geo = browser_fingerprint_pool.detect_proxy_exit_geo(proxy, enabled=_browser_geo_enabled)
     _browser_profile = browser_fingerprint_pool.select_browser_profile(_browser_geo, seed=device_id, config=config)
     locale, timezone_id = decisions.aligned_locale_timezone(_browser_profile, locale, timezone_id)
-    _browser_viewport = decisions.playwright_viewport(_browser_profile, driver_name)
+    # P1-3: playwright consumes this as its viewport; camoufox consumes it as
+    # Screen(max_width, max_height) (previously hardcoded 1280x900, so the pool
+    # never reached it). Provider-owned drivers get None -- see decisions.py.
+    _browser_viewport = decisions.browser_screen_size(_browser_profile, driver_name)
     try:
         # Admission must happen before a browser process/context is allocated.
         # Acquiring at the later AUTH_FLOW transition let queued workers hold
@@ -177,13 +180,25 @@ def run_browser_registration(
             browser_identity=browser_identity, viewport=_browser_viewport,
             session_factory=session_factory,
         ) as browser:
-            if driver_name in {"roxy", "cloak"}:
+            # P2-3: every browser driver probes its egress now. Provider
+            # drivers keep failing on a mismatch; the local ones only record
+            # and warn -- a wrong country is evidence, not a gate.
+            _country_check = decisions.proxy_country_check_mode(driver_name, config)
+            if _country_check != "off":
                 verification = external_sessions.verify_browser_proxy_country(browser, expected_country=str((proxy_metadata or {}).get("expected_country") or ""), timeout_seconds=min(20, timeout))
                 if proxy_metadata is not None:
                     proxy_metadata = dict(proxy_metadata)
                     proxy_metadata["actual_country"] = verification.get("actual_country", "")
                 if not verification.get("ok"):
-                    raise BrowserRegistrationError(f"{driver_name}_proxy_country_mismatch", str(verification.get("error") or "unknown"))
+                    _country_error = str(verification.get("error") or "unknown")
+                    if _country_check == "blocking":
+                        raise BrowserRegistrationError(f"{driver_name}_proxy_country_mismatch", _country_error)
+                    logger.warning(
+                        "egress country probe (%s, non-fatal): %s (expected=%s actual=%s)",
+                        driver_name, _country_error,
+                        str((proxy_metadata or {}).get("expected_country") or ""),
+                        str(verification.get("actual_country") or ""),
+                    )
             page = browser.page
             browser.add_device_cookie(device_id, chat_base, auth_base)
             machine.transition(RegistrationState.AUTH_FLOW)

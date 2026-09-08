@@ -19,6 +19,7 @@ import signal
 import sys
 
 from sms_tool.proxy_pool import Socks5Server, UpstreamProxy
+from sms_tool.proxy_health import ProxyHealthTracker
 
 logger = logging.getLogger("proxy_pool")
 
@@ -81,10 +82,16 @@ def main() -> None:
 
     # load pool settings from config
     pool_cfg: dict = {}
+    full_cfg: dict = {}
     if config_path and os.path.isfile(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             full_cfg = json.load(f)
         pool_cfg = full_cfg.get("proxy_pool") or {}
+
+    # P1-2: share the on-disk ProxyHealthTracker with the registration/remail paths
+    # so the SOCKS5 pool's health becomes visible to the proxies that consume the
+    # same egress endpoints. No-op in-memory pool if no config is present.
+    health_tracker = ProxyHealthTracker(full_cfg)
 
     host = args.host or pool_cfg.get("listen_host", "127.0.0.1")
     port = args.port or pool_cfg.get("listen_port", 18080)
@@ -114,6 +121,7 @@ def main() -> None:
         health_check_timeout=5.0,
         connect_timeout=connect_timeout,
         max_retries=max_retries,
+        health_tracker=health_tracker,
     )
 
     logger.info("Proxy pool config: host=%s port=%d stats=%d upstreams=%d",

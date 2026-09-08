@@ -38,10 +38,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-try:  # Python 3.9+
-    from zoneinfo import ZoneInfo
-except Exception:  # pragma: no cover - only on very old interpreters
-    ZoneInfo = None  # type: ignore
+from . import geo as _geo
+from .geo import clock as _clock
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +57,10 @@ CHROME_UA = (
 # ---------------------------------------------------------------------------
 AUTO_BROWSER_LOCALE_FROM_IP = True
 IP_GEO_TIMEOUT = 6.0
+# Legacy: the probe now walks ``sms_tool.geo.GEO_ENDPOINTS`` (which puts
+# ``cloudflare.com/cdn-cgi/trace`` first — plain text, no rate limit, and a
+# success there is also a reachability signal for OpenAI, which sits behind
+# Cloudflare).  Kept because config docs and external callers reference it.
 IP_GEO_ENDPOINTS = [
     "https://ipinfo.io/json",
     "https://ipapi.co/json",
@@ -128,15 +130,13 @@ BROWSER_PROFILE_LABELS = [
 
 
 def _offset_minutes_for_timezone(tz_name: str, default: int) -> int:
-    if ZoneInfo is None:
-        return int(default)
-    try:
-        offset = datetime.now(ZoneInfo(tz_name)).utcoffset()
-        if offset is not None:
-            return int(offset.total_seconds() // 60)
-    except Exception:
-        pass
-    return int(default)
+    """UTC offset in minutes for ``tz_name`` right now (DST-aware).
+
+    Delegates to :func:`sms_tool.geo.clock.offset_minutes_for_timezone` — the
+    same function the Sentinel payload uses, so the browser clock and the PoW
+    clock can no longer disagree.
+    """
+    return _clock.offset_minutes_for_timezone(tz_name, int(default))
 
 
 def _label_for_index(index: int) -> str:
@@ -211,76 +211,68 @@ def shared_browser_profile_pool(config: Mapping[str, Any] | None = None) -> Brow
 # ---------------------------------------------------------------------------
 # Exit-IP geo detection (mirrors turb's _detect_exit_geo)
 # ---------------------------------------------------------------------------
+# The cache, the endpoint list and the precedence chain now live in
+# ``sms_tool.geo`` (P0-1): the browser path, the protocol path and the payment
+# preflight all resolve through one resolver, so a country measured during
+# preflight is reused here instead of being re-guessed from the credential
+# template, and a failed probe expires after NEGATIVE_TTL instead of poisoning
+# the process forever.
+#
+# ``_GEO_CACHE`` / ``_GEO_CACHE_LOCK`` are no longer the source of truth but are
+# kept: external callers and tests import them, and removing a module-level
+# name would break the patch seams.
 _GEO_CACHE: dict[str, dict[str, Any]] = {}
 _GEO_CACHE_LOCK = threading.Lock()
 
 
 def _normalize_geo_response(data: Any) -> dict[str, Any]:
-    """Normalize ipinfo / ipapi / ipwho.is JSON into a common shape."""
-    if not isinstance(data, dict):
-        return {}
-    timezone = data.get("timezone")
-    if isinstance(timezone, dict):
-        timezone = timezone.get("id") or timezone.get("name")
-    country = str(
-        data.get("country") or data.get("country_code") or data.get("countryCode") or ""
-    ).strip().upper()
-    return {
-        "ip": data.get("ip") or data.get("query"),
-        "country": country,
-        "region": data.get("region") or data.get("regionName"),
-        "city": data.get("city"),
-        "timezone": str(timezone or "").strip(),
-        "org": data.get("org") or data.get("isp") or (data.get("connection") or {}).get("org"),
-    }
+    """Normalize ipinfo / ipapi / ipwho.is JSON into a common shape.
+
+    Thin shell over :func:`sms_tool.geo.normalize_geo_response` — the provider
+    field mapping now has one implementation.
+    """
+    return _geo.normalize_geo_response(data).to_dict()
+
+
+def _geo_probe_adapter(
+    proxy: str,
+    *,
+    timeout: float,
+    endpoints: Any,
+    need_timezone: bool,
+) -> "_geo.ProxyGeo":
+    """Expose the legacy ``_query_geo_endpoints`` seam to the resolver.
+
+    ``_query_geo_endpoints`` stays module-level and stays the function tests
+    patch; this adapter is what lets the resolver call it without knowing about
+    the browser module.
+    """
+    return _geo.normalize_geo_response(_query_geo_endpoints(proxy, float(timeout)))
 
 
 def _query_geo_endpoints(proxy: str, timeout: float) -> dict[str, Any]:
-    """Query geo endpoints through the proxy; return first usable normalize() result."""
-    last_err: str = ""
-    # Prefer curl_cffi (handles socks5 + TLS impersonation); fall back to urllib
-    # for plain http/https proxies.
-    for url in IP_GEO_ENDPOINTS:
-        try:
-            from curl_cffi.requests import get as cffi_get
+    """Query geo endpoints through the proxy; return first usable result.
 
-            resp = cffi_get(
-                url,
-                proxy=proxy or None,
-                impersonate="chrome",
-                timeout=timeout,
-                headers={"User-Agent": CHROME_UA, "Accept": "application/json"},
-            )
-            if resp.status_code == 200:
-                geo = _normalize_geo_response(resp.json())
-                if geo.get("country") or geo.get("timezone"):
-                    return geo
-        except Exception as exc:  # curl_cffi missing, network error, non-200…
-            last_err = f"{type(exc).__name__}: {exc}"
-            continue
-    # urllib fallback (http/https proxies only)
-    try:
-        import urllib.request
+    Delegates to :func:`sms_tool.geo.probe_exit_geo` so the browser path uses
+    the same endpoint list (and the same curl_cffi-then-urllib transport) as
+    every other caller.  Kept as a module-level function purely because it is
+    the documented patch seam for geo tests.
+    """
+    geo = _geo.probe_exit_geo(proxy, timeout=float(timeout), need_timezone=True)
+    return geo.to_dict() if geo.known else {}
 
-        handler = urllib.request.ProxyHandler(
-            {"http": proxy, "https": proxy} if proxy else {}
-        )
-        opener = urllib.request.build_opener(handler)
-        req = urllib.request.Request(
-            IP_GEO_ENDPOINTS[0],
-            headers={"User-Agent": CHROME_UA, "Accept": "application/json"},
-        )
-        with opener.open(req, timeout=timeout) as r:
-            if r.status == 200:
-                geo = _normalize_geo_response(json.loads(r.read().decode("utf-8", "replace")))
-                if geo.get("country") or geo.get("timezone"):
-                    return geo
-    except Exception as exc:
-        last_err = f"urllib:{type(exc).__name__}: {exc}"
-    if last_err:
-        # Swallow; caller treats empty geo as "fall back to configured locale".
-        pass
-    return {}
+
+def _proxy_cache_key(proxy: str) -> str:
+    """Canonical cache key — ``scheme://user:pass@host:port``.
+
+    Proxy pools arrive in many shapes (including the common
+    ``host:port:user:pass`` form); without normalization geo detection silently
+    fails and the fingerprint falls back to the default US locale, defeating
+    the whole geo-alignment optimization.
+    """
+    from .phone_proxy import normalize_proxy_url
+
+    return normalize_proxy_url(proxy) or str(proxy or "")
 
 
 def detect_proxy_exit_geo(
@@ -291,32 +283,27 @@ def detect_proxy_exit_geo(
 ) -> dict[str, Any]:
     """Detect the proxy's real exit geo. Never raises; returns ``{}`` on miss.
 
-    Cached per proxy string so repeated registrations through the same egress
-    don't re-probe.  Disabled (or direct/unproxied) calls return ``{}`` so the
+    Resolves through the process-wide :class:`sms_tool.geo.GeoResolver`, so a
+    geo already measured by the payment preflight is reused instead of being
+    re-probed.  Disabled (or direct/unproxied) calls return ``{}`` so the
     caller keeps using the configured locale/timezone.
     """
     if not enabled or not proxy:
         return {}
-    # Normalize first: proxy pools are supplied in many shapes (including the
-    # common ``host:port:user:pass`` form).  curl_cffi / urllib only understand
-    # the canonical ``scheme://user:pass@host:port`` URL, so without this step
-    # geo detection silently fails and the fingerprint falls back to the
-    # default US locale — defeating the whole geo-alignment optimization.
-    from .phone_proxy import normalize_proxy_url
-    norm = normalize_proxy_url(proxy) or str(proxy)
-    cache_key = norm
-    with _GEO_CACHE_LOCK:
-        cached = _GEO_CACHE.get(cache_key)
-        if cached is not None:
-            return dict(cached)
-    geo: dict[str, Any] = {}
+    key = _proxy_cache_key(proxy)
     try:
-        geo = _query_geo_endpoints(cache_key, float(timeout))
+        geo = _geo.shared_geo_resolver().resolve(
+            key,
+            timeout=float(timeout),
+            need_timezone=True,
+            probe=_geo_probe_adapter,
+        )
     except Exception:
-        geo = {}
+        geo = _geo.ProxyGeo()
+    data = geo.to_dict() if geo.known else {}
     with _GEO_CACHE_LOCK:
-        _GEO_CACHE[cache_key] = dict(geo)
-    return dict(geo)
+        _GEO_CACHE[key] = dict(data)
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -393,10 +380,16 @@ def build_browser_environment(
         tz = str(geo.get("timezone") or "").strip()
         if tz:
             locale["timezone_iana"] = tz
-            locale["timezone_offset_minutes"] = _offset_minutes_for_timezone(
-                tz, int(locale.get("timezone_offset_minutes", 0))
-            )
             locale["timezone_name"] = TIMEZONE_NAME_BY_IANA.get(tz, locale.get("timezone_name", ""))
+    # P1-4: the offset is *always* recomputed from the IANA name, never taken
+    # from the table.  The table's values were written down during DST
+    # ("us" = -7h Pacific Daylight, "gb" = +1h British Summer) and are an hour
+    # wrong for half the year.  A browser reporting -0700 in January next to a
+    # Pacific timezone is a free contradiction for any server-side check.
+    locale["timezone_offset_minutes"] = _offset_minutes_for_timezone(
+        str(locale.get("timezone_iana") or ""),
+        int(locale.get("timezone_offset_minutes", 0)),
+    )
     profile = dict(base_profile or {})
     profile.update({
         "locale_profile": key,
@@ -500,6 +493,39 @@ def validate_browser_profile(profile: Any) -> list[str]:
     issues.extend(_range_issue(profile, "device_memory", _DEVICE_MEMORY_RANGE))
     issues.extend(_range_issue(profile, "device_pixel_ratio", _DEVICE_PIXEL_RATIO_RANGE))
     return issues
+
+
+# P1-3: drivers whose fingerprint is owned end-to-end by the anti-detect provider.
+# Screen size / UA / platform come from the provider profile, so a locally
+# configured ``registration.browser_profile_pool`` has no effect for them.
+PROVIDER_MANAGED_FINGERPRINT_DRIVERS = frozenset({"roxy", "cloak", "adspower"})
+
+
+def provider_managed_fingerprint_notice(
+    config: Mapping[str, Any] | None, driver_name: Any
+) -> str:
+    """Explain that ``browser_profile_pool`` does not apply to this driver.
+
+    Non-empty only when the operator actually configured
+    ``registration.browser_profile_pool`` *and* selected a provider-owned driver.
+    The built-in default pool is not "configured", so this stays silent in the
+    common case instead of logging on every single registration.
+    """
+    driver = str(driver_name or "").strip().lower()
+    if driver not in PROVIDER_MANAGED_FINGERPRINT_DRIVERS:
+        return ""
+    cfg = config if isinstance(config, Mapping) else {}
+    registration = cfg.get("registration")
+    if not isinstance(registration, Mapping):
+        return ""
+    pool = registration.get("browser_profile_pool")
+    if not isinstance(pool, Mapping) or not pool:
+        return ""
+    return (
+        f"driver {driver!r} is provider-managed: its screen/UA/platform come from "
+        "the provider profile, so registration.browser_profile_pool has no effect "
+        "for this driver (it applies to playwright and camoufox only)"
+    )
 
 
 def select_browser_profile(

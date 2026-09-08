@@ -6,6 +6,7 @@ from sms_tool.auth_headers import (
     AUTH_IMPERSONATE,
     DEFAULT_SEC_CH_UA,
     DEFAULT_USER_AGENT,
+    hardware_profile_for_family,
     openai_auth_headers,
     nextauth_headers,
     chatgpt_headers,
@@ -13,6 +14,7 @@ from sms_tool.auth_headers import (
     set_fingerprint_geo,
     sentinel_fingerprint,
 )
+from sms_tool.fingerprint_pool import FingerprintPool
 from sms_tool.error_classification import classify_error
 
 
@@ -145,6 +147,141 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
 
     def test_sentinel_extraction_failure_is_retryable_network_error(self):
         self.assertEqual(classify_error("sentinel_extract_failed"), "network")
+
+
+class FamilyHardwareProfileTests(unittest.TestCase):
+    """P1-1: platform-class fields come from a family table, not a hardcoded Win32.
+
+    The two current profiles are both Windows desktop, so their output must stay
+    byte-identical to the formerly-hardcoded values. The table also must let P0-2
+    add non-desktop families (macOS/iOS Safari) without creating a UA/platform
+    contradiction.
+    """
+
+    def tearDown(self):
+        auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = AUTH_IMPERSONATE
+
+    def test_current_profiles_keep_windows_desktop_constants(self):
+        # Regression guard: firefox/chrome must still report the old Win32 shape.
+        for name in ("firefox144", "chrome146"):
+            auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = name
+            fp = sentinel_fingerprint()
+            self.assertEqual(fp["navigator_platform"], "Win32")
+            self.assertEqual(fp["max_touch_points"], 0)
+            self.assertEqual(fp["sec_ch_ua_platform_version"], "10.0.0")
+        # Only Chrome carries the Google vendor; Firefox's vendor is empty.
+        auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = "firefox144"
+        self.assertEqual(sentinel_fingerprint()["navigator_vendor"], "")
+        auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = "chrome146"
+        self.assertEqual(sentinel_fingerprint()["navigator_vendor"], "Google Inc.")
+
+    def test_hardware_profile_for_family_returns_full_keys(self):
+        firefox = hardware_profile_for_family("firefox144")
+        chrome = hardware_profile_for_family("chrome146")
+        for key in ("navigator_platform", "navigator_vendor", "max_touch_points", "sec_ch_ua_platform_version"):
+            self.assertIn(key, firefox)
+            self.assertIn(key, chrome)
+        self.assertEqual(firefox["navigator_platform"], "Win32")
+        self.assertEqual(chrome["navigator_vendor"], "Google Inc.")
+
+    def test_unknown_family_falls_back_to_self_consistent_desktop(self):
+        # A misclassified impersonate token must degrade to a populated desktop
+        # profile, never to a half-empty dict that would drop required keys.
+        unknown = hardware_profile_for_family("netscape-1.0")
+        self.assertEqual(set(unknown.keys()), {
+            "navigator_platform", "navigator_vendor", "max_touch_points", "sec_ch_ua_platform_version",
+        })
+        self.assertEqual(unknown["navigator_platform"], "Win32")
+
+    def test_non_desktop_family_picks_up_own_platform_without_contradiction(self):
+        # Contract for P0-2: once a macOS/iOS family is added to the table, the
+        # sentinel fingerprint must report that platform instead of Win32, so a
+        # Safari UA never coexists with a Windows navigator.platform. The platform
+        # class ("macos") drives platform/touch/version; the browser family
+        # ("safari") drives the vendor.
+        mac_entry = {
+            "navigator_platform": "MacIntel",
+            "max_touch_points": 0,
+            "sec_ch_ua_platform_version": "14.5.0",
+        }
+        with patch.dict(auth_headers._HARDWARE_PROFILES, {"macos": mac_entry}):
+            with patch.object(auth_headers, "current_auth_fingerprint", return_value={
+                "name": "safari17_0",
+                "impersonate": "safari17_0",
+                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/17.0",
+                "sec_ch_ua": "", "sec_ch_ua_mobile": "?0", "sec_ch_ua_platform": '"macOS"',
+            }):
+                fp = sentinel_fingerprint()
+        self.assertEqual(fp["navigator_platform"], "MacIntel")
+        self.assertEqual(fp["navigator_vendor"], "Apple Computer, Inc.")
+        self.assertEqual(fp["sec_ch_ua_platform_version"], "14.5.0")
+        # The per-account device silhouette is still derived independently.
+        self.assertIn(fp["screen"], auth_headers._SCREEN_CHOICES)
+
+
+class FingerprintPoolVersionMatrixTests(unittest.TestCase):
+    """P0-2: protocol fingerprint pool becomes a weighted version matrix.
+
+    Firefox stays the dominant share (ChatGPT's Cloudflare edge 403s Chrome), the
+    two original profiles keep their canonical keys/values intact, and the pool
+    supports both weighted-random (default) and round-robin (deterministic) modes.
+    """
+
+    def tearDown(self):
+        auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = AUTH_IMPERSONATE
+
+    def test_original_two_profiles_remain_byte_identical(self):
+        # Canonical keys that drive persisted-account attribution must not change.
+        self.assertEqual(
+            auth_headers.AUTH_FINGERPRINT_PROFILES["firefox144"]["user_agent"],
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
+        )
+        self.assertEqual(
+            auth_headers.AUTH_FINGERPRINT_PROFILES["chrome146"]["sec_ch_ua"],
+            '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+        )
+
+    def test_matrix_spans_firefox_chrome_safari_with_ios(self):
+        fams = {}
+        for name in auth_headers.AUTH_FINGERPRINT_PROFILES:
+            fams.setdefault(auth_headers._browser_family(name), set()).add(name)
+        self.assertIn("firefox", fams)
+        self.assertIn("chrome", fams)
+        self.assertIn("safari", fams)
+        self.assertTrue(any(n.endswith("_ios") for n in fams["safari"]))
+
+    def test_family_weights_keep_firefox_dominant(self):
+        # With ~16 profiles the family shares must hold: Firefox majority, Chrome
+        # minority, Safari present. Draw enough samples that the law of large
+        # numbers pins the fractions well inside any plausible noise band.
+        names = list(auth_headers.AUTH_FINGERPRINT_PROFILES)
+        cfg = {"mode": "random", "profiles": names}
+        counts = {"firefox": 0, "chrome": 0, "safari": 0}
+        with patch.object(auth_headers, "_auth_fingerprint_config", return_value=cfg):
+            for _ in range(1200):
+                prof = auth_headers.select_auth_fingerprint(rotate=True)
+                counts[auth_headers._browser_family(prof["impersonate"])] += 1
+        total = sum(counts.values())
+        ff, ch, sa = (counts[k] / total for k in ("firefox", "chrome", "safari"))
+        self.assertGreater(ff, ch)
+        self.assertGreater(ff, sa)
+        self.assertGreater(ff, 0.40)
+        self.assertGreater(sa, 0.0)
+
+    def test_pool_default_is_weighted_random_and_round_robin_still_works(self):
+        pool = FingerprintPool.from_config({})
+        self.assertEqual(pool._mode, "random")
+        self.assertGreater(pool.size, 2)
+        rr = FingerprintPool(mode="round_robin")
+        seen = {rr.next().name for _ in range(rr.size)}
+        self.assertEqual(seen, {p.name for p in rr._profiles})
+
+    def test_safari_sentinel_profile_reports_mac_platform(self):
+        auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = "safari17_0"
+        fp = sentinel_fingerprint()
+        self.assertEqual(fp["navigator_platform"], "MacIntel")
+        self.assertEqual(fp["navigator_vendor"], "Apple Computer, Inc.")
+        self.assertEqual(fp["sec_ch_ua_platform_version"], "14.5.0")
 
 
 if __name__ == "__main__":
