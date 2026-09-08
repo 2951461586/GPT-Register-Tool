@@ -136,7 +136,33 @@ def probe_proxy(
         result.error = "proxy_scheme_detection_failed:" + " | ".join(errors[-3:])
     if state is not None:
         state.record_probe(value, result)
+    _publish_probe_geo(value, result)
     return result
+
+
+def _publish_probe_geo(value: str, result: "ProxyProbeResult") -> None:
+    """Hand a successful preflight measurement to the shared geo resolver.
+
+    The preflight already knows the real egress country — it just used to be
+    dropped on the floor, and the fingerprint pool then guessed the country
+    again from the credential template, with nothing reconciling the two.  (P0-1)
+    """
+    if not getattr(result, "ok", False) or not getattr(result, "country_code", ""):
+        return
+    try:
+        from .geo import ProxyGeo, remember_proxy_geo
+
+        remember_proxy_geo(
+            value,
+            ProxyGeo(
+                ip=str(result.ip or ""),
+                country=str(result.country_code or "").upper(),
+                region=str(getattr(result, "region", "") or ""),
+                source="probe",
+            ),
+        )
+    except Exception:
+        pass  # geo is advisory; never let cache bookkeeping fail a payment probe
 
 
 def _proxy_scheme_candidates(proxy: str) -> list[str]:

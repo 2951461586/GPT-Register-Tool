@@ -16,10 +16,18 @@ canonical fingerprint definitions remain in one place.  This module adds:
 from __future__ import annotations
 
 import json
+import random
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+
+from .auth_headers import fingerprint_profile_weights
+from .geo import ProxyGeo
+
+# Returned when geo resolution is unavailable entirely; the caller then keeps
+# the profile's own defaults.
+_EMPTY_GEO = ProxyGeo()
 
 
 @dataclass(frozen=True)
@@ -117,21 +125,31 @@ class FingerprintPool:
         headers = profile.apply_to(base_headers)
     """
 
-    def __init__(self, profiles: list[ProtocolEnvironmentProfile] | None = None) -> None:
+    def __init__(self, profiles: list[ProtocolEnvironmentProfile] | None = None, mode: str | None = None) -> None:
         self._profiles = profiles or _build_profiles()
         self._index = 0
         self._lock = threading.Lock()
+        # P0-2: selection strategy. "round_robin" keeps the old deterministic
+        # order (used by tests that need a fixed sequence); anything else
+        # (including the default "random") draws weighted-random by browser
+        # family so consecutive accounts don't share a predictable fingerprint.
+        self._mode = (mode or "random").strip().lower()
+        if self._mode == "round_robin" or not self._profiles:
+            self._weights = None
+        else:
+            try:
+                name_weights = fingerprint_profile_weights([p.name for p in self._profiles])
+                self._weights = [float(name_weights.get(p.name, 1.0)) for p in self._profiles]
+            except Exception:
+                self._weights = None
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any] | None = None) -> "FingerprintPool":
         """Create a pool, optionally filtering by config settings."""
-        pool = cls()
-        if not isinstance(config, Mapping):
-            return pool
-        registration = config.get("registration", {})
-        if not isinstance(registration, Mapping):
-            return pool
-        fp_cfg = registration.get("fingerprint_pool", {})
+        registration = config.get("registration", {}) if isinstance(config, Mapping) else {}
+        fp_cfg = registration.get("fingerprint_pool", {}) if isinstance(registration, Mapping) else {}
+        mode = fp_cfg.get("mode") if isinstance(fp_cfg, Mapping) else None
+        pool = cls(mode=mode)
         if not isinstance(fp_cfg, Mapping):
             return pool
         # Filter by allowed countries if configured
@@ -156,10 +174,28 @@ class FingerprintPool:
             from .auth_headers import _GEO_PROFILES
         except Exception:
             return profile
-        country = infer_proxy_country(proxy)
+        hint = ""
+        try:
+            hint = str(infer_proxy_country(proxy) or "").strip().upper()
+        except Exception:
+            hint = ""
+        # Only pay for a measurement when the curated table cannot answer.
+        # ``_GEO_PROFILES`` covers a handful of markets wired up by hand; any
+        # other country needs the measured clock, otherwise the profile keeps
+        # its hard-coded US one.
+        resolved = self._resolve_geo(proxy, hint, need_timezone=hint not in _GEO_PROFILES)
+        country = resolved.country
         geo = _GEO_PROFILES.get(country) if country else None
         if not geo:
-            return profile
+            # The country is real but has no curated entry (``_GEO_PROFILES``
+            # only covers the handful of markets that were wired up by hand).
+            # Falling through to the profile default here is the actual bug this
+            # resolver was built to kill: it hands a Brazilian exit IP a
+            # US Eastern clock. Use the measured timezone when we have one and
+            # keep the profile's language, which is far less observable.
+            if not resolved.timezone:
+                return profile
+            geo = {"timezone": resolved.timezone}
         return ProtocolEnvironmentProfile(
             name=profile.name,
             impersonate=profile.impersonate,
@@ -172,6 +208,31 @@ class FingerprintPool:
             lang_full=str(geo.get("lang_full") or profile.lang_full),
             country=country,
         )
+
+    @staticmethod
+    def _resolve_geo(proxy: str, hint: str, need_timezone: bool):
+        """Template hint first, real probe as the fallback (P0-1).
+
+        This used to be ``infer_proxy_country(proxy)`` alone.  A proxy whose
+        credential carries no region token therefore resolved to ``""`` and the
+        profile kept its hard-coded US locale and clock no matter where the
+        egress actually was — the "Brazilian IP, UTC clock" contradiction.  The
+        shared resolver now measures the exit country in that case, and reuses
+        a measurement the payment preflight already made when one exists.
+
+        The hint still wins when present: it is free, and forcing a probe onto
+        the registration hot path for proxies that already advertise their
+        region would cost a round-trip per batch.  ``need_timezone`` is what a
+        caller sets when the hint alone is not enough to place a clock.
+        """
+        try:
+            from .geo import shared_geo_resolver
+
+            return shared_geo_resolver().resolve(
+                proxy, hint=hint, need_timezone=need_timezone
+            )
+        except Exception:
+            return ProxyGeo(country=hint, source="hint") if hint else _EMPTY_GEO
 
     def next(self, proxy: str | None = None) -> ProtocolEnvironmentProfile:
         """Return the next profile (round-robin), geo-aligned to the proxy exit."""
@@ -187,8 +248,11 @@ class FingerprintPool:
                 proxy,
             )
         with self._lock:
-            profile = self._profiles[self._index % len(self._profiles)]
-            self._index += 1
+            if self._mode == "round_robin" or not self._weights:
+                profile = self._profiles[self._index % len(self._profiles)]
+                self._index += 1
+            else:
+                profile = random.choices(self._profiles, weights=self._weights, k=1)[0]
         return self._with_geo(profile, proxy)
 
     def select(self, name: str, proxy: str | None = None) -> ProtocolEnvironmentProfile | None:

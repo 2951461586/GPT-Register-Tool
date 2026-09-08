@@ -15,6 +15,7 @@ from sms_tool.browser_fingerprint_pool import (
     detect_proxy_exit_geo,
     is_cloud_proxy,
     locale_profile_key_from_geo,
+    provider_managed_fingerprint_notice,
     select_browser_profile,
     shared_browser_profile_pool,
     validate_browser_profile,
@@ -246,6 +247,55 @@ class CloudProxyClassificationTests(unittest.TestCase):
         env = select_browser_profile(geo, seed="device-cloud", config=cfg)
         self.assertEqual(env["proxy_org_class"], "cloud")
         self.assertTrue(env["browser_fingerprint_profile"])
+
+
+class TestProviderManagedFingerprintNotice(unittest.TestCase):
+    """P1-3: say so out loud when a configured pool cannot apply to a driver."""
+
+    def _pool_config(self):
+        # Canonical shape is a Mapping -- that is exactly what
+        # shared_browser_profile_pool() requires for the key to be honoured.
+        return {"registration": {"browser_profile_pool": {"profiles": [{"screen_width": 1440}]}}}
+
+    def test_provider_drivers_warn_when_a_pool_is_configured(self):
+        for driver in ("roxy", "cloak", "adspower"):
+            notice = provider_managed_fingerprint_notice(self._pool_config(), driver)
+            self.assertTrue(notice, driver)
+            self.assertIn(driver, notice)
+            self.assertIn("browser_profile_pool", notice)
+
+    def test_screen_managed_drivers_never_warn(self):
+        # These drivers do consume the pool, so a notice here would be a lie.
+        for driver in ("playwright", "camoufox"):
+            self.assertEqual(
+                provider_managed_fingerprint_notice(self._pool_config(), driver), "", driver
+            )
+
+    def test_silent_without_an_explicitly_configured_pool(self):
+        # The built-in default pool is not "configured" -- otherwise this would
+        # log on every single registration.
+        for cfg in (
+            {},
+            {"registration": {}},
+            {"registration": {"browser_profile_pool": {}}},
+            {"registration": {"browser_profile_pool": None}},
+            # A list is not the canonical shape and is ignored, the same way
+            # shared_browser_profile_pool() ignores it.
+            {"registration": {"browser_profile_pool": [{"screen_width": 1440}]}},
+        ):
+            self.assertEqual(provider_managed_fingerprint_notice(cfg, "roxy"), "", cfg)
+
+    def test_silent_for_junk_config(self):
+        for cfg in (None, "nope", 42, []):
+            self.assertEqual(provider_managed_fingerprint_notice(cfg, "roxy"), "", cfg)
+
+    def test_uppercase_and_padded_driver_names_are_recognised(self):
+        self.assertTrue(provider_managed_fingerprint_notice(self._pool_config(), " Roxy "))
+
+    def test_unknown_driver_never_warns(self):
+        self.assertEqual(
+            provider_managed_fingerprint_notice(self._pool_config(), "protocol"), ""
+        )
 
 
 if __name__ == "__main__":

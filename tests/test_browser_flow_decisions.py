@@ -76,12 +76,36 @@ def test_aligned_locale_timezone_keeps_configured_defaults_when_pool_is_silent()
 
 
 def test_aligned_locale_timezone_overrides_only_supplied_values():
+    # ``geo`` present == exit-geo detection actually measured something, which
+    # is the precondition for overriding the caller's values.
     assert decisions.aligned_locale_timezone(
-        {"navigator_language": "de-DE"}, "en-US", "America/New_York"
+        {"geo": {"country": "DE"}, "navigator_language": "de-DE"},
+        "en-US",
+        "America/New_York",
     ) == ("de-DE", "America/New_York")
     assert decisions.aligned_locale_timezone(
-        {"timezone_iana": "Europe/Berlin"}, "en-US", "America/New_York"
+        {"geo": {"country": "DE"}, "timezone_iana": "Europe/Berlin"},
+        "en-US",
+        "America/New_York",
     ) == ("en-US", "Europe/Berlin")
+
+
+def test_aligned_locale_timezone_does_not_clobber_when_geo_is_unknown():
+    """A failed exit-geo probe must mean "unknown", not "it is the US".
+
+    The pool falls back to its default (US) profile when detection fails.
+    Blindly applying that used to replace a correct caller-supplied locale with
+    en-US / America/New_York -- manufacturing the very country/environment
+    mismatch the alignment exists to prevent.
+    """
+    us_default_profile = {"navigator_language": "en-US", "timezone_iana": "America/New_York"}
+    assert decisions.aligned_locale_timezone(
+        us_default_profile, "pt-BR", "America/Sao_Paulo"
+    ) == ("pt-BR", "America/Sao_Paulo")
+    # Same profile, but the egress really was measured as the US -> override.
+    assert decisions.aligned_locale_timezone(
+        dict(us_default_profile, geo={"country": "US"}), "pt-BR", "America/Sao_Paulo"
+    ) == ("en-US", "America/New_York")
 
 
 def test_geo_affinity_country():
@@ -120,3 +144,125 @@ def test_registration_state_and_basis_stay_consistent(success, probe_pending, ex
 )
 def test_needs_chat_base_navigation(chat_base, page_url, expected):
     assert decisions.needs_chat_base_navigation(chat_base, page_url) is expected
+
+
+# ─────────────────────────── P1-3: pooled screen size ─────────────────────────
+#
+# The 7 hardware profiles in BROWSER_PROFILE_POOL used to reach Playwright only.
+# Camoufox was pinned to a hardcoded 1280x900; provider-owned drivers (roxy/
+# cloak/adspower) can never take it. These lock that split down.
+
+
+@pytest.mark.parametrize(
+    "driver, expected",
+    [
+        ("playwright", (1680, 1050)),
+        ("camoufox", (1680, 1050)),
+        # provider-owned: the anti-detect profile owns screen/UA/platform.
+        ("roxy", None),
+        ("cloak", None),
+        ("adspower", None),
+        # driver_name is already normalized upstream; no silent case folding.
+        ("PLAYWRIGHT", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_browser_screen_size_reaches_only_screen_managed_drivers(driver, expected):
+    profile = {"screen_width": 1680, "screen_height": 1050}
+    assert decisions.browser_screen_size(profile, driver) == expected
+
+
+def test_browser_screen_size_falls_back_when_profile_has_no_screen():
+    assert decisions.browser_screen_size({}, "playwright") == (
+        decisions.DEFAULT_VIEWPORT_WIDTH,
+        decisions.DEFAULT_VIEWPORT_HEIGHT,
+    )
+
+
+def test_browser_screen_size_falls_back_per_axis():
+    # A profile that only carries one axis must not collapse to (0, 0).
+    assert decisions.browser_screen_size({"screen_height": 800}, "camoufox") == (1440, 800)
+
+
+def test_browser_screen_size_coerces_string_dimensions():
+    profile = {"screen_width": "1512", "screen_height": "982"}
+    assert decisions.browser_screen_size(profile, "camoufox") == (1512, 982)
+
+
+def test_screen_and_provider_driver_sets_are_disjoint_and_complete():
+    # Every browser driver must be exactly one of: screen-managed or provider-managed.
+    assert not (decisions.SCREEN_MANAGED_DRIVERS & decisions.PROVIDER_MANAGED_DRIVERS)
+    assert decisions.SCREEN_MANAGED_DRIVERS | decisions.PROVIDER_MANAGED_DRIVERS == {
+        "playwright", "camoufox", "roxy", "cloak", "adspower",
+    }
+
+
+@pytest.mark.parametrize(
+    "driver, expected",
+    [
+        ("playwright", (1440, 900)),
+        ("camoufox", None),
+        ("roxy", None),
+        ("cloak", None),
+        ("adspower", None),
+    ],
+)
+def test_playwright_viewport_stays_playwright_only(driver, expected):
+    # Kept for its existing call sites; it must stay a strict subset of
+    # browser_screen_size so the two can never drift apart.
+    assert decisions.playwright_viewport({}, driver) == expected
+
+
+def test_playwright_viewport_delegates_to_browser_screen_size():
+    profile = {"screen_width": 2056, "screen_height": 1329}
+    assert decisions.playwright_viewport(profile, "playwright") == (
+        decisions.browser_screen_size(profile, "playwright")
+    )
+
+
+# ─────────────────── P2-3: exit-country probe strictness ───────────────────
+
+
+@pytest.mark.parametrize(
+    "driver, expected",
+    [
+        ("roxy", "blocking"),
+        ("cloak", "blocking"),
+        ("camoufox", "diagnostic"),
+        ("playwright", "diagnostic"),
+    ],
+)
+def test_proxy_country_check_mode_defaults(driver, expected):
+    assert decisions.proxy_country_check_mode(driver) == expected
+
+
+def test_proxy_country_check_mode_defaults_with_an_empty_config():
+    assert decisions.proxy_country_check_mode("roxy", {}) == "blocking"
+    assert decisions.proxy_country_check_mode("camoufox", {}) == "diagnostic"
+
+
+@pytest.mark.parametrize(
+    "mode", ["blocking", "diagnostic", "off"]
+)
+def test_proxy_country_check_mode_config_overrides_both_ways(mode):
+    cfg = {"registration": {"browser_proxy_country_check": mode}}
+    assert decisions.proxy_country_check_mode("roxy", cfg) == mode
+    assert decisions.proxy_country_check_mode("playwright", cfg) == mode
+
+
+def test_proxy_country_check_mode_ignores_junk_config():
+    # An unrecognised value must fall back to the per-driver default rather
+    # than silently disabling the check.
+    cfg = {"registration": {"browser_proxy_country_check": "sometimes"}}
+    assert decisions.proxy_country_check_mode("roxy", cfg) == "blocking"
+    assert decisions.proxy_country_check_mode("camoufox", cfg) == "diagnostic"
+
+
+def test_proxy_country_check_mode_tolerates_a_broken_registration_section():
+    assert decisions.proxy_country_check_mode("roxy", {"registration": "nope"}) == "blocking"
+    assert decisions.proxy_country_check_mode("roxy", None) == "blocking"
+
+
+def test_proxy_country_check_modes_are_the_only_accepted_values():
+    assert decisions.PROXY_COUNTRY_CHECK_MODES == {"blocking", "diagnostic", "off"}

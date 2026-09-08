@@ -58,6 +58,31 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
 
         self.assertEqual(seen["impersonate"], AUTH_IMPERSONATE)
 
+    def test_otp_impersonation_follows_the_selected_profile(self):
+        """P0-3: the OTP stage must not split TLS identity from the signup.
+
+        It used to be pinned to ``AUTH_IMPERSONATE`` (firefox144) while every
+        other stage used the pooled profile, so one signup could present two
+        different TLS/UA identities.
+        """
+        seen = {}
+
+        def fake_request(*args, **kwargs):
+            seen.update(kwargs)
+            return FakeResponse(200)
+
+        with patch.object(otp_strategy, "request_with_retry", side_effect=fake_request), \
+             patch.object(otp_strategy, "auth_impersonate", return_value="chrome146"):
+            otp_strategy.send_registration_email_otp(
+                session=object(),
+                auth_base="https://auth.openai.com",
+                base_headers={"User-Agent": "test"},
+                current_url="https://auth.openai.com/email-verification",
+                mode="passwordless",
+            )
+
+        self.assertEqual(seen["impersonate"], "chrome146")
+
 
 if __name__ == "__main__":
     unittest.main()

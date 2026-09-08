@@ -1,5 +1,12 @@
 # Core dependencies
 curl_cffi==0.16.0
+# IANA timezone database.  Windows ships none, so ``zoneinfo.TZPATH`` is empty
+# and every ``ZoneInfo("America/New_York")`` raises.  That silently broke:
+#   - browser_fingerprint_pool: offset fell back to the hardcoded DST value
+#   - sentinel/client.py: the requirements token fell back to the *local
+#     machine's* clock while claiming the profile's timezone
+#   - sentinel/runner.py: ``timezoneOffsetMinutes`` was 0 for every registration
+tzdata>=2024.1
 cryptography>=41.0.0
 PyNaCl>=1.5.0
 httpx[http2,socks]>=0.28.0

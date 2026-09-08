@@ -319,10 +319,27 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         # global defaults so the browser has a consistent environment.
         locale = configured_locale or ("" if geoip else self.locale)
         timezone = configured_timezone or ("" if geoip else self.timezone_id)
+        if using_bridge:
+            locale, timezone = self._bridged_geo_locale_timezone(
+                raw_proxy, configured_locale, configured_timezone, locale, timezone
+            )
         if locale:
             options["locale"] = locale
-        # Note: timezone is not accepted by Camoufox's launch_persistent_context;
-        # it is applied to the context after creation if geoip is disabled.
+        if timezone:
+            # Camoufox passes unrecognised launch options through to Playwright's
+            # ``launch_persistent_context``, which accepts ``timezone_id`` -- so
+            # this belongs in the launch options.  It used to be assigned onto
+            # the context afterwards, which was a no-op: Playwright's
+            # BrowserContext has no ``timezone_id`` attribute, so the write only
+            # created an instance field that nothing ever read (and raised
+            # nothing, so the ``except: pass`` around it never fired either).
+            options["timezone_id"] = timezone
+        # Registration never needs WebRTC, and an unspoofed ICE candidate hands
+        # any page our real egress IP -- the geo check only inspects the HTTP
+        # exit, so this leak would otherwise pass every audit.  Camoufox turns
+        # this into the Firefox pref ``media.peerconnection.enabled=false``.
+        if bool(self.driver_config.get("block_webrtc", True)):
+            options["block_webrtc"] = True
         user_data_dir = str(self.driver_config.get("user_data_dir") or "").strip()
         try:
             # Use persistent_context with a temp profile when no explicit
@@ -356,14 +373,6 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             pages = list(getattr(self.context, "pages", []) or [])
             self.page = pages[0] if pages else self.context.new_page()
             self.context.set_default_timeout(self.timeout_ms)
-            # Apply timezone to the context when geoip is disabled (bridged
-            # proxy).  Camoufox's persistent_context doesn't accept timezone
-            # as a launch parameter, so we set it via context timezone_id.
-            if timezone and not geoip:
-                try:
-                    self.context.timezone_id = timezone
-                except Exception:
-                    pass
             self.stealth_status = apply_playwright_stealth(
                 self.context,
                 self.page,
@@ -378,6 +387,48 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         except Exception as exc:
             self.close()
             raise BrowserRegistrationError("camoufox_launch_failed", f"{type(exc).__name__}: {exc}") from exc
+
+    @staticmethod
+    def _bridged_geo_locale_timezone(
+        raw_proxy: str,
+        configured_locale: str,
+        configured_timezone: str,
+        locale: str,
+        timezone: str,
+    ) -> tuple[str, str]:
+        """Align a bridged Camoufox launch with the egress we already measured.
+
+        Camoufox's own GeoIP is meaningless behind a local SOCKS5 bridge (it
+        sees ``127.0.0.1``), so a bridged launch has to be told where it exits.
+        The orchestrator normally supplies that via ``self.locale``, but a
+        session built directly (CLI, scripts, tests, the browser pool) has no
+        such alignment and would silently launch ``en-US`` on any egress.
+
+        Reads the shared resolver's cache only -- a browser launch must never
+        block on or fail because of a geo probe. When nothing has been measured
+        the caller's values stand.
+        """
+        try:
+            from ... import browser_fingerprint_pool as bfp
+            from ...geo import shared_geo_resolver
+
+            measured = shared_geo_resolver().cached(raw_proxy)
+        except Exception:
+            return locale, timezone
+        if measured is None or not measured.known:
+            return locale, timezone
+        profile = bfp.BROWSER_LOCALE_PROFILES.get(
+            bfp.locale_profile_key_from_geo(measured.to_dict())
+        ) or {}
+        if not configured_locale:
+            language = str(profile.get("navigator_language") or "")
+            if language:
+                locale = language
+        if not configured_timezone:
+            tz = str(measured.timezone or profile.get("timezone_iana") or "")
+            if tz:
+                timezone = tz
+        return locale, timezone
 
     def close(self) -> None:
         keep_open = self._launch_succeeded and bool(self.driver_config.get("keep_browser_open", False))

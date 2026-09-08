@@ -54,6 +54,18 @@ logger = logging.getLogger("proxy_bridge")
 _HTTP_SCHEMES = {"http", "https"}
 
 
+async def _close_writer(w: asyncio.StreamWriter) -> None:
+    """Best-effort close; Windows raises if the peer already reset the socket."""
+    try:
+        w.close()
+    except Exception:
+        return
+    try:
+        await w.wait_closed()
+    except Exception:
+        pass
+
+
 @dataclass
 class LocalProxyBridge:
     """Expose a single upstream proxy as a local SOCKS5 endpoint.
@@ -361,33 +373,54 @@ class LocalProxyBridge:
     async def _connect_http_upstream(
         self, upstream: ProxyEntry, dest_host: str, dest_port: int
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """HTTP CONNECT tunnel to the destination through an http(s) upstream."""
-        port = upstream.port or _SOCKS_DEFAULT_PORT
-        r, w = await asyncio.open_connection(upstream.host, port)
-        authority = f"{dest_host}:{dest_port}"
-        lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
-        if upstream.username:
-            token = _basic_auth_header(upstream.username, upstream.password)
-            lines.append(f"Proxy-Authorization: Basic {token}")
-        lines.append("Proxy-Connection: keep-alive")
-        lines.append("")
-        lines.append("")
-        w.write("\r\n".join(lines).encode("ascii", errors="replace"))
-        await w.drain()
+        """HTTP CONNECT tunnel to the destination through an http(s) upstream.
 
-        status_line = await r.readline()
-        status_text = status_line.decode("ascii", errors="replace")
-        code = int(status_text.split(" ", 2)[1]) if len(status_text.split(" ", 2)) > 1 else 0
-        while True:
-            line = await r.readline()
-            if line in (b"\r\n", b"\n", b""):
-                break
+        P1-4: every await below is bounded by ``connect_timeout``.  The socks
+        branch always delegated to ``Socks5Server``, which honours it; this one
+        used raw ``open_connection`` / ``readline``, so an upstream that
+        accepted the TCP socket but never answered the CONNECT parked this
+        coroutine -- and the client handler awaiting it -- forever, leaking one
+        task and one socket per stuck request until the process was restarted.
+        """
+        port = upstream.port or _SOCKS_DEFAULT_PORT
+        timeout = self.connect_timeout
+        try:
+            r, w = await asyncio.wait_for(
+                asyncio.open_connection(upstream.host, port), timeout=timeout
+            )
+        except (asyncio.TimeoutError, OSError) as exc:
+            raise ConnectionError(
+                f"HTTP upstream connect failed within {timeout}s: {upstream.masked}"
+            ) from exc
+        try:
+            authority = f"{dest_host}:{dest_port}"
+            lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
+            if upstream.username:
+                token = _basic_auth_header(upstream.username, upstream.password)
+                lines.append(f"Proxy-Authorization: Basic {token}")
+            lines.append("Proxy-Connection: keep-alive")
+            lines.append("")
+            lines.append("")
+            w.write("\r\n".join(lines).encode("ascii", errors="replace"))
+            await asyncio.wait_for(w.drain(), timeout=timeout)
+            status_line = await asyncio.wait_for(r.readline(), timeout=timeout)
+            status_text = status_line.decode("ascii", errors="replace")
+            code = (
+                int(status_text.split(" ", 2)[1])
+                if len(status_text.split(" ", 2)) > 1
+                else 0
+            )
+            while True:
+                line = await asyncio.wait_for(r.readline(), timeout=timeout)
+                if line in (b"\r\n", b"\n", b""):
+                    break
+        except (asyncio.TimeoutError, ValueError, ConnectionError, OSError) as exc:
+            await _close_writer(w)
+            raise ConnectionError(
+                f"HTTP CONNECT failed within {timeout}s: {upstream.masked} ({exc})"
+            ) from exc
         if not (200 <= code < 300):
-            w.close()
-            try:
-                await w.wait_closed()
-            except Exception:
-                pass
+            await _close_writer(w)
             raise ConnectionError(f"HTTP CONNECT failed: {status_text.strip()}")
         return r, w
 

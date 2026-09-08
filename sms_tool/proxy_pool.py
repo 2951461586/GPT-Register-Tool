@@ -19,8 +19,11 @@ import struct
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from .proxy_health import ProxyHealthTracker
 
 logger = logging.getLogger("proxy_pool")
 
@@ -62,6 +65,22 @@ class UpstreamProxy:
     @property
     def addr(self) -> str:
         return f"{self.host}:{self.port}"
+
+    @property
+    def proxy_url(self) -> str:
+        """Reconstruct a ``scheme://[user:pass@]host:port`` URL for this upstream.
+
+        P1-2: this is the string fed into ``ProxyHealthTracker`` so the SOCKS5
+        pool's health (which lives only in this process's memory) becomes visible to
+        the registration/remail paths that consume the same egress proxies via the
+        shared on-disk tracker. ``ProxyHealthTracker.key()`` derives the same
+        ``host:port#sid-hash`` it would from a raw proxy URL.
+        """
+        auth = ""
+        if self.username:
+            pwd = f":{self.password}" if self.password else ""
+            auth = f"{self.username}{pwd}@"
+        return f"socks5://{auth}{self.host}:{self.port}"
 
     @classmethod
     def from_url(cls, url: str, label: str = "", priority: int = 0) -> UpstreamProxy:
@@ -211,6 +230,10 @@ class Socks5Server:
         connect_timeout: float = 10.0,
         max_retries: int = 2,
         pipe_buf_size: int = 65536,
+        health_check_target_host: str = "cloudflare.com",
+        health_check_target_port: int = 443,
+        health_check_fail_threshold: int = 3,
+        health_tracker: ProxyHealthTracker | None = None,
     ) -> None:
         self._listen_host = listen_host
         self._listen_port = listen_port
@@ -218,6 +241,22 @@ class Socks5Server:
         self._stats_port = stats_port
         self._health_check_interval = health_check_interval
         self._health_check_timeout = health_check_timeout
+        # P0-3: the health probe used to hit connectivity-check.gstatic.com, which
+        # has nothing to do with OpenAI/Cloudflare reachability. ChatGPT sits behind
+        # Cloudflare, so we probe cloudflare.com instead -- a successful CONNECT
+        # there is a far better signal that the proxy can actually serve traffic.
+        self._health_check_target_host = health_check_target_host
+        self._health_check_target_port = health_check_target_port
+        # P0-3: death only after this many *consecutive* failures; recovery needs
+        # the same count of consecutive successes (see _apply_health hysteresis).
+        # A single blip no longer kills an upstream, and one lucky success no
+        # longer whitelists a bad one.
+        self._health_check_fail_threshold = max(1, int(health_check_fail_threshold))
+        # P1-2: optional shared health tracker (ProxyHealthTracker). When set, every
+        # health event funnelled through _apply_health is mirrored into the tracker's
+        # on-disk state so the registration/remail paths see the SOCKS5 pool's
+        # outcomes. Left None to keep the pool purely in-memory (default/tests).
+        self._health_tracker: ProxyHealthTracker | None = health_tracker
         self._connect_timeout = connect_timeout
         self._max_retries = max_retries
         self._pipe_buf_size = pipe_buf_size
@@ -350,7 +389,11 @@ class Socks5Server:
                 )
                 break  # success
             except Exception as exc:
-                upstream.fail_count += 1
+                # P0-3: route live-failures through the same hysteresis as the
+                # health probe, so a single blip in real traffic does not instantly
+                # kill an upstream (and recovery must still earn consecutive success).
+                # P1-2: the error string is mirrored into the shared tracker too.
+                self._apply_health(upstream, False, error=str(exc)[:120])
                 upstream.total_connections += 1
                 self._stats.total_errors += 1
                 tried.add(upstream.addr)
@@ -391,25 +434,58 @@ class Socks5Server:
 
     # ── upstream selection ──
 
+    def _apply_health(self, upstream: UpstreamProxy, success: bool, error: str = "") -> None:
+        """Update an upstream's health with hysteresis (P0-3).
+
+        Death: an upstream goes unhealthy only after ``fail_threshold`` *consecutive*
+        failures. Recovery: once unhealthy, it must reach ``fail_count == 0`` (i.e.
+        several consecutive successes) before it is trusted again -- a single lucky
+        success does not whitelist a bad proxy, and a single blip does not kill a
+        good one.
+
+        P1-2: when a shared ``health_tracker`` is configured, the same event is
+        mirrored into it so the registration/remail paths observe this proxy's health.
+        The SOCKS5 pool's own selection logic still uses in-memory state only.
+        """
+        if success:
+            upstream.fail_count = max(0, upstream.fail_count - 1)
+        else:
+            upstream.fail_count = min(self._health_check_fail_threshold, upstream.fail_count + 1)
+        if upstream.healthy:
+            upstream.healthy = upstream.fail_count < self._health_check_fail_threshold
+        else:
+            upstream.healthy = upstream.fail_count == 0
+        upstream.last_check = time.time()
+
+        if self._health_tracker is not None:
+            self._health_tracker.record(upstream.proxy_url, ok=success, error=error)
+
     def _pick_upstream(self, exclude: set[str] | None = None) -> UpstreamProxy | None:
         if not self._upstreams:
             return None
         exclude = exclude or set()
         healthy = [u for u in self._upstreams if u.healthy and u.addr not in exclude]
-        if not healthy:
-            for upstream in self._upstreams:
-                upstream.healthy = True
-            # fail open after all upstreams are marked unhealthy; health checks will correct this later
-            healthy = [u for u in self._upstreams if u.addr not in exclude]
-        if not healthy:
-            # last resort: try anything
-            healthy = list(self._upstreams)
-        # priority-based selection: pick from the lowest priority number tier
-        min_pri = min(u.priority for u in healthy)
-        tier = [u for u in healthy if u.priority == min_pri]
-        idx = self._rr_idx % len(tier)
+        if healthy:
+            # priority-based selection: pick from the lowest priority number tier,
+            # round-robin within that tier.
+            min_pri = min(u.priority for u in healthy)
+            tier = [u for u in healthy if u.priority == min_pri]
+            idx = self._rr_idx % len(tier)
+            self._rr_idx += 1
+            return tier[idx]
+        # Half-open: nothing healthy. Instead of fail-open-resurrecting the entire
+        # pool (which would spray every dead upstream with live traffic at once),
+        # probe a single candidate -- the least-bad, rotating among ties -- so a
+        # recovery is discovered incrementally rather than by mass-resurrecting.
+        candidates = sorted(
+            (u for u in self._upstreams if u.addr not in exclude),
+            key=lambda u: (u.fail_count, u.priority),
+        )
+        if not candidates:
+            return None
+        candidate = candidates[self._rr_idx % len(candidates)]
         self._rr_idx += 1
-        return tier[idx]
+        return candidate
 
     # ── upstream SOCKS5 handshake ──
 
@@ -523,13 +599,22 @@ class Socks5Server:
     # ── health check ──
 
     async def _health_check_loop(self) -> None:
-        test_host = "connectivity-check.gstatic.com"
-        test_port = 80
+        # P0-3: probe the configured target (cloudflare.com:443 by default) instead
+        # of connectivity-check.gstatic.com -- a green check now means the proxy can
+        # actually reach ChatGPT's edge (Cloudflare sits in front of it), so one probe
+        # serves both connectivity and edge-reachability. Each result is fed through
+        # self._apply_health, which enforces the consecutive-failure threshold and the
+        # hysteresis recovery -- no single blip kills an upstream, and no single lucky
+        # success whitelists a dead one.
+        test_host = self._health_check_target_host
+        test_port = self._health_check_target_port
         while True:
             try:
                 await asyncio.sleep(self._health_check_interval)
                 for upstream in self._upstreams:
                     was_healthy = upstream.healthy
+                    success = False
+                    probe_error = ""
                     try:
                         r, w = await asyncio.wait_for(
                             asyncio.open_connection(upstream.host, upstream.port),
@@ -553,21 +638,16 @@ class Socks5Server:
                                 reply = await asyncio.wait_for(
                                     _read_exact(r, 4), timeout=self._health_check_timeout
                                 )
-                                if reply[1] == _REP_SUCCEEDED:
-                                    upstream.healthy = True
-                                    upstream.fail_count = 0
-                                    upstream.last_check = time.time()
-                                else:
-                                    upstream.fail_count += 1
+                                success = reply[1] == _REP_SUCCEEDED
                         finally:
                             w.close()
                             await w.wait_closed()
-                    except Exception:
-                        upstream.fail_count += 1
+                    except Exception as _probe_exc:
+                        success = False
+                        probe_error = str(_probe_exc)[:120]
 
-                    if upstream.fail_count >= 1:
-                        upstream.healthy = False
-                    upstream.last_check = time.time()
+                    # P1-2: a shared tracker (if configured) sees the same event.
+                    self._apply_health(upstream, success, error=probe_error if not success else "")
 
                     if upstream.healthy != was_healthy:
                         level = logging.INFO if upstream.healthy else logging.WARNING

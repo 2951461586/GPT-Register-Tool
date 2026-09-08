@@ -24,6 +24,58 @@ from .registration_state import (
 )
 
 
+def _new_registration_session(proxy: str = "") -> Any:
+    """Build the protocol session for one registration.
+
+    P1-8: curl_cffi honours ``trust_env`` by default, so a machine-wide
+    ``HTTP(S)_PROXY`` in the process environment silently *overrides* the
+    per-account proxy set here -- every account would then exit through one
+    shared IP, which defeats the whole proxy pool.  The preflight already pins
+    this (``registration_preflight``), as do the other transports
+    (``paypal_protocol``, ``gcash_transport``, ``phone_proxy``).  With no proxy
+    configured we leave the default alone so an env-provided proxy still
+    applies.
+    """
+    session = curl_requests.Session()
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+        session.trust_env = False
+    return session
+
+
+def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> None:
+    """Pick the pooled protocol fingerprint and bind *its* geo to this account.
+
+    P1-1: the pool resolves the proxy's exit geo before handing back a profile
+    (measuring it when the credential carries no region token).  This used to
+    take only ``profile.name`` and drop the geo half, while the geo actually
+    applied came from ``infer_proxy_country`` -- which only reads a region token
+    in the proxy username.  A residential proxy has no such token, so it
+    resolved to ``""`` and the account kept a US clock on, say, a Brazilian
+    exit: the measurement was paid for and then ignored.
+    """
+    profile = None
+    try:
+        from .fingerprint_pool import shared_fingerprint_pool
+        pool = shared_fingerprint_pool(config)
+        if pool.size > 0:
+            profile = pool.next(proxy)
+    except Exception:
+        profile = None
+    if profile is not None:
+        ops.set_fingerprint_geo(
+            profile.country,
+            timezone=profile.timezone,
+            lang=profile.lang,
+            lang_full=profile.lang_full,
+        )
+        from .auth_headers import set_auth_fingerprint
+        set_auth_fingerprint(profile.name)
+    else:
+        from .paypal_proxy import infer_proxy_country
+        ops.set_fingerprint_geo(infer_proxy_country(proxy))
+
+
 class RegistrationStageHandler(Protocol):
     state: RegistrationState
 
@@ -480,9 +532,7 @@ class RegistrationEmailWorkflow:
             print("  [Device] Reusing persisted device context")
         print(f"[*] Username: {s.username}  Password: [stored]  Name: {s.full_name}  Birth: {s.birthdate}")
         self._persist_checkpoint("identity_ready")
-        s.session = curl_requests.Session()
-        if s.proxy:
-            s.session.proxies = {"http": s.proxy, "https": s.proxy}
+        s.session = _new_registration_session(s.proxy)
         if s.registration_mode == "passwordless":
             # Keep the Web/NextAuth flow isolated from the Sentinel extraction
             # prime session. Importing its auth.openai.com login cookies creates
@@ -490,21 +540,8 @@ class RegistrationEmailWorkflow:
             r._set_oai_did_cookie(s.session, s.device_id)
         else:
             r._import_sentinel_cookies(s.session, s.sentinel_data, s.device_id)
-        from .paypal_proxy import infer_proxy_country
-        r.set_fingerprint_geo(infer_proxy_country(s.proxy))
         r.set_fingerprint_device(s.device_id)
-        # Apply a round-robin protocol fingerprint profile from the pool.
-        # This rotates the browser impersonation version and sec-ch-ua headers
-        # across registrations so consecutive accounts don't cluster.
-        try:
-            from .fingerprint_pool import shared_fingerprint_pool
-            pool = shared_fingerprint_pool(self.config)
-            if pool.size > 0:
-                profile = pool.next(s.proxy)
-                from .auth_headers import set_auth_fingerprint
-                set_auth_fingerprint(profile.name)
-        except Exception:
-            pass
+        _apply_protocol_fingerprint(r, self.config, s.proxy)
         s.base_headers = r.openai_auth_headers(
             s.device_id,
             accept="application/json",

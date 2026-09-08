@@ -119,16 +119,19 @@ def _token_from_bundle(
 def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
     """Generate the SDK-compatible initial requirements proof."""
     import base64
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
 
     screen = str(profile.get("screen") or "1920x1080")
     width, _, height = screen.partition("x")
     timezone_name = str(profile.get("timezone") or "UTC")
-    try:
-        now = datetime.now(ZoneInfo(timezone_name))
-    except Exception:
-        now = datetime.now().astimezone()
+    # Single authority (P1-4).  The old inline ``ZoneInfo`` here raised
+    # ZoneInfoNotFoundError on any host without the IANA database -- Windows
+    # included -- and the except branch then fell back to
+    # ``datetime.now().astimezone()``: the *local machine's* clock stamped into
+    # a proof that claims New York.  The fallback still has to be something,
+    # but it now goes through the module that logs the root cause once.
+    from ..geo.clock import now_in_timezone
+
+    now = now_in_timezone(timezone_name)
     config = [
         int(width or 1920) + int(height or 1080),
         now.strftime("%a %b %d %Y %H:%M:%S GMT%z (%Z)"),

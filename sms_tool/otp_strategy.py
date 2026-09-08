@@ -9,7 +9,7 @@ import json
 from collections.abc import Mapping
 
 from .config import CFG, current_config_data
-from .auth_headers import AUTH_IMPERSONATE, openai_auth_headers
+from .auth_headers import AUTH_IMPERSONATE, auth_impersonate, openai_auth_headers
 from .auth_flow import _absolute_url, _invalid_state_auth_response, _json_or_raw
 from .http_client import request_with_retry
 from .mailbox import _poll_email_otp
@@ -62,9 +62,15 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
     for endpoint, payload in endpoints:
         kwargs = {
             "headers": headers,
-            # Registration preflight validates that the configured profile is
-            # supported before this stage consumes a mailbox.
-            "impersonate": AUTH_IMPERSONATE,
+            # Follow the profile the rest of this registration already picked.
+            # This used to be pinned to AUTH_IMPERSONATE (firefox144) while
+            # every other stage used the pooled profile, so a single signup
+            # could present two different TLS/UA identities -- exactly the
+            # mismatch the reference implementation warns about.  The pool is
+            # still Firefox-majority by weight (CF edge 403s on Chrome), so
+            # this stays Firefox in the common case; when it does not, the
+            # whole signup is consistent instead of split.
+            "impersonate": auth_impersonate() or AUTH_IMPERSONATE,
         }
         if payload is not None:
             kwargs["json"] = payload

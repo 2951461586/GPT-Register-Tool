@@ -345,8 +345,16 @@ def _browser_failure_class(code: str) -> str:
     return "network"
 
 
+# ``page.evaluate`` is not governed by Playwright's default timeout, so an
+# unresponsive backend-api endpoint used to be able to block a registration
+# worker forever -- the same trap ``external_sessions.probe`` fell into before
+# P2-3 gave it an in-page deadline.
+_TOTP_FETCH_BUDGET_MS = 20_000
+
+
 def _bind_totp_in_browser(
     page: Any, access_token: str, device_id: str, *, chat_base: str,
+    budget_ms: int = _TOTP_FETCH_BUDGET_MS,
 ) -> dict[str, Any]:
     """Enroll and activate TOTP 2FA through the browser's fetch API.
 
@@ -354,46 +362,81 @@ def _bind_totp_in_browser(
     ``page.evaluate(fetch(...))`` so they carry the browser's real
     cookies, fingerprint, and Cloudflare clearance.  Returns a dict
     with ``ok``, ``totp_secret``, and optionally ``error``.
+
+    ``budget_ms`` bounds the request *and* the JSON body read from inside the
+    page (AbortController + deadline race), so a hung endpoint surfaces as a
+    failed enrollment instead of a stuck worker.
     """
     chat_base = chat_base.rstrip("/")
+    try:
+        parsed_budget = int(budget_ms)
+    except (TypeError, ValueError):
+        parsed_budget = 0
+    budget = parsed_budget if parsed_budget > 0 else _TOTP_FETCH_BUDGET_MS
     enroll_script = """
-    async ([url, accessToken, deviceId]) => {
-        const r = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Authorization": "Bearer " + accessToken,
-                "oai-device-id": deviceId,
-                "oai-language": "en-US",
-                "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({"factor_type": "totp"}),
-        });
-        const data = await r.json().catch(() => ({}));
-        return {status: r.status, body: data};
+    async ([url, accessToken, deviceId, budgetMs]) => {
+        const withDeadline = (promise, ms) => Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), Math.max(1, ms))),
+        ]);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), budgetMs);
+        try {
+            const r = await withDeadline(fetch(url, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + accessToken,
+                    "oai-device-id": deviceId,
+                    "oai-language": "en-US",
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({"factor_type": "totp"}),
+                signal: controller.signal,
+            }), budgetMs);
+            const data = await withDeadline(r.json(), budgetMs).catch(() => ({}));
+            return {status: r.status, body: data};
+        } catch (error) {
+            return {status: 0, body: {}, error: String((error && error.message) || error || "fetch_failed")};
+        } finally {
+            clearTimeout(timer);
+        }
     }
     """
     activate_script = """
-    async ([url, accessToken, deviceId, code, sessionId]) => {
-        const r = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Authorization": "Bearer " + accessToken,
-                "oai-device-id": deviceId,
-                "oai-language": "en-US",
-                "Content-Type": "application/json",
-            },
-            credentials: "include",
-            body: JSON.stringify({"code": code, "factor_type": "totp", "session_id": sessionId}),
-        });
-        const data = await r.json().catch(() => ({}));
-        return {status: r.status, body: data};
+    async ([url, accessToken, deviceId, code, sessionId, budgetMs]) => {
+        const withDeadline = (promise, ms) => Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), Math.max(1, ms))),
+        ]);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), budgetMs);
+        try {
+            const r = await withDeadline(fetch(url, {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + accessToken,
+                    "oai-device-id": deviceId,
+                    "oai-language": "en-US",
+                    "Content-Type": "application/json",
+                },
+                credentials: "include",
+                body: JSON.stringify({"code": code, "factor_type": "totp", "session_id": sessionId}),
+                signal: controller.signal,
+            }), budgetMs);
+            const data = await withDeadline(r.json(), budgetMs).catch(() => ({}));
+            return {status: r.status, body: data};
+        } catch (error) {
+            return {status: 0, body: {}, error: String((error && error.message) || error || "fetch_failed")};
+        } finally {
+            clearTimeout(timer);
+        }
     }
     """
     try:
         enroll_result = page.evaluate(
             enroll_script,
-            [f"{chat_base}/backend-api/accounts/mfa/enroll", access_token, device_id],
+            [f"{chat_base}/backend-api/accounts/mfa/enroll", access_token, device_id, budget],
         )
         if not isinstance(enroll_result, dict) or enroll_result.get("status") != 200:
             error_detail = str(enroll_result)[:300] if enroll_result else "no response"
@@ -412,7 +455,7 @@ def _bind_totp_in_browser(
 
         activate_result = page.evaluate(
             activate_script,
-            [f"{chat_base}/backend-api/accounts/mfa/user/activate_enrollment", access_token, device_id, totp_code, session_id],
+            [f"{chat_base}/backend-api/accounts/mfa/user/activate_enrollment", access_token, device_id, totp_code, session_id, budget],
         )
         if not isinstance(activate_result, dict) or activate_result.get("status") != 200:
             error_detail = str(activate_result)[:300] if activate_result else "no response"
