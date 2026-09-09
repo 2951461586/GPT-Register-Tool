@@ -94,7 +94,7 @@ public sealed class SettingsServiceTests
         SettingDefinition driver = SettingsCatalog.AllFields.Single(field => field.Key == "registration_driver");
         Assert.Equal(SettingFieldKind.Options, driver.Kind);
         Assert.Equal(
-            new[] { "protocol", "playwright", "roxy", "cloak", "camoufox", "adspower" },
+            new[] { "protocol", "playwright", "roxy", "cloak", "camoufox" },
             driver.Options);
 
         Assert.Equal(SettingFieldKind.Secret, SettingsCatalog.AllFields.Single(field => field.Key == "roxy_api_token").Kind);

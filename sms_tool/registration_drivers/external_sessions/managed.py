@@ -16,6 +16,7 @@ from curl_cffi import requests as curl_requests
 from ...driver_env import driver_config as _driver_config
 from ...phone_proxy import normalize_proxy_url
 from ..base import BrowserRegistrationError
+from ..browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from ..browser_session import PlaywrightBrowserSession
 from ..stealth import apply_playwright_stealth
 from ..platform_patches import MOZ_DISABLE_CONTENT_SANDBOX, camoufox_launch_env
@@ -93,7 +94,7 @@ class ConnectedPlaywrightSession(PlaywrightBrowserSession):
         self.context = contexts[0] if contexts else browser.new_context(
             locale=self.locale,
             timezone_id=self.timezone_id,
-            viewport={"width": 1440, "height": 900},
+            viewport={"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT},
         )
         self.context.set_default_timeout(self.timeout_ms)
         pages = list(getattr(self.context, "pages", []) or [])
@@ -691,82 +692,4 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                     self.profile_id, type(last_err).__name__,
                 )
         self.profile_id = ""
-
-
-class AdsPowerBrowserSession(ConnectedPlaywrightSession):
-    """Drive an AdsPower-managed Chromium over its local REST API.
-
-    AdsPower owns the browser process, the fingerprint and the proxy for each
-    environment (``user_id``).  This session only starts/stops the environment
-    and attaches through CDP -- the environment must already exist in AdsPower's
-    UI, because fingerprint/proxy configuration lives there, not in config.
-    """
-
-    def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.driver_config = _driver_config(config, "adspower")
-        self.api_base = ""
-        self.user_id = ""
-        self.debugger_address = ""
-
-    def _api_get(self, path: str, params: Mapping[str, Any]) -> dict[str, Any]:
-        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50325").rstrip("/")
-        url = urljoin(self.api_base + "/", path.lstrip("/"))
-        timeout = min(60, max(10, self.timeout_ms // 1000))
-        try:
-            response = curl_requests.get(url, params=params, timeout=timeout)
-            data = response.json()
-        except Exception as exc:
-            raise BrowserRegistrationError("adspower_api_error", type(exc).__name__) from exc
-        if int(getattr(response, "status_code", 0) or 0) >= 400:
-            raise BrowserRegistrationError("adspower_api_error", f"http_{response.status_code}")
-        if not isinstance(data, Mapping):
-            raise BrowserRegistrationError("adspower_api_error", "non_json_response")
-        if int(data.get("code", 0) or 0) != 0:
-            raise BrowserRegistrationError(
-                "adspower_api_error",
-                str(data.get("msg") or data.get("message") or f"code_{data.get('code')}"),
-            )
-        return dict(data)
-
-    def __enter__(self):
-        self.api_base = str(self.driver_config.get("api_base") or "http://127.0.0.1:50325").rstrip("/")
-        self.user_id = str(self.driver_config.get("user_id") or self.driver_config.get("profile_id") or "").strip()
-        if not self.user_id:
-            raise BrowserRegistrationError("adspower_user_id_missing")
-        started = self._api_get("api/v1/browser/start", {
-            "user_id": self.user_id,
-            "headless": 1 if self.headless else 0,
-            "ip_tab": 0,
-        })
-        data = started.get("data") or {}
-        ws_blob = data.get("ws") if isinstance(data.get("ws"), Mapping) else {}
-        ws_address = str(ws_blob.get("playwright") or ws_blob.get("puppeteer") or "").strip()
-        if not ws_address:
-            ws_address = str(data.get("debuggerAddress") or "").strip()
-        if not ws_address:
-            raise BrowserRegistrationError("adspower_debug_address_missing")
-        ws_address = _normalize_debugger_address(ws_address)
-        self.debugger_address = ws_address
-        self._start_playwright()
-        try:
-            browser = self._playwright.chromium.connect_over_cdp(ws_address, timeout=self.timeout_ms)
-            self._adopt_browser(browser)
-            return self
-        except BrowserRegistrationError:
-            self.close()
-            raise
-        except Exception as exc:
-            self.close()
-            raise BrowserRegistrationError("adspower_connect_failed", type(exc).__name__) from exc
-
-    def close(self) -> None:
-        keep_open = bool(self.driver_config.get("keep_browser_open", False))
-        self._close_connection(keep_browser_open=keep_open)
-        if not self.user_id or not self.api_base or keep_open:
-            return
-        try:
-            self._api_get("api/v1/browser/stop", {"user_id": self.user_id})
-        except Exception:
-            pass
         self.user_id = ""

@@ -84,7 +84,18 @@ class CrossProcessSemaphore:
             try:
                 handle = open(path, "a+b")
             except OSError:
-                continue
+                # The gate directory can disappear underneath a waiter: the
+                # owner calls ``discard()`` after releasing.  Without this
+                # re-create the waiter would poll forever against a gate that
+                # nobody holds any more.
+                try:
+                    self.gate_dir.mkdir(parents=True, exist_ok=True)
+                except OSError:
+                    continue
+                try:
+                    handle = open(path, "a+b")
+                except OSError:
+                    continue
             try:
                 _lock_byte(handle)
             except OSError:
@@ -102,6 +113,41 @@ class CrossProcessSemaphore:
                 _unlock_byte(handle)
             finally:
                 handle.close()
+
+    def discard(self) -> None:
+        """Best-effort removal of this gate's slot files and its directory.
+
+        Only valid for **ephemeral** gates -- ones whose ``name`` is unique per
+        operation and will never be meaningfully acquired again once the owner
+        has released it (``payment-batch-<batch_id>``,
+        ``payment-operation-<key_hash>``).  Those names are unbounded, so every
+        run would otherwise leave behind a permanent empty file plus an empty
+        directory; at the time of writing 3,949 batch gates and 806 operation
+        gates had accumulated that way.
+
+        Never call this on a **reused** gate such as ``registration_<stage>``.
+        A reused gate is created once and acquired by unrelated processes for
+        the lifetime of the machine; deleting its directory while another
+        process still holds the old inode lets a newcomer create a *fresh* slot
+        file and lock it, so two processes end up holding the same slot.  That
+        is why the call sites are enumerated by
+        ``tests/test_cross_process_gate.py`` instead of being left to habit.
+
+        Removal is best-effort on purpose: if any process still holds an open
+        handle on a slot file the OS refuses the unlink (Windows) or unlinks
+        the name while the inode survives (POSIX).  Either way the leftover is
+        an empty file that the operator-facing retention CLI retires later, and
+        the correctness of the gate never depends on this succeeding.  (Do not
+        name that script here: a test asserts no module under ``sms_tool/`` even
+        mentions it, so the retention tool can never ride a hot path.)
+
+        Safe to call more than once, and safe to call without acquiring.
+        """
+        for slot in range(self.limit):
+            with contextlib.suppress(OSError):
+                self._slot_path(slot).unlink()
+        with contextlib.suppress(OSError):
+            self.gate_dir.rmdir()
 
     def __enter__(self) -> "CrossProcessSemaphore":
         self.acquire()

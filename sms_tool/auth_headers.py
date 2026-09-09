@@ -465,7 +465,10 @@ def _configured_auth_profiles():
 # deliberately NOT copied. Each family's weight is split evenly across its
 # versions, so adding more Firefox versions raises diversity without diluting
 # Firefox's overall share.
-_FAMILY_WEIGHTS = {"firefox": 50, "chrome": 25, "safari": 18, "edge": 7}
+# P2-2: removed the ghost "edge": 7 entry — _browser_family does recognise
+# edge-prefixed names, but AUTH_FINGERPRINT_PROFILES has no edge member, so the
+# weight was never reached.  If an edge profile is added later, add it here too.
+_FAMILY_WEIGHTS = {"firefox": 50, "chrome": 25, "safari": 18}
 
 
 def fingerprint_profile_weights(names) -> dict[str, float]:

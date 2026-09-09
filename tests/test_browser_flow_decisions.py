@@ -150,7 +150,7 @@ def test_needs_chat_base_navigation(chat_base, page_url, expected):
 #
 # The 7 hardware profiles in BROWSER_PROFILE_POOL used to reach Playwright only.
 # Camoufox was pinned to a hardcoded 1280x900; provider-owned drivers (roxy/
-# cloak/adspower) can never take it. These lock that split down.
+# cloak) can never take it. These lock that split down.
 
 
 @pytest.mark.parametrize(
@@ -161,7 +161,6 @@ def test_needs_chat_base_navigation(chat_base, page_url, expected):
         # provider-owned: the anti-detect profile owns screen/UA/platform.
         ("roxy", None),
         ("cloak", None),
-        ("adspower", None),
         # driver_name is already normalized upstream; no silent case folding.
         ("PLAYWRIGHT", None),
         ("", None),
@@ -194,7 +193,7 @@ def test_screen_and_provider_driver_sets_are_disjoint_and_complete():
     # Every browser driver must be exactly one of: screen-managed or provider-managed.
     assert not (decisions.SCREEN_MANAGED_DRIVERS & decisions.PROVIDER_MANAGED_DRIVERS)
     assert decisions.SCREEN_MANAGED_DRIVERS | decisions.PROVIDER_MANAGED_DRIVERS == {
-        "playwright", "camoufox", "roxy", "cloak", "adspower",
+        "playwright", "camoufox", "roxy", "cloak",
     }
 
 
@@ -205,7 +204,6 @@ def test_screen_and_provider_driver_sets_are_disjoint_and_complete():
         ("camoufox", None),
         ("roxy", None),
         ("cloak", None),
-        ("adspower", None),
     ],
 )
 def test_playwright_viewport_stays_playwright_only(driver, expected):

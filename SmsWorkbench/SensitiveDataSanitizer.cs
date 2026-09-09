@@ -20,6 +20,12 @@ namespace SmsWorkbench
             LoadPolicy().SensitiveOptions,
             StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Log-strength redaction: credentials plus log-only masking (account
+        /// emails). Mirrors the backend's <c>sanitize_log_text</c>, so both
+        /// sides of the IPC boundary apply the same rules from the same policy
+        /// file. Every caller here feeds operator-visible output, never storage.
+        /// </summary>
         internal static string Redact(string? value)
         {
             string text = value ?? "";
@@ -57,13 +63,30 @@ namespace SmsWorkbench
         {
             SensitivePolicyDocument document = LoadPolicy();
             var patterns = new List<(Regex Pattern, string Replacement)>();
-            foreach (SensitivePatternDocument item in document.TextPatterns)
-            {
-                if (string.IsNullOrWhiteSpace(item.Pattern))
-                    throw new InvalidOperationException("Sensitive policy contains an empty pattern");
-                patterns.Add((new Regex(item.Pattern, RegexOptions.CultureInvariant), item.Replacement));
-            }
+            // Credential rules first: they redact secrets that must never be
+            // stored or printed. Log-only rules (account emails) run after, so
+            // they only ever see text that has already been de-credentialed.
+            AddPatterns(patterns, document.TextPatterns, "text_patterns");
+            AddPatterns(patterns, document.LogTextPatterns, "log_text_patterns");
             return patterns;
+        }
+
+        private static void AddPatterns(
+            List<(Regex Pattern, string Replacement)> target,
+            IReadOnlyList<SensitivePatternDocument>? entries,
+            string section)
+        {
+            if (entries is null)
+            {
+                // Older policies predate log_text_patterns; absence is legal.
+                return;
+            }
+            foreach (SensitivePatternDocument item in entries)
+            {
+                if (item is null || string.IsNullOrWhiteSpace(item.Pattern))
+                    throw new InvalidOperationException($"Sensitive policy contains an empty pattern in {section}");
+                target.Add((new Regex(item.Pattern, RegexOptions.CultureInvariant), item.Replacement ?? "[REDACTED]"));
+            }
         }
 
         private static SensitivePolicyDocument LoadPolicy()
@@ -80,7 +103,8 @@ namespace SmsWorkbench
         private sealed record SensitivePolicyDocument(
             [property: JsonPropertyName("schema")] string Schema,
             [property: JsonPropertyName("text_patterns")] IReadOnlyList<SensitivePatternDocument> TextPatterns,
-            [property: JsonPropertyName("sensitive_options")] IReadOnlyList<string> SensitiveOptions);
+            [property: JsonPropertyName("sensitive_options")] IReadOnlyList<string> SensitiveOptions,
+            [property: JsonPropertyName("log_text_patterns")] IReadOnlyList<SensitivePatternDocument>? LogTextPatterns = null);
 
         private sealed record SensitivePatternDocument(
             [property: JsonPropertyName("pattern")] string Pattern,

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool.accounts import account_scan
+from sms_tool.error_classification import classify_error
 
 
 class AccountScanTests(unittest.TestCase):
@@ -85,7 +86,7 @@ class AccountScanTests(unittest.TestCase):
              patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
              patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens", return_value={"ok": True, "tokens": {"access_token": "at_123"}}), \
              patch("sms_tool.accounts.account_scan._persist_scan"):
-            result = account_scan._scan_one(0, 1, "a@example.com")
+            result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
         self.assertFalse(workspace_probe.call_args.kwargs["enabled"])
@@ -120,7 +121,7 @@ class AccountScanTests(unittest.TestCase):
              patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
              patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens", return_value={"ok": True, "tokens": {"access_token": "at_123"}}), \
              patch("sms_tool.accounts.account_scan._persist_scan"):
-            result = account_scan._scan_one(0, 1, "a@example.com")
+            result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["scan_status"], "alive")
@@ -163,11 +164,23 @@ class AccountScanTests(unittest.TestCase):
                  return_value={"ok": False, "error": "Failed to perform, curl: (56) CONNECT tunnel failed, response 403"},
              ), \
              patch("sms_tool.accounts.account_scan._persist_scan"):
-            result = account_scan._scan_one(0, 1, "a@example.com")
+            result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["scan_status"], "alive_probe_inconclusive")
         self.assertEqual(result["token_probe"]["status"], "active")
+
+    def test_scan_one_probe_only_does_not_start_oauth_or_otp(self):
+        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com", "access_token": "at_123"}, "")), \
+             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
+             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
+             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
+             patch("sms_tool.accounts.account_scan._persist_scan"):
+            result = account_scan._scan_one(0, 1, "a@example.com")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["scan_status"], "alive")
+        collect.assert_not_called()
 
     def test_scan_one_marks_relogin_failed_instead_of_generic_scan_failed(self):
         with patch(
@@ -233,6 +246,62 @@ class AccountScanTests(unittest.TestCase):
         probe.assert_not_called()
         relogin.assert_not_called()
         collect.assert_not_called()
+
+
+class ScanFailureStatusTests(unittest.TestCase):
+    """P1-7: the scan status names the failure class explicitly.
+
+    ``classify_error`` keeps its marker precedence (network before auth_state)
+    on purpose -- both classes are retryable -- so these cases pin the *status*
+    mapping, not the classifier ordering.
+    """
+
+    def test_each_class_maps_to_its_own_status(self):
+        cases = {
+            "network": "network_failed",
+            "mailbox": "mailbox_failed",
+            "auth_state": "auth_state_failed",
+            "rate_limit": "rate_limited",
+        }
+        for failure_class, expected in cases.items():
+            with self.subTest(failure_class=failure_class):
+                self.assertEqual(
+                    account_scan._scan_failure_status(failure_class, {"ok": False}),
+                    expected,
+                )
+
+    def test_account_class_still_falls_through_to_relogin_or_scan_failed(self):
+        self.assertEqual(account_scan._scan_failure_status("account", {"ok": False}), "relogin_failed")
+        self.assertEqual(account_scan._scan_failure_status("unknown", {"ok": False}), "relogin_failed")
+        self.assertEqual(account_scan._scan_failure_status("unknown", None), "scan_failed")
+        self.assertEqual(account_scan._scan_failure_status("unknown", {"ok": True}), "scan_failed")
+
+    def test_auth_state_error_is_not_reported_as_relogin_failed(self):
+        with patch(
+            "sms_tool.accounts.account_scan._load_seed_session",
+            return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
+        ), \
+             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
+             patch(
+                "sms_tool.accounts.account_scan.relogin_codex_account",
+                return_value={"ok": False, "error": "invalid_auth_step"},
+            ), \
+             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
+             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
+             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
+             patch("sms_tool.accounts.account_scan._persist_scan"):
+            result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failure_class"], "auth_state")
+        self.assertEqual(result["scan_status"], "auth_state_failed")
+        collect.assert_not_called()
+
+    def test_auth_state_error_mentioning_connection_stays_network_failed(self):
+        """The conservative direction must survive: jitter is never an account failure."""
+        payload = {"ok": False, "error": "sign-in session is no longer valid: connection reset"}
+        self.assertEqual(classify_error(payload), "network")
+        self.assertEqual(account_scan._scan_failure_status(classify_error(payload), payload), "network_failed")
 
 
 if __name__ == "__main__":

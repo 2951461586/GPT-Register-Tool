@@ -45,6 +45,14 @@ def test_refresh_local_quota_uses_light_probe_before_browser(monkeypatch):
     assert calls == ["light"]
 
 
+def test_liveness_explicit_proxy_wins_over_configured_pool():
+    account = {"email": "proxy@example.com", "access_token": "at"}
+    with patch.object(account_recovery, "proxy_pool_for", return_value=["http://pool-a:1", "http://pool-b:2"]), \
+         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active"}) as probe:
+        account_recovery._probe_liveness_with_retries(account, proxy="http://explicit:3", timeout=10)
+    assert probe.call_args.kwargs["proxy"] == "http://explicit:3"
+
+
 def test_chatgpt_email_relogin_requires_saved_mailbox():
     with patch("sms_tool.codex_oauth._mailbox_from_data", return_value=None):
         result = account_recovery.relogin_chatgpt_email_account({"email": "ok@example.com"})
@@ -81,6 +89,22 @@ def test_refresh_local_quota_statuses_persists_result():
     assert result["ok"]
     marked.assert_called_once()
     assert marked.call_args.args[:2] == ("ok@example.com", "active")
+
+
+def test_refresh_local_quota_keeps_probe_health_when_persistence_fails():
+    with (
+        patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}),
+        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "active"}),
+        patch.object(account_recovery, "mark_quota_status", return_value=False),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
+
+    assert result["ok"]
+    assert result["success"] == 1
+    assert result["persisted"] == 0
+    assert result["persist_failed"] == 1
+    assert result["results"][0]["probe_ok"] is True
+    assert result["results"][0]["persisted"] is False
 
 
 def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypatch):
@@ -1002,7 +1026,7 @@ def test_liveness_transport_failure_retries_configured_pool(monkeypatch):
         account, proxy="http://127.0.0.1:7897", timeout=5
     )
     assert result["ok"]
-    assert calls == ["http://registration.example:8080", "http://pool-a.example:8080"]
+    assert calls == ["http://127.0.0.1:7897", "http://registration.example:8080"]
 
 
 def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():

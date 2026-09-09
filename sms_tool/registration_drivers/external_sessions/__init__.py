@@ -8,7 +8,7 @@ from ...driver_env import driver_config as _driver_config
 from ..base import BROWSER_REGISTRATION_DRIVERS, BrowserRegistrationError, normalize_registration_driver
 from ..browser_session import PlaywrightBrowserSession, _playwright_proxy
 from .managed import (
-    AdsPowerBrowserSession, CamoufoxBrowserSession, CloakBrowserSession,
+    CamoufoxBrowserSession, CloakBrowserSession,
     ConnectedPlaywrightSession, RoxyBrowserSession,
     MOZ_DISABLE_CONTENT_SANDBOX, _first, _normalize_debugger_address, _require, _roxy_retryable,
     apply_playwright_stealth, curl_requests, time,
@@ -20,7 +20,6 @@ _BROWSER_SESSION_FACTORIES: dict[str, type[PlaywrightBrowserSession]] = {
     "cloak": CloakBrowserSession,
     "camoufox": CamoufoxBrowserSession,
     "roxy": RoxyBrowserSession,
-    "adspower": AdsPowerBrowserSession,
 }
 assert set(_BROWSER_SESSION_FACTORIES) == BROWSER_REGISTRATION_DRIVERS - {"playwright"}
 
@@ -67,5 +66,5 @@ def create_browser_session(
 
 __all__ = [
     "CamoufoxBrowserSession", "CloakBrowserSession", "RoxyBrowserSession",
-    "AdsPowerBrowserSession", "create_browser_session", "verify_browser_proxy_country",
+    "create_browser_session", "verify_browser_proxy_country",
 ]

@@ -60,17 +60,6 @@ def _as_bool(value: Any) -> bool | None:
 
 
 
-def _manager_error_stage(state: str) -> str:
-    return {
-        "created": "validation",
-        "validating": "validation",
-        "preparing_proxy": "proxy_setup",
-        "running": "adapter",
-        "extracting": "normalization",
-    }.get(state, "manager")
-
-
-
 def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
 
@@ -177,25 +166,6 @@ PAYMENT_METHODS = {
         definition.artifact_validator,
     )
     for key, definition in CATALOG_METHODS.items()
-}
-
-
-
-_TERMINAL_STATES = frozenset({"completed", "failed", "cancelled", "unknown", "timed_out"})
-
-
-
-_NON_SUCCESS_TERMINAL_STATES = _TERMINAL_STATES - {"completed"}
-
-
-
-_TRANSITIONS = {
-    "created": {"validating"} | _NON_SUCCESS_TERMINAL_STATES,
-    "validating": {"preparing_proxy"} | _NON_SUCCESS_TERMINAL_STATES,
-    "preparing_proxy": {"running"} | _NON_SUCCESS_TERMINAL_STATES,
-    "running": {"extracting"} | _NON_SUCCESS_TERMINAL_STATES,
-    "extracting": set(_TERMINAL_STATES),
-    **{state: set() for state in _TERMINAL_STATES},
 }
 
 

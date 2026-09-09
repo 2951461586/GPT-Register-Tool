@@ -16,6 +16,7 @@ from .account_health import (
     HealthCheckKind,
     liveness_health_result,
     plan_health_result,
+    sanitize_health_details,
 )
 from ..config import CFG
 from ..paths import runtime_file
@@ -149,18 +150,6 @@ def enqueue_post_registration_checks(
     return jobs
 
 
-def list_account_health_jobs(*, status: str = "", limit: int = 0) -> list[dict[str, Any]]:
-    wanted = str(status or "").strip().lower()
-    with _LOCK:
-        items = _load_unlocked()
-    if wanted:
-        items = [item for item in items if item.get("status") == wanted]
-    items.sort(key=lambda item: int(item.get("updated_at") or 0), reverse=True)
-    if limit > 0:
-        items = items[: int(limit)]
-    return [_public_item(item) for item in items]
-
-
 def process_account_health_jobs(
     *,
     workers: int = 2,
@@ -220,6 +209,9 @@ def process_account_health_jobs(
                 try:
                     value = future.result()
                     result = value.to_dict() if isinstance(value, AccountHealthResult) else dict(value or {})
+                    # Keep the queue safe even for injected/plugin handlers;
+                    # the built-in result type is not the only producer.
+                    result = sanitize_health_details(result)
                     try:
                         updated = _update(
                             item["id"],
@@ -624,7 +616,6 @@ def _pid_alive(pid: int) -> bool:
 __all__ = [
     "enqueue_account_health",
     "enqueue_post_registration_checks",
-    "list_account_health_jobs",
     "process_account_health_jobs",
     "queue_path",
     "start_account_health_worker",

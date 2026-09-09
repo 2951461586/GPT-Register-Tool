@@ -29,5 +29,8 @@
     {"name":"stripe_key","pattern":"(?i)\\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]+\\b","replacement":"[REDACTED]"},
     {"name":"bare_proxy_credentials","pattern":"(?i)\\b([A-Za-z0-9_.\\-]+):([^@\\s:/]+)@([A-Za-z0-9_.\\-]+):(\\d{2,5})\\b","replacement":"[REDACTED]@$3:$4"},
     {"name":"named_secret","pattern":"(?i)(access[_-]?token|refresh[_-]?token|id[_-]?token|oauth[_-]?refresh[_-]?token|totp(?:[_-]?secret)?|client[_-]?secret|api[_-]?key|service[_-]?token|session[_-]?token|session[_-]?id|ba[_-]?token|blik[_-]?code|password|card(?:[_-]?(?:number|cvv|cvc|last4))?|authorization|cookie|token)(\\s*[=:]\\s*)[\"']?([^\\s,}\"']+)[\"']?","replacement":"$1$2[REDACTED]"}
+  ],
+  "log_text_patterns": [
+    {"name":"account_email","pattern":"(?i)(?<![A-Z0-9._%+\\-])([A-Z0-9._%+\\-]{1,2})[A-Z0-9._%+\\-]*@([A-Z0-9.\\-]+\\.[A-Za-z]{2,})","replacement":"$1***@$2"}
   ]
 }

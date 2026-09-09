@@ -33,6 +33,8 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.09.10 发布说明](releases/release-v2026.09.10.md) - 协议注册依赖修复、
+  内部异常分类、持久化 journal 终态和 WPF 发布验证。
 - [v2026.09.08 发布说明](releases/release-v2026.09.08.md) - 桌面注册结果契约、
   阶段计时与关联修复、浏览器 admission 前置、测活队列租约，以及日志脱敏和轮转。
 - [v2026.09.06.3 发布说明](releases/release-v2026.09.06.3.md) - 注册链路加固

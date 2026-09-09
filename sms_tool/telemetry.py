@@ -12,5 +12,6 @@ def correlation_fields() -> dict:
         "schema_version": SCHEMA_VERSION,
         "source": os.environ.get("SMS_TOOL_EVENT_SOURCE", "live"),
         "command_id": os.environ.get("SMS_TOOL_COMMAND_ID", ""),
+        "task_name": os.environ.get("SMS_TOOL_TASK_NAME", ""),
         "run_id": current_run_id.get(),
     }

@@ -549,7 +549,13 @@ def run_payment_batch(
             _write_checkpoint(report_path, report)
         return report
     finally:
+        # Reached only when ``acquire`` succeeded -- the timeout branch above
+        # raises, so we never discard a gate another process still holds.
+        # ``batch_id`` is unique per run, so after release nobody will acquire
+        # this gate again and its slot file is pure litter (3,949 empty ones had
+        # accumulated before this line existed).
         process_gate.release()
+        process_gate.discard()
 
 
 def _build_report(*, batch_id: str, method: str, started: float, workers: int,
@@ -611,6 +617,12 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
         "failed": sum(not bool(row.get("ok")) for row in results),
         "cancelled": sum(state in {"cancelled", "canceled"} for state in terminal_states),
         "unknown": sum(state in {"unknown", "outcome_unknown"} for state in terminal_states),
+        # Tallied from the flag itself, not from `status`. Several executors set
+        # requires_reconciliation on rows whose status never becomes "unknown"
+        # (unknown-after-confirm, conflict on a settled operation, unsupported
+        # method), so a status-based count silently under-reports how much money
+        # sits in an undetermined state.
+        "reconciliation_required": sum(row.get("requires_reconciliation") is True for row in results),
         "timed_out": sum(state in {"timed_out", "timeout", "timeout_expired"} for state in terminal_states),
         "retryable": sum(row.get("retryable") is True for row in results),
     }
@@ -866,9 +878,32 @@ def _load_checkpoint(path: Path, method: str, run_signature: str) -> dict[str, A
 
 
 def _checkpoint_row_resumable(row: dict[str, Any]) -> bool:
-    """Resume only completed success or an explicitly non-retryable failure."""
+    """Reuse a checkpoint row as-is instead of re-running it.
+
+    Two flags settle a row even when it is not a success, and neither may be
+    re-run:
+
+    * ``side_effect_started`` -- the remote side may already have moved money.
+      ``payment_operation._replay_allowed`` refuses to replay these, so putting
+      them back in the pending set only produces ``PaymentOperationConflict``,
+      which the worker loop degrades into a ``payment_worker_exception`` row
+      flagged ``retryable=True`` -- actively misleading for a row that must not
+      be retried.
+    * ``requires_reconciliation`` -- outcome unknown (``status == "unknown"``).
+      ``PaymentResult.from_mapping`` derives ``side_effect_started`` from this
+      flag, so it is the wider of the two.
+
+    Both are reused, never re-run, and must stay visible: the row keeps its
+    ``requires_reconciliation`` field and ``counts.reconciliation_required``
+    tallies every such row. That counter is what tells an operator the batch
+    has money in an unknown state -- do not drop it.
+    """
     contract = PaymentResult.from_mapping(row)
-    if contract.outcome.requires_reconciliation or contract.outcome.side_effect_started and not contract.ok:
+    outcome = contract.outcome
+    # Written as two independent clauses on purpose. The previous one-line form
+    # read as `A or (B and not C)`, which was ambiguous to every reader and
+    # collapsed to the same answer only by accident.
+    if outcome.requires_reconciliation or outcome.side_effect_started:
         return True
     if row.get("ok") is True:
         return True

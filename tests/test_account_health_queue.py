@@ -34,6 +34,28 @@ def test_health_contract_normalizes_plan_and_redacts_credentials():
     assert "access_token" not in result["details"]
 
 
+def test_health_contract_redacts_camel_case_secret_keys():
+    result = plan_health_result(
+        "user@example.com",
+        {"ok": True, "accessToken": "secret", "refreshToken": "secret", "cookieHeader": "secret"},
+    ).to_dict()
+    assert "accessToken" not in result["details"]
+    assert "refreshToken" not in result["details"]
+    assert "cookieHeader" not in result["details"]
+
+
+def test_queue_sanitizes_mapping_handler_results():
+    with tempfile.TemporaryDirectory() as tmp, patch.object(
+        account_health_queue, "queue_path", return_value=Path(tmp) / "queue.json"
+    ):
+        account_health_queue.enqueue_account_health("user@example.com", "plan", auto_start=False)
+        account_health_queue.process_account_health_jobs(
+            handler=lambda job: {"ok": True, "email": job["email"], "accessToken": "secret"}
+        )
+        saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
+        assert "accessToken" not in saved[0]["result"]
+
+
 def test_health_contract_records_recovery_chain_and_final_verification():
     result = liveness_health_result(
         "user@example.com",

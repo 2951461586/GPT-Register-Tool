@@ -3,12 +3,14 @@
 from pathlib import Path
 from typing import Any, Mapping
 
+from ...paths import runtime_dir
 
-def _browser_profile_dir(driver: str, profile_id: str) -> str:
+
+def _browser_profile_dir(driver: str, profile_id: str, config: Mapping[str, Any] | None = None) -> str:
     safe_id = "".join(c if c.isalnum() or c in "-._" else "_" for c in str(profile_id or ""))
     if not safe_id or safe_id in {".", ".."}:
         safe_id = "default"
-    return str(Path("runtime") / "browser_profiles" / driver / safe_id)
+    return str(runtime_dir(config or {}) / "browser_profiles" / driver / safe_id)
 
 
 def _inject_screen_size(
@@ -56,7 +58,9 @@ def _inject_browser_profile(
     driver_cfg = dict(drivers.get(driver) or {})
     if driver in {"camoufox", "cloak", "playwright"}:
         if not str(driver_cfg.get("user_data_dir") or "").strip():
-            driver_cfg["user_data_dir"] = _browser_profile_dir(driver, str(browser_identity["profile_id"]))
+            driver_cfg["user_data_dir"] = _browser_profile_dir(
+                driver, str(browser_identity["profile_id"]), config=mutable
+            )
     elif driver == "roxy":
         driver_cfg.setdefault("delete_profile_after_run", False)
     drivers[driver] = driver_cfg

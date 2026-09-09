@@ -7,6 +7,7 @@ from typing import Any, Mapping
 from urllib.parse import unquote, urlsplit
 
 from ..phone_proxy import normalize_proxy_url
+from .browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from .stealth import apply_playwright_stealth
 
 
@@ -53,11 +54,12 @@ class PlaywrightBrowserSession:
         self.timezone_id = str(timezone_id or "America/New_York")
         self.user_data_dir = str(user_data_dir or "").strip()
         # Rotated screen profile (browser fingerprint pool).  Defaults to the
-        # historical 1440x900 so behavior is unchanged when no pool is drawn.
+        # shared constants so the fallback is defined in exactly one place
+        # (P2-10: was hardcoded 1440x900 duplicated from decisions.py).
         if viewport and len(viewport) == 2 and viewport[0] > 0 and viewport[1] > 0:
             self.viewport: dict[str, int] = {"width": int(viewport[0]), "height": int(viewport[1])}
         else:
-            self.viewport = {"width": 1440, "height": 900}
+            self.viewport = {"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT}
         self._persistent = bool(self.user_data_dir)
         self._playwright = None
         self.browser = None

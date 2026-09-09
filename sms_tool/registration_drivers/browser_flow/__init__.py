@@ -17,14 +17,29 @@ patch 必须打遍所有副本才生效（曾经需要 tests/browser_flow_patch.
 会响亮地 AttributeError，而不是静默放过。
 """
 
-from .orchestrator import (
-    build_browser_session_file,
-    run_browser_registration,
-    run_playwright_registration,
-)
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "run_browser_registration",
-    "run_playwright_registration",
-    "build_browser_session_file",
-]
+if TYPE_CHECKING:
+    from .orchestrator import (
+        build_browser_session_file,
+        run_browser_registration,
+        run_playwright_registration,
+    )
+
+__all__ = ["run_browser_registration", "run_playwright_registration", "build_browser_session_file"]
+
+
+def __getattr__(name: str):
+    """Load the orchestration layer only when its public API is requested.
+
+    Leaf modules such as ``browser_session`` import ``browser_flow.decisions``.
+    Eagerly importing the package's orchestrator from here pulls ``session``
+    back into ``browser_session`` and creates a circular import during module
+    initialisation.  Lazy exports preserve the public API without making every
+    leaf import the whole browser workflow.
+    """
+    if name in __all__:
+        from . import orchestrator
+
+        return getattr(orchestrator, name)
+    raise AttributeError(name)

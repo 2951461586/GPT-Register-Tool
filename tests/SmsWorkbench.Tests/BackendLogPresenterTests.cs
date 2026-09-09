@@ -167,6 +167,17 @@ public class BackendLogPresenterTests
     }
 
     [Fact]
+    public void ProgressEventLine_RendersOneClickSmsAccountOutcome()
+    {
+        var progress = new BackendProgressEvent(
+            "one_click_sms", "run-1", "a***@example.com", "", "failed", "failed",
+            "email_otp_poll_timeout", FailureClass: "mailbox");
+        Assert.Equal(
+            "一键接码 · a***@example.com · failed · 失败 · email_otp_poll_timeout",
+            BackendLogPresenter.ProgressEventLine(progress));
+    }
+
+    [Fact]
     public void ProgressEventLine_SurvivesMissingDetailAndTotal()
     {
         Assert.Equal("── 账号测活开始 ──",

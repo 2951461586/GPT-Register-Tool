@@ -23,7 +23,9 @@ namespace SmsWorkbench
         string Schema = "",
         int Total = 0,
         string BatchId = "",
-        string Operation = "");
+        string Operation = "",
+        string CommandId = "",
+        string FailureClass = "");
 
     public static class BackendProgressEventParser
     {
@@ -69,7 +71,9 @@ namespace SmsWorkbench
                     Text(root, "schema"),
                     Number(payload, "total"),
                     Text(payload, "batch_id"),
-                    Text(payload, "operation"));
+                    Text(payload, "operation"),
+                    First(Text(root, "command_id"), Text(payload, "command_id")),
+                    Text(payload, "failure_class"));
                 return true;
             }
             catch (JsonException)

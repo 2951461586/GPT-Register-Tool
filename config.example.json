@@ -84,13 +84,6 @@
         "disable_content_sandbox": true,
         "keep_browser_open": false,
         "start_url": "https://chatgpt.com/auth/login"
-      },
-      "adspower": {
-        "api_base": "http://127.0.0.1:50325",
-        "user_id": "",
-        "headless": false,
-        "keep_browser_open": false,
-        "start_url": "https://chatgpt.com/auth/login"
       }
     },
     "password_random_length": 12,

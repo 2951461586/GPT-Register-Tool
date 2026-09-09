@@ -8,6 +8,7 @@ the row, or re-enqueue the health check.
 
 from __future__ import annotations
 
+import json
 import types
 
 import pytest
@@ -108,6 +109,12 @@ def test_failed_registration_does_not_hard_block_inprocess_retry(tmp_path):
     out = persist_registration_result(args, failed, str(base_dir), ctx)
     assert out["status"] == "complete"
     assert "durable_conflict" not in out
+    journal = next((tmp_path / "payment_operations").glob("*.json"))
+    record = json.loads(journal.read_text(encoding="utf-8"))
+    assert record["status"] == "failed"
+    assert record["finished_at"] > 0
+    assert record["retryable"] is True
+    assert record["side_effect_started"] is False
     # A later successful attempt for the same email+batch must still be allowed to persist.
     out2 = persist_registration_result(args, _fresh_data("f@e.com"), str(base_dir), ctx)
     assert out2["db_saved"] == 1

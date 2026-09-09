@@ -39,7 +39,10 @@ namespace SmsWorkbench
             using var timeout = new CancellationTokenSource(command.Timeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
             using var process = new Process { StartInfo = CreateStartInfo(command), EnableRaisingEvents = true };
-            string commandId = Guid.NewGuid().ToString("N");
+            string commandId = command.EnvironmentVariables.TryGetValue("SMS_TOOL_COMMAND_ID", out string? configuredCommandId)
+                && !string.IsNullOrWhiteSpace(configuredCommandId)
+                ? configuredCommandId.Trim()
+                : Guid.NewGuid().ToString("N");
             process.StartInfo.Environment["SMS_TOOL_COMMAND_ID"] = commandId;
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();

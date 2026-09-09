@@ -11,7 +11,7 @@ def run_roxy_registration(**kwargs: Any) -> dict:
     Roxy owns the Chromium process, fingerprint and proxy for each profile;
     this driver only starts/stops the profile via Roxy's local REST API and
     attaches through Playwright's connect_over_cdp -- the same contract as the
-    other anti-detect drivers (Cloak/Camoufox/AdsPower).
+    other anti-detect drivers (Cloak/Camoufox).
     """
     return run_browser_registration(driver_name="roxy", **kwargs)
 

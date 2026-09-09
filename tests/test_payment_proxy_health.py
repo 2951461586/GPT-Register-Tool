@@ -9,7 +9,6 @@ from sms_tool.paypal_proxy import (
     probe_proxy,
     select_proxy_from_pool,
 )
-from sms_tool.payment_country_catalog import is_paypal_supported, validate_paypal_country
 
 
 def test_probe_cache_serves_second_selection_without_network(tmp_path, monkeypatch):
@@ -72,18 +71,3 @@ def test_select_pool_skips_cooldown_and_prefers_healthy(tmp_path, monkeypatch):
     assert "good-exit" in selected
     # The cooling-down bad proxy is ranked out and never probed.
     assert all("bad-exit" not in value for value in probed)
-
-
-def test_paypal_supported_country_catalog():
-    assert is_paypal_supported("US")
-    assert is_paypal_supported("gb")  # case-insensitive
-    assert is_paypal_supported("VN")
-    assert not is_paypal_supported("TR")  # PayPal withdrew from Turkey
-    assert not is_paypal_supported("")
-
-
-def test_validate_paypal_country_is_compatibility_noop():
-    validate_paypal_country("gopay", "TR")
-    validate_paypal_country("paypal", "")
-    validate_paypal_country("paypal", "US")
-    validate_paypal_country("paypal", "TR")

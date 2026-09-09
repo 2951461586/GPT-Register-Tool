@@ -32,6 +32,46 @@ from ..config import CFG
 _GMAIL_SCAN_LOCKS = {}
 _GMAIL_SCAN_LOCKS_GUARD = threading.Lock()
 
+# ``classify_error`` resolves exactly one class by marker precedence, so an
+# auth_state error whose text also mentions "connection"/"timeout" already
+# lands in "network".  That ordering is deliberate and is NOT what we are
+# changing: both classes are retryable
+# (``registration_policy.RETRYABLE_CLASSES``), and judging an account dead
+# because of network jitter is worse than the reverse.
+#
+# What used to be implicit is the *scan status*: everything that was not
+# "network" collapsed into "relogin_failed"/"scan_failed", so a transient
+# auth_state / mailbox / rate-limit failure was indistinguishable from a
+# genuinely dead account.  Map the class explicitly instead, reusing the same
+# vocabulary ``store/normalize._status`` already persists so the scan result
+# and the stored row agree.
+_SCAN_STATUS_BY_FAILURE_CLASS = {
+    "network": "network_failed",
+    "mailbox": "mailbox_failed",
+    "auth_state": "auth_state_failed",
+    "rate_limit": "rate_limited",
+    # A user-initiated cancel is not a failure: ``CANCELLED_ERROR_MARKERS`` is
+    # literally ``("registration_cancelled", "cancelled_by_user")`` and
+    # ``registration_cancelled`` is also listed as a terminal (non-retryable)
+    # marker. Collapsing it into ``scan_failed`` both inflates the failure
+    # counts and feeds the ``at_invalid`` promotion at :481, which infers a
+    # dead token from a scan failure the user actually asked for.
+    "cancelled": "scan_cancelled",
+}
+
+
+def _scan_failure_status(failure_class: str, relogin_result: dict[str, Any] | None) -> str:
+    """Explicit scan status for a failed scan.
+
+    Only classes with their own status are mapped here.  ``account`` and
+    ``unknown`` keep falling through to ``relogin_failed``/``scan_failed``,
+    which is what the ``at_invalid`` promotion in ``_persist_scan`` keys off.
+    """
+    explicit = _SCAN_STATUS_BY_FAILURE_CLASS.get(str(failure_class or "").strip().lower())
+    if explicit:
+        return explicit
+    return "relogin_failed" if relogin_result and not relogin_result.get("ok") else "scan_failed"
+
 
 def scan_accounts(
     emails: Iterable[str],
@@ -45,6 +85,7 @@ def scan_accounts(
     auto_switch_workspace: bool = False,
     quota_relogin_on_401: bool = False,
     relogin_mode: str = "auto",
+    deep_probe: bool = False,
 ) -> list[dict[str, Any]]:
     emails = _unique_emails(emails)
     workers = max(1, min(int(workers or 1), 8, len(emails) or 1))
@@ -66,6 +107,7 @@ def scan_accounts(
                 auto_switch_workspace=auto_switch_workspace,
                 quota_relogin_on_401=quota_relogin_on_401,
                 relogin_mode=relogin_mode,
+                deep_probe=deep_probe,
             )
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -84,6 +126,7 @@ def scan_accounts(
                     auto_switch_workspace=auto_switch_workspace,
                     quota_relogin_on_401=quota_relogin_on_401,
                     relogin_mode=relogin_mode,
+                    deep_probe=deep_probe,
                 )
                 for index, email in enumerate(emails)
             ]
@@ -154,6 +197,7 @@ def _scan_one(
     auto_switch_workspace: bool = False,
     quota_relogin_on_401: bool = False,
     relogin_mode: str = "auto",
+    deep_probe: bool = False,
 ) -> dict[str, Any]:
     print(f"\n[{index + 1}/{total}] Account scan: {email}")
     started = time.time()
@@ -185,7 +229,7 @@ def _scan_one(
     relogin_result = {}
 
     recovering_401 = quota_relogin_on_401 and _token_probe_is_invalid(token_probe)
-    if refresh_token and not recovering_401:
+    if deep_probe and refresh_token and not recovering_401:
         refresh_result = _refresh_with_openai_oauth(data, refresh_token, proxy=proxy)
         if refresh_result.get("ok"):
             data.update(refresh_result.get("data") or {})
@@ -237,7 +281,7 @@ def _scan_one(
 
     if relogin_result:
         oauth_result = relogin_result
-    else:
+    elif deep_probe:
         oauth_result = collect_codex_oauth_tokens(
             data=data,
             proxy=proxy,
@@ -246,6 +290,23 @@ def _scan_one(
             phone_pool=None,
             phone_probe_only=True,
         )
+    else:
+        # The default scan is deliberately probe-only.  A valid AT is the
+        # liveness answer; OAuth/OTP recovery is an explicit deep operation.
+        oauth_result = {"ok": False, "mode": "probe_only", "error": "deep_probe_disabled"}
+
+    if not deep_probe and not relogin_result and _token_probe_is_active(token_probe):
+        result = _result(
+            index, email, "alive", True, had_rt, had_phone,
+            token_probe=token_probe, started=started, workspace_result=workspace_result,
+        )
+        result["subscription_type"] = _subscription_type(data)
+        result["at_status"] = _at_status_label(result, {}, oauth_result)
+        result["phone_verification_required_label"] = "否"
+        result["dropped"] = "否"
+        _persist_scan(data, json_path, result)
+        print(f"[OK] {email} alive (probe-only)")
+        return result
 
     if oauth_result.get("ok"):
         tokens = oauth_result.get("tokens") if isinstance(oauth_result.get("tokens"), dict) else {}
@@ -357,10 +418,7 @@ def _scan_one(
         return result
 
     failure_class = classify_error(relogin_result or oauth_result or refresh_result)
-    if failure_class == "network":
-        failure_status = "network_failed"
-    else:
-        failure_status = "relogin_failed" if relogin_result and not relogin_result.get("ok") else "scan_failed"
+    failure_status = _scan_failure_status(failure_class, relogin_result)
     result = _result(
         index,
         email,
@@ -457,6 +515,17 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
             or (result or {}).get("refresh")
             or {}
         )
+    elif status not in {"alive", "alive_probe_inconclusive", "account_deactivated", "phone_verification_required", "secondary_phone_verification_required"}:
+        # A transient scan failure must not inherit a stale registration
+        # status/success bit from an earlier run.
+        updated["success"] = False
+        updated["status"] = status or "scan_failed"
+        updated["error"] = _oauth_error(
+            (result or {}).get("relogin")
+            or (result or {}).get("oauth")
+            or (result or {}).get("refresh")
+            or {}
+        ) or status or "scan_failed"
 
     if json_path:
         try:

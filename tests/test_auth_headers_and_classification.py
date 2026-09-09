@@ -148,6 +148,20 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
     def test_sentinel_extraction_failure_is_retryable_network_error(self):
         self.assertEqual(classify_error("sentinel_extract_failed"), "network")
 
+    def test_internal_and_configuration_failures_are_not_unknown(self):
+        self.assertEqual(
+            classify_error("registration_internal_error:NameError: missing dependency"),
+            "internal",
+        )
+        self.assertEqual(
+            classify_error("identity_ready_transport:name 'get_device_context' is not defined"),
+            "internal",
+        )
+        self.assertEqual(
+            classify_error("unsupported_registration_driver:protocol"),
+            "configuration",
+        )
+
 
 class FamilyHardwareProfileTests(unittest.TestCase):
     """P1-1: platform-class fields come from a family table, not a hardcoded Win32.
@@ -282,6 +296,29 @@ class FingerprintPoolVersionMatrixTests(unittest.TestCase):
         self.assertEqual(fp["navigator_platform"], "MacIntel")
         self.assertEqual(fp["navigator_vendor"], "Apple Computer, Inc.")
         self.assertEqual(fp["sec_ch_ua_platform_version"], "14.5.0")
+
+    def test_select_by_exact_name_finds_profile(self):
+        # P2-3: select(name) used to split on "_" and truncate, so
+        # "safari18_0" became "safari18" which never matched any
+        # profile name → always returned None.  Now the full name is
+        # matched as-is.
+        pool = FingerprintPool.from_config({})
+        # Pick a real profile name from the pool to guarantee a match.
+        real_name = pool._profiles[0].name
+        found = pool.select(real_name)
+        self.assertIsNotNone(found, f"select({real_name!r}) returned None")
+        self.assertEqual(found.name, real_name)
+
+        # A name with an underscore suffix must also match exactly.
+        for p in pool._profiles:
+            if "_" in p.name:
+                result = pool.select(p.name)
+                self.assertIsNotNone(result, f"select({p.name!r}) returned None")
+                self.assertEqual(result.name, p.name)
+                break
+
+        # A non-existent name must still return None.
+        self.assertIsNone(pool.select("nonexistent_profile_xyz"))
 
 
 if __name__ == "__main__":

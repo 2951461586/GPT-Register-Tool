@@ -225,7 +225,7 @@ Start the desktop UI with:
 
 First-run setup:
   1. Install Python 3.10+ (Add to PATH), then run:
-     python -m pip install -r requirements.txt
+     python -m pip install -r requirements.txt -c constraints.txt
   2. config.json is created from config.example.json on install; edit it with
      local mailbox, proxy, SMS, and payment settings (the desktop Settings
      window can edit most of them).

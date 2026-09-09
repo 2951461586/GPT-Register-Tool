@@ -17,8 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "playwright") -> Any | None:
-    """Build the reference project's conservative ``playwright-stealth`` profile."""
-    del provider_prefix
+    """Build the reference project's conservative ``playwright-stealth`` profile.
+
+    P2-8: *provider_prefix* is accepted but unused — it was intended for
+    per-provider stealth tweaks, but all providers use the same conservative
+    profile.  Kept in the signature to avoid breaking call sites that already
+    pass it; remove it here when those call sites are cleaned up too.
+    """
     try:
         from playwright_stealth import Stealth
     except ImportError:

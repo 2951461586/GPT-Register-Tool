@@ -66,7 +66,7 @@ def _ensure_signup_page_ready(
             pass
         # P3: randomize the settle interval so every account in a batch does
         # not share one identical timing signature.
-        _settle = humanize_delay("page_settle", config=config)
+        _settle = humanize_delay("page_settle", config=config, sleep=False)
         try:
             page.wait_for_timeout(int(_settle * 1000))
         except Exception:
@@ -292,7 +292,7 @@ def _wait_for_registration_state(
                 return "authenticated"
         except Exception:
             pass
-        _pause = humanize_delay("state_probe", config=config)
+        _pause = humanize_delay("state_probe", config=config, sleep=False)
         try:
             page.wait_for_timeout(int(_pause * 1000))
         except Exception:
@@ -425,7 +425,7 @@ def _wait_for_profile_completion(
             return True
         if state == "challenge":
             raise BrowserRegistrationError("manual_challenge_required")
-        _settle = humanize_delay("page_settle", config=config)
+        _settle = humanize_delay("page_settle", config=config, sleep=False)
         try:
             page.wait_for_timeout(int(_settle * 1000))
         except Exception:

@@ -10,6 +10,7 @@ below so existing links do not break:
 - [`registration-architecture.md`](registration-architecture.md) - 注册依赖、状态、生命周期与重试
 - [`configuration.md`](configuration.md) - 配置分片优先级与迁移约定
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
+- [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约
 - [`../README.md`](../README.md)
 
 New current-state documents should be linked here first and indexed from

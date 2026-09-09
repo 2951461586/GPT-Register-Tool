@@ -1,8 +1,9 @@
-"""Browser process pool for concurrent Camoufox registrations.
+"""Shared browser process pool for concurrent registrations.
 
-Manages a pool of browser processes that can be reused across multiple
-registration tasks.  Each process tracks a health state and a generation
-counter so stale or degraded browsers are recycled automatically.
+Manages reusable browser processes for drivers that support process pooling.
+The pool is shared by the browser registration path rather than being
+Camoufox-specific; individual driver capabilities still decide whether a
+session can be reused.
 
 The pool is designed for the synchronous registration flow: callers acquire
 a browser session, run their registration logic, and release the session back

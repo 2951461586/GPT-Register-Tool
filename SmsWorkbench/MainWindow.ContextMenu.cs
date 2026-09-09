@@ -199,7 +199,7 @@ namespace SmsWorkbench
                 Log($"正在进行账号测活：{row.Identifier}");
                 var args = new List<string> { "--quota-usage", "--email", row.Identifier, "--refresh-timeout", "45" };
                 AddRegistrationProxy(args);
-                string json = await RunBackendWithResultAsync("账号测活", args);
+                string json = await RunBackendWithResultAsync("账号测活", args, 120000, ct);
 
                 if (string.IsNullOrWhiteSpace(json))
                 {
@@ -219,19 +219,22 @@ namespace SmsWorkbench
                 }
                 else
                 {
-                    string error = root.TryGetProperty("error", out var errEl) ? errEl.GetString() ?? "未知错误" : "未知错误";
+                    string error = root.TryGetProperty("error", out var errEl) ? SensitiveDataSanitizer.Redact(errEl.GetString() ?? "未知错误") : "未知错误";
                     string status = root.TryGetProperty("status", out var stEl) ? stEl.GetString() ?? "" : "";
+                    string failureClass = root.TryGetProperty("failure_class", out var fcEl) ? fcEl.GetString() ?? "" : "";
                     string msg = $"测活失败：{error}";
+                    if (failureClass.Length > 0)
+                        msg += $"\n失败分类：{failureClass}";
                     if (status == "token_invalid")
                         msg += "\n\n接口返回 HTTP 401，当前 Access Token 已失效。";
                     await DialogFactory.ShowInfoAsync(this, $"账号测活：{row.Identifier}", msg);
-                    Log($"账号测活失败：{row.Identifier} → {error}");
+                    Log($"账号测活失败：{row.Identifier} → {error} failure_class={failureClass}");
                 }
             }
             catch (Exception ex)
             {
                 Log($"账号测活异常：{ex.Message}");
-                await DialogFactory.ShowInfoAsync(this, "账号测活", $"测活异常：{ex.Message}");
+                    await DialogFactory.ShowInfoAsync(this, "账号测活", $"测活异常：{SensitiveDataSanitizer.Redact(ex.Message)}");
             }
         }
 

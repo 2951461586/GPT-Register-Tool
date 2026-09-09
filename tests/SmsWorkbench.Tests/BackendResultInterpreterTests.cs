@@ -403,6 +403,11 @@ public sealed class BackendResultInterpreterTests
     [InlineData("secondary_phone_verification_required", "手机验证")]
     [InlineData("phone_verification_required", "支付完成")]
     [InlineData("scan_failed", "扫描失败")]
+    [InlineData("network_failed", "网络失败")]
+    [InlineData("mailbox_failed", "邮箱链路失败")]
+    [InlineData("auth_state_failed", "登录态失效")]
+    [InlineData("rate_limited", "触发限流")]
+    [InlineData("relogin_failed", "重登失败")]
     [InlineData("unknown_status", "unknown_status")]
     [InlineData("", "未知")]
     public void ScanStatusLabel_ReturnsCorrectLabel(string input, string expected)
