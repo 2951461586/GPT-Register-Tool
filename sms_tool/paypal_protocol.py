@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import urllib.parse
 from typing import Any, Optional
@@ -25,10 +24,6 @@ logger = logging.getLogger(__name__)
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 PP_ORIGIN = "https://www.paypal.com"
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
 
 # ── Regex patterns ─────────────────────────────────────────────────────────────
 

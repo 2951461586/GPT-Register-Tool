@@ -62,7 +62,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | 数据存储 | JSON、JSONL、SQLite |
 | 邮箱协议 | ReMail API、CFWorker、iCloud 接码链接、Microsoft Graph/OAuth、IMAP、Gmail IMAP |
 | 支付协议 | Stripe Checkout、PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo |
-| 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser、AdsPower |
+| 浏览器辅助 | Playwright、Camoufox、CloakBrowser、RoxyBrowser |
 
 ## 安装部署方式
 
@@ -94,7 +94,7 @@ GPT-Register-Tool-Setup-vYYYY.MM.DD.exe
 运行安装器并选择安装目录。首次启动前仍需安装 Python 依赖，并创建本地配置：
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 copy config.example.json config.json
 ```
 
@@ -109,7 +109,7 @@ GPT-Register-Tool-win-x64-vYYYY.MM.DD.zip
 在解压目录执行：
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 copy config.example.json config.json
 .\dist\net10\SmsWorkbench.exe
 ```
@@ -119,7 +119,7 @@ copy config.example.json config.json
 ```powershell
 git clone https://github.com/2951461586/GPT-Register-Tool.git
 cd GPT-Register-Tool
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 copy config.example.json config.json
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
@@ -142,9 +142,8 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 - `roxy`：连接本机 RoxyBrowser API 创建/打开 Profile，再通过 CDP 接管。
 - `cloak`：调用已安装的 CloakBrowser Python SDK。
 - `camoufox`：调用已安装的 Camoufox 反检测浏览器（**当前默认浏览器驱动**）。
-- `adspower`：连接本机 AdsPower API 创建/打开环境，再通过 CDP 接管。
 
-RoxyBrowser 与 AdsPower 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
+RoxyBrowser 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
 
 浏览器注册默认启用 **脉冲调度**（`registration.pulse`，波次间隔 + OTP-ban 暂停）与 **浏览器进程池**（`registration.browser_process_pool`，按进程复用浏览器上下文、按健康度回收）。二者与「账号 ↔ 代理槽绑定」协同：每个账号在整个生命周期内固定走同一个注册出口，重试时只刷新会话 sid，不切换代理成员——避免出口轮换被注册方判定为代理抖动而封禁。进程池哈希键按 `(driver, headless, timeout)` 缓存，使同一出口、同一头部配置的账号复用同一浏览器进程，降低冷启动开销。
 
@@ -291,7 +290,7 @@ SmsWorkbench/
 
 IBackendClient
   -> ArgumentList + 取消/超时/进程树终止
-  -> @@SMSWORKBENCH_IPC_V1@@ 单行版本化结果信封
+  -> @@SMSWORKBENCH_V2@@ 单行版本化结果信封
 
 sms_tool/cli.py
   CLI 与任务编排
@@ -515,7 +514,7 @@ HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/sessi
 当 OpenAI 轮换 Stripe publishable key 或 Sentinel SDK 版本、导致支付提链或注册 OTP 失败时，可用环境变量临时覆盖，无需改代码：
 
 - `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key（`sms_tool/gen_pp_link.py` 与 `services/protocol-payment/momo/ac_paylink_core.py` 两处共用）。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。
-- `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel_quickjs.py`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
+- `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel/bundle.py` 的 `DEFAULT_SENTINEL_VERSION`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
 - `OPENAI_SENTINEL_DISABLE_QUICKJS`：设任意值可显式禁用真实 SDK 路径；生产注册默认不建议设置，
   因为纯 HTTP PoW 无法通过 Sentinel 深层校验。
 
@@ -664,7 +663,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构决策记录（ADR）](docs/adr/README.md)
 - [注册恢复与协作取消](docs/current/registration-recovery.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/releases/release-v2026.09.08.md)
+- [最新发布说明](docs/releases/release-v2026.09.10.md)
 - [历史发布说明](docs/releases/)（`docs/releases/` 目录，文件名即版本）
 - [代理指南](PROXY_GUIDE.md)
 

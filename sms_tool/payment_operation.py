@@ -100,6 +100,12 @@ class PaymentOperation:
             return
         self._closed = True
         self.gate.release()
+        # The gate name is ``payment-operation-<sha256(idempotency_key>)``, an
+        # unbounded namespace: without this the store leaves one empty slot file
+        # plus one empty directory behind per idempotency key forever (806 had
+        # accumulated).  Idempotency lives in the record file, not in the gate
+        # directory, so removing the directory cannot lose a replay decision.
+        self.gate.discard()
 
 
 class PaymentOperationStore:
@@ -167,6 +173,9 @@ class PaymentOperationStore:
             return PaymentOperation(path=path, gate=gate, record=record)
         except BaseException:
             gate.release()
+            # No ``PaymentOperation`` escapes this branch, so ``close()`` never
+            # runs and the discard has to happen here too.
+            gate.discard()
             raise
 
 

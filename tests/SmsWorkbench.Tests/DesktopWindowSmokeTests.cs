@@ -202,8 +202,8 @@ public sealed class DesktopWindowSmokeTests
                 && editor.DataContext is SettingFieldViewModel field
                 && field.Key == "registration_driver");
         // Keep in sync with SettingsCatalog's registration_driver options:
-        // protocol / playwright / roxy / cloak / camoufox / adspower.
-        Assert.Equal(6, driverEditor.Items.Count);
+        // protocol / playwright / roxy / cloak / camoufox.
+        Assert.Equal(5, driverEditor.Items.Count);
         Assert.True(contentScrollViewer.ScrollableHeight > 0);
         Assert.Equal(Visibility.Visible, outerVerticalBar.Visibility);
     }

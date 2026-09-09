@@ -52,6 +52,8 @@ provider-free. The seams fixed in place are `account_seed` (seed lookup),
 
 See [registration architecture](current/registration-architecture.md) for the
 state groups, session ownership, error policy and compatibility guarantees.
+See [account health contract](current/account-health.md) for probe/recovery
+side effects, result semantics and proxy precedence.
 [ADR-0009](adr/0009-registration-hardening.md) records the decisions.
 
 ## Boundary Rules

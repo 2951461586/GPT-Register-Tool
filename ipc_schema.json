@@ -1,5 +1,9 @@
 {
   "version": 1,
+  "protocol_version": 1,
+  "event_envelope_version": 2,
+  "event_envelope_schema": "smsworkbench.ipc.v2",
   "ops": ["hello", "ping", "accounts", "mailbox-pool", "pools", "account", "account-file", "mailbox-file", "payment-url-file"],
-  "error_codes": ["bad_request", "unknown_operation", "backend_error", "watchdog_timeout", "internal"]
+  "error_codes": ["bad_request", "unknown_operation", "backend_error", "watchdog_timeout", "internal"],
+  "event_envelope_keys": ["schema", "version", "type", "command_id", "task_name", "source", "run_id", "sequence", "timestamp_ms", "terminal", "payload"]
 }

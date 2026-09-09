@@ -22,16 +22,19 @@ class HealthState(str, Enum):
     UNKNOWN = "unknown"
 
 
-_SENSITIVE_KEYS = {
-    "access_token",
-    "authorization",
-    "cookie",
-    "cookie_header",
-    "id_token",
-    "password",
-    "refresh_token",
-    "session_token",
-}
+_SENSITIVE_KEY_FRAGMENTS = (
+    "token", "secret", "password", "cookie", "authorization", "api_key",
+    "apikey", "clientsecret", "cardnumber", "cvv", "proxy",
+)
+
+
+def _canonical_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _is_sensitive_key(value: Any) -> bool:
+    key = _canonical_key(value)
+    return any(fragment in key for fragment in _SENSITIVE_KEY_FRAGMENTS)
 
 
 @dataclass(frozen=True)
@@ -141,7 +144,7 @@ def sanitize_health_details(value: Any) -> Any:
         return {
             str(key): sanitize_health_details(item)
             for key, item in value.items()
-            if str(key).lower() not in _SENSITIVE_KEYS
+            if not _is_sensitive_key(key)
         }
     if isinstance(value, (list, tuple)):
         return [sanitize_health_details(item) for item in value]

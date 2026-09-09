@@ -22,9 +22,17 @@ from sms_tool.browser_fingerprint_pool import (
 )
 from sms_tool.registration_drivers.browser_session import PlaywrightBrowserSession
 from sms_tool.registration_drivers.external_sessions import create_browser_session
+from sms_tool.registration_drivers.external_sessions.profiles import _browser_profile_dir
 
 
 class BrowserFingerprintPoolTests(unittest.TestCase):
+    def test_browser_profile_dir_uses_configured_runtime_root(self):
+        with self.subTest("configured runtime"):
+            path = _browser_profile_dir(
+                "camoufox", "profile-1", config={"runtime": {"directory": "tmp-runtime"}}
+            )
+            self.assertTrue(path.replace("\\", "/").endswith("/tmp-runtime/browser_profiles/camoufox/profile-1"))
+
     def test_select_browser_profile_deterministic_by_seed(self):
         a = select_browser_profile(None, seed="device-abc")
         b = select_browser_profile(None, seed="device-abc")
@@ -258,7 +266,7 @@ class TestProviderManagedFingerprintNotice(unittest.TestCase):
         return {"registration": {"browser_profile_pool": {"profiles": [{"screen_width": 1440}]}}}
 
     def test_provider_drivers_warn_when_a_pool_is_configured(self):
-        for driver in ("roxy", "cloak", "adspower"):
+        for driver in ("roxy", "cloak"):
             notice = provider_managed_fingerprint_notice(self._pool_config(), driver)
             self.assertTrue(notice, driver)
             self.assertIn(driver, notice)

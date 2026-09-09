@@ -26,7 +26,6 @@ class RegistrationDriver(str, Enum):
     ROXY = "roxy"
     CLOAK = "cloak"
     CAMOUFOX = "camoufox"
-    ADSPOWER = "adspower"
 
 
 @dataclass(frozen=True)
@@ -78,9 +77,6 @@ DRIVERS: dict[str, BrowserDriverSpec] = {
     ),
     RegistrationDriver.CAMOUFOX.value: BrowserDriverSpec(
         "camoufox", frozenset({"camoufox", "camou", "fox", "cf"}),
-    ),
-    RegistrationDriver.ADSPOWER.value: BrowserDriverSpec(
-        "adspower", frozenset({"adspower", "adsp", "ap", "adspower_browser"}),
     ),
 }
 

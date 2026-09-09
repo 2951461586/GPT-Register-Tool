@@ -383,6 +383,7 @@ _PROBE_REASON_LABELS = (
     ("token_invalid", "AT 失效（HTTP 401）"),
     ("health_timeout", "探测超时"),
     ("scan_failed", "探测失败"),
+    ("scan_cancelled", "扫描已取消"),
     ("mailbox_transport", "邮箱链路失败"),
     ("mailbox_auth_invalid", "邮箱授权失效"),
     ("mailbox_pool_repair_required", "邮箱池熔断中"),

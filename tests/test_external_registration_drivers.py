@@ -1538,7 +1538,7 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
 
     Camoufox was pinned to a hardcoded Screen(max_width=1280, max_height=900),
     so the largest fingerprint investment in the codebase never reached it.
-    Provider-owned drivers (roxy/cloak/adspower) must stay untouched -- their
+    Provider-owned drivers (roxy/cloak) must stay untouched -- their
     fingerprint belongs to the provider profile.
     """
 
@@ -1568,7 +1568,7 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
 
     def test_non_camoufox_drivers_are_untouched(self):
         config = {"registration": {"drivers": {"roxy": {"api_key": "k"}}}}
-        for driver in ("roxy", "cloak", "adspower", "playwright"):
+        for driver in ("roxy", "cloak", "playwright"):
             with self.subTest(driver=driver):
                 self.assertIs(_inject_screen_size(config, driver, (1680, 1050)), config)
 

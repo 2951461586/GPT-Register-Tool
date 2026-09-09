@@ -49,7 +49,7 @@ Download the latest installer or portable archive from [GitHub Releases](https:/
 ```powershell
 git clone https://github.com/2951461586/GPT-Register-Tool.git
 cd GPT-Register-Tool
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -c constraints.txt
 copy config.example.json config.json
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
@@ -107,7 +107,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
-- [v2026.09.08 release notes](./docs/releases/release-v2026.09.08.md)
+- [v2026.09.10 release notes](./docs/releases/release-v2026.09.10.md)
 - [Documentation index](./docs/README.md) (Chinese; release notes and audits archived under `docs/releases/` and `docs/audits/`)
 - [Directory map](./docs/directory-map.md)
 - [Proxy guide](./PROXY_GUIDE.md)
@@ -123,7 +123,6 @@ The desktop **Settings -> Registration & mailbox -> Registration driver** select
 - `roxy`: create/open a RoxyBrowser profile through its local API and attach over CDP.
 - `cloak`: use the installed CloakBrowser Python SDK.
 - `camoufox`: use the installed Camoufox anti-detect browser (default browser driver).
-- `adspower`: open an existing AdsPower environment through its local API and attach over CDP.
 
 Each driver reuses the mailbox OTP, session extraction, AT HTTP 200 probe, and persistence boundary. Provider credentials and lifecycle flags are configured in their own Settings sections. Missing required fields produce sanitized configuration errors; browser drivers do not bypass CAPTCHA and return `manual_challenge_required` when a human challenge is encountered.
 

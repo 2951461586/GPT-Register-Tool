@@ -59,9 +59,10 @@ namespace SmsWorkbench
 
         public async Task<string> RunForResultAsync(
             BackendCommand command,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default)
         {
-            BackendCommandResult result = await RunAsync(command, cancellationToken: cancellationToken).ConfigureAwait(false);
+            BackendCommandResult result = await RunAsync(command, progress, cancellationToken).ConfigureAwait(false);
             if (result.Payload.HasValue)
                 return result.Payload.Value.GetRawText();
             if (result.TimedOut)

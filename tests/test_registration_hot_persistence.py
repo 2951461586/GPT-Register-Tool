@@ -1,5 +1,6 @@
 import threading
 import time
+from dataclasses import replace
 from collections.abc import Mapping
 from pathlib import Path
 from types import SimpleNamespace
@@ -242,3 +243,30 @@ def test_explicit_promotion_check_does_not_enqueue_duplicate_plan_job(tmp_path):
         persist_registration_result(args, _result("health@example.com"), tmp_path, ctx)
 
     assert enqueue.call_args.kwargs["include_plan"] is False
+
+
+def test_promotion_check_is_skipped_when_batch_has_no_saved_success(tmp_path):
+    cfg = _runtime_cfg(tmp_path / "accounts.sqlite3")
+    ctx = _context(cfg, lambda _data, *, json_path: False)
+    args = _args()
+    args.check_promotion_after_registration = True
+    promotion = []
+    ctx = replace(
+        ctx,
+        check_registered_promotions=lambda *args, **kwargs: promotion.append((args, kwargs)),
+    )
+
+    report = save_registration_results(
+        args,
+        [{"success": False, "email": "failed@example.com", "error": "boom"}],
+        effective_count=1,
+        base_dir=tmp_path,
+        pipeline_started=time.time() - 1,
+        mailbox_seconds=0,
+        register_seconds=1,
+        ctx=ctx,
+    )
+
+    assert report["promotion"] is None
+    assert report["health"]["promotion_completed"] is False
+    assert promotion == []

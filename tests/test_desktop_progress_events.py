@@ -3,6 +3,7 @@ import json
 from sms_tool import desktop_ipc
 from sms_tool.registration_progress import RegistrationProgress
 from sms_tool.sanitizer import account_reference
+from sms_tool.commands.one_click import _emit_one_click_event
 
 
 def test_emit_event_is_opt_in_and_sanitized(monkeypatch, capsys):
@@ -39,3 +40,22 @@ def test_payment_method_field_survives_event_sanitization(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX):])["payload"]
     assert payload["method"] == "qris"
     assert payload["payment_method"] == "qris"
+
+
+def test_one_click_sms_event_contains_terminal_failure_class(monkeypatch, capsys):
+    monkeypatch.setenv(desktop_ipc.EVENT_ENV, "1")
+    _emit_one_click_event(
+        run_id="batch:acct",
+        batch_id="batch",
+        stage="failed",
+        status="failed",
+        email="user@example.com",
+        detail="email_otp_poll_timeout",
+        account_terminal=True,
+        failure_class="mailbox",
+    )
+    payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    assert payload["domain"] == "one_click_sms"
+    assert payload["account_ref"] == account_reference("user@example.com")
+    assert payload["failure_class"] == "mailbox"
+    assert payload["account_terminal"] is True

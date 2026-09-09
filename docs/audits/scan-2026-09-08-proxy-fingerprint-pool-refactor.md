@@ -10,6 +10,10 @@
 
 **最大的问题不是"少了某个功能"，而是同一件事被实现了三遍，且三份实现互不一致。**
 
+> **历史快照提示（2026-09-10）**：下表记录的是本轮扫描时的旧状态，不能
+> 当作当前实现。P0-1/P0-2/P0-3 已在后续落地记录中完成；当前代码使用共享
+> geo resolver、加权指纹池和 Cloudflare + hysteresis/half-open 健康策略。
+
 | # | 问题 | 证据 | 影响 |
 |---|------|------|------|
 | 1 | **出口国家（geo）有三套独立实现**，两套靠模板猜、一套靠实测，端点列表还不一样 | `proxy_entry.infer_region:449`、`paypal_proxy._probe_proxy_network:186`、`browser_fingerprint_pool._query_geo_endpoints:238` | 协议路径用猜的国家绑时区，实测数据就在旁边没用上 |

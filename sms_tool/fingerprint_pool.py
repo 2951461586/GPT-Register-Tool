@@ -2,14 +2,14 @@
 
 Combines the browser impersonation profile (Chrome version, UA, sec-ch-ua)
 with the geo profile (timezone, locale, language) into a unified
-``ProtocolEnvironmentProfile``.  A ``FingerprintPool`` distributes these
-profiles round-robin across registrations so consecutive accounts don't
-share the same fingerprint cluster.
+``ProtocolEnvironmentProfile``. A ``FingerprintPool`` uses weighted-random
+family selection by default; deterministic round-robin remains available for
+tests and explicitly deterministic operators.
 
 The pool reads from the existing ``auth_headers`` profile tables so the
 canonical fingerprint definitions remain in one place.  This module adds:
 - formal ``ProtocolEnvironmentProfile`` with ``validate()``
-- thread-safe round-robin ``FingerprintPool``
+- thread-safe weighted ``FingerprintPool`` (with opt-in round-robin mode)
 - integration seam for ``registration_handlers``
 """
 
@@ -116,7 +116,7 @@ def _build_profiles() -> list[ProtocolEnvironmentProfile]:
 
 
 class FingerprintPool:
-    """Thread-safe round-robin pool of protocol fingerprint profiles.
+    """Thread-safe weighted pool of protocol fingerprint profiles.
 
     Usage::
 
@@ -235,7 +235,7 @@ class FingerprintPool:
             return ProxyGeo(country=hint, source="hint") if hint else _EMPTY_GEO
 
     def next(self, proxy: str | None = None) -> ProtocolEnvironmentProfile:
-        """Return the next profile (round-robin), geo-aligned to the proxy exit."""
+        """Return a weighted profile, geo-aligned to the proxy exit."""
         if not self._profiles:
             # Fallback to a default profile
             return self._with_geo(
@@ -256,8 +256,14 @@ class FingerprintPool:
         return self._with_geo(profile, proxy)
 
     def select(self, name: str, proxy: str | None = None) -> ProtocolEnvironmentProfile | None:
-        """Select a specific profile by name, geo-aligned to the proxy exit."""
-        canonical = str(name or "").strip().lower().split("_", 1)[0]
+        """Select a specific profile by name, geo-aligned to the proxy exit.
+
+        The name is matched as-is (lower-cased and stripped).  P2-3: the old
+        ``split("_", 1)[0]`` was a hold-over from a naming convention that
+        never landed — profile names like ``safari18_0`` were truncated to
+        ``safari18``, which never matched, so ``select`` always returned None.
+        """
+        canonical = str(name or "").strip().lower()
         for p in self._profiles:
             if p.name == canonical:
                 return self._with_geo(p, proxy)

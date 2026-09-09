@@ -67,7 +67,7 @@ namespace SmsWorkbench
                 MessageBox.Show(
                     this,
                     $"环境自检发现 {fails.Count} 项必需依赖缺失:\n  - {detail}\n\n" +
-                    "可先运行: python -m pip install -r requirements.txt\n" +
+                    "可先运行: python -m pip install -r requirements.txt -c constraints.txt\n" +
                     "或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
                     "环境自检",
                     MessageBoxButton.OK,
@@ -78,7 +78,7 @@ namespace SmsWorkbench
                 Log("[doctor] 环境自检失败: " + ex.Message);
                 MessageBox.Show(
                     this,
-                    ex.Message + "\n\n桌面端依赖 Python 3.10+ 与 requirements.txt 中的依赖包。" +
+                    SensitiveDataSanitizer.Redact(ex.Message) + "\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。" +
                     "\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
                     "无法启动 Python 后端",
                     MessageBoxButton.OK,
@@ -150,10 +150,12 @@ namespace SmsWorkbench
             // panel gets the folded operator story instead of envelopes, JSON
             // blocks and banner bars.
             var logFolder = new BackendLogFolder();
+            string commandId = Guid.NewGuid().ToString("N");
             var progress = new Progress<BackendOutputLine>(line =>
             {
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
                 {
+                    LogBackendProgress(taskName, progressEvent);
                     if (accountProgress != null
                         && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
                     {
@@ -191,7 +193,7 @@ namespace SmsWorkbench
             });
             try
             {
-                logger?.Information("启动：python {Args}", safeArgs);
+                logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, safeArgs);
                 Log(BackendLogPresenter.TaskStartLine(taskName));
                 StatusText = taskName + " 运行中";
                 BackendCommandResult result = await backendTasks.RunAsync(
@@ -199,7 +201,13 @@ namespace SmsWorkbench
                         taskName,
                         args,
                         timeoutMs ?? BackendTaskTimeoutMs,
-                        new Dictionary<string, string> { ["SMSWORKBENCH_EVENTS"] = "1" }),
+                        new Dictionary<string, string>
+                        {
+                            ["SMSWORKBENCH_EVENTS"] = "1",
+                            ["SMS_TOOL_COMMAND_ID"] = commandId,
+                            ["SMS_TOOL_TASK_NAME"] = taskName,
+                            ["SMS_TOOL_EVENT_SOURCE"] = "wpf",
+                        }),
                     progress);
 
                 // Use BackendResultInterpreter to normalize the outcome
@@ -283,10 +291,49 @@ namespace SmsWorkbench
 
         private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000, CancellationToken ct = default)
         {
-            logger?.Information("启动：python {Args}", FormatBackendArgsForDisplay(args));
+            string commandId = Guid.NewGuid().ToString("N");
+            logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, FormatBackendArgsForDisplay(args));
             Log(BackendLogPresenter.TaskStartLine(taskName));
+            var logFolder = new BackendLogFolder();
+            var progress = new Progress<BackendOutputLine>(line =>
+            {
+                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
+                {
+                    string? stageLine = BackendLogPresenter.ProgressEventLine(progressEvent);
+                    if (stageLine != null)
+                        UiLog(stageLine);
+                    return;
+                }
+                foreach (string display in logFolder.Feed(line.Text))
+                    UiLog(display);
+            });
             return await backendTasks.RunForResultAsync(
-                BackendCommand.Create(taskName, args, timeoutMs));
+                BackendCommand.Create(
+                    taskName,
+                    args,
+                    timeoutMs,
+                    new Dictionary<string, string>
+                    {
+                        ["SMSWORKBENCH_EVENTS"] = "1",
+                        ["SMS_TOOL_COMMAND_ID"] = commandId,
+                        ["SMS_TOOL_TASK_NAME"] = taskName,
+                        ["SMS_TOOL_EVENT_SOURCE"] = "wpf",
+                    }),
+                progress,
+                ct);
+        }
+
+        private void LogBackendProgress(string taskName, BackendProgressEvent progressEvent)
+        {
+            logger?.Information(
+                "后端进度 task={TaskName} command_id={CommandId} account_ref={AccountRef} stage={Stage} status={Status} failure_class={FailureClass} detail={Detail}",
+                taskName,
+                progressEvent.CommandId,
+                progressEvent.AccountRef,
+                progressEvent.Stage,
+                progressEvent.Status,
+                progressEvent.FailureClass,
+                SensitiveDataSanitizer.Redact(progressEvent.Detail));
         }
 
         private static string FormatBackendArgsForDisplay(List<string> args)

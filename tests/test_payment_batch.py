@@ -495,6 +495,41 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertEqual(counts["timed_out"], 1)
         self.assertEqual(counts["retryable"], 1)
 
+    def test_reconciliation_rows_are_reused_never_rerun(self):
+        # Money may already have moved. _replay_allowed refuses to replay these,
+        # so re-queueing them would only degrade into a payment_worker_exception
+        # row flagged retryable=True -- the opposite of what an operator needs.
+        self.assertTrue(payment_batch._checkpoint_row_resumable(
+            {"ok": False, "status": "unknown", "requires_reconciliation": True},
+        ))
+        self.assertTrue(payment_batch._checkpoint_row_resumable(
+            {"ok": False, "side_effect_started": True, "retryable": False},
+        ))
+
+    def test_settled_success_stays_resumable(self):
+        # Locks in the parenthesised rewrite of the old `A or B and not C`
+        # form: a success with a side effect must remain reusable.
+        self.assertTrue(payment_batch._checkpoint_row_resumable(
+            {"ok": True, "side_effect_started": True},
+        ))
+
+    def test_retryable_failure_is_requeued(self):
+        self.assertFalse(payment_batch._checkpoint_row_resumable(
+            {"ok": False, "retryable": True},
+        ))
+
+    def test_reconciliation_required_counts_flag_not_status(self):
+        counts = payment_batch._batch_counts([
+            {"status": "completed", "ok": True, "requires_reconciliation": True},
+            {"status": "unknown", "ok": False, "requires_reconciliation": True},
+            {"status": "completed", "ok": True},
+        ], 3)
+        # The status-based count sees one row; the flag sees two. Rows marked
+        # by an executor without ever becoming status == "unknown" used to be
+        # invisible in the summary.
+        self.assertEqual(counts["unknown"], 1)
+        self.assertEqual(counts["reconciliation_required"], 2)
+
     def test_matrix_matches_payment_method_and_registration_country(self):
         auth = {
             "ok": True,

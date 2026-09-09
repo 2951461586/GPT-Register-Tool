@@ -72,11 +72,16 @@ def delay(
     config: Mapping[str, Any] | None = None,
     baseline: float | None = None,
     jitter: float | None = None,
+    sleep: bool = True,
 ) -> float:
     """Sleep for a randomized interval around the kind's baseline.
 
-    Returns the number of seconds slept.  With the feature disabled this is
-    exactly the baseline, i.e. byte-for-byte the old fixed-sleep behaviour.
+    Returns the number of seconds slept (or would have slept if *sleep* is False).
+    With the feature disabled this is exactly the baseline, i.e. byte-for-byte
+    the old fixed-sleep behaviour.
+
+    P2-7: pass *sleep=False* when the caller will do its own ``page.wait_for_timeout``
+    to avoid double-waiting (``time.sleep`` + ``wait_for_timeout`` = 2× intended).
     """
     base_default, jitter_default = HUMANIZE_DELAYS.get(kind, HUMANIZE_DELAYS["default"])
     base = float(baseline) if baseline is not None else base_default
@@ -92,9 +97,9 @@ def delay(
         seconds = base * factor * random.uniform(1.0 - spread, 1.0 + spread)
 
     seconds = max(0.0, seconds)
-    if seconds:
+    if sleep and seconds:
         time.sleep(seconds)
-    logger.debug("[humanize] kind=%s seconds=%.3f enabled=%s", kind, seconds, cfg["enabled"])
+    logger.debug("[humanize] kind=%s seconds=%.3f enabled=%s sleep=%s", kind, seconds, cfg["enabled"], sleep)
     return seconds
 
 

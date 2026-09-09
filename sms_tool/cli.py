@@ -386,6 +386,7 @@ def build_parser():
     parser.add_argument("--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used")
     parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth")
+    parser.add_argument("--scan-deep-probe", action="store_true", help="Allow --one-click-scan to run OAuth/email-OTP deep probing; default is AT probe-only")
     
     parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
     parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")

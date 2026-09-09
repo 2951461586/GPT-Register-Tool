@@ -1212,33 +1212,14 @@ def generate_hosted_long_url(
 
 
 
-def generate_payment_link(
-    access_token: str,
-    proxy: Any = None,
-    payment_method: Any = "paypal",
-    auth_context: dict[str, Any] | None = None,
-    paypal_generation_type: str | None = None,
-    **kwargs: Any,
-) -> dict[str, Any]:
-    """Compatibility entrypoint backed by the unified payment-link manager."""
-    from ..payment_link_manager import generate_payment_link as managed_generate
-
-    return managed_generate(
-        access_token=access_token,
-        proxy=proxy,
-        payment_method=payment_method,
-        auth_context=auth_context,
-        paypal_generation_type=paypal_generation_type,
-        **kwargs,
-    )
-
-
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+# 本模块位于 ``sms_tool/paypal_link/``，项目根要**再上两层**（sms_tool 的父目录）。
+# 只上一层会指向 ``sms_tool/config.json`` —— 一个被 .gitignore 排除的遗留影子
+# 文件。它不该被任何代码路径当作 canonical config 使用。
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 
 
 

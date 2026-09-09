@@ -396,6 +396,7 @@ namespace SmsWorkbench
         private void ClearLog_Click(object sender, RoutedEventArgs e)
         {
             LogText = "";
+            LogTextBox?.Clear();
         }
 
         private void Log(string text)
@@ -424,7 +425,8 @@ namespace SmsWorkbench
                 // used to be `logText += line`, which copied the whole buffer on
                 // every line and never truncated; AppendLogLine is amortised
                 // O(1) and caps retained history at MaxLogBufferChars.
-                AppendLogLine(line);
+                if (AppendLogLine(line))
+                    LogTextBox.Text = _logBuffer.ToString();
                 return;
             }
             AppendLogLine(line);

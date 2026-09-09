@@ -99,7 +99,7 @@ def _maybe_dismiss_chatgpt_onboarding(page, config: Mapping[str, Any] | None = N
         if not dom_fields._click_first_visible(page, selectors, timeout_ms=400):
             break
         clicks += 1
-        _pause = humanize_delay("click", config=config)
+        _pause = humanize_delay("click", config=config, sleep=False)
         try:
             page.wait_for_timeout(int(_pause * 1000))
         except Exception:
@@ -248,7 +248,7 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                     # Renderer navigation can destroy the execution context for
                     # one poll; the next poll observes the new document.
                     pass
-                _pause = humanize_delay("retry", config=config)
+                _pause = humanize_delay("retry", config=config, sleep=False)
                 try:
                     page.wait_for_timeout(int(_pause * 1000))
                 except Exception:

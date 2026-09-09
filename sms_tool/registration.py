@@ -207,6 +207,90 @@ def probe_account_liveness(*args, **kwargs):
     return account_liveness.probe_account_liveness(*args, **kwargs)
 
 
+def _email_registration_operations() -> RegistrationOperations:
+    """Explicit dependency wiring for the protocol (email) registration flow.
+
+    Every dependency is named literally instead of being swept up by
+    ``bind(globals())``. Two things come out of that:
+
+    * A missing import becomes statically visible. Linters see each name
+      referenced in this module, so ``pyflakes`` stops flagging these imports
+      as unused -- this one file accounted for ~89 of the repo's unused-import
+      findings, all of them false positives caused by the glob sweep.
+    * The dependency set for the protocol flow is auditable by reading one
+      function instead of by knowing that ``globals()`` happens to contain it.
+
+    The mapping is built *inside* the function, not at import time, on purpose:
+    bare names resolve against module globals when the call happens, so
+    ``patch.object(registration, "<name>")`` in tests still takes effect.
+    Hoisting this to a module-level constant would silently freeze patched
+    values and break the suite.
+    """
+    return RegistrationOperations.bind(
+        {
+            "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS": REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+            "current_config_data": current_config_data,
+            "runtime_config_scope": runtime_config_scope,
+            "validate_config": validate_config,
+            "SyntheticResponse": SyntheticResponse,
+            "_auth_request_headers": _auth_request_headers,
+            "_json_or_raw": _json_or_raw,
+            "_resolve_proxy_scheme": _resolve_proxy_scheme,
+            "chatgpt_headers": chatgpt_headers,
+            "nextauth_headers": nextauth_headers,
+            "openai_auth_headers": openai_auth_headers,
+            "registration_network_preflight": registration_network_preflight,
+            "request_with_retry": request_with_retry,
+            "_extract_sentinel": _extract_sentinel,
+            "_import_sentinel_cookies": _import_sentinel_cookies,
+            "_sentinel_device_id": _sentinel_device_id,
+            "_set_oai_did_cookie": _set_oai_did_cookie,
+            "assert_sentinel_device_id": assert_sentinel_device_id,
+            "auth_impersonate": auth_impersonate,
+            "select_auth_fingerprint": select_auth_fingerprint,
+            "set_fingerprint_device": set_fingerprint_device,
+            "set_fingerprint_geo": set_fingerprint_geo,
+            "_auth_session_access_token": _auth_session_access_token,
+            "_fetch_auth_session": _fetch_auth_session,
+            "_fetch_client_auth_session_dump": _fetch_client_auth_session_dump,
+            "_oauth_result_summary": _oauth_result_summary,
+            "_prepare_signup_auth_state": _prepare_signup_auth_state,
+            "_probe_registration_access_token": _probe_registration_access_token,
+            "_create_account_continue_url": _create_account_continue_url,
+            "_follow_continue_url": _follow_continue_url,
+            "_is_chatgpt_auth_login_landing": _is_chatgpt_auth_login_landing,
+            "_is_signup_password_step": _is_signup_password_step,
+            "_is_user_already_exists": _is_user_already_exists,
+            "_login_existing_account_with_email_otp": _login_existing_account_with_email_otp,
+            "_passwordless_signin_attempts": _passwordless_signin_attempts,
+            "_signup_signin_attempts": _signup_signin_attempts,
+            "_generate_password": _generate_password,
+            "_normalize_registration_mode": _normalize_registration_mode,
+            "_random_birthdate": _random_birthdate,
+            "_random_name": _random_name,
+            "_stored_registration_password": _stored_registration_password,
+            "_email_otp_send_url": _email_otp_send_url,
+            "_ensure_mailbox_account": _ensure_mailbox_account,
+            "_is_wrong_email_otp_code": _is_wrong_email_otp_code,
+            "_mailbox_snapshot": _mailbox_snapshot,
+            "_poll_registration_email_otp": _poll_registration_email_otp,
+            "_send_registration_email_otp": _send_registration_email_otp,
+            "_snapshot_mailbox_message": _snapshot_mailbox_message,
+            "_validate_email_otp": _validate_email_otp,
+            "_failure_result": _failure_result,
+            "_print_timings": _print_timings,
+            "_registration_outcome": _registration_outcome,
+            "_retain_registration_checkpoint": _retain_registration_checkpoint,
+            "_safe_tock": _safe_tock,
+            "_sanitize_text": _sanitize_text,
+            "_tick": _tick,
+            "_timing_summary": _timing_summary,
+            "_tl": _tl,
+            "think_stage": think_stage,
+        }
+    )
+
+
 @track_registration
 def run_email(
     proxy=None,
@@ -223,6 +307,8 @@ def run_email(
     proxy_metadata=None,
     batch_id=None,
     registration_attempt=0,
+    persistence=None,
+    post_process_result=None,
 ):
     """Run the staged email-registration workflow."""
     config = resolve_runtime_config(runtime_config, workflow="registration")
@@ -260,7 +346,9 @@ def run_email(
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
         config=config.data,
-        operations=RegistrationOperations.bind(globals()),
+        operations=_email_registration_operations(),
+        persistence=persistence,
+        post_process_result=post_process_result,
     ).run()
     if isinstance(result, dict) and batch_id:
         result["batch_id"] = str(batch_id)

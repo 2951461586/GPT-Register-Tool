@@ -12,19 +12,10 @@ class RegistrationDriverCliChoicesTests(unittest.TestCase):
         action = parser._option_string_actions["--registration-driver"]
         return list(action.choices)
 
-    def test_adspower_is_a_known_registration_driver(self):
-        choices = self._driver_choices()
-        self.assertIn("adspower", choices)
-
     def test_all_expected_drivers_are_present(self):
         choices = self._driver_choices()
-        for expected in ["protocol", "playwright", "roxy", "cloak", "camoufox", "adspower"]:
+        for expected in ["protocol", "playwright", "roxy", "cloak", "camoufox"]:
             self.assertIn(expected, choices)
-
-    def test_adspower_parses_without_error(self):
-        parser = cli.build_parser()
-        args = parser.parse_args(["--registration-driver", "adspower"])
-        self.assertEqual(args.registration_driver, "adspower")
 
     def test_unknown_driver_is_rejected(self):
         parser = cli.build_parser()

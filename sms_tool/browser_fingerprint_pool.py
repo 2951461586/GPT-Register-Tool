@@ -498,7 +498,7 @@ def validate_browser_profile(profile: Any) -> list[str]:
 # P1-3: drivers whose fingerprint is owned end-to-end by the anti-detect provider.
 # Screen size / UA / platform come from the provider profile, so a locally
 # configured ``registration.browser_profile_pool`` has no effect for them.
-PROVIDER_MANAGED_FINGERPRINT_DRIVERS = frozenset({"roxy", "cloak", "adspower"})
+PROVIDER_MANAGED_FINGERPRINT_DRIVERS = frozenset({"roxy", "cloak"})
 
 
 def provider_managed_fingerprint_notice(

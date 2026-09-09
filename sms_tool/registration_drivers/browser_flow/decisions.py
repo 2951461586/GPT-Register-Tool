@@ -31,10 +31,10 @@ DEFAULT_VIEWPORT_HEIGHT = 900
 # - camoufox:   takes it as Camoufox's ``Screen(max_width=..., max_height=...)``
 #               (it used to be pinned to a hardcoded 1280x900, so the largest
 #               fingerprint investment -- BROWSER_PROFILE_POOL -- never reached it).
-# - roxy/cloak/adspower: the anti-detect provider owns the whole fingerprint;
+# - roxy/cloak: the anti-detect provider owns the whole fingerprint;
 #   screen size is set in the provider profile and cannot be overridden here.
 SCREEN_MANAGED_DRIVERS = frozenset({"playwright", "camoufox"})
-PROVIDER_MANAGED_DRIVERS = frozenset({"roxy", "cloak", "adspower"})
+PROVIDER_MANAGED_DRIVERS = frozenset({"roxy", "cloak"})
 
 
 def attempt_number(proxy_metadata: Mapping[str, Any] | None) -> int:
@@ -104,7 +104,7 @@ def browser_screen_size(
 
     P1-3: both ``playwright`` (viewport) and ``camoufox`` (``Screen(max_width,
     max_height)``) accept a screen size, so both get the pooled value. Provider-owned
-    drivers (roxy/cloak/adspower) get ``None`` -- the provider profile owns their
+    drivers (roxy/cloak) get ``None`` -- the provider profile owns their
     fingerprint and we must not pretend otherwise.
     """
     if driver_name not in SCREEN_MANAGED_DRIVERS:

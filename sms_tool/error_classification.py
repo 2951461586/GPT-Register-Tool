@@ -85,6 +85,25 @@ RATE_LIMIT_ERROR_MARKERS = (
 
 CANCELLED_ERROR_MARKERS = ("registration_cancelled", "cancelled_by_user")
 
+INTERNAL_ERROR_MARKERS = (
+    "registration_internal_error",
+    "nameerror",
+    "attributeerror",
+    "typeerror",
+    "keyerror",
+    "importerror",
+    "unboundlocalerror",
+    "notimplementederror",
+    " is not defined",
+)
+
+CONFIGURATION_ERROR_MARKERS = (
+    "unsupported_registration_driver",
+    "missing_dependency",
+    "invalid_configuration",
+    "configuration_error",
+)
+
 # Hard stops: retrying cannot change the outcome. Kept beside classify_error
 # because this is pure classification -- the transport layer needs it and must
 # not import registration policy to get it.
@@ -120,6 +139,10 @@ def classify_error(value) -> str:
     text = error_text(value)
     if any(marker in text for marker in CANCELLED_ERROR_MARKERS):
         return "cancelled"
+    if any(marker in text for marker in INTERNAL_ERROR_MARKERS):
+        return "internal"
+    if any(marker in text for marker in CONFIGURATION_ERROR_MARKERS):
+        return "configuration"
     if any(marker in text for marker in ACCOUNT_ERROR_MARKERS):
         return "account"
     if any(marker in text for marker in MAILBOX_ERROR_MARKERS):

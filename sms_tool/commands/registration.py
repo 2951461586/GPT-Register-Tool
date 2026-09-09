@@ -221,8 +221,9 @@ def persist_registration_result(
     a ``PaymentOperationStore`` record keyed by ``email|batch`` acquires a cross-process
     lock and replays the same guard used for payments, so two processes (or a restart
     mid-batch) cannot double-write the session file, upsert the row, or re-enqueue the
-    health check. A successful persist is finalized (replays blocked); a failed one is
-    left running so the in-process finalization retry can still re-acquire the lock.
+    health check. A successful persist is finalized (replays blocked). A
+    pre-side-effect failure is finalized as retryable, so a later finalization
+    pass can safely replay it without leaving a permanent ``running`` journal.
     """
     identity = (data.get("email") or data.get("phone") or "unknown") if isinstance(data, dict) else "unknown"
     batch_id = str(getattr(args, "registration_batch_id", "") or "")
@@ -253,10 +254,18 @@ def persist_registration_result(
     try:
         result = _persist_registration_result_core(args, data, base_dir, ctx, pipeline_timing=pipeline_timing)
     except Exception as exc:
-        # A persistence failure (e.g. a temporary DB error) must surface as a failed
-        # status, not propagate. Leave the durable record running so an in-process
-        # retry can re-acquire the lock and attempt the side effects again.
-        op.close()
+        # A persistence failure (e.g. a temporary DB error) must surface as a
+        # retryable terminal journal state, not propagate or leave ``running``
+        # forever. The retry can re-acquire the lock from the failed record.
+        op.finish({
+            "ok": False,
+            "status": "failed",
+            "error": str(exc),
+            "error_code": f"persist_result_{type(exc).__name__.lower()}",
+            "error_stage": "persist_result",
+            "retryable": True,
+            "side_effect_started": False,
+        })
         return {
             "status": "failed",
             "session_saved": 0,
@@ -279,7 +288,18 @@ def persist_registration_result(
         op.record["db_saved"] = int(result.get("db_saved") or 0)
         op.finish({"ok": True, "status": "completed", "side_effect_started": True})
     else:
-        op.close()
+        # Logical registration failures are terminal for this persistence
+        # attempt, but remain explicitly retryable because no side effect was
+        # committed and a later finalization pass may safely replay them.
+        op.finish({
+            "ok": False,
+            "status": "failed",
+            "error": str(result.get("error") or "registration_result_not_persisted"),
+            "error_code": "registration_result_not_persisted",
+            "error_stage": "persist_result",
+            "retryable": True,
+            "side_effect_started": False,
+        })
     return result
 
 
@@ -515,7 +535,7 @@ def save_registration_results(
         )
 
     promotion_report = None
-    if getattr(args, "check_promotion_after_registration", False):
+    if getattr(args, "check_promotion_after_registration", False) and import_emails:
         promotion_report = ctx.check_registered_promotions(
             import_emails,
             workers=max(1, int(getattr(args, "workers", 4) or 4)),

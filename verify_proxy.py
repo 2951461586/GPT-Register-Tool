@@ -5,10 +5,11 @@
   python verify_proxy.py
 """
 
-import json
 import sys
 
 import requests
+
+from sms_tool.config import load_merged_config
 
 
 def test_proxy(proxy_url, test_url="https://ipinfo.io/json"):
@@ -31,9 +32,14 @@ def test_proxy(proxy_url, test_url="https://ipinfo.io/json"):
 
 
 def _load_config():
+    """Read the **merged** shards, not the legacy root ``config.json``.
+
+    The root file stops being authoritative once the proxy/runtime/payment
+    shards exist; reading it here silently hid the whole ``paypal`` section,
+    so every PayPal proxy check in this tool verified an empty list.
+    """
     try:
-        with open("config.json", encoding="utf-8") as f:
-            return json.load(f)
+        return load_merged_config()
     except Exception:
         return {}
 

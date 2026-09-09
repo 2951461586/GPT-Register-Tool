@@ -6,7 +6,7 @@ import sys
 import threading
 from typing import Any, TextIO
 
-from .sanitizer import sanitize_command_args, sanitize_text
+from .sanitizer import sanitize_command_args, sanitize_log_text
 
 
 def safe_print(
@@ -18,11 +18,15 @@ def safe_print(
 ) -> None:
     target = file or sys.stdout
     text = sep.join(str(value) for value in values)
-    print(sanitize_text(text), end=end, file=target, flush=flush)
+    # ``sanitize_log_text``, not ``sanitize_text``: everything reaching this
+    # seam is operator-visible (desktop panel, runtime/app_*.log), so account
+    # emails are masked here as well. ``sanitize_text`` stays the weaker
+    # credential-only form used for persisted data.
+    print(sanitize_log_text(text), end=end, file=target, flush=flush)
 
 
 def safe_exception(value: BaseException | Any) -> str:
-    return sanitize_text(value)
+    return sanitize_log_text(value)
 
 
 
@@ -63,7 +67,7 @@ class SanitizingTextIO:
             return ""
 
     def write(self, value: str) -> int:
-        text = sanitize_text(value)
+        text = sanitize_log_text(value)
         if not self._line_buffer:
             with self._lock:
                 self._wrapped.write(text)

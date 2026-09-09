@@ -101,14 +101,14 @@ internal static class Program
         return new EnvironmentCheck(pythonFound, pythonDetail, failed, warned, failItems);
     }
 
-    /// <summary>Offers/proxies `python -m pip install -r requirements.txt` in the install dir.</summary>
+    /// <summary>Offers/proxies `python -m pip install -r requirements.txt -c constraints.txt` in the install dir.</summary>
     private static string RunPipInstall(string installDir)
     {
         var startInfo = new ProcessStartInfo
         {
             FileName = "python",
             WorkingDirectory = installDir,
-            Arguments = "-m pip install -r requirements.txt",
+            Arguments = "-m pip install -r requirements.txt -c constraints.txt",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -492,7 +492,7 @@ internal static class Program
                         "GPT-Register-Tool 已安装到:\n" + result.InstallDir + "\n\n" +
                         "⚠ 未检测到可用的 Python 解释器。\n" +
                         "桌面端依赖 Python 3.10+:请从 python.org 安装(勾选 Add to PATH),\n" +
-                        "再运行 python -m pip install -r requirements.txt,然后重新打开 SmsWorkbench。\n\n" +
+                        "再运行 python -m pip install -r requirements.txt -c constraints.txt,然后重新打开 SmsWorkbench。\n\n" +
                         configNote,
                         Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     Close();
@@ -504,7 +504,7 @@ internal static class Program
                     string missing = string.Join("\n  - ", check.FailItems);
                     DialogResult choice = MessageBox.Show(this,
                         "已安装到: " + result.InstallDir + "\n\n环境自检发现 " + check.Failed + " 项缺失依赖:\n  - " + missing +
-                        "\n\n是否现在运行 python -m pip install -r requirements.txt 自动安装?(需要联网,约几分钟)",
+                        "\n\n是否现在运行 python -m pip install -r requirements.txt -c constraints.txt 自动安装?(需要联网,约几分钟)",
                         Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (choice == DialogResult.Yes)
                     {
@@ -530,7 +530,7 @@ internal static class Program
                     else
                     {
                         MessageBox.Show(this,
-                            "已安装。稍后可手动安装依赖并自检:\n  python -m pip install -r requirements.txt\n  python chatgpt_phone_reg.py --doctor\n\n" + configNote,
+                            "已安装。稍后可手动安装依赖并自检:\n  python -m pip install -r requirements.txt -c constraints.txt\n  python chatgpt_phone_reg.py --doctor\n\n" + configNote,
                             Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }

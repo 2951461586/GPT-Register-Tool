@@ -163,6 +163,23 @@ class RegistrationDriverTests(unittest.TestCase):
                 self.assertFalse(result["success"])
                 self.assertEqual(result["failure_class"], "configuration")
 
+    @patch("sms_tool.registration_handlers.RegistrationEmailWorkflow")
+    def test_run_email_forwards_registration_seams(self, workflow_cls):
+        workflow_cls.return_value.run.return_value = {"success": True}
+        persistence = object()
+        post_process = lambda value: value
+        mailbox = type("Mailbox", (), {"email": "user@example.com"})()
+        result = run_email(
+            mailbox=mailbox,
+            registration_driver="protocol",
+            runtime_config={"chatgpt": {}, "registration": {}},
+            persistence=persistence,
+            post_process_result=post_process,
+        )
+        self.assertTrue(result["success"])
+        self.assertIs(workflow_cls.call_args.kwargs["persistence"], persistence)
+        self.assertIs(workflow_cls.call_args.kwargs["post_process_result"], post_process)
+
     def test_browser_driver_credentials_accept_environment_overrides(self):
         config = {"registration": {"drivers": {"roxy": {}}}}
         with patch.dict(os.environ, {"ROXY_WORKSPACE_ID": "env-workspace"}, clear=False):

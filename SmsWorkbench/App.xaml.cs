@@ -48,7 +48,7 @@ namespace SmsWorkbench
         private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             LogCrash(e.Exception);
-            System.Windows.MessageBox.Show(e.Exception.Message, "运行异常", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(SensitiveDataSanitizer.Redact(e.Exception.Message), "运行异常", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             e.Handled = true;
         }
 
@@ -70,13 +70,18 @@ namespace SmsWorkbench
         {
             try
             {
-                _logger?.Error(ex, "Unhandled exception");
-                // Also write to legacy crash log for backward compatibility
+                string safeException = SensitiveDataSanitizer.Redact(ex.ToString());
+                _logger?.Error("Unhandled exception: {ExceptionText}", safeException);
+                // Keep the legacy file only as a bootstrap fallback. Once
+                // Serilog is available, runtime/app_*.log is the single WPF
+                // lifecycle/error destination.
+                if (_logger != null)
+                    return;
                 string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime");
                 Directory.CreateDirectory(dir);
                 string path = Path.Combine(dir, "ui_errors.log");
                 File.AppendAllText(path,
-                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "] " + ex + Environment.NewLine + Environment.NewLine,
+                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + "] " + safeException + Environment.NewLine + Environment.NewLine,
                     new UTF8Encoding(false));
             }
             catch

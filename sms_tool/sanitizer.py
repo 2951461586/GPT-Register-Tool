@@ -59,6 +59,17 @@ _TEXT_PATTERNS = tuple(
 _EMAIL_PATTERN = re.compile(
     r"(?i)(?<![A-Z0-9._%+\-])([A-Z0-9._%+\-]{1,64})@([A-Z0-9.\-]+\.[A-Z]{2,})"
 )
+# Extra rules applied ONLY on the way out to an operator (stdout / log files),
+# never to persisted data. ``text_patterns`` redacts credentials and is applied
+# everywhere; these mask personally identifying values that are perfectly legal
+# to store but must not be printed. The desktop host reads the same
+# ``log_text_patterns`` array from this file, which is why the rules live in the
+# policy instead of in code: one edit covers both sides of the IPC boundary.
+_LOG_TEXT_PATTERNS = tuple(
+    (re.compile(str(item["pattern"])), _python_replacement(str(item.get("replacement") or REDACTED_VALUE)))
+    for item in (SENSITIVE_POLICY.get("log_text_patterns") or ())
+    if isinstance(item, dict) and item.get("pattern")
+)
 
 
 def sanitize_text(value: Any) -> str:
@@ -71,6 +82,10 @@ def sanitize_text(value: Any) -> str:
 def sanitize_log_text(value: Any) -> str:
     """Sanitize credentials and mask account emails in persisted log text."""
     text = sanitize_text(value)
+    if _LOG_TEXT_PATTERNS:
+        for pattern, replacement in _LOG_TEXT_PATTERNS:
+            text = pattern.sub(replacement, text)
+        return text
     return _EMAIL_PATTERN.sub(
         lambda match: mask_account(f"{match.group(1)}@{match.group(2)}"),
         text,

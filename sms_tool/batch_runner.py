@@ -313,12 +313,21 @@ def run_batch_impl(
                 }
             if not isinstance(result, dict):
                 result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
-            tracker = ProxyHealthTracker(CFG)
-            tracker.record(
-                worker_proxy,
-                ok=bool(result.get("success")),
-                error=str(result.get("error") or result.get("failure_class") or "")[:120],
-            )
+            # Only transport failures are evidence about the selected proxy.
+            # Internal/configuration/account/mailbox failures must not poison
+            # the shared proxy-health journal.
+            failure_class = str(result.get("failure_class") or "").strip().lower()
+            if not failure_class and not result.get("success"):
+                failure_class = classify_error(result)
+                result["failure_class"] = failure_class
+            proxy_attributed = bool(result.get("proxy_attributed")) or failure_class == "network"
+            if worker_proxy and (bool(result.get("success")) or proxy_attributed):
+                tracker = ProxyHealthTracker(CFG)
+                tracker.record(
+                    worker_proxy,
+                    ok=bool(result.get("success")),
+                    error=str(result.get("error") or failure_class or "")[:120],
+                )
             result["registration_attempts"] = attempt
             result["proxy_rotation_count"] = max(0, attempt - 1)
             result["batch_id"] = batch_id

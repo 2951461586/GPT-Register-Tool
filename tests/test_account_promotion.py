@@ -548,3 +548,9 @@ def test_liveness_200_restores_shared_at_status_after_promotion_401(tmp_path):
     record = get_account_record(session["email"], runtime_config=config)
     assert record["status"] == "registered"
     assert record["quota_status"] == "可用"
+def test_promotion_explicit_proxy_wins_over_pool():
+    with patch.object(account_promotion, "parse_proxy_pool", return_value=["http://pool:1"]), \
+         patch.object(account_promotion, "proxy_pool_for", return_value=["http://cfg:2"]):
+        assert account_promotion._promotion_proxy_candidates(
+            {"email": "a@example.com"}, "http://explicit:3", None
+        ) == ["http://explicit:3", "http://pool:1"]

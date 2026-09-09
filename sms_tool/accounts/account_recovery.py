@@ -34,6 +34,28 @@ from ..mailbox_quarantine import mailbox_relogin_allowed
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 
 
+def _heavy_lane_slots(max_workers: int) -> int:
+    """Capacity of a heavy lane (browser fallback / 401 relogin).
+
+    不变量：**只要 ``max_workers >= 2``，heavy lane 必须严格小于 worker 池**。
+    heavy lane 的作用就是给便宜的 HTTP probe 留出余量；一旦它等于池大小，
+    慢恢复就能占满所有 worker，semaphore 形同虚设。
+
+    旧公式 ``max(1, min(max_workers, max(2, max_workers // 2)))`` 里的
+    ``max(2, ...)`` 下限会在小并发下**反向压过** ``max_workers``：
+    ``max_workers=2``（配置默认，见 ``account_health_queue.py:121``）算出来是 2，
+    与池相等 —— 默认配置下隔离从来没生效过。
+
+    ``max_workers=1`` 时无法隔离（一个 worker 不可能同时干重活和轻活），返回 1。
+    外层的 ``max(1, ...)`` 已经兜住了这个下界，下面的显式分支是**冗余的**
+    （等价变异验证时删掉它测试仍全绿）。保留是因为它把"1 个 worker 时不做隔离"
+    这个决策写成了代码，也防未来有人改外层下界时静默退化成 0。
+    """
+    if max_workers <= 1:
+        return 1
+    return max(1, min(max_workers - 1, max_workers // 2))
+
+
 def refresh_local_quota_statuses(
     emails: list[str] | None = None,
     workers: int = 4,
@@ -66,7 +88,7 @@ def refresh_local_quota_statuses(
     # every browser fallback and relogin through two slots. Combined with the
     # short/no-wait acquires below, that turned "queued" into "skipped" for
     # every account after the first two.
-    heavy_lane_slots = max(1, min(max_workers, max(2, max_workers // 2)))
+    heavy_lane_slots = _heavy_lane_slots(max_workers)
     # A normal liveness probe is a single HTTP request. Browser sessions are a
     # bounded fallback for 401/Cloudflare responses and must not consume the
     # whole batch's worker pool while they start and tear down.
@@ -289,7 +311,7 @@ def refresh_local_quota_statuses(
                 _clear_promotion_marker_after_probe(email)
             probe_ok = bool(probe.get("ok"))
             result = {
-                "ok": probe_ok and bool(persisted),
+                "ok": probe_ok,
                 "email": email,
                 "quota_status": status,
                 "probe": probe,
@@ -317,7 +339,7 @@ def refresh_local_quota_statuses(
         _emit_account_batch_event(
             run_id,
             "account_completed",
-            "completed" if result.get("ok") else "failed",
+            "completed" if result.get("probe_ok") else "failed",
             account_ref=email,
             total=len(accounts),
             detail=str(result.get("quota_status") or "检测完成"),
@@ -342,7 +364,10 @@ def refresh_local_quota_statuses(
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
     results = [item for item in ordered if item is not None]
-    success = sum(1 for item in results if item.get("ok"))
+    # Remote health is independent from local marker persistence.  A healthy
+    # account whose SQLite write failed remains healthy and is reported through
+    # ``persist_failed`` instead of being counted as a dead account.
+    success = sum(1 for item in results if item.get("probe_ok"))
     persisted = sum(1 for item in results if item.get("persisted"))
     account_deactivated = sum(1 for item in results if _item_is_account_deactivated(item))
     # Count the original liveness result, even when an optional relogin later
@@ -413,15 +438,25 @@ def _probe_liveness_with_retries(
     """Retry transport-only failures against the configured liveness pool."""
     has_affinity = bool((account.get("identity_context") or {}).get("proxy_affinity"))
     configured = proxy_pool_for(CFG, "liveness")
-    candidates = configured[:3] if configured and not has_affinity else [None]
-    if not candidates:
-        candidates = [proxy]
+    # An explicit command proxy is authoritative.  Do not silently replace it
+    # with a configured pool or discard it because the account has affinity.
+    if proxy:
+        candidates = [proxy] + [item for item in configured[:3] if item != proxy]
+        source = "explicit"
+    elif has_affinity:
+        candidates = [None]
+        source = "registration_affinity"
+    else:
+        candidates = configured[:3] if configured else [None]
+        source = "operation_pool" if configured else "default"
     last: dict[str, Any] = {}
     for candidate in candidates:
-        effective_proxy = None if has_affinity else (candidate or proxy)
+        effective_proxy = candidate
         last = probe_account_liveness(
             account, proxy=effective_proxy, timeout=timeout, browser_fetch=browser_fetch
         )
+        if isinstance(last, dict):
+            last.setdefault("proxy_source", source)
         if int(last.get("status_code") or 0) != 0 or last.get("ok"):
             return last
         if not is_transient_transport_error(last.get("error")):
@@ -1028,6 +1063,25 @@ def _verify_and_persist_candidate(
     }
 
 
+def _promotion_auth_failure(data: Any) -> bool:
+    """True when a persisted promotion probe recorded a dead access token.
+
+    ``store/markers.mark_promotion_status`` persists a machine-readable
+    ``promotion.status_code`` next to the Chinese display label. Key off the
+    code, not the label: the label is a UI string, and behaviour that reads it
+    breaks silently the moment the wording changes. The label comparison stays
+    only as a fallback for records written before ``status_code`` existed.
+    """
+    if not isinstance(data, dict):
+        return False
+    promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+    code = str(promotion.get("status_code") or "").strip()
+    if code:
+        return code == "401"
+    label = str(data.get("promotion_status") or "").strip() or str(promotion.get("status") or "").strip()
+    return label == "AT失效"
+
+
 def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now: int | None = None) -> None:
     """Replace stale 401 metadata after a newly acquired AT passes HTTP 200."""
     timestamp = int(now or time.time())
@@ -1048,13 +1102,14 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
         "oauth_refresh_http_401",
     )):
         data.pop("error", None)
-    # A previous promotion probe can persist "AT失效". A verified replacement
-    # AT makes that marker stale; keep its detailed result for later inspection
-    # but stop surfacing the authentication failure in the account list.
-    if str(data.get("promotion_status") or "").strip() == "AT失效":
+    # A previous promotion probe can persist an auth-failure marker. A verified
+    # replacement AT makes that marker stale; keep its detailed result for
+    # later inspection but stop surfacing the authentication failure in the
+    # account list.
+    if _promotion_auth_failure(data):
         data["promotion_status"] = ""
     promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
-    if str(promotion.get("status") or "").strip() == "AT失效":
+    if promotion and _promotion_auth_failure({**data, "promotion_status": promotion.get("status")}):
         promotion["status"] = ""
         data["promotion"] = promotion
     account_scan = data.get("account_scan") if isinstance(data.get("account_scan"), dict) else {}

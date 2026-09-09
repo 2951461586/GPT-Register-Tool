@@ -2,6 +2,24 @@
 
 ## Correlation contract, version 1
 
+### Log destinations
+
+- `runtime/logs/sms_tool.log`: Python operator log. Human-readable, sanitized,
+  rotated; use for registration, liveness, promotion, mailbox and one-click SMS
+  stage messages.
+- `runtime/logs/sms_tool.jsonl`: Python machine log. One sanitized JSON record
+  per event with `command_id`, `run_id`, `account_ref`, stage and failure class.
+- `runtime/app_*.log`: WPF host lifecycle and backend-process correlation log.
+  It records task start/exit, command ids and UI-side diagnostics, but not the
+  full Python event stream.
+- `runtime/ui_errors.log`: WPF crash-only compatibility log. It is reserved for
+  unhandled dispatcher/domain/task exceptions and is sanitized before writing.
+
+The WPF panel is an ephemeral operator view, not an audit store. It folds JSON,
+shows stage summaries, and keeps a bounded in-memory buffer. For post-run
+diagnosis, use the two Python files plus `runtime/app_*.log` and correlate on
+`command_id`/`run_id`.
+
 Python file logs rotate under `runtime/logs/` in two channels:
 
 - `sms_tool.log` — the operator log, one normalized line per record:
@@ -10,8 +28,8 @@ Python file logs rotate under `runtime/logs/` in two channels:
   邮箱 / 代理…), and registration stage records render as
   `阶段 · 中文名 (code) — 状态`. Envelope metadata and raw JSON never appear here.
 - `sms_tool.jsonl` — the machine log, rotating JSON lines with `schema_version`,
-  `source`, `command_id`, `run_id`, UTC `timestamp`, `level`, `logger`, and
-  sanitized `message` for tooling and audits.
+  `source`, `command_id`, `task_name`, `run_id`, UTC `timestamp`, `level`,
+  `logger`, and sanitized `message` for tooling and audits.
 
 `configure_logging` also routes the Python `warnings` module through logging
 (`captureWarnings`), so library warnings render as `[!] [告警] <Category>: <text>`

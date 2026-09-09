@@ -298,6 +298,16 @@ public static class BackendResultInterpreter
             "secondary_phone_verification_required" => "手机验证",
             "phone_verification_required" => "支付完成",
             "scan_failed" => "扫描失败",
+            // account_scan now names the failure class explicitly instead of
+            // collapsing every non-network failure into relogin/scan_failed.
+            "network_failed" => "网络失败",
+            "mailbox_failed" => "邮箱链路失败",
+            "auth_state_failed" => "登录态失效",
+            "rate_limited" => "触发限流",
+            // A user-initiated cancel is not a failure; see the comment beside
+            // ``_SCAN_STATUS_BY_FAILURE_CLASS`` in account_scan.py.
+            "scan_cancelled" => "扫描已取消",
+            "relogin_failed" => "重登失败",
             _ => value.Length > 0 ? value : "未知"
         };
     }

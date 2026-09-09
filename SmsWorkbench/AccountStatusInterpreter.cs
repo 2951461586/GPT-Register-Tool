@@ -183,6 +183,15 @@ namespace SmsWorkbench
                 || paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)
                 || paypalOk == "1"
                 || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "待支付";
+            // Probe-level failure vocabulary produced by Python
+            // ``store/normalize._status``. These MUST come before the
+            // "已注册" fallback below: a network/rate-limit failure still has
+            // a refresh token and an access token, so without these branches
+            // the row is displayed as a healthy account.
+            if (status.Equals("network_failed", StringComparison.OrdinalIgnoreCase)) return "网络失败";
+            if (status.Equals("mailbox_failed", StringComparison.OrdinalIgnoreCase)) return "邮箱失败";
+            if (status.Equals("auth_state_failed", StringComparison.OrdinalIgnoreCase)) return "会话失效";
+            if (status.Equals("rate_limited", StringComparison.OrdinalIgnoreCase)) return "限流";
             if (hasRt && access.Length > 0) return "已注册";
             if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
             return access.Length > 0 ? "已注册" : "待处理";

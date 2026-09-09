@@ -82,6 +82,40 @@ class RegistrationStageHandler(Protocol):
     def __call__(self, context: Any, state: dict[str, Any]) -> Mapping[str, Any] | None: ...
 
 
+class RegistrationPersistence(Protocol):
+    """Persistence seam for registration checkpoints and device identity."""
+
+    def save_checkpoint(self, email: str, state: str, payload: Mapping[str, Any], *, runtime_config: Mapping[str, Any] | None) -> Any: ...
+    def upsert_account(self, payload: Mapping[str, Any], *, runtime_config: Mapping[str, Any] | None) -> Any: ...
+    def get_checkpoint(self, email: str, *, runtime_config: Mapping[str, Any] | None) -> Mapping[str, Any]: ...
+    def get_device_context(self, email: str) -> Mapping[str, Any]: ...
+    def clear_checkpoint(self, email: str, *, runtime_config: Mapping[str, Any] | None) -> Any: ...
+
+
+class StorageRegistrationPersistence:
+    """Default adapter kept at the application seam, not inside stage logic."""
+
+    def save_checkpoint(self, email, state, payload, *, runtime_config=None):
+        from .storage import save_registration_checkpoint
+        return save_registration_checkpoint(email, state, payload, runtime_config=runtime_config)
+
+    def upsert_account(self, payload, *, runtime_config=None):
+        from .storage import upsert_account
+        return upsert_account(payload, runtime_config=runtime_config)
+
+    def get_checkpoint(self, email, *, runtime_config=None):
+        from .storage import get_registration_checkpoint
+        return get_registration_checkpoint(email, runtime_config=runtime_config)
+
+    def get_device_context(self, email):
+        from .storage import get_device_context
+        return get_device_context(email)
+
+    def clear_checkpoint(self, email, *, runtime_config=None):
+        from .storage import clear_registration_checkpoint
+        return clear_registration_checkpoint(email, runtime_config=runtime_config)
+
+
 @dataclass(frozen=True)
 class BoundRegistrationStage:
     """Bind a handler that returns state deltas to a stage.
@@ -173,6 +207,8 @@ class RegistrationEmailWorkflow:
         enroll_2fa: bool = True,
         config: Mapping[str, Any] | None = None,
         operations: RegistrationOperations,
+        persistence: RegistrationPersistence | None = None,
+        post_process_result: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self.machine = machine
         self.input_proxy = proxy
@@ -188,6 +224,8 @@ class RegistrationEmailWorkflow:
         self.enroll_2fa = bool(enroll_2fa)
         self.config = config
         self._operations = operations
+        self.persistence = persistence or StorageRegistrationPersistence()
+        self.post_process_result = post_process_result
         self.runtime = RegistrationRuntimeState()
         self.stage_runner = RegistrationStageRunner(self.runtime, machine)
         self._timing_open = False
@@ -283,6 +321,10 @@ class RegistrationEmailWorkflow:
             raise
         except RegistrationStageOverrun as exc:
             raise RegistrationAbort(f"{state.value}_stage_budget_exceeded:{exc}") from exc
+        except (NameError, AttributeError, ImportError, KeyError, TypeError) as exc:
+            raise RegistrationAbort(
+                f"{state.value}_internal:{type(exc).__name__}:{exc}"
+            ) from exc
         except Exception as exc:
             raise RegistrationAbort(f"{state.value}_transport:{exc}") from exc
         finally:
@@ -351,13 +393,11 @@ class RegistrationEmailWorkflow:
         if not s.username:
             return
         try:
-            from .storage import save_registration_checkpoint, upsert_account
-
             payload = self._checkpoint_payload()
             payload["registration_state"] = state
-            save_registration_checkpoint(s.username, state, payload, runtime_config=self.config)
+            self.persistence.save_checkpoint(s.username, state, payload, runtime_config=self.config)
             if s.access_token:
-                upsert_account(payload, runtime_config=self.config)
+                self.persistence.upsert_account(payload, runtime_config=self.config)
         except Exception as exc:
             print(f"  [Checkpoint] persist warning: {self.r._sanitize_text(exc)}")
 
@@ -366,9 +406,7 @@ class RegistrationEmailWorkflow:
         if not mailbox_email or self.input_mailbox is None:
             return None
         try:
-            from .storage import get_registration_checkpoint
-
-            checkpoint = get_registration_checkpoint(mailbox_email, runtime_config=self.config)
+            checkpoint = self.persistence.get_checkpoint(mailbox_email, runtime_config=self.config)
             payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
         except Exception:
             checkpoint, payload = {}, {}
@@ -397,9 +435,7 @@ class RegistrationEmailWorkflow:
         if self.input_mailbox is None:
             return False
         try:
-            from .storage import get_registration_checkpoint
-
-            checkpoint = get_registration_checkpoint(self.runtime.username, runtime_config=self.config)
+            checkpoint = self.persistence.get_checkpoint(self.runtime.username, runtime_config=self.config)
             payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
             state = str((payload or {}).get("registration_state") or checkpoint.get("state") or "")
             return bool((payload or {}).get("access_token")) and state in {
@@ -454,9 +490,7 @@ class RegistrationEmailWorkflow:
                 browser_headless=self.browser_headless,
             )
         else:
-            from .storage import get_device_context
-
-            device_context = dict(get_device_context(s.username) or {})
+            device_context = dict(self.persistence.get_device_context(s.username) or {})
             s.sentinel_data = {
                 "oai_did": str(device_context.get("device_id") or uuid.uuid4()),
                 "sentinel_source": "node_sdk_runner",
@@ -468,9 +502,7 @@ class RegistrationEmailWorkflow:
     def prepare_identity(self) -> None:
         r = self.r
         s = self.runtime
-        from .storage import get_device_context
-
-        device_context = dict(get_device_context(getattr(s.mailbox, "email", "")) or {})
+        device_context = dict(self.persistence.get_device_context(getattr(s.mailbox, "email", "")) or {})
         stored_device_id = str(device_context.get("device_id") or "").strip()
         sentinel_device_id = str(r._sentinel_device_id(s.sentinel_data) or "").strip()
         if stored_device_id and stored_device_id != sentinel_device_id:
@@ -506,7 +538,7 @@ class RegistrationEmailWorkflow:
             random_name=r._random_name,
             random_birthdate=r._random_birthdate,
             normalize_mode=r._normalize_registration_mode,
-            get_device_context=get_device_context,
+            get_device_context=self.persistence.get_device_context,
             sentinel_device_id=r._sentinel_device_id,
             new_uuid=lambda: str(uuid.uuid4()),
             browser_headless=self.browser_headless,
@@ -1053,14 +1085,14 @@ class RegistrationEmailWorkflow:
                 "timing": r._timing_summary(),
             },
         )
+        if self.post_process_result is not None:
+            result = self.post_process_result(result)
         self.machine.transition(RegistrationState.COMPLETED)
         if r._retain_registration_checkpoint(s.success, s.access_token, s.at_probe):
             print("  [Checkpoint] Retaining post-create state for AT probe retry")
         else:
             try:
-                from .storage import clear_registration_checkpoint
-
-                clear_registration_checkpoint(s.username, runtime_config=self.config)
+                self.persistence.clear_checkpoint(s.username, runtime_config=self.config)
             except Exception:
                 pass
         result["registration_machine"] = self.machine.snapshot()

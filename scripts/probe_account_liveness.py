@@ -29,6 +29,7 @@ from sms_tool.accounts.account_liveness import (
     probe_account_liveness,
     browser_fetch_for_account,
 )
+from sms_tool.config import load_merged_config
 from sms_tool.storage import get_account_record
 
 
@@ -36,8 +37,14 @@ LIVENESS_ENDPOINT = CODEX_USAGE_URL
 
 
 def load_config_proxy() -> str:
+    """Resolve the default proxy from the merged config shards.
+
+    Reading ``config.json`` by relative path was wrong twice over: it depends
+    on the caller's cwd, and the root file is only a legacy migration source
+    that stops being consulted once the proxy/runtime/payment shards exist.
+    """
     try:
-        cfg = json.loads(Path("config.json").read_text(encoding="utf-8"))
+        cfg = load_merged_config()
     except Exception:
         return ""
     proxy = cfg.get("proxy", {}) if isinstance(cfg.get("proxy"), dict) else {}

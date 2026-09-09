@@ -170,11 +170,16 @@ namespace SmsWorkbench
         /// bounded. Callers still push into the TextBox directly via
         /// LogPresanitized, so appending here triggers no re-render.
         /// </summary>
-        internal void AppendLogLine(string line)
+        internal bool AppendLogLine(string line)
         {
             _logBuffer.Append(line);
+            bool trimmed = false;
             if (_logBuffer.Length > MaxLogBufferChars)
+            {
                 _logBuffer.Remove(0, _logBuffer.Length - MaxLogBufferChars);
+                trimmed = true;
+            }
+            return trimmed;
         }
 
         public string StatusText

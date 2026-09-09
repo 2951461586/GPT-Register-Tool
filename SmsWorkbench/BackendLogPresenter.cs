@@ -140,18 +140,16 @@ namespace SmsWorkbench
             return body;
         }
 
-        private static readonly string[] ScanLikeDomains = { "account_scan", "account_promotion" };
+        private static readonly string[] ScanLikeDomains = { "account_scan", "account_promotion", "one_click_sms" };
 
         /// <summary>
         /// Panel line for one structured progress event, or null when the event
         /// carries no operator value for the log panel.
         ///
-        /// The liveness and promotion backends already emit Chinese
-        /// batch_started / account_completed / batch_completed events, but the
-        /// task runner consumed them for the progress dialog only and returned
-        /// before the log panel saw anything -- so these two commands showed no
-        /// stage structure at all. Registration still prints its own staged
-        /// text and stays on that path, so only the scan family renders here.
+        /// The liveness, promotion and one-click SMS backends emit structured
+        /// batch/account events. The task runner consumes them for progress
+        /// tracking and this method renders the operator-facing subset without
+        /// leaking raw envelopes into the panel.
         /// </summary>
         public static string? ProgressEventLine(BackendProgressEvent? progressEvent)
         {
@@ -163,7 +161,9 @@ namespace SmsWorkbench
 
             string label = string.Equals(domain, "account_promotion", StringComparison.OrdinalIgnoreCase)
                 ? "账号优惠检测"
-                : "账号测活";
+                : string.Equals(domain, "one_click_sms", StringComparison.OrdinalIgnoreCase)
+                    ? "一键接码"
+                    : "账号测活";
 
             switch (progressEvent.Stage)
             {
@@ -179,10 +179,27 @@ namespace SmsWorkbench
                             : $"── {label}结束 ──";
                     }
                 default:
-                    // Per-account rows: only failures are worth a panel line,
-                    // and both backends already print those from Python with
-                    // the richer relogin note attached.
-                    return null;
+                    // One-click SMS has no other operator-facing stream: retain
+                    // account stages and terminal outcomes while keeping the
+                    // high-volume scan/promotion rows folded as before.
+                    if (!string.Equals(domain, "one_click_sms", StringComparison.OrdinalIgnoreCase))
+                        return null;
+                    string account = progressEvent.AccountRef ?? "";
+                    string suffix = progressEvent.Detail?.Trim() ?? "";
+                    if (suffix.Length == 0 && progressEvent.FailureClass.Length > 0)
+                        suffix = progressEvent.FailureClass;
+                    if (account.Length == 0)
+                        return suffix.Length > 0 ? $"一键接码 · {suffix}" : null;
+                    string state = progressEvent.Status switch
+                    {
+                        "success" or "completed" => "成功",
+                        "failed" or "error" => "失败",
+                        "cancelled" => "已取消",
+                        _ => "进行中",
+                    };
+                    return suffix.Length > 0
+                        ? $"一键接码 · {account} · {progressEvent.Stage} · {state} · {suffix}"
+                        : $"一键接码 · {account} · {progressEvent.Stage} · {state}";
             }
         }
 

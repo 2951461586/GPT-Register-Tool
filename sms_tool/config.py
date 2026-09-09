@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import sys
@@ -22,6 +23,38 @@ from .driver_env import driver_config
 
 class ConfigError(ValueError):
     pass
+
+
+_LOGGER = logging.getLogger(__name__)
+
+# Keys under ``account_health`` that this build understands. The list is
+# deliberately generous: an unrecognised key only produces a *warning* (see
+# ``config_warnings``), so over-listing costs a missed typo warning while
+# under-listing would nag about legitimate config.
+ACCOUNT_HEALTH_KEYS = frozenset({
+    "use_registration_affinity",
+    "batch_timeout_seconds",
+    "account_timeout_seconds",
+    "relogin_cooldown_seconds",
+    "post_registration_enabled",
+    "post_registration_deep_liveness",
+    "proxy_pool",
+    "proxies",
+    "workers",
+    "max_pending",
+    "state_file",
+    "checks",
+    "enabled",
+    "consecutive_failures",
+    "fail_skip_after",
+    "fail_cooldown_seconds",
+    "probe_cache_ttl_seconds",
+    "zero_cache_ttl_seconds",
+})
+
+# ``account_health_queue`` clamps the worker count to this range, so anything
+# outside it is silently ignored -- worth telling the operator about.
+ACCOUNT_HEALTH_WORKER_RANGE = (1, 8)
 
 
 # ---- Config sharding (proxy.json / runtime.json / payment.json) ----
@@ -200,10 +233,6 @@ def validate_registration_driver_config(
         configured = selected_config.get(key)
         if not str(configured or "").strip():
             raise ConfigError(error_code)
-    if selected == "adspower":
-        user_id = str(selected_config.get("user_id") or selected_config.get("profile_id") or "").strip()
-        if not user_id:
-            raise ConfigError("adspower_user_id_missing")
     # ``proxy`` stays in the signature for call-site stability; every remaining
     # driver consumes the registration proxy locally, so there is no
     # "provider-native proxy setting required" case left to validate.
@@ -338,6 +367,7 @@ def load_runtime_config(path: str | Path | None = None, *, validate: bool = True
             raise ConfigError("merged config root must be a JSON object")
         if validate:
             validate_config(raw)
+        _log_config_warnings(raw)
         return RuntimeConfig(data=_freeze(raw), source=_CONFIG_DIR)
     source = Path(path).expanduser().resolve()
     if not source.is_file():
@@ -350,6 +380,7 @@ def load_runtime_config(path: str | Path | None = None, *, validate: bool = True
         raise ConfigError("config root must be a JSON object")
     if validate:
         validate_config(raw)
+    _log_config_warnings(raw)
     if source == Path(__file__).resolve().parent / "config.json":
         # The bundled package config is a minimal safe fallback (endpoints and
         # paths only). Running on it means the project-root config.json is
@@ -433,6 +464,11 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             for key, value in health_proxies.items():
                 if not isinstance(value, (str, list, tuple)):
                     errors.append(f"account_health.proxies.{key} must be a proxy list")
+        _validate_positive_numbers(account_health, (
+            "workers", "max_pending", "batch_timeout_seconds",
+            "account_timeout_seconds", "relogin_cooldown_seconds",
+            "fail_skip_after", "fail_cooldown_seconds",
+        ), "account_health", errors)
 
     registration = config.get("registration", {})
     if registration is not None and not isinstance(registration, Mapping):
@@ -562,6 +598,48 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         errors.append(f"unknown workflow: {workflow}")
     if errors:
         raise ConfigError("; ".join(errors))
+
+
+def _log_config_warnings(config: Mapping[str, Any]) -> None:
+    """Emit advisories. A diagnostic must never break config loading."""
+    try:
+        for message in config_warnings(config):
+            _LOGGER.warning("%s", message)
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
+def config_warnings(config: Mapping[str, Any]) -> list[str]:
+    """Non-fatal advisories for config that parses fine but will not do what it says.
+
+    Kept out of :func:`validate_config` on purpose. Every message here is a
+    "you probably meant something else", not a "this cannot run": an unknown
+    key may simply be a section this build has not caught up with, and raising
+    over it would break an otherwise working install on a config upgrade.
+
+    The one genuinely surprising case is ``account_health.workers`` -- the queue
+    clamps it to :data:`ACCOUNT_HEALTH_WORKER_RANGE`, so a value outside that
+    range is accepted, stored, and then quietly ignored.
+    """
+    warnings_out: list[str] = []
+    health = config.get("account_health")
+    if not isinstance(health, Mapping):
+        return warnings_out
+    unknown = sorted(str(key) for key in set(health) - ACCOUNT_HEALTH_KEYS)
+    if unknown:
+        warnings_out.append(
+            "unknown account_health key(s): " + ", ".join(unknown)
+        )
+    low, high = ACCOUNT_HEALTH_WORKER_RANGE
+    workers = health.get("workers")
+    if isinstance(workers, (int, float)) and not isinstance(workers, bool):
+        if not (low <= int(workers) <= high):
+            clamped = max(low, min(int(workers), high))
+            warnings_out.append(
+                f"account_health.workers={workers} is outside the effective "
+                f"range {low}..{high}; it runs as {clamped}"
+            )
+    return warnings_out
 
 
 def _validate_positive_numbers(section: Mapping[str, Any], keys: tuple[str, ...], prefix: str, errors: list[str]) -> None:

@@ -80,12 +80,6 @@ DRIVER_ENV_OVERRIDES: dict[str, dict[str, tuple[str, str]]] = {
         "max_width": ("CAMOUFOX_MAX_WIDTH", "int"),
         "max_height": ("CAMOUFOX_MAX_HEIGHT", "int"),
     },
-    "adspower": {
-        "api_base": ("ADSPOWER_API_BASE", "str"),
-        "user_id": ("ADSPOWER_USER_ID", "str"),
-        "headless": ("ADSPOWER_HEADLESS", "bool"),
-        "keep_browser_open": ("ADSPOWER_KEEP_BROWSER_OPEN", "bool"),
-    },
 }
 
 

@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import re
+import time
 import uuid
 from typing import Any
 
@@ -29,6 +30,12 @@ from ..proxy_routing import parse_proxy_pool, proxy_pool_for, select_operation_p
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
+
+# Rate-limit response: worth one delayed retry. Bounds exist so a hostile or
+# fat-fingered ``Retry-After`` cannot park a batch run.
+PROMOTION_THROTTLE_STATUS = 429
+PROMOTION_THROTTLE_DEFAULT_BACKOFF = 1.5
+PROMOTION_THROTTLE_MAX_BACKOFF = 5.0
 
 
 def _account_token(account: Any) -> str:
@@ -260,7 +267,7 @@ def check_account_promotion(
     resolved_proxy = select_operation_proxy(
         account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
         operation="promotion",
-        explicit=(proxy_pool or proxy),
+        explicit=proxy or proxy_pool,
         config=CFG,
     )
 
@@ -276,6 +283,7 @@ def check_account_promotion(
 
     # When a browser fetch callable is provided, route the probe through the
     # browser context to carry the real fingerprint and cookies.
+    retry_after = ""
     if browser_fetch is not None:
         try:
             result = browser_fetch(url, headers=headers, timeout_ms=timeout * 1000)
@@ -310,6 +318,10 @@ def check_account_promotion(
             return {"ok": False, "promotion_status": "检测失败", "error": error[:300]}
         status_code = int(getattr(response, "status_code", 0) or 0)
         try:
+            retry_after = str((getattr(response, "headers", None) or {}).get("Retry-After") or "").strip()
+        except Exception:
+            retry_after = ""
+        try:
             body = response.json()
         except Exception:
             return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code}
@@ -317,7 +329,15 @@ def check_account_promotion(
     if status_code == 401:
         return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401}
     if not (200 <= status_code < 300):
-        return {"ok": False, "promotion_status": f"HTTP {status_code}", "error": f"http_{status_code}", "status_code": status_code}
+        failure = {
+            "ok": False,
+            "promotion_status": f"HTTP {status_code}",
+            "error": f"http_{status_code}",
+            "status_code": status_code,
+        }
+        if retry_after:
+            failure["retry_after"] = retry_after
+        return failure
 
     parsed = parse_accounts_check(body, account_id=account_id)
     parsed["status_code"] = status_code
@@ -385,6 +405,26 @@ def refresh_promotion_statuses(
                             browser_fetch=browser_fetch,
                         )
                         used_proxy = candidate
+                        if probe.get("ok"):
+                            break
+                        # A 429 is per-exit *and* short-lived: sleep first, then
+                        # rotate to a fresh IP when the pool has one left, and
+                        # fall back to one delayed retry on the same exit once
+                        # the pool is exhausted. Total attempts are therefore
+                        # bounded at len(candidates) + 1, so a sustained 429
+                        # cannot multiply the batch duration.
+                        backoff = _promotion_throttle_backoff(probe)
+                        if backoff is not None:
+                            time.sleep(backoff)
+                            if index >= len(candidates) - 1:
+                                probe = check_account_promotion(
+                                    account,
+                                    proxy=candidate,
+                                    timeout=timeout,
+                                    browser_fetch=browser_fetch,
+                                )
+                                break
+                            continue
                         if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
                             break
                     probe = probe or {
@@ -459,11 +499,14 @@ def refresh_promotion_statuses(
 
 def _promotion_proxy_candidates(account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None) -> list[str | None]:
     """Return deterministic candidates for stateless promotion probes."""
-    if isinstance(account, dict) and account.get("identity_context"):
-        return [proxy]
+    # Explicit command input wins over every configured pool.  This keeps a
+    # one-off operator probe on the requested egress instead of silently
+    # rotating it through the global promotion pool.
     values = parse_proxy_pool(proxy_pool)
-    if not values:
-        values = parse_proxy_pool(proxy)
+    if proxy:
+        return [proxy] + [item for item in values if item != proxy]
+    if isinstance(account, dict) and account.get("identity_context"):
+        return [None]
     if not values:
         values = proxy_pool_for(CFG, "promotion")
     if len(values) <= 1:
@@ -480,6 +523,32 @@ def _retryable_promotion_transport(probe: dict[str, Any] | None) -> bool:
         return False
     error = str(probe.get("error") or "").lower()
     return any(marker in error for marker in ("curl: (5)", "curl: (7)", "curl: (28)", "timed out", "timeout"))
+
+
+def _promotion_throttle_backoff(probe: dict[str, Any] | None) -> float | None:
+    """Seconds to wait before retrying a throttled probe, else ``None``.
+
+    Only HTTP 429 is throttled. **401 is deliberately not retryable** -- the
+    access token is dead, so a second attempt just burns a proxy slot and adds
+    latency (``test_promotion_401_stays_in_promotion_namespace`` locks that in).
+    When the endpoint sends ``Retry-After`` we honour it, clamped so a hostile
+    or misconfigured value cannot stall a batch run.
+    """
+    if not isinstance(probe, dict) or probe.get("ok"):
+        return None
+    try:
+        code = int(probe.get("status_code") or 0)
+    except (TypeError, ValueError):
+        return None
+    if code != PROMOTION_THROTTLE_STATUS:
+        return None
+    try:
+        seconds = float(str(probe.get("retry_after") or "").strip())
+    except (TypeError, ValueError):
+        return PROMOTION_THROTTLE_DEFAULT_BACKOFF
+    if seconds < 0:
+        return PROMOTION_THROTTLE_DEFAULT_BACKOFF
+    return min(seconds, PROMOTION_THROTTLE_MAX_BACKOFF)
 
 
 def _promotion_status_code(item: dict[str, Any]) -> int:
