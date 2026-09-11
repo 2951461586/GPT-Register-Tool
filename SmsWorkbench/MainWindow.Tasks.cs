@@ -273,15 +273,24 @@ namespace SmsWorkbench
             {
                 string directory = Path.Combine(rootDir, "runtime", "account_liveness_batches");
                 if (!Directory.Exists(directory)) return "";
+                // Prefer a terminal snapshot: partial snapshots are written
+                // while the batch runs (and after a hard kill) and may carry
+                // unfinished rows. A stale non-terminal snapshot (older than
+                // 10 minutes) is crash residue from a dead batch, not an
+                // answer to this task's question.
                 string? latest = Directory.GetFiles(directory, "*.json")
                     .OrderByDescending(File.GetLastWriteTimeUtc)
                     .FirstOrDefault();
                 if (string.IsNullOrWhiteSpace(latest)) return "";
                 using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(latest));
                 JsonElement root = doc.RootElement;
-                return root.TryGetProperty("results", out _) && root.TryGetProperty("total", out _)
-                    ? root.GetRawText()
-                    : "";
+                if (!root.TryGetProperty("results", out _) || !root.TryGetProperty("total", out _))
+                    return "";
+                bool terminal = root.TryGetProperty("terminal", out JsonElement terminalEl)
+                    && terminalEl.ValueKind == JsonValueKind.True;
+                if (!terminal && File.GetLastWriteTimeUtc(latest) < DateTime.UtcNow.AddMinutes(-10))
+                    return "";
+                return root.GetRawText();
             }
             catch
             {
