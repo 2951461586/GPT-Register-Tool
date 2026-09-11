@@ -71,6 +71,7 @@ IP_GEO_ENDPOINTS = [
 COUNTRY_LOCALE_PROFILE_MAP = {
     "JP": "jp", "CN": "cn", "HK": "hk", "TW": "tw", "US": "us", "CA": "us",
     "SG": "sg", "GB": "gb", "AU": "gb", "DE": "de", "FR": "fr", "NL": "nl",
+    "VN": "vn",
 }
 DEFAULT_LOCALE_PROFILE = "us"
 
@@ -86,6 +87,7 @@ BROWSER_LOCALE_PROFILES: dict[str, dict[str, Any]] = {
     "de": {"navigator_language": "de-DE", "navigator_languages": ["de-DE"], "accept_language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Berlin", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
     "fr": {"navigator_language": "fr-FR", "navigator_languages": ["fr-FR"], "accept_language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Paris", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
     "nl": {"navigator_language": "nl-NL", "navigator_languages": ["nl-NL"], "accept_language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Amsterdam", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
+    "vn": {"navigator_language": "vi-VN", "navigator_languages": ["vi-VN"], "accept_language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Asia/Ho_Chi_Minh", "timezone_offset_minutes": 7 * 60, "timezone_name": "Indochina Time"},
 }
 
 TIMEZONE_NAME_BY_IANA = {
@@ -102,6 +104,7 @@ TIMEZONE_NAME_BY_IANA = {
     "Europe/Berlin": "Central European Summer Time",
     "Europe/Paris": "Central European Summer Time",
     "Europe/Amsterdam": "Central European Summer Time",
+    "Asia/Ho_Chi_Minh": "Indochina Time",
 }
 
 # Common macOS Chrome desktop hardware profiles.  One is drawn per registration

@@ -44,8 +44,27 @@ build_log.txt
 *.bak
 *.bak_before_*
 *.bak_*
+*.bak-*
 runtime/*.log
 runtime/**/*.log
+
+# === 凭据型本地配置的整族快照（2026-09-11）===
+# 上面那批 `*.bak` / `*.bak_*` 挡不住**连字符**形式。实测：`proxy.json.bak-vn-migration`
+# （100 条代理账密 + smsbower api_key）以未跟踪状态躺在公开仓库根目录，
+# `git check-ignore` 判定为"未忽略"——于是 release payload gate 那条
+# "被 .gitignore 拒绝的文件绝不能出货"的规则对它完全失效（闸门是问 git 的，
+# git 说没忽略，闸门就放行）。这里按**家族**忽略，而不是枚举后缀：
+# 枚举是补不完的，`proxy.json.old` / `proxy.json.save` 还会漏。
+proxy.json*
+config.json*
+runtime.json*
+payment.json*
+session.json*
+# 例外：示例模板只有占位符，允许入库（沿用 config.example.json 的命名习惯）。
+# 少了这两行，将来新建 proxy.json.example 会被上面的家族规则静默吃掉 ——
+# 既不入库、也不进发布载荷，且不报错。
+!proxy.json.example
+!config.json.example
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/

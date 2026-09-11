@@ -10,6 +10,7 @@ from unittest.mock import patch
 from sms_tool.browser_fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     BROWSER_PROFILE_POOL,
+    COUNTRY_LOCALE_PROFILE_MAP,
     build_browser_environment,
     classify_proxy_org,
     detect_proxy_exit_geo,
@@ -137,6 +138,23 @@ class BrowserProfileValidationTests(unittest.TestCase):
                     [],
                     msg=f"contradiction in profile={base} geo={geo}",
                 )
+
+    def test_country_map_targets_an_existing_locale_profile(self):
+        # The other direction of the matrix: a country mapped to a locale key
+        # that has no entry degrades *silently* to the US profile via
+        # ``BROWSER_LOCALE_PROFILES.get(key, DEFAULT)``.  Adding an exit region
+        # therefore means touching both tables — this is the guard for that.
+        for country, key in COUNTRY_LOCALE_PROFILE_MAP.items():
+            self.assertIn(
+                key,
+                BROWSER_LOCALE_PROFILES,
+                msg=f"country {country} maps to locale {key!r} which has no profile",
+            )
+        # ...and no locale profile should be dead weight: each must be reachable
+        # from at least one country, otherwise it can never be selected.
+        reachable = set(COUNTRY_LOCALE_PROFILE_MAP.values())
+        unreachable = set(BROWSER_LOCALE_PROFILES) - reachable
+        self.assertEqual(unreachable, set(), msg=f"unreachable locale profiles: {unreachable}")
 
     def test_validate_flags_language_missing_from_languages(self):
         issues = validate_browser_profile({
