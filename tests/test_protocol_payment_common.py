@@ -137,3 +137,35 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_command_id_correlates_with_the_launching_cli_task(self):
+        # 协议支付终端报告此前没有任何相关性字段，桌面侧只能靠进程级环境猜。
+        # 子进程继承 SMS_TOOL_COMMAND_ID，报告应携带同一 ID。
+        import unittest.mock as mock
+
+        result = CORE.ProtocolResult(payment_method="ideal", ok=True, status="completed")
+        self.assertEqual(result.command_id, "")
+
+        with mock.patch.dict(os.environ, {"SMS_TOOL_COMMAND_ID": "cmd-123"}):
+            correlated = CORE.ProtocolResult(payment_method="ideal", ok=True, status="completed")
+            payload = json.loads(correlated.to_json())
+        self.assertEqual(payload["command_id"], "cmd-123")
+
+    def test_redaction_parity_with_sms_tool_sanitizer(self):
+        """双端脱敏一致：protocol_core 的手搓规则集与 sms_tool.sanitizer
+        （policy 驱动）对同一批秘密形状都要打码。规则漂移在此显形，而不是
+        在某个子进程漏报密时。"""
+        from sms_tool.sanitizer import sanitize_text as sms_sanitize_text
+
+        battery = [
+            "access_token=eyJhbGciOiJSUzI1NiJ9.payload.signature-value",
+            "refresh_token: rt_abcdefgh12345678",
+            "Authorization: Bearer abcdef123456",
+            "password=hunter2-secret",
+            "http://user:sekret-pw@gate.kookeey.info:1000",
+            "key sk_live_ABCDEFGHIJ1234",
+            "token BA-ABCD1234EFGH5678",
+        ]
+        for raw in battery:
+            self.assertIn("[REDACTED]", CORE.sanitize_text(raw), raw)
+            self.assertIn("[REDACTED]", sms_sanitize_text(raw), raw)

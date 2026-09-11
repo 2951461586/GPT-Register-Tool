@@ -66,6 +66,15 @@ class ProtocolResult:
     side_effect_started: bool = False
     requires_reconciliation: bool = False
     schema: str = RESULT_SCHEMA
+    # Correlation with the launching CLI task (sms_tool.telemetry vocabulary).
+    # The desktop sets SMS_TOOL_COMMAND_ID for backend tasks; payment
+    # subprocesses inherit the environment, so the terminal report carries the
+    # same correlation ID the manager's IPC envelopes use.
+    command_id: str = ""  # dataclass default_factory below
+
+    def __post_init__(self) -> None:
+        if not self.command_id:
+            object.__setattr__(self, "command_id", os.environ.get("SMS_TOOL_COMMAND_ID", "").strip())
 
     def to_json(self) -> str:
         return json.dumps(sanitize_payload(asdict(self)), ensure_ascii=False, separators=(",", ":"))
