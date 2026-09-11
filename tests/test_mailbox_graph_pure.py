@@ -350,3 +350,19 @@ class UnparseableBodyTests(_RefreshCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_oauth_client_id_matches_the_cross_language_fixture():
+    """C# MainWindow.Export.DefaultMailboxClientId 的回落值与本侧默认值必须是
+    同一个 OAuth 应用（tests/fixtures/oauth_client_id.json 同时 pin 两侧）。"""
+    import json
+    import re
+    from pathlib import Path
+
+    fixture = json.loads(
+        (Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "oauth_client_id.json")
+        .read_text(encoding="utf-8")
+    )
+    source = (Path(__file__).resolve().parents[1] / "sms_tool" / "providers" / "mailbox_graph.py").read_text(encoding="utf-8")
+    found = re.findall(r'"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"', source)
+    assert fixture["client_id"] in found
