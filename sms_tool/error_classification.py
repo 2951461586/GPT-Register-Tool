@@ -113,8 +113,10 @@ INTERNAL_ERROR_MARKERS = (
     "typeerror",
     "keyerror",
     "importerror",
+    "indexerror",
     "unboundlocalerror",
     "notimplementederror",
+    "recursionerror",
     " is not defined",
 )
 

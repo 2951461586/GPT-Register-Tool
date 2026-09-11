@@ -1,0 +1,13 @@
+[tool.ruff]
+# Only the lint gate is configured here for now; pytest still reads pytest.ini.
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# Narrow gate: syntax errors + ambiguous names + undefined names. Wider rule
+# sets would flag the documented facade re-exports (ADR-0009) — widen only
+# together with per-file-ignores for the compat facades.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sms_tool"]

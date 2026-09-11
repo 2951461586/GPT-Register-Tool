@@ -62,19 +62,30 @@ def git_ignores(rel: str) -> bool:
 
     解析文本会得到"我以为的规则"，而闸门用的是"git 实际的判定"——
     两者不一致正是本次事故的成因。
+
+    用 ``check-ignore -v`` 并**解析匹配规则本身**，而不是只看退出码：
+    git 2.21~2.22 的 check-ignore 对**例外规则**（``!proxy.json.example``）
+    命中时也返回退出码 0（"被忽略"），2.23 起才修正；本机 git 2.21 正中该
+    缺陷。但 -v 打印的"最后命中规则"在所有版本里语义一致：
+    规则以 ``!`` 开头 = 未被忽略；无匹配 = 未被忽略。
     """
     proc = subprocess.run(
-        ["git", "check-ignore", "-q", rel],
+        ["git", "check-ignore", "-v", "--", rel],
         cwd=str(ROOT),
         capture_output=True,
     )
-    # check-ignore 的退出码只有 0（被忽略）和 1（未忽略）两种正常结果。
     if proc.returncode not in (0, 1):
         raise AssertionError(
             f"git check-ignore failed for {rel!r}: rc={proc.returncode} "
             f"stderr={proc.stderr.decode('utf-8', errors='replace').strip()!r}"
         )
-    return proc.returncode == 0
+    out = proc.stdout.decode("utf-8", errors="replace").strip()
+    if not out:
+        # 无任何规则命中 —— 未被忽略。
+        return False
+    # 行格式：<source>:<linenum>:<pattern>\t<pathname>。
+    matched_pattern = out.splitlines()[0].split("\t", 1)[0].rsplit(":", 1)[-1]
+    return not matched_pattern.startswith("!")
 
 
 @pytest.mark.parametrize("rel", CREDENTIAL_CONFIG_SNAPSHOTS)

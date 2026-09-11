@@ -32,6 +32,18 @@ from ..storage import (
 )
 from ..mailbox_quarantine import mailbox_relogin_allowed
 from ..providers.mailbox_graph import MailboxAuthInvalidError
+from ..utils import atomic_write_text
+
+# Probe verdicts from a scan pass that a quota refresh must not re-probe.
+# Anything else (unknown / timeout / empty / 检测失败) is transport-shaped and
+# gets a fresh probe because the network may have recovered since the scan.
+_FRESH_PROBE_DEFINITIVE_STATUSES = {"active", "token_invalid", "account_deactivated"}
+
+
+def _probe_is_fresh_definitive(probe: dict[str, Any] | None) -> bool:
+    if not isinstance(probe, dict) or not probe:
+        return False
+    return str(probe.get("status") or "").strip().lower() in _FRESH_PROBE_DEFINITIVE_STATUSES
 
 
 def _heavy_lane_slots(max_workers: int) -> int:
@@ -66,6 +78,7 @@ def refresh_local_quota_statuses(
     relogin_mode: str = "auto",
     batch_timeout: int = 900,
     account_timeout: int = 360,
+    fresh_probes: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if relogin_on_401:
         _refresh_mailbox_quarantine_state()
@@ -170,12 +183,21 @@ def refresh_local_quota_statuses(
                     "terminal": True,
                 }
             else:
-                # Fast path: use the canonical lightweight quota endpoint for
-                # every account, including accounts that have a browser
-                # identity. This avoids opening a browser for healthy tokens.
-                probe = _probe_liveness_with_retries(
-                    account, proxy=proxy, timeout=probe_timeout, browser_fetch=None
-                )
+                # A scan pass that just ran probe_account_liveness for this
+                # account hands its verdict in via ``fresh_probes``; re-probing
+                # wham minutes later doubled the Cloudflare-401 exposure and
+                # let the two passes disagree. Reuse only definitive
+                # classifications -- transport-unknown results still re-probe.
+                fresh = (fresh_probes or {}).get(str(email).strip().lower())
+                if _probe_is_fresh_definitive(fresh):
+                    probe = {**fresh, "probe_source": "scan_reuse"}
+                else:
+                    # Fast path: use the canonical lightweight quota endpoint for
+                    # every account, including accounts that have a browser
+                    # identity. This avoids opening a browser for healthy tokens.
+                    probe = _probe_liveness_with_retries(
+                        account, proxy=proxy, timeout=probe_timeout, browser_fetch=None
+                    )
                 if not isinstance(probe, dict):
                     probe = {
                         "ok": False,
@@ -1297,7 +1319,7 @@ def _persist_token_revoked_drop(account: dict[str, Any]) -> bool:
     json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
     if json_path:
         try:
-            Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            atomic_write_text(json_path, json.dumps(data, ensure_ascii=False, indent=2))
         except Exception:
             pass
     return upsert_account(data, json_path=json_path)
@@ -1325,7 +1347,7 @@ def _persist_permanent_deactivation(account: dict[str, Any], result: dict[str, A
     json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
     if json_path:
         try:
-            Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            atomic_write_text(json_path, json.dumps(data, ensure_ascii=False, indent=2))
         except Exception:
             pass
     return upsert_account(data, json_path=json_path)

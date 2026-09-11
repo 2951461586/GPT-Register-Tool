@@ -2,10 +2,29 @@ import random
 import secrets
 import threading
 import time
+from pathlib import Path
 
 from .config import CFG
 
 _tls = threading.local()
+
+
+# ==========================================
+# Durable writes
+# ==========================================
+def atomic_write_text(path, text: str) -> None:
+    """Write ``text`` to ``path`` via temp-file + replace.
+
+    Account/session JSON is the record of truth for the desktop grid; a crash
+    mid-write with plain ``write_text`` truncates the record. Callers that
+    already persist atomically (snapshots, the store layer) keep their own
+    paths -- this is for the stragglers.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix(target.suffix + ".tmp")
+    temp.write_text(text, encoding="utf-8")
+    temp.replace(target)
 
 # ==========================================
 # Timing

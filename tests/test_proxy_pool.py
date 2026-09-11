@@ -52,6 +52,19 @@ class TestUpstreamProxy(unittest.TestCase):
         self.assertEqual(u.host, "127.0.0.1")
         self.assertEqual(u.port, 17912)
 
+    def test_from_url_raises_on_unparseable(self):
+        # A garbage upstream used to fall through to a permissive urlparse
+        # fallback and become a live 127.0.0.1:1080 entry; it must raise.
+        for bad in ("", "socks5://", "://", "http://[bad"):
+            with self.assertRaises(ValueError):
+                UpstreamProxy.from_url(bad)
+
+    def test_from_url_four_segment(self):
+        u = UpstreamProxy.from_url("gate.kookeey.info:1000:9408785-edbd645b:54ad4d54-JP")
+        self.assertEqual(u.host, "gate.kookeey.info")
+        self.assertEqual(u.port, 1000)
+        self.assertTrue(u.username)
+
     def test_addr_property(self):
         u = UpstreamProxy(host="10.0.0.1", port=3128)
         self.assertEqual(u.addr, "10.0.0.1:3128")
@@ -346,24 +359,19 @@ class TestStatsJson(unittest.TestCase):
 
 
 class TestConfigLoading(unittest.TestCase):
-    def test_load_upstreams_from_config(self):
-        import json
-        import tempfile
-        from start_proxy_pool import _load_upstreams_from_config
+    def test_upstreams_from_proxy_cfg(self):
+        from start_proxy_pool import _upstreams_from_proxy_cfg
 
         cfg = {
-            "proxy_pool": {
-                "upstreams": [
+            "proxy": {
+                "pool": [
                     {"url": "socks5://127.0.0.1:7897", "label": "clash"},
                     {"url": "socks5://10.0.0.1:1080", "label": "remote", "username": "u", "password": "p"},
                     "socks5://plain:1080",
                 ]
             }
         }
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(cfg, f)
-            f.flush()
-            upstreams = _load_upstreams_from_config(f.name)
+        upstreams = _upstreams_from_proxy_cfg(cfg)
 
         self.assertEqual(len(upstreams), 3)
         self.assertEqual(upstreams[0].host, "127.0.0.1")
@@ -372,24 +380,34 @@ class TestConfigLoading(unittest.TestCase):
         self.assertEqual(upstreams[1].password, "p")
         self.assertEqual(upstreams[2].host, "plain")
 
-    def test_load_upstreams_priority_from_config(self):
-        import json
-        import tempfile
-        from start_proxy_pool import _load_upstreams_from_config
+    def test_upstreams_from_proxy_cfg_skips_non_socks5_and_empty(self):
+        from start_proxy_pool import _upstreams_from_proxy_cfg
 
         cfg = {
-            "proxy_pool": {
-                "upstreams": [
+            "proxy": {
+                "pool": [
+                    "http://1.2.3.4:8080",
+                    "socks5://5.6.7.8:1080",
+                    {"label": "no-url"},
+                    {"bogus": True},
+                ]
+            }
+        }
+        upstreams = _upstreams_from_proxy_cfg(cfg)
+        self.assertEqual([u.addr for u in upstreams], ["5.6.7.8:1080"])
+
+    def test_upstreams_priority_from_proxy_cfg(self):
+        from start_proxy_pool import _upstreams_from_proxy_cfg
+
+        cfg = {
+            "proxy": {
+                "pool": [
                     {"url": "socks5://127.0.0.1:17912", "label": "jp", "priority": 0},
                     {"url": "socks5://127.0.0.1:7897", "label": "clash", "priority": 1},
                 ]
             }
         }
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(cfg, f)
-            f.flush()
-            upstreams = _load_upstreams_from_config(f.name)
-
+        upstreams = _upstreams_from_proxy_cfg(cfg)
         self.assertEqual(upstreams[0].priority, 0)
         self.assertEqual(upstreams[1].priority, 1)
 

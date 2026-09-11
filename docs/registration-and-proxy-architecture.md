@@ -145,7 +145,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 | 路径 | 指纹池类型 | 单例入口 | 内容 | 地理对齐 |
 | --- | --- | --- | --- | --- |
-| `protocol` | `FingerprintPool`（`fingerprint_pool.py:118`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:285`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:34`） | `next(proxy)`（`fingerprint_pool.py:237`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
+| `protocol` | `FingerprintPool`（`fingerprint_pool.py:121`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:328`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:37`） | `next(proxy)`（`fingerprint_pool.py:249`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
 | `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:162`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:199`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:534`）取档 | 7 个桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:112`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:281`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:79`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
 
 **核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:139`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:534`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。
@@ -232,8 +232,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:484` / `:550` | 选池 |
 | `registration_network_preflight` | `registration_preflight.py:99` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration_preflight.py:69` | socks5↔http 纠错 |
-| `shared_fingerprint_pool` | `fingerprint_pool.py:291` | 协议路径指纹池单例 |
-| `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:118` / `:34` | 协议路径 TLS/UA 档案 |
+| `shared_fingerprint_pool` | `fingerprint_pool.py:328` | 协议路径指纹池单例 |
+| `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:121` / `:37` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:199` | 浏览器路径指纹池单例 |
 | `select_browser_profile` | `browser_fingerprint_pool.py:534` | 取浏览器硬件档案（seed 稳定） |
 | `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:281` | 穿透代理查出口地理 |
