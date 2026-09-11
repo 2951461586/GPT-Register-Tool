@@ -85,6 +85,27 @@ RATE_LIMIT_ERROR_MARKERS = (
 
 CANCELLED_ERROR_MARKERS = ("registration_cancelled", "cancelled_by_user")
 
+# A transport failure that escapes to the unexpected-exception handler is
+# wrapped as ``registration_internal_error:<Type>:<msg>``, and because INTERNAL
+# is tested before NETWORK the wrapper used to win -- demoting a retryable
+# network error to a terminal-looking internal one. Observed 2026-09-12:
+# ``registration_internal_error:RuntimeError:Failed to perform, curl: (35) ...``
+# was recorded as ``internal`` (not retryable) although its own text classifies
+# as ``network`` (retryable).
+#
+# Only *curl error codes* may demote ``internal``, and that restriction is the
+# whole point: the generic network markers ("connection", "timeout", "proxy",
+# "dns") also occur inside genuine Python exception text --
+# ``NameError: name 'connection_pool' is not defined`` is a bug, and answering
+# "retry the network" to it is worse than leaving it internal. A curl code
+# cannot appear in a Python exception message, so it is unambiguous.
+#
+# Derived from NETWORK_ERROR_MARKERS rather than hardcoded, so adding a new
+# ``curl: (NN)`` marker automatically extends the demotion.
+CURL_TRANSPORT_MARKERS = tuple(
+    marker for marker in NETWORK_ERROR_MARKERS if marker.startswith("curl:")
+)
+
 INTERNAL_ERROR_MARKERS = (
     "registration_internal_error",
     "nameerror",
@@ -139,7 +160,11 @@ def classify_error(value) -> str:
     text = error_text(value)
     if any(marker in text for marker in CANCELLED_ERROR_MARKERS):
         return "cancelled"
-    if any(marker in text for marker in INTERNAL_ERROR_MARKERS):
+    # See CURL_TRANSPORT_MARKERS: a wrapped transport failure is still a
+    # transport failure, but only a curl code is allowed to prove it.
+    if any(marker in text for marker in INTERNAL_ERROR_MARKERS) and not any(
+        marker in text for marker in CURL_TRANSPORT_MARKERS
+    ):
         return "internal"
     if any(marker in text for marker in CONFIGURATION_ERROR_MARKERS):
         return "configuration"

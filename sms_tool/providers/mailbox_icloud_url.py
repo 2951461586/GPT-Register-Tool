@@ -35,6 +35,20 @@ _OTP_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The OTP wait re-fetches the *same* forwarding URL every ``otp_poll_interval``
+# seconds.  If that page -- or a CDN in front of it -- serves a cached body, every
+# poll inside the window returns the same stale listing and a mail that lands
+# mid-window stays invisible until the budget expires; the run then reports
+# ``email_otp_poll_timeout`` while the code is already sitting in the inbox
+# (2026-09-11 triage).  Asking for revalidation is the cheap, safe half of that
+# fix: a cache-busting query parameter would defeat URL-keyed caching more
+# thoroughly, but these are signed forwarding URLs and an extra parameter risks
+# a 403, so it is deliberately NOT done here.
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
+
 
 def is_icloud_url_line(value: Any) -> bool:
     email, url = split_icloud_url_line(value)
@@ -148,6 +162,7 @@ def _request(url: str, *, proxy: str | None = None):
     try:
         return curl_requests.get(
             url,
+            headers=dict(_NO_CACHE_HEADERS),
             proxies=proxies,
             impersonate="chrome124",
             timeout=35,

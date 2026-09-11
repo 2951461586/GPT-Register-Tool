@@ -8,6 +8,7 @@ account_creation, account_2fa, codex_oauth, session_refresh, and auth_state:
   * _follow_continue_url  – GET a continue URL with impersonation
   * _cookie_header        – serialize session cookies to a header string
   * _minimal_chatgpt_cookie_header  – keep only essential ChatGPT cookies
+  * _cookie_presence      – which auth-relevant cookies a session currently holds
   * _validate_email_otp   – POST OTP code to validate endpoint(s)
 """
 
@@ -100,6 +101,47 @@ def _cookie_header(session) -> str:
     return _minimal_chatgpt_cookie_header(
         "; ".join(f"{name}={value}" for name, value in items)
     )
+
+
+def _cookie_presence(session):
+    """Which auth-relevant cookies the session currently holds (flags, no values).
+
+    Moved here from ``auth_flow`` on 2026-09-12: ``account_creation`` needs it too,
+    and ``auth_flow`` imports ``account_creation`` at module level, so calling it
+    from there required a delayed import -- which tripped the delayed-import
+    ratchet.  This module already hosts ``_cookie_header`` (the sibling utility)
+    and is imported by both sides, so the cycle disappears.
+
+    🔴 ``nextauth_state`` and ``nextauth_session`` are **not** interchangeable.
+    ``next-auth.state`` is the OAuth *state* cookie; the cookie that actually
+    authenticates ``GET /api/auth/session`` is the next-auth **session token**
+    (``__Secure-next-auth.session-token``, chunked as ``.0/.1`` when large, or
+    unprefixed in dev).  Until 2026-09-12 only the former was reported, so a
+    "session callback returned 200 yet /api/auth/session is anonymous" failure
+    had no readout that could distinguish "cookie never landed" from "server
+    has not propagated it yet".
+    """
+    names = set()
+    try:
+        names = {
+            str(getattr(cookie, "name", cookie) or "")
+            for cookie in session.cookies
+        }
+    except Exception:
+        try:
+            names = set(session.cookies.get_dict())
+        except Exception:
+            names = set()
+    names = {name for name in names if name}
+    return {
+        "oai_did": any(name.lower() == "oai-did" for name in names),
+        "oai_login_csrf": any("oai-login-csrf" in name.lower() for name in names),
+        "login_session": any("login_session" in name.lower() for name in names),
+        "client_auth_session": any("client_auth_session" in name.lower() for name in names),
+        "nextauth_state": any("next-auth.state" in name.lower() for name in names),
+        "nextauth_session": any("next-auth.session-token" in name.lower() for name in names),
+        "cookie_count": len(names),
+    }
 
 
 # ── email OTP validation ──────────────────────────────────────────────────────

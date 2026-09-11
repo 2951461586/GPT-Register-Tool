@@ -78,8 +78,15 @@ class RegistrationProgress:
         if lease is not None:
             lease.release()
 
-    def stage(self, name: str, status: str = "running", detail: str = "") -> None:
+    def stage(
+        self,
+        name: str,
+        status: str = "running",
+        detail: str = "",
+        failure_class: str = "",
+    ) -> None:
         next_stage = str(name or "unknown")
+        failure_class = _sanitize_text(failure_class)[:80].strip().lower()
         now_mono = time.monotonic()
         previous_stage = self.last_stage
         previous_duration_ms = int(
@@ -99,6 +106,12 @@ class RegistrationProgress:
             "status": str(status or "running"),
             "at": int(time.time()),
             "sequence": self.sequence,
+            # Failure class rides on the event, not only on the persisted row:
+            # the row does not exist until the run finishes, so without this the
+            # operator log cannot separate a 300s OTP timeout from an auth_state
+            # failure while the batch is still in flight (2026-09-11: the whole
+            # 56%-failure triage had to wait for terminal rows to be written).
+            "failure_class": failure_class,
             # Duration belongs to the stage named by this event. It is filled
             # when the next transition occurs (or when persist finalizes the
             # terminal stage), never attributed to the stage being entered.
@@ -122,6 +135,7 @@ class RegistrationProgress:
                 "status": event["status"],
                 "previous_stage": previous_stage,
                 "previous_stage_duration_ms": previous_duration_ms,
+                "failure_class": failure_class,
             },
         )
         try:
@@ -154,11 +168,21 @@ class RegistrationProgress:
             (result or {}).get("error") or ""
         ).lower() == "registration_cancelled"
         final_error = _sanitize_text(error or (result or {}).get("error") or "")[:300]
+        failure_class = str(
+            (result or {}).get("failure_class")
+            or ("" if success else registration_retry_decision(final_error).failure_class)
+        )[:80]
         terminal_stage = "completed" if success else "cancelled" if cancelled else "failed"
         terminal_status = "success" if success else "cancelled" if cancelled else "failed"
         last_event = self.events[-1] if self.events else {}
         if last_event.get("stage") != terminal_stage or last_event.get("status") != terminal_status:
-            self.stage(terminal_stage, terminal_status, final_error)
+            self.stage(terminal_stage, terminal_status, final_error, failure_class=failure_class)
+        elif not last_event.get("failure_class"):
+            # The caller already emitted the terminal stage -- the registration
+            # loop stages "failed" itself before persisting, which is the common
+            # path.  Backfill the class so every terminal event is aggregatable,
+            # not just the ones this method emits.
+            last_event["failure_class"] = _sanitize_text(failure_class)[:80].strip().lower()
         if self.events:
             now_mono = time.monotonic()
             self.events[-1]["duration_ms"] = int(
@@ -183,7 +207,7 @@ class RegistrationProgress:
             "attempt": int((result or {}).get("registration_attempts") or self.attempt),
             "success": success,
             "error": final_error,
-            "failure_class": str((result or {}).get("failure_class") or ("" if success else registration_retry_decision(final_error).failure_class))[:80],
+            "failure_class": failure_class,
             "retryable": bool((result or {}).get("retryable", not success and registration_retry_decision(final_error).retryable)),
             "registration_state": str((result or {}).get("registration_state") or "")[:40],
             "registration_driver": str((result or {}).get("registration_driver") or self.driver or "unknown")[:32],
@@ -238,13 +262,18 @@ def _append_progress_row(
         handle.write(line)
 
 
-def registration_stage(name: str, status: str = "running", detail: str = "") -> None:
+def registration_stage(
+    name: str,
+    status: str = "running",
+    detail: str = "",
+    failure_class: str = "",
+) -> None:
     progress = _current.get()
     if progress is None:
         return
     waited_ms = progress.enter_stage_gate(name)
     wait_detail = f"stage_queue_wait_ms={waited_ms:.1f}" if waited_ms >= 1 else ""
-    progress.stage(name, status, detail or wait_detail)
+    progress.stage(name, status, detail or wait_detail, failure_class=failure_class)
 
 
 def admit_registration_stage(name: str) -> float:

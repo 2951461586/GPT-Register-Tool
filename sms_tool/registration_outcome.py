@@ -197,7 +197,15 @@ def _failure_result(error, email="", mailbox=None, password=""):
     return _sanitize(result)
 
 
-def _registration_outcome(create_ok, create_data, access_token, at_probe):
+def _registration_outcome(create_ok, create_data, access_token, at_probe, existing_login_error=""):
+    """Decide whether a registration produced a usable access token.
+
+    ``existing_login_error`` carries the *cause* when an already-registered
+    address could not be logged back in. Without it the outcome collapses to
+    the generic ``missing_auth_session_access_token``, which classifies as
+    ``unknown`` and therefore reads as terminal -- hiding a retryable
+    ``invalid_state`` behind a name that suggests a code defect.
+    """
     probe = at_probe if isinstance(at_probe, dict) else {}
     try:
         status_code = int(probe.get("status_code") or 0)
@@ -208,7 +216,8 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe):
     if success:
         return True, "", create_error
     if not str(access_token or "").strip():
-        return False, create_error or "missing_auth_session_access_token", ""
+        cause = create_error or str(existing_login_error or "").strip()
+        return False, cause or "missing_auth_session_access_token", ""
     if status_code:
         return False, f"access_token_probe_http_{status_code}", create_error
     probe_error = str(probe.get("error") or probe.get("status") or "unknown").strip()

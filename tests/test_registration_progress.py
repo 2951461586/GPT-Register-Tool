@@ -196,5 +196,67 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertNotIn("browser_diagnostics", rows[1])
 
 
+    def test_stage_event_carries_failure_class(self):
+        """The event must be aggregatable by failure class while the run is live.
+
+        Before 2026-09-11 the class only appeared on the persisted row, which
+        does not exist until the run finishes -- so a batch with 56% failures
+        could not be triaged until it was over.
+        """
+        progress = registration_progress.RegistrationProgress("user@example.com")
+        progress.stage(
+            "email_otp_wait", "failed", "email_otp_poll_timeout", failure_class="mailbox"
+        )
+        event = progress.events[-1]
+        self.assertEqual(event["stage"], "email_otp_wait")
+        self.assertEqual(event["failure_class"], "mailbox")
+
+    def test_stage_event_failure_class_defaults_to_empty(self):
+        progress = registration_progress.RegistrationProgress("user@example.com")
+        progress.stage("auth_flow")
+        self.assertEqual(progress.events[-1]["failure_class"], "")
+
+    def test_module_level_registration_stage_forwards_failure_class(self):
+        progress = registration_progress.RegistrationProgress("user@example.com")
+        registration_progress._current.set(progress)
+        try:
+            registration_progress.registration_stage("failed", "failed", failure_class="mailbox")
+        finally:
+            registration_progress._current.set(None)
+        self.assertEqual(progress.events[-1]["failure_class"], "mailbox")
+
+    def test_persist_terminal_event_carries_derived_failure_class(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({"success": False, "error": "email_otp_poll_timeout"})
+
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            terminal = stored["events"][-1]
+            self.assertEqual(terminal["stage"], "failed")
+            self.assertEqual(terminal["failure_class"], "mailbox")
+            self.assertEqual(stored["failure_class"], "mailbox")
+
+    def test_persist_backfills_failure_class_on_caller_emitted_terminal_stage(self):
+        """The registration loop stages 'failed' itself before persisting.
+
+        That is the common production path, so backfilling is what actually
+        makes the operator log aggregatable -- emitting it only on events this
+        method creates would leave the real failures unclassified.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            progress.stage("failed", "failed", "email_otp_poll_timeout")
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                progress.persist({"success": False, "error": "email_otp_poll_timeout"})
+
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            failed = [item for item in stored["events"] if item["stage"] == "failed"]
+            self.assertEqual(1, len(failed))
+            self.assertEqual(failed[0]["failure_class"], "mailbox")
+
+
 if __name__ == "__main__":
     unittest.main()

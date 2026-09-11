@@ -7,7 +7,12 @@ from .accounts.account_creation import _validate_email_otp
 from .auth_headers import auth_impersonate, openai_auth_headers
 from .config import current_config_data
 from .http_client import request_with_retry
-from .http_utils import _absolute_url, _follow_continue_url, _json_or_raw
+from .http_utils import (
+    _absolute_url,
+    _cookie_presence,
+    _follow_continue_url,
+    _json_or_raw,
+)
 from .mailbox import _poll_email_otp
 from .phone_proxy import redact_proxy_url
 
@@ -112,29 +117,6 @@ def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen
     if prompt:
         params["prompt"] = prompt
     return f"{chat_base}/api/auth/signin/openai?{urlencode(params)}"
-
-
-def _cookie_presence(session):
-    names = set()
-    try:
-        names = {
-            str(getattr(cookie, "name", cookie) or "")
-            for cookie in session.cookies
-        }
-    except Exception:
-        try:
-            names = set(session.cookies.get_dict())
-        except Exception:
-            names = set()
-    names = {name for name in names if name}
-    return {
-        "oai_did": any(name.lower() == "oai-did" for name in names),
-        "oai_login_csrf": any("oai-login-csrf" in name.lower() for name in names),
-        "login_session": any("login_session" in name.lower() for name in names),
-        "client_auth_session": any("client_auth_session" in name.lower() for name in names),
-        "nextauth_state": any("next-auth.state" in name.lower() for name in names),
-        "cookie_count": len(names),
-    }
 
 
 def _protocol_diagnostic(*, response=None, final_url="", session=None, sentinel_source="", sentinel_flow="", proxy="", **extra):

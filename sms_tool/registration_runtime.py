@@ -65,6 +65,11 @@ class RegistrationAccount:
     create_data: dict[str, Any] = field(default_factory=dict)
     create_ok: bool = False
     existing_account: bool = False
+    # Why the existing-account re-login failed, when it did. Kept separate from
+    # ``error`` because ``_registration_outcome`` must not overwrite a real
+    # create_account error with it, but must surface it when the only other
+    # explanation left is the generic "no access token" fallback.
+    existing_login_error: str = ""
     auth_session: dict[str, Any] = field(default_factory=dict)
     auth_body: dict[str, Any] = field(default_factory=dict)
     access_token: str = ""

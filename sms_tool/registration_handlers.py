@@ -470,6 +470,22 @@ class RegistrationEmailWorkflow:
         if self._has_resume_checkpoint():
             print("[*] Resumable post-create checkpoint found; skipping mailbox/OTP stages")
             return
+        # Snapshot the mailbox here, at the earliest point the mailbox is known
+        # and before any OTP can be issued.
+        #
+        # This used to run inside ``send_email_otp``.  That was too late: in
+        # passwordless mode the OTP is sent by the earlier ``auth_flow``
+        # (authorize) step, so by the time ``send_email_otp`` snapshotted, the
+        # code mail was already visible on the forwarding page and got written
+        # into ``seen_message_ids`` -- which ``_latest_email_otp_candidate``
+        # then skips.  The poll drained its full 300s window while the code sat
+        # in plain sight (2026-09-11, batch 5e32aa85: 10 of 12 runs failed).
+        #
+        # Taking the snapshot up front makes it a true "what was already in the
+        # inbox before this attempt" marker, matching the reference design
+        # where ``before_ids`` is captured during identity resolution.
+        print("[*] Snapshotting mailbox (pre-OTP baseline)")
+        r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
         print("[*] ChatGPT Email Registration Started")
         self._run_stage(RegistrationState.SENTINEL, "0-Extract sentinel token", self.extract_sentinel)
         self._run_stage(RegistrationState.IDENTITY_READY, "1-Prepare registration identity", self.prepare_identity)
@@ -715,7 +731,11 @@ class RegistrationEmailWorkflow:
     def send_email_otp(self) -> None:
         r = self.r
         s = self.runtime
-        r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
+        # Do NOT snapshot here.  The pre-OTP baseline is taken once in
+        # ``_bootstrap``; re-snapshotting at this point would be a race --
+        # passwordless sends the OTP during ``auth_flow``, so the code mail can
+        # already be visible and would be recorded as "seen", permanently
+        # hiding it from ``_latest_email_otp_candidate``.
         continue_url = r._email_otp_send_url(
             s.reg_data,
             s.auth_base,
@@ -902,7 +922,8 @@ class RegistrationEmailWorkflow:
         except Exception as exc:
             existing_login = {"ok": False, "error": f"existing_login_transport:{exc}"}
         if not existing_login.get("ok"):
-            print(f"  Existing account login failed: {r._sanitize_text(existing_login.get('error') or 'unknown')}")
+            s.existing_login_error = r._sanitize_text(existing_login.get("error") or "unknown")
+            print(f"  Existing account login failed: {s.existing_login_error}")
             return
         s.auth_session = r._fetch_auth_session(s.login_session, s.chat_base, s.base_headers)
         s.auth_body = s.auth_session.get("body") or {}
@@ -938,6 +959,7 @@ class RegistrationEmailWorkflow:
             s.create_data,
             s.access_token,
             s.at_probe,
+            s.existing_login_error,
         )
         # Email registration is AT-only. OAuth/phone recovery remains in its
         # own entry points; these impossible branches added hidden dependencies.

@@ -26,6 +26,7 @@ Two traps worth knowing before editing:
 
 import argparse
 import json
+import logging
 import os
 import re
 import time
@@ -63,6 +64,8 @@ from .mailbox_quarantine import filter_quarantined_mailboxes, prune_quarantine_a
 from .providers import mailbox_icloud_url
 from .providers import mailbox_smailr
 from . import mailbox_strategies
+
+_LOGGER = logging.getLogger(__name__)
 
 # MailboxAccount and parsers moved to mailbox_types/mailbox_parsers.
 # Deprecated monkeypatch hook for older integrations. Production composition
@@ -315,28 +318,82 @@ def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: Confi
 
 
 def _snapshot_mailbox_message(mailbox, proxy=None):
+    """Record the pre-OTP baseline: every message id visible *right now*.
+
+    Everything this marks as seen is permanently skipped by
+    ``_latest_email_otp_candidate``, so the **call site** matters more than the
+    implementation -- it must run before anything can send an OTP.  See
+    ``RegistrationEmailWorkflow._bootstrap`` for the protocol lane and
+    ``browser_flow.orchestrator`` for the browser lane.
+    """
     provider = getattr(mailbox, "provider", "")
-    if provider in {"cfworker", "remail", mailbox_icloud_url.PROVIDER}:
-        try:
-            if provider == mailbox_icloud_url.PROVIDER:
-                messages = mailbox_icloud_url.snapshot_icloud_url_messages(
-                    mailbox,
-                    limit=25,
-                    proxy=_resolve_mailbox_proxy(proxy),
-                )
-            else:
-                messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
-            message_id = _message_id(messages[0]) if messages else ""
-            mailbox.seen_message_id = message_id
-            mailbox.seen_message_ids = tuple(
-                message_id for message_id in (_message_id(message) for message in messages) if message_id
+    if provider not in {"cfworker", "remail", mailbox_icloud_url.PROVIDER}:
+        # gmail/graph/outlook have no cheap "list ids" call on this path, so
+        # their poll relies on ``issued_after_unix`` alone.  Log it once per
+        # attempt so a timeout on those providers is not misread as a
+        # snapshot-timing bug.
+        _LOGGER.info(
+            "Mailbox baseline snapshot provider=%s result=skipped reason=unsupported",
+            provider or "unknown",
+            extra={
+                "event": "mailbox_baseline_snapshot",
+                "provider": provider,
+                "result": "skipped",
+                "seen_id_count": 0,
+            },
+        )
+        return ""
+    try:
+        if provider == mailbox_icloud_url.PROVIDER:
+            messages = mailbox_icloud_url.snapshot_icloud_url_messages(
+                mailbox,
+                limit=25,
+                proxy=_resolve_mailbox_proxy(proxy),
             )
-            mailbox.seen_message_received_ts = _message_received_ts(messages[0]) if messages else 0
-            return message_id
-        except Exception as e:
-            print(f"[{provider} snapshot error: {e}]")
-            return ""
-    return ""
+        else:
+            messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
+        message_id = _message_id(messages[0]) if messages else ""
+        mailbox.seen_message_id = message_id
+        mailbox.seen_message_ids = tuple(
+            message_id for message_id in (_message_id(message) for message in messages) if message_id
+        )
+        mailbox.seen_message_received_ts = _message_received_ts(messages[0]) if messages else 0
+        # A real log record, not a print.  ``print`` never reaches
+        # sms_tool.log (the file handlers only receive logging records), so an
+        # invisible baseline makes a later ``email_otp_poll_timeout``
+        # impossible to attribute -- you cannot tell "the mail never arrived"
+        # from "the baseline swallowed it".  2026-09-11 cost a whole batch to
+        # exactly that ambiguity.
+        _LOGGER.info(
+            "Mailbox baseline snapshot provider=%s result=ok seen_ids=%d newest_ts=%s",
+            provider,
+            len(mailbox.seen_message_ids),
+            mailbox.seen_message_received_ts,
+            extra={
+                "event": "mailbox_baseline_snapshot",
+                "provider": provider,
+                "result": "ok",
+                "seen_id_count": len(mailbox.seen_message_ids),
+                "seen_newest_ts": mailbox.seen_message_received_ts,
+            },
+        )
+        return message_id
+    except Exception as e:
+        # Also a log record: a silently swallowed snapshot failure leaves the
+        # baseline empty, which is *not* harmless -- without it the poll can
+        # pick up a stale code from an earlier attempt.
+        _LOGGER.warning(
+            "Mailbox baseline snapshot provider=%s result=error error=%s",
+            provider,
+            e,
+            extra={
+                "event": "mailbox_baseline_snapshot",
+                "provider": provider,
+                "result": "error",
+                "seen_id_count": 0,
+            },
+        )
+        return ""
 
 def _create_cfworker_mailboxes(args=None):
     return mailbox_cfworker._create_cfworker_mailboxes(
@@ -798,6 +855,30 @@ def _poll_email_otp(
             }
             if provider.strip().lower() == "remail":
                 poll_kwargs["proxy_candidates"] = proxy_candidates
+            # Which backend actually serves the wait was invisible before: the
+            # facade dispatches by provider, so a run stuck at the OTP timeout
+            # gave no hint whether it went through cfworker/remail/graph or
+            # which proxy route it took.  Proxy values are credentials and are
+            # deliberately NOT logged -- only the candidate count.
+            #
+            # NOTE: registration does NOT come through here.  The handler calls
+            # `MailboxService.poll_otp` (passed as poll_otp_fn), which resolves its
+            # own adapter.  This hook covers auth_flow / codex_oauth / email-change;
+            # the registration lane is covered in mailbox_service.py.
+            _LOGGER.info(
+                "Mailbox OTP poll dispatch provider=%s poller=%s timeout=%ss proxy_candidates=%d",
+                provider or "unknown",
+                getattr(poller, "__name__", type(poller).__name__),
+                timeout,
+                len(proxy_candidates or []),
+                extra={
+                    "event": "mailbox_otp_poll_dispatch",
+                    "provider": provider,
+                    "poller": getattr(poller, "__name__", type(poller).__name__),
+                    "otp_timeout_s": timeout,
+                    "proxy_candidate_count": len(proxy_candidates or []),
+                },
+            )
             return poller(
                 mailbox,
                 **poll_kwargs,
