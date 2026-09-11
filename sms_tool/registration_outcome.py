@@ -17,6 +17,7 @@ from .config import CFG
 from .error_classification import classify_error
 from .registration_policy import registration_retry_decision
 from .registration_progress import registration_stage
+from .registration_result import build_registration_failure_result
 from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from .utils import _timing_summary
 
@@ -181,19 +182,25 @@ def _browser_mailbox_snapshot(mailbox):
 
 
 def _failure_result(error, email="", mailbox=None, password=""):
+    """协议路径失败装配 —— 2026-09-13 起走 ADR-0008 共享契约。
+
+    此前这里手拼一份最小失败 dict（键集与浏览器路径漂移）。现在统一经由
+    ``build_registration_failure_result``：完整 COMMON_RESULT_KEYS + 重试决策，
+    协议路径专有的 timing 通过 extra 保留，密码保持历史脱敏语义。
+    """
     decision = registration_retry_decision(error)
-    result = {
-        "success": False, "error": _sanitize_text(error),
-        "failure_class": decision.failure_class, "retryable": decision.retryable,
-        "error_advice": decision.advice, "timing": _timing_summary(),
-    }
-    if email:
-        result["email"] = email
-    if password:
-        result["password"] = "[REDACTED]"
-    mailbox_data = _mailbox_snapshot(mailbox)
-    if mailbox_data:
-        result["mailbox"] = mailbox_data
+    result = build_registration_failure_result(
+        error=_sanitize_text(error),
+        failure_class=decision.failure_class,
+        email=email,
+        extra={
+            "timing": _timing_summary(),
+            "retryable": decision.retryable,
+            "error_advice": decision.advice,
+            "password": "[REDACTED]" if password else "",
+            "mailbox": _mailbox_snapshot(mailbox) or {},
+        },
+    )
     return _sanitize(result)
 
 
