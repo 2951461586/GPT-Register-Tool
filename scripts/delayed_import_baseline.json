@@ -8,7 +8,8 @@
     "sms_tool/accounts/account_lifecycle.py": 1,
     "sms_tool/accounts/account_liveness.py": 3,
     "sms_tool/accounts/account_promotion.py": 7,
-    "sms_tool/accounts/account_recovery.py": 21,
+    "sms_tool/accounts/account_recovery.py": 20,
+    "sms_tool/accounts/recovery_batch.py": 7,
     "sms_tool/agent_identity.py": 6,
     "sms_tool/auth_flow.py": 2,
     "sms_tool/auth_headers.py": 7,
@@ -23,9 +24,9 @@
     "sms_tool/commands/helpers.py": 3,
     "sms_tool/commands/mailbox_ops.py": 8,
     "sms_tool/commands/omakse.py": 2,
-    "sms_tool/commands/one_click.py": 6,
+    "sms_tool/commands/one_click.py": 7,
     "sms_tool/commands/payment.py": 18,
-    "sms_tool/commands/payment_links.py": 10,
+    "sms_tool/commands/payment_links.py": 9,
     "sms_tool/commands/registration.py": 10,
     "sms_tool/config.py": 5,
     "sms_tool/desktop_read.py": 3,
@@ -52,7 +53,6 @@
     "sms_tool/payment_capability.py": 6,
     "sms_tool/payment_catalog.py": 2,
     "sms_tool/payment_egress.py": 2,
-    "sms_tool/payment_reconciliation.py": 1,
     "sms_tool/payment_routing.py": 4,
     "sms_tool/paypal/orchestrator.py": 11,
     "sms_tool/paypal_extract.py": 1,
@@ -73,6 +73,7 @@
     "sms_tool/registration.py": 3,
     "sms_tool/registration_cancel.py": 1,
     "sms_tool/registration_concurrency.py": 1,
+    "sms_tool/registration_drivers/browser_flow/__init__.py": 1,
     "sms_tool/registration_drivers/browser_flow/flow_steps.py": 2,
     "sms_tool/registration_drivers/browser_flow/orchestrator.py": 2,
     "sms_tool/registration_drivers/browser_flow/page_state.py": 1,
@@ -80,7 +81,7 @@
     "sms_tool/registration_drivers/browser_session.py": 2,
     "sms_tool/registration_drivers/external_sessions/managed.py": 9,
     "sms_tool/registration_drivers/stealth.py": 2,
-    "sms_tool/registration_handlers.py": 21,
+    "sms_tool/registration_handlers.py": 20,
     "sms_tool/registration_preflight.py": 1,
     "sms_tool/registration_progress.py": 3,
     "sms_tool/registration_pulse.py": 1,
@@ -95,5 +96,5 @@
     "sms_tool/upi_link.py": 3,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 400
+  "total": 405
 }
