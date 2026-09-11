@@ -31,6 +31,10 @@ from ..storage import (
     upsert_account,
 )
 from ..mailbox_quarantine import mailbox_relogin_allowed
+from ..promotion_states import (
+    AUTH_INVALID_LABEL,
+    PROMOTION_STATE_AUTH_INVALID,
+)
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
 
@@ -1089,19 +1093,24 @@ def _promotion_auth_failure(data: Any) -> bool:
     """True when a persisted promotion probe recorded a dead access token.
 
     ``store/markers.mark_promotion_status`` persists a machine-readable
+    ``promotion_state`` (``sms_tool/promotion_states.py``) plus a HTTP
     ``promotion.status_code`` next to the Chinese display label. Key off the
-    code, not the label: the label is a UI string, and behaviour that reads it
-    breaks silently the moment the wording changes. The label comparison stays
-    only as a fallback for records written before ``status_code`` existed.
+    machine fields, not the label: the label is a UI string, and behaviour
+    that reads it breaks silently the moment the wording changes. The label
+    comparison stays only as a fallback for records written before the
+    machine fields existed.
     """
     if not isinstance(data, dict):
         return False
     promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+    state = str(promotion.get("state") or data.get("promotion_state") or "").strip().lower()
+    if state:
+        return state == PROMOTION_STATE_AUTH_INVALID
     code = str(promotion.get("status_code") or "").strip()
     if code:
         return code == "401"
     label = str(data.get("promotion_status") or "").strip() or str(promotion.get("status") or "").strip()
-    return label == "AT失效"
+    return label == AUTH_INVALID_LABEL
 
 
 def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now: int | None = None) -> None:
@@ -1130,6 +1139,11 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
     # account list.
     if _promotion_auth_failure(data):
         data["promotion_status"] = ""
+        data.pop("promotion_state", None)
+        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else None
+        if promotion is not None:
+            promotion.pop("state", None)
+            data["promotion"] = promotion
     promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
     if promotion and _promotion_auth_failure({**data, "promotion_status": promotion.get("status")}):
         promotion["status"] = ""

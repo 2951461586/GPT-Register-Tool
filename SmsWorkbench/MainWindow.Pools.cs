@@ -18,7 +18,7 @@ namespace SmsWorkbench
             string scope = DisplayText(ScopeFilter);
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
-            if (scope == "有试用" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus)) return false;
+            if (scope == "有试用" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
             if (scope == "待处理" && !row.Status.Contains("待") && !row.Status.Contains("缺") && !row.Status.Contains("失败")) return false;
             if (term.Length == 0) return true;
 
@@ -135,7 +135,7 @@ namespace SmsWorkbench
 
         private void UpdateOverview()
         {
-            int trialEligible = allRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus));
+            int trialEligible = allRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState));
             int registered = allRows.Count(IsRegisteredRow);
             int attention = allRows.Count(r => r.Status.Contains("待") || r.Status.Contains("缺") || r.Status.Contains("失败"));
             TotalCountText = allRows.Count.ToString();
@@ -422,6 +422,7 @@ namespace SmsWorkbench
                     GetString(data, "promotion_status"),
                     paypalStatusDisplay,
                     paypalAmount),
+                PromotionState = GetString(data, "promotion_state"),
                 RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
                 TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? "已设置" : "未设置",
                 HasAccessToken = hasAccess,

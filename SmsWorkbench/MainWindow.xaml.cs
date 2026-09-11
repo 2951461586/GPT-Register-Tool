@@ -334,6 +334,9 @@ namespace SmsWorkbench
         public string PayPalStatus { get; set; } = "";
         public string PayPalAmount { get; set; } = "";
         public string PromotionStatus { get; set; } = "";
+        // Machine promotion state from the desktop read payload
+        // (sms_tool/promotion_states.py); the label above is display copy.
+        public string PromotionState { get; set; } = "";
         public string RefreshTokenStatus { get; set; } = "";
         public string TwoFactorStatus { get; set; } = "未设置";
         public string Phone { get; set; } = "";

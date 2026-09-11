@@ -26,6 +26,14 @@ from .account_liveness import account_chatgpt_id, browser_fetch_for_account
 from ..auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
+from ..promotion_states import (
+    PROMOTION_STATE_AUTH_INVALID,
+    PROMOTION_STATE_FREE,
+    PROMOTION_STATE_PROBE_FAILED,
+    PROMOTION_STATE_SUBSCRIBED,
+    PROMOTION_STATE_TRIAL_ELIGIBLE,
+    PROMOTION_STATE_UNKNOWN,
+)
 from ..proxy_routing import parse_proxy_pool, proxy_pool_for, select_operation_proxy
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
@@ -138,6 +146,29 @@ def promotion_status_label(result: dict[str, Any]) -> str:
             return f"{label}｜可支付:{methods_label}"
         return label
     return "Free·无优惠"
+
+
+def promotion_status_code(result: Any) -> str:
+    """Machine state for the 优惠 badge, from the same parsed result as
+    :func:`promotion_status_label`.
+
+    Persisted as ``promotion_state`` next to the display label so the desktop
+    filter/sort consumes a stable enum (see ``sms_tool/promotion_states.py``)
+    instead of substring-matching Chinese copy.
+    """
+    if not isinstance(result, dict) or not result:
+        return PROMOTION_STATE_UNKNOWN
+    if not result.get("ok"):
+        error = str(result.get("error") or "").lower()
+        if "401" in error or "token" in error or "unauthorized" in error:
+            return PROMOTION_STATE_AUTH_INVALID
+        return PROMOTION_STATE_PROBE_FAILED
+    plan = str(result.get("current_plan_type") or "").strip().lower()
+    if result.get("has_active_subscription") and plan and plan != "free":
+        return PROMOTION_STATE_SUBSCRIBED
+    if result.get("plus_trial_eligible"):
+        return PROMOTION_STATE_TRIAL_ELIGIBLE
+    return PROMOTION_STATE_FREE
 
 
 # Short display overrides for Stripe method tokens; anything else falls back to
@@ -258,7 +289,7 @@ def check_account_promotion(
     """
     token = _account_token(account)
     if not token:
-        return {"ok": False, "promotion_status": "缺少AT", "error": "missing_access_token"}
+        return {"ok": False, "promotion_status": "缺少AT", "error": "missing_access_token", "promotion_state": PROMOTION_STATE_PROBE_FAILED}
 
     had_identity_context = bool(account.get("identity_context")) if isinstance(account, dict) else False
     identity = bind_account_identity(account)
@@ -301,7 +332,7 @@ def check_account_promotion(
                 status_code = 0
                 body = result
         except Exception as exc:
-            return {"ok": False, "promotion_status": "检测失败", "error": str(exc)[:300]}
+            return {"ok": False, "promotion_status": "检测失败", "error": str(exc)[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED}
     else:
         normalized_proxy = normalize_proxy_url(resolved_proxy)
         proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
@@ -315,7 +346,7 @@ def check_account_promotion(
             for candidate in (str(proxy or "").strip(), str(resolved_proxy or "").strip(), normalized_proxy):
                 if candidate:
                     error = error.replace(candidate, _redact_proxy_url(candidate, empty_placeholder=""))
-            return {"ok": False, "promotion_status": "检测失败", "error": error[:300]}
+            return {"ok": False, "promotion_status": "检测失败", "error": error[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED}
         status_code = int(getattr(response, "status_code", 0) or 0)
         try:
             retry_after = str((getattr(response, "headers", None) or {}).get("Retry-After") or "").strip()
@@ -324,16 +355,17 @@ def check_account_promotion(
         try:
             body = response.json()
         except Exception:
-            return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code}
+            return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code, "promotion_state": PROMOTION_STATE_PROBE_FAILED}
 
     if status_code == 401:
-        return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401}
+        return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401, "promotion_state": PROMOTION_STATE_AUTH_INVALID}
     if not (200 <= status_code < 300):
         failure = {
             "ok": False,
             "promotion_status": f"HTTP {status_code}",
             "error": f"http_{status_code}",
             "status_code": status_code,
+            "promotion_state": PROMOTION_STATE_PROBE_FAILED,
         }
         if retry_after:
             failure["retry_after"] = retry_after
@@ -342,6 +374,7 @@ def check_account_promotion(
     parsed = parse_accounts_check(body, account_id=account_id)
     parsed["status_code"] = status_code
     parsed["promotion_status"] = promotion_status_label(parsed)
+    parsed["promotion_state"] = promotion_status_code(parsed)
     return parsed
 
 
@@ -440,15 +473,25 @@ def refresh_promotion_statuses(
                 probe.update(methods)
                 if methods.get("payment_methods_label"):
                     probe["promotion_status"] = promotion_status_label(probe)
+                    probe["promotion_state"] = promotion_status_code(probe)
                     logger.info(
                         "trial payment methods for %s: %s",
                         email, methods["payment_methods_label"],
                     )
             label = str(probe.get("promotion_status") or "")
+            if not str(probe.get("promotion_state") or "").strip():
+                probe["promotion_state"] = promotion_status_code(probe)
             persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
-            result = {"email": email, "ok": bool(probe.get("ok")), "promotion_status": label, "persisted": bool(persisted), "probe": probe}
+            result = {
+                "email": email,
+                "ok": bool(probe.get("ok")),
+                "promotion_status": label,
+                "promotion_state": str(probe.get("promotion_state") or ""),
+                "persisted": bool(persisted),
+                "probe": probe,
+            }
         except Exception as exc:
-            result = {"email": email, "ok": False, "promotion_status": "检测失败", "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
+            result = {"email": email, "ok": False, "promotion_status": "检测失败", "promotion_state": PROMOTION_STATE_PROBE_FAILED, "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
         _emit_account_batch_event(
             run_id,
             "account_completed",

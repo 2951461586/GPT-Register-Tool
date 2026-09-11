@@ -554,3 +554,55 @@ def test_promotion_explicit_proxy_wins_over_pool():
         assert account_promotion._promotion_proxy_candidates(
             {"email": "a@example.com"}, "http://explicit:3", None
         ) == ["http://explicit:3", "http://pool:1"]
+
+
+# ---------------------------------------------------------------------------
+# 跨语言机器契约：与 tests/SmsWorkbench.Tests/PromotionStatusContractTests.cs
+# 共用 tests/fixtures/promotion_status_cases.json，两侧任一漂移即失败。
+# ---------------------------------------------------------------------------
+
+from pathlib import Path as _Path
+
+from sms_tool.accounts.account_promotion import promotion_status_code
+from sms_tool.promotion_states import promotion_marker_is_stale
+
+_PROMOTION_FIXTURE = _Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "promotion_status_cases.json"
+
+
+def test_promotion_label_and_state_match_shared_contract():
+    cases = json.loads(_PROMOTION_FIXTURE.read_text(encoding="utf-8"))["cases"]
+    assert cases, "fixture must not be empty"
+    for case in cases:
+        assert promotion_status_label(case["result"]) == case["label"], case["name"]
+        assert promotion_status_code(case["result"]) == case["state"], case["name"]
+
+
+def test_promotion_state_is_persisted_next_to_the_label(tmp_path):
+    import sms_tool.store.markers as markers
+
+    config = {
+        "chatgpt": {},
+        "storage": {"sqlite_path": str(tmp_path / "accounts.sqlite3")},
+        "runtime": {"directory": str(tmp_path)},
+    }
+    assert upsert_account({"email": "state@example.test", "success": True}, runtime_config=config)
+    assert markers.mark_promotion_status(
+        "state@example.test",
+        "可试用Plus·-100%·×1month",
+        {"ok": True, "promotion_status": "可试用Plus·-100%·×1month", "promotion_state": "trial_eligible"},
+        runtime_config=config,
+    )
+    record = get_account_record("state@example.test", runtime_config=config)
+    data = json.loads(record["raw_json"])
+    assert data["promotion_state"] == "trial_eligible"
+    assert data["promotion"]["state"] == "trial_eligible"
+
+
+def test_promotion_marker_is_stale_rule_is_single_owned():
+    # 401 标记 + 后来 AT 200 ⇒ 标记过期；机器状态优先，旧记录回落到文案。
+    assert promotion_marker_is_stale("AT失效", "", "200") is True
+    assert promotion_marker_is_stale("", "auth_invalid", 200) is True
+    assert promotion_marker_is_stale("AT失效", "", "") is False
+    assert promotion_marker_is_stale("AT失效", "", "401") is False
+    assert promotion_marker_is_stale("", "probe_failed", "200") is False
+    assert promotion_marker_is_stale("Free·无优惠", "free", "200") is False

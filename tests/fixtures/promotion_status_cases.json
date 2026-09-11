@@ -1,0 +1,109 @@
+{
+  "_comment": "共享优惠状态契约夹具：Python (tests/test_account_promotion.py) 与 C# (tests/SmsWorkbench.Tests/PromotionStatusContractTests.cs) 消费同一份用例。result 是 accounts/check 的解析产物；label 是 Python promotion_status_label 的展示文案；state 是 promotion_status_code 的机器状态；legacy_fallback 是无机器状态时对展示文案的子串判定；sort_rank 是桌面排序权重（0=试用号优先）。",
+  "contract": {
+    "trial_eligible": "trial_eligible",
+    "subscribed": "subscribed",
+    "free": "free",
+    "auth_invalid": "auth_invalid",
+    "probe_failed": "probe_failed",
+    "unknown": "unknown"
+  },
+  "cases": [
+    {
+      "name": "trial_full_discount_one_month",
+      "result": {
+        "ok": true,
+        "current_plan_type": "free",
+        "plus_trial_eligible": true,
+        "plus_trial_discount_percentage": 100,
+        "plus_trial_duration_num_periods": 1,
+        "plus_trial_duration_period": "month"
+      },
+      "label": "可试用Plus·-100%·×1month",
+      "state": "trial_eligible",
+      "legacy_fallback": true,
+      "sort_rank": 0
+    },
+    {
+      "name": "trial_half_discount_three_months",
+      "result": {
+        "ok": true,
+        "current_plan_type": "free",
+        "plus_trial_eligible": true,
+        "plus_trial_discount_percentage": 50,
+        "plus_trial_duration_num_periods": 3,
+        "plus_trial_duration_period": "month"
+      },
+      "label": "可试用Plus·-50%·×3month",
+      "state": "trial_eligible",
+      "legacy_fallback": true,
+      "sort_rank": 0
+    },
+    {
+      "name": "subscribed_plus",
+      "result": {
+        "ok": true,
+        "current_plan_type": "chatgptplusplan",
+        "has_active_subscription": true
+      },
+      "label": "已订阅·Plus",
+      "state": "subscribed",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    },
+    {
+      "name": "subscribed_plus_gratis",
+      "result": {
+        "ok": true,
+        "current_plan_type": "chatgptplusplan",
+        "has_active_subscription": true,
+        "is_active_subscription_gratis": true
+      },
+      "label": "Plus(赠)",
+      "state": "subscribed",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    },
+    {
+      "name": "free_without_promo",
+      "result": {
+        "ok": true,
+        "current_plan_type": "free"
+      },
+      "label": "Free·无优惠",
+      "state": "free",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    },
+    {
+      "name": "auth_invalid_token",
+      "result": {
+        "ok": false,
+        "error": "token_invalid"
+      },
+      "label": "AT失效",
+      "state": "auth_invalid",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    },
+    {
+      "name": "probe_failed_invalid_json",
+      "result": {
+        "ok": false,
+        "error": "invalid_json"
+      },
+      "label": "检测失败",
+      "state": "probe_failed",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    },
+    {
+      "name": "empty_result_is_unknown",
+      "result": {},
+      "label": "检测失败",
+      "state": "unknown",
+      "legacy_fallback": false,
+      "sort_rank": 1
+    }
+  ]
+}

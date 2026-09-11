@@ -6,6 +6,7 @@ import json
 import time
 
 from ..config import ConfigInput
+from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
 from .normalize import _find_existing_account_email, _update_session_json
@@ -163,7 +164,7 @@ def mark_account_health_result(
 
 
 
-def mark_promotion_status(email, promotion_status="", promotion_result=None, *, runtime_config: ConfigInput = None):
+def mark_promotion_status(email, promotion_status="", promotion_result=None, *, promotion_state: str = "", runtime_config: ConfigInput = None):
     """Persist the account plan/promotion (优惠) probe result into raw_json + session.
 
     Stored alongside the account without a dedicated DB column; ``desktop_read``
@@ -208,6 +209,15 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
         data["promotion"] = promotion
         data["promotion_status"] = str(promotion_status or "")
         data["promotion_updated_at"] = now
+        # Machine state next to the display label (sms_tool/promotion_states.py):
+        # the desktop filter/sort keys off this, not off the Chinese copy.
+        promotion_state = str(
+            promotion_state
+            or (promotion_result or {}).get("promotion_state")
+            or ""
+        ).strip()
+        promotion["state"] = promotion_state
+        data["promotion_state"] = promotion_state
         # Promotion and liveness are separate contracts. A promotion 401 is
         # retained under promotion.last_result and must not downgrade the
         # shared account/AT status.
@@ -278,11 +288,19 @@ def clear_stale_promotion_at_marker(email, *, verified_at: int | None = None, ru
         if str(data.get("promotion_status") or "").strip() == "AT失效":
             data["promotion_status"] = ""
             changed = True
-        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else None
-        if isinstance(promotion, dict) and str(promotion.get("status") or "").strip() == "AT失效":
-            promotion["status"] = ""
-            data["promotion"] = promotion
+        if str(data.get("promotion_state") or "").strip() == PROMOTION_STATE_AUTH_INVALID:
+            data["promotion_state"] = ""
             changed = True
+        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else None
+        if isinstance(promotion, dict):
+            if str(promotion.get("status") or "").strip() == "AT失效":
+                promotion["status"] = ""
+                changed = True
+            if str(promotion.get("state") or "").strip() == PROMOTION_STATE_AUTH_INVALID:
+                promotion["state"] = ""
+                changed = True
+            if changed:
+                data["promotion"] = promotion
         if not changed:
             return False
         data["promotion_updated_at"] = now
