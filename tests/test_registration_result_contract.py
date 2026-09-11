@@ -10,11 +10,50 @@ import ast
 import unittest
 from pathlib import Path
 
-from sms_tool.registration_result import COMMON_RESULT_KEYS, build_registration_result
+from sms_tool.registration_result import (
+    COMMON_RESULT_KEYS,
+    build_registration_failure_result,
+    build_registration_result,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HANDLERS = REPO_ROOT / "sms_tool" / "registration_handlers.py"
 ORCHESTRATOR = REPO_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
+
+
+class BuildRegistrationFailureResultTests(unittest.TestCase):
+    def test_failure_result_contains_every_common_key(self):
+        result = build_registration_failure_result(
+            error="browser_mailbox_setup_failed",
+            failure_class="mailbox",
+        )
+        self.assertTrue(COMMON_RESULT_KEYS <= result.keys())
+        self.assertFalse(result["success"])
+        self.assertEqual(result["failure_class"], "mailbox")
+        # ADR-0008: failures carry the retry decision too.
+        self.assertIn("retryable", result)
+        self.assertIn("error_advice", result)
+
+    def test_explicit_failure_class_wins_over_the_derived_one(self):
+        result = build_registration_failure_result(
+            error="connection reset",
+            failure_class="mailbox",
+        )
+        self.assertEqual(result["failure_class"], "mailbox")
+
+    def test_derived_failure_class_when_none_given(self):
+        result = build_registration_failure_result(error="unsupported_registration_driver:x")
+        self.assertEqual(result["failure_class"], "configuration")
+
+    def test_extra_keys_merge_last(self):
+        result = build_registration_failure_result(
+            error="registration_cancelled",
+            registration_state="cancelled",
+            extra={"registration_driver": "camoufox", "browser_diagnostics": {"dom": []}},
+        )
+        self.assertEqual(result["registration_driver"], "camoufox")
+        self.assertEqual(result["browser_diagnostics"], {"dom": []})
+        self.assertEqual(result["registration_state"], "cancelled")
 
 
 class BuildRegistrationResultTests(unittest.TestCase):
