@@ -33,6 +33,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.09.13 发布说明](releases/release-v2026.09.13.md) - 深度扫描延后项收口：
+  双 god file 拆解与失败词汇单一注册表、geo 表合一（US=New York）、
+  protocol_core 改读 policy、WPF 邮箱解析迁 Contracts、构建双胞胎合并。
 - [v2026.09.12 发布说明](releases/release-v2026.09.12.md) - 深度扫描第一批收口：
   优惠状态跨语言机器契约、失败结果入约与终态判定唯一 owner、测活去双探与队列
   浏览器槽修复、代理池静默默认值清零、BA-token 与 campaign 常量单源、Rule 6
