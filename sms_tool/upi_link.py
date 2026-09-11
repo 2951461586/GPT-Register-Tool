@@ -28,6 +28,7 @@ from typing import Any
 
 try:
     from .paypal_extract import CURRENCY_MAP, _new_session
+    from .checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
     from .pp_link_helpers import (
         DEFAULT_STRIPE_PK,
         STRIPE_VERSION,
@@ -37,6 +38,7 @@ try:
     from .paypal_proxy import _stage_proxy_value
 except ImportError:  # pragma: no cover - direct script execution
     from paypal_extract import CURRENCY_MAP, _new_session  # type: ignore
+    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
     from pp_link_helpers import (  # type: ignore
         DEFAULT_STRIPE_PK,
         STRIPE_VERSION,
@@ -193,7 +195,7 @@ def _upi_scan_free_trial(value: Any, depth: int = 0, signals: dict | None = None
                 or "free trial" in lower_val
                 or "1 month free" in lower_val
                 or "one month free" in lower_val
-                or "plus-1-month-free" in lower_val
+                or PLUS_TRIAL_CAMPAIGN_ID in lower_val
                 or "coupon" in lower_key
                 or "promotion" in lower_key
             ):
@@ -215,7 +217,7 @@ def _upi_get_free_trial_status(init_data: Any) -> dict:
     pm_types = _upi_get_payment_method_types(init_data)
     coupon = signals["coupon_name"].strip()
     coupon_lower = coupon.lower()
-    looks_like_trial = any(s in coupon_lower for s in ("free trial", "1 month free", "one month free", "plus-1-month-free"))
+    looks_like_trial = any(s in coupon_lower for s in ("free trial", "1 month free", "one month free", PLUS_TRIAL_CAMPAIGN_ID))
     looks_like_full_discount = (signals["percent_off"] is not None and signals["percent_off"] >= 100) or looks_like_trial
     return {
         "has_free_trial": due == 0 or (looks_like_full_discount and signals["percent_off"] is not None and signals["percent_off"] >= 100),
@@ -439,7 +441,7 @@ def generate_upi_qr_link(
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
             "billing_details": {"country": checkout_country, "currency": currency},
-            "promo_campaign": {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False},
+            "promo_campaign": {"promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID, "is_coupon_from_query_param": False},
             "checkout_ui_mode": str(upi_cfg.get("checkout_ui_mode") or "hosted"),
         }
         r = cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)

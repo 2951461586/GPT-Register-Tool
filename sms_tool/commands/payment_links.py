@@ -13,6 +13,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from ..gen_pp_link import generate_pp_link
+
 
 @dataclass(frozen=True)
 class PaymentLinkCommandContext:
@@ -26,7 +28,6 @@ class PaymentLinkCommandContext:
 
 def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate PayPal BA link from Access Token."""
-    from ..gen_pp_link import generate_pp_link
 
     at = (getattr(args, "at", None) or "").strip()
     if not at:
@@ -135,6 +136,8 @@ def auto_pay(args: Any) -> None:
     reverse_only = getattr(args, 'auto_pay_reverse_only', False)
     mode = "reverse-only" if reverse_only else "reverse+browser"
     print(f"[*] Starting auto-pay ({mode}) for: {email or session_file}")
+    # Rule 6: the execution layer consumes links; generation stays in the
+    # adapter and is injected as a factory so it only runs when no URL exists.
     result = run_auto_pay(
         email=email,
         session_file=session_file,
@@ -142,6 +145,7 @@ def auto_pay(args: Any) -> None:
         headless=args.auto_pay_headless,
         timeout=args.auto_pay_timeout,
         reverse_only=reverse_only,
+        link_factory=generate_pp_link,
     )
 
     if result.get("ok"):
@@ -196,6 +200,7 @@ def batch_auto_pay(args: Any) -> None:
             proxy=args.proxy,
             headless=args.auto_pay_headless,
             timeout=args.auto_pay_timeout,
+            link_factory=generate_pp_link,
         )
         results.append(result)
 

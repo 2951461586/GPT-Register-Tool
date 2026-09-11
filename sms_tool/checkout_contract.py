@@ -101,6 +101,13 @@ PAYMENT_METHOD_PROFILES: dict[str, PaymentMethodProfile] = {
 }
 
 
+# Canonical Plus trial campaign id. Single source: every stage/adapter
+# defaults to this constant instead of repeating the literal (2026-09-12 scan:
+# the literal was hardcoded in 6+ modules; renaming the campaign used to be a
+# multi-file sweep with silent misses).
+PLUS_TRIAL_CAMPAIGN_ID = "plus-1-month-free"
+
+
 @dataclass(frozen=True)
 class CheckoutRequestContract:
     payment_method: str
@@ -111,7 +118,7 @@ class CheckoutRequestContract:
     browser_timezone: str
     entry_point: str = "all_plans_pricing_modal"
     plan_name: str = "chatgptplusplan"
-    promo_campaign_id: str = "plus-1-month-free"
+    promo_campaign_id: str = PLUS_TRIAL_CAMPAIGN_ID
     checkout_ui_mode: str = "custom"
 
     @classmethod
@@ -124,7 +131,7 @@ class CheckoutRequestContract:
         payment_locale: str = "",
         browser_locale: str = "",
         browser_timezone: str = "",
-        promo_campaign_id: str = "plus-1-month-free",
+        promo_campaign_id: str = PLUS_TRIAL_CAMPAIGN_ID,
         checkout_ui_mode: str = "custom",
     ) -> "CheckoutRequestContract":
         key = str(payment_method or "").strip().lower().replace("-", "_")

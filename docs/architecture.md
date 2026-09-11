@@ -102,8 +102,6 @@ recovered.
 
 ### Current Violations
 
-Verified against the working tree on 2026-09-07:
-
 - **Rule 1 — resolved 2026-09-07.** Transport no longer imports registration
   policy. The shared pieces were pushed *down* instead of hidden in a lazy
   import: pure backoff maths moved to `sms_tool/backoff.py` and terminal-error
@@ -111,14 +109,22 @@ Verified against the working tree on 2026-09-07:
   (`is_terminal_registration_error`). `http_client.py` now imports from those
   two only. Do not "restore" the `registration_retry_decision(...)` call —
   it is exactly equivalent and reintroduces the layering violation.
-- **Rule 6 — open.** `sms_tool/paypal/orchestrator.py:16` is
-  `from ..gen_pp_link import generate_pp_link`. The PayPal layer regenerates
-  links instead of consuming the one passed to the adapter.
-- **Rule 14 — needs a decision.** `sms_tool/paypal/config_picker.py:16` is
-  `from ..storage import upsert_account`, i.e. the PayPal layer persists SQLite
-  rows directly. The same snapshot also assigns *result persistence* to
-  `paypal.config_picker` in its module table, so the two statements conflict and
-  the rule needs to be restated before it can be enforced.
+- **Rule 6 — resolved 2026-09-12.** `sms_tool/paypal/orchestrator.py` no
+  longer imports `gen_pp_link`. The execution layer consumes the URL the
+  caller owns; when none exists the command adapter
+  (`sms_tool/commands/payment_links.py`) injects `link_factory=generate_pp_link`
+  so lazy generation stays adapter-owned, and without a factory a missing URL
+  is an explicit `paypal_link_missing` failure instead of a silent second
+  order. Enforced by the same grep as the rule row.
+- **Rule 14 — restated 2026-09-12 (decision).** The pre-hardening snapshot
+  assigned *result persistence* to `paypal.config_picker` in its module table
+  and forbade "SQLite business rules" in the same breath; those two statements
+  conflicted. Decision: `paypal/config_picker.py` IS the documented
+  persistence owner for the auto-pay flow — its `upsert_account` call is
+  sanctioned and `grep -rn "upsert_account" sms_tool/paypal/` must resolve
+  only to `config_picker.py`. The desktop layer stays out of SQLite business
+  rules; any new persistence site in `sms_tool/paypal/` needs a rule change
+  first.
 
 Rules 2–5, 7–13 and 15 currently hold.
 

@@ -18,6 +18,8 @@ except ImportError:
 import requests
 
 from .paypal_fingerprints import PAYPAL_USER_AGENT as USER_AGENT
+from .pp_link_helpers import extract_ba_token as _extract_ba_token_str
+from .pp_link_helpers import extract_paypal_approve_url
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +78,12 @@ def _make_session(proxy: Optional[str] = None) -> Any:
 # ── BA / EC Token extraction ───────────────────────────────────────────────────
 
 def extract_ba_token(paypal_redirect_url: str) -> Optional[str]:
-    """从 Stripe 返回的 PayPal redirect URL 中提取 BA token。"""
-    m = _BA_RE.search(paypal_redirect_url or "")
-    return m.group(0) if m else None
+    """从 Stripe 返回的 PayPal redirect URL 中提取 BA token。
+
+    解析实现在 ``pp_link_helpers.extract_ba_token``（单一 owner，返回 ""）；
+    本模块的历史契约是 Optional[str]，仅做语义转换。
+    """
+    return _extract_ba_token_str(paypal_redirect_url) or None
 
 
 def extract_ec_token(text: str) -> Optional[str]:
@@ -94,19 +99,8 @@ def _mask_ba_token(value: str) -> str:
 
 
 def _extract_paypal_approve_url(text: str) -> str:
-    body = (
-        str(text or "")
-        .replace("\\u0026", "&")
-        .replace("\\/", "/")
-        .replace("&amp;", "&")
-    )
-    match = re.search(r"https?://(?:www\.)?paypal\.com/agreements/approve\?[^\s<>\"']+", body)
-    if match:
-        return match.group(0)
-    match = re.search(r"ba_token=(BA-[A-Za-z0-9_.-]+)", body)
-    if match:
-        return f"{PP_ORIGIN}/agreements/approve?ba_token={urllib.parse.quote(match.group(1), safe='')}"
-    return ""
+    # Single owner: pp_link_helpers.extract_paypal_approve_url.
+    return extract_paypal_approve_url(text)
 
 
 # ── Stripe redirect follower ───────────────────────────────────────────────────

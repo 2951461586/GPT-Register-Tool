@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from ..checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
     from ..phone_proxy import normalize_proxy_url
     from ..pp_link_helpers import (
         DEFAULT_STRIPE_PK,
@@ -60,7 +60,7 @@ try:
         PAYPAL_BA_RE,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
+    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract  # type: ignore
     from phone_proxy import normalize_proxy_url  # type: ignore
     from pp_link_helpers import (  # type: ignore
         DEFAULT_STRIPE_PK,
@@ -622,7 +622,7 @@ def generate_pp_link(
     approve_proxy = str(_approve or "").strip()
     promotion_proxy = str(_promotion or "").strip()
     promotion_taxes = bool(paypal_cfg.get("promotion_taxes", False))
-    promo_campaign_id = str(paypal_cfg.get("promo_campaign_id") or "plus-1-month-free")
+    promo_campaign_id = str(paypal_cfg.get("promo_campaign_id") or PLUS_TRIAL_CAMPAIGN_ID)
 
     generation_type = _normalized_generation_type(paypal_cfg, paypal_generation_type)
     if _is_chatgpt_checkout_link_generation_type(generation_type):
@@ -1042,7 +1042,7 @@ def generate_chatgpt_checkout_link(
             "provider_proxy": "",
             "approve_proxy": "",
             "proxy_exits": {"checkout": proxy_exit},
-            "promo_campaign_id": "plus-1-month-free",
+            "promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID,
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "error_code": "chatgpt_checkout_link_failed", "link_type": "chatgpt_checkout_link", "url": ""}
@@ -1205,7 +1205,7 @@ def generate_hosted_long_url(
             "stripe_init_proxy": redact_proxy_url(stripe_init_proxy),
             "approve_proxy": "",
             "proxy_exits": {"checkout": checkout_exit, "stripe_init": stripe_exit},
-            "promo_campaign_id": "plus-1-month-free",
+            "promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID,
         }
     except Exception as e:
         return {"ok": False, "error": str(e), "error_code": "hosted_long_url_failed", "link_type": "chatgpt_checkout_hosted_long_url", "url": ""}

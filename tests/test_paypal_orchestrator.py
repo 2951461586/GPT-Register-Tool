@@ -67,8 +67,6 @@ def rec(monkeypatch):
     monkeypatch.setattr(orchestrator, "_generate_password", r("password", "pw-fixture"))
     monkeypatch.setattr(orchestrator, "_generate_alias_email", r("alias", "alias@example.com"))
     monkeypatch.setattr(orchestrator, "_save_paypal_result", r("save", "sessions/saved.json"))
-    monkeypatch.setattr(orchestrator, "generate_pp_link",
-                        r("gen_link", {"ok": True, "url": "https://paypal.example/generated"}))
     monkeypatch.setattr(orchestrator, "_try_reverse_pay", r("reverse", {"ok": True}))
     monkeypatch.setattr(orchestrator, "_try_nodriver_pay", r("nodriver", {"ok": False}))
     monkeypatch.setattr(orchestrator, "_try_browser_pay", r("browser", {"ok": False}))
@@ -171,18 +169,31 @@ def test_auto_pay_reuses_an_existing_paypal_url(rec, configured):
 
 
 def test_auto_pay_generates_a_url_when_the_seed_has_none(rec, configured, monkeypatch):
+    # Rule 6: the execution layer never imports gen_pp_link; the adapter
+    # injects the factory so generation stays lazy and adapter-owned.
     monkeypatch.setattr(orchestrator, "_load_seed",
                         lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
-    orchestrator.auto_pay()
+    factory = rec("gen_link", {"ok": True, "url": "https://paypal.example/generated"})
+    orchestrator.auto_pay(link_factory=factory)
     assert "gen_link" in names(rec)
+    gen_calls = [entry for entry in rec.calls if entry[0] == "gen_link"]
+    assert gen_calls and gen_calls[0][1] == ("t",)  # invoked with the AT
+
+
+def test_auto_pay_refuses_missing_link_without_a_factory(rec, configured, monkeypatch):
+    monkeypatch.setattr(orchestrator, "_load_seed",
+                        lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
+    result = orchestrator.auto_pay()
+    assert result["ok"] is False
+    assert result["error"].startswith("paypal_link_missing")
+    assert names(rec) == []  # nothing executed on an ambiguous missing link
 
 
 def test_auto_pay_aborts_when_the_link_cannot_be_generated(rec, configured, monkeypatch):
     monkeypatch.setattr(orchestrator, "_load_seed",
                         lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
-    monkeypatch.setattr(orchestrator, "generate_pp_link",
-                        rec("gen_link", {"ok": False, "error": "boom"}))
-    result = orchestrator.auto_pay()
+    result = orchestrator.auto_pay(
+        link_factory=rec("gen_link", {"ok": False, "error": "boom"}))
     assert result["ok"] is False
     assert "paypal_link_generation_failed" in result["error"]
     assert "reverse" not in names(rec)

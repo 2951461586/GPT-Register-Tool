@@ -21,6 +21,7 @@ from .checkout_contract import (
     CheckoutContractError,
     CheckoutRequestContract,
     CheckoutSessionContract,
+    PLUS_TRIAL_CAMPAIGN_ID,
     PAYMENT_METHOD_PROFILES,
     StripeCapabilityEvidence,
 )
@@ -661,7 +662,7 @@ def _promotion_payload(
     campaign = checkout_payload.get("promo_campaign")
     if not isinstance(campaign, Mapping):
         campaign = {
-            "promo_campaign_id": "plus-1-month-free",
+            "promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID,
             "is_coupon_from_query_param": False,
         }
     return {
