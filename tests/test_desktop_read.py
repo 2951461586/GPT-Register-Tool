@@ -11,7 +11,7 @@ from sms_tool.desktop_read import (
     read_accounts,
     read_mailbox_pool,
 )
-from sms_tool.storage import upsert_account
+from sms_tool.storage import mark_promotion_status, upsert_account
 
 
 def _config(tmp_path: Path) -> dict:
@@ -336,3 +336,40 @@ def test_mailbox_pool_enumerates_known_files_once(tmp_path):
     assert emails["mailbox_tokens.txt"] == ["tok@example.test"]
     assert emails["hotmail.txt"] == ["hot@example.test"]
     assert emails["my_chatai_export.txt"] == ["glob@example.test"]
+
+
+def test_public_read_surfaces_promotion_state_and_clears_stale_marker(tmp_path):
+    """机器状态 promotion_state 随桌面读透出；401 标记遇后续 AT 200 被判定过期。
+
+    共享 stale 规则在 sms_tool/promotion_states.promotion_marker_is_stale，
+    桌面读与 account_recovery 持久化两侧共用。
+    """
+    stale_probe = {"status": "active", "status_code": 200}
+    accounts = {
+        "promo-fresh@example.test": {},
+        "promo-stale@example.test": {"account_scan": {"token_probe": stale_probe}},
+    }
+    for email, extra in accounts.items():
+        session = {
+            "email": email,
+            "success": True,
+            "access_token": "access-token-value",
+            **extra,
+        }
+        path = tmp_path / f"session_{email}.json"
+        path.write_text(json.dumps(session), encoding="utf-8")
+        assert upsert_account(session, json_path=str(path), runtime_config=_config(tmp_path))
+        assert mark_promotion_status(
+            email,
+            "AT失效",
+            {"ok": False, "promotion_status": "AT失效", "promotion_state": "auth_invalid"},
+            runtime_config=_config(tmp_path),
+        )
+
+    fresh_row = read_account(email="promo-fresh@example.test", runtime_config=_config(tmp_path))
+    assert fresh_row["promotion_status"] == "AT失效"
+    assert fresh_row["promotion_state"] == "auth_invalid"
+
+    stale_row = read_account(email="promo-stale@example.test", runtime_config=_config(tmp_path))
+    assert "promotion_status" not in stale_row
+    assert "promotion_state" not in stale_row

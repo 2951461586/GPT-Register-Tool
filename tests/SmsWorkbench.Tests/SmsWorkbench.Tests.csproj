@@ -20,4 +20,8 @@
     <ProjectReference Include="..\..\SmsWorkbench.Contracts\SmsWorkbench.Contracts.csproj" />
     <ProjectReference Include="..\..\SmsWorkbench\SmsWorkbench.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Shared cross-language promotion contract fixture (see PromotionStatusContractTests). -->
+    <None Include="..\fixtures\promotion_status_cases.json" CopyToOutputDirectory="PreserveNewest" Link="promotion_status_cases.json" />
+  </ItemGroup>
 </Project>

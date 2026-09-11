@@ -15,6 +15,7 @@ from typing import Any
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox_parsers import parse_mailbox_pool_line
 from .paths import PROJECT_ROOT
+from .promotion_states import promotion_marker_is_stale
 from .sanitizer import sanitize
 from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, list_account_records
 
@@ -151,15 +152,21 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
             )
             # 优惠状态 (plan/promotion) lives in raw_json, not a dedicated column.
             promotion_status = str(session.get("promotion_status") or "").strip()
+            promotion_state = str(session.get("promotion_state") or "").strip()
             if not promotion_status and isinstance(session.get("promotion"), dict):
                 promotion_status = str(session["promotion"].get("status") or "").strip()
-            # A promotion probe that recorded "AT失效" predates a later verified
-            # relogin (quota/account-scan token probe HTTP 200). The stale auth
-            # failure must not surface in the 优惠状态 column anymore.
-            if promotion_status == "AT失效" and str(result.get("at_probe_status_code") or "").strip() == "200":
+            if not promotion_state and isinstance(session.get("promotion"), dict):
+                promotion_state = str(session["promotion"].get("state") or "").strip()
+            # A promotion probe that recorded an auth failure predates a later
+            # verified relogin (quota/account-scan token probe HTTP 200). The
+            # stale marker must not surface in the 优惠状态 column anymore.
+            if promotion_marker_is_stale(promotion_status, promotion_state, result.get("at_probe_status_code")):
                 promotion_status = ""
+                promotion_state = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
+            if promotion_state:
+                result["promotion_state"] = promotion_state
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
             if include_session:

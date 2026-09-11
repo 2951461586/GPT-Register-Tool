@@ -43,7 +43,21 @@ namespace SmsWorkbench
 
     public static class PromotionStatusPresentation
     {
-        public static bool IsTrialEligible(string status)
+        // Machine promotion state emitted by the Python backend
+        // (sms_tool/promotion_states.py). The Chinese label is display copy:
+        // filtering and sorting key off the code so a label reword cannot
+        // change behaviour. Rows recorded before the field existed fall back
+        // to the legacy substring rule.
+        public const string TrialEligibleState = "trial_eligible";
+
+        public static bool IsTrialEligible(string status, string state = null)
+        {
+            string machine = (state ?? "").Trim();
+            if (machine.Length > 0) return machine == TrialEligibleState;
+            return IsTrialEligibleLabel(status);
+        }
+
+        public static bool IsTrialEligibleLabel(string status)
         {
             string value = (status ?? "").Trim();
             if (value.Length == 0) return false;
@@ -51,9 +65,9 @@ namespace SmsWorkbench
                 && value.Contains("plus", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static int SortRank(string status)
+        public static int SortRank(string status, string state = null)
         {
-            if (IsTrialEligible(status)) return 0;
+            if (IsTrialEligible(status, state)) return 0;
             return string.IsNullOrWhiteSpace(status) ? 2 : 1;
         }
     }
@@ -98,7 +112,7 @@ namespace SmsWorkbench
             if (member.Equals(nameof(PoolRow.PromotionStatus), StringComparison.Ordinal))
             {
                 string promotion = row?.PromotionStatus ?? "";
-                return new AccountSortValue(PromotionStatusPresentation.SortRank(promotion), promotion);
+                return new AccountSortValue(PromotionStatusPresentation.SortRank(promotion, row?.PromotionState), promotion);
             }
 
             if (PropertyGetters.TryGetValue(member, out Func<PoolRow, object>? getter))
