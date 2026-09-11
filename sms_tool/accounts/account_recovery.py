@@ -19,6 +19,7 @@ from typing import Any
 
 from .account_identity import account_identity, resolve_account_proxy
 from .account_liveness import browser_fetch_for_account, probe_account_liveness
+from .account_terminal import text_has_account_deactivated
 from ..config import CFG
 from ..http_client import is_transient_transport_error
 from ..proxy_routing import proxy_pool_for
@@ -1389,14 +1390,7 @@ def _redact_recovery_error(value: Any) -> str:
 
 
 def _looks_account_deactivated(value: Any) -> bool:
-    text = json.dumps(value or {}, ensure_ascii=False).lower()
-    return any(marker in text for marker in (
-        "account_deactivated",
-        "account_deatived",
-        "deleted or deactivated",
-        "account has been deleted",
-        "account has been deactivated",
-    ))
+    return text_has_account_deactivated(json.dumps(value or {}, ensure_ascii=False))
 
 
 def _probe_is_token_invalid(value: Any) -> bool:

@@ -139,4 +139,37 @@ def build_registration_result(
     return result
 
 
-__all__ = ["COMMON_RESULT_KEYS", "build_registration_result"]
+def build_registration_failure_result(
+    *,
+    error: Any,
+    failure_class: str = "",
+    registration_mode: str = "browser",
+    registration_state: str = "failed",
+    email: str = "",
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Failure half of the shared result contract (ADR-0008).
+
+    The browser path used to hand-build failure dicts with per-site key sets
+    that drifted (one omitted ``email``, another omitted ``failure_class`` and
+    ``mailbox``), so consumers could not rely on the common keys regardless of
+    where the attempt died. Every failure now goes through the same assembly
+    as a success: the full common key set is present, path-specific keys ride
+    in ``extra``, and the retry decision is derived from ``error`` unless the
+    caller pins ``failure_class`` explicitly (``extra`` merges first, so an
+    explicit class wins over the derived one).
+    """
+    merged: dict[str, Any] = dict(extra or {})
+    if failure_class:
+        merged.setdefault("failure_class", failure_class)
+    return build_registration_result(
+        success=False,
+        registration_mode=registration_mode,
+        registration_state=registration_state,
+        email=email,
+        error=error,
+        extra=merged,
+    )
+
+
+__all__ = ["COMMON_RESULT_KEYS", "build_registration_result", "build_registration_failure_result"]

@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 from ..codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 from ..codex_oauth import collect_codex_oauth_tokens
+from .account_terminal import text_has_account_deactivated
 from .account_liveness import probe_account_liveness
 from .account_recovery import (
     is_permanently_deactivated,
@@ -829,14 +830,7 @@ def _looks_phone_required(result):
 def _looks_account_deactivated(result):
     if not isinstance(result, dict):
         return False
-    text = json.dumps(_public_oauth_result(result), ensure_ascii=False).lower()
-    return (
-        "account_deactivated" in text
-        or "account_deatived" in text
-        or "deleted or deactivated" in text
-        or "account has been deleted" in text
-        or "account has been deactivated" in text
-    )
+    return text_has_account_deactivated(json.dumps(_public_oauth_result(result), ensure_ascii=False))
 
 
 def _probe_existing_access_token(data, proxy=None, timeout=120):

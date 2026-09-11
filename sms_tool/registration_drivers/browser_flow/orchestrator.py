@@ -85,32 +85,34 @@ def run_browser_registration(
     try:
         driver_name = normalize_registration_driver(driver_name)
     except ValueError as exc:
-        return {
-            "success": False,
-            "registration_driver": str(driver_name or ""),
-            "error": dom_fields._safe_text(str(exc)),
-            "failure_class": "configuration",
-        }
+        return registration_result.build_registration_failure_result(
+            error=dom_fields._safe_text(str(exc)),
+            failure_class="configuration",
+            extra={"registration_driver": str(driver_name or "")},
+        )
     if driver_name == "protocol":
-        return {
-            "success": False,
-            "registration_driver": driver_name,
-            "error": "unsupported_registration_driver:protocol",
-            "failure_class": "configuration",
-        }
+        return registration_result.build_registration_failure_result(
+            error="unsupported_registration_driver:protocol",
+            failure_class="configuration",
+            extra={"registration_driver": driver_name},
+        )
     try:
         mailbox = mailbox_pkg._ensure_mailbox_account(mailbox)
     except Exception as exc:
-        return {
-            "success": False,
-            "registration_driver": driver_name,
-            "error": "browser_mailbox_setup_failed",
-            "failure_class": "mailbox",
-            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-        }
+        return registration_result.build_registration_failure_result(
+            error="browser_mailbox_setup_failed",
+            failure_class="mailbox",
+            extra={
+                "registration_driver": driver_name,
+                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+            },
+        )
     email = str(getattr(mailbox, "email", "") or "").strip()
     if not email:
-        return {"success": False, "error": "mailbox_required", "registration_driver": driver_name}
+        return registration_result.build_registration_failure_result(
+            error="mailbox_required",
+            extra={"registration_driver": driver_name},
+        )
     password = str(password or "").strip()
     if not password:
         password = _generate_password()
@@ -126,14 +128,15 @@ def run_browser_registration(
     try:
         mailbox_service = MailboxService.create(config)
     except Exception as exc:
-        return {
-            "success": False,
-            "email": email,
-            "registration_driver": driver_name,
-            "error": "browser_mailbox_service_unavailable",
-            "failure_class": "network",
-            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-        }
+        return registration_result.build_registration_failure_result(
+            error="browser_mailbox_service_unavailable",
+            failure_class="network",
+            email=email,
+            extra={
+                "registration_driver": driver_name,
+                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+            },
+        )
     started = int(time.time())
     machine = RegistrationStateMachine(registration_progress.registration_stage)
     machine.transition(RegistrationState.MAILBOX_READY)
@@ -603,19 +606,20 @@ def run_browser_registration(
             "browser registration failed driver=%s code=%s cancelled=%s",
             driver_name, exc.code, cancelled,
         )
-        return {
-            "success": False,
-            "email": email,
-            "registration_driver": driver_name,
-            "error": dom_fields._safe_text(exc),
-            "failure_class": "cancelled" if cancelled else session._browser_failure_class(exc.code),
-            "registration_state": "cancelled" if cancelled else "failed",
-            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-            "registration_machine": machine.snapshot(),
-            "browser_diagnostics": diagnostics,
-            "proxy_audit": session._safe_proxy_audit(proxy_metadata),
-            "driver_capabilities": driver_capabilities(driver_name),
-        }
+        return registration_result.build_registration_failure_result(
+            error=dom_fields._safe_text(exc),
+            failure_class="cancelled" if cancelled else session._browser_failure_class(exc.code),
+            registration_state="cancelled" if cancelled else "failed",
+            email=email,
+            extra={
+                "registration_driver": driver_name,
+                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+                "registration_machine": machine.snapshot(),
+                "browser_diagnostics": diagnostics,
+                "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+                "driver_capabilities": driver_capabilities(driver_name),
+            },
+        )
     except Exception as exc:
         if machine.state is not RegistrationState.FAILED:
             machine.fail(type(exc).__name__)
@@ -629,18 +633,19 @@ def run_browser_registration(
             "browser registration crashed driver=%s: %s",
             driver_name, error, exc_info=exc,
         )
-        return {
-            "success": False,
-            "email": email,
-            "registration_driver": driver_name,
-            "error": dom_fields._safe_text(error),
-            "failure_class": session._browser_failure_class(str(exc)),
-            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-            "registration_machine": machine.snapshot(),
-            "browser_diagnostics": diagnostics,
-            "proxy_audit": session._safe_proxy_audit(proxy_metadata),
-            "driver_capabilities": driver_capabilities(driver_name),
-        }
+        return registration_result.build_registration_failure_result(
+            error=dom_fields._safe_text(error),
+            failure_class=session._browser_failure_class(str(exc)),
+            email=email,
+            extra={
+                "registration_driver": driver_name,
+                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+                "registration_machine": machine.snapshot(),
+                "browser_diagnostics": diagnostics,
+                "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+                "driver_capabilities": driver_capabilities(driver_name),
+            },
+        )
 
 
 def run_playwright_registration(**kwargs: Any) -> dict[str, Any]:

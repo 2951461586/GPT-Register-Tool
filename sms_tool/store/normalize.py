@@ -314,6 +314,12 @@ def _status(data, paypal, access_token, has_refresh_token=False):
 # "account_deatived" is a misspelling that was written by an older release and
 # therefore still occurs in session files already on disk. Keep it until those
 # rows are known to be gone -- it looks like a typo but it is live data.
+#
+# This tuple stays a source literal because tests/test_backend_text_markers.py
+# AST-parses it against the C# BackendTextMarkers copy (an imported name would
+# be invisible to that parser). It must stay identical to
+# ACCOUNT_DEACTIVATED_MARKERS in sms_tool/account_terminal.py -- the canonical
+# terminal-state vocabulary; tests/test_account_terminal.py enforces that.
 ACCOUNT_DEACTIVATED_MARKERS = (
     "account_deactivated",
     "account_deatived",
