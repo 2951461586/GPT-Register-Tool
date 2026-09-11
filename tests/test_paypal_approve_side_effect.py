@@ -245,7 +245,7 @@ class CheckoutContractReuseTests(unittest.TestCase):
         }
 
         with patch.object(extractor, "_create_checkout", return_value=checkout):
-            with patch.object(extractor, "_checkout_update_promotion", return_value=True) as promotion:
+            with patch.object(extractor, "checkout_update_promotion", return_value=True) as promotion:
                 with patch.object(extractor, "_run_provider_stages") as provider:
                     result = extractor.extract()
 

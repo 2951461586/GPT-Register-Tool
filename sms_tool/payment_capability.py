@@ -8,6 +8,7 @@ from typing import Any, Mapping, Protocol
 from .checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
+    PLUS_TRIAL_CAMPAIGN_ID,
     STRIPE_INIT_URL,
     CheckoutContractError,
     CheckoutRequestContract,
@@ -229,7 +230,7 @@ def payment_method_capability_probe(
     payment_locale: str = "",
     browser_locale: str = "",
     browser_timezone: str = "",
-    promo_campaign_id: str = "plus-1-month-free",
+    promo_campaign_id: str = PLUS_TRIAL_CAMPAIGN_ID,
     checkout_ui_mode: str = "custom",
     require_zero: bool = True,
     stage_proxy_countries: Mapping[str, str] | None = None,
@@ -475,7 +476,7 @@ def _paypal_capability_probe(
                 "probe_checkout_kind": "oaics",
                 "retryable": False,
             }
-        if not extractor.enable_promotion or not extractor._checkout_update_promotion(cs_id, entity):
+        if not extractor.enable_promotion or not extractor.checkout_update_promotion(cs_id, entity):
             return {
                 "ok": True,
                 "operation": "payment_method_capability_probe",

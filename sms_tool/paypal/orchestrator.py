@@ -8,12 +8,11 @@ CloakBrowser fallback), and finally persists the outcome to the session file.
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Callable
 
 from ..accounts.account_seed import extract_access_token as _extract_access_token
 from ..accounts.account_seed import load_account_seed as _load_seed
 from ..config import CFG
-from ..gen_pp_link import generate_pp_link
 from ..paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
 from ..paypal_reverse import try_reverse_pay
 from ..utils import _generate_password, _random_name
@@ -35,6 +34,7 @@ def auto_pay(
     headless: bool = False,
     timeout: int = 180,
     reverse_only: bool = False,
+    link_factory: Callable[[str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Automatically complete PayPal payment for a ChatGPT account.
 
@@ -55,12 +55,22 @@ def auto_pay(
     if not access_token:
         return {"ok": False, "email": target_email, "error": "missing_access_token"}
 
-    # 2. Get or generate PayPal URL
+    # 2. Consume the PayPal URL the caller owns. This layer must not
+    # regenerate links (architecture.md Rule 6): generation creates a new
+    # pending order, so repeating it here is an ambiguous external side
+    # effect. The command adapter injects ``link_factory`` when lazy
+    # generation is wanted; without one a missing URL is an explicit failure.
     paypal = data.get("paypal") or {}
     paypal_url = str(approval_url or paypal.get("url") or "").strip()
     if not paypal_url:
-        print("[*] No PayPal URL found, generating...")
-        paypal = generate_pp_link(access_token)
+        if link_factory is None:
+            return {
+                "ok": False,
+                "email": target_email,
+                "error": "paypal_link_missing: pass approval_url or store a paypal.url first",
+            }
+        print("[*] No PayPal URL found, generating via injected link factory...")
+        paypal = link_factory(access_token)
         if not paypal.get("ok") or not paypal.get("url"):
             return {"ok": False, "email": target_email, "error": f"paypal_link_generation_failed: {paypal.get('error', '')}"}
         paypal_url = paypal["url"]

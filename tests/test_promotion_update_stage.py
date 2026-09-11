@@ -57,7 +57,7 @@ class PromotionUpdateStageTests(unittest.TestCase):
             return _Resp(200, {"success": True})
 
         with patch.object(paypal_extract, "_checkout_post", side_effect=fake_post):
-            ok = e._checkout_update_promotion("cs_live_X", "openai_llc")
+            ok = e.checkout_update_promotion("cs_live_X", "openai_llc")
 
         self.assertTrue(ok)
         self.assertEqual(seen["url"], "https://chatgpt.com/backend-api/payments/checkout/update")
@@ -69,7 +69,7 @@ class PromotionUpdateStageTests(unittest.TestCase):
     def test_update_promotion_non_fatal_on_error(self):
         e = g.PPLinkExtractor("at", provider_proxy="http://us", promotion_proxy="http://vn", target_country="US")
         with patch.object(paypal_extract, "_checkout_post", return_value=_Resp(409, text="checkout_not_active")):
-            self.assertFalse(e._checkout_update_promotion("cs_live_X", "openai_llc"))
+            self.assertFalse(e.checkout_update_promotion("cs_live_X", "openai_llc"))
 
     def test_extract_runs_stripe_init_before_post_approval_promotion(self):
         """The standard flow must not apply promotion before Stripe init."""

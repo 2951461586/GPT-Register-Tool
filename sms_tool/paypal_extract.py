@@ -64,12 +64,14 @@ except ImportError:  # pragma: no cover - direct script execution
 
 try:
     from .checkout_contract import (
+        PLUS_TRIAL_CAMPAIGN_ID,
         CheckoutRequestContract,
         CheckoutSessionContract,
         browser_profile_for_country,
     )
 except ImportError:  # pragma: no cover - direct script execution
     from checkout_contract import (  # type: ignore
+        PLUS_TRIAL_CAMPAIGN_ID,
         CheckoutRequestContract,
         CheckoutSessionContract,
         browser_profile_for_country,
@@ -294,7 +296,7 @@ class PPLinkExtractor:
         emit: Any = None,
         cookie_header: str = "",
         promotion_taxes: bool = False,
-        promo_campaign_id: str = "plus-1-month-free",
+        promo_campaign_id: str = PLUS_TRIAL_CAMPAIGN_ID,
         preflight_proxy_check: bool = False,
         rotate_proxy_sessions: bool = False,
         proxy_probe_timeout: float = 12,
@@ -320,7 +322,7 @@ class PPLinkExtractor:
         self.promotion_proxy = normalize_proxy_url(promotion_proxy)
         self.enable_promotion = bool(self.promotion_proxy)
         self.promotion_taxes = bool(promotion_taxes)
-        self.promo_campaign_id = str(promo_campaign_id or "plus-1-month-free")
+        self.promo_campaign_id = str(promo_campaign_id or PLUS_TRIAL_CAMPAIGN_ID)
         self.target_country = target_country.upper()
         self.checkout_country = (checkout_country or target_country).upper()
         self.currency = CURRENCY_MAP.get(self.target_country, "EUR")
@@ -531,7 +533,7 @@ class PPLinkExtractor:
         entity = processor_entity or ("openai_llc" if self.checkout_country == "US" else "openai_ie")
         return f"https://chatgpt.com/checkout/{entity}/{cs_id}"
 
-    def _checkout_update_promotion(self, cs_id: str, processor_entity: str) -> bool:
+    def checkout_update_promotion(self, cs_id: str, processor_entity: str) -> bool:
         """Apply the 0-due promo to an existing checkout via /checkout/update.
 
         Routed through ``promotion_proxy`` (a promo-eligible region egress).
@@ -1006,7 +1008,7 @@ class PPLinkExtractor:
                 error_code="approve_outcome_unknown",
             ) from exc
         if self.enable_promotion:
-            self.promotion_applied = self._checkout_update_promotion(cs_id, processor_entity)
+            self.promotion_applied = self.checkout_update_promotion(cs_id, processor_entity)
             if self.promotion_applied and self.promotion_taxes:
                 self._checkout_update_taxes(cs_id, processor_entity)
             if self.require_zero:
@@ -1037,7 +1039,7 @@ class PPLinkExtractor:
         # never be sent to Stripe's /payment_pages/{id}/init endpoint.
         if cs_id.startswith("oaics_"):
             if self.enable_promotion:
-                self.promotion_applied = self._checkout_update_promotion(cs_id, processor_entity)
+                self.promotion_applied = self.checkout_update_promotion(cs_id, processor_entity)
             return {
                 "ok": True,
                 "link_type": "chatgpt_checkout_link",

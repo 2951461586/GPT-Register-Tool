@@ -16,7 +16,7 @@ import os
 import re
 import uuid
 from typing import Any
-from urllib.parse import parse_qsl, urljoin, urlsplit
+from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 
 import requests
 
@@ -198,6 +198,31 @@ def extract_ba_token(url: str) -> str:
         if pos != -1:
             end = min(end, pos)
     return url[start:end]
+
+
+PAYPAL_ORIGIN = "https://www.paypal.com"
+
+
+def extract_paypal_approve_url(text: str) -> str:
+    """Pull the PayPal approve URL out of arbitrary page/JSON text.
+
+    Single owner of approve-URL extraction (canonical form returned when only
+    a ``ba_token`` is present); ``paypal_protocol`` and the reconciliation
+    path consume this instead of re-parsing.
+    """
+    body = (
+        str(text or "")
+        .replace("\\u0026", "&")
+        .replace("\\/", "/")
+        .replace("&amp;", "&")
+    )
+    match = re.search(r"https?://(?:www\.)?paypal\.com/agreements/approve\?[^\s<>\"']+", body)
+    if match:
+        return match.group(0)
+    match = re.search(r"ba_token=(BA-[A-Za-z0-9_.-]+)", body)
+    if match:
+        return f"{PAYPAL_ORIGIN}/agreements/approve?ba_token={quote(match.group(1), safe='')}"
+    return ""
 
 
 def find_url_in_value(value: Any, patterns: list[re.Pattern]) -> str:
