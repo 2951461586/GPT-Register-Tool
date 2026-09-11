@@ -273,6 +273,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # $Version 归一为不带 v（供 -p:Version= 用），文件名则统一带 v，与历史资产一致。
+# 兜底（2026-09-13 heisenbug）：带 publish 的运行曾三次观察到 $Version 在此处
+# 为空（:36 探针处却正确），产出无名资产。重派生一次；仍为空则硬失败——
+# 绝不产出无名资产。
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = (& git -C $repoRoot describe --tags --match='v*' --abbrev=0 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Version)) {
+        $Version = Get-Date -Format 'yyyy.MM.dd'
+    }
+    $Version = ([string]$Version).TrimStart('v')
+    Write-Host "version re-derived at naming point: $Version"
+}
 $safeVersion = 'v' + ($Version -replace '[^0-9A-Za-z_.-]', '-')
 $zipPath = Join-Path $releaseDir "GPT-Register-Tool-win-x64-$safeVersion.zip"
 $setupPath = Join-Path $releaseDir "GPT-Register-Tool-Setup-$safeVersion.exe"
