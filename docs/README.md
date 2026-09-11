@@ -33,6 +33,10 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.09.12 发布说明](releases/release-v2026.09.12.md) - 深度扫描第一批收口：
+  优惠状态跨语言机器契约、失败结果入约与终态判定唯一 owner、测活去双探与队列
+  浏览器槽修复、代理池静默默认值清零、BA-token 与 campaign 常量单源、Rule 6
+  关闭与 Rule 14 决策落档。
 - [v2026.09.11 发布说明](releases/release-v2026.09.11.md) - 注册代理出口切换至
   越南（VN）、9http `geo-XX` 供应商模板与两侧地理档案补齐、PayPal 链接生成的
   代理地区重写收敛到单一范式。
