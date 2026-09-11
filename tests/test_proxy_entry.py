@@ -289,3 +289,26 @@ class TestResolveProxyValue(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
+    """C# 归一器写出的代理值必须能被唯一权威 parse_proxy 无损解析。
+
+    两侧消费同一份 tests/fixtures/proxy_input_cases.json；C# 侧断言
+    Normalize(operator_input) == csharp_normalized（ProxyInputNormalizerTests），
+    本侧断言 csharp_normalized 解析后语义字段无损。
+    """
+    import json
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "proxy_input_cases.json"
+    cases = json.loads(fixture.read_text(encoding="utf-8"))["cases"]
+    assert cases
+    for case in cases:
+        entry = parse_proxy(case["csharp_normalized"], default_scheme="socks5")
+        assert entry is not None, case["name"]
+        assert entry.scheme == case["scheme"], case["name"]
+        assert entry.host == case["host"], case["name"]
+        assert entry.port == case["port"], case["name"]
+        assert entry.username == case["username"], case["name"]
+        assert entry.password == case["password"], case["name"]

@@ -23,5 +23,7 @@
   <ItemGroup>
     <!-- Shared cross-language promotion contract fixture (see PromotionStatusContractTests). -->
     <None Include="..\fixtures\promotion_status_cases.json" CopyToOutputDirectory="PreserveNewest" Link="promotion_status_cases.json" />
+    <!-- Shared cross-language proxy parsing fixture (see ProxyInputNormalizerTests / test_proxy_entry). -->
+    <None Include="..\fixtures\proxy_input_cases.json" CopyToOutputDirectory="PreserveNewest" Link="proxy_input_cases.json" />
   </ItemGroup>
 </Project>
