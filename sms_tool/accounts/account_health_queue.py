@@ -32,6 +32,11 @@ _PENDING_TTL_SECONDS = 6 * 60 * 60
 _LEASE_SECONDS = 120
 _HEARTBEAT_SECONDS = 30
 _BROWSER_FALLBACK_SLOTS = threading.BoundedSemaphore(2)
+# Wait for a browser-fallback slot instead of skipping after one second. The
+# 1.0s wait re-created the "concurrency_limited" pathology that
+# account_recovery already fixed; 30s covers queueing behind a browser start
+# plus teardown without letting a stuck browser pin the whole queue.
+_BROWSER_FALLBACK_WAIT_SECONDS = 30.0
 
 
 def queue_path() -> Path:
@@ -374,7 +379,14 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
     else:
         initial = probe_account_liveness(account, proxy=proxy)
         if browser_identity and _needs_browser_fallback(initial):
-            acquired = _BROWSER_FALLBACK_SLOTS.acquire(timeout=1.0)
+            # Queue for a browser slot instead of skipping. The one-second wait
+            # re-created the exact "concurrency_limited" pathology that
+            # account_recovery already fixed (deadline-bounded acquire with the
+            # comment quoting the old one-liner): with more than a couple of
+            # Cloudflare-blocked accounts in a queue, every account after the
+            # slot holders reported browser_fallback=concurrency_limited
+            # instead of just waiting its turn.
+            acquired = _BROWSER_FALLBACK_SLOTS.acquire(timeout=_BROWSER_FALLBACK_WAIT_SECONDS)
             if acquired:
                 try:
                     with browser_fetch_for_account(account, proxy=proxy) as browser_fetch:

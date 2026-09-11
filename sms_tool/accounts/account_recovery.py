@@ -9,6 +9,7 @@ ChatGPT cookie session, protocol email-OTP login, then Codex OAuth PKCE).
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import time
@@ -39,10 +40,36 @@ from ..promotion_states import (
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
 
+logger = logging.getLogger(__name__)
+
 # Probe verdicts from a scan pass that a quota refresh must not re-probe.
 # Anything else (unknown / timeout / empty / 检测失败) is transport-shaped and
 # gets a fresh probe because the network may have recovered since the scan.
 _FRESH_PROBE_DEFINITIVE_STATUSES = {"active", "token_invalid", "account_deactivated"}
+
+# runtime/account_liveness_batches grew without bound (one snapshot per run,
+# several per operator day). Keep the newest files -- the WPF panel reads the
+# newest snapshot, older ones are crash-history only.
+_LIVENESS_SNAPSHOT_KEEP = 20
+
+
+def _prune_liveness_snapshots(directory, keep: int = _LIVENESS_SNAPSHOT_KEEP, exclude: str = "") -> int:
+    """Delete oldest liveness batch snapshots beyond ``keep``. Returns removed count."""
+    try:
+        files = [p for p in Path(directory).glob("*.json") if p.name != exclude]
+    except OSError:
+        return 0
+    if len(files) <= keep:
+        return 0
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    removed = 0
+    for stale in files[keep:]:
+        try:
+            stale.unlink()
+            removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 def _probe_is_fresh_definitive(probe: dict[str, Any] | None) -> bool:
@@ -151,8 +178,10 @@ def refresh_local_quota_statuses(
             temp = snapshot_path.with_suffix(snapshot_path.suffix + ".tmp")
             temp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             temp.replace(snapshot_path)
-        except OSError:
-            pass
+        except OSError as exc:
+            # A silent snapshot failure left "crash-recoverable" batches that
+            # were never actually persisted; make it observable at least.
+            logger.warning("liveness snapshot persist failed run_id=%s: %s", run_id, exc)
 
     def run(index: int, account: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         email = str(account.get("email") or "").strip()
@@ -427,6 +456,7 @@ def refresh_local_quota_statuses(
         ),
     )
     persist_snapshot(terminal=True)
+    _prune_liveness_snapshots(snapshot_path.parent, exclude=snapshot_path.name)
     return {
         "ok": success == len(results) and len(results) == len(accounts),
         "mode": "local",
