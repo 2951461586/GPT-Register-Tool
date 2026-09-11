@@ -1,0 +1,75 @@
+{
+  "_comment": "跨语言代理解析契约夹具。C# ProxyInputNormalizer 是桌面上 operator 输入的入口，它写出的值之后由 Python proxy_entry.parse_proxy（唯一权威，边界规则 13）解析。两侧测试消费同一份用例：C# 断言 Normalize(operator_input) == csharp_normalized；Python 断言 parse_proxy(csharp_normalized) 无损保留 scheme/host/port/username/password。这样 C# 归一器的任何输出漂移都会在两侧同时失败。",
+  "cases": [
+    {
+      "name": "socks5_with_auth",
+      "operator_input": "socks5://user:pass@host:1080",
+      "csharp_normalized": "socks5://user:pass@host:1080",
+      "scheme": "socks5",
+      "host": "host",
+      "port": 1080,
+      "username": "user",
+      "password": "pass"
+    },
+    {
+      "name": "socks5h_no_auth",
+      "operator_input": "socks5h://gw.example:1080",
+      "csharp_normalized": "socks5h://gw.example:1080",
+      "scheme": "socks5h",
+      "host": "gw.example",
+      "port": 1080,
+      "username": "",
+      "password": ""
+    },
+    {
+      "name": "four_segment_defaults_to_http",
+      "operator_input": "gw.example:8080:user:pass",
+      "csharp_normalized": "http://user:pass@gw.example:8080",
+      "scheme": "http",
+      "host": "gw.example",
+      "port": 8080,
+      "username": "user",
+      "password": "pass"
+    },
+    {
+      "name": "host_port_defaults_to_http",
+      "operator_input": "gw.example:8080",
+      "csharp_normalized": "http://gw.example:8080",
+      "scheme": "http",
+      "host": "gw.example",
+      "port": 8080,
+      "username": "",
+      "password": ""
+    },
+    {
+      "name": "https_url_preserved",
+      "operator_input": "https://u:p@h:8443",
+      "csharp_normalized": "https://u:p@h:8443",
+      "scheme": "https",
+      "host": "h",
+      "port": 8443,
+      "username": "u",
+      "password": "p"
+    },
+    {
+      "name": "socks_alias_maps_to_socks5",
+      "operator_input": "socks://u:p@h:1080",
+      "csharp_normalized": "socks5://u:p@h:1080",
+      "scheme": "socks5",
+      "host": "h",
+      "port": 1080,
+      "username": "u",
+      "password": "p"
+    },
+    {
+      "name": "fullwidth_separators_normalized",
+      "operator_input": "host：8080：user：pass",
+      "csharp_normalized": "http://user:pass@host:8080",
+      "scheme": "http",
+      "host": "host",
+      "port": 8080,
+      "username": "user",
+      "password": "pass"
+    }
+  ]
+}

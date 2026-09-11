@@ -1,9 +1,40 @@
+using System.IO;
+using System.Text.Json;
 using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
 
 public sealed class ProxyInputNormalizerTests
 {
+    private static List<(string Name, string Input, string Expected)> LoadFixtureCases()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "proxy_input_cases.json");
+        using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(path));
+        var cases = new List<(string, string, string)>();
+        foreach (JsonElement c in doc.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            cases.Add((
+                c.GetProperty("name").GetString() ?? "",
+                c.GetProperty("operator_input").GetString() ?? "",
+                c.GetProperty("csharp_normalized").GetString() ?? ""));
+        }
+        return cases;
+    }
+
+    [Fact]
+    public void SharedFixtureNormalization_MatchesTheCrossLanguageContract()
+    {
+        // 与 tests/test_proxy_entry.py 消费同一份夹具：C# 归一器的输出会被
+        // Python proxy_entry.parse_proxy（代理唯一权威）再解析，任何一侧
+        // 漂移都会让两侧测试同时失败。
+        var cases = LoadFixtureCases();
+        Assert.NotEmpty(cases);
+        foreach (var (name, input, expected) in cases)
+        {
+            Assert.True(ProxyInputNormalizer.Normalize(input) == expected, name);
+        }
+    }
+
     [Fact]
     public void BareProviderEntryDefaultsToCanonicalHttpUrl()
     {
