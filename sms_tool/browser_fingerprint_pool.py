@@ -40,6 +40,7 @@ from typing import Any
 
 from . import geo as _geo
 from .geo import clock as _clock
+from .geo.profiles import MARKET_PROFILES
 
 logger = logging.getLogger(__name__)
 
@@ -67,29 +68,19 @@ IP_GEO_ENDPOINTS = [
     "https://ipwho.is/",
 ]
 
-# Country (ISO-3166 alpha-2) -> locale profile key.
+# Country (ISO-3166 alpha-2) -> locale profile key.  每个市场一个独立档案
+# （CA/AU 不再别名到 us/gb，时区与出口严格一致），键即小写国家码。
 COUNTRY_LOCALE_PROFILE_MAP = {
-    "JP": "jp", "CN": "cn", "HK": "hk", "TW": "tw", "US": "us", "CA": "us",
-    "SG": "sg", "GB": "gb", "AU": "gb", "DE": "de", "FR": "fr", "NL": "nl",
+    "JP": "jp", "CN": "cn", "HK": "hk", "TW": "tw", "US": "us", "CA": "ca",
+    "SG": "sg", "GB": "gb", "AU": "au", "DE": "de", "FR": "fr", "NL": "nl",
     "VN": "vn",
 }
 DEFAULT_LOCALE_PROFILE = "us"
 
-# Locale profile key -> browser language / accept-language / timezone.
-BROWSER_LOCALE_PROFILES: dict[str, dict[str, Any]] = {
-    "jp": {"navigator_language": "ja-JP", "navigator_languages": ["ja-JP"], "accept_language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Asia/Tokyo", "timezone_offset_minutes": 9 * 60, "timezone_name": "Japan Standard Time"},
-    "cn": {"navigator_language": "zh-CN", "navigator_languages": ["zh-CN"], "accept_language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Asia/Shanghai", "timezone_offset_minutes": 8 * 60, "timezone_name": "China Standard Time"},
-    "us": {"navigator_language": "en-US", "navigator_languages": ["en-US"], "accept_language": "en-US,en;q=0.9", "timezone_iana": "America/Los_Angeles", "timezone_offset_minutes": -7 * 60, "timezone_name": "Pacific Daylight Time"},
-    "sg": {"navigator_language": "en-SG", "navigator_languages": ["en-SG"], "accept_language": "en-SG,en-US;q=0.9,en;q=0.8", "timezone_iana": "Asia/Singapore", "timezone_offset_minutes": 8 * 60, "timezone_name": "Singapore Standard Time"},
-    "hk": {"navigator_language": "zh-HK", "navigator_languages": ["zh-HK"], "accept_language": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6", "timezone_iana": "Asia/Hong_Kong", "timezone_offset_minutes": 8 * 60, "timezone_name": "Hong Kong Standard Time"},
-    "tw": {"navigator_language": "zh-TW", "navigator_languages": ["zh-TW"], "accept_language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Asia/Taipei", "timezone_offset_minutes": 8 * 60, "timezone_name": "Taipei Standard Time"},
-    "gb": {"navigator_language": "en-GB", "navigator_languages": ["en-GB"], "accept_language": "en-GB,en-US;q=0.9,en;q=0.8", "timezone_iana": "Europe/London", "timezone_offset_minutes": 1 * 60, "timezone_name": "British Summer Time"},
-    "de": {"navigator_language": "de-DE", "navigator_languages": ["de-DE"], "accept_language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Berlin", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
-    "fr": {"navigator_language": "fr-FR", "navigator_languages": ["fr-FR"], "accept_language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Paris", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
-    "nl": {"navigator_language": "nl-NL", "navigator_languages": ["nl-NL"], "accept_language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Europe/Amsterdam", "timezone_offset_minutes": 2 * 60, "timezone_name": "Central European Summer Time"},
-    "vn": {"navigator_language": "vi-VN", "navigator_languages": ["vi-VN"], "accept_language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7", "timezone_iana": "Asia/Ho_Chi_Minh", "timezone_offset_minutes": 7 * 60, "timezone_name": "Indochina Time"},
-}
-
+# 浏览器路径地理档案 = geo/profiles.MARKET_PROFILES 的渲染视图（单一事实源，
+# 与 auth_headers._GEO_PROFILES 同源派生）。timezone_offset_minutes 只是
+# _offset_minutes_for_timezone 的回退值（P1-4：运行时按 IANA 名重算）；用
+# zoneinfo 在导入时求当前偏移，避免 DST 硬编码半年错一小时。
 TIMEZONE_NAME_BY_IANA = {
     "Asia/Tokyo": "Japan Standard Time",
     "Asia/Shanghai": "China Standard Time",
@@ -100,11 +91,44 @@ TIMEZONE_NAME_BY_IANA = {
     "America/New_York": "Eastern Daylight Time",
     "America/Chicago": "Central Daylight Time",
     "America/Denver": "Mountain Daylight Time",
+    "America/Toronto": "Eastern Standard Time",
+    "Australia/Sydney": "AUS Eastern Standard Time",
     "Europe/London": "British Summer Time",
     "Europe/Berlin": "Central European Summer Time",
     "Europe/Paris": "Central European Summer Time",
     "Europe/Amsterdam": "Central European Summer Time",
     "Asia/Ho_Chi_Minh": "Indochina Time",
+}
+
+
+def _fallback_offset_minutes(tz_iana: str) -> int:
+    """Current UTC offset for ``tz_iana`` in minutes (import-time fallback).
+
+    The runtime path recomputes this per registration via
+    ``_offset_minutes_for_timezone`` (P1-4); this only replaces the old
+    hard-coded DST values the table used to carry.
+    """
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        offset = datetime.now(ZoneInfo(tz_iana)).utcoffset()
+        return int(offset.total_seconds() // 60) if offset else 0
+    except Exception:
+        return 0
+
+
+# Locale profile key -> browser language / accept-language / timezone.
+BROWSER_LOCALE_PROFILES: dict[str, dict[str, Any]] = {
+    country.lower(): {
+        "navigator_language": profile["lang"],
+        "navigator_languages": [profile["lang"]],
+        "accept_language": profile["lang_full"],
+        "timezone_iana": profile["timezone_iana"],
+        "timezone_offset_minutes": _fallback_offset_minutes(profile["timezone_iana"]),
+        "timezone_name": TIMEZONE_NAME_BY_IANA.get(profile["timezone_iana"], ""),
+    }
+    for country, profile in MARKET_PROFILES.items()
 }
 
 # Common macOS Chrome desktop hardware profiles.  One is drawn per registration

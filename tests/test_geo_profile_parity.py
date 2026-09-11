@@ -1,34 +1,44 @@
-"""geo 表防漂移：协议池与浏览器池共享市场的时区/语言必须一致。
+"""geo 表合一：协议/浏览器两路档案必须与规范表 (geo/profiles.MARKET_PROFILES) 一致。
 
-协议池读 ``auth_headers._GEO_PROFILES``，浏览器池读
-``browser_fingerprint_pool.BROWSER_LOCALE_PROFILES``——2026-09 的越南迁移
-曾在 ``auth_headers`` 和 ``browser_fingerprint_pool`` 各改一遍，漏一边就是
-"协议路径在越南、浏览器路径在美国"的指纹矛盾。两张表在美区等取值上有
-**历史分歧**（协议=纽约，浏览器=洛杉矶/PDT），合并需要运维决策；在合并
-之前，本测试保证：任何新市场必须两侧同时添加，共享市场不允许单侧改动。
+2026-09-12 扫描发现两张表各自维护、越南迁移时改两处、US 时区两表分歧
+（协议=New York，浏览器=Los Angeles）。运维决策：统一为 New York。两张表现
+在都是 ``MARKET_PROFILES`` 的渲染视图——新增市场只改规范表一处。
 """
 
 from sms_tool.auth_headers import _GEO_PROFILES
-from sms_tool.browser_fingerprint_pool import BROWSER_LOCALE_PROFILES
-
-# 浏览器表刻意保留的逐市场差异：US 时区（协议=America/New_York，浏览器=
-# America/Los_Angeles PDT）。除此之外的共享市场一律必须一致。
-_DOCUMENTED_TIMEZONE_DIVERGENCES = {"US"}
-
-
-def test_vn_migration_exists_on_both_sides():
-    # 2026-09 越南迁移的事故原样：只加一边不会报错。pin 住它。
-    assert "VN" in _GEO_PROFILES
-    assert "vn" in BROWSER_LOCALE_PROFILES
+from sms_tool.browser_fingerprint_pool import (
+    BROWSER_LOCALE_PROFILES,
+    COUNTRY_LOCALE_PROFILE_MAP,
+    TIMEZONE_NAME_BY_IANA,
+)
+from sms_tool.geo.profiles import MARKET_PROFILES
 
 
-def test_shared_markets_agree_on_timezone_and_primary_language():
-    for country, protocol_profile in _GEO_PROFILES.items():
-        browser_profile = BROWSER_LOCALE_PROFILES.get(country.lower())
-        if browser_profile is None:
-            # 浏览器表是更小的精选集（缺 CA/AU），缺市场允许，但存在就必须一致。
-            continue
-        if country in _DOCUMENTED_TIMEZONE_DIVERGENCES:
-            continue
-        assert browser_profile["timezone_iana"] == protocol_profile["timezone"], country
-        assert browser_profile["navigator_language"] == protocol_profile["lang"], country
+def test_both_tables_derive_from_the_canonical_table():
+    for country, profile in MARKET_PROFILES.items():
+        protocol = _GEO_PROFILES.get(country)
+        assert protocol is not None, country
+        assert protocol["timezone"] == profile["timezone_iana"], country
+        assert protocol["lang"] == profile["lang"], country
+        assert protocol["lang_full"] == profile["lang_full"], country
+
+        browser = BROWSER_LOCALE_PROFILES.get(country.lower())
+        assert browser is not None, country
+        assert browser["timezone_iana"] == profile["timezone_iana"], country
+        assert browser["navigator_language"] == profile["lang"], country
+        assert browser["accept_language"] == profile["lang_full"], country
+
+
+def test_us_is_new_york_on_both_lanes_per_operator_decision():
+    assert _GEO_PROFILES["US"]["timezone"] == "America/New_York"
+    assert BROWSER_LOCALE_PROFILES["us"]["timezone_iana"] == "America/New_York"
+
+
+def test_every_market_has_a_locale_profile_key():
+    for country in MARKET_PROFILES:
+        assert COUNTRY_LOCALE_PROFILE_MAP.get(country) == country.lower(), country
+
+
+def test_timezone_names_cover_all_canonical_zones():
+    for profile in MARKET_PROFILES.values():
+        assert TIMEZONE_NAME_BY_IANA.get(profile["timezone_iana"]), profile["timezone_iana"]
