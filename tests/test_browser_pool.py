@@ -406,3 +406,23 @@ def test_scope_rebuilds_pool_when_driver_changes():
         ):
             pass
     assert pw._BROWSER_POOL.driver == "playwright"
+
+
+def test_pool_relaunches_when_browser_identity_changes():
+    # 复用路径曾静默丢弃 browser_identity（profile_id 只在 relaunch 时生效）。
+    # profile_id 的意义就是把失败尝试与陈旧登录页隔离——身份变化必须触发
+    # 干净重launch，而不是 renew 时把身份留在上一个账号的进程上。
+    factory = RecordingFactory()
+    pool = _pool(session_factory=factory)
+    with pool.session(browser_identity={"driver": "camoufox", "profile_id": "a@b.com#1"}):
+        pass
+    with pool.session(browser_identity={"driver": "camoufox", "profile_id": "a@b.com#1"}):
+        pass
+    # Same identity -> resident reused, single factory call.
+    assert len(factory.calls) == 1
+
+    with pool.session(browser_identity={"driver": "camoufox", "profile_id": "a@b.com#2"}):
+        pass
+    # Different profile_id -> clean relaunch carrying the new identity.
+    assert len(factory.calls) == 2
+    assert factory.calls[1]["browser_identity"] == {"driver": "camoufox", "profile_id": "a@b.com#2"}
