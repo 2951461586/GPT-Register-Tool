@@ -142,12 +142,19 @@ checkpoints; terminal account results are not retried as network errors.
 
 ## Exit Codes
 
-| Code | Meaning | Desktop log level |
+As implemented by `SmsWorkbench/BackendResultInterpreter.cs` (keep this table
+in sync with that mapping):
+
+| Code | Meaning | Desktop presentation |
 | --- | --- | --- |
-| 0 | Normal completion | Information, Warning if IPC payload is absent |
-| 2 | Empty/malformed explicit mailbox source | Warning |
-| 3 | Provider/import failure | Warning |
-| Negative / timeout | Abnormal process termination | Error |
+| 0 | Normal completion | Information; Warning when the IPC payload is absent |
+| 1 | Missing/invalid arguments | `[失败·参数]`, state failed |
+| 2 | Preflight/environment failure | `[失败·前置检查]`, state failed |
+| 3 | Runtime/provider failure | `[失败·运行时]`, state failed |
+| Other / negative / timeout | Abnormal process termination | `[失败·运行时]`, state failed or timed_out |
+
+`doctor.py` deliberately exits with the count of failed environment checks and
+is not part of this table.
 
 See [telemetry and runtime data](current/telemetry-and-runtime.md) for
 `command_id`, `run_id`, schema version and test/live separation.
