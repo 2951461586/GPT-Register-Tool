@@ -143,6 +143,13 @@ class BrowserProcessPool:
         # (preserving per-account proxy isolation).
         self._residents: dict[int, Any] = {}
         self._resident_proxy: dict[int, str | None] = {}
+        # Per-account browser identity (profile_id etc.) the resident was
+        # launched with. Reuse must not silently drop it: a new attempt's
+        # profile_id exists to isolate failed attempts from stale auth pages,
+        # so an identity change forces a clean relaunch exactly like a proxy
+        # change does.
+        self._resident_identity: dict[int, Mapping[str, Any] | None] = {}
+        self._log = logging.getLogger("browser_pool")
 
     @contextmanager
     def session(self, **session_overrides: Any):
@@ -170,18 +177,26 @@ class BrowserProcessPool:
 
         requested_proxy = session_overrides.get("proxy", self.proxy)
         slot = self._acquire_slot(requested_proxy)
+        requested_identity = session_overrides.get("browser_identity") or None
         try:
             resident = self._residents.get(slot.slot_id)
-            relaunch = resident is None or self._resident_proxy.get(slot.slot_id) != requested_proxy
+            relaunch = (
+                resident is None
+                or self._resident_proxy.get(slot.slot_id) != requested_proxy
+                or self._resident_identity.get(slot.slot_id) != requested_identity
+            )
             if relaunch:
                 # Tear down any prior resident before launching a fresh process
-                # (proxy change or first use of this slot generation).
+                # (proxy/identity change or first use of this slot generation).
                 old = self._residents.pop(slot.slot_id, None)
                 if old is not None:
                     try:
                         old.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self._log.warning(
+                            "resident close failed during relaunch slot=%s: %s",
+                            slot.slot_id, exc,
+                        )
                 self._resident_proxy.pop(slot.slot_id, None)
                 kwargs = {
                     "proxy": self.proxy,
@@ -195,6 +210,7 @@ class BrowserProcessPool:
                 resident.__enter__()
                 self._residents[slot.slot_id] = resident
                 self._resident_proxy[slot.slot_id] = requested_proxy
+                self._resident_identity[slot.slot_id] = requested_identity
             else:
                 # Reuse: swap in a fresh isolated context on the resident browser.
                 # If the driver cannot renew (no resident browser, CDP quirk,
@@ -213,10 +229,14 @@ class BrowserProcessPool:
                 except Exception:
                     try:
                         resident.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self._log.warning(
+                            "resident close failed after renew error slot=%s: %s",
+                            slot.slot_id, exc,
+                        )
                     self._residents.pop(slot.slot_id, None)
                     self._resident_proxy.pop(slot.slot_id, None)
+                    self._resident_identity.pop(slot.slot_id, None)
                     kwargs = {
                         "proxy": self.proxy,
                         "headless": self.headless,
@@ -229,6 +249,7 @@ class BrowserProcessPool:
                     resident.__enter__()
                     self._residents[slot.slot_id] = resident
                     self._resident_proxy[slot.slot_id] = requested_proxy
+                    self._resident_identity[slot.slot_id] = requested_identity
 
             yield resident, slot
             slot.health = BrowserHealth.HEALTHY
@@ -250,10 +271,14 @@ class BrowserProcessPool:
                 if resident is not None:
                     try:
                         resident.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self._log.warning(
+                            "resident close failed during recycle slot=%s: %s",
+                            slot.slot_id, exc,
+                        )
                 self._residents.pop(slot.slot_id, None)
                 self._resident_proxy.pop(slot.slot_id, None)
+                self._resident_identity.pop(slot.slot_id, None)
             elif resident is not None:
                 # Keep the process alive; only release the per-account context.
                 # Drivers without ``release_account_context`` fall back to a full
@@ -264,8 +289,11 @@ class BrowserProcessPool:
                         release()
                     else:
                         resident.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._log.warning(
+                        "resident context release failed slot=%s: %s",
+                        slot.slot_id, exc,
+                    )
             self._release_slot(slot)
             self._semaphore.release()
 
@@ -347,13 +375,14 @@ class BrowserProcessPool:
             residents = list(self._residents.values())
             self._residents.clear()
             self._resident_proxy.clear()
+            self._resident_identity.clear()
             for slot in self._slots:
                 slot.in_use = False
         for resident in residents:
             try:
                 resident.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._log.warning("resident close failed during pool close: %s", exc)
 
 
 __all__ = [
