@@ -12,6 +12,8 @@ from collections import Counter
 from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlparse
 
+from .geo.profiles import MARKET_PROFILES
+
 
 AUTH_IMPERSONATE = "firefox144"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
@@ -310,16 +312,15 @@ def hardware_profile_for_family(impersonate: str) -> dict[str, object]:
     return hw
 _AUTH_FINGERPRINT_LOCAL = threading.local()
 
+# 协议路径地理档案 = geo/profiles.MARKET_PROFILES 的渲染视图（单一事实源，
+# 与 browser_fingerprint_pool.BROWSER_LOCALE_PROFILES 同源派生）。
 _GEO_PROFILES = {
-    "US": {"timezone": "America/New_York", "lang": "en-US", "lang_full": "en-US,en;q=0.9"},
-    "CA": {"timezone": "America/Toronto", "lang": "en-CA", "lang_full": "en-CA,en-US;q=0.9,en;q=0.8"},
-    "GB": {"timezone": "Europe/London", "lang": "en-GB", "lang_full": "en-GB,en;q=0.9,en-US;q=0.8"},
-    "DE": {"timezone": "Europe/Berlin", "lang": "de-DE", "lang_full": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"},
-    "FR": {"timezone": "Europe/Paris", "lang": "fr-FR", "lang_full": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7"},
-    "JP": {"timezone": "Asia/Tokyo", "lang": "ja-JP", "lang_full": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7"},
-    "SG": {"timezone": "Asia/Singapore", "lang": "en-SG", "lang_full": "en-SG,en-US;q=0.9,en;q=0.8"},
-    "AU": {"timezone": "Australia/Sydney", "lang": "en-AU", "lang_full": "en-AU,en-US;q=0.9,en;q=0.8"},
-    "VN": {"timezone": "Asia/Ho_Chi_Minh", "lang": "vi-VN", "lang_full": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7"},
+    country: {
+        "timezone": profile["timezone_iana"],
+        "lang": profile["lang"],
+        "lang_full": profile["lang_full"],
+    }
+    for country, profile in MARKET_PROFILES.items()
 }
 
 
