@@ -287,10 +287,6 @@ class TestResolveProxyValue(unittest.TestCase):
         self.assertEqual(resolve_proxy_value("bad,weird://h:1"), "")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
     """C# 归一器写出的代理值必须能被唯一权威 parse_proxy 无损解析。
 
@@ -312,3 +308,6 @@ def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
         assert entry.port == case["port"], case["name"]
         assert entry.username == case["username"], case["name"]
         assert entry.password == case["password"], case["name"]
+
+if __name__ == "__main__":
+    unittest.main()

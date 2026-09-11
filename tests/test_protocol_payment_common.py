@@ -135,9 +135,6 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         self.assertTrue(payload["side_effect_started"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_command_id_correlates_with_the_launching_cli_task(self):
         # 协议支付终端报告此前没有任何相关性字段，桌面侧只能靠进程级环境猜。
         # 子进程继承 SMS_TOOL_COMMAND_ID，报告应携带同一 ID。
@@ -169,3 +166,46 @@ if __name__ == "__main__":
         for raw in battery:
             self.assertIn("[REDACTED]", CORE.sanitize_text(raw), raw)
             self.assertIn("[REDACTED]", sms_sanitize_text(raw), raw)
+
+    def test_payload_keys_are_policy_driven_not_hardcoded(self):
+        # policy sensitive_keys/sensitive_key_fragments 里的键必须打码——旧手搓
+        # 片段表不含 api_key/license_key/session_id，它们此前会漏。证明读取的
+        # 是 policy 而不是内置回退表。
+        cleaned = CORE.sanitize_payload({
+            "api_key": "secret-value",
+            "license_key": "lic-value",
+            "session_id": "sess-value",
+            "cs_id": "cs-value",
+            "error_count": 3,
+            "note": "safe text",
+        })
+        self.assertEqual(cleaned["api_key"], "[REDACTED]")
+        self.assertEqual(cleaned["license_key"], "[REDACTED]")
+        self.assertEqual(cleaned["session_id"], "[REDACTED]")
+        self.assertEqual(cleaned["cs_id"], "[REDACTED]")
+        self.assertEqual(cleaned["error_count"], 3)
+
+    def test_safe_key_paths_keep_proxy_affinity_session_id(self):
+        cleaned = CORE.sanitize_payload({
+            "proxy_affinity": {"session_id": "sid-value", "country": "VN"},
+            "session_id": "top-level-must-die",
+        })
+        self.assertEqual(cleaned["proxy_affinity"]["session_id"], "sid-value")
+        self.assertEqual(cleaned["session_id"], "[REDACTED]")
+
+    def test_sanitize_log_text_masks_account_emails(self):
+        masked = CORE.sanitize_log_text("failed for alice@example.com twice")
+        self.assertNotIn("alice@example.com", masked)
+        self.assertIn("***@example.com", masked)
+
+    def test_redaction_survives_missing_policy_file(self):
+        # policy 缺失必须退回内置 LEGACY 规则：提取器绝不漏报密。
+        import unittest.mock as mock
+
+        with mock.patch.object(CORE, "_POLICY_LOADED", True), \
+             mock.patch.object(CORE, "_POLICY_CACHE", None):
+            self.assertIn("[REDACTED]", CORE.sanitize_text("password=hunter2"))
+            self.assertEqual(CORE.sanitize_payload({"access_token": "x"})["access_token"], "[REDACTED]")
+
+if __name__ == "__main__":
+    unittest.main()

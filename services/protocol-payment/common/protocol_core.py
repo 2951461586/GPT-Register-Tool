@@ -11,40 +11,144 @@ from typing import Any, Callable
 
 RESULT_SCHEMA = "protocol_payment.v1"
 
-# Rule set mirrors sms_tool/sanitizer.py + sensitive_policy.json so subprocess
-# extractors and the manager redact the same secret shapes.
-_SENSITIVE_RE = re.compile(
-    r"(?is)(access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|"
-    r"oauth[_-]?refresh[_-]?token|service[_-]?token|"
-    r"client[_-]?secret|api[_-]?key|ba[_-]?token|totp(?:[_-]?secret)?|"
-    r"card(?:[_-]?(?:number|cvv|cvc|last4))?|blik[_-]?code|"
-    r"authorization|password|checkout[_-]?session[_-]?id|payment[_-]?intent[_-]?id)"
-    r"(\s*[=:]\s*)['\"]?[^\s,}\"']+"
+# ──────────────────── policy-driven redaction ────────────────────
+# 规则来自仓库根的 ``sensitive_policy.json``（single source）——C# 的
+# ``SensitiveDataSanitizer`` 与 Python 的 ``sms_tool.sanitizer`` 都读它，
+# 子进程提取器也必须读它，否则三端各养一套规则、漂移只是时间问题
+# （2026-09-12 扫描：本模块此前手搓一份"镜像"规则集）。
+#
+# 降级保证：policy 文件缺失/损坏时退回内置 LEGACY_* 规则（即旧手搓集），
+# 支付提取器绝不因 policy 缺失而漏报密或崩溃。
+
+import re as _re
+from pathlib import Path as _Path
+
+_REDACTED = "[REDACTED]"
+_POLICY_CANDIDATES = (
+    _Path(__file__).resolve().parents[3] / "sensitive_policy.json",
 )
-_BEARER_RE = re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+")
-_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b")
-_BA_RE = re.compile(r"\bBA-[A-Za-z0-9_.-]+\b")
-_PROXY_AUTH_RE = re.compile(r"(?i)\b(https?|socks5h?)://[^\s/@]+@")
-_STRIPE_KEY_RE = re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]+")
-_RT_PREFIX_RE = re.compile(r"\brt_[A-Za-z0-9._-]{8,}\b")
+_POLICY_CACHE: dict[str, Any] | None = None
+_POLICY_LOADED = False
+
+# 旧手搓集，仅作 policy 缺失时的回退（与 v2026.09.12 版逐字相同）。
+LEGACY_TEXT_PATTERNS = [
+    ("bearer", r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED]"),
+    ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b", "[REDACTED]"),
+    ("ba_token", r"\bBA-[A-Za-z0-9_.-]+\b", "[REDACTED]"),
+    ("proxy_credentials", r"(?i)\b((?:https?|socks5h?)://)[^\s/@]+@", r"\1://[REDACTED]@"),
+    ("stripe_key", r"\b[sr]k_(?:live|test)_[A-Za-z0-9]+", "[REDACTED]"),
+    ("refresh_token", r"\brt_[A-Za-z0-9._-]{8,}\b", "[REDACTED]"),
+    ("named_secret", r"(?is)(access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|oauth[_-]?refresh[_-]?token|service[_-]?token|client[_-]?secret|api[_-]?key|ba[_-]?token|totp(?:[_-]?secret)?|card(?:[_-]?(?:number|cvv|cvc|last4))?|blik[_-]?code|authorization|password|checkout[_-]?session[_-]?id|payment[_-]?intent[_-]?id)(\s*[=:]\s*)['\"]?[^\s,}\"']+", r"\1\2[REDACTED]"),
+]
+LEGACY_KEY_FRAGMENTS = (
+    "token", "secret", "password", "authorization",
+    "card_number", "cardnumber", "card_last4", "cvv", "blik_code",
+)
+LEGACY_SAFE_KEY_SUFFIXES = ()
+
+
+def _load_policy() -> dict[str, Any] | None:
+    """Load and cache sensitive_policy.json; None when unavailable."""
+    global _POLICY_CACHE, _POLICY_LOADED
+    if _POLICY_LOADED:
+        return _POLICY_CACHE
+    _POLICY_LOADED = True
+    for candidate in _POLICY_CANDIDATES:
+        try:
+            _POLICY_CACHE = json.loads(_Path(candidate).read_text(encoding="utf-8"))
+            break
+        except Exception:
+            continue
+    return _POLICY_CACHE
+
+
+def _python_replacement(value: str) -> str:
+    """policy 的替换串用 .NET 语法（``$1``）；Python re 需要 ``\\g<1>``。
+
+    与 sms_tool/sanitizer._python_replacement 同一翻译（policy 是 .NET/Python
+    共用的单一事实源）。
+    """
+    return _re.sub(r"\$(\d+)", r"\\g<\1>", value)
+
+
+def _compiled_patterns() -> list[tuple[_re.Pattern[str], str]]:
+    policy = _load_policy()
+    if policy:
+        try:
+            return [
+                (_re.compile(entry["pattern"]), _python_replacement(str(entry["replacement"])))
+                for entry in policy.get("text_patterns") or []
+            ]
+        except Exception:
+            pass
+    return [(_re.compile(pattern), replacement) for _name, pattern, replacement in LEGACY_TEXT_PATTERNS]
+
+
+def _key_rules() -> tuple[set[str], tuple[str, ...], tuple[str, ...]]:
+    """(exact sensitive keys, fragments, safe suffixes) for payload redaction."""
+    policy = _load_policy()
+    if policy:
+        try:
+            return (
+                {str(k).lower() for k in policy.get("sensitive_keys") or []},
+                tuple(str(f).lower() for f in policy.get("sensitive_key_fragments") or []),
+                tuple(str(s).lower() for s in policy.get("safe_key_suffixes") or []),
+            )
+        except Exception:
+            pass
+    return set(), LEGACY_KEY_FRAGMENTS, LEGACY_SAFE_KEY_SUFFIXES
 
 
 def sanitize_text(value: Any) -> str:
     text = str(value or "")
-    text = _BEARER_RE.sub(r"\1[REDACTED]", text)
-    text = _JWT_RE.sub("[REDACTED]", text)
-    text = _BA_RE.sub("[REDACTED]", text)
-    text = _PROXY_AUTH_RE.sub(r"\1://[REDACTED]@", text)
-    text = _STRIPE_KEY_RE.sub("[REDACTED]", text)
-    text = _RT_PREFIX_RE.sub("[REDACTED]", text)
-    return _SENSITIVE_RE.sub(r"\1\2[REDACTED]", text)
+    for pattern, replacement in _compiled_patterns():
+        text = pattern.sub(replacement, text)
+    return text
 
 
-def sanitize_payload(value: Any) -> Any:
+def sanitize_log_text(value: Any) -> str:
+    """Log-strength redaction: sanitize_text plus log_text_patterns
+    (operator-facing email masking) — mirrors C# SensitiveDataSanitizer.Redact."""
+    text = sanitize_text(value)
+    policy = _load_policy()
+    entries = (policy or {}).get("log_text_patterns") or []
+    try:
+        for entry in entries:
+            text = _re.compile(entry["pattern"]).sub(
+                _python_replacement(str(entry["replacement"])), text)
+    except Exception:
+        pass
+    return text
+
+
+def _key_is_sensitive(key: str, path: str, exact: set[str], fragments: tuple[str, ...], safe_suffixes: tuple[str, ...]) -> bool:
+    lowered = str(key).lower()
+    full_path = f"{path}.{lowered}" if path else lowered
+    if any(full_path == safe or full_path.endswith("." + safe) for safe in _SAFE_KEY_PATHS):
+        return False
+    if lowered in exact:
+        return True
+    if lowered.endswith(tuple(safe_suffixes)):
+        return False
+    return any(fragment in lowered for fragment in fragments)
+
+
+# safe_key_paths 不随 policy 缺失而失效：proxy_affinity.session_id 是既有契约。
+_SAFE_KEY_PATHS = ("proxy_affinity.session_id",)
+
+
+def sanitize_payload(value: Any, *, _path: str = "") -> Any:
     if isinstance(value, dict):
-        return {key: "[REDACTED]" if any(part in str(key).lower() for part in ("token", "secret", "password", "authorization", "card_number", "cardnumber", "card_last4", "cvv", "blik_code")) else sanitize_payload(item) for key, item in value.items()}
+        exact, fragments, safe_suffixes = _key_rules()
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            if _key_is_sensitive(str(key), _path, exact, fragments, safe_suffixes):
+                cleaned[key] = _REDACTED
+            else:
+                cleaned[key] = sanitize_payload(item, _path=f"{_path}.{str(key).lower()}" if _path else str(key).lower())
+        return cleaned
     if isinstance(value, list):
-        return [sanitize_payload(item) for item in value]
+        return [sanitize_payload(item, _path=_path) for item in value]
     if isinstance(value, str):
         return sanitize_text(value)
     return value
