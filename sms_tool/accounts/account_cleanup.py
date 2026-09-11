@@ -2,11 +2,14 @@
 
 Only terminal account states are removable. Transport failures and other
 unknown probe results stay in the account pool for a later recheck.
+``token_revoked`` is the explicit 掉号 verdict written by
+``account_recovery._persist_token_revoked_drop`` after the recovery chain
+confirmed there is no relogin material -- without it here those rows were
+permanently dead yet survived every cleanup pass.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Any, Iterable
 
 
@@ -14,12 +17,8 @@ _TERMINAL_STATUSES = {
     "account_deactivated",
     "deactivated",
     "dropped",
+    "token_revoked",
 }
-_TOKEN_FAILURE_RE = re.compile(
-    r"(?:\b401\b|access[_ -]?token.*(?:invalid|expired)|"
-    r"authentication token has been invalidated)",
-    re.IGNORECASE,
-)
 
 
 def account_cleanup_reason(account: dict[str, Any]) -> str:

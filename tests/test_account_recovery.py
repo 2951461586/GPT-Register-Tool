@@ -91,6 +91,55 @@ def test_refresh_local_quota_statuses_persists_result():
     assert marked.call_args.args[:2] == ("ok@example.com", "active")
 
 
+def test_refresh_local_quota_reuses_definitive_scan_probe_without_reprobing():
+    probes = []
+
+    def probe(_account, **kwargs):
+        probes.append(kwargs)
+        return {"ok": True, "status": "active", "quota_status": "重新探测"}
+
+    account = {"email": "fresh@example.com", "access_token": "at_123"}
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(account_recovery, "probe_account_liveness", side_effect=probe),
+        patch.object(account_recovery, "mark_quota_status", return_value=True) as marked,
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["fresh@example.com"],
+            fresh_probes={"fresh@example.com": {"ok": True, "status": "active", "quota_status": "可用"}},
+        )
+
+    assert result["ok"]
+    # The scan probed wham moments ago; a definitive verdict must not be
+    # probed a second time (doubled Cloudflare-401 exposure).
+    assert probes == []
+    assert marked.call_args.args[1] == "可用"
+    assert marked.call_args.kwargs["quota_result"].get("probe_source") == "scan_reuse"
+
+
+def test_refresh_local_quota_reprobes_transport_unknown_scan_probe():
+    probes = []
+
+    def probe(_account, **kwargs):
+        probes.append(kwargs)
+        return {"ok": True, "status": "active", "quota_status": "可用"}
+
+    account = {"email": "stale@example.com", "access_token": "at_123"}
+    with (
+        patch.object(account_recovery, "get_account_record", return_value=account),
+        patch.object(account_recovery, "probe_account_liveness", side_effect=probe),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+    ):
+        result = account_recovery.refresh_local_quota_statuses(
+            ["stale@example.com"],
+            fresh_probes={"stale@example.com": {"ok": False, "status": "unknown", "error": "timeout"}},
+        )
+
+    assert result["ok"]
+    assert len(probes) == 1
+    assert result["results"][0]["quota_status"] == "可用"
+
+
 def test_refresh_local_quota_keeps_probe_health_when_persistence_fails():
     with (
         patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}),

@@ -20,7 +20,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
-from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from .proxy_health import ProxyHealthTracker
@@ -86,53 +85,29 @@ class UpstreamProxy:
     def from_url(cls, url: str, label: str = "", priority: int = 0) -> UpstreamProxy:
         """Parse a proxy URL into UpstreamProxy.
 
-        Supports standard ``scheme://user:pass@host:port`` and the Kookeey /
-        ippeak non-standard 4-segment ``host:port:user:pass`` format, plus
-        IPv6 literals and no-auth forms via the unified ``proxy_entry`` parser.
+        Delegates to the single-authority ``proxy_entry`` parser: standard
+        ``scheme://user:pass@host:port``, the Kookeey / ippeak non-standard
+        4-segment ``host:port:user:pass`` format, IPv6 literals and no-auth
+        forms. Malformed input raises ``ValueError`` -- a garbage URL used to
+        fall through to a permissive ``urlparse`` fallback and become a live
+        ``127.0.0.1:1080`` upstream, which is exactly the failure a pool
+        server must refuse loudly instead of serving.
         """
-        # Delegate to the single-authority parser; fall back to the historical
-        # logic only if the strict parser refuses (e.g. malformed input).
         from .proxy_entry import parse_proxy
 
         entry = parse_proxy(url, default_scheme="socks5")
-        if entry is not None:
-            if not label:
-                # Keep the legacy label convention: URL form -> raw URL;
-                # bare 4-segment form -> user@host:port.
-                label = url if "://" in url else f"{entry.username}@{entry.host}:{entry.port}"
-            return cls(
-                host=entry.host,
-                port=entry.port,
-                username=entry.username,
-                password=entry.password,
-                label=label,
-                priority=priority,
-            )
-        # Detect Kookeey / ippeak 4-segment format: host:port:user:pass
-        # Example: gate.kookeey.info:1000:9408785-edbd645b:54ad4d54-JP
-        if "://" not in url:
-            parts = url.split(":")
-            if len(parts) == 4 and "." in parts[0]:
-                host, port_s, user, pwd = parts
-                try:
-                    port = int(port_s)
-                except ValueError:
-                    port = 1080
-                return cls(
-                    host=host,
-                    port=port,
-                    username=user,
-                    password=pwd,
-                    label=label or f"{user}@{host}:{port}",
-                    priority=priority,
-                )
-        p = urlparse(url)
+        if entry is None:
+            raise ValueError(f"unparseable proxy url: {url!r}")
+        if not label:
+            # Keep the legacy label convention: URL form -> raw URL;
+            # bare 4-segment form -> user@host:port.
+            label = url if "://" in url else f"{entry.username}@{entry.host}:{entry.port}"
         return cls(
-            host=p.hostname or "127.0.0.1",
-            port=p.port or 1080,
-            username=p.username or "",
-            password=p.password or "",
-            label=label or url,
+            host=entry.host,
+            port=entry.port,
+            username=entry.username,
+            password=entry.password,
+            label=label,
             priority=priority,
         )
 

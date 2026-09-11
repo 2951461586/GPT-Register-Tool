@@ -321,11 +321,29 @@ class RegistrationEmailWorkflow:
             raise
         except RegistrationStageOverrun as exc:
             raise RegistrationAbort(f"{state.value}_stage_budget_exceeded:{exc}") from exc
-        except (NameError, AttributeError, ImportError, KeyError, TypeError) as exc:
+        except (
+            NameError,
+            AttributeError,
+            ImportError,
+            KeyError,
+            TypeError,
+            IndexError,
+            UnboundLocalError,
+            NotImplementedError,
+            RecursionError,
+        ) as exc:
+            # Programming/contract errors only. IndexError used to fall into the
+            # transport catch-all below and get retried as a network failure --
+            # the same "error name hides root cause" class as the RuntimeError
+            # demotion fixed in error_classification. Keep this tuple in sync
+            # with error_classification.INTERNAL_ERROR_MARKERS, which matches
+            # the `{state}_internal:<Type>:` label text.
             raise RegistrationAbort(
                 f"{state.value}_internal:{type(exc).__name__}:{exc}"
             ) from exc
         except Exception as exc:
+            # Transport/protocol failures keep their message so
+            # classify_error's marker vocabulary decides retryability.
             raise RegistrationAbort(f"{state.value}_transport:{exc}") from exc
         finally:
             if self._timing_open:

@@ -17,3 +17,25 @@ def test_cleanup_selects_only_explicit_terminal_states():
     assert [(row["email"], row["cleanup_reason"]) for row in selected] == [
         ("deactivated@example.com", "account_deactivated"),
     ]
+
+
+def test_cleanup_selects_token_revoked_terminal_verdict():
+    # 掉号: _persist_token_revoked_drop stamps terminal_failure.code=token_revoked
+    # after recovery confirmed there is no relogin material. Without it in the
+    # terminal set these rows survived every cleanup pass forever.
+    account = {
+        "email": "revoked@example.com",
+        "access_token": "",
+        "status": "at_invalid",
+        "error": "token_revoked_unrecoverable",
+        "terminal_failure": {"code": "token_revoked", "reason": "token_invalid_no_relogin_material"},
+    }
+    assert account_cleanup_reason(account) == "token_revoked"
+    assert [row["email"] for row in select_removable_accounts([account])] == ["revoked@example.com"]
+
+
+def test_cleanup_still_keeps_error_text_only_token_failures():
+    # Error-text token failures without an explicit terminal verdict stay
+    # eligible for recheck (architecture.md Terminal Account Cleanup rule).
+    account = {"email": "maybe@example.com", "access_token": "at", "status": "at_invalid", "error": "401"}
+    assert account_cleanup_reason(account) == ""

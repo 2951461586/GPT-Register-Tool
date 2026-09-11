@@ -16,6 +16,7 @@ canonical fingerprint definitions remain in one place.  This module adds:
 from __future__ import annotations
 
 import json
+import logging
 import random
 import threading
 from collections.abc import Mapping
@@ -24,6 +25,8 @@ from typing import Any
 
 from .auth_headers import fingerprint_profile_weights
 from .geo import ProxyGeo
+
+logger = logging.getLogger(__name__)
 
 # Returned when geo resolution is unavailable entirely; the caller then keeps
 # the profile's own defaults.
@@ -142,6 +145,11 @@ class FingerprintPool:
                 self._weights = [float(name_weights.get(p.name, 1.0)) for p in self._profiles]
             except Exception:
                 self._weights = None
+        # Country allow-list enforced per selection (see ``next``), not at
+        # construction: every built profile carries the placeholder country
+        # "US" because real geo binds at ``_with_geo`` time from the proxy.
+        self._allowed_countries: frozenset[str] = frozenset()
+        self._allowed_warned = False
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any] | None = None) -> "FingerprintPool":
@@ -152,11 +160,15 @@ class FingerprintPool:
         pool = cls(mode=mode)
         if not isinstance(fp_cfg, Mapping):
             return pool
-        # Filter by allowed countries if configured
+        # ``allowed_countries`` narrows the geo-bound selection in ``next``.
+        # Filtering the built profiles here used to empty the pool silently:
+        # every profile carries the placeholder country "US" at build time, so
+        # ``allowed_countries: ["VN"]`` fell back to the default profile.
         allowed_countries = fp_cfg.get("allowed_countries")
         if isinstance(allowed_countries, (list, tuple)) and allowed_countries:
-            allowed = {str(c).upper() for c in allowed_countries}
-            pool._profiles = [p for p in pool._profiles if p.country in allowed]
+            pool._allowed_countries = frozenset(
+                str(c).strip().upper() for c in allowed_countries if str(c).strip()
+            )
         return pool
 
     def _with_geo(self, profile: "ProtocolEnvironmentProfile", proxy: str | None) -> "ProtocolEnvironmentProfile":
@@ -235,7 +247,13 @@ class FingerprintPool:
             return ProxyGeo(country=hint, source="hint") if hint else _EMPTY_GEO
 
     def next(self, proxy: str | None = None) -> ProtocolEnvironmentProfile:
-        """Return a weighted profile, geo-aligned to the proxy exit."""
+        """Return a weighted profile, geo-aligned to the proxy exit.
+
+        With ``allowed_countries`` configured, the check runs on the
+        geo-bound result: redraw a bounded number of times looking for a
+        matching exit country, then return the closest mismatch with a
+        one-time warning instead of silently degrading to the default profile.
+        """
         if not self._profiles:
             # Fallback to a default profile
             return self._with_geo(
@@ -247,13 +265,32 @@ class FingerprintPool:
                 ),
                 proxy,
             )
-        with self._lock:
-            if self._mode == "round_robin" or not self._weights:
-                profile = self._profiles[self._index % len(self._profiles)]
-                self._index += 1
-            else:
-                profile = random.choices(self._profiles, weights=self._weights, k=1)[0]
-        return self._with_geo(profile, proxy)
+        allowed = self._allowed_countries
+        attempts = max(2, min(8, len(self._profiles) * 2)) if allowed else 1
+        fallback: ProtocolEnvironmentProfile | None = None
+        for _ in range(attempts):
+            with self._lock:
+                if self._mode == "round_robin" or not self._weights:
+                    profile = self._profiles[self._index % len(self._profiles)]
+                    self._index += 1
+                else:
+                    profile = random.choices(self._profiles, weights=self._weights, k=1)[0]
+            aligned = self._with_geo(profile, proxy)
+            if not allowed or str(aligned.country or "").upper() in allowed:
+                return aligned
+            if fallback is None:
+                fallback = aligned
+        if not self._allowed_warned:
+            self._allowed_warned = True
+            logger.warning(
+                "fingerprint_pool.allowed_countries=%s never matched the geo-bound "
+                "profile country (last: %s); returning the closest profile. Check the "
+                "configured countries against the actual proxy exits.",
+                sorted(allowed),
+                getattr(fallback, "country", ""),
+            )
+        assert fallback is not None  # attempts >= 2 when allowed is non-empty
+        return fallback
 
     def select(self, name: str, proxy: str | None = None) -> ProtocolEnvironmentProfile | None:
         """Select a specific profile by name, geo-aligned to the proxy exit.

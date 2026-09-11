@@ -28,6 +28,7 @@ from ..storage import upsert_account
 from ..workspace_scan import inspect_workspace, parse_workspace_fallback_ids
 from ..error_classification import classify_error
 from ..config import CFG
+from ..utils import atomic_write_text
 
 _GMAIL_SCAN_LOCKS = {}
 _GMAIL_SCAN_LOCKS_GUARD = threading.Lock()
@@ -529,7 +530,7 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
 
     if json_path:
         try:
-            Path(json_path).write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+            atomic_write_text(json_path, json.dumps(updated, ensure_ascii=False, indent=2))
         except Exception as exc:
             print(f"[!] Failed to update session JSON {json_path}: {exc}")
     upsert_account(updated, json_path=json_path)
@@ -763,6 +764,17 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
     ]
     if not emails:
         return {}
+    # The scan just probed every account's wham endpoint (token_probe, or the
+    # post-relogin probe when the scan recovered a 401). Handing those
+    # verdicts to the quota refresh halves the probe count and the
+    # Cloudflare-401 exposure; refresh_local_quota_statuses re-probes only the
+    # transport-unknown results.
+    fresh_probes: dict[str, dict] = {}
+    for result in results or []:
+        email = str((result or {}).get("email") or "").strip().lower()
+        probe = (result or {}).get("token_probe")
+        if email and isinstance(probe, dict) and probe:
+            fresh_probes[email] = probe
     try:
         quota = refresh_local_quota_statuses(
             emails=emails,
@@ -778,6 +790,7 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
             relogin_mode=relogin_mode,
             batch_timeout=max(300, int((CFG.get("account_health") or {}).get("batch_timeout_seconds") or 900)),
             account_timeout=max(60, int((CFG.get("account_health") or {}).get("account_timeout_seconds") or 360)),
+            fresh_probes=fresh_probes,
         )
         if quota.get("total", 0):
             print(f"[*] Local quota refreshed: {quota.get('success', 0)}/{quota.get('total', 0)}")
