@@ -16,6 +16,7 @@ from sms_tool.auth_headers import (
 )
 from sms_tool.fingerprint_pool import FingerprintPool
 from sms_tool.error_classification import classify_error
+from sms_tool.registration_policy import registration_retry_decision
 
 
 class AuthHeadersAndClassificationTests(unittest.TestCase):
@@ -160,6 +161,84 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertEqual(
             classify_error("unsupported_registration_driver:protocol"),
             "configuration",
+        )
+
+
+class WrappedTransportFailureClassificationTests(unittest.TestCase):
+    """``registration_internal_error:`` must not outrank a real curl failure.
+
+    Observed 2026-09-12 in wave2 (``runtime/_verify_wave2_run.log:411``)::
+
+        [!] Registration failed for b23a6a8439c0dde5:
+            registration_internal_error:RuntimeError:Failed to perform,
+            curl: (35) BoringSSL SSL_connect: Connection closed abruptly ...
+
+    Its own text classifies as ``network`` (retryable), but the
+    ``registration_internal_error:`` wrapper is tested first and won, so the
+    result was recorded ``internal`` -- not retryable.
+
+    The demotion is deliberately narrow. Only a curl error code can prove "this
+    is really a transport failure"; the generic network markers ("connection",
+    "timeout", "proxy", "dns") also occur inside genuine Python exception text,
+    and demoting those would turn real bugs into retryable network noise. The
+    negative tests below are the ones that pin that restriction.
+    """
+
+    CURL_35 = (
+        "registration_internal_error:RuntimeError:Failed to perform, "
+        "curl: (35) BoringSSL SSL_connect: Connection closed abruptly "
+        "(SSL_ERROR_SYSCALL; error queue empty) in connection to chatgpt.com:443."
+    )
+    CURL_28 = (
+        "registration_internal_error:RuntimeError:Failed to perform, "
+        "curl: (28) Operation timed out after 20003 milliseconds with 58036 bytes received."
+    )
+
+    def test_wrapped_curl_ssl_failure_classifies_as_retryable_network(self):
+        self.assertEqual(classify_error(self.CURL_35), "network")
+        self.assertTrue(registration_retry_decision(self.CURL_35).retryable)
+
+    def test_wrapped_curl_timeout_classifies_as_retryable_network(self):
+        self.assertEqual(classify_error(self.CURL_28), "network")
+        self.assertTrue(registration_retry_decision(self.CURL_28).retryable)
+
+    def test_bare_curl_failure_is_network_too(self):
+        self.assertEqual(classify_error("Failed to perform, curl: (35) broken"), "network")
+
+    def test_internal_error_without_a_curl_code_stays_internal(self):
+        self.assertEqual(
+            classify_error("registration_internal_error:NameError: missing dependency"),
+            "internal",
+        )
+
+    def test_internal_error_mentioning_connection_stays_internal(self):
+        """The false-positive guard: a NameError is a bug, not a network blip."""
+        error = "registration_internal_error:NameError: name 'connection_pool' is not defined"
+        self.assertEqual(classify_error(error), "internal")
+        self.assertFalse(registration_retry_decision(error).retryable)
+
+    def test_internal_error_mentioning_timeout_stays_internal(self):
+        error = "registration_internal_error:AttributeError: 'X' object has no attribute 'timeout'"
+        self.assertEqual(classify_error(error), "internal")
+
+    def test_internal_error_mentioning_proxy_stays_internal(self):
+        error = "registration_internal_error:TypeError: proxy() got an unexpected keyword argument"
+        self.assertEqual(classify_error(error), "internal")
+
+    def test_plain_typeerror_stays_internal(self):
+        self.assertEqual(classify_error("registration_internal_error:TypeError: boom"), "internal")
+
+    def test_curl_markers_are_derived_not_hardcoded(self):
+        """A second, drifting copy of the marker list is how this check rots."""
+        from sms_tool.error_classification import (
+            CURL_TRANSPORT_MARKERS,
+            NETWORK_ERROR_MARKERS,
+        )
+
+        self.assertTrue(CURL_TRANSPORT_MARKERS)
+        self.assertEqual(
+            CURL_TRANSPORT_MARKERS,
+            tuple(m for m in NETWORK_ERROR_MARKERS if m.startswith("curl:")),
         )
 
 

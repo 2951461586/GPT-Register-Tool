@@ -329,6 +329,42 @@ class ICloudUrlMailboxTests(unittest.TestCase):
                 mailbox_icloud_url._request(secret_url)
         self.assertNotIn("private-token", str(caught.exception))
 
+    def test_request_asks_for_revalidation_of_the_forwarding_page(self):
+        """A cached listing keeps a mid-window mail invisible for the whole budget.
+
+        The OTP wait re-fetches the same forwarding URL every ``otp_poll_interval``
+        seconds.  If the body is served from cache, every poll inside the window
+        sees the same stale listing and the run times out with the code already
+        in the inbox (2026-09-11 triage).  Asserting the request opts out of
+        caching pins the fix; asserting the URL is byte-identical pins *why* the
+        stronger cache-busting parameter was rejected -- these are signed
+        forwarding URLs, so an extra query parameter risks a 403.
+        """
+        url = "https://mail.example/show/token/target@icloud.com"
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response()) as get:
+            mailbox_icloud_url._request(url)
+
+        args, kwargs = get.call_args
+        headers = {str(key).lower(): value for key, value in dict(kwargs["headers"]).items()}
+        self.assertEqual(headers.get("cache-control"), "no-cache")
+        self.assertEqual(headers.get("pragma"), "no-cache")
+        self.assertEqual(args[0], url)
+
+    def test_revalidation_headers_are_not_mutated_by_a_request(self):
+        """Contract guard, not a mutation target.
+
+        Dropping the ``dict(...)`` copy in ``_request`` is an *equivalent
+        mutant* -- nothing on the current path mutates the mapping -- so this
+        assertion cannot kill it, and is not claimed to (verified 2026-09-11:
+        the mutant survives by design).  It stays because the map is
+        module-level and shared by every poll, so a future change that pops a
+        header would silently corrupt all later requests instead of failing.
+        """
+        before = dict(mailbox_icloud_url._NO_CACHE_HEADERS)
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response()):
+            mailbox_icloud_url._request("https://mail.example/show/token/target@icloud.com")
+        self.assertEqual(mailbox_icloud_url._NO_CACHE_HEADERS, before)
+
 
 if __name__ == "__main__":
     unittest.main()

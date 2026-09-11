@@ -234,6 +234,33 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertTrue(presence["oai_did"])
         self.assertTrue(presence["nextauth_state"])
 
+    def test_cookie_presence_distinguishes_state_from_session_token(self):
+        """`next-auth.state` 是 OAuth state，**不**代表 session 已认证。
+
+        2026-09-12：`/api/auth/session` 连续 4 次 200 却匿名（账号已创建成功
+        仍报废），而当时的读数只有 `nextauth_state`，看不出决定性的
+        `next-auth.session-token` 到底在不在 —— 两种病因读数完全一样。
+        """
+        session = Mock()
+        session.cookies = ["oai-did", "__Secure-next-auth.state"]
+        presence = auth_flow._cookie_presence(session)
+        self.assertTrue(presence["nextauth_state"])
+        self.assertFalse(presence["nextauth_session"])
+
+        session.cookies = ["oai-did", "__Secure-next-auth.session-token"]
+        presence = auth_flow._cookie_presence(session)
+        self.assertTrue(presence["nextauth_session"])
+        self.assertFalse(presence["nextauth_state"])
+
+    def test_cookie_presence_sees_chunked_session_token(self):
+        """next-auth 会把超过 4KB 的 cookie 分块成 `.0`/`.1` —— 必须都认。"""
+        session = Mock()
+        session.cookies = [
+            "__Secure-next-auth.session-token.0",
+            "__Secure-next-auth.session-token.1",
+        ]
+        self.assertTrue(auth_flow._cookie_presence(session)["nextauth_session"])
+
     def test_registration_mode_defaults_to_passwordless_and_keeps_legacy_escape(self):
         self.assertEqual(_normalize_registration_mode(None), "passwordless")
         self.assertEqual(_normalize_registration_mode("har"), "passwordless")

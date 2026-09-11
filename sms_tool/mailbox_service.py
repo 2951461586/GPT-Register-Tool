@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Any
@@ -13,6 +14,9 @@ from .mailbox_quarantine import (
     raise_if_mailbox_quarantined, record_mailbox_auth_invalid,
     record_mailbox_endpoint_unavailable,
 )
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -93,6 +97,30 @@ class MailboxService:
             adapter = self.providers.resolve_poller(mailbox, config)
             if adapter is None:
                 raise RuntimeError("no mailbox OTP poller resolved")
+            # This is the path registration actually uses -- `mailbox._poll_email_otp`
+            # is NOT on it (the handler passes `poll_otp_fn=self.poll_otp`), so an
+            # observability hook placed there never fires for a stuck run.
+            # `otp_issued_after_unix` is logged because it is the whole story when
+            # a real OTP mail is rejected as "too old": candidates with a timestamp
+            # below it are dropped by `_email_otp_candidate`, and 2026-09-11 showed
+            # OpenAI stamping the mail BEFORE the local send request, so a correct
+            # code sat in the inbox while the poll drained the full 300s window.
+            _LOGGER.info(
+                "Mailbox OTP poll dispatch provider=%s adapter=%s timeout=%ss issued_after=%s proxy_candidates=%d",
+                str(getattr(mailbox, "provider", "") or "") or "unknown",
+                type(adapter).__name__,
+                timeout,
+                int(issued_after_unix or 0),
+                len(proxy_candidates or []),
+                extra={
+                    "event": "mailbox_otp_poll_dispatch",
+                    "provider": str(getattr(mailbox, "provider", "") or ""),
+                    "poller": type(adapter).__name__,
+                    "otp_timeout_s": timeout,
+                    "otp_issued_after_unix": int(issued_after_unix or 0),
+                    "proxy_candidate_count": len(proxy_candidates or []),
+                },
+            )
             return adapter.poll_otp(
                 mailbox,
                 subject_keyword=subject_keyword,

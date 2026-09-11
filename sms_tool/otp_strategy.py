@@ -6,6 +6,8 @@ request shape so registration code does not duplicate state-sensitive details.
 """
 
 import json
+import logging
+import time
 from collections.abc import Mapping
 
 from .config import CFG, current_config_data
@@ -14,6 +16,27 @@ from .auth_flow import _absolute_url, _invalid_state_auth_response, _json_or_raw
 from .http_client import request_with_retry
 from .mailbox import _poll_email_otp
 from .registration_progress import registration_stage
+
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _otp_poll_log(event: str, provider: str, message: str, **fields: object) -> None:
+    """Structured breadcrumb bracketing the OTP wait window.
+
+    The OTP wait used to be a blank gap in the operator log: nothing was
+    written until the poll resolved, so "the mail never arrived" and "we never
+    looked" were indistinguishable -- exactly the question raised by the
+    2026-09-11 triage, where failures all sat at 300-303s.  These records name
+    the provider and the budget so the two cases separate.
+    """
+    _LOGGER.info(
+        "Email OTP poll %s provider=%s %s",
+        event,
+        provider or "unknown",
+        message,
+        extra={"event": f"email_otp_poll_{event}", "provider": provider, **fields},
+    )
 
 
 class SyntheticResponse:
@@ -123,15 +146,42 @@ def _poll_registration_email_otp(
     poll_otp_fn = poll_otp_fn or _poll_email_otp
     total_timeout = max(0, int(timeout or 0))
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    if provider != "remail" or resend_callback is None:
+    started = time.monotonic()
+
+    def poll(window: int):
         return poll_otp_fn(
             mailbox,
             subject_keyword=subject_keyword,
-            timeout=total_timeout,
+            timeout=window,
             issued_after_unix=issued_after_unix,
             proxy=proxy,
             excluded_otps=excluded_otps,
         )
+
+    def finish(code):
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        _otp_poll_log(
+            "end",
+            provider,
+            f"matched={bool(code)} elapsed_ms={elapsed_ms}",
+            otp_matched=bool(code),
+            otp_elapsed_ms=elapsed_ms,
+        )
+        return code
+
+    if provider != "remail" or resend_callback is None:
+        # Single-shot window: only remail wires a resend callback, so every
+        # other provider gets exactly one poll for the whole budget.  If the
+        # mail is late the run burns the entire timeout and dies -- record the
+        # budget so the log attributes it instead of showing a silent gap.
+        _otp_poll_log(
+            "start",
+            provider,
+            f"timeout={total_timeout}s resend=none",
+            otp_timeout_s=total_timeout,
+            otp_resend_enabled=False,
+        )
+        return finish(poll(total_timeout))
     if resend_after_seconds is None:
         value = current_config_data().get("email_registration")
         email_cfg = value if isinstance(value, Mapping) else {}
@@ -141,24 +191,34 @@ def _poll_registration_email_otp(
     except (TypeError, ValueError):
         first_window = 30
     if first_window <= 0 or first_window >= total_timeout:
-        return _poll_email_otp(
-            mailbox,
-            subject_keyword=subject_keyword,
-            timeout=total_timeout,
-            issued_after_unix=issued_after_unix,
-            proxy=proxy,
-            excluded_otps=excluded_otps,
+        _otp_poll_log(
+            "start",
+            provider,
+            f"timeout={total_timeout}s resend=disabled",
+            otp_timeout_s=total_timeout,
+            otp_resend_enabled=False,
         )
-    code = poll_otp_fn(
-        mailbox,
-        subject_keyword=subject_keyword,
-        timeout=first_window,
-        issued_after_unix=issued_after_unix,
-        proxy=proxy,
-        excluded_otps=excluded_otps,
+        return finish(
+            _poll_email_otp(
+                mailbox,
+                subject_keyword=subject_keyword,
+                timeout=total_timeout,
+                issued_after_unix=issued_after_unix,
+                proxy=proxy,
+                excluded_otps=excluded_otps,
+            )
+        )
+    _otp_poll_log(
+        "start",
+        provider,
+        f"timeout={total_timeout}s resend_after={first_window}s",
+        otp_timeout_s=total_timeout,
+        otp_resend_enabled=True,
+        otp_resend_after_s=first_window,
     )
+    code = poll(first_window)
     if code:
-        return code
+        return finish(code)
     # Cancellation arriving during the first poll window must not pay for a
     # resend request plus the remaining window.
     ensure_not_cancelled()
@@ -171,11 +231,4 @@ def _poll_registration_email_otp(
     except Exception as exc:
         print(f"  ReMail OTP resend warning: {exc}")
     registration_stage("email_otp_wait")
-    return poll_otp_fn(
-        mailbox,
-        subject_keyword=subject_keyword,
-        timeout=total_timeout - first_window,
-        issued_after_unix=issued_after_unix,
-        proxy=proxy,
-        excluded_otps=excluded_otps,
-    )
+    return finish(poll(total_timeout - first_window))
