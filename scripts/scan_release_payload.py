@@ -14,8 +14,10 @@ so ignored-but-on-disk files can slip in.
 
 Checks
 ------
-1. Payload file paths that are git-ignored (source-ish extensions only; .dll/.exe
-   build output is legitimately ignored and out of scope).
+1. Payload file paths that are git-ignored. Only genuine build output is skipped
+   (.dll/.exe/.pdb and the build directories); everything else is asked about,
+   including suffixes nobody anticipated — a positive allowlist here is
+   fail-open and let a credential snapshot through on 2026-09-11.
 2. Credential regexes over payload text files (reuses sensitive_field_scan).
 3. Known-bad name patterns from past incidents (`scripts/_*.py`, `pick_final*`).
 
@@ -41,11 +43,19 @@ ROOT = Path(__file__).resolve().parents[1]
 # single most important false-positive filter here.
 _SCRATCH_SCRIPT = re.compile(r"(^|[\\/])_(?!_)[^\\/]*\.py$")
 
-# Only these are worth asking git about. Build output (.dll/.exe/.pyd) is ignored
-# on purpose and would produce nothing but false positives.
-SOURCE_SUFFIXES = {
-    ".py", ".pyw", ".cs", ".xaml", ".json", ".md", ".txt", ".ps1", ".bat",
-    ".cmd", ".sh", ".yml", ".yaml", ".js", ".ts", ".ini", ".cfg", ".toml",
+# Build output that is git-ignored *by design* and is the whole point of the
+# payload.
+#
+# This used to be a positive allowlist of "source-ish" suffixes. That is
+# **fail-open**, and it hid a real file: `proxy.json.bak-vn-migration` has the
+# suffix `.bak-vn-migration`, so it was never handed to git at all — the gate
+# stayed blind to it even after .gitignore began rejecting it (2026-09-11,
+# caught by mutation testing: the "force the snapshot into a payload dir" probe
+# came back clean). A security gate must fail closed: anything not recognised
+# as build output gets asked about.
+BUILD_OUTPUT_SUFFIXES = {
+    ".dll", ".exe", ".pdb", ".so", ".dylib", ".pyd", ".pyc",
+    ".lib", ".exp", ".obj", ".ilk", ".nupkg", ".snupkg",
 }
 
 # Directories whose contents are build output, not source. They are git-ignored by
@@ -163,11 +173,12 @@ def main(argv: list[str]) -> int:
             rel = path.relative_to(payload).as_posix()
             if rel.startswith(BUILD_OUTPUT_PREFIXES):
                 continue
-            if path.suffix.lower() in SOURCE_SUFFIXES:
-                rel_paths.append(rel)
+            if path.suffix.lower() in BUILD_OUTPUT_SUFFIXES:
+                continue
+            rel_paths.append(rel)
             failures.extend(check_names(rel))
 
-        print(f"[{payload.name}] {len(rel_paths)} source-ish files to verify")
+        print(f"[{payload.name}] {len(rel_paths)} files to verify against .gitignore")
         failures.extend(check_ignored(payload, rel_paths))
         failures.extend(check_artifact_regexes(payload))
 

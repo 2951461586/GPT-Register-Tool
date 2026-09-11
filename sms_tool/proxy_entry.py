@@ -319,16 +319,25 @@ def proxy_to_url(entry: ProxyEntry) -> str:
 #
 # Supported provider templates:
 #   * Cliproxy / Novproxy — username carries ``region-XX`` and ``-sid-<id>-t-<n>``.
+#   * 9http / 9proxy      — username carries ``geo-XX`` and ``-sid-<id>-ttl-<n>``;
+#     the region tag is ``geo`` rather than ``region``, so both spellings are
+#     matched and — critically — the *original* tag is preserved when
+#     retargeting, otherwise ``geo-VN`` would be rewritten to ``region-US`` and
+#     the provider would reject the credential.
 #   * Kookeey / ippeak    — password shaped ``BASE-CC-SESSION-TTL`` (TTL like
 #     ``5m`` / ``30s`` / ``1h`` / ``1d``); the TTL unit set is the superset of
 #     both historical implementations so seconds/days sessions rotate too.
 
-_USER_REGION_RE = re.compile(r"(^|-)region-[A-Za-z]{2}(?=-|$)")
+_REGION_TAG = r"(?P<tag>region|geo)"
+_USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")
 _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
 _KOOKEEY_PW_RE = re.compile(
     r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$"
 )
-_INFER_USER_REGION_RE = re.compile(r"region-([A-Za-z]{2})(?=$|[-_:])")
+# NOTE: the tag group must stay *non-capturing* here — ``infer_region`` reads
+# ``match.group(1)`` as the country code, so a capturing tag group would make it
+# return ``"GEO"`` instead of ``"VN"``.
+_INFER_USER_REGION_RE = re.compile(r"(?:region|geo)-([A-Za-z]{2})(?=$|[-_:])")
 _INFER_KOOKEEY_PW_RE = re.compile(r"^.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]$")
 _INFER_USER_TAIL_RE = re.compile(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?$")
 _IPWO_CUSTOM_ZONE_RE = re.compile(
@@ -385,7 +394,9 @@ def retarget_region(proxy: str, iso_code: str) -> str:
     if not username and not password:
         return value
     changed = False
-    new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}region-{iso}", username, count=1)
+    new_user, count = _USER_REGION_RE.subn(
+        lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1
+    )
     if count:
         username = new_user
         changed = True

@@ -119,13 +119,18 @@ def test_proxy_for_country_keeps_jp_sticky_city_suffix():
 
 
 def test_proxy_for_country_returns_the_template_untouched_when_no_region_token():
-    """AUDIT POINT: the '-XX' fallback is dead whenever the proxy has a password.
+    """A credentialed template carrying no region token is returned unchanged.
 
-    ``rpartition("@")`` leaves the scheme inside *userinfo* (``http://user:pass``),
-    so the ``-[A-Za-z]{2}$`` fallback can only ever fire for password-less
-    proxies.  A credentialed template with no ``region-XX`` token is therefore
-    returned unchanged - the caller believes it routed to the requested country
-    while the egress region never changed.
+    The ``-XX`` fallback can only fire for a password-less proxy:
+    ``rpartition("@")`` leaves ``:password`` at the end of *userinfo*, so
+    ``-[A-Za-z]{2}$`` never matches a credentialed one.
+
+    After the delegation to ``phone_proxy.match_proxy_region`` every *known*
+    provider template (``region-XX`` / ``geo-XX`` / ``custom_zone_XX`` /
+    Kookeey password) is rewritten, so this branch now covers only credentials
+    that genuinely carry no region token.  Returning them untouched is the
+    honest outcome — there is nothing to rewrite, and silently inventing a
+    region would be worse than leaving it be.
     """
     template = "user-xx:pass@1.2.3.4:8080"
     assert proxy_for_country_template(template, "US") == "http://user-xx:pass@1.2.3.4:8080"
@@ -150,6 +155,34 @@ def test_proxy_for_country_is_idempotent_for_the_same_country():
     template = "user-region-us:pass@1.2.3.4:8080"
     once = proxy_for_country_template(template, "DE")
     assert proxy_for_country_template(once, "DE") == once
+
+
+def test_proxy_for_country_inherits_9http_geo_template():
+    """The rewrite is delegated, so 9http's ``geo-XX`` routes too.
+
+    This helper used to hard-code ``region-[A-Za-z]{2}``: a 9http credential
+    came back untouched while the caller believed the egress was retargeted.
+    """
+    template = "VSBFTHZC-geo-VN-sid-mwT3-ttl-5:secret@global.9http.com:9091"
+    out = proxy_for_country_template(template, "US")
+    assert "geo-US" in out
+    assert "geo-VN" not in out
+    # ...and the provider tag must survive, not be rewritten to region-US.
+    assert "region-US" not in out
+
+
+def test_proxy_for_country_inherits_ipwo_custom_zone_template():
+    template = "acct_custom_zone_US_sid_1_time_5:secret@us.ipwo.net:7878"
+    out = proxy_for_country_template(template, "JP")
+    assert "custom_zone_JP" in out
+    assert "custom_zone_US" not in out
+
+
+def test_proxy_for_country_inherits_kookeey_password_template():
+    template = "gate.kookeey.info:1000:user:pass-JP-abc123-5m"
+    out = proxy_for_country_template(template, "GB")
+    assert "pass-GB-abc123-5m" in out
+    assert "pass-JP-abc123-5m" not in out
 
 
 # ──────────────────────── is_paypal_ba_approve_url ───────────────────────────

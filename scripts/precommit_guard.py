@@ -56,6 +56,15 @@ BLOCKED_SUFFIXES = (
     "_credentials.json",
 )
 
+# The blocked names above are EXACT, so `proxy.json.bak-vn-migration` sailed past
+# both this gate and .gitignore (2026-09-11: it held 100 proxy user:pass pairs
+# plus an smsbower api_key while sitting untracked in the public repo root).
+# Snapshot suffixes are unbounded — `.bak`, `.bak-<desc>`, `.old`, `.save` — so
+# match the credential-config FAMILY instead of enumerating suffixes.
+BLOCKED_CONFIG_FAMILY = re.compile(
+    r"^(?:config|proxy|runtime|payment|session)\.json(?:\..+)?$"
+)
+
 # Explicitly allowed even though the name looks dangerous.
 ALLOWED_EXACT = {
     "sensitive_policy.json",   # policy definitions, not values
@@ -64,6 +73,8 @@ ALLOWED_EXACT = {
     "skills-lock.json",
     "payment_methods.json",
     "global.json",
+    "proxy.json.example",      # mirrors the .gitignore exception
+    "config.json.example",
 }
 
 ALLOWED_SUFFIXES = (
@@ -171,6 +182,8 @@ def name_is_blocked(rel: str) -> bool:
         return False
     if name.endswith(ALLOWED_SUFFIXES):
         return False
+    if BLOCKED_CONFIG_FAMILY.match(name):
+        return True
     if name in BLOCKED_NAMES:
         return True
     return name.endswith(BLOCKED_SUFFIXES)

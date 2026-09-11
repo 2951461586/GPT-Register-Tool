@@ -319,6 +319,7 @@ _GEO_PROFILES = {
     "JP": {"timezone": "Asia/Tokyo", "lang": "ja-JP", "lang_full": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7"},
     "SG": {"timezone": "Asia/Singapore", "lang": "en-SG", "lang_full": "en-SG,en-US;q=0.9,en;q=0.8"},
     "AU": {"timezone": "Australia/Sydney", "lang": "en-AU", "lang_full": "en-AU,en-US;q=0.9,en;q=0.8"},
+    "VN": {"timezone": "Asia/Ho_Chi_Minh", "lang": "vi-VN", "lang_full": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7"},
 }
 
 

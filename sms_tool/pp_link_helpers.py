@@ -22,10 +22,10 @@ import requests
 
 try:
     from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
-    from .phone_proxy import normalize_proxy_url
+    from .phone_proxy import match_proxy_region, normalize_proxy_url
 except ImportError:  # pragma: no cover - direct script execution
     from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
-    from phone_proxy import normalize_proxy_url  # type: ignore
+    from phone_proxy import match_proxy_region, normalize_proxy_url  # type: ignore
 
 try:
     from .paypal_proxy import (
@@ -118,7 +118,25 @@ def normalize_proxy_template(template: str) -> str:
 
 
 def proxy_for_country_template(template: str, country: str) -> str:
-    """Replace a proxy template's region with the requested country."""
+    """Replace a proxy template's region with the requested country.
+
+    Region rewriting is delegated to the single-authority
+    :func:`phone_proxy.match_proxy_region` (→ ``proxy_entry.retarget_region``)
+    so this helper inherits every provider template the canonical parser knows
+    — ``region-XX`` (Cliproxy), ``geo-XX`` (9http), IPWO ``custom_zone_XX`` and
+    the Kookeey ``BASE-CC-SESSION-TTL`` password shape.  It used to hard-code
+    its own ``region-[A-Za-z]{2}`` rewrite, which silently ignored every other
+    provider: the caller believed it had routed to the requested country while
+    the egress region never changed.
+
+    Two shapes stay local, because the canonical rewrite does not own them:
+
+    * the Cliproxy ``-st-<state>-city-<city>`` sticky-routing suffix, which is
+      dropped for every country except ``JP`` (elsewhere it pins the egress to
+      a stale city);
+    * the password-less ``user-XX`` fallback, reachable only when the
+      credential carries no recognisable region token at all.
+    """
     proxy = normalize_proxy_template(template)
     country = str(country or "").strip().upper()
     if not proxy or not country:
@@ -126,14 +144,25 @@ def proxy_for_country_template(template: str, country: str) -> str:
     userinfo, separator, host = proxy.rpartition("@")
     if not separator:
         return proxy
-    replaced, count = re.subn(r"region-[A-Za-z]{2}(?=$|[-_:])", f"region-{country}", userinfo, count=1)
-    if count != 1:
-        replaced, count = re.subn(r"-[A-Za-z]{2}$", f"-{country}", userinfo)
-    elif country != "JP":
-        replaced = re.sub(r"-st-[^-@]+-city-[^-@]+(?=-sid-)", "", replaced, count=1)
-    if count != 1:
-        return proxy
-    return normalize_proxy_url(f"{replaced}@{host}")
+
+    rewritten = match_proxy_region(proxy, country)
+    if rewritten == proxy:
+        # No provider template matched.  The ``-XX`` fallback can only fire for
+        # a password-less proxy: ``rpartition("@")`` leaves ``:password`` at the
+        # end of *userinfo*, so ``-[A-Za-z]{2}$`` never matches a credentialed
+        # one.  Returning the template untouched is the honest outcome there —
+        # there is no region token to rewrite.
+        replaced_user, count = re.subn(r"-[A-Za-z]{2}$", f"-{country}", userinfo)
+        if count != 1:
+            return proxy
+        return normalize_proxy_url(f"{replaced_user}@{host}")
+
+    if country != "JP":
+        rewritten_user, _, rewritten_host = rewritten.rpartition("@")
+        cleaned = re.sub(r"-st-[^-@]+-city-[^-@]+(?=-sid-)", "", rewritten_user, count=1)
+        if cleaned != rewritten_user:
+            return normalize_proxy_url(f"{cleaned}@{rewritten_host}")
+    return rewritten
 
 
 def rotate_proxy_session(proxy: str) -> str:

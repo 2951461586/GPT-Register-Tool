@@ -102,7 +102,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 | Lane | 用途 | 出口来源 |
 | --- | --- | --- |
-| ① 注册代理 | 注册 worker（全部 6 驱动） | `proxy.registration` + `proxy.pool`（动态 sticky session，IPWO US 主池） |
+| ① 注册代理 | 注册 worker（全部 6 驱动） | `proxy.registration` + `proxy.pool`（动态 sticky session，**VN 主池**：9http `geo-VN` 10 条 + IPWO `custom_zone_VN` 10 条，2026-09-11 切换） |
 | ② 邮箱/OTP 代理 | OTP 轮询收件 | `mailbox_proxy`，**固定** `http://127.0.0.1:7897`，从不继承旋转注册代理（`mailbox._resolve_mailbox_proxy`） |
 | ③ 协议支付代理 | Checkout/Approve | **随用户选择的 checkout/approve 出口动态选择**：取 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool` 持有的候选池（如 IPWO US/JP/GB），**非固定 JP/US/GB 混用** |
 
@@ -125,11 +125,13 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
   - `rotate_session()`（`proxy_entry.py:405`）—— 刷新 sticky session id
 - **供应商模板**：
   - **Cliproxy**：username `region-XX` + `-sid-<id>-t-<n>`
+  - **9http / 9proxy**：username `geo-XX` + `-sid-<id>-ttl-<n>`。地区标签是 `geo` 而非 `region`，`_INFER_USER_REGION_RE` / `_USER_REGION_RE` 同时接受两种拼写；**重定地区时保留原标签**，否则 `geo-VN` 会被改写成供应商不认的 `region-US`。
   - **IPWO**：`custom_zone_XX`
   - **Kookeey**：password `BASE-CC-SESSION-TTL`，TTL 单位 `\d+[smhd]` 超集
 - **选池**：`load_proxy_pool()`（`proxy_entry.py:473`）/ `choose_proxy_entry()`（`proxy_entry.py:539`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
-- **池形态约束（以 `config.json` 为准，2026-08-27 更正）**：**IPWO 是主代理池**——顶层 `proxy.registration` / `default` / `pool` 全部是 `us.ipwo.net` / `eu.ipwo.net`，且协议支付 / PayPal 的 `checkout_proxy_pool`、`approve_proxy_pool`、`proxies`、`stage_proxy_pools`、`proxy_pool` **按用户选择的 checkout/approve 出口动态选取**——候选为 IPWO US/JP/GB（见 §7 代理 lane 表），**不是固定 JP/US/GB 混用**。**Kookeey（`gate.kookeey.info`）只保留在支付方法的 `stage_proxies` / 单方法 `proxy` 字段**（各 payment method 的 stage 拉取那一步），不参与注册与 checkout/approve；`direct_card` 等仍通过同一 ProxyEntry 模板规则旋转 Kookeey sticky 密码。**Cliproxy 用户名处理（`region-XX`）在 `proxy_entry.py` 中仍保留**，但 `config.json` 未配置 Cliproxy URL，属未启用状态。
+- **池形态约束（以 `proxy.json` 为准，2026-09-11 更正）**：**注册主池已切换为 VN**——顶层 `proxy.registration` / `default` / `pool` 共 20 条越南出口，由 9http（`global.9http.com:9091`，`geo-VN` 模板，10 条）与 IPWO（`us.ipwo.net:7878`，`custom_zone_VN` 模板，10 条）两家组成，出口实测落在 FPT Telecom / VNPT / Viettel 等本地 ISP。协议支付 / PayPal 的 `checkout_proxy_pool`、`approve_proxy_pool`、`proxies`、`stage_proxy_pools`、`proxy_pool` **仍按用户选择的 checkout/approve 出口动态选取**（候选为 IPWO US/JP/GB，见 §7 代理 lane 表），**不是固定 JP/US/GB 混用**，且**不随注册池切换到 VN**。**Kookeey（`gate.kookeey.info`）只保留在支付方法的 `stage_proxies` / 单方法 `proxy` 字段**（各 payment method 的 stage 拉取那一步），不参与注册与 checkout/approve；`direct_card` 等仍通过同一 ProxyEntry 模板规则旋转 Kookeey sticky 密码。**Cliproxy 用户名处理（`region-XX`）在 `proxy_entry.py` 中仍保留**，但未配置 Cliproxy URL，属未启用状态。
+- **配置真源提醒**：`config.json` 在 `proxy.json` / `runtime.json` / `payment.json` 任一分片存在时即退化为 legacy 死文件（`config.py:163-181`），且其 `proxy.registration` 仍是历史的 100 条列表形态，与分片不一致。**改代理只改 `proxy.json`**。
 
 > 实战含义：新增任何代理供应商支持，**只改 `proxy_entry`**（解析 + 重建 + 重定 + 轮换），不要让 `phone_proxy` / `paypal_proxy` 重新实现字符串操作。
 
@@ -144,15 +146,17 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | 路径 | 指纹池类型 | 单例入口 | 内容 | 地理对齐 |
 | --- | --- | --- | --- | --- |
 | `protocol` | `FingerprintPool`（`fingerprint_pool.py:118`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:285`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:34`） | `next(proxy)`（`fingerprint_pool.py:237`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
-| `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:159`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:196`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:531`）取档 | 7 个桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:109`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:278`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:78`） |
+| `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:162`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:199`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:534`）取档 | 7 个桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:112`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:281`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:79`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
 
-**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:139`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:531`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。
+**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:139`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:534`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。
+
+> **地区覆盖（2026-09-11）**：两侧都已收录 `VN`——协议路径 `_GEO_PROFILES["VN"]` = `Asia/Ho_Chi_Minh` / `vi-VN`；浏览器路径 `BROWSER_LOCALE_PROFILES["vn"]` + `COUNTRY_LOCALE_PROFILE_MAP["VN"] = "vn"`，并在 `TIMEZONE_NAME_BY_IANA` 补了 `Asia/Ho_Chi_Minh`。**未收录的国家不会报错，而是静默回退**：协议路径回退到"实测时区 + 档案原语言"，浏览器路径 `locale_profile_key_from_geo` 直接回退 `"us"`。因此**新增出口地区时必须同步补这三张表**，否则会出现"出口在 A 国、语言是 en-US"的隐性矛盾。
 
 ### 7.2 代理 lane：三元隔离的运行时落地
 
 | Lane | 选取入口 | 落地池（config 键） | 备注 |
 | --- | --- | --- | --- |
-| 注册（全部 6 驱动） | `proxy_pool_for(config, "protocol_registration"` / `"browser_registration")`（`proxy_routing.py:40`） | `proxy.registration` + `proxy.pool` → 回退 `proxy.default` | `browser_registration` 先查 `browser_pool`/`browser_registration_pool` 别名，空则回退注册主池（`proxy_routing.py:53`、`:68`） |
+| 注册（全部 6 驱动） | `proxy_pool_for(config, "protocol_registration"` / `"browser_registration")`（`proxy_routing.py:40`） | `proxy.registration` + `proxy.pool` → 回退 `proxy.default`（现为 20 条 VN） | `browser_registration` 先查 `browser_pool`/`browser_registration_pool` 别名，空则回退注册主池（`proxy_routing.py:53`、`:68`）。**两条注册路径共用同一个池**，且活体/健康 lane 也回退到它——改注册池会连带改变健康探测出口 |
 | 邮箱/OTP | `mailbox._resolve_mailbox_proxy` | `mailbox_proxy`（固定 `http://127.0.0.1:7897`） | 从不继承旋转注册代理；2026-08-29 由 `socks5h://` 改为 `http://` |
 | 协议支付 | 方法配置 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool`（`config.json:650` 起） | **随用户选择的 checkout/approve 出口动态选择**，候选池形如 IPWO US/JP/GB | **不是固定 JP/US/GB 混用**（见 §6 池形态约束更正） |
 | 活体/推广/健康 | `select_operation_proxy(...)`（`proxy_routing.py:115`） | 默认回退注册主池；`account_health.use_registration_affinity=true`（`config.json:216`）时还原账号保存的注册代理 | 2026-08-29 决策：废弃独立 `127.0.0.1:7897` 健康 lane（`proxy_routing.py:80`） |
@@ -213,8 +217,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `normalize_registration_driver` | `registration_drivers/base.py:94` | 归一化，默认 protocol |
 | `BrowserRegistrationError` | `registration_drivers/base.py:130` | 浏览器层错误封装 |
 | `AUTH_FINGERPRINT_PROFILES` | `auth_headers.py:34` | Chrome 124–146 设备档案 |
-| `sentinel_fingerprint` | `auth_headers.py:628` | 确定性指纹派生 |
-| `openai_auth_headers` | `auth_headers.py:713` | `oai-*` 头注入 |
+| `sentinel_fingerprint` | `auth_headers.py:629` | 确定性指纹派生 |
+| `openai_auth_headers` | `auth_headers.py:714` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:41` / `:56` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:89` / `:101` | DID 一致性 |
@@ -222,18 +226,18 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `select_operation_proxy` | `proxy_routing.py:115` | 操作代理选择（探测回退注册池，2026-08-29 决策） |
 | `ProxyEntry` | `proxy_entry.py:67` | 规范代理模型 |
 | `parse_proxy` | `proxy_entry.py:128` | 6 形式解析 |
-| `rebuild_proxy_credentials` | `proxy_entry.py:347` | 凭据重建 |
-| `retarget_region` | `proxy_entry.py:368` | 地区重定 |
-| `rotate_session` | `proxy_entry.py:405` | 会话轮换 |
-| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:473` / `:539` | 选池 |
+| `rebuild_proxy_credentials` | `proxy_entry.py:356` | 凭据重建 |
+| `retarget_region` | `proxy_entry.py:377` | 地区重定 |
+| `rotate_session` | `proxy_entry.py:416` | 会话轮换 |
+| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:484` / `:550` | 选池 |
 | `registration_network_preflight` | `registration_preflight.py:99` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration_preflight.py:69` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:291` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:118` / `:34` | 协议路径 TLS/UA 档案 |
-| `shared_browser_profile_pool` | `browser_fingerprint_pool.py:196` | 浏览器路径指纹池单例 |
-| `select_browser_profile` | `browser_fingerprint_pool.py:531` | 取浏览器硬件档案（seed 稳定） |
-| `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:278` | 穿透代理查出口地理 |
-| `BrowserProfilePool` / `BROWSER_PROFILE_POOL` | `browser_fingerprint_pool.py:159` / `:109` | 7 桌面硬件档案（4 个浏览器驱动共享） |
+| `shared_browser_profile_pool` | `browser_fingerprint_pool.py:199` | 浏览器路径指纹池单例 |
+| `select_browser_profile` | `browser_fingerprint_pool.py:534` | 取浏览器硬件档案（seed 稳定） |
+| `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:281` | 穿透代理查出口地理 |
+| `BrowserProfilePool` / `BROWSER_PROFILE_POOL` | `browser_fingerprint_pool.py:162` / `:112` | 7 桌面硬件档案（4 个浏览器驱动共享） |
 | `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:69` | 5 浏览器驱动统一入口 |
 | `PoolConfig`（进程池） | `browser_pool.py:62` | `registration.browser_process_pool` 解析 |
 

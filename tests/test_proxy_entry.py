@@ -211,6 +211,37 @@ class TestIpwoCountryTemplate(unittest.TestCase):
         self.assertEqual(infer_region(rotated), "GB")
 
 
+class TestNineHttpGeoCountryTemplate(unittest.TestCase):
+    """9http / 9proxy use ``geo-XX`` where Cliproxy uses ``region-XX``.
+
+    The region tag must be matched *and* preserved on rewrite: a naive
+    ``region-`` only pattern leaves the credential unrecognised, while a
+    capturing tag group makes ``infer_region`` return ``"GEO"`` instead of the
+    country code (``match.group(1)`` is the country).
+    """
+
+    PROXY = "http://VSBFTHZC-geo-VN-sid-mwT3-ttl-5:A90IhxdPeq@global.9http.com:9091"
+
+    def test_infers_geo_country_not_the_tag(self):
+        self.assertEqual(infer_region(self.PROXY), "VN")
+
+    def test_retarget_preserves_the_geo_tag(self):
+        retargeted = retarget_region(self.PROXY, "US")
+        self.assertIn("geo-US", retargeted)
+        self.assertNotIn("region-US", retargeted)
+        self.assertEqual(infer_region(retargeted), "US")
+
+    def test_rotation_keeps_the_region(self):
+        rotated = rotate_session(self.PROXY)
+        self.assertEqual(infer_region(rotated), "VN")
+        self.assertIn("geo-VN", rotated)
+
+    def test_region_tag_still_supported(self):
+        cliproxy = "http://user-region-JP-sid-abc:t-5@host:8080"
+        self.assertEqual(infer_region(cliproxy), "JP")
+        self.assertIn("region-GB", retarget_region(cliproxy, "GB"))
+
+
 class TestResolveProxyValue(unittest.TestCase):
     """--proxy single-value resolution (pool / bare credential / URL)."""
 

@@ -193,7 +193,14 @@ if ($SelfSign) {
 Reset-Directory -Path $installerRoot -AllowedRoot (Join-Path $repoRoot "dist")
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
-$trackedFiles = & git -C $repoRoot ls-files
+# `ls-files` alone only lists TRACKED paths, so a brand-new release note that
+# has not been committed yet is silently dropped from the payload — the zip then
+# ships a README pointing at a release note that is not inside it (hit on
+# 2026-09-11 with release-v2026.09.11.md). `--others --exclude-standard` adds
+# untracked-but-not-ignored files, which keeps the payload consistent with the
+# working tree. Credential-bearing snapshots stay out because .gitignore now
+# rejects the whole config family (see the `proxy.json*` block there).
+$trackedFiles = & git -C $repoRoot ls-files --cached --others --exclude-standard
 if ($LASTEXITCODE -ne 0) {
     throw "git ls-files failed with exit code $LASTEXITCODE"
 }

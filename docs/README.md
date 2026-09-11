@@ -33,6 +33,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.09.11 发布说明](releases/release-v2026.09.11.md) - 注册代理出口切换至
+  越南（VN）、9http `geo-XX` 供应商模板与两侧地理档案补齐、PayPal 链接生成的
+  代理地区重写收敛到单一范式。
 - [v2026.09.10 发布说明](releases/release-v2026.09.10.md) - 协议注册依赖修复、
   内部异常分类、持久化 journal 终态和 WPF 发布验证。
 - [v2026.09.08 发布说明](releases/release-v2026.09.08.md) - 桌面注册结果契约、
