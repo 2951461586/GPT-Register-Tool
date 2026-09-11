@@ -27,6 +27,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _CLASSIFICATION = PROJECT_ROOT / "sms_tool" / "error_classification.py"
+_REGISTRY = PROJECT_ROOT / "sms_tool" / "failure_registry.py"
 _SCAN = PROJECT_ROOT / "sms_tool" / "accounts" / "account_scan.py"
 _INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "BackendResultInterpreter.cs"
 
@@ -64,12 +65,34 @@ def _returned_strings(fn: ast.FunctionDef) -> set[str]:
     return out
 
 
-def failure_class_vocabulary(py_path: Path = _CLASSIFICATION) -> set[str]:
-    """``classify_error`` 能返回的 failure_class 全集。"""
+def failure_class_vocabulary(py_path: Path = _CLASSIFICATION, registry_path: Path = _REGISTRY) -> set[str]:
+    """``classify_error`` 能返回的 failure_class 全集。
+
+    2026-09-13 起分类词汇的单源在 ``failure_registry.FAILURE_CLASSES``，而
+    ``classify_error`` 里的字面 Return 只剩 internal 的特殊 demotion 分支与
+    "unknown"。全集 = 注册表 FailureClass(code=...) 关键字 ∪ classify_error
+    的直返字面量。
+    """
+    vocab: set[str] = set()
     fn = _function_node(ast.parse(py_path.read_text(encoding="utf-8")), "classify_error")
     if fn is None:
         raise AssertionError(f"{py_path} 里找不到 classify_error —— 提取器必须立刻失败")
-    return {word for word in _returned_strings(fn) if _STATUS_WORD.match(word)}
+    vocab |= {word for word in _returned_strings(fn) if _STATUS_WORD.match(word)}
+    tree = ast.parse(registry_path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "FailureClass":
+            code_value = None
+            if node.args:
+                first = node.args[0]
+                code_value = first.value if isinstance(first, ast.Constant) else None
+            for kw in node.keywords:
+                if kw.arg == "code" and isinstance(kw.value, ast.Constant):
+                    code_value = kw.value.value
+            if isinstance(code_value, str) and code_value:
+                vocab.add(code_value)
+    if not vocab:
+        raise AssertionError("failure_class 全集提取为空 —— 提取器或注册表已腐烂")
+    return vocab
 
 
 def scan_status_map(py_path: Path = _SCAN) -> dict[str, str]:
