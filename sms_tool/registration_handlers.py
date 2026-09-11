@@ -14,6 +14,7 @@ from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
 from .registration_runtime import RegistrationRuntimeState
+from . import registration_checkpoint
 from .registration_state import (
     RegistrationContext,
     RegistrationStage,
@@ -258,45 +259,40 @@ class RegistrationEmailWorkflow:
             self._run_stage(RegistrationState.TOTP_ENROLL, "9-Enroll TOTP", self.enroll_totp)
             return self._run_stage(RegistrationState.FINALIZE, "10-Finalize registration", self.finalize)
         except RegistrationAbort as exc:
-            if self.machine.state is not RegistrationState.FAILED:
-                self.machine.fail(str(exc))
-            result = r._failure_result(
-                str(exc),
-                email=self.runtime.username,
-                mailbox=self.runtime.mailbox,
-                password=self.runtime.password,
-            )
-            result["registration_machine"] = self.machine.snapshot()
-            return result
+            return self._abort_result(str(exc))
         except RegistrationCancelled:
             # Cooperative cancellation: report the same cancelled contract the
             # batch runner and the browser path use, not an internal error.
-            if self.machine.state is not RegistrationState.FAILED:
-                self.machine.fail("registration_cancelled")
-            result = r._failure_result(
-                "registration_cancelled",
-                email=self.runtime.username,
-                mailbox=self.runtime.mailbox,
-                password=self.runtime.password,
-            )
-            result["registration_state"] = "cancelled"
-            result["registration_machine"] = self.machine.snapshot()
-            return result
+            return self._abort_result("registration_cancelled", cancelled=True)
         except Exception as exc:
             error = f"registration_internal_error:{type(exc).__name__}:{exc}"
-            if self.machine.state is not RegistrationState.FAILED:
-                self.machine.fail(error)
-            result = r._failure_result(
-                error,
-                email=self.runtime.username,
-                mailbox=self.runtime.mailbox,
-                password=self.runtime.password,
-            )
-            result["registration_machine"] = self.machine.snapshot()
-            return result
+            return self._abort_result(error)
         finally:
             self._close_sessions()
             config_scope.__exit__(None, None, None)
+
+    def _abort_result(self, error: str, *, cancelled: bool = False) -> dict[str, Any]:
+        """Single failure-result constructor for every run() exit path.
+
+        三条 except 臂曾各拼一份结果（cancelled 臂多一个 registration_state），
+        漂移只是时间问题——现在同一构造，cancelled 仅多打一个状态标记。
+        """
+        r = self.r
+        if cancelled:
+            if self.machine.state is not RegistrationState.FAILED:
+                self.machine.fail("registration_cancelled")
+        elif self.machine.state is not RegistrationState.FAILED:
+            self.machine.fail(error)
+        result = r._failure_result(
+            error,
+            email=self.runtime.username,
+            mailbox=self.runtime.mailbox,
+            password=self.runtime.password,
+        )
+        if cancelled:
+            result["registration_state"] = "cancelled"
+        result["registration_machine"] = self.machine.snapshot()
+        return result
 
     def _run_stage(self, state: RegistrationState, label: str, handler: Callable[[], Any]) -> Any:
         r = self.r
@@ -385,37 +381,19 @@ class RegistrationEmailWorkflow:
         raise RegistrationAbort(error)
 
     def _checkpoint_payload(self) -> dict[str, Any]:
-        s = self.runtime
-        r = self.r
-        return {
-            "email": s.username,
-            "source": "register",
-            "register_method": "email" if s.registration_mode != "phone" else "phone",
-            "session_type": "at_only" if s.registration_mode == "at_only" else "web",
-            "plan_type": "unknown",
-            "success": False,
-            "status": "at_probe_pending",
-            "password": s.password,
-            "device_id": s.device_id,
-            "auth_session_logging_id": s.session_logging_id,
-            "access_token": s.access_token,
-            "id_token": s.id_token,
-            "cookie_header": s.auth_session.get("cookie_header", "") if isinstance(s.auth_session, dict) else "",
-            "auth_session": s.auth_body,
-            "mailbox": r._mailbox_snapshot(s.mailbox),
-            "registration_mode": s.registration_mode,
-        }
+        # 数据契约归 registration_checkpoint（候选1拆解）；编排仍在此处。
+        return registration_checkpoint.build_checkpoint_payload(
+            self.runtime, lambda: self.r._mailbox_snapshot(self.runtime.mailbox)
+        )
 
     def _persist_checkpoint(self, state: str) -> None:
         s = self.runtime
         if not s.username:
             return
         try:
-            payload = self._checkpoint_payload()
-            payload["registration_state"] = state
-            self.persistence.save_checkpoint(s.username, state, payload, runtime_config=self.config)
-            if s.access_token:
-                self.persistence.upsert_account(payload, runtime_config=self.config)
+            registration_checkpoint.persist_checkpoint(
+                self.persistence, self.config, s, self._checkpoint_payload(), state,
+            )
         except Exception as exc:
             print(f"  [Checkpoint] persist warning: {self.r._sanitize_text(exc)}")
 
@@ -423,27 +401,13 @@ class RegistrationEmailWorkflow:
         mailbox_email = str(getattr(self.runtime.mailbox, "email", "") or "").strip()
         if not mailbox_email or self.input_mailbox is None:
             return None
-        try:
-            checkpoint = self.persistence.get_checkpoint(mailbox_email, runtime_config=self.config)
-            payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
-        except Exception:
-            checkpoint, payload = {}, {}
-        if not isinstance(payload, dict) or not payload.get("access_token"):
+        payload = registration_checkpoint.load_resumable_checkpoint(
+            self.persistence, mailbox_email, self.config
+        )
+        if payload is None:
             return None
-        state = str(payload.get("registration_state") or checkpoint.get("state") or "")
-        if state not in {"at_probe_pending", "at_probe_transport_unknown"}:
-            return None
-        s = self.runtime
-        s.username = mailbox_email
-        s.password = str(payload.get("password") or "")
-        s.device_id = str(payload.get("device_id") or "")
-        s.session_logging_id = str(payload.get("auth_session_logging_id") or "")
-        s.access_token = str(payload.get("access_token") or "")
-        s.id_token = str(payload.get("id_token") or "")
-        s.auth_body = payload.get("auth_session") if isinstance(payload.get("auth_session"), dict) else {}
-        s.auth_session = {"cookie_header": str(payload.get("cookie_header") or "")}
-        s.registration_mode = str(payload.get("registration_mode") or "passwordless")
-        s.create_ok = True
+        registration_checkpoint.apply_resume_payload(self.runtime, payload)
+        self.runtime.username = mailbox_email
         print(f"[*] Resuming saved registration checkpoint for {mailbox_email}")
         self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", self.probe_access_token)
         self._set_outcome()
@@ -452,15 +416,12 @@ class RegistrationEmailWorkflow:
     def _has_resume_checkpoint(self) -> bool:
         if self.input_mailbox is None:
             return False
-        try:
-            checkpoint = self.persistence.get_checkpoint(self.runtime.username, runtime_config=self.config)
-            payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
-            state = str((payload or {}).get("registration_state") or checkpoint.get("state") or "")
-            return bool((payload or {}).get("access_token")) and state in {
-                "at_probe_pending", "at_probe_transport_unknown"
-            }
-        except Exception:
-            return False
+        return (
+            registration_checkpoint.load_resumable_checkpoint(
+                self.persistence, self.runtime.username, self.config
+            )
+            is not None
+        )
 
     def _bootstrap(self) -> None:
         r = self.r

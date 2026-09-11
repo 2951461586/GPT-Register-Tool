@@ -37,6 +37,7 @@ import time
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from . import geo as _geo
 from .geo import clock as _clock
@@ -109,9 +110,6 @@ def _fallback_offset_minutes(tz_iana: str) -> int:
     hard-coded DST values the table used to carry.
     """
     try:
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
         offset = datetime.now(ZoneInfo(tz_iana)).utcoffset()
         return int(offset.total_seconds() // 60) if offset else 0
     except Exception:
