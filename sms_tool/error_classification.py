@@ -1,89 +1,33 @@
-"""Shared failure classification for batch-safe account handling."""
+"""Shared failure classification for batch-safe account handling.
+
+分类词汇（各 FailureClass 的标记、硬停标记、优先序）的**单一事实源**是
+``sms_tool/failure_registry.py``——本模块保留全部公共元组名与
+``classify_error``/``is_terminal_registration_error`` 语义，但每个元组都从
+注册表派生（2026-09-12 扫描：新增一种失败曾要改 3-5 个文件，现在只改注册表）。
+"""
 
 from __future__ import annotations
 
 import json
 
+from .failure_registry import FAILURE_CLASSES, TERMINAL_ERROR_MARKERS as _TERMINAL_MARKERS
 
-NETWORK_ERROR_MARKERS = (
-    "tls",
-    "ssl",
-    "sslerror",
-    "eof occurred",
-    "connection",
-    "connect error",
-    "timeout",
-    "timed out",
-    "proxy",
-    "socks",
-    "dns",
-    "name resolution",
-    "winerror 10060",
-    "curl: (35)",
-    "curl: (28)",
-    "curl: (6)",
-    "curl: (7)",
-    "remote disconnected",
-    "connection reset",
-    "connection aborted",
-    "session_circuit_open",
-    "max retries exceeded",
-    "/sentinel/req",
-    "sentinel quickjs",
-    "sentinel_extract_failed",
-    "cloudflare",
-    "just a moment",
-)
+# 注册表顺序即匹配优先序（cancelled 最先）。以下公共元组名被多个模块与测试
+# 直接引用，作为兼容视图保留。
+_CANCELLED_CLASS, _INTERNAL_CLASS, _CONFIGURATION_CLASS, _ACCOUNT_CLASS, \
+    _MAILBOX_CLASS, _RATE_LIMIT_CLASS, _NETWORK_CLASS, _AUTH_STATE_CLASS = FAILURE_CLASSES
 
-ACCOUNT_ERROR_MARKERS = (
-    "account_deactivated",
-    "account deactivated",
-    "account has been deactivated",
-    "deleted or deactivated",
-    "registration_disallowed",
-    "invalid_grant",
-    "authenticationfailed",
-    "invalid credentials",
-    "wrong_email_otp_code",
-    "password_verify_failed",
-    "phone_recently_used",
-    "unsupported_phone_number",
-    "fraud_guard",
-    "token_invalidated",
-)
+NETWORK_ERROR_MARKERS = _NETWORK_CLASS.markers
 
-MAILBOX_ERROR_MARKERS = (
-    "mailbox_auth_invalid",
-    "mailbox_endpoint_unavailable",
-    "remail_api_auth_invalid",
-    "outlook otp timeout",
-    "email_otp_poll_timeout",
-    "mailbox otp timeout",
-    "mailbox_transport_unavailable",
-    "relogin_mailbox_transport_failed",
-    "remail poll transport",
-)
+ACCOUNT_ERROR_MARKERS = _ACCOUNT_CLASS.markers
 
-AUTH_STATE_ERROR_MARKERS = (
-    "browser_email_field_not_editable",
-    "invalid_auth_step",
-    "invalid_state",
-    "sign-in session is no longer valid",
-    "signup_auth_state",
-    "browser_registration_state_unknown",
-    "browser_email_verification_stuck",
-    "browser_auth_state",
-)
+MAILBOX_ERROR_MARKERS = _MAILBOX_CLASS.markers
 
-RATE_LIMIT_ERROR_MARKERS = (
-    "rate_limit_exceeded",
-    "registration_rate_limited",
-    "registration_rate_limit_circuit_open",
-    "too many requests",
-    "http_429",
-)
+AUTH_STATE_ERROR_MARKERS = _AUTH_STATE_CLASS.markers
 
-CANCELLED_ERROR_MARKERS = ("registration_cancelled", "cancelled_by_user")
+RATE_LIMIT_ERROR_MARKERS = _RATE_LIMIT_CLASS.markers
+
+CANCELLED_ERROR_MARKERS = _CANCELLED_CLASS.markers
 
 # A transport failure that escapes to the unexpected-exception handler is
 # wrapped as ``registration_internal_error:<Type>:<msg>``, and because INTERNAL
@@ -106,36 +50,14 @@ CURL_TRANSPORT_MARKERS = tuple(
     marker for marker in NETWORK_ERROR_MARKERS if marker.startswith("curl:")
 )
 
-INTERNAL_ERROR_MARKERS = (
-    "registration_internal_error",
-    "nameerror",
-    "attributeerror",
-    "typeerror",
-    "keyerror",
-    "importerror",
-    "indexerror",
-    "unboundlocalerror",
-    "notimplementederror",
-    "recursionerror",
-    " is not defined",
-)
+INTERNAL_ERROR_MARKERS = _INTERNAL_CLASS.markers
 
-CONFIGURATION_ERROR_MARKERS = (
-    "unsupported_registration_driver",
-    "missing_dependency",
-    "invalid_configuration",
-    "configuration_error",
-)
+CONFIGURATION_ERROR_MARKERS = _CONFIGURATION_CLASS.markers
 
 # Hard stops: retrying cannot change the outcome. Kept beside classify_error
 # because this is pure classification -- the transport layer needs it and must
-# not import registration policy to get it.
-TERMINAL_ERROR_MARKERS = (
-    "manual_challenge_required", "browser_proxy_blocked", "mailbox_auth_invalid",
-    "mailbox_endpoint_unavailable", "remail_api_auth_invalid", "invalid_grant",
-    "registration_cancelled", "session_circuit_open", "registration_rate_limit",
-    "http_429", "stage_budget_exceeded",
-)
+# not import registration policy to get it. 单一事实源在 failure_registry。
+TERMINAL_ERROR_MARKERS = _TERMINAL_MARKERS
 
 
 def error_text(value) -> str:
@@ -160,26 +82,18 @@ def error_text(value) -> str:
 
 def classify_error(value) -> str:
     text = error_text(value)
-    if any(marker in text for marker in CANCELLED_ERROR_MARKERS):
-        return "cancelled"
     # See CURL_TRANSPORT_MARKERS: a wrapped transport failure is still a
     # transport failure, but only a curl code is allowed to prove it.
-    if any(marker in text for marker in INTERNAL_ERROR_MARKERS) and not any(
-        marker in text for marker in CURL_TRANSPORT_MARKERS
-    ):
-        return "internal"
-    if any(marker in text for marker in CONFIGURATION_ERROR_MARKERS):
-        return "configuration"
-    if any(marker in text for marker in ACCOUNT_ERROR_MARKERS):
-        return "account"
-    if any(marker in text for marker in MAILBOX_ERROR_MARKERS):
-        return "mailbox"
-    if any(marker in text for marker in RATE_LIMIT_ERROR_MARKERS):
-        return "rate_limit"
-    if any(marker in text for marker in NETWORK_ERROR_MARKERS):
-        return "network"
-    if any(marker in text for marker in AUTH_STATE_ERROR_MARKERS):
-        return "auth_state"
+    internal_match = any(marker in text for marker in INTERNAL_ERROR_MARKERS)
+    curl_match = any(marker in text for marker in CURL_TRANSPORT_MARKERS)
+    for cls in FAILURE_CLASSES:
+        if cls.code == "internal":
+            # internal 的例外 demotion（curl 码证明 transport）仍在此实现。
+            if internal_match and not curl_match:
+                return "internal"
+            continue
+        if any(marker in text for marker in cls.markers):
+            return cls.code
     return "unknown"
 
 

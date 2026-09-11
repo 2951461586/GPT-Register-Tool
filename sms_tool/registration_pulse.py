@@ -20,15 +20,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .config import CFG
+from .failure_registry import OTP_BAN_MARKERS as _OTP_BAN_MARKERS
 from .registration_cancel import cancellable_sleep
 
-
 # Failure signatures that indicate OTP delivery was blocked, most likely
-# by an IP-level ban rather than per-account issues.
-_OTP_BAN_MARKERS = (
-    "otp_not_received", "otp_timeout", "email_otp_timeout",
-    "mailbox_otp_not_received", "no_otp", "otp_poll_timeout",
-)
+# by an IP-level ban rather than per-account issues. 词汇在 failure_registry
+#（单一注册表）。
 
 
 class PulseConfig:

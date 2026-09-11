@@ -5,6 +5,7 @@ import threading
 
 from .batch_circuit_breaker import BatchCircuitBreaker
 from .error_classification import classify_error
+from .failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from .config import CFG
 from .paypal_proxy import infer_proxy_country
 from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection, refresh_proxy_sid
@@ -309,7 +310,7 @@ def run_batch_impl(
                     "success": False,
                     "error": safe_error,
                     "failure_class": failure_class,
-                    "dropped": True if failure_class == "account" else False if failure_class in {"network", "mailbox", "auth_state"} else None,
+                    "dropped": True if failure_class in BATCH_DROPPED_CLASSES else False if failure_class in BATCH_RETRY_CLASSES else None,
                 }
             if not isinstance(result, dict):
                 result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
@@ -336,7 +337,7 @@ def run_batch_impl(
                 breaker.record_success()
                 return i, result
             result.setdefault("failure_class", classify_error(result))
-            if result["failure_class"] in {"network", "mailbox", "auth_state", "rate_limit"}:
+            if result["failure_class"] in BATCH_RETRY_CLASSES:
                 result.setdefault("dropped", False)
             elif result["failure_class"] == "account":
                 result.setdefault("dropped", True)
