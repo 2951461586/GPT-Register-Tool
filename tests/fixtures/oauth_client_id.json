@@ -1,0 +1,4 @@
+{
+  "_comment": "跨语言 OAuth client id 契约：Microsoft Graph 邮箱注册的公共客户端 ID。C# (MainWindow.Export.DefaultMailboxClientId 的回落值) 与 Python (sms_tool/providers/mailbox_graph.py 的默认值) 必须引用同一个 GUID，任一侧单改都会造成两侧注册到不同的 OAuth 应用。",
+  "client_id": "9e5f94bc-e8a4-4e73-b8be-63364c29d753"
+}
