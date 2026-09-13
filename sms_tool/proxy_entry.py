@@ -327,17 +327,29 @@ def proxy_to_url(entry: ProxyEntry) -> str:
 #   * Kookeey / ippeak    — password shaped ``BASE-CC-SESSION-TTL`` (TTL like
 #     ``5m`` / ``30s`` / ``1h`` / ``1d``); the TTL unit set is the superset of
 #     both historical implementations so seconds/days sessions rotate too.
+#   * rola                — username shaped ``BASE_<sid>-country-XX``; the region
+#     tag is spelled ``country``, so it must be in the tag set below or both
+#     rotation and retargeting silently no-op on it.
 
-_REGION_TAG = r"(?P<tag>region|geo)"
+_REGION_TAG = r"(?P<tag>region|geo|country)"
 _USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")
 _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
+# rola puts its sticky session id between the final ``_`` and the region tag
+# (``SYS433954tbr_1-country-vn``).  Probed 2026-09-12 against the live gateway:
+# the provider accepts an *arbitrary* token there -- a random 4-char id
+# (``aZ3q``) and an out-of-range ``_99`` both returned 200 with a fresh VN egress
+# IP.  So this is a session id, not a pre-provisioned 1..N slot index, and
+# rotating it is safe.  Do not "fix" this into a bounded 1..N counter.
+_ROLA_SID_RE = re.compile(
+    rf"(?<=_)[A-Za-z0-9]+(?=-{_REGION_TAG}-[A-Za-z]{{2}}(?=[_:]|$))"
+)
 _KOOKEEY_PW_RE = re.compile(
     r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$"
 )
 # NOTE: the tag group must stay *non-capturing* here — ``infer_region`` reads
 # ``match.group(1)`` as the country code, so a capturing tag group would make it
 # return ``"GEO"`` instead of ``"VN"``.
-_INFER_USER_REGION_RE = re.compile(r"(?:region|geo)-([A-Za-z]{2})(?=$|[-_:])")
+_INFER_USER_REGION_RE = re.compile(r"(?:region|geo|country)-([A-Za-z]{2})(?=$|[-_:])")
 _INFER_KOOKEEY_PW_RE = re.compile(r"^.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]$")
 _INFER_USER_TAIL_RE = re.compile(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?$")
 _IPWO_CUSTOM_ZONE_RE = re.compile(
@@ -346,11 +358,27 @@ _IPWO_CUSTOM_ZONE_RE = re.compile(
 )
 
 
-def _random_session_id(length: int, *, digits_only: bool = False) -> str:
-    """Random replacement id preserving the original length (min 1)."""
+def _random_session_id(length: int, *, digits_only: bool = False, avoid: str = "") -> str:
+    """Random replacement id preserving the original length (min 1).
+
+    ``avoid`` is the previous value, and the result is guaranteed to differ from
+    it.  A collision is not hypothetical: rola's ids are ``_1``..``_10``, so a
+    one-character id lands back on itself 1 time in 10 (measured -- one of ten
+    rotations was a silent no-op) and the two-character ``_10`` 1 time in 100.
+    Either case keeps the same sticky session on a retry whose entire purpose is
+    to change it.
+
+    The collision is resolved deterministically by stepping the last symbol
+    forward in the alphabet rather than re-rolling, so a caller can rely on
+    "rotated" actually meaning rotated.
+    """
     alphabet = string.digits if digits_only else (string.ascii_letters + string.digits)
     size = max(1, int(length or 8))
-    return "".join(random.choice(alphabet) for _ in range(size))
+    value = "".join(random.choice(alphabet) for _ in range(size))
+    if value != avoid:
+        return value
+    last = value[-1]
+    return value[:-1] + alphabet[(alphabet.index(last) + 1) % len(alphabet)]
 
 
 def rebuild_proxy_credentials(parsed: Any, username: str, password: str) -> str:
@@ -434,7 +462,14 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         return value
     changed = False
     if iso:
-        new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}region-{iso}", username, count=1)
+        # Write the *original* tag back, exactly like ``retarget_region`` does.
+        # 9http expects ``geo-`` and rola expects ``country-``; emitting a
+        # hardcoded ``region-`` makes both providers reject the credential.
+        # This is reachable: ``paypal_proxy.rotate_proxy_session`` calls
+        # ``rotate_session(proxy, country)`` with a real country code.
+        new_user, count = _USER_REGION_RE.subn(
+            lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1
+        )
         if count:
             username = new_user
             changed = True
@@ -444,14 +479,30 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         if count:
             username = new_user
             changed = True
-    new_user, count = _USER_SID_RE.subn(lambda m: _random_session_id(len(m.group(0))), username, count=1)
+    new_user, count = _USER_SID_RE.subn(
+        lambda m: _random_session_id(len(m.group(0)), avoid=m.group(0)), username, count=1
+    )
+    if count:
+        username = new_user
+        changed = True
+    new_user, count = _ROLA_SID_RE.subn(
+        lambda m: _random_session_id(
+            len(m.group(0)), digits_only=m.group(0).isdigit(), avoid=m.group(0)
+        ),
+        username,
+        count=1,
+    )
     if count:
         username = new_user
         changed = True
     match = _KOOKEEY_PW_RE.match(password)
     if match:
         country = iso or match.group("cc").upper()
-        sid = _random_session_id(len(match.group("sid")), digits_only=match.group("sid").isdigit())
+        sid = _random_session_id(
+            len(match.group("sid")),
+            digits_only=match.group("sid").isdigit(),
+            avoid=match.group("sid"),
+        )
         password = f"{match.group('base')}-{country}-{sid}-{match.group('ttl')}"
         changed = True
     return rebuild_proxy_credentials(parsed, username, password) if changed else value

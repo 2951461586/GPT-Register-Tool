@@ -242,6 +242,133 @@ class TestNineHttpGeoCountryTemplate(unittest.TestCase):
         self.assertIn("region-GB", retarget_region(cliproxy, "GB"))
 
 
+class TestRotationWithCountryPreservesTheTag(unittest.TestCase):
+    """``rotate_session`` with a country must write the *original* tag back.
+
+    Regression: it hardcoded ``region-`` while ``retarget_region`` preserved the
+    tag, so rotating a 9http ``geo-VN`` credential to a country produced
+    ``region-US`` -- which the provider rejects.  The old tests missed it because
+    ``test_rotation_keeps_the_region`` calls ``rotate_session(PROXY)`` with **no**
+    country, skipping the region branch entirely.
+
+    Reachable in production: ``paypal_proxy.rotate_proxy_session`` passes a real
+    country code.
+    """
+
+    PROXY = "http://VSBFTHZC-geo-VN-sid-mwT3-ttl-5:A90IhxdPeq@global.9http.com:9091"
+
+    def test_rotation_with_country_keeps_the_geo_tag(self):
+        rotated = rotate_session(self.PROXY, "US")
+        self.assertIn("geo-US", rotated)
+        self.assertNotIn("region-US", rotated)
+        self.assertEqual(infer_region(rotated), "US")
+
+    def test_rotation_with_country_also_refreshes_the_session_id(self):
+        rotated = rotate_session(self.PROXY, "US")
+        self.assertNotEqual(rotated, self.PROXY)
+        self.assertNotIn("sid-mwT3-", rotated)
+
+
+class TestRolaCountryTemplate(unittest.TestCase):
+    """rola spells the region tag ``country``: ``BASE_<sid>-country-XX``.
+
+    Probed against the live gateway on 2026-09-12: the provider accepts an
+    arbitrary token in the sid slot (a random 4-char id returned a fresh VN
+    egress IP) and is case-insensitive on the country code, so rotating the sid
+    and rewriting the country are both safe.  Before this, ``rotate_session`` and
+    ``retarget_region`` were silent no-ops on all 10 rola pool entries.
+    """
+
+    PROXY = "http://SYS433954tbr_1-country-vn:tWL%5E%23B@gate.rola.vip:2000"
+
+    def test_infers_country_from_the_tag_not_the_tail(self):
+        # The tag *name* must not leak into the result -- the 9http lesson: a
+        # capturing tag group would make this return "COUNTRY".
+        self.assertEqual(infer_region(self.PROXY), "VN")
+
+    def test_retarget_preserves_the_country_tag(self):
+        retargeted = retarget_region(self.PROXY, "US")
+        self.assertIn("country-US", retargeted)
+        self.assertNotIn("region-US", retargeted)
+        self.assertNotIn("geo-US", retargeted)
+        self.assertEqual(infer_region(retargeted), "US")
+
+    def test_rotation_refreshes_the_sid_and_keeps_the_region(self):
+        rotated = rotate_session(self.PROXY)
+        self.assertNotEqual(rotated, self.PROXY)
+        self.assertIn("country-vn", rotated)
+        self.assertEqual(infer_region(rotated), "VN")
+
+    def test_rotation_with_country_changes_both(self):
+        rotated = rotate_session(self.PROXY, "US")
+        self.assertIn("country-US", rotated)
+        self.assertEqual(infer_region(rotated), "US")
+
+    def test_credentials_survive_the_rotation(self):
+        # The password contains ``^#``; hand-built URLs lose it to fragment
+        # parsing, so this pins the ``ProxyEntry.url`` round trip.
+        entry = parse_proxy(rotate_session(self.PROXY))
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.password, "tWL^#B")
+        self.assertEqual(entry.host, "gate.rola.vip")
+        self.assertEqual(entry.port, 2000)
+
+
+class TestUnknownTemplateIsLeftAlone(unittest.TestCase):
+    """Negative guard: an unrecognised credential comes back byte-identical.
+
+    Without this, "make rola work" could be satisfied by loosening the patterns
+    until they match anything -- which would rewrite credentials the provider
+    never agreed to.
+    """
+
+    UNKNOWN = (
+        "http://plainuser:plainpass@host:8080",
+        "http://user-country-vietnam:pw@host:8080",  # tag present, not ISO-2
+        "http://user-cc-vn:pw@host:8080",            # tag name not in the set
+        "http://SYS433954tbr_1:pw@host:2000",        # rola shape minus the region
+    )
+
+    def test_retarget_is_a_noop(self):
+        for proxy in self.UNKNOWN:
+            with self.subTest(proxy=proxy):
+                self.assertEqual(retarget_region(proxy, "US"), proxy)
+
+    def test_rotation_is_a_noop(self):
+        for proxy in self.UNKNOWN:
+            with self.subTest(proxy=proxy):
+                self.assertEqual(rotate_session(proxy, "US"), proxy)
+
+
+class TestShortSessionIdNeverRotatesToItself(unittest.TestCase):
+    """A 1-char sid must not rotate back to the same value.
+
+    Measured on rola's ``_1``..``_10`` ids: one of ten rotations was a silent
+    no-op, which keeps the same sticky session on a retry whose entire purpose is
+    to change it.
+    """
+
+    def test_one_char_rola_sid_always_changes(self):
+        for _ in range(200):
+            rotated = rotate_session("http://SYS433954tbr_1-country-vn:pw@gate.rola.vip:2000")
+            self.assertNotIn("tbr_1-", rotated)
+
+    def test_two_char_rola_sid_always_changes(self):
+        # `_10` is digits-only and two characters -- a re-roll-free
+        # implementation collides 1 time in 100, too often to ignore.
+        for _ in range(300):
+            rotated = rotate_session("http://SYS433954tbr_10-country-vn:pw@gate.rola.vip:2000")
+            self.assertNotIn("tbr_10-", rotated)
+
+    def test_one_char_rola_sid_stays_numeric(self):
+        # The original slot is a digit; keep the alphabet so the credential keeps
+        # looking like the provider's own format.
+        for _ in range(50):
+            rotated = rotate_session("http://SYS433954tbr_1-country-vn:pw@gate.rola.vip:2000")
+            sid = rotated.split("://", 1)[1].split("@", 1)[0].split("_", 1)[1].split("-", 1)[0]
+            self.assertTrue(sid.isdigit(), sid)
+
+
 class TestResolveProxyValue(unittest.TestCase):
     """--proxy single-value resolution (pool / bare credential / URL)."""
 

@@ -20,20 +20,33 @@ provider names, credentials and local client profile paths out of Git.
 / `infer_region`. Provider region templates (rola-style `-VN` credential
 suffixes etc.) are recognized there — never hand-build provider URLs elsewhere.
 
-## SOCKS5 Pool Server
+## Pool Server
 
-`start_proxy_pool.py` serves a local SOCKS5 endpoint that rotates over a pool
-of upstreams with health checks:
+`start_proxy_pool.py` serves a local **SOCKS5** endpoint that rotates over a
+pool of upstreams with health checks. Clients always speak SOCKS5 to the
+listener; how each upstream is dialed depends on that entry's own scheme:
+
+| Upstream scheme | Dialed with |
+| --- | --- |
+| `socks5`, `socks5h` | SOCKS5 handshake (RFC 1928 + RFC 1929 auth); `socks5h` passes hostnames through un-resolved for remote DNS |
+| `http`, `https` | HTTP `CONNECT` tunnel (`https` wraps the tunnel in TLS) |
 
 ```powershell
-# Upstreams from the proxy shard (proxy.pool), SOCKS5 entries only:
+# Upstreams from the proxy shard (proxy.pool), any supported scheme:
 python start_proxy_pool.py
 
 # Or explicit upstreams:
-python start_proxy_pool.py --upstreams "socks5://127.0.0.1:7897,socks5://127.0.0.1:17912"
+python start_proxy_pool.py --upstreams "http://user:pass@host:8080,socks5://127.0.0.1:7897"
 ```
 
-Without `--upstreams` or `proxy.pool` SOCKS5 entries the server exits with an
+HTTP upstreams are not an optional extra: **every residential provider we buy
+hands out `http://` endpoints** — the live `proxy.pool` is 30/30 `http`. A
+SOCKS5-only filter therefore emptied a perfectly good pool down to zero
+upstreams and exited with "no upstreams configured". Entries whose scheme the
+pool cannot dial are skipped with a warning; scheme-less entries default to
+`socks5`, which keeps older pool files working.
+
+Without `--upstreams` or a usable `proxy.pool` entry the server exits with an
 error. The historical silent fallback to `socks5://127.0.0.1:7897` (via the
 `config.json proxy_pool.upstreams` key that never existed) was removed on
 purpose: a pool that quietly serves your local clash listener instead of the
