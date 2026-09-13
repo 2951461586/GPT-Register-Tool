@@ -91,6 +91,28 @@ class HumanLogFormatterTests(unittest.TestCase):
         self.assertNotIn("user.name@example.com", line)
         self.assertIn("us***@example.com", line)
 
+    def test_account_ref_is_appended_to_the_operator_line(self):
+        """Concurrent attempts must be attributable from ``sms_tool.log`` alone.
+
+        Before this, the human channel had *zero* occurrences of ``account_ref``
+        (the desktop progress line and the JSONL envelope both carry it), so
+        telling two interleaved registrations apart needed time adjacency --
+        which this repo's playbook explicitly rules out.
+        """
+        record = _record("Registration stage=%s status=%s", args=("user_register", "running"))
+        record.account_ref = "77011ced116a1194"
+        self.assertRegex(
+            HumanLogFormatter().format(record),
+            r"^\d{2}:\d{2}:\d{2} \[\*\] \[注册\] 阶段 · 提交注册 \(user_register\)"
+            r" — 进行中 · account_ref=77011ced116a1194$",
+        )
+
+    def test_records_without_an_account_ref_keep_the_plain_shape(self):
+        line = HumanLogFormatter().format(
+            _record("Registration stage=%s status=%s", args=("user_register", "running"))
+        )
+        self.assertNotIn("account_ref", line)
+
     def test_json_machine_envelope_keeps_full_metadata(self):
         record = _record("Registration stage=%s status=%s", args=("user_register", "running"))
         data = json.loads(CorrelatedJsonFormatter().format(record))

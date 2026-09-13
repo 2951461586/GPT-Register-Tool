@@ -132,6 +132,27 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
         "browser_registration_state_unknown",
         "browser_email_verification_stuck",
         "browser_auth_state",
+        # Added 2026-09-13 from the live failure log: these four were answered
+        # as ``unknown`` (or, for the last one, ``network``) and therefore read
+        # as *terminal*, so the retry guard never accumulated a cooldown for
+        # them. Measured over 09-08..09-13: ``unknown`` covered 18 of 179
+        # failures, all of them ``missing_auth_session_access_token``.
+        #
+        # ``missing_auth_session_access_token`` is the collapsed outcome when
+        # an already-registered address cannot be logged back in;
+        # ``registration_outcome._registration_outcome`` already documents that
+        # it hides a retryable ``invalid_state`` behind a name that suggests a
+        # code defect. ``browser_passwordless_otp_state_unknown`` and
+        # ``browser_email_value_mismatch`` are raised by
+        # ``browser_flow/form_steps.py`` when the page is in an unexpected
+        # state. ``browser_profile_submit_timeout`` was already classified
+        # ``auth_state`` by the browser lane (``session._browser_failure_class``
+        # matches ``profile_``) and is listed here so the shared classifier
+        # agrees instead of being stolen by the bare ``timeout`` marker.
+        "missing_auth_session_access_token",
+        "browser_passwordless_otp_state_unknown",
+        "browser_email_value_mismatch",
+        "browser_profile_submit_timeout",
     ), retryable=True, batch_retry=True),
 )
 

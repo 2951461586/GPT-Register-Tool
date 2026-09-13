@@ -182,7 +182,86 @@ class HumanLogFormatter(logging.Formatter):
                 message = f"{warning_match.group(1)}: {text}" if text else warning_match.group(1)
         marker = _LEVEL_MARKERS.get(record.levelno, "[*]")
         stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
-        return f"{stamp} {marker} [{module_label(record.name)}] {message}"
+        # ``account_ref`` is the same hash the JSONL envelope and the desktop
+        # progress line carry, so an operator line can be grepped against both
+        # machine channels. It is appended rather than prefixed to keep the
+        # ``HH:MM:SS [*] [模块] 阶段 · ...`` shape that the stage regex and the
+        # existing display tests rely on.
+        account = sanitize_log_text(str(getattr(record, "account_ref", "") or "")).strip()
+        suffix = f" · account_ref={account}" if account else ""
+        return f"{stamp} {marker} [{module_label(record.name)}] {message}{suffix}"
+
+
+_ROLLOVER_RETRY_EVERY = 200
+
+
+class ResilientRotatingFileHandler(RotatingFileHandler):
+    """Rotating handler that never lets a failed rotation drop a record.
+
+    ``RotatingFileHandler.emit`` lets a rotation ``OSError`` escape into
+    ``logging.Handler.handleError``, which writes to stderr and *discards* the
+    record. On Windows the rename is refused while another process holds the
+    file open, and because the size stays above ``maxBytes`` every later record
+    fails the same way -- so the channel stops permanently, silently.
+
+    That is exactly what happened to ``runtime/logs/sms_tool.jsonl``: it reached
+    5,242,694 of its 5,242,880-byte cap at 2026-09-13 10:50 and never received
+    another record, while the human ``sms_tool.log`` (still under its cap) kept
+    writing. Nothing surfaced the stop, because the seven concurrent Python
+    processes that had the file open also meant ``sms_tool.1.jsonl`` was never
+    created -- there was no rotated file to notice either.
+
+    Here a failed rotation reopens the stream and appends anyway, which is
+    strictly better than losing the record, and the first failure is announced
+    through the logging system so it lands in the *other* channel too. Rotation
+    is retried periodically so it self-heals once the file is released; between
+    retries the records keep flowing.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._rollover_failures = 0
+        self._records_since_failure = 0
+
+    def shouldRollover(self, record) -> int:
+        if self._rollover_failures:
+            # Backing off matters: a rollover attempt closes and reopens the
+            # stream, and retrying that per record while the file is still held
+            # is pure overhead. Retry occasionally so rotation recovers on its
+            # own, and append in the meantime so nothing is lost.
+            self._records_since_failure += 1
+            if self._records_since_failure < _ROLLOVER_RETRY_EVERY:
+                return 0
+            self._records_since_failure = 0
+        return super().shouldRollover(record)
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except OSError as exc:
+            first = not self._rollover_failures
+            self._rollover_failures += 1
+            # No explicit reopen is needed: ``RotatingFileHandler.doRollover``
+            # closes the stream before renaming, and ``FileHandler.emit``
+            # reopens a ``None`` stream before writing (that is how ``delay``
+            # works), so the record still lands. Deleting a defensive reopen
+            # here is an *equivalent* mutation -- verified, not assumed.
+            if first:
+                self._announce_rollover_failure(exc)
+        else:
+            self._rollover_failures = 0
+
+    def _announce_rollover_failure(self, exc: OSError) -> None:
+        # Re-entering this handler is safe: the failure counter is already
+        # non-zero, so ``shouldRollover`` answers 0 for the warning record and it
+        # is written normally. Announcing through ``logging`` (rather than
+        # ``print(..., file=sys.stderr)``, which the desktop host does not
+        # persist) is what puts the degradation into the operator log.
+        logging.getLogger(__name__).warning(
+            "log rotation failed for %s (%s); appending without rotation",
+            self.baseFilename,
+            exc,
+        )
 
 
 def _default_log_path() -> Path:
@@ -240,21 +319,30 @@ def configure_logging(
 
     try:
         path = Path(log_path) if log_path else _default_log_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        human = RotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8")
-        human.setFormatter(HumanLogFormatter("%(message)s"))
-        root.addHandler(human)
-        machine = RotatingFileHandler(
-            path.with_suffix(".jsonl"), maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
-        )
-        machine.setFormatter(CorrelatedJsonFormatter("%(message)s"))
-        root.addHandler(machine)
     except Exception as exc:  # pragma: no cover - last-resort only
-        # Never let logging setup crash the application. Broad on purpose:
-        # OSError (permissions/full disk) is the expected case, but a broken
-        # path resolver must not take the CLI down either -- it reports and
-        # continues, which is strictly better than the old silent fallback.
-        print(f"[logging] could not open log file: {exc}")
+        print(f"[logging] could not resolve the log path: {exc}")
+        path = None
+
+    if path is not None:
+        # The two channels are installed independently: a failure on one must
+        # not take the other down with it. They used to share a single ``try``,
+        # so one unopenable file silenced both.
+        for target, formatter in (
+            (path, HumanLogFormatter("%(message)s")),
+            (path.with_suffix(".jsonl"), CorrelatedJsonFormatter("%(message)s")),
+        ):
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                handler = ResilientRotatingFileHandler(
+                    target, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+                )
+                handler.setFormatter(formatter)
+                root.addHandler(handler)
+            except Exception as exc:  # pragma: no cover - last-resort only
+                # Never let logging setup crash the application. Broad on
+                # purpose: OSError (permissions/full disk) is the expected case,
+                # but a broken path resolver must not take the CLI down either.
+                print(f"[logging] could not open log file {target}: {exc}")
 
     if to_console:
         sh = logging.StreamHandler()

@@ -333,6 +333,12 @@ def _browser_failure_class(code: str) -> str:
         "session_access_denied", "session_oauth_callback_failed", "session_token_refresh_failed",
         "chatgpt_context_unavailable", "profile_", "passwordless_otp", "otp_restart_state",
         "registration_state_unknown", "email_verification", "email_field", "auth_state",
+        # ``browser_email_value_mismatch`` (form_steps) means the email field kept
+        # a different value than the address we typed, i.e. an unexpected page
+        # state -- the same family as ``browser_email_field_not_editable``. It is
+        # listed here so this lane agrees with ``failure_registry`` instead of
+        # falling through to the blanket ``network`` default below.
+        "email_value_mismatch",
     )):
         return "auth_state"
     if "proxy_blocked" in value or "proxy_country_mismatch" in value:

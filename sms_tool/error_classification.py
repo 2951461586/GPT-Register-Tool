@@ -50,6 +50,23 @@ CURL_TRANSPORT_MARKERS = tuple(
     marker for marker in NETWORK_ERROR_MARKERS if marker.startswith("curl:")
 )
 
+# Bare transport vocabulary ("timeout", "connection", "proxy", ...). These are
+# substrings of stage-scoped failure codes, and NETWORK is tested before
+# AUTH_STATE/ACCOUNT/... in the registry order, so a code such as
+# ``browser_profile_submit_timeout`` was answered as ``network`` even though the
+# browser lane pins it as ``auth_state`` (``session._browser_failure_class``
+# matches ``profile_``). Both classes are retryable, so the retry semantics never
+# differed -- but a shared classifier that disagrees with the lane-specific one
+# is how the next real divergence goes unnoticed.
+#
+# Derived from NETWORK_ERROR_MARKERS: a marker that is a single bare word is
+# generic vocabulary, while a compound token (``curl: (35)``,
+# ``session_circuit_open``, ``connection reset``, ``winerror 10060``) names a
+# specific condition and stays decisive on its own.
+GENERIC_TRANSPORT_MARKERS = tuple(
+    marker for marker in NETWORK_ERROR_MARKERS if marker.isalpha()
+)
+
 INTERNAL_ERROR_MARKERS = _INTERNAL_CLASS.markers
 
 CONFIGURATION_ERROR_MARKERS = _CONFIGURATION_CLASS.markers
@@ -86,14 +103,26 @@ def classify_error(value) -> str:
     # transport failure, but only a curl code is allowed to prove it.
     internal_match = any(marker in text for marker in INTERNAL_ERROR_MARKERS)
     curl_match = any(marker in text for marker in CURL_TRANSPORT_MARKERS)
+    generic_network_only = False
     for cls in FAILURE_CLASSES:
         if cls.code == "internal":
             # internal 的例外 demotion（curl 码证明 transport）仍在此实现。
             if internal_match and not curl_match:
                 return "internal"
             continue
-        if any(marker in text for marker in cls.markers):
-            return cls.code
+        hits = [marker for marker in cls.markers if marker in text]
+        if not hits:
+            continue
+        if cls.code == "network" and all(marker in GENERIC_TRANSPORT_MARKERS for marker in hits):
+            # See GENERIC_TRANSPORT_MARKERS. A bare transport word is the
+            # weakest evidence in the registry, so remember it and let the
+            # stage-scoped classes be tested first; it still wins when nothing
+            # more specific matched.
+            generic_network_only = True
+            continue
+        return cls.code
+    if generic_network_only:
+        return "network"
     return "unknown"
 
 
