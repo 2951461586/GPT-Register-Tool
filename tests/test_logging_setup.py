@@ -90,7 +90,19 @@ class ResilientRotationTests(unittest.TestCase):
     def test_the_first_failure_is_announced_through_logging(self):
         """Silence is the other half of the bug: the stop was invisible."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            handler = self._handler(Path(temp_dir) / "sms_tool.log")
+            path = Path(temp_dir) / "sms_tool.log"
+            # The file has to be non-empty before the rollover is attempted.
+            # CPython 3.12 added "never roll over an empty file" (gh-116263):
+            # ``shouldRollover`` now returns False as soon as
+            # ``self.stream.tell()`` is 0, where 3.11 computed
+            # ``0 + len(msg) >= maxBytes`` and rolled over anyway. With an empty
+            # file the rollover is never attempted on 3.12, so no warning can
+            # exist and the only symptom is the assertion below reporting an
+            # empty list -- which blames the announcement instead of the missing
+            # precondition. This test was green on a 3.11 interpreter and red on
+            # the 3.12 CI runner for exactly that reason.
+            path.write_text("seed\n", encoding="utf-8")
+            handler = self._handler(path)
             handler.rotate = Mock(side_effect=PermissionError(13, "file is in use"))
             captured = []
 
@@ -112,6 +124,12 @@ class ResilientRotationTests(unittest.TestCase):
                 handler.close()
                 root.removeHandler(capture)
 
+            self.assertEqual(
+                1,
+                handler._rollover_failures,
+                "no rollover was attempted, so nothing about the announcement "
+                "was exercised",
+            )
             messages = [
                 record.getMessage()
                 for record in captured
