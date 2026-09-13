@@ -119,10 +119,10 @@ Python 消费方**，改它是 no-op。
 
 ## 验证
 
-- Python：`pytest tests/` — **3551 passed / 6 skipped / 616 subtests**
-  （166.16s，0 failed）。新增：L1–L4 行为用例 15 条、failure_registry 分类优先序
+- Python：`pytest tests/` — **3554 passed / 6 skipped / 616 subtests**
+  （170.67s，0 failed）。新增：L1–L4 行为用例 15 条、failure_registry 分类优先序
   5 条、代理池 HTTP 上游与 `proxy_entry` scheme 往返、文档指针刷新与漂移守卫、
-  HTTP 重试覆盖 AST 门禁、非 ASCII 脚本 BOM 门禁 4 条。
+  HTTP 重试覆盖 AST 门禁、非 ASCII 脚本 BOM 门禁 4 条、constraints 合法性门禁 3 条。
 - .NET：`dotnet test GPTRegisterTool.slnx -c Release` — 386 passed / 0 failed
   （本版未改 C#，沿用 v2026.09.13 基线）。
 - 构建：WPF 完整重建 0 error（`dist/net10/SmsWorkbench.exe`，37 个 DLL）；
@@ -140,3 +140,21 @@ ANSI 代码页解码；`9d16fb7` 新增的三行中文注释让错位序列吃�
 **直接无法解析**（`:278 意外的标记"}"`）。定性用「只解析不执行」对照：同一份字节
 无 BOM 报 1 个错、加 BOM 报 0 个错。修复只加 BOM，其余字节逐字节保持。
 新增 `tests/test_powershell_script_encoding.py` 防复发（含负向测试）。
+
+## CI 依赖锁修复（随本版）
+
+`constraints.txt` 自 2026-08-31 起是**孤儿文件**——审计 backlog 记过「`ci.yml` 没有
+`-c`」——所以从没有人把它交给 pip 解析过。`edf3cf5` 把它接进 CI 后，第一次解析就
+致命：文件里 `httpx[http2,socks]` / `camoufox[geoip]` / `qrcode[pil]` 三条带 extras，
+而 pip 的 constraints 文件只接受「包名 + 版本限定符」，于是
+`pip install -r requirements.txt -c constraints.txt` 在 CI **首个步骤**报
+`ERROR: Constraints cannot have extras`（pip issue #8210）退出。
+
+extras 只需在 `requirements.txt` 声明一次，constraints 只负责锁版本，因此三条改为
+`httpx==0.28.1` / `camoufox==0.5.4` / `qrcode==8.2`。
+
+原有的 `test_dependency_guard.py` 看不见这个问题：`_parse_requirement_lines` 的正则
+把 `[extras]` 捕获后丢弃（`_extras`），set 与 version 两条断言对 extras 完全失明
+——这正是绿门禁与红 CI 并存的原因。新增 `_constraint_violations()` 对原始行做字面
+扫描（extras / 直接引用），配真实文件正例 + 负例 + 合法对照例；负向测试经变异验证
+（M1 丢弃全部告警 / M2 extras 失明）**均 KILLED**。
