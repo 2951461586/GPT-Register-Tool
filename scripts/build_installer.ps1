@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Version = "",
     [switch]$SkipPublish,
     [switch]$SelfSign,
