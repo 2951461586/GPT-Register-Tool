@@ -33,6 +33,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.09.14 发布说明](releases/release-v2026.09.14.md) - 协议注册日志四个输出
+  缺陷收口（假成功信号、机器通道静默停写、失败分类失真、人读通道无法归因），
+  外加 HTTP 重试覆盖补齐、代理池支持 HTTP 上游、文档指针漂移的检测与修复两半。
 - [v2026.09.13 发布说明](releases/release-v2026.09.13.md) - 深度扫描延后项收口：
   双 god file 拆解与失败词汇单一注册表、geo 表合一（US=New York）、
   protocol_core 改读 policy、WPF 邮箱解析迁 Contracts、构建双胞胎合并。

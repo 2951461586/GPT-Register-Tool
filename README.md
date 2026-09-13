@@ -663,7 +663,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 - [架构决策记录（ADR）](docs/adr/README.md)
 - [注册恢复与协作取消](docs/current/registration-recovery.md)
 - [PayPal 0 元链接说明](docs/paypal-zero-due-link.md)
-- [最新发布说明](docs/releases/release-v2026.09.13.md)
+- [最新发布说明](docs/releases/release-v2026.09.14.md)
 - [历史发布说明](docs/releases/)（`docs/releases/` 目录，文件名即版本）
 - [代理指南](PROXY_GUIDE.md)
 
