@@ -18,19 +18,25 @@
 # package (never imported directly), so it looks unused to a source scanner, but
 # omitting it silently breaks every timezone-offset computation. See
 # sms_tool/geo/clock.py.
+# Constraints may only carry a package name and a version specifier: pip
+# rejects every other form. An extra in particular is a hard error -
+# `httpx[http2]` here makes `pip install -r requirements.txt -c constraints.txt`
+# (the command in README.md and ci.yml) fail with "ERROR: Constraints cannot
+# have extras" before it installs anything. Extras are declared once, in
+# requirements.txt; this file only narrows the version. See pip issue #8210.
 curl_cffi==0.16.0
 cryptography==50.0.1
 PyNaCl==1.6.2
-httpx[http2,socks]==0.28.1
+httpx==0.28.1
 requests==2.34.2
 PyOTP==2.10.0
 tzdata==2026.3
-camoufox[geoip]==0.5.4
+camoufox==0.5.4
 browserforge==1.2.4
 cloakbrowser==0.5.9
 playwright==1.60.0
 playwright-stealth==2.0.3
-qrcode[pil]==8.2
+qrcode==8.2
 nodriver==0.50.3
 pytest==9.1.1
 pytest-cov==7.1.0

@@ -377,3 +377,91 @@ def test_constraints_versions_satisfy_requirements_specifiers() -> None:
                 f"pins '{pinned}'"
             )
     assert not problems, "contradictory version declarations:\n  " + "\n  ".join(problems)
+
+
+# ------------------------------------ constraints file legality (pip's rules)
+
+
+def _constraint_violations(text: str) -> list[str]:
+    """Entries a constraints file may not contain, per pip's own parser.
+
+    ``pip`` accepts only "a package name and a version specifier" here; every
+    other form is rejected before anything is installed:
+
+      * ``ERROR: Constraints cannot have extras`` (pip issue #8210). This is the
+        one that turned the v2026.09.14 CI run red. ``constraints.txt`` had been
+        an orphan file since 2026-08-31 - documented in the audit backlogs as
+        "no consumer, `ci.yml` has no ``-c``" - so nothing had ever handed it to
+        pip. Wiring it into ``ci.yml`` was the first time it was ever parsed,
+        and the extras that had been sitting in it since it was written were
+        fatal on contact.
+      * a direct reference (``pkg @ https://...``) is not a version specifier
+        either.
+
+    ``_parse_requirement_lines`` cannot catch these: it drops the ``[extras]``
+    group while normalising, so the set and version checks above are blind to
+    them. That is precisely how a green guard coexisted with a red CI run, so
+    this stays a separate, deliberately literal pass over the raw lines.
+    """
+    problems: list[str] = []
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
+            continue  # blank, comment, or a pip option such as -c / --hash
+        reasons: list[str] = []
+        if "[" in line:
+            reasons.append("extras are not allowed in a constraint")
+        if "://" in line or " @ " in line:
+            reasons.append("direct references are not allowed in a constraint")
+        if reasons:
+            problems.append(f"line {number}: {'; '.join(reasons)} ({line!r})")
+    return problems
+
+
+def test_constraints_file_contains_only_names_and_version_specifiers() -> None:
+    """`pip install -r requirements.txt -c constraints.txt` must get past parsing."""
+    text = CONSTRAINTS.read_text(encoding="utf-8")
+    scanned = [
+        stripped
+        for stripped in (line.split("#", 1)[0].strip() for line in text.splitlines())
+        if stripped and not stripped.startswith("-")
+    ]
+    assert len(scanned) >= 10, (
+        f"only {len(scanned)} constraint entries were scanned - the check is not "
+        f"running against the real file"
+    )
+    problems = _constraint_violations(text)
+    assert not problems, (
+        "constraints.txt holds entries pip refuses to parse, so the documented "
+        "install command (README.md, .github/workflows/ci.yml) fails before it "
+        "installs anything:\n  " + "\n  ".join(problems)
+    )
+
+
+def test_the_constraint_checker_flags_extras_and_direct_references(tmp_path: Path) -> None:
+    """Negative test: the checker must fail on the exact shape that broke CI."""
+    bad = tmp_path / "constraints.txt"
+    bad.write_text(
+        "httpx[http2,socks]==0.28.1\n"
+        "camoufox[geoip]==0.5.4\n"
+        "qrcode[pil]==8.2\n"
+        "pkg @ https://example.com/pkg.whl\n",
+        encoding="utf-8",
+    )
+    problems = _constraint_violations(bad.read_text(encoding="utf-8"))
+    assert len(problems) == 4, problems
+
+
+def test_the_constraint_checker_accepts_a_legal_constraints_file(tmp_path: Path) -> None:
+    """Control: comments, pip options and environment markers are all legal."""
+    good = tmp_path / "constraints.txt"
+    good.write_text(
+        "# a comment\n"
+        "\n"
+        "-c another-constraints.txt\n"
+        "httpx==0.28.1\n"
+        'pkg==1.0; python_version < "3.13"\n'
+        "other==2.0  # trailing comment\n",
+        encoding="utf-8",
+    )
+    assert _constraint_violations(good.read_text(encoding="utf-8")) == []
