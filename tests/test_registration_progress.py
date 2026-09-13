@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import registration_progress
+from sms_tool.registration_state import RegistrationState, RegistrationStateMachine
+from sms_tool.sanitizer import account_reference
 
 
 class RegistrationProgressTests(unittest.TestCase):
@@ -256,6 +258,73 @@ class RegistrationProgressTests(unittest.TestCase):
             failed = [item for item in stored["events"] if item["stage"] == "failed"]
             self.assertEqual(1, len(failed))
             self.assertEqual(failed[0]["failure_class"], "mailbox")
+
+    def test_failed_run_after_pipeline_completion_never_reports_success(self):
+        """Regression: the log read '完成 — 成功' one line above '失败 — 失败'.
+
+        The existing-login fallback fails *after* the pipeline reaches
+        ``COMPLETED``, which is why 14 of 26 failures on 09-12 showed the
+        contradictory pair. ``COMPLETED`` is a pipeline marker, so the run's
+        verdict must come from this terminal event only.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "progress.jsonl"
+
+            @registration_progress.track_registration
+            def run(**kwargs):
+                machine = RegistrationStateMachine(registration_progress.registration_stage)
+                machine.transition(RegistrationState.FINALIZE)
+                machine.transition(RegistrationState.COMPLETED)
+                return {
+                    "success": False,
+                    "error": 'existing_login_otp_validate:{"status": 409}',
+                }
+
+            with patch.object(registration_progress, "runtime_file", return_value=path):
+                run()
+
+            stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertFalse(stored["success"])
+            self.assertEqual(
+                [],
+                [event for event in stored["events"] if event["status"] == "success"],
+                "a failed run must not emit any event that claims success",
+            )
+            self.assertEqual(stored["events"][-1]["stage"], "failed")
+
+    def test_stage_log_record_carries_account_ref_for_attribution(self):
+        """The human channel needs a per-account anchor, not time adjacency.
+
+        ``sms_tool.log`` had zero occurrences of ``account_ref``, so concurrent
+        attempts could only be told apart by line neighbourhood -- the exact
+        method this repo rules out for interleaved multi-account logs.
+        """
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        handler = Capture()
+        logger = logging.getLogger(registration_progress.__name__)
+        old_level = logger.level
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        try:
+            progress = registration_progress.RegistrationProgress("user@example.com")
+            progress.stage("auth_flow")
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+
+        expected = account_reference("user@example.com")
+        self.assertTrue(expected)
+        self.assertTrue(records)
+        # Both channels are asserted: the ``extra`` field is what the JSONL
+        # envelope persists, and the message text is what the human formatter
+        # renders. A mutation that only satisfies one of them must not pass.
+        self.assertEqual(records[-1].account_ref, expected)
+        self.assertEqual(progress.events[-1]["stage"], "auth_flow")
 
 
 if __name__ == "__main__":

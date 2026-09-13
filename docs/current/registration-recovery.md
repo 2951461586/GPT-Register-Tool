@@ -19,6 +19,37 @@
   It is not treated as a dead account and is not sent through the post-
   registration health queue until the probe succeeds.
 
+## Failure Classification
+
+`failure_registry.FAILURE_CLASSES` is the single ordered source of truth, and
+`error_classification.classify_error` answers with the first class whose marker
+matches. Two rules matter when reading a failure class:
+
+- **A stage-scoped code beats a bare transport word.** `NETWORK` is tested before
+  `AUTH_STATE`, and its markers include bare vocabulary (`timeout`,
+  `connection`, `proxy`…). A code such as `browser_profile_submit_timeout`
+  contains that vocabulary, so it used to be answered as `network` even though
+  the browser lane pins it as `auth_state`. Bare transport words are now held
+  back until no stage-scoped class matched; a compound token (`curl: (35)`,
+  `session_circuit_open`, `connection reset`) still decides on its own.
+- **Do not widen a stage class with a generic word to "catch" a failure.** Bare
+  transport words also appear inside genuine defects
+  (`NameError: name 'connection_pool' is not defined`), which would then be
+  retried as a network error. Match the exact failure code instead.
+
+Since 2026-09-13 `missing_auth_session_access_token`,
+`browser_passwordless_otp_state_unknown`, `browser_email_value_mismatch` and
+`browser_profile_submit_timeout` classify as `auth_state` (retryable) rather
+than `unknown`/`network`. This is a **behaviour change**: those failures now feed
+the retry guard below, so a mailbox that hits one of them twice is cooled down
+instead of being retried immediately. The revert point is the marker list in
+`failure_registry.py`.
+
+There is only one shared classifier. Progress rows take their `failure_class`
+from `registration_retry_decision()` too (`build_registration_result` applies it
+via `setdefault`); the browser lane's `session._browser_failure_class` is the
+only other place a class is assigned.
+
 ## Concurrency
 
 Browser registration follows the requested worker count (the desktop UI allows
@@ -36,7 +67,9 @@ auth stage.
 Repeated retryable failures are tracked in
 `runtime/registration_retry_guard.json`. The same mailbox is cooled down after
 two consecutive `network` or `auth_state` failures so a later batch cannot
-spin on the same broken browser state.
+spin on the same broken browser state. Because the cooldown keys off the failure
+class, a misclassified failure is invisible here — see
+[Failure Classification](#failure-classification) before changing any marker.
 
 Registration batches also expose cooperative cancellation through
 `request_registration_cancel()`. Remaining accounts receive a `cancelled`

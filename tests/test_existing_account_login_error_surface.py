@@ -18,8 +18,18 @@ a ChatGPT session to fetch:
 The real cause is a 409 ``invalid_state`` on the re-login, and it was printed
 but never reached the outcome. That matters beyond cosmetics:
 ``classify_error`` maps ``invalid_state`` to ``auth_state`` (retryable), while
-``missing_auth_session_access_token`` maps to ``unknown`` (not retryable), so
-the generic name was also turning a transient failure into a permanent drop.
+``missing_auth_session_access_token`` used to map to ``unknown`` (not
+retryable), so the generic name was also turning a transient failure into a
+permanent drop.
+
+2026-09-13 update (L3): the fallback itself is now ``auth_state`` too. Surfacing
+the cause was the right first fix, but the no-cause fallback is not rare -- 18 of
+179 failures over 09-08..09-13 ended there, every one of them a *protocol* run
+whose pipeline reached ``finalize`` and whose auth session returned no access
+token (upstream answered 200 with only ``WARNING_BANNER``). Leaving it
+``unknown`` meant ``RegistrationRetryGuard`` never accumulated a cooldown and the
+same mailbox was re-attempted immediately. See
+``test_generic_fallback_is_a_retryable_auth_state`` below.
 
 Three things this file pins down:
 
@@ -92,11 +102,22 @@ class RegistrationOutcomeCauseTests(unittest.TestCase):
         self.assertEqual(classify_error(error), "auth_state")
         self.assertTrue(registration_retry_decision(error).retryable)
 
-    def test_generic_fallback_classifies_as_unknown_and_is_not_retryable(self):
+    def test_generic_fallback_is_a_retryable_auth_state(self):
+        """L3 (2026-09-13): the no-cause fallback is an auth-session state.
+
+        This used to assert ``unknown`` / not-retryable. The intent behind that
+        was conservative -- "we do not know why, so do not burn another attempt"
+        -- with the real fix being to surface the cause (asserted above). But the
+        fallback is not rare: 18 of 179 failures over 09-08..09-13 ended here,
+        all of them protocol runs whose pipeline reached ``finalize`` while the
+        auth session returned no access token. ``unknown`` is not in
+        ``RETRYABLE_CLASSES``, so the retry guard never accumulated a cooldown.
+        """
         _, error, _ = registration._registration_outcome(True, {}, "", {}, "")
 
-        self.assertEqual(classify_error(error), "unknown")
-        self.assertFalse(registration_retry_decision(error).retryable)
+        self.assertEqual(error, "missing_auth_session_access_token")
+        self.assertEqual(classify_error(error), "auth_state")
+        self.assertTrue(registration_retry_decision(error).retryable)
 
 
 class ExistingAccountLoginSurfaceTests(unittest.TestCase):

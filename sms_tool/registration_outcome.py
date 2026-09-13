@@ -208,10 +208,15 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe, existi
     """Decide whether a registration produced a usable access token.
 
     ``existing_login_error`` carries the *cause* when an already-registered
-    address could not be logged back in. Without it the outcome collapses to
-    the generic ``missing_auth_session_access_token``, which classifies as
-    ``unknown`` and therefore reads as terminal -- hiding a retryable
-    ``invalid_state`` behind a name that suggests a code defect.
+    address could not be logged back in. Without a cause the outcome collapses to
+    the generic ``missing_auth_session_access_token``, which hides a retryable
+    ``invalid_state`` behind a name that suggests a code defect -- so the cause is
+    always preferred over it.
+
+    The generic name is itself classified ``auth_state`` (retryable) since
+    2026-09-13: it used to be ``unknown``, which reads as terminal, and 18 of the
+    179 failures over 09-08..09-13 ended on it -- protocol runs that reached
+    ``finalize`` with no access token from the auth session.
     """
     probe = at_probe if isinstance(at_probe, dict) else {}
     try:

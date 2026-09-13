@@ -63,8 +63,22 @@ class RegistrationStateMachine:
         safe_detail = sanitize_text(detail)
         self.state = state
         self.history.append(RegistrationTransition(state, safe_detail))
-        status = "success" if state is RegistrationState.COMPLETED else "running"
-        self.stage_callback(state.value, status, safe_detail)
+        # ``COMPLETED`` names the last *stage*, not the run's verdict: the
+        # pipeline ran out of steps, and whether an account was actually
+        # registered is decided by the caller after the final stage returns.
+        # ``registration_progress.persist`` is the only layer that knows the
+        # outcome, so it owns the terminal event.
+        #
+        # Announcing ``success`` here is what produced the false success signal:
+        # the operator log read "阶段 · 完成 (completed) — 成功" and then, in the
+        # same second, "阶段 · 失败 (failed) — 失败" for the same attempt. That
+        # hit 27 of 179 failures between 09-08 and 09-13 (14 of 26 on 09-12
+        # alone, once the existing-login fallback became the dominant failure
+        # mode and started failing *after* ``finalize``). It also made the WPF
+        # batch counter mark those attempts complete, because the desktop
+        # envelope treats ``status=success`` as terminal.
+        if state is not RegistrationState.COMPLETED:
+            self.stage_callback(state.value, "running", safe_detail)
 
     def fail(self, detail: str = "") -> None:
         detail = sanitize_text(detail)

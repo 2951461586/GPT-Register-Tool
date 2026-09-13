@@ -7,6 +7,7 @@ from sms_tool.error_classification import (
     CANCELLED_ERROR_MARKERS,
     CONFIGURATION_ERROR_MARKERS,
     CURL_TRANSPORT_MARKERS,
+    GENERIC_TRANSPORT_MARKERS,
     INTERNAL_ERROR_MARKERS,
     MAILBOX_ERROR_MARKERS,
     NETWORK_ERROR_MARKERS,
@@ -76,3 +77,72 @@ def test_terminal_markers_are_orthogonal_to_classes():
 def test_curl_markers_are_derived_from_the_network_class():
     assert CURL_TRANSPORT_MARKERS == tuple(m for m in NETWORK_ERROR_MARKERS if m.startswith("curl:"))
     assert CURL_TRANSPORT_MARKERS
+
+
+def test_known_registration_failures_are_not_left_unknown():
+    """L3 (2026-09-13): these were answered ``unknown``, which reads as terminal.
+
+    ``unknown`` is not in ``RETRYABLE_CLASSES``, so ``RegistrationRetryGuard``
+    never accumulated a cooldown for them and the same mailbox was re-attempted
+    immediately. Measured over 09-08..09-13: 18 of 179 failures were
+    ``missing_auth_session_access_token``, every one of them ``unknown``.
+    """
+    for code in (
+        "missing_auth_session_access_token",
+        "browser_passwordless_otp_state_unknown",
+        "browser_email_value_mismatch",
+    ):
+        assert classify_error(code) == "auth_state", code
+        assert classify_error(code) in RETRYABLE_CLASSES, code
+
+
+def test_a_stage_scoped_code_beats_a_bare_transport_word():
+    """``browser_profile_submit_timeout`` contains the generic marker ``timeout``.
+
+    NETWORK is tested before AUTH_STATE in the registry order, so the bare word
+    used to win even though the browser lane
+    (``session._browser_failure_class``) answers ``auth_state`` for that code.
+    """
+    assert classify_error("browser_profile_submit_timeout") == "auth_state"
+
+
+def test_bare_transport_words_still_classify_as_network():
+    """Negative guard for the rule above.
+
+    Deferring the generic tokens must not turn a real transport failure into
+    ``unknown`` -- that would flip it from retryable to terminal.
+    """
+    assert classify_error("timeout") == "network"
+    assert classify_error("proxy") == "network"
+    assert classify_error("connection") == "network"
+    assert (
+        classify_error(
+            "ReadTimeout: HTTPSConnectionPool(host='auth.openai.com', port=443): "
+            "Read timed out. (read timeout=10)"
+        )
+        == "network"
+    )
+
+
+def test_generic_transport_markers_are_derived_from_the_network_class():
+    assert GENERIC_TRANSPORT_MARKERS == tuple(
+        m for m in NETWORK_ERROR_MARKERS if m.isalpha()
+    )
+    assert GENERIC_TRANSPORT_MARKERS
+    # A specific condition must never be treated as generic vocabulary, or it
+    # would stop being decisive on its own.
+    assert "session_circuit_open" not in GENERIC_TRANSPORT_MARKERS
+    assert "connection reset" not in GENERIC_TRANSPORT_MARKERS
+    assert not any(marker.startswith("curl:") for marker in GENERIC_TRANSPORT_MARKERS)
+
+
+def test_browser_lane_and_shared_classifier_agree_on_these_codes():
+    """Two classifiers answering differently is how the next divergence hides."""
+    from sms_tool.registration_drivers.browser_flow.session import _browser_failure_class
+
+    for code in (
+        "browser_profile_submit_timeout",
+        "browser_passwordless_otp_state_unknown",
+        "browser_email_value_mismatch",
+    ):
+        assert _browser_failure_class(code) == classify_error(code) == "auth_state", code

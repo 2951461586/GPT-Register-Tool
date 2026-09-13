@@ -148,6 +148,28 @@ class RegistrationStateTests(unittest.TestCase):
         self.assertEqual(machine.snapshot()["state"], "auth_flow")
         self.assertEqual([event[0] for event in events], ["mailbox_ready", "auth_flow"])
 
+    def test_completed_transition_does_not_claim_the_run_succeeded(self):
+        """``completed`` names the last stage, not the run's verdict.
+
+        ``COMPLETED`` is announced as soon as the pipeline runs out of stages,
+        while the outcome is decided by the caller afterwards. Reporting
+        ``success`` here made the operator log read
+        ``阶段 · 完成 (completed) — 成功`` and then, in the same second,
+        ``阶段 · 失败 (failed) — 失败`` for one attempt (27 of 179 failures
+        between 09-08 and 09-13). The terminal event now belongs solely to
+        ``registration_progress.persist``, which knows the outcome.
+        """
+        events = []
+        machine = RegistrationStateMachine(lambda state, status, detail: events.append((state, status)))
+        machine.transition(RegistrationState.FINALIZE)
+        machine.transition(RegistrationState.COMPLETED)
+
+        # The machine still records the transition itself ...
+        self.assertEqual(machine.snapshot()["state"], "completed")
+        # ... but it announces no stage outcome, least of all a successful one.
+        self.assertEqual([state for state, _status in events], ["finalize"])
+        self.assertNotIn("success", [status for _state, status in events])
+
     def test_context_reuses_device_and_stored_password_without_exposing_them_in_repr(self):
         context = prepare_registration_context(
             proxy="http://proxy.example:8080",

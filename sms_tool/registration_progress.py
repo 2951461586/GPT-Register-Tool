@@ -46,6 +46,12 @@ class RegistrationProgress:
     ):
         self.run_id = str(run_id or uuid.uuid4().hex)
         self.email = str(email or "")
+        # Computed once: the operator log needs a stable per-account anchor so
+        # concurrent attempts can be told apart. Without it the human channel
+        # (``sms_tool.log``) had *zero* occurrences of ``account_ref``, and the
+        # only way to attribute a line was time adjacency -- exactly the method
+        # this repo's own playbook rules out for interleaved multi-account logs.
+        self.account_ref = account_reference(self.email)
         self.driver = driver
         self.batch_id = str(batch_id or "")
         self.attempt = max(0, int(attempt or 0))
@@ -124,7 +130,10 @@ class RegistrationProgress:
             event["detail"] = _sanitize_text(detail)[:240]
         self.events.append(event)
         # run_id travels in the event dict, the desktop IPC event and the JSONL
-        # envelope; the operator log message stays metadata-free on purpose.
+        # envelope; the operator log message stays metadata-free on purpose --
+        # but it does carry ``account_ref`` as a structured field, so a line in
+        # ``sms_tool.log`` can be attributed to one account even while several
+        # registrations interleave (the human formatter renders it as a suffix).
         logging.getLogger(__name__).info(
             "Registration stage=%s status=%s",
             next_stage,
@@ -136,6 +145,7 @@ class RegistrationProgress:
                 "previous_stage": previous_stage,
                 "previous_stage_duration_ms": previous_duration_ms,
                 "failure_class": failure_class,
+                "account_ref": self.account_ref,
             },
         )
         try:
@@ -144,7 +154,7 @@ class RegistrationProgress:
             emit_event({
                 "domain": "registration",
                 "run_id": self.run_id,
-                "account_ref": account_reference(self.email),
+                "account_ref": self.account_ref,
                 **event,
             })
         except (OSError, ValueError, TypeError, RuntimeError):
