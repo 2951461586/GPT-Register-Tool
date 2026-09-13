@@ -20,6 +20,8 @@ from sms_tool.proxy_pool import (
     Socks5Server,
     _build_socks5_reply,
     _encode_socks5_addr,
+    _http_connect_authority,
+    _http_connect_handshake,
 )
 from sms_tool.proxy_health import ProxyHealthTracker
 
@@ -380,7 +382,12 @@ class TestConfigLoading(unittest.TestCase):
         self.assertEqual(upstreams[1].password, "p")
         self.assertEqual(upstreams[2].host, "plain")
 
-    def test_upstreams_from_proxy_cfg_skips_non_socks5_and_empty(self):
+    def test_upstreams_from_proxy_cfg_skips_unsupported_scheme_and_empty(self):
+        """HTTP upstreams are accepted now; only unknown schemes are skipped.
+
+        A SOCKS5-only filter here emptied a 30-entry residential pool (all
+        ``http://``) down to zero upstreams, and the server exited.
+        """
         from start_proxy_pool import _upstreams_from_proxy_cfg
 
         cfg = {
@@ -388,13 +395,15 @@ class TestConfigLoading(unittest.TestCase):
                 "pool": [
                     "http://1.2.3.4:8080",
                     "socks5://5.6.7.8:1080",
+                    "ftp://9.9.9.9:21",
                     {"label": "no-url"},
                     {"bogus": True},
                 ]
             }
         }
         upstreams = _upstreams_from_proxy_cfg(cfg)
-        self.assertEqual([u.addr for u in upstreams], ["5.6.7.8:1080"])
+        self.assertEqual([u.addr for u in upstreams], ["1.2.3.4:8080", "5.6.7.8:1080"])
+        self.assertEqual([u.scheme for u in upstreams], ["http", "socks5"])
 
     def test_upstreams_priority_from_proxy_cfg(self):
         from start_proxy_pool import _upstreams_from_proxy_cfg
@@ -485,6 +494,207 @@ class TestSocks5Handshake(unittest.TestCase):
             self.assertEqual(server._stats.total_connections, 1)
 
         asyncio.run(_run())
+
+
+class _FakeHttpProxy:
+    """A stand-in HTTP CONNECT endpoint: records the request, then tunnels."""
+
+    def __init__(self, status=b"HTTP/1.1 200 Connection established", payload=b"TUNNELED"):
+        self.status = status
+        self.payload = payload
+        self.requests: list[tuple[str, list[str]]] = []
+        self._server = None
+        self.port = 0
+
+    async def start(self):
+        self._server = await asyncio.start_server(self._on_conn, "127.0.0.1", 0)
+        self.port = self._server.sockets[0].getsockname()[1]
+        return self
+
+    async def _on_conn(self, reader, writer):
+        request_line = (await reader.readline()).decode("ascii", "replace").strip()
+        headers = []
+        while True:
+            line = await reader.readline()
+            if line in (b"\r\n", b"\n", b""):
+                break
+            headers.append(line.decode("ascii", "replace").strip())
+        self.requests.append((request_line, headers))
+        writer.write(self.status + b"\r\n\r\n")
+        await writer.drain()
+        if self.payload:
+            writer.write(self.payload)
+            await writer.drain()
+        writer.close()
+
+    async def close(self):
+        self._server.close()
+        await self._server.wait_closed()
+
+
+class TestHttpConnectUpstream(unittest.TestCase):
+    """P3: the pool must be able to dial ``http://`` upstreams.
+
+    Every residential provider we buy hands out ``http://`` endpoints, so a
+    SOCKS5-only pool emptied a 30-entry pool file down to zero upstreams.
+    """
+
+    def test_authority_brackets_ipv6_only(self):
+        self.assertEqual(_http_connect_authority("cloudflare.com", 443), "cloudflare.com:443")
+        self.assertEqual(_http_connect_authority("2001:db8::1", 443), "[2001:db8::1]:443")
+
+    def test_from_url_keeps_the_http_scheme(self):
+        u = UpstreamProxy.from_url("http://user:pw@proxy.example:8080")
+        self.assertEqual(u.scheme, "http")
+        self.assertEqual((u.host, u.port), ("proxy.example", 8080))
+        self.assertEqual(u.proxy_url, "http://user:pw@proxy.example:8080")
+
+    def test_socks5_stays_the_default_scheme(self):
+        self.assertEqual(UpstreamProxy(host="1.2.3.4", port=1080).scheme, "socks5")
+        self.assertEqual(UpstreamProxy.from_url("socks5h://1.2.3.4:1080").scheme, "socks5h")
+
+    def test_handshake_sends_connect_and_basic_auth(self):
+        async def _run():
+            fake = await _FakeHttpProxy().start()
+            try:
+                r, w = await asyncio.open_connection("127.0.0.1", fake.port)
+                try:
+                    await _http_connect_handshake(
+                        r, w,
+                        UpstreamProxy(host="h", port=1, username="u", password="p", scheme="http"),
+                        "cloudflare.com", 443, 5.0,
+                    )
+                    self.assertEqual(await asyncio.wait_for(r.read(8), 5.0), b"TUNNELED")
+                finally:
+                    w.close()
+                request_line, headers = fake.requests[0]
+            finally:
+                await fake.close()
+            return request_line, headers
+
+        request_line, headers = asyncio.run(_run())
+        self.assertEqual(request_line, "CONNECT cloudflare.com:443 HTTP/1.1")
+        self.assertIn("Host: cloudflare.com:443", headers)
+        # base64("u:p")
+        self.assertIn("Proxy-Authorization: Basic dTpw", headers)
+
+    def test_no_credentials_sends_no_auth_header(self):
+        async def _run():
+            fake = await _FakeHttpProxy().start()
+            try:
+                r, w = await asyncio.open_connection("127.0.0.1", fake.port)
+                try:
+                    await _http_connect_handshake(
+                        r, w, UpstreamProxy(host="h", port=1, scheme="http"),
+                        "cloudflare.com", 443, 5.0,
+                    )
+                finally:
+                    w.close()
+                headers = fake.requests[0][1]
+            finally:
+                await fake.close()
+            return headers
+
+        headers = asyncio.run(_run())
+        self.assertFalse(any(h.lower().startswith("proxy-authorization") for h in headers))
+
+    def test_non_2xx_reply_raises(self):
+        async def _run():
+            fake = await _FakeHttpProxy(
+                status=b"HTTP/1.1 407 Proxy Authentication Required", payload=b""
+            ).start()
+            try:
+                r, w = await asyncio.open_connection("127.0.0.1", fake.port)
+                try:
+                    with self.assertRaises(ConnectionError) as ctx:
+                        await _http_connect_handshake(
+                            r, w, UpstreamProxy(host="h", port=1, scheme="http"),
+                            "cloudflare.com", 443, 5.0,
+                        )
+                finally:
+                    w.close()
+            finally:
+                await fake.close()
+            return str(ctx.exception)
+
+        self.assertIn("HTTP 407", asyncio.run(_run()))
+
+    def test_handshake_dispatches_on_scheme(self):
+        """socks5 still sends 0x05; http sends a CONNECT line."""
+        async def _run():
+            seen: asyncio.Queue[bytes] = asyncio.Queue()
+
+            async def _record(reader, writer):
+                await seen.put(await reader.read(64))
+                writer.close()
+
+            srv = await asyncio.start_server(_record, "127.0.0.1", 0)
+            port = srv.sockets[0].getsockname()[1]
+            server = Socks5Server("127.0.0.1", 0, [], stats_port=0)
+            out = {}
+            try:
+                for scheme in ("socks5", "http"):
+                    r, w = await asyncio.open_connection("127.0.0.1", port)
+                    try:
+                        with self.assertRaises(Exception):
+                            await server._handshake(
+                                r, w,
+                                UpstreamProxy(host="127.0.0.1", port=port, scheme=scheme),
+                                "cloudflare.com", 443, _ATYP_DOMAIN, 2.0,
+                            )
+                    finally:
+                        w.close()
+                    out[scheme] = await asyncio.wait_for(seen.get(), 2.0)
+            finally:
+                srv.close()
+                await srv.wait_closed()
+            return out
+
+        out = asyncio.run(_run())
+        self.assertEqual(out["socks5"][:1], b"\x05")
+        self.assertTrue(out["http"].startswith(b"CONNECT "), out["http"])
+
+    def test_socks5_client_tunnels_through_an_http_upstream(self):
+        """End-to-end: SOCKS5 in, HTTP CONNECT out, bytes both ways."""
+        async def _run():
+            fake = await _FakeHttpProxy().start()
+            server = Socks5Server(
+                "127.0.0.1", 0,
+                [UpstreamProxy(host="127.0.0.1", port=fake.port, scheme="http", label="http-up")],
+                stats_port=0,
+                health_check_interval=3600.0,
+            )
+            await server.start()
+            listen_port = server._server.sockets[0].getsockname()[1]
+            try:
+                r, w = await asyncio.open_connection("127.0.0.1", listen_port)
+                try:
+                    w.write(bytes([_SOCKS5_VER, 0x01, _NO_AUTH]))
+                    await w.drain()
+                    self.assertEqual((await r.readexactly(2))[1], _NO_AUTH)
+
+                    domain = b"cloudflare.com"
+                    req = bytearray([_SOCKS5_VER, _CMD_CONNECT, 0x00, _ATYP_DOMAIN])
+                    req.append(len(domain))
+                    req.extend(domain)
+                    req.extend(struct.pack("!H", 443))
+                    w.write(bytes(req))
+                    await w.drain()
+
+                    reply = await asyncio.wait_for(r.readexactly(4), 5.0)
+                    self.assertEqual(reply[1], 0x00)  # SUCCEEDED
+                    await asyncio.wait_for(r.readexactly(6), 5.0)  # bound addr + port
+                    payload = await asyncio.wait_for(r.read(8), 5.0)
+                finally:
+                    w.close()
+            finally:
+                await server.stop()
+                await fake.close()
+            return payload, fake.requests[0]
+
+        payload, (request_line, _headers) = asyncio.run(_run())
+        self.assertEqual(payload, b"TUNNELED")
+        self.assertEqual(request_line, "CONNECT cloudflare.com:443 HTTP/1.1")
 
 
 if __name__ == "__main__":

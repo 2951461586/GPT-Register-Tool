@@ -1,7 +1,13 @@
-"""Async SOCKS5 proxy pool server with upstream rotation and health checks.
+"""Async proxy pool server with upstream rotation and health checks.
 
 Zero external dependencies -- pure asyncio + struct + socket.
-Supports socks5h (remote DNS) by passing hostnames un-resolved to upstreams.
+Clients always speak SOCKS5 to the listener; upstreams may be reached either
+over SOCKS5 (``socks5`` / ``socks5h`` -- remote DNS by passing hostnames
+un-resolved) or over an HTTP CONNECT tunnel (``http`` / ``https``).
+
+The HTTP side matters because every residential provider we buy hands out
+``http://`` endpoints: a pool that only spoke SOCKS5 upstream had nothing to
+dial and exited with "no upstreams configured" on a perfectly good pool file.
 
 Usage:
     from sms_tool.proxy_pool import Socks5Server, UpstreamProxy
@@ -12,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import socket
@@ -44,6 +51,11 @@ _REP_CONN_REFUSED = 0x05
 _REP_CMD_NOT_SUPPORTED = 0x07
 _REP_ADDR_NOT_SUPPORTED = 0x08
 
+# Upstream schemes reached with an RFC 7231 CONNECT tunnel instead of SOCKS5.
+HTTP_UPSTREAM_SCHEMES = ("http", "https")
+SOCKS5_UPSTREAM_SCHEMES = ("socks5", "socks5h")
+UPSTREAM_SCHEMES = SOCKS5_UPSTREAM_SCHEMES + HTTP_UPSTREAM_SCHEMES
+
 # ──────────────────── Data classes ────────────────────
 
 
@@ -55,6 +67,10 @@ class UpstreamProxy:
     password: str = ""
     label: str = ""
     priority: int = 0  # lower = higher priority; highest-priority tier selected first
+    # How *this process* dials the upstream: socks5/socks5h use the SOCKS5
+    # handshake, http/https use an HTTP CONNECT tunnel.  Clients always speak
+    # SOCKS5 to our listener regardless.
+    scheme: str = "socks5"
     healthy: bool = True
     last_check: float = 0.0
     fail_count: int = 0
@@ -73,13 +89,15 @@ class UpstreamProxy:
         pool's health (which lives only in this process's memory) becomes visible to
         the registration/remail paths that consume the same egress proxies via the
         shared on-disk tracker. ``ProxyHealthTracker.key()`` derives the same
-        ``host:port#sid-hash`` it would from a raw proxy URL.
+        ``host:port#sid-hash`` it would from a raw proxy URL, so the scheme has to
+        be the entry's own -- reporting an ``http://`` upstream as ``socks5://``
+        would still key correctly but would lie to anything that reads the URL.
         """
         auth = ""
         if self.username:
             pwd = f":{self.password}" if self.password else ""
             auth = f"{self.username}{pwd}@"
-        return f"socks5://{auth}{self.host}:{self.port}"
+        return f"{self.scheme}://{auth}{self.host}:{self.port}"
 
     @classmethod
     def from_url(cls, url: str, label: str = "", priority: int = 0) -> UpstreamProxy:
@@ -109,12 +127,14 @@ class UpstreamProxy:
             password=entry.password,
             label=label,
             priority=priority,
+            scheme=entry.scheme or "socks5",
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "addr": self.addr,
+            "scheme": self.scheme,
             "priority": self.priority,
             "healthy": self.healthy,
             "fail_count": self.fail_count,
@@ -188,6 +208,124 @@ def _encode_socks5_addr(host: str, port: int) -> bytes:
 
 def _build_socks5_reply(reply: int, bind_host: str = "0.0.0.0", bind_port: int = 0) -> bytes:
     return bytes([_SOCKS5_VER, reply, 0x00]) + _encode_socks5_addr(bind_host, bind_port)
+
+
+# ──────────────────── upstream handshakes ────────────────────
+
+
+async def _socks5_handshake(
+    r: asyncio.StreamReader,
+    w: asyncio.StreamWriter,
+    upstream: UpstreamProxy,
+    dest_host: str,
+    dest_port: int,
+    dest_atyp: int,
+    timeout: float,
+) -> None:
+    """RFC 1928 greeting + auth + CONNECT on an already-open socket."""
+    # greeting to upstream
+    if upstream.username and upstream.password:
+        w.write(bytes([_SOCKS5_VER, 0x02, _NO_AUTH, _USERPASS]))
+    else:
+        w.write(bytes([_SOCKS5_VER, 0x01, _NO_AUTH]))
+    await w.drain()
+
+    resp = await asyncio.wait_for(_read_exact(r, 2), timeout=timeout)
+    method = resp[1]
+
+    if method == _USERPASS:
+        # RFC 1929 username/password auth
+        user = upstream.username.encode()
+        pwd = upstream.password.encode()
+        auth = bytearray([0x01, len(user)])
+        auth.extend(user)
+        auth.append(len(pwd))
+        auth.extend(pwd)
+        w.write(bytes(auth))
+        await w.drain()
+        auth_resp = await asyncio.wait_for(_read_exact(r, 2), timeout=timeout)
+        if auth_resp[1] != 0x00:
+            raise ConnectionError("upstream auth failed")
+    elif method == _NO_ACCEPTABLE:
+        raise ConnectionError("upstream: no acceptable auth method")
+
+    # CONNECT request to upstream -- preserve original ATYP for remote DNS
+    connect_req = bytearray([_SOCKS5_VER, _CMD_CONNECT, 0x00])
+    connect_req.append(dest_atyp)
+    if dest_atyp == _ATYP_DOMAIN:
+        domain = dest_host.encode("ascii")
+        connect_req.append(len(domain))
+        connect_req.extend(domain)
+    elif dest_atyp == _ATYP_IPV4:
+        connect_req.extend(socket.inet_aton(dest_host))
+    elif dest_atyp == _ATYP_IPV6:
+        connect_req.extend(socket.inet_pton(socket.AF_INET6, dest_host))
+    connect_req.extend(struct.pack("!H", dest_port))
+    w.write(bytes(connect_req))
+    await w.drain()
+
+    reply = await asyncio.wait_for(_read_exact(r, 4), timeout=timeout)
+    if reply[1] != _REP_SUCCEEDED:
+        raise ConnectionError(f"upstream CONNECT reply: {reply[1]:#x}")
+    # consume bind address
+    bind_atyp = reply[3]
+    if bind_atyp == _ATYP_IPV4:
+        await _read_exact(r, 4)
+    elif bind_atyp == _ATYP_DOMAIN:
+        ln = (await _read_exact(r, 1))[0]
+        await _read_exact(r, ln)
+    elif bind_atyp == _ATYP_IPV6:
+        await _read_exact(r, 16)
+    await _read_exact(r, 2)  # bind port
+
+
+def _http_connect_authority(host: str, port: int) -> str:
+    """RFC 7231 authority form -- IPv6 literals must be bracketed."""
+    return f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+
+
+async def _http_connect_handshake(
+    r: asyncio.StreamReader,
+    w: asyncio.StreamWriter,
+    upstream: UpstreamProxy,
+    dest_host: str,
+    dest_port: int,
+    timeout: float,
+) -> None:
+    """Open an HTTP CONNECT tunnel on an already-open socket.
+
+    Every residential provider we buy exposes ``http://`` endpoints, so the pool
+    has to speak CONNECT to be usable at all.  Credentials travel as
+    ``Proxy-Authorization: Basic`` -- the same username/password pair the SOCKS5
+    path sends via RFC 1929.
+    """
+    authority = _http_connect_authority(dest_host, dest_port)
+    lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
+    if upstream.username:
+        token = base64.b64encode(
+            f"{upstream.username}:{upstream.password}".encode("utf-8")
+        ).decode("ascii")
+        lines.append(f"Proxy-Authorization: Basic {token}")
+    lines.extend(("", ""))
+    w.write("\r\n".join(lines).encode("ascii"))
+    await w.drain()
+
+    status = await asyncio.wait_for(r.readline(), timeout=timeout)
+    if not status:
+        raise ConnectionError("upstream closed during CONNECT")
+    try:
+        code = int(status.split()[1])
+    except (IndexError, ValueError) as exc:
+        raise ConnectionError(f"upstream CONNECT: unparsable status {status[:40]!r}") from exc
+
+    # Drain the response headers; the tunnel starts at the blank line.
+    while True:
+        line = await asyncio.wait_for(r.readline(), timeout=timeout)
+        if line in (b"\r\n", b"\n", b""):
+            break
+
+    if not 200 <= code < 300:
+        raise ConnectionError(f"upstream CONNECT reply: HTTP {code}")
 
 
 # ──────────────────── Server ────────────────────
@@ -462,7 +600,29 @@ class Socks5Server:
         self._rr_idx += 1
         return candidate
 
-    # ── upstream SOCKS5 handshake ──
+    # ── upstream handshake ──
+
+    def _open_upstream(self, upstream: UpstreamProxy):
+        """Dial the upstream, wrapping in TLS when the scheme asks for it."""
+        return asyncio.open_connection(
+            upstream.host, upstream.port, ssl=upstream.scheme == "https"
+        )
+
+    async def _handshake(
+        self,
+        r: asyncio.StreamReader,
+        w: asyncio.StreamWriter,
+        upstream: UpstreamProxy,
+        dest_host: str,
+        dest_port: int,
+        dest_atyp: int,
+        timeout: float,
+    ) -> None:
+        """Open the tunnel: SOCKS5 CONNECT or HTTP CONNECT, per upstream scheme."""
+        if upstream.scheme in HTTP_UPSTREAM_SCHEMES:
+            await _http_connect_handshake(r, w, upstream, dest_host, dest_port, timeout)
+        else:
+            await _socks5_handshake(r, w, upstream, dest_host, dest_port, dest_atyp, timeout)
 
     async def _connect_through_upstream(
         self,
@@ -471,66 +631,12 @@ class Socks5Server:
         dest_port: int,
         dest_atyp: int,
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        r, w = await asyncio.open_connection(upstream.host, upstream.port)
+        r, w = await self._open_upstream(upstream)
 
         try:
-            # greeting to upstream
-            if upstream.username and upstream.password:
-                w.write(bytes([_SOCKS5_VER, 0x02, _NO_AUTH, _USERPASS]))
-            else:
-                w.write(bytes([_SOCKS5_VER, 0x01, _NO_AUTH]))
-            await w.drain()
-
-            resp = await asyncio.wait_for(_read_exact(r, 2), timeout=self._connect_timeout)
-            method = resp[1]
-
-            if method == _USERPASS:
-                # RFC 1929 username/password auth
-                user = upstream.username.encode()
-                pwd = upstream.password.encode()
-                auth = bytearray([0x01, len(user)])
-                auth.extend(user)
-                auth.append(len(pwd))
-                auth.extend(pwd)
-                w.write(bytes(auth))
-                await w.drain()
-                auth_resp = await asyncio.wait_for(
-                    _read_exact(r, 2), timeout=self._connect_timeout
-                )
-                if auth_resp[1] != 0x00:
-                    raise ConnectionError("upstream auth failed")
-            elif method == _NO_ACCEPTABLE:
-                raise ConnectionError("upstream: no acceptable auth method")
-
-            # CONNECT request to upstream -- preserve original ATYP for remote DNS
-            connect_req = bytearray([_SOCKS5_VER, _CMD_CONNECT, 0x00])
-            connect_req.append(dest_atyp)
-            if dest_atyp == _ATYP_DOMAIN:
-                domain = dest_host.encode("ascii")
-                connect_req.append(len(domain))
-                connect_req.extend(domain)
-            elif dest_atyp == _ATYP_IPV4:
-                connect_req.extend(socket.inet_aton(dest_host))
-            elif dest_atyp == _ATYP_IPV6:
-                connect_req.extend(socket.inet_pton(socket.AF_INET6, dest_host))
-            connect_req.extend(struct.pack("!H", dest_port))
-            w.write(bytes(connect_req))
-            await w.drain()
-
-            reply = await asyncio.wait_for(_read_exact(r, 4), timeout=self._connect_timeout)
-            if reply[1] != _REP_SUCCEEDED:
-                raise ConnectionError(f"upstream CONNECT reply: {reply[1]:#x}")
-            # consume bind address
-            bind_atyp = reply[3]
-            if bind_atyp == _ATYP_IPV4:
-                await _read_exact(r, 4)
-            elif bind_atyp == _ATYP_DOMAIN:
-                ln = (await _read_exact(r, 1))[0]
-                await _read_exact(r, ln)
-            elif bind_atyp == _ATYP_IPV6:
-                await _read_exact(r, 16)
-            await _read_exact(r, 2)  # bind port
-
+            await self._handshake(
+                r, w, upstream, dest_host, dest_port, dest_atyp, self._connect_timeout
+            )
         except Exception:
             w.close()
             await w.wait_closed()
@@ -591,29 +697,22 @@ class Socks5Server:
                     success = False
                     probe_error = ""
                     try:
+                        # The probe runs the *same* handshake real traffic runs
+                        # (scheme-aware, and with the upstream's credentials).
+                        # The old inline probe always sent a no-auth SOCKS5
+                        # greeting, so an upstream that requires RFC 1929 auth
+                        # was reported dead even while serving fine -- and it
+                        # could not express an HTTP upstream at all.
                         r, w = await asyncio.wait_for(
-                            asyncio.open_connection(upstream.host, upstream.port),
+                            self._open_upstream(upstream),
                             timeout=self._health_check_timeout,
                         )
                         try:
-                            # minimal SOCKS5 handshake
-                            w.write(bytes([_SOCKS5_VER, 0x01, _NO_AUTH]))
-                            await w.drain()
-                            resp = await asyncio.wait_for(
-                                _read_exact(r, 2), timeout=self._health_check_timeout
+                            await self._handshake(
+                                r, w, upstream, test_host, test_port,
+                                _ATYP_DOMAIN, self._health_check_timeout,
                             )
-                            if resp[1] == _NO_AUTH:
-                                domain = test_host.encode("ascii")
-                                req = bytearray([_SOCKS5_VER, _CMD_CONNECT, 0x00, _ATYP_DOMAIN])
-                                req.append(len(domain))
-                                req.extend(domain)
-                                req.extend(struct.pack("!H", test_port))
-                                w.write(bytes(req))
-                                await w.drain()
-                                reply = await asyncio.wait_for(
-                                    _read_exact(r, 4), timeout=self._health_check_timeout
-                                )
-                                success = reply[1] == _REP_SUCCEEDED
+                            success = True
                         finally:
                             w.close()
                             await w.wait_closed()

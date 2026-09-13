@@ -26,8 +26,9 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | `pytest.ini` | Test discovery compatibility | Keeps repository-wide pytest discovery and markers. |
 | `config_schema.json` | Cross-language config manifest | Shard ownership checked against Python and C# stores. |
 | `ipc_schema.json` | Resident desktop-read manifest | Protocol version and operation set checked against Python and C# sources. |
-| `start_proxy_pool.py` | Operator utility | Standalone SOCKS5 proxy-pool server entrypoint. |
+| `start_proxy_pool.py` | Operator utility | Standalone proxy-pool server entrypoint: a SOCKS5 listener rotating over SOCKS5 **or** HTTP-CONNECT upstreams. |
 | `verify_proxy.py` | Operator utility | Proxy configuration verification; reads merged proxy/runtime/payment shards. |
+
 ## Runtime and generated directories
 
 These directories are runtime state and are ignored by Git:

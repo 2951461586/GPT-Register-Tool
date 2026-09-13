@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the SOCKS5 proxy pool server.
+"""Start the proxy pool server (SOCKS5 listener, SOCKS5 *or* HTTP upstreams).
 
 Usage:
     python start_proxy_pool.py
@@ -8,10 +8,16 @@ Usage:
 
 Upstreams come from ``--upstreams`` or, by default, the merged config shards
 (``proxy.pool`` in proxy.json when the shard exists). If neither yields a
-SOCKS5 upstream the server exits with an error instead of silently serving a
+usable upstream the server exits with an error instead of silently serving a
 hard-coded default -- the previous fallback to ``socks5://127.0.0.1:7897``
 fired whenever the dead ``config.json proxy_pool.upstreams`` key was absent,
 which was always.
+
+Upstream scheme is per-entry: ``socks5``/``socks5h`` use the SOCKS5 handshake,
+``http``/``https`` use an HTTP CONNECT tunnel. Clients always speak SOCKS5 to
+the listener either way. Accepting HTTP matters because every residential
+provider we buy hands out ``http://`` endpoints -- a SOCKS5-only filter emptied
+a 30-entry pool down to zero upstreams and exited.
 """
 
 from __future__ import annotations
@@ -23,7 +29,7 @@ import signal
 import sys
 
 from sms_tool.phone_proxy import redact_proxy_url
-from sms_tool.proxy_pool import Socks5Server, UpstreamProxy
+from sms_tool.proxy_pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
 from sms_tool.proxy_health import ProxyHealthTracker
 
 logger = logging.getLogger("proxy_pool")
@@ -33,9 +39,9 @@ def _upstreams_from_proxy_cfg(cfg: dict) -> list[UpstreamProxy]:
     """Build upstreams from the merged proxy shard (``proxy.pool``).
 
     Pool entries are the same strings/dicts the registration path consumes.
-    Non-SOCKS5 entries are skipped with a warning instead of being silently
-    turned into SOCKS5 upstreams that fail at connect time; entries without a
-    usable URL are skipped loudly too.
+    Entries whose scheme the pool cannot dial are skipped with a warning instead
+    of being silently coerced into SOCKS5 upstreams that fail at connect time;
+    entries without a usable URL are skipped loudly too.
     """
     proxy_cfg = cfg.get("proxy") if isinstance(cfg.get("proxy"), dict) else {}
     raw_list = proxy_cfg.get("pool") or []
@@ -59,10 +65,10 @@ def _upstreams_from_proxy_cfg(cfg: dict) -> list[UpstreamProxy]:
             logger.warning("Ignoring proxy.pool entry without url: %r", entry)
             continue
         scheme = url.split("://", 1)[0].lower() if "://" in url else ""
-        if scheme not in ("socks5", "socks5h"):
+        if scheme and scheme not in UPSTREAM_SCHEMES:
             logger.warning(
-                "Skipping non-SOCKS5 proxy.pool entry (%s://): %s",
-                scheme or "?",
+                "Skipping proxy.pool entry with an unsupported scheme (%s://): %s",
+                scheme,
                 redact_proxy_url(url),
             )
             continue
@@ -94,7 +100,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--host", default=None, help="Listen host (default: 127.0.0.1)")
     p.add_argument("--port", type=int, default=None, help="SOCKS5 listen port (default: 18080)")
     p.add_argument("--stats-port", type=int, default=None, help="HTTP stats port (default: 18081)")
-    p.add_argument("--upstreams", default=None, help="Comma-separated upstream socks5:// URLs")
+    p.add_argument(
+        "--upstreams",
+        default=None,
+        help="Comma-separated upstream URLs (socks5://, socks5h://, http://, https://)",
+    )
     p.add_argument("--health-interval", type=float, default=30.0, help="Health check interval (seconds)")
     p.add_argument("--connect-timeout", type=float, default=10.0, help="Upstream connect timeout (seconds)")
     p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
@@ -128,8 +138,10 @@ def main() -> None:
 
     if not upstreams:
         logger.error(
-            "No SOCKS5 upstreams configured. Pass --upstreams \"socks5://host:port,...\" "
-            "or add proxy.pool entries to the proxy shard (proxy.json)."
+            "No usable upstreams configured. Pass --upstreams \"socks5://host:port,...\" "
+            "or add proxy.pool entries to the proxy shard (proxy.json). "
+            "Supported upstream schemes: %s.",
+            ", ".join(UPSTREAM_SCHEMES),
         )
         sys.exit(1)
 
