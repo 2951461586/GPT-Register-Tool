@@ -158,3 +158,23 @@ extras 只需在 `requirements.txt` 声明一次，constraints 只负责锁版�
 ——这正是绿门禁与红 CI 并存的原因。新增 `_constraint_violations()` 对原始行做字面
 扫描（extras / 直接引用），配真实文件正例 + 负例 + 合法对照例；负向测试经变异验证
 （M1 丢弃全部告警 / M2 extras 失明）**均 KILLED**。
+
+## CI：Python 3.12 兼容（随本版）
+
+CI 在 3.12.10 上跑 pytest 时单点红：
+`test_logging_setup.py::test_the_first_failure_is_announced_through_logging` 报
+`no rotation warning reached the logging system: []`，而本地 3.11.8 全绿。
+
+真因是 CPython **gh-116263**：3.12 起 `RotatingFileHandler.shouldRollover` 先读
+`self.stream.tell()`，`if not pos: return False` —— **空文件永不轮转**；3.11 则是
+`0 + len(msg) >= maxBytes` 直接判 True。该用例用 `maxBytes=1` 加一个空文件，于是 3.12 上
+轮转**根本没被尝试** ⇒ 告警不可能存在。报错指向「告警没到 logging」，真因却是「前置条件
+没成立」。
+
+修法是让前置条件显式成立（先写一个种子字节），并补一条前置断言
+（`assertEqual(1, handler._rollover_failures)`），使「轮转没被尝试」这类失败以后直接指出
+真因，而不是伪装成空列表。验证用决定性复现而非推理：把 3.12 的 `shouldRollover` 实现注入
+本地 3.11，本地立刻复现出与 CI **完全相同**的失败（同一用例、同一消息），修复后两种语义下
+均通过。
+
+生产侧无影响：`maxBytes` 为 5 MB 且只在 `emit` 时判定，文件必然非空。
