@@ -66,8 +66,8 @@ class RegistrationDriver(str, Enum):
 `sms_tool/auth_headers.py` 是「每个账号看起来像同一台稳定设备」的事实来源。
 
 - **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`auth_headers.py:36`）覆盖 Chrome 124–146 的 UA / 平台 / 渲染器组合。
-- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:625`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
-- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:710`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
+- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:630`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
+- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:715`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
 - **一致性强约束**（见 `architecture.md` 的 *Registration Protocol Consistency*）：Sentinel QuickJS 消费**同一指纹**，为 `username_password_create` / `authorize_continue` / `oauth_create_account` 分别产出 token；token payload id、`oai-did` cookie、auth header **必须匹配**。提取失败**fail closed**——绝不使用纯 HTTP 的 PoW fallback。
 
 > 实战含义：调注册相关代码时，**不要**单独改某一处 `oai-*` 头或指纹，必须走 `auth_headers` 统一出口，否则 DID/Header/Cookie 三者错位会直接被风控。
@@ -120,15 +120,15 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 - **单一模型**：`ProxyEntry` frozen dataclass（`proxy_entry.py:67`）—— 全项目的规范代理表示。
 - **六形式解析**：`parse_proxy()`（`proxy_entry.py:128`）处理 6 种代理 URL 写法。
 - **重建 / 重定 / 轮换**：
-  - `rebuild_proxy_credentials()`（`proxy_entry.py:347`）
-  - `retarget_region()`（`proxy_entry.py:368`）—— 重定出口地区
-  - `rotate_session()`（`proxy_entry.py:405`）—— 刷新 sticky session id
+  - `rebuild_proxy_credentials()`（`proxy_entry.py:384`）
+  - `retarget_region()`（`proxy_entry.py:405`）—— 重定出口地区
+  - `rotate_session()`（`proxy_entry.py:444`）—— 刷新 sticky session id
 - **供应商模板**：
   - **Cliproxy**：username `region-XX` + `-sid-<id>-t-<n>`
   - **9http / 9proxy**：username `geo-XX` + `-sid-<id>-ttl-<n>`。地区标签是 `geo` 而非 `region`，`_INFER_USER_REGION_RE` / `_USER_REGION_RE` 同时接受两种拼写；**重定地区时保留原标签**，否则 `geo-VN` 会被改写成供应商不认的 `region-US`。
   - **IPWO**：`custom_zone_XX`
   - **Kookeey**：password `BASE-CC-SESSION-TTL`，TTL 单位 `\d+[smhd]` 超集
-- **选池**：`load_proxy_pool()`（`proxy_entry.py:473`）/ `choose_proxy_entry()`（`proxy_entry.py:539`）。
+- **选池**：`load_proxy_pool()`（`proxy_entry.py:535`）/ `choose_proxy_entry()`（`proxy_entry.py:601`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
 - **池形态约束（以 `proxy.json` 为准，2026-09-11 更正）**：**注册主池已切换为 VN**——顶层 `proxy.registration` / `default` / `pool` 共 20 条越南出口，由 9http（`global.9http.com:9091`，`geo-VN` 模板，10 条）与 IPWO（`us.ipwo.net:7878`，`custom_zone_VN` 模板，10 条）两家组成，出口实测落在 FPT Telecom / VNPT / Viettel 等本地 ISP。协议支付 / PayPal 的 `checkout_proxy_pool`、`approve_proxy_pool`、`proxies`、`stage_proxy_pools`、`proxy_pool` **仍按用户选择的 checkout/approve 出口动态选取**（候选为 IPWO US/JP/GB，见 §7 代理 lane 表），**不是固定 JP/US/GB 混用**，且**不随注册池切换到 VN**。**Kookeey（`gate.kookeey.info`）只保留在支付方法的 `stage_proxies` / 单方法 `proxy` 字段**（各 payment method 的 stage 拉取那一步），不参与注册与 checkout/approve；`direct_card` 等仍通过同一 ProxyEntry 模板规则旋转 Kookeey sticky 密码。**Cliproxy 用户名处理（`region-XX`）在 `proxy_entry.py` 中仍保留**，但未配置 Cliproxy URL，属未启用状态。
 - **配置真源提醒**：`config.json` 在 `proxy.json` / `runtime.json` / `payment.json` 任一分片存在时即退化为 legacy 死文件（`config.py:163-181`），且其 `proxy.registration` 仍是历史的 100 条列表形态，与分片不一致。**改代理只改 `proxy.json`**。
@@ -165,7 +165,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 全部 4 个浏览器驱动共享同一个**常驻进程池**（`browser_pool.py`），非每驱动各开各的：
 
-- `PoolConfig`（`browser_pool.py:61`）：`max_concurrent`（默认 4）/ `max_uses_per_process`（默认 10）/ `recycle_on_error`（默认 true）。
+- `PoolConfig`（`browser_pool.py:62`）：`max_concurrent`（默认 4）/ `max_uses_per_process`（默认 10）/ `recycle_on_error`（默认 true）。
 - config 键**故意叫 `registration.browser_process_pool`**（`config.json:293`），**不叫 `browser_pool`**——后者是 `proxy_routing` 里的代理别名，二者无关（`browser_pool.py:70` 注释明确）。
 - 进程级回收：达到 `max_uses_per_process`、出错（`recycle_on_error`）或代理变更时，该槽位进程回收重建（`browser_pool.py:156`）。默认 `max_concurrent:4` 与脉冲 `wave_size:4` 对齐。
 
@@ -188,8 +188,8 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 注册真正开始前，先跑网络边界预检（在认领邮箱之前）：
 
-- `registration_network_preflight()`（`registration_preflight.py:99`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
-- `_resolve_proxy_scheme()`（`registration_preflight.py:69`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
+- `registration_network_preflight()`（`registration_preflight.py:104`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
+- `_resolve_proxy_scheme()`（`registration_preflight.py:74`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
 
 ---
 
@@ -226,12 +226,12 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `select_operation_proxy` | `proxy_routing.py:115` | 操作代理选择（探测回退注册池，2026-08-29 决策） |
 | `ProxyEntry` | `proxy_entry.py:67` | 规范代理模型 |
 | `parse_proxy` | `proxy_entry.py:128` | 6 形式解析 |
-| `rebuild_proxy_credentials` | `proxy_entry.py:356` | 凭据重建 |
-| `retarget_region` | `proxy_entry.py:377` | 地区重定 |
-| `rotate_session` | `proxy_entry.py:416` | 会话轮换 |
-| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:484` / `:550` | 选池 |
-| `registration_network_preflight` | `registration_preflight.py:99` | 边界探活 |
-| `_resolve_proxy_scheme` | `registration_preflight.py:69` | socks5↔http 纠错 |
+| `rebuild_proxy_credentials` | `proxy_entry.py:384` | 凭据重建 |
+| `retarget_region` | `proxy_entry.py:405` | 地区重定 |
+| `rotate_session` | `proxy_entry.py:444` | 会话轮换 |
+| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:535` / `:601` | 选池 |
+| `registration_network_preflight` | `registration_preflight.py:104` | 边界探活 |
+| `_resolve_proxy_scheme` | `registration_preflight.py:74` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:328` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:121` / `:37` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:221` | 浏览器路径指纹池单例 |

@@ -68,6 +68,7 @@ from `docs/README.md`.
 |---|---|---|
 | `headless-browser-registration-audit.md` | 08-29 | 无头浏览器注册：能力盘点与缺口分析（只读基线） |
 | `browser-registration-risk-control-gap-2026-08-30.md` | 08-30 | 指纹浏览器注册风控缺口，对照 `turb-gpt-free-register` / `aBaiFreeGPT` |
+| `scan-2026-09-12-localflow-register-reference.md` | 09-12 | 协议注册专项扫描：P1 rola 模板 / P2 注册 lane 重试覆盖 / P3 代理池 http 上游不兼容；附 `LocalFlow Register` 参考评估 |
 
 ### Security & credentials
 

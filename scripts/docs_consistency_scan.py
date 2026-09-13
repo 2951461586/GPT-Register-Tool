@@ -75,22 +75,33 @@ def _resolve_source(name: str) -> Path | None:
     return None
 
 
-def _iter_refs(text: str):
-    """Yield ``(ref_text, path|None, line_number, extension)`` resolving ``:NN`` shorthands.
+def _iter_ref_matches(text: str):
+    """Yield ``(match, path|None, line_number, extension)`` resolving ``:NN`` shorthands.
 
-    A bare ```:NN`` repeats the file named by the last fully-qualified pointer on
-    the same line, which is how the architecture doc writes ``/ `:539` ``.
+    The match itself is handed to callers that need to rewrite the number in
+    place (see ``scripts/refresh_doc_symbol_lines.py``); everything else should
+    use :func:`_iter_refs` and never re-derive the shorthand rule.
     """
     last_file: str | None = None
     for match in REF.finditer(text):
         full, full_num, bare_num = match.group(1), match.group(2), match.group(3)
         if full is not None:
             last_file = full
-            yield match.group(0), _resolve_source(full), int(full_num), full.rsplit(".", 1)[-1]
+            yield match, _resolve_source(full), int(full_num), full.rsplit(".", 1)[-1]
         elif last_file:
-            yield match.group(0), _resolve_source(last_file), int(bare_num), last_file.rsplit(".", 1)[-1]
+            yield match, _resolve_source(last_file), int(bare_num), last_file.rsplit(".", 1)[-1]
         else:
-            yield match.group(0), None, int(bare_num), ""
+            yield match, None, int(bare_num), ""
+
+
+def _iter_refs(text: str):
+    """Yield ``(ref_text, path|None, line_number, extension)`` resolving ``:NN`` shorthands.
+
+    A bare ```:NN`` repeats the file named by the last fully-qualified pointer on
+    the same line, which is how the architecture doc writes ``/ `:539` ``.
+    """
+    for match, source, num, ext in _iter_ref_matches(text):
+        yield match.group(0), source, num, ext
 
 
 def _symbol_lines(path: Path) -> dict[str, int]:
@@ -195,6 +206,7 @@ def main() -> int:
     if failures:
         print("Documentation consistency check failed")
         print("\n".join(failures))
+        print("hint: python scripts/refresh_doc_symbol_lines.py --apply")
         return 1
     print(f"Documentation consistency check passed ({latest})")
     return 0
