@@ -119,13 +119,24 @@ Python 消费方**，改它是 no-op。
 
 ## 验证
 
-- Python：`pytest tests/` — **3547 passed / 6 skipped / 616 subtests**
-  （158.51s，0 failed）。新增：L1–L4 行为用例 15 条、failure_registry 分类优先序
+- Python：`pytest tests/` — **3551 passed / 6 skipped / 616 subtests**
+  （166.16s，0 failed）。新增：L1–L4 行为用例 15 条、failure_registry 分类优先序
   5 条、代理池 HTTP 上游与 `proxy_entry` scheme 往返、文档指针刷新与漂移守卫、
-  HTTP 重试覆盖 AST 门禁。
+  HTTP 重试覆盖 AST 门禁、非 ASCII 脚本 BOM 门禁 4 条。
 - .NET：`dotnet test GPTRegisterTool.slnx -c Release` — 386 passed / 0 failed
   （本版未改 C#，沿用 v2026.09.13 基线）。
+- 构建：WPF 完整重建 0 error（`dist/net10/SmsWorkbench.exe`，37 个 DLL）；
+  安装包 payload 扫描通过（482 文件），复算 SHA-256 与清单逐字节一致。
 - 守卫：architecture_scan / docs_consistency_scan / config_schema_check /
   ipc_schema_check / ruff / 秘密扫描全部通过。
 - 变异：L1–L4 变异器 **9/9 KILLED**（每个变异体杀死的测试集都能用设计理由逐条
   解释），判定探针双向通过。
+
+## 构建脚本修复（随本版）
+
+`scripts/build_installer.ps1` 与 `SmsWorkbench/build_dotnet.ps1` 补 UTF-8 BOM。
+两者原本是无 BOM 的 UTF-8，而 Windows PowerShell 5.1 对无 BOM 的 `.ps1` 按系统
+ANSI 代码页解码；`9d16fb7` 新增的三行中文注释让错位序列吃掉引号，安装包脚本
+**直接无法解析**（`:278 意外的标记"}"`）。定性用「只解析不执行」对照：同一份字节
+无 BOM 报 1 个错、加 BOM 报 0 个错。修复只加 BOM，其余字节逐字节保持。
+新增 `tests/test_powershell_script_encoding.py` 防复发（含负向测试）。
