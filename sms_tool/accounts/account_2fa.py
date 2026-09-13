@@ -20,6 +20,8 @@ import logging
 import time
 from typing import Any
 
+from ..http_client import request_with_retry
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +53,8 @@ def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, bas
         "csrfToken": csrf_token,
         "json": "true",
     })
-    r = session.post(url, headers=headers, data=body, impersonate=_impersonate())
+    r = request_with_retry(session, "post", url, headers=headers, data=body,
+                           impersonate=_impersonate(), label="2FA reauth signin")
     r.raise_for_status()
     data = r.json()
     auth_url = data.get("url")
@@ -66,7 +69,8 @@ def _follow_reauth_authorize(session, auth_url: str, base_headers: dict) -> None
     headers["Referer"] = "https://chatgpt.com/"
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
-    r = session.get(auth_url, headers=headers, allow_redirects=True, impersonate=_impersonate())
+    r = request_with_retry(session, "get", auth_url, headers=headers, allow_redirects=True,
+                           impersonate=_impersonate(), label="2FA reauth authorize")
     r.raise_for_status()
 
 
@@ -74,7 +78,8 @@ def _fetch_csrf_token(session, base_headers: dict) -> str:
     url = "https://chatgpt.com/api/auth/csrf"
     headers = dict(base_headers)
     headers["Accept"] = "application/json"
-    r = session.get(url, headers=headers, impersonate=_impersonate())
+    r = request_with_retry(session, "get", url, headers=headers,
+                           impersonate=_impersonate(), label="2FA csrf")
     r.raise_for_status()
     return r.json()["csrfToken"]
 
@@ -87,7 +92,8 @@ def _validate_email_otp(session, code: str, base_headers: dict) -> str:
     headers["origin"] = "https://auth.openai.com"
     headers["referer"] = "https://auth.openai.com/email-verification"
     body = json.dumps({"code": code})
-    r = session.post(url, headers=headers, data=body, impersonate=_impersonate())
+    r = request_with_retry(session, "post", url, headers=headers, data=body,
+                           impersonate=_impersonate(), label="2FA email otp validate")
     r.raise_for_status()
     data = r.json()
     continue_url = data.get("continue_url")
@@ -103,7 +109,8 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     headers["Referer"] = "https://auth.openai.com/email-verification"
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
-    session.get(continue_url, headers=headers, allow_redirects=True, impersonate=_impersonate())
+    request_with_retry(session, "get", continue_url, headers=headers, allow_redirects=True,
+                       impersonate=_impersonate(), label="2FA reauth continue")
 
     # Fetch fresh session
     chat_base = "https://chatgpt.com"
@@ -111,7 +118,8 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     headers2 = dict(base_headers)
     headers2["Accept"] = "application/json"
     headers2["Referer"] = f"{chat_base}/"
-    r = session.get(url, headers=headers2, impersonate=_impersonate())
+    r = request_with_retry(session, "get", url, headers=headers2,
+                           impersonate=_impersonate(), label="2FA auth session")
     r.raise_for_status()
     data = r.json()
     access_token = data.get("accessToken")
@@ -129,7 +137,8 @@ def _enroll_totp(session, access_token: str, did: str, base_headers: dict) -> tu
     headers["oai-language"] = "en-US"
     headers["Content-Type"] = "application/json"
     headers["Referer"] = "https://chatgpt.com/"
-    r = session.post(url, headers=headers, json={"factor_type": "totp"}, impersonate=_impersonate())
+    r = request_with_retry(session, "post", url, headers=headers, json={"factor_type": "totp"},
+                           impersonate=_impersonate(), label="2FA mfa enroll")
     if r.status_code != 200:
         raise RuntimeError(f"mfa enroll HTTP {r.status_code}: {r.text[:300]}")
     data = r.json()
@@ -155,11 +164,12 @@ def _activate_totp(session, access_token: str, did: str, secret: str, session_id
     headers["Content-Type"] = "application/json"
     headers["Referer"] = "https://chatgpt.com/"
     totp_code = pyotp.TOTP(secret).now()
-    r = session.post(
-        url,
+    r = request_with_retry(
+        session, "post", url,
         headers=headers,
         json={"code": totp_code, "factor_type": "totp", "session_id": session_id},
         impersonate=_impersonate(),
+        label="2FA mfa activate",
     )
     if r.status_code != 200:
         raise RuntimeError(f"mfa activate HTTP {r.status_code}: {r.text[:300]}")
@@ -177,7 +187,8 @@ def _mfa_info(session, access_token: str, did: str, base_headers: dict) -> dict[
     headers["oai-language"] = "en-US"
     headers["Referer"] = "https://chatgpt.com/"
     try:
-        response = session.get(url, headers=headers, impersonate=_impersonate())
+        response = request_with_retry(session, "get", url, headers=headers,
+                                      impersonate=_impersonate(), label="2FA mfa info")
     except Exception:
         return None
     if response.status_code != 200:

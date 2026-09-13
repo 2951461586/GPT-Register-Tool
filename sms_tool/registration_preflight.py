@@ -13,6 +13,7 @@ from .auth_headers import (
     openai_auth_headers,
 )
 from .config import CFG
+from .http_client import request_with_retry
 from .accounts.account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
 from .sentinel.bundle import sentinel_version
@@ -55,7 +56,11 @@ def _proxy_scheme_reachable(candidate: str, url: str) -> bool:
         pass
     session.proxies = {"http": candidate, "https": candidate}
     try:
-        session.get(url, timeout=15, impersonate=auth_impersonate())
+        # One transient reset on an otherwise healthy socks5 endpoint used to
+        # answer "unreachable" and trigger a scheme downgrade to http:// for the
+        # whole run.  Retry the transport before declaring the scheme wrong.
+        request_with_retry(session, "get", url, timeout=15,
+                           impersonate=auth_impersonate(), label="proxy scheme probe")
         return True
     except Exception:
         return False
@@ -143,7 +148,9 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
                         "Upgrade-Insecure-Requests": "1",
                     },
                 )
-                response = session.get(url, headers=headers, timeout=15, impersonate=auth_impersonate())
+                response = request_with_retry(session, "get", url, headers=headers,
+                                              timeout=15, impersonate=auth_impersonate(),
+                                              label=f"preflight {label}")
                 if not allow_http_error and int(getattr(response, "status_code", 0) or 0) >= 400:
                     raise RuntimeError(f"registration_preflight_failed:{label}:http_{response.status_code}")
             result = {"ok": True, "profile": current_auth_fingerprint()["impersonate"]}
