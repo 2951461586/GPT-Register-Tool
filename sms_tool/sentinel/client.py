@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from curl_cffi import requests as curl_requests
 
 from ..auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
+from ..http_client import request_with_retry
 from ..phone_proxy import normalize_proxy_url
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
@@ -192,8 +193,10 @@ def _challenge(
     timeout_seconds: int,
 ) -> dict[str, Any]:
     proof = _requirements_token(device_id, profile)
-    response = session.post(
+    response = request_with_retry(
+        session, "post",
         SENTINEL_REQ_URL,
+        label="sentinel challenge",
         data=json.dumps({"p": proof, "id": device_id, "flow": flow}, separators=(",", ":")),
         headers={
             "Content-Type": "text/plain;charset=UTF-8",
