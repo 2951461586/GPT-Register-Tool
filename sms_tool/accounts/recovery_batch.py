@@ -18,20 +18,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from ..registration_retry_guard import RegistrationRetryGuard
+
 logger = logging.getLogger(__name__)
 
 
-def __getattr__(name: str):
-    """引擎体对策略层与既有助手的引用在调用期经 account_recovery 解析。
-
-    (a) recovery_batch → account_recovery 是调用期依赖，导入期零循环；
-    (b) 测试通过 ``patch.object(account_recovery, "probe_account_liveness", …)``
-        打桩的协作者继续保持生效——切分不改变 patch 面。
-    """
-    import importlib
-
-    module = importlib.import_module(".account_recovery", __package__)
-    return getattr(module, name)
 # Probe verdicts from a scan pass that a quota refresh must not re-probe.
 # Anything else (unknown / timeout / empty / 检测失败) is transport-shaped and
 # gets a fresh probe because the network may have recovered since the scan.
@@ -107,6 +98,7 @@ def refresh_local_quota_statuses(
     from .account_recovery import (
         CFG,
         _TRANSIENT_RELOGIN_MODES,
+        _clear_relogin_failure,
         _has_relogin_material,
         _is_token_revoked_drop,
         _health_status_code,
@@ -335,6 +327,15 @@ def refresh_local_quota_statuses(
                             if email:
                                 try:
                                     _clear_promotion_marker_after_probe(email)
+                                except Exception:
+                                    pass
+                                # The recorded failure is over.  A stale shape
+                                # would make the next unrelated failure compare
+                                # equal to it and take the long repeat window.
+                                try:
+                                    _clear_relogin_failure(email)
+                                    if probe.get("ok"):
+                                        RegistrationRetryGuard(CFG).record(email, success=True)
                                 except Exception:
                                     pass
                         elif relogin:

@@ -85,6 +85,42 @@ from common.protocol_core import (
     find_submission_attempt as common_find_submission_attempt,
     first_value_by_key as common_first_value_by_key,
 )
+from common.file_loading import (
+    load_proxy_file as shared_load_proxy_file,
+    load_token as shared_load_token,
+)
+from common.http_dump import (
+    DumpCounter,
+    dump_http as shared_dump_http,
+)
+from common.redaction import (
+    RedactionRegistry,
+    redact_log_text as shared_redact_log_text,
+    redact_text as shared_redact_text,
+    register_proxy_for_redaction as shared_register_proxy_for_redaction,
+)
+from common.proxy_bookkeeping import (
+    find_named_token as shared_find_named_token,
+    is_known_static_host as shared_is_known_static_host,
+    proxy_key as shared_proxy_key,
+    proxy_label as shared_proxy_label,
+    proxy_short as shared_proxy_short,
+    token_key_name as shared_token_key_name,
+)
+from common.proxy_selection import (
+    is_preferred_proxy as shared_is_preferred_proxy,
+    pick_random_proxies as shared_pick_random_proxies,
+    proxy_for_country as shared_proxy_for_country,
+)
+from common.proxy_url import (
+    NO_FOUR_PART,
+    default_scheme_from_env,
+    normalize_proxy_url as shared_normalize_proxy_url,
+)
+from common.logging_setup import make_file_logger
+from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+from common import stripe_flow as shared_stripe_flow
+from common import geo as shared_geo
 
 LOG_DIR = SCRIPT_DIR / "logs"
 DUMP_DIR = SCRIPT_DIR / "dumps"
@@ -118,8 +154,6 @@ def print_failure_result(
 def print_already_paid_result() -> None:
     _result_reporter.already_paid()
 
-DEFAULT_TIMEOUT = 30
-CHATGPT_TIMEOUT = 45
 IDEAL_UNAVAILABLE_ERROR = "当前账号支付方式不支持 iDEAL"
 STRIPE_VERSION_FULL = (
     "2025-03-31.basil; checkout_server_update_beta=v1; "
@@ -195,31 +229,32 @@ NL_BILLING_ADDRESSES = [
 EMAIL_DOMAINS = ("gmail.com", "outlook.com", "icloud.com", "hotmail.com")
 
 _log_file = LOG_DIR / f"ideal_{time.strftime('%Y%m%d-%H%M%S')}.log"
-_dump_counter = 0
+# Durable rotated copy alongside the legacy append-only file above. The legacy
+# file keeps its exact naming/content; this channel only adds a size-capped,
+# rotation-resilient mirror. It writes to files only, never stdout.
+_durable_logger = make_file_logger("ideal", LOG_DIR, redact=lambda text: redact_log_text(text))
+_dump_counter = DumpCounter()
 _proxy_state: dict[str, Any] | None = None
 _proxy_state_lock = RLock()
 _log_lock = RLock()
-_dump_lock = RLock()
 _proxy_file_lock = RLock()
-_proxy_redaction_lock = RLock()
-_proxy_redaction_values: set[str] = set()
+_proxy_redaction_registry = RedactionRegistry()
 _log_context = local()
 
 
 def redact_log_text(text: str) -> str:
-    text = str(text or "")
-    with _proxy_redaction_lock:
-        values = sorted(_proxy_redaction_values, key=len, reverse=True)
-    for value in values:
-        if value:
-            try:
-                label = proxy_label(value)
-            except (TypeError, ValueError):
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            if label == "direct":
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            text = text.replace(value, label)
-    return text
+    """Delegate to the shared redactor (batch 2 of the consolidation).
+
+    ``registry`` is this module's own: it holds the proxies THIS extractor
+    registered.  A single shared registry would make one extractor's log output
+    depend on another extractor's registrations, and would leak one
+    extractor's proxy strings into another's dump files.
+    """
+    return shared_redact_log_text(
+        text,
+        registry=_proxy_redaction_registry,
+        proxy_label=proxy_label,
+    )
 
 
 def log(message: str, prefix: str = "") -> None:
@@ -227,8 +262,12 @@ def log(message: str, prefix: str = "") -> None:
     line = redact_log_text(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {prefix}{context}{message}")
     with _log_lock:
         print(line, flush=True)
-        with open(_log_file, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        try:
+            with open(_log_file, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+        _durable_logger.info("%s%s%s", prefix, context, message)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -305,78 +344,54 @@ def payment_accept_language() -> str:
 
 
 def normalize_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if not proxy:
-        return ""
-    if "://" not in proxy:
-        proxy = f"{default_proxy_scheme()}://{proxy}"
+    """Delegate to the shared skeleton in ``common/proxy_url.py``.
 
-    parsed = urlsplit(proxy)
-    if parsed.username is None and parsed.password is None:
-        return proxy
-
-    hostname = parsed.hostname or ""
-    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    username = quote(unquote(parsed.username or ""), safe="-._~")
-    auth = username
-    if parsed.password is not None:
-        auth = f"{auth}:{quote(unquote(parsed.password), safe='-._~')}"
-    return urlunsplit((parsed.scheme, f"{auth}@{host}", parsed.path, parsed.query, parsed.fragment))
+    No four-field provider form is accepted here (``four_part=NO_FOUR_PART``)
+    and the credentials are re-encoded -- both unchanged from the local body
+    this replaces.  ``runtime/tmp/p0_proxy_diff.py`` pins that claim input by
+    input.
+    """
+    return shared_normalize_proxy_url(
+        proxy, default_scheme=default_proxy_scheme(), four_part=NO_FOUR_PART
+    )
 
 
 def register_proxy_for_redaction(proxy: str) -> None:
-    raw = str(proxy or "").strip()
-    if not raw:
-        return
-    normalized = normalize_proxy_url(raw)
-    values = {raw}
-    if normalized:
-        values.add(normalized)
-        decoded = unquote(normalized)
-        values.add(decoded)
-        parsed = urlsplit(decoded)
-        if parsed.netloc:
-            values.add(parsed.netloc)
-        if parsed.hostname:
-            host = parsed.hostname
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-            try:
-                port = parsed.port
-            except ValueError:
-                port = None
-            values.add(f"{host}:{port}" if port else host)
-    with _proxy_redaction_lock:
-        _proxy_redaction_values.update(values)
+    """Delegate to the shared registrar (batch 2 of the consolidation).
 
+    ``normalize`` is this module's own normaliser and ``registry`` is this
+    module's own value set -- see ``redact_log_text`` for why neither is
+    shared.
+    """
+    shared_register_proxy_for_redaction(
+        proxy,
+        registry=_proxy_redaction_registry,
+        normalize=normalize_proxy_url,
+    )
 
 def default_proxy_scheme() -> str:
-    raw = os.environ.get("IDEAL_PROXY_DEFAULT_SCHEME", "http").strip().lower()
-    raw = raw[:-3] if raw.endswith("://") else raw
-    if raw in ("socks5", "socks5h"):
-        return "socks5h"
-    if raw in ("http", "https"):
-        return raw
-    return "http"
+    """Delegate to the shared resolver in ``common/proxy_url.py``."""
+    return default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
 
 
 def proxy_short(proxy: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    if not proxy:
-        return "direct"
-    digest = hashlib.sha256(proxy.encode()).hexdigest()[:10]
-    return f"proxy#{digest}"
+    """Delegate to ``common/proxy_bookkeeping.py``.
+
+    The host-side body is shared; the normaliser is injected so blik keeps its
+    ``user:pass:host:port`` reading while the others keep ``host:port:user:pass``
+    (see ``common/proxy_url.py``).
+    """
+    return shared_proxy_short(proxy, normalize_proxy_url)
 
 
 def proxy_label(proxy: str) -> str:
-    return proxy_short(proxy)
+    """Delegate to ``common/proxy_bookkeeping.py`` (historical alias of proxy_short)."""
+    return shared_proxy_label(proxy, normalize_proxy_url)
 
 
 def proxy_key(proxy: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    return hashlib.sha256(proxy.encode()).hexdigest() if proxy else ""
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_proxy_key(proxy, normalize_proxy_url)
 
 
 _PROXY_COUNTRY_SELECTOR_RE = re.compile(
@@ -395,42 +410,24 @@ def proxy_chain_key(proxy: str) -> str:
 
 
 def proxy_for_country(proxy: str, country: str) -> str:
-    """Rewrite only a proxy auth country selector while retaining its sticky session."""
-    proxy = normalize_proxy_url(proxy)
-    target_country = normalize_country(country).lower()
-    if not proxy:
-        raise RuntimeError("代理为空，无法派生地区链路")
+    """Delegate to the shared rewriter (batch 5 of the consolidation).
 
-    parsed = urlsplit(proxy)
-    username = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    replacements = 0
-
-    def replace_country(match: re.Match[str]) -> str:
-        nonlocal replacements
-        replacements += 1
-        current = match.group("value")
-        value = target_country.upper() if current.isupper() else target_country
-        return f"{match.group('name')}{match.group('separator')}{value}"
-
-    username = _PROXY_COUNTRY_SELECTOR_RE.sub(replace_country, username)
-    password = _PROXY_COUNTRY_SELECTOR_RE.sub(replace_country, password)
-    if not replacements:
-        raise RuntimeError(
-            f"代理未包含可改写的 country/region 选择器: {proxy_label(proxy)}"
-        )
-
-    hostname = parsed.hostname or ""
-    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    auth = quote(username, safe="-._~")
-    if parsed.password is not None:
-        auth = f"{auth}:{quote(password, safe='-._~')}"
-    derived = urlunsplit((parsed.scheme, f"{auth}@{host}", parsed.path, parsed.query, parsed.fragment))
-    register_proxy_for_redaction(derived)
-    return derived
-
+    Every knob is this module's own: the proxy normaliser, the country
+    normaliser (whose fallback differs per provider), the selector pattern --
+    which this module also uses for ``proxy_chain_key`` -- the redaction label
+    used in the error text, and the registrar that keeps the *derived* proxy out
+    of the logs.  The derived proxy is a new credential, not a restatement of
+    the seed, so registering it is not optional.
+    """
+    return shared_proxy_for_country(
+        proxy,
+        country,
+        normalize=normalize_proxy_url,
+        country_normalizer=normalize_country,
+        selector=_PROXY_COUNTRY_SELECTOR_RE,
+        label=proxy_label,
+        register=register_proxy_for_redaction,
+    )
 
 def ideal_proxy_chain(proxy_seed: str) -> tuple[str, str, str]:
     """Keep one sticky seed across configured checkout, promotion, and provider stages."""
@@ -454,6 +451,76 @@ def log_ideal_proxy_chain(proxy_seed: str, checkout_proxy: str, promotion_proxy:
         f"{IDEAL_PROMOTION_COUNTRY} promotion={proxy_label(promotion_proxy)}; "
         f"{IDEAL_PROVIDER_COUNTRY} provider/approve={proxy_label(provider_proxy)}"
     )
+
+
+def ideal_lookup_proxy_country(group: str, proxy: str, timeout: int | None = None) -> tuple[str, str, str]:
+    return shared_geo.lookup_proxy_country(
+        group, proxy, timeout,
+        record=proxy_record(group, proxy),
+        save_state=save_proxy_state,
+        new_session=new_session,
+        env_bool=env_bool,
+        env_int=env_int,
+        redact=redact_log_text,
+        env_prefix="IDEAL",
+    )
+
+
+def ideal_lookup_proxy_targets(group: str, proxy: str, timeout: int | None = None) -> tuple[bool, str]:
+    return shared_geo.lookup_proxy_targets(
+        group, proxy, timeout,
+        record=proxy_record(group, proxy),
+        save_state=save_proxy_state,
+        new_session=new_session,
+        env_bool=env_bool,
+        env_int=env_int,
+        redact=redact_log_text,
+        env_prefix="IDEAL",
+        user_agent=DEFAULT_USER_AGENT,
+    )
+
+
+def ideal_expected_proxy_countries(group: str) -> set[str]:
+    return shared_geo.expected_proxy_countries(
+        group,
+        env_prefix="IDEAL",
+        default_checkout_country=lambda: IDEAL_BOOTSTRAP_COUNTRY,
+        default_country=lambda: IDEAL_PROVIDER_COUNTRY,
+        default_provider_countries=lambda: IDEAL_PROVIDER_COUNTRY,
+    )
+
+
+def maybe_check_proxy_geo(checkout_proxy: str, provider_proxy: str) -> None:
+    """Opt-in exit-geo / target-reachability gate (default OFF).
+
+    ideal/twint derive checkout+provider from ONE sticky seed, so both names
+    resolve to the same exit IP today (the region selector is not rewritten into
+    the URL — verified 2026-09-19). The check therefore probes the *seed's* exit
+    country once and is meaningful (no constant false-positive). It is OFF by
+    default: turning it on is a behaviour change (a network probe + a possible
+    rejection of a working proxy), so it is gated behind ``IDEAL_PROXY_GEO_CHECK``.
+    """
+    if not env_bool("IDEAL_PROXY_GEO_CHECK", False):
+        return
+    shared_geo.ensure_proxy_country(
+        "checkout", checkout_proxy,
+        lookup_country=ideal_lookup_proxy_country,
+        expected_countries=ideal_expected_proxy_countries,
+        env_bool=env_bool,
+        log=log,
+        label=proxy_label,
+        remove_failed=remove_failed_proxy,
+        env_prefix="IDEAL",
+    )
+    if env_bool("IDEAL_PROXY_TARGET_CHECK", False):
+        shared_geo.ensure_proxy_targets(
+            "checkout", checkout_proxy,
+            lookup_targets=ideal_lookup_proxy_targets,
+            env_bool=env_bool,
+            log=log,
+            label=proxy_label,
+            env_prefix="IDEAL",
+        )
 
 
 def normalize_pre_proxy_url(proxy: str) -> str:
@@ -855,17 +922,17 @@ def pre_proxy_url() -> str:
 
 
 def load_proxy_file(path: Path) -> list[str]:
-    proxies: list[str] = []
-    if not path.exists():
-        return proxies
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            register_proxy_for_redaction(line)
-            proxy = normalize_proxy_url(line)
-            if proxy:
-                proxies.append(proxy)
-    random.shuffle(proxies)
-    return proxies
+    """Delegate to the shared loader (batch 3 of the consolidation).
+
+    The two injected knobs are this module's own: redaction registration writes
+    into *this* extractor's registry, and the normaliser is the one that knows
+    ideal's four-field convention.
+    """
+    return shared_load_proxy_file(
+        path,
+        register_for_redaction=register_proxy_for_redaction,
+        normalize=normalize_proxy_url,
+    )
 
 
 def proxy_seed_file() -> Path:
@@ -1026,15 +1093,19 @@ def new_session(proxy: str = "", use_pre_proxy: bool = True) -> Any:
 
 
 def _redact_text(text: str, limit: int | None = None) -> str:
-    text = text or ""
-    text = re.sub(r"(Bearer\s+)[A-Za-z0-9._=-]+", r"\1***", text)
-    text = re.sub(r"(__Secure-next-auth\.session-token=)[^;\\s]+", r"\1***", text)
-    text = re.sub(r"(accessToken|access_token|sessionToken|token)(['\"]?\s*[:=]\s*['\"])[^'\"]+", r"\1\2***", text)
-    text = redact_log_text(text)
-    if limit is None:
-        limit = env_int("IDEAL_DUMP_LIMIT", 6000, minimum=500)
-    return text[:limit]
+    """Delegate to the shared redactor (batch 2 of the consolidation).
 
+    ``limit_env`` is injected because ideal and twint read different env vars
+    (``IDEAL_DUMP_LIMIT`` vs the twint one), and a default would silently pick one.
+    """
+    return shared_redact_text(
+        text,
+        limit,
+        registry=_proxy_redaction_registry,
+        proxy_label=proxy_label,
+        limit_env="IDEAL_DUMP_LIMIT",
+        env_int=env_int,
+    )
 
 def dump_http(
     response: requests.Response | None,
@@ -1044,62 +1115,35 @@ def dump_http(
     request_url: str = "",
     force: bool = False,
 ) -> None:
-    if not force and not env_bool("IDEAL_DUMP", False):
-        return
-    global _dump_counter
-    with _dump_lock:
-        _dump_counter += 1
-        name = f"{time.strftime('%Y%m%d-%H%M%S')}_{_dump_counter:04d}_{stage}.txt"
-    path = DUMP_DIR / re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
-    lines = [
-        f"stage: {stage}",
-        f"request: {request_method} {request_url}",
-        "",
-        "request_body:",
-        _redact_text(json.dumps(request_body, ensure_ascii=False, indent=2) if request_body is not None else ""),
-        "",
-    ]
-    if response is not None:
-        lines.extend(
-            [
-                f"status: {response.status_code}",
-                f"url: {response.url}",
-                "",
-                "response:",
-                _redact_text(response.text),
-            ]
-        )
-    path.write_text("\n".join(lines), encoding="utf-8")
+    """Delegate to the shared dumper (batch 4 of the consolidation).
+
+    Every knob is this module's own: the switch is ``IDEAL_DUMP`` (twint reads
+    ``TWINT_DUMP``), dumps land in this module's ``DUMP_DIR``, the index numbers
+    this extractor's files only, and redaction uses this module's registry.
+    """
+    shared_dump_http(
+        response,
+        stage,
+        request_body,
+        request_method,
+        request_url,
+        force,
+        dump_env="IDEAL_DUMP",
+        dump_dir=DUMP_DIR,
+        counter=_dump_counter,
+        redact_text=_redact_text,
+        env_bool=env_bool,
+    )
 
 
 def token_key_name(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_token_key_name(value)
 
 
 def find_named_token(payload: Any, aliases: tuple[str, ...]) -> str:
-    wanted = {token_key_name(item) for item in aliases}
-    if isinstance(payload, dict):
-        cookie_name = token_key_name(payload.get("name") or payload.get("key"))
-        if cookie_name in wanted:
-            for value_key in ("value", "token", "content"):
-                value = str(payload.get(value_key) or "").strip()
-                if value:
-                    return value
-        for key, value in payload.items():
-            if token_key_name(key) in wanted and isinstance(value, (str, int, float)):
-                found = str(value).strip()
-                if found:
-                    return found
-        for value in payload.values():
-            found = find_named_token(value, aliases)
-            if found:
-                return found
-    elif isinstance(payload, list):
-        for item in payload:
-            found = find_named_token(item, aliases)
-            if found:
-                return found
-    return ""
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_find_named_token(payload, aliases)
 
 
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
@@ -1151,41 +1195,18 @@ def normalize_token(raw: str) -> tuple[str, str]:
 
 
 def load_token() -> tuple[str, str]:
-    for env_name in ("PP_TOKEN", "IDEAL_TOKEN"):
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            log(f"使用环境变量 {env_name}")
-            token, session_token = normalize_token(value)
-            env_session = os.environ.get("PP_SESSION_TOKEN", "").strip()
-            if env_session or session_token:
-                log("已加载 sessionToken cookie")
-            return token, env_session or session_token
+    """Delegate to the shared loader (batch 3 of the consolidation).
 
-    candidates = [SCRIPT_DIR / "token.txt"]
-    for path in candidates:
-        if not path.exists():
-            continue
-        raw = path.read_bytes()
-        for enc in ("utf-8-sig", "utf-16", "utf-8", "ascii"):
-            try:
-                text = raw.decode(enc).strip()
-                break
-            except UnicodeError:
-                continue
-        else:
-            text = raw.decode("utf-8", errors="ignore").strip()
-        if text:
-            log("使用 token 文件")
-            token, session_token = normalize_token(text)
-            env_session = os.environ.get("PP_SESSION_TOKEN", "").strip()
-            if env_session or session_token:
-                log("已加载 sessionToken cookie")
-            return token, env_session or session_token
-
-    token = input("请输入 access_token: ").strip()
-    session_token = os.environ.get("PP_SESSION_TOKEN", "").strip()
-    token, parsed_session = normalize_token(token)
-    return token, session_token or parsed_session
+    ``env_names`` is passed explicitly and must stay as written: ideal and blik
+    share ``IDEAL_TOKEN`` while twint uses ``TWINT_TOKEN``, and the first hit in
+    the tuple wins.  Do not "unify" these with the other extractors.
+    """
+    return shared_load_token(
+        env_names=("PP_TOKEN", "IDEAL_TOKEN"),
+        token_file=SCRIPT_DIR / "token.txt",
+        normalize_token=normalize_token,
+        log=log,
+    )
 
 
 def build_chatgpt_session(access_token: str, device_id: str, proxy: str, session_token: str = "") -> requests.Session:
@@ -1755,43 +1776,21 @@ def add_inline_ideal_payment_method_data(body: dict[str, Any], cs_id: str, billi
 
 
 def processor_entity_for_country(country: str, processor_entity: str = "") -> str:
-    if processor_entity:
-        return processor_entity
-    return "openai_llc" if normalize_country(country) == "US" else "openai_ie"
+    return shared_stripe_flow.processor_entity_for_country(country, processor_entity, normalize_country=normalize_country)
 
 
 def stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str) -> str:
-    processor = processor_entity_for_country(country, processor_entity)
-    success = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor}&plan_type=plus"
-    return (
-        f"https://checkout.stripe.com/c/pay/{cs_id}"
-        f"?returned_from_redirect=true&ui_mode=custom&return_url={quote(success, safe='')}"
-    )
+    return shared_stripe_flow.stripe_checkout_long_url(cs_id, country, processor_entity, normalize_country=normalize_country)
 
 
 def to_openai_pay_url(stripe_hosted_url: str) -> str:
-    url = str(stripe_hosted_url or "").strip()
-    if not url:
-        return ""
-    if url.startswith("https://checkout.stripe.com"):
-        return "https://pay.openai.com" + url[len("https://checkout.stripe.com") :]
-    parsed = urlsplit(url)
-    if parsed.netloc.lower() == "checkout.stripe.com":
-        return urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
-    return url
+    return shared_stripe_flow.to_openai_pay_url(stripe_hosted_url)
 
 
 def stripe_confirm_return_url(cs_id: str, checkout: dict[str, str], stripe_hosted_url: str) -> str:
-    country = normalize_country(checkout.get("billing_country") or "NL")
-    processor = processor_entity_for_country(country, checkout.get("processor_entity") or "")
-    success = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor}&plan_type=plus"
-    hosted = to_openai_pay_url(stripe_hosted_url) or stripe_checkout_long_url(cs_id, country, processor)
-    if "pay.openai.com/" in hosted or "checkout.stripe.com/" in hosted:
-        parsed = urlsplit(hosted)
-        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        query.setdefault("success_return_url", success)
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
-    return hosted
+    return shared_stripe_flow.stripe_confirm_return_url(
+        cs_id, checkout, stripe_hosted_url, normalize_country=normalize_country, default_country="NL"
+    )
 
 
 def stripe_confirm_ideal(
@@ -1877,14 +1876,8 @@ def is_resource_url(url: str) -> bool:
 
 
 def is_known_static_host(url: str) -> bool:
-    host = (urlparse(url).netloc or "").lower()
-    return host in {
-        "stripe-camo.global.ssl.fastly.net",
-        "files.stripe.com",
-        "js.stripe.com",
-        "m.stripe.network",
-        "q.stripe.com",
-    }
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_is_known_static_host(url)
 
 
 def is_redirect_like_url(url: str, from_action_field: bool = False) -> bool:
@@ -2385,33 +2378,22 @@ def resolve_confirm_payload_ideal(
     provider_proxy: str,
     approve_pool: list[str],
 ) -> tuple[str, list[str], str]:
-    raise_if_setup_intent_blocked(confirm_payload, "stripe confirm", current_pm_id=pm_id)
-    redirect_url = extract_redirect_url(confirm_payload)
-    if not redirect_url:
-        redirect_url = stripe_payload_intent_redirect_url(stripe, confirm_payload, stripe_pk, current_pm_id=pm_id)
-    qr_urls = extract_qr_candidates(confirm_payload)
-    submission = find_submission_attempt(confirm_payload)
-
-    if redirect_url:
-        log(f"confirm 提取到最终扫码/授权 URL: {redirect_url[:180]}")
-    if qr_urls:
-        log(f"confirm 提取到 QR 候选 {len(qr_urls)} 个")
-
-    approve_proxy = ""
-    if not redirect_url and submission.get("state") == "requires_approval":
-        log("需要 ChatGPT approve...")
-        approve_proxies = approve_proxy_candidates(checkout_proxy, provider_proxy, approve_pool)
-        log("需要 approve：iDEAL 0 元场景，优先使用历史成功/当前 Provider 代理，失败后切换下一个 Provider 代理。")
-        approve_proxy = approve_with_retry(access_token, device_id, checkout, approve_proxies, session_token, "provider")
-        log("跟随跳转提取最终链...")
-        redirect_url, poll_qr = poll_payment_page(stripe, checkout, stripe_pk, ctx, current_pm_id=pm_id)
-        qr_urls.extend(poll_qr)
-    elif not redirect_url and not qr_urls:
-        log("confirm 未返回真实 iDEAL redirect/QR，继续 poll payment_pages 做最终确认", "[WARN] ")
-        redirect_url, poll_qr = poll_payment_page(stripe, checkout, stripe_pk, ctx, current_pm_id=pm_id)
-        qr_urls.extend(poll_qr)
-
-    return redirect_url, list(dict.fromkeys(qr_urls)), approve_proxy
+    return shared_stripe_flow.resolve_confirm_payload(
+        stripe, confirm_payload, checkout, stripe_pk, ctx, pm_id,
+        access_token, device_id, session_token, checkout_proxy, provider_proxy, approve_pool,
+        provider_label="iDEAL",
+        redirect_label="扫码/授权 URL",
+        no_redirect_note="redirect/QR",
+        raise_if_setup_intent_blocked=raise_if_setup_intent_blocked,
+        extract_redirect_url=extract_redirect_url,
+        stripe_payload_intent_redirect_url=stripe_payload_intent_redirect_url,
+        extract_qr_candidates=extract_qr_candidates,
+        find_submission_attempt=find_submission_attempt,
+        approve_proxy_candidates=approve_proxy_candidates,
+        approve_with_retry=approve_with_retry,
+        poll_payment_page=poll_payment_page,
+        log=log,
+    )
 
 
 def run_provider_flow(
@@ -2619,6 +2601,7 @@ def run_once(
         checkout_proxy, promotion_proxy, provider_proxy = ideal_proxy_chain(proxy_seed)
         log_ideal_proxy_chain(proxy_seed, checkout_proxy, promotion_proxy, provider_proxy)
         log(f"本轮代理: checkout/资格={proxy_label(checkout_proxy)}；Stripe/iDEAL={proxy_label(provider_proxy)}")
+        maybe_check_proxy_geo(checkout_proxy, provider_proxy)
         zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(checkout_proxy, checkout_country)
         if zero_status == "ok":
             log(f"checkout 0元资格缓存命中: amount={zero_amount}")
@@ -2788,32 +2771,36 @@ def build_attempt_batches(checkout_proxies: list[str], provider_proxies: list[st
 
 
 def is_preferred_proxy(group: str, proxy: str) -> bool:
-    if not group or not env_bool("IDEAL_PROXY_SCORE", True):
-        return False
-    state = load_proxy_state().get(group, {})
-    if not isinstance(state, dict):
-        return False
-    record = state.get(proxy_key(proxy), {})
-    if not isinstance(record, dict):
-        return False
-    return int(record.get("success") or 0) > 0
+    """Delegate to the shared scorer (batch 5 of the consolidation).
 
+    ``score_env`` is injected because ideal and twint read different switches
+    (``IDEAL_PROXY_SCORE`` vs the other one); a default would silently make one answer to
+    the other's switch.
+    """
+    return shared_is_preferred_proxy(
+        group,
+        proxy,
+        score_env="IDEAL_PROXY_SCORE",
+        env_bool=env_bool,
+        load_state=load_proxy_state,
+        key=proxy_key,
+    )
 
 def pick_random_proxies(proxies: list[str], limit: int, group: str = "") -> list[str]:
-    if group:
-        proxies = order_proxy_group(group, proxies)
-    preferred = [proxy for proxy in proxies if is_preferred_proxy(group, proxy)]
-    preferred_set = set(preferred)
-    rest = [proxy for proxy in proxies if proxy not in preferred_set]
-    if limit >= len(proxies):
-        random.shuffle(rest)
-        return preferred + rest
-    selected = preferred[:limit]
-    remain_count = limit - len(selected)
-    if remain_count > 0:
-        selected.extend(random.sample(rest, min(remain_count, len(rest))))
-    return selected
+    """Delegate to the shared picker (batch 5 of the consolidation).
 
+    ``is_preferred`` is this module's own rule.  blik's is deliberately not the
+    shared one (it keys records by group and honours ``zero_ok``), so passing
+    the callable keeps that difference explicit instead of hiding it behind a
+    flag.
+    """
+    return shared_pick_random_proxies(
+        proxies,
+        limit,
+        group,
+        order_group=order_proxy_group,
+        is_preferred=is_preferred_proxy,
+    )
 
 def run_single_link_attempt(
     access_token: str,

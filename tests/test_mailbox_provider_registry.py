@@ -128,3 +128,20 @@ def test_the_real_graph_adapter_loses_when_registered_first():
         MailboxAccount("user@example.com", provider="cfworker"), {})
     assert resolved is not None
     assert resolved.name == "cfworker"
+
+
+def test_provider_credentials_are_resolved_by_the_same_registry():
+    registry = MailboxProviderRegistry()
+    registry.register_credentials(
+        "fake",
+        lambda mailbox, _config: mailbox.provider == "fake",
+        lambda mailbox, _config: bool(mailbox.token),
+    )
+    assert registry.has_credentials(
+        MailboxAccount("user@example.com", provider="fake", token="mailbox-id"),
+        {},
+    )
+    assert not registry.has_credentials(
+        MailboxAccount("user@example.com", provider="fake"),
+        {},
+    )

@@ -14,6 +14,7 @@ makes the shared resolver safe to route everything through:
 
 from __future__ import annotations
 
+import json
 import logging
 import unittest
 from unittest.mock import patch
@@ -29,7 +30,46 @@ from sms_tool.geo.resolver import (
     probe_exit_geo,
     reset_shared_geo_resolver,
 )
-from sms_tool.browser_fingerprint_pool import detect_proxy_exit_geo
+from sms_tool.browser_fingerprint_pool import (
+    build_browser_environment,
+    detect_proxy_exit_geo,
+)
+
+# ``https://ipwho.is/`` answer captured 2026-09-13 through a live Philippine
+# exit (``gate.rola.vip``, the second egress added the same day).  Verbatim
+# except for the display-only fields (``flag``, ``readme``, coordinates) that
+# ``normalize_geo_response`` never reads.  The point of keeping it here is that
+# this provider puts the country **name** in ``country`` and the code in
+# ``country_code`` — reading the former first made every caller see
+# ``"PHILIPPINES"`` where an ISO code was expected.
+IPWHO_PH_BODY = """{
+    "ip": "49.144.165.95",
+    "success": true,
+    "type": "IPv4",
+    "continent": "Asia",
+    "continent_code": "AS",
+    "country": "Philippines",
+    "country_code": "PH",
+    "region": "Calabarzon (Region IV-A)",
+    "region_code": "40",
+    "city": "San Pablo",
+    "postal": "4000",
+    "calling_code": "63",
+    "capital": "Manila",
+    "connection": {
+        "asn": 9299,
+        "org": "HOME DSL",
+        "isp": "Philippine Long Distance Telephone Co.",
+        "domain": "pldthome.com"
+    },
+    "timezone": {
+        "id": "Asia/Manila",
+        "abbr": "PST",
+        "is_dst": false,
+        "offset": 28800,
+        "utc": "+08:00"
+    }
+}"""
 
 
 class _RaisingProbe:
@@ -92,6 +132,76 @@ class NormalizeTests(unittest.TestCase):
     def test_garbage_returns_empty(self):
         for bad in (None, "", [], 42, {"country": None}):
             self.assertFalse(normalize_geo_response(bad).known)
+
+    def test_ipwho_name_in_country_does_not_beat_the_code(self):
+        # The regression: ipwho.is returns country="Philippines" (a *name*)
+        # and country_code="PH".  Reading `country` first put "PHILIPPINES"
+        # into ProxyGeo.country, which every consumer compares against an ISO
+        # code — the browser lane then silently fell back to the US locale
+        # profile while keeping the measured Asia/Manila clock.
+        out = normalize_geo_response(json.loads(IPWHO_PH_BODY))
+        self.assertEqual(out.country, "PH")
+        self.assertEqual(out.timezone, "Asia/Manila")
+        self.assertEqual(out.org, "HOME DSL")
+        self.assertEqual(out.city, "San Pablo")
+
+    def test_country_name_without_a_code_is_dropped(self):
+        # No code field anywhere -> the name must not be passed off as one.
+        # An empty country is honest ("unknown"); "PHILIPPINES" is not.
+        out = normalize_geo_response({"country": "Philippines", "timezone": "Asia/Manila"})
+        self.assertEqual(out.country, "")
+        self.assertTrue(out.known)  # the clock alone still makes it usable
+
+    def test_camel_case_country_code_is_accepted(self):
+        self.assertEqual(normalize_geo_response({"countryCode": "ph"}).country, "PH")
+
+    def test_code_field_wins_over_a_name_in_country(self):
+        out = normalize_geo_response({"country": "United States", "country_code": "ph"})
+        self.assertEqual(out.country, "PH")
+
+    def test_code_field_wins_over_a_two_letter_country(self):
+        # This is the case that actually pins the field *order*.  The test above
+        # cannot: a name in `country` is skipped by the two-letter guard no
+        # matter which field is read first, so it passes under either order.
+        # Here `country` is itself a valid-looking code that disagrees with
+        # `country_code` — `country_code` is by definition the ISO field, so it
+        # must win rather than the answer depending on the provider's whim.
+        out = normalize_geo_response({"country": "US", "country_code": "PH"})
+        self.assertEqual(out.country, "PH")
+
+    def test_dropping_a_country_name_is_logged(self):
+        # The original bug left no trace anywhere.  A country that is not a code
+        # must now leave a line behind instead of silently degrading the locale.
+        records: list[logging.LogRecord] = []
+
+        class _Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        target = logging.getLogger("sms_tool.geo.resolver")
+        handler = _Capture()
+        target.addHandler(handler)
+        try:
+            normalize_geo_response({"country": "Philippines", "timezone": "Asia/Manila"})
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].levelno, logging.WARNING)
+            self.assertIn("Philippines", records[0].getMessage())
+
+            # A valid code must stay quiet — otherwise the line becomes noise
+            # and stops being a signal.
+            records.clear()
+            normalize_geo_response({"country_code": "PH"})
+            normalize_geo_response({"country": "PH"})
+            self.assertEqual(records, [])
+        finally:
+            target.removeHandler(handler)
+
+    def test_country_name_is_never_mistaken_for_a_code(self):
+        # Anything that is not two letters must not survive as a code.  Two
+        # letters that are not ISO ("UK") still pass — narrowing that needs a
+        # real ISO table and is out of scope here.
+        for name in ("Philippines", "Vietnam", "United States", "PHILIPPINES"):
+            self.assertEqual(normalize_geo_response({"country": name}).country, "")
 
 
 class TraceParsingTests(unittest.TestCase):
@@ -422,6 +532,49 @@ class ProbeExitGeoTests(unittest.TestCase):
             out = probe_exit_geo("http://p:1", need_timezone=True)
         self.assertEqual(out.country, "DE")
         self.assertEqual(out.timezone, "")
+
+    def test_country_survives_a_richer_answer_that_omits_it(self):
+        # The country-only trace answer is kept as `best` while the walk looks
+        # for a clock.  If the richer document carries a timezone but no
+        # country, the earlier country must be merged in — dropping it leaves
+        # the caller with a clock and no locale, i.e. the default US English
+        # next to a foreign timezone.
+        def fake_get(url, proxy, timeout):
+            if url.endswith("/cdn-cgi/trace"):
+                return 200, "ip=1.2.3.4\nloc=PH\n"
+            return 200, '{"timezone": "Asia/Manila", "ip": "1.2.3.4"}'
+
+        with patch.object(geo.resolver, "_http_get", fake_get):
+            out = probe_exit_geo("http://p:1", need_timezone=True)
+        self.assertEqual(out.country, "PH")
+        self.assertEqual(out.timezone, "Asia/Manila")
+
+    def test_real_ipwho_payload_yields_the_ph_locale_profile(self):
+        """End-to-end through the exact production seam, with the real body.
+
+        ``_http_get`` is the only thing faked; the endpoint order, the walk,
+        the normalizer and ``build_browser_environment`` are all the shipped
+        code.  This is the assertion that would have caught the bug: with the
+        name read as a code the profile came out ``us`` (en-US) while the clock
+        said ``Asia/Manila``.
+        """
+
+        def fake_get(url, proxy, timeout):
+            if url.endswith("/cdn-cgi/trace"):
+                return 200, "fl=123f\nip=49.144.165.95\nloc=PH\ntls=TLSv1.3\n"
+            if "ipwho.is" in url:
+                return 200, IPWHO_PH_BODY
+            raise AssertionError(f"unexpected endpoint: {url}")
+
+        with patch.object(geo.resolver, "_http_get", fake_get):
+            out = probe_exit_geo("http://p:1", need_timezone=True)
+        env = build_browser_environment(out.to_dict(), {})
+        self.assertEqual(env["locale_profile"], "ph")
+        self.assertEqual(env["navigator_language"], "en-PH")
+        self.assertEqual(env["accept_language"], "en-PH,en;q=0.9,en-US;q=0.8")
+        self.assertEqual(env["timezone_iana"], "Asia/Manila")
+        self.assertEqual(env["timezone_offset_minutes"], 480)
+        self.assertEqual(env["geo"]["country"], "PH")
 
     def test_all_endpoints_failing_returns_empty(self):
         with patch.object(geo.resolver, "_http_get", lambda *a, **k: (0, "")):

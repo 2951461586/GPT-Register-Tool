@@ -156,6 +156,15 @@ namespace SmsWorkbench
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
                 {
                     LogBackendProgress(taskName, progressEvent);
+                    if (progressEvent.Domain == "registration" && progressEvent.Stage == "registration_status_changed")
+                        RefreshPoolsThrottled(preserveView: true);
+                    // The backend drops cooling/quarantined/dead-end mailboxes
+                    // before attempting them; the event carries the masked list
+                    // so the grid can refresh those rows out of their stale
+                    // pre-batch state instead of leaving the operator to find
+                    // the skip in the backend log.
+                    if (progressEvent.Domain == "registration" && progressEvent.Stage == "mailboxes_skipped")
+                        RefreshPoolsThrottled(preserveView: true);
                     if (accountProgress != null
                         && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
                     {

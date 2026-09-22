@@ -1,4 +1,5 @@
 import threading
+from urllib.parse import urlsplit
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -98,6 +99,38 @@ class BatchErrorClassificationTests(unittest.TestCase):
             selected = select_registration_proxy_pool(pool)
 
         self.assertEqual(selected, [pool[0], pool[2]])
+
+    def test_health_ranking_cannot_flatten_endpoint_interleaving(self):
+        pool = [
+            "http://user-a1:pass@provider-a.example:8080",
+            "http://user-b1:pass@provider-b.example:8080",
+            "http://user-a2:pass@provider-a.example:8080",
+            "http://user-b2:pass@provider-b.example:8080",
+        ]
+
+        class FlatteningTracker:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def rank(self, values):
+                return sorted(values, key=lambda value: urlsplit(value).hostname)
+
+            def record(self, *_args, **_kwargs):
+                pass
+
+        with patch("sms_tool.batch_runner.ProxyHealthTracker", FlatteningTracker), \
+             patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value), \
+             patch(
+                 "sms_tool.batch_runner.probe_proxy_with_scheme_detection",
+                 return_value={"ok": True, "country_code": "IN"},
+             ):
+            selected = select_registration_proxy_pool(pool)
+
+        hosts = [urlsplit(value).hostname for value in selected]
+        self.assertEqual(hosts, [
+            "provider-a.example", "provider-b.example",
+            "provider-a.example", "provider-b.example",
+        ])
 
     def test_account_proxy_egress_is_pinned_across_retries(self):
         # Audit #4: rotating the egress on every retry looks like proxy churn

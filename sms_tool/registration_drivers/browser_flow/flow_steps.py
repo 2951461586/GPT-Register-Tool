@@ -5,6 +5,8 @@ from __future__ import annotations
 import threading
 import time
 import atexit
+import hashlib
+import json
 
 from . import dom_fields, form_steps, page_state
 
@@ -14,6 +16,20 @@ from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from contextlib import contextmanager
 from typing import Any
+
+
+def _browser_pool_config_identity(config: Mapping[str, Any] | None) -> str:
+    """Return a credential-safe identity for process-shaping configuration."""
+    try:
+        payload = json.dumps(
+            dict(config or {}),
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    except Exception:
+        payload = repr(type(config)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _poll_browser_otp(
@@ -183,6 +199,7 @@ def _browser_session_scope(
         driver_name,
         headless,
         timeout_ms,
+        _browser_pool_config_identity(config),
         pool_config.max_concurrent,
         pool_config.max_uses_per_process,
         pool_config.recycle_on_error,

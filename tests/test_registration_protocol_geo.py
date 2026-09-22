@@ -14,13 +14,20 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool.auth_headers import _AUTH_FINGERPRINT_LOCAL, set_fingerprint_geo
+from sms_tool.browser_fingerprint_pool import (
+    COUNTRY_LOCALE_PROFILE_MAP,
+    TIMEZONE_NAME_BY_IANA,
+    build_browser_environment,
+)
 from sms_tool.registration_handlers import (
     _apply_protocol_fingerprint,
     _new_registration_session,
 )
 
-# Not in auth_headers._GEO_PROFILES (only AU/CA/DE/FR/GB/JP/SG/US are curated),
-# so resolving it used to land on the UTC/en-US default even when measured.
+# Not in auth_headers._GEO_PROFILES (which mirrors geo/profiles.MARKET_PROFILES:
+# US/CA/GB/DE/FR/NL/JP/SG/AU/VN/PH/IN/CN/HK/TW), so resolving it used to land on the
+# UTC/en-US default even when measured. Keep this off the curated list -- the
+# "uncurated" half of the contract needs a country that really is uncurated.
 _UNCURATED = "BR"
 
 
@@ -60,7 +67,7 @@ def test_pool_geo_is_applied_instead_of_the_template_guess():
     with (
         patch("sms_tool.fingerprint_pool.shared_fingerprint_pool",
               return_value=SimpleNamespace(size=1, next=lambda proxy: _profile())),
-        patch("sms_tool.auth_headers.set_auth_fingerprint") as set_fp,
+        patch("sms_tool.registration_handlers.set_auth_fingerprint") as set_fp,
         patch("sms_tool.paypal_proxy.infer_proxy_country", return_value="") as infer,
     ):
         _apply_protocol_fingerprint(ops, {}, "http://user:pass@host:8080")
@@ -132,3 +139,16 @@ def test_blank_overrides_do_not_clobber_the_curated_entry():
     applied = set_fingerprint_geo("JP", timezone="", lang=None, lang_full="   ")
     assert applied["timezone"] == "Asia/Tokyo"
     assert applied["lang"] == "ja-JP"
+
+
+def test_active_india_registration_egress_is_curated_on_both_lanes():
+    protocol = set_fingerprint_geo("IN")
+    assert protocol["timezone"] == "Asia/Kolkata"
+    assert protocol["lang"] == "en-IN"
+    assert COUNTRY_LOCALE_PROFILE_MAP["IN"] == "in"
+    assert TIMEZONE_NAME_BY_IANA["Asia/Kolkata"] == "India Standard Time"
+
+    browser = build_browser_environment({"country": "IN", "timezone": "Asia/Kolkata"})
+    assert browser["locale_profile"] == "in"
+    assert browser["navigator_language"] == "en-IN"
+    assert browser["timezone_name"] == "India Standard Time"

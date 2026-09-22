@@ -178,6 +178,7 @@ from .registration_state import (
     RegistrationStateMachine,
     _normalize_registration_mode,
     _stored_registration_password,
+    _stored_registration_totp,
     prepare_registration_context,
 )
 from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
@@ -259,6 +260,7 @@ def _email_registration_operations() -> RegistrationOperations:
             "_create_account_continue_url": _create_account_continue_url,
             "_follow_continue_url": _follow_continue_url,
             "_is_chatgpt_auth_login_landing": _is_chatgpt_auth_login_landing,
+            "_is_existing_login_redirect": _is_existing_login_redirect,
             "_is_signup_password_step": _is_signup_password_step,
             "_is_user_already_exists": _is_user_already_exists,
             "_login_existing_account_with_email_otp": _login_existing_account_with_email_otp,
@@ -269,6 +271,7 @@ def _email_registration_operations() -> RegistrationOperations:
             "_random_birthdate": _random_birthdate,
             "_random_name": _random_name,
             "_stored_registration_password": _stored_registration_password,
+            "_stored_registration_totp": _stored_registration_totp,
             "_email_otp_send_url": _email_otp_send_url,
             "_ensure_mailbox_account": _ensure_mailbox_account,
             "_is_wrong_email_otp_code": _is_wrong_email_otp_code,
@@ -346,6 +349,7 @@ def run_email(
         browser_headless=browser_headless,
         enroll_2fa=enroll_2fa,
         config=config.data,
+        proxy_metadata=proxy_metadata,
         operations=_email_registration_operations(),
         persistence=persistence,
         post_process_result=post_process_result,

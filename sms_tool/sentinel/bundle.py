@@ -10,8 +10,10 @@ from pathlib import Path
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 SDK_PATH = RUNTIME_DIR / "sdk.js"
 RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
+# Digests are computed over newline-normalised bytes (see ``_digest``), so the
+# pinned values below are stable regardless of the working tree's line endings.
 SDK_SHA256 = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"
-RUNNER_SHA256 = "334ceb331dd60fe92dc9b9f802e1eef43dbd7e32e5206a4900a62dfdf83e0a21"
+RUNNER_SHA256 = "b388b2e2cca9511bfa0cf06689407142cd790136c44020d1c4fc321c0ea9eece"
 DEFAULT_SENTINEL_VERSION = "20260219f9f6"
 
 
@@ -20,11 +22,19 @@ class SentinelBundleError(RuntimeError):
 
 
 def _digest(path: Path) -> str:
-    value = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            value.update(chunk)
-    return value.hexdigest()
+    """Hash the asset's content with line endings normalised to LF.
+
+    Pinning a raw byte digest here is a trap: ``core.autocrlf`` and
+    ``.gitattributes`` (``*.js text eol=lf``) rewrite the working tree's line
+    endings at checkout while leaving the index -- and therefore ``git status``
+    -- unchanged.  On 2026-09-17 that turned ``sentinel-runner.js`` from CRLF
+    into LF (57592 -> 56154 bytes; byte-identical once normalised), which
+    silently broke this check, fell back to the legacy issuer, and killed every
+    account that reached ``create_account``.  Normalising here makes the digest
+    describe the *content*, not the checkout's line-ending flavour.
+    """
+    data = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def validate_runtime_bundle(*, verify_hash: bool = True) -> tuple[Path, Path]:

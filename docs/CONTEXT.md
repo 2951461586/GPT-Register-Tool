@@ -11,6 +11,8 @@
 - **Proxy lane**: an isolated egress purpose such as registration, mailbox/OTP, liveness, or payment.
 - **Desktop read**: the read-only sanitized account/mailbox contract consumed by WPF.
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
+- **Payment capability probe**: a side-effect-limited Checkout and Stripe-init
+  observation that lists offered methods without creating or confirming one.
 
 ## Ownership Rules
 

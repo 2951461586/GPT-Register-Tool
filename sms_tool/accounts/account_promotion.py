@@ -33,8 +33,15 @@ from ..promotion_states import (
     PROMOTION_STATE_SUBSCRIBED,
     PROMOTION_STATE_TRIAL_ELIGIBLE,
     PROMOTION_STATE_UNKNOWN,
+    promotion_status_with_eligibility,
 )
-from ..proxy_routing import parse_proxy_pool, proxy_pool_for, select_operation_proxy
+from ..proxy_routing import (
+    operation_proxy_candidates,
+    parse_lane_proxy_pool,
+    proxy_pool_for,
+    select_operation_proxy,
+    select_operation_proxy_candidate,
+)
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
@@ -140,11 +147,7 @@ def promotion_status_label(result: dict[str, Any]) -> str:
                 pass
         if periods not in (None, "") and period:
             parts.append(f"×{periods}{period}")
-        label = "·".join(parts)
-        methods_label = str(result.get("payment_methods_label") or "").strip()
-        if methods_label:
-            return f"{label}｜可支付:{methods_label}"
-        return label
+        return "·".join(parts)
     return "Free·无优惠"
 
 
@@ -171,106 +174,6 @@ def promotion_status_code(result: Any) -> str:
     return PROMOTION_STATE_FREE
 
 
-# Short display overrides for Stripe method tokens; anything else falls back to
-# the payment catalog's display_name (matched by stripe_type) and finally to
-# the raw token.
-_PAYMENT_METHOD_DISPLAY = {
-    "card": "银行卡",
-    "link": "Link",
-    "cashapp": "Cash App",
-    "klarna": "Klarna",
-}
-
-
-def payment_method_display(token: Any) -> str:
-    """Human label for one Stripe payment-method token (card/momo/upi/...)."""
-    from ..checkout_contract import normalize_payment_method_token
-    from ..payment_catalog import PAYMENT_CATALOG
-
-    normalized = normalize_payment_method_token(token)
-    if not normalized:
-        return ""
-    override = _PAYMENT_METHOD_DISPLAY.get(normalized)
-    if override:
-        return override
-    for definition in PAYMENT_CATALOG.methods.values():
-        if definition.stripe_type == normalized:
-            return definition.label
-    return normalized
-
-
-def probe_trial_payment_methods(
-    account: Any,
-    *,
-    proxy: str | None = None,
-    timeout: int = 20,
-) -> dict[str, Any]:
-    """List the checkout payment methods a trial-eligible account is offered.
-
-    Runs the existing side-effect-free capability probe (Checkout + Stripe
-    init, stopping before payment-method creation) once and harvests the full
-    method list. Failures are reported, never raised: the promotion label must
-    survive a payment-probe outage.
-    """
-    empty: dict[str, Any] = {"payment_methods": [], "payment_methods_label": ""}
-    if not isinstance(account, dict):
-        return {**empty, "payment_methods_error": "missing_account"}
-    token = _account_token(account)
-    if not token:
-        return {**empty, "payment_methods_error": "missing_access_token"}
-    country = _trial_checkout_country(account)
-    try:
-        from ..pay_link.base import _DIRECT_CARD_CURRENCY
-        from ..payment_capability import payment_method_capability_probe
-
-        result = payment_method_capability_probe(
-            token,
-            "direct_card",
-            auth_context={
-                "device_id": str(account.get("device_id") or ""),
-                "cookie_header": str(account.get("cookie_header") or account.get("cookie") or ""),
-            },
-            proxy=proxy,
-            billing_country=country,
-            currency=_DIRECT_CARD_CURRENCY.get(country, "USD"),
-            require_zero=False,
-            timeout=max(20, int(timeout or 20)),
-        )
-    except Exception as exc:
-        return {**empty, "payment_methods_error": str(exc)[:200]}
-
-    ordered = result.get("ordered_payment_method_types") or []
-    union = result.get("payment_method_types") or []
-    custom = result.get("custom_payment_methods") or []
-    tokens = [t for t in (*ordered, *union, *custom) if t]
-    seen: dict[str, None] = {}
-    for token in tokens:
-        seen.setdefault(str(token), None)
-    methods = list(seen)
-    labels = [label for label in (payment_method_display(t) for t in methods) if label]
-    output = {
-        "payment_methods": methods,
-        "payment_methods_label": "/".join(dict.fromkeys(labels)),
-        "payment_methods_country": str(result.get("checkout_country") or country),
-        "payment_methods_currency": str(result.get("currency") or ""),
-    }
-    if not methods:
-        output["payment_methods_error"] = str(result.get("error") or result.get("decision") or "no_methods")[:200]
-    return output
-
-
-def _trial_checkout_country(account: dict[str, Any]) -> str:
-    """Checkout billing country: registration country, else proxy affinity, else US."""
-    for value in (
-        account.get("registration_country"),
-        (account_identity(account).get("proxy_affinity") or {}).get("country"),
-    ):
-        code = str(value or "").strip().upper()
-        if re.fullmatch(r"[A-Z]{2}", code):
-            return code
-    return "US"
-
-
 def check_account_promotion(
     account: Any,
     proxy: str | None = None,
@@ -295,12 +198,14 @@ def check_account_promotion(
     identity = bind_account_identity(account)
     # Promotion checks must reuse the saved registration egress/fingerprint
     # pair; presenting the same AT from a different exit can trigger revocation.
-    resolved_proxy = select_operation_proxy(
+    selected_proxy = select_operation_proxy_candidate(
         account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
         operation="promotion",
         explicit=proxy or proxy_pool,
         config=CFG,
     )
+    resolved_proxy = selected_proxy.proxy if selected_proxy else None
+    proxy_source = selected_proxy.source if selected_proxy else "direct"
 
     account_id = account_chatgpt_id(account) if isinstance(account, dict) else _jwt_account_id(token)
     did = str(identity.get("device_id") or (account.get("device_id") if isinstance(account, dict) else "") or "")
@@ -332,7 +237,7 @@ def check_account_promotion(
                 status_code = 0
                 body = result
         except Exception as exc:
-            return {"ok": False, "promotion_status": "检测失败", "error": str(exc)[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED}
+            return {"ok": False, "promotion_status": "检测失败", "error": str(exc)[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED, "proxy_source": proxy_source}
     else:
         normalized_proxy = normalize_proxy_url(resolved_proxy)
         proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
@@ -346,7 +251,7 @@ def check_account_promotion(
             for candidate in (str(proxy or "").strip(), str(resolved_proxy or "").strip(), normalized_proxy):
                 if candidate:
                     error = error.replace(candidate, _redact_proxy_url(candidate, empty_placeholder=""))
-            return {"ok": False, "promotion_status": "检测失败", "error": error[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED}
+            return {"ok": False, "promotion_status": "检测失败", "error": error[:300], "promotion_state": PROMOTION_STATE_PROBE_FAILED, "proxy_source": proxy_source}
         status_code = int(getattr(response, "status_code", 0) or 0)
         try:
             retry_after = str((getattr(response, "headers", None) or {}).get("Retry-After") or "").strip()
@@ -355,10 +260,10 @@ def check_account_promotion(
         try:
             body = response.json()
         except Exception:
-            return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code, "promotion_state": PROMOTION_STATE_PROBE_FAILED}
+            return {"ok": False, "promotion_status": "检测失败", "error": "invalid_json", "status_code": status_code, "promotion_state": PROMOTION_STATE_PROBE_FAILED, "proxy_source": proxy_source}
 
     if status_code == 401:
-        return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401, "promotion_state": PROMOTION_STATE_AUTH_INVALID}
+        return {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401, "promotion_state": PROMOTION_STATE_AUTH_INVALID, "proxy_source": proxy_source}
     if not (200 <= status_code < 300):
         failure = {
             "ok": False,
@@ -366,6 +271,7 @@ def check_account_promotion(
             "error": f"http_{status_code}",
             "status_code": status_code,
             "promotion_state": PROMOTION_STATE_PROBE_FAILED,
+            "proxy_source": proxy_source,
         }
         if retry_after:
             failure["retry_after"] = retry_after
@@ -375,6 +281,7 @@ def check_account_promotion(
     parsed["status_code"] = status_code
     parsed["promotion_status"] = promotion_status_label(parsed)
     parsed["promotion_state"] = promotion_status_code(parsed)
+    parsed["proxy_source"] = proxy_source
     return parsed
 
 
@@ -384,8 +291,18 @@ def refresh_promotion_statuses(
     proxy: str | None = None,
     timeout: int = 20,
     proxy_pool: str | list[str] | None = None,
+    payment_eligibility: bool = True,
 ) -> dict[str, Any]:
-    """Probe plan/promotion for saved accounts and persist ``promotion_status``."""
+    """Probe plan/promotion for saved accounts and persist ``promotion_status``.
+
+    When ``payment_eligibility`` is set (the default), each account that kept a
+    live access token also gets one side-effect-free Checkout + Stripe init
+    probe that enumerates the payment methods Stripe offers it; the result is
+    persisted as ``raw_json.payment_capability`` and rendered next to the
+    promotion badge in the desktop 优惠状态 column.  See
+    :mod:`sms_tool.accounts.account_payment_eligibility` for why it is one probe
+    rather than one per method.
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from ..storage import get_account_record, list_paypal_accounts, mark_promotion_status
@@ -465,23 +382,24 @@ def refresh_promotion_statuses(
                         "promotion_status": "检测失败",
                         "error": "no_promotion_proxy_available",
                     }
-            if probe.get("ok") and probe.get("plus_trial_eligible"):
-                # 试用号: list the checkout payment methods on the same egress
-                # and fold them into the persisted 优惠状态 label. A probe
-                # outage must not demote a successful promotion check.
-                methods = probe_trial_payment_methods(account, proxy=used_proxy, timeout=timeout)
-                probe.update(methods)
-                if methods.get("payment_methods_label"):
-                    probe["promotion_status"] = promotion_status_label(probe)
-                    probe["promotion_state"] = promotion_status_code(probe)
-                    logger.info(
-                        "trial payment methods for %s: %s",
-                        email, methods["payment_methods_label"],
-                    )
             label = str(probe.get("promotion_status") or "")
             if not str(probe.get("promotion_state") or "").strip():
                 probe["promotion_state"] = promotion_status_code(probe)
-            persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
+            # A dead access token fails Checkout identically, so skip the extra
+            # two requests instead of burning a proxy slot on a known-bad AT.
+            eligibility: dict[str, Any] = {}
+            if payment_eligibility and not _promotion_probe_is_unauthorized(probe):
+                eligibility = _probe_payment_eligibility(account, proxy=used_proxy, timeout=timeout)
+            persisted = (
+                mark_promotion_status(
+                    email,
+                    label,
+                    promotion_result=probe,
+                    payment_capability=eligibility or None,
+                )
+                if email
+                else False
+            )
             result = {
                 "email": email,
                 "ok": bool(probe.get("ok")),
@@ -490,6 +408,18 @@ def refresh_promotion_statuses(
                 "persisted": bool(persisted),
                 "probe": probe,
             }
+            eligibility_label = ""
+            if eligibility:
+                from .account_payment_eligibility import payment_eligibility_label
+
+                result["payment_capability"] = eligibility
+                eligibility_label = payment_eligibility_label(eligibility)
+                if eligibility_label:
+                    result["payment_eligibility"] = eligibility_label
+            # Pre-composed so every consumer (desktop grid, detail panel, task
+            # result list) renders the same string instead of each re-deriving
+            # the separator rule.
+            result["promotion_display"] = promotion_status_with_eligibility(label, eligibility_label)
         except Exception as exc:
             result = {"email": email, "ok": False, "promotion_status": "检测失败", "promotion_state": PROMOTION_STATE_PROBE_FAILED, "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
         _emit_account_batch_event(
@@ -520,12 +450,26 @@ def refresh_promotion_statuses(
         if isinstance(item.get("probe"), dict)
         and bool(item["probe"].get("plus_trial_eligible"))
     )
+    eligibility_results = [
+        item["payment_capability"]
+        for item in results
+        if isinstance(item.get("payment_capability"), dict)
+    ]
+    eligibility_ok = sum(1 for item in eligibility_results if item.get("ok"))
+    # Distinct method tokens across the batch: the batch-level answer to "which
+    # payment rails do these accounts actually have".
+    from .account_payment_eligibility import payment_method_tokens
+
+    methods_seen = sorted({token for item in eligibility_results for token in payment_method_tokens(item)})
     _emit_account_batch_event(
         run_id,
         "batch_completed",
         "completed" if success == len(results) else "failed",
         total=len(results),
-        detail=f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，传输失败 {transport_failed}",
+        detail=(
+            f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
+            f"传输失败 {transport_failed}，支付资格 {eligibility_ok}/{len(eligibility_results)}"
+        ),
     )
     return {
         "ok": success == len(results) if results else False,
@@ -536,27 +480,23 @@ def refresh_promotion_statuses(
         "transport_failed": transport_failed,
         "persist_failed": persist_failed,
         "trial_eligible": trial_eligible,
+        "payment_eligibility_ok": eligibility_ok,
+        "payment_eligibility_failed": len(eligibility_results) - eligibility_ok,
+        "payment_methods_seen": methods_seen,
         "results": results,
     }
 
 
 def _promotion_proxy_candidates(account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None) -> list[str | None]:
-    """Return deterministic candidates for stateless promotion probes."""
-    # Explicit command input wins over every configured pool.  This keeps a
-    # one-off operator probe on the requested egress instead of silently
-    # rotating it through the global promotion pool.
-    values = parse_proxy_pool(proxy_pool)
-    if proxy:
-        return [proxy] + [item for item in values if item != proxy]
-    if isinstance(account, dict) and account.get("identity_context"):
-        return [None]
-    if not values:
-        values = proxy_pool_for(CFG, "promotion")
-    if len(values) <= 1:
-        return values or [proxy]
-    email = str((account or {}).get("email") or "").strip().lower()
-    start = sum(email.encode("utf-8")) % len(values) if email else 0
-    return values[start:] + values[:start]
+    """Return candidates from the canonical operation-proxy decision point."""
+    candidates = operation_proxy_candidates(
+        account,
+        operation="promotion",
+        explicit=proxy,
+        pool=proxy_pool if parse_lane_proxy_pool(proxy_pool) else None,
+        config=CFG,
+    )
+    return [item.proxy for item in candidates] or [None]
 
 
 def _retryable_promotion_transport(probe: dict[str, Any] | None) -> bool:
@@ -599,6 +539,45 @@ def _promotion_status_code(item: dict[str, Any]) -> int:
         return int((item.get("probe") or {}).get("status_code") or 0)
     except (TypeError, ValueError, AttributeError):
         return 0
+
+
+def _promotion_probe_is_unauthorized(probe: Any) -> bool:
+    """True when the promotion probe proved the access token is dead."""
+    if not isinstance(probe, dict):
+        return False
+    if int(probe.get("status_code") or 0) == 401:
+        return True
+    return str(probe.get("promotion_state") or "").strip() == PROMOTION_STATE_AUTH_INVALID
+
+
+def _probe_payment_eligibility(
+    account: dict[str, Any],
+    *,
+    proxy: str | None,
+    timeout: int,
+) -> dict[str, Any]:
+    """Enumerate the account's payment methods, never raising into the batch.
+
+    Imported lazily: ``account_payment_eligibility`` pulls in the payment
+    catalog at import time, and this module is loaded by the desktop read path.
+    """
+    from .account_payment_eligibility import probe_account_payment_eligibility
+
+    try:
+        return probe_account_payment_eligibility(
+            account,
+            proxy=proxy,
+            timeout=max(5, int(timeout or 45)),
+        )
+    except Exception as exc:  # noqa: BLE001 - eligibility is best-effort
+        logger.debug("payment eligibility probe failed", exc_info=True)
+        return {
+            "ok": False,
+            "error": str(exc)[:200],
+            "error_code": "eligibility_probe_exception",
+            "error_stage": "payment_eligibility",
+            "retryable": True,
+        }
 
 
 def _promotion_failure_class(item: dict[str, Any]) -> str:

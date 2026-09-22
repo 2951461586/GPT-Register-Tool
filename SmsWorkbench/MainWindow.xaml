@@ -772,7 +772,7 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="优惠状态" Width="230" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
+                <DataGridTemplateColumn Header="优惠状态" Width="300" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionStatus, Converter={StaticResource StatusSeverityConverter}}" ToolTip="{Binding PromotionStatus}">

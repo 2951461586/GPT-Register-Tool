@@ -15,13 +15,16 @@ import os
 import re
 import time
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .helpers import unique_emails
+from ..batch_runner import filter_registered_mailboxes
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
-from ..sanitizer import mask_account
+from ..proxy_entry import parse_proxy
+from ..sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,45 @@ class RegistrationCommandContext:
     runtime_config: Mapping[str, Any]
 
 
+def _preflight_host_label(candidate: Any) -> str:
+    """Credential-free ``host:port`` for progress lines and per-host accounting."""
+    entry = parse_proxy(candidate)
+    if entry is None:
+        return str(candidate or "").strip() or "-"
+    return f"{entry.host}:{entry.port}"
+
+
+def _preflight_limits(config: Mapping[str, Any] | None) -> tuple[int, float]:
+    """``(per-host consecutive-failure cap, wall-clock budget seconds)``.
+
+    Defaults come from the 2026-09-13 outage: a 30-candidate, three-provider pool
+    where every route was dead burned 10m51s of a silent black screen before
+    ``exit 2``. Both guards only ever *shorten* an all-fail run -- a single
+    healthy candidate still returns immediately, so they cannot hide a working
+    route that the unbounded loop would have found.
+    """
+    section = ((config or {}).get("registration") or {})
+    if not isinstance(section, Mapping):
+        section = {}
+
+    def _int(name: str, default: int, low: int, high: int) -> int:
+        try:
+            return max(low, min(high, int(section.get(name, default))))
+        except (TypeError, ValueError):
+            return default
+
+    def _float(name: str, default: float, low: float, high: float) -> float:
+        try:
+            return max(low, min(high, float(section.get(name, default))))
+        except (TypeError, ValueError):
+            return default
+
+    return (
+        _int("preflight_max_consecutive_failures_per_host", 3, 1, 50),
+        _float("preflight_budget_seconds", 180.0, 10.0, 3600.0),
+    )
+
+
 def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandContext) -> dict:
     """Select a healthy auth route before a paid/disposable mailbox is claimed."""
     from ..config import validate_registration_driver_config
@@ -74,23 +116,120 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
     # ChatGPT probe from this process measures the real registration egress.
     from ..registration import registration_network_preflight
 
+    per_host_limit, budget_seconds = _preflight_limits(ctx.runtime_config)
+    total = len(candidates)
+    started = time.time()
     last_error = None
-    for candidate in candidates:
-        try:
-            result = registration_network_preflight(candidate, proxy_attempts=2)
-        except Exception as exc:
-            last_error = exc
-            continue
-        selected = str(result.get("proxy") or candidate or "").strip()
-        if selected:
-            ordered = [selected]
-            ordered.extend(str(item).strip() for item in candidates if item and str(item).strip() != selected)
-            args.proxy_pool = "\n".join(dict.fromkeys(ordered))
-            args.proxy = selected
-        else:
-            args.proxy_pool = ""
-            args.proxy = None
-        return result
+    host_failures: dict[str, int] = {}
+    attempted = 0
+    skipped_hosts: dict[str, int] = {}
+    successful_routes: list[tuple[str, dict]] = []
+
+    safe_print(f"[*] 注册预检：{total} 个候选路由（单候选上限 {per_host_limit} 次、总预算 {budget_seconds:.0f}s）")
+
+    # 并发探测（2026-09-18）：串行时启动开销与候选数成正比 —— 实测 10 个候选
+    # 124s，而 ``select_registration_proxy_pool`` 早就在用
+    # ``ThreadPoolExecutor(max_workers=8)`` 探同一个池子。单候选**内部**仍按
+    # ``proxy_attempts`` 重试；这里的并发只跨候选。
+    #
+    # 每个主机**每轮的在飞上限**（allowance）分两档：
+    #
+    # * 从没探过、或有过失败记录 ⇒ ``per_host_limit``。这一档保住既有的
+    #   「同一出口连续失败 N 次就不再浪费探测」守卫：坏出口最多只吃 N 个探测。
+    #   因为它们是并发的，「整池死掉」从串行的 N × 单次耗时 变成**一轮**。
+    # * 已经探过且记录干净 ⇒ 整个窗口。健康的出口没必要限速 —— 这一档才拿到
+    #   单出口池的提速（10 候选：先 3 并发探 3 个，确认健康后 7 并发探完）。
+    #
+    # 逐候选的判定顺序（主机守卫 → 预算 → 探测）、进度行的
+    # ``序号/总数 主机 结果（耗时）`` 形态、以及 ``successful_routes`` 的
+    # **候选序**都保持不变。变的只有探测的发起顺序：并发 ⇒ 完成序不再等于候选序。
+    workers = max(1, min(8, total))
+    probed_hosts: set[str] = set()
+    pending = list(enumerate(candidates, start=1))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        while pending:
+            batch: list[tuple[int, Any]] = []
+            deferred: list[tuple[int, Any]] = []
+            in_batch_per_host: dict[str, int] = {}
+            timed_out = False
+            for index, candidate in pending:
+                label = _preflight_host_label(candidate)
+                if host_failures.get(label, 0) >= per_host_limit:
+                    # One endpoint failing its first N candidates is unlikely to
+                    # answer the N+1th. Skip the rest from that endpoint instead
+                    # of spending the entire batch-start budget on equivalent
+                    # routes.
+                    skipped_hosts[label] = skipped_hosts.get(label, 0) + 1
+                    continue
+                elapsed_total = time.time() - started
+                if elapsed_total > budget_seconds:
+                    safe_print(
+                        f"[!] 注册预检超时：已用 {elapsed_total:.0f}s / 预算 {budget_seconds:.0f}s，"
+                        f"放弃剩余候选（已试 {attempted}/{total}）"
+                    )
+                    timed_out = True
+                    break
+                proven = label in probed_hosts and not host_failures.get(label, 0)
+                allowance = workers if proven else per_host_limit
+                if in_batch_per_host.get(label, 0) >= allowance or len(batch) >= workers:
+                    deferred.append((index, candidate))
+                    continue
+                in_batch_per_host[label] = in_batch_per_host.get(label, 0) + 1
+                batch.append((index, candidate))
+            if not batch:
+                break
+            attempted += len(batch)
+            batch_started = time.time()
+            futures = {
+                executor.submit(
+                    registration_network_preflight, candidate, proxy_attempts=2
+                ): (index, candidate, _preflight_host_label(candidate))
+                for index, candidate in batch
+            }
+            batch_failures: dict[str, int] = {}
+            batch_ok_hosts: set[str] = set()
+            probes: dict[int, tuple[str, dict]] = {}
+            for future in as_completed(futures):
+                index, candidate, label = futures[future]
+                elapsed = time.time() - batch_started
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    last_error = exc
+                    batch_failures[label] = batch_failures.get(label, 0) + 1
+                    safe_print(
+                        f"[!] 注册预检 {index}/{total} {label} 失败 "
+                        f"({elapsed:.1f}s)：{sanitize_log_text(exc)[:160]}"
+                    )
+                    continue
+                batch_ok_hosts.add(label)
+                safe_print(f"[*] 注册预检 {index}/{total} {label} 可用（{elapsed:.1f}s）")
+                probes[index] = (str(result.get("proxy") or candidate or "").strip(), result)
+            # 主机计数按**整批**结算，不按完成序 —— 否则「成功清零 / 失败累加」
+            # 的先后会让同一个出口的计数随线程调度随机化。
+            for label, failures in batch_failures.items():
+                if label not in batch_ok_hosts:
+                    host_failures[label] = host_failures.get(label, 0) + failures
+            for label in batch_ok_hosts:
+                host_failures[label] = 0
+            probed_hosts.update(label for _index, _candidate, label in futures.values())
+            # ``successful_routes`` 必须保持候选序：调用方取 ``[0]`` 当
+            # ``args.proxy``，并发下完成序是随机的。
+            successful_routes.extend(probes[index] for index in sorted(probes))
+            pending = [] if timed_out else deferred
+
+    if skipped_hosts:
+        summary = ", ".join(f"{host}×{count}" for host, count in sorted(skipped_hosts.items()))
+        safe_print(f"[!] 注册预检：以下出口主机连续失败已达上限，剩余候选已跳过：{summary}")
+    if successful_routes:
+        healthy = list(dict.fromkeys(route for route, _result in successful_routes if route))
+        args.proxy_pool = "\n".join(healthy)
+        args.proxy = healthy[0] if healthy else None
+        safe_print(
+            f"[*] 注册预检完成：{len(successful_routes)}/{attempted} 条实测可用，"
+            "批次只使用通过 OpenAI 边界检查的路由"
+        )
+        return successful_routes[0][1]
     raise RuntimeError(
         "registration_preflight_failed:no_healthy_route:"
         + (type(last_error).__name__ if last_error is not None else "unknown")
@@ -128,13 +267,17 @@ def registration_phone_pool(args: Any):
     return phone_pool
 
 
-def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
+def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=True):
     """Probe plan/promotion for saved accounts.
 
     ``proxy_pool`` is threaded through so this entry point accepts the same
     health-pool rotation as ``commands/accounts.py::check_promotion``. It
     previously had no such parameter, so a pool supplied by the caller was
     silently dropped on this path.
+
+    ``payment_eligibility`` (default on) additionally enumerates each account's
+    available payment methods into ``raw_json.payment_capability``; see
+    ``accounts/account_payment_eligibility.py``.
     """
     from ..accounts.account_promotion import refresh_promotion_statuses
     from ..sanitizer import sanitize
@@ -155,6 +298,7 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
             proxy=proxy,
             proxy_pool=proxy_pool,
             timeout=max(5, int(timeout or 20)),
+            payment_eligibility=bool(payment_eligibility),
         )
     except Exception as exc:
         report = {
@@ -175,20 +319,27 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     # here, which left the other CLI entry point with no such key at all.
     trial_eligible = int(report.get("trial_eligible") or 0)
     report["trial_eligible"] = trial_eligible
+    eligibility_ok = int(report.get("payment_eligibility_ok") or 0)
+    eligibility_total = eligibility_ok + int(report.get("payment_eligibility_failed") or 0)
     safe_print(
         "[*] Promotion check: "
         f"success={int(report.get('success') or 0)}/{int(report.get('total') or 0)} "
-        f"trial_eligible={trial_eligible}"
+        f"trial_eligible={trial_eligible} "
+        f"payment_eligibility={eligibility_ok}/{eligibility_total}"
     )
     logger.info(
-        "promotion check finished: success=%s/%s trial_eligible=%s",
+        "promotion check finished: success=%s/%s trial_eligible=%s payment_eligibility=%s/%s",
         int(report.get("success") or 0), int(report.get("total") or 0), trial_eligible,
+        eligibility_ok, eligibility_total,
     )
     for item in results:
         if not isinstance(item, dict):
             continue
         email = str(item.get("email") or "").strip()
         label = str(item.get("promotion_status") or "检测失败").strip()
+        eligibility = str(item.get("payment_eligibility") or "").strip()
+        if eligibility:
+            label = f"{label} · {eligibility}" if label else eligibility
         safe_print(f"    {mask_account(email)}: {label}")
     return report
 
@@ -343,7 +494,20 @@ def _persist_registration_result_core(
             in {"at_probe_pending", "at_probe_transport_unknown"}
             and bool(str(data.get("access_token") or "").strip())
         )
-        if not data.get("success", False) and not deferred_probe:
+        # 🔴 2026-09-15: ``partial_registered`` must be persisted too.
+        #
+        # The server has stated the address already exists; this run simply did
+        # not get a session for it.  Skipping the upsert left ``accounts`` with
+        # zero ``partial_registered`` rows while ``registration_audit`` held 330,
+        # and the UI's "半注册" guards (``MainWindow.Register.cs`` /
+        # ``MainWindow.Pools.cs``) read the *accounts* table -- so the guard
+        # written to stop this address from being re-registered never fired, and
+        # every batch re-selected it as an "unregistered mailbox" and spent
+        # another email code.
+        partial_registered = (
+            str(data.get("registration_state") or "").strip().lower() == "partial_registered"
+        )
+        if not data.get("success", False) and not deferred_probe and not partial_registered:
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             if not marker.get("failure_reported"):
@@ -380,18 +544,47 @@ def _persist_registration_result_core(
 
         # Keep transport-unknown AT probes resumable. The account already has
         # an auth session, so persisting it is safer than replaying signup.
-        data["registration_state"] = "at_probe_pending" if deferred_probe else "pending"
+        data["registration_state"] = (
+            "at_probe_pending" if deferred_probe
+            else ("partial_registered" if partial_registered else "pending")
+        )
         if not marker.get("pending_audited"):
             record_registration_audit(
                 data,
                 batch_id=batch_id,
-                state="pending",
+                state="partial_registered" if partial_registered else "pending",
                 runtime_config=ctx.runtime_config,
             )
             marker["pending_audited"] = True
 
         session_data = ctx.build_session_file(data)
         if not session_data.get("access_token"):
+            if partial_registered:
+                # No session exists to save, but the account row must still land:
+                # that row is exactly what the UI's "半注册" guard reads.
+                # Persist it with an empty ``json_path`` (the parameter default)
+                # instead of returning early, and set ``db_saved`` so the caller
+                # finalizes this persistence attempt as completed.
+                session_data["registration_state"] = "partial_registered"
+                # ``build_session_file`` does not emit ``batch_id``, and the
+                # normal path sets it *after* this early return -- so without
+                # this line every partial row lands unattributed.  Measured
+                # 2026-09-15: all 71 ``partial_registered`` rows carried an
+                # empty ``batch_id`` and could not be grouped with the run
+                # that produced them.
+                session_data["batch_id"] = batch_id
+                marker["db_saved"] = 1 if ctx.upsert_account(session_data, json_path="") else 0
+                marker["db_completed"] = True
+                marker["import_email"] = str(session_data.get("email") or "")
+                marker["status"] = "complete"
+                marker.pop("error_type", None)
+                if not marker.get("partial_reported"):
+                    safe_print(
+                        "[*] Partial registration recorded (address already exists): "
+                        f"{mask_account(session_data.get('email') or '')}"
+                    )
+                    marker["partial_reported"] = True
+                return marker
             if not marker.get("missing_token_reported"):
                 safe_print("[!] Successful registration has no access_token; session file was not saved")
                 marker["missing_token_reported"] = True
@@ -400,7 +593,10 @@ def _persist_registration_result_core(
             return marker
 
         session_data["batch_id"] = batch_id
-        session_data["registration_state"] = "at_probe_pending" if deferred_probe else "active"
+        session_data["registration_state"] = (
+            "at_probe_pending" if deferred_probe
+            else ("partial_registered" if partial_registered else "active")
+        )
         out_pattern = ctx.runtime_config.get("output", {}).get(
             "filename_pattern", "session_{email}_{timestamp}.json"
         )
@@ -544,6 +740,7 @@ def save_registration_results(
             # immediately re-use a contaminated registration exit.
             proxy=None,
             timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+            payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
         )
 
     if getattr(args, "import_cpa", False):
@@ -595,8 +792,20 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
         while active < target and purchased < max_purchases and not halted:
             quantity = min(target - active, max_purchases - purchased)
             args.count = quantity
-            mailboxes = ctx.load_mailbox_pool(args)
+            loaded_mailboxes = ctx.load_mailbox_pool(args)
+            # Filter before ``purchased`` is incremented.  Skipped mailboxes must
+            # not count towards ``max_purchases`` (nor towards ``spent``), and a
+            # pool that is entirely registered has to stop the loop -- otherwise
+            # every round re-loads the same list and the batch spins without
+            # attempting anything.
+            mailboxes = filter_registered_mailboxes(loaded_mailboxes)
             if not mailboxes:
+                if loaded_mailboxes:
+                    safe_print(
+                        "[!] Every mailbox in the pool already has a registered account; stopping. "
+                        "Add fresh mailboxes, or set registration.skip_registered_mailboxes=false "
+                        "to attempt them anyway."
+                    )
                 break
             purchased += len(mailboxes)
             for mailbox in mailboxes:

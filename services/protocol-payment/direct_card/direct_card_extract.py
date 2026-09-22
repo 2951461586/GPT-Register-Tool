@@ -55,6 +55,18 @@ except ImportError:  # pragma: no cover - exercised by the CLI error path
     CurlSession = None  # type: ignore[assignment]
 
 
+# ``common/`` is the sibling of this script's own directory. The host launches
+# extractors with ``cwd=<their own dir>`` (sms_tool/pay_link/adapters.py), so
+# neither the repository root nor ``common``'s parent is on ``sys.path`` yet.
+PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
+if str(PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROTOCOL_ROOT))
+
+from common.proxy_url import (
+    normalize_provider_form as shared_normalize_provider_form,
+)
+
+
 VERSION = "1.0.0"
 CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
 UPDATE_PATH = "/backend-api/payments/checkout/update"
@@ -309,19 +321,20 @@ def sync_cookies(target: Any, source: Any) -> None:
 
 
 def normalize_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if not proxy:
-        return ""
-    if "://" in proxy:
-        return proxy
-    parts = proxy.split(":", 3)
-    if len(parts) == 4 and parts[1].isdigit() and "@" not in proxy:
-        host, port, username, password = parts
-        return (
-            f"http://{quote(username, safe='-._~')}:"
-            f"{quote(password, safe='-._~')}@{host}:{port}"
-        )
-    return f"http://{proxy}"
+    """Delegate to the shared light skeleton in ``common/proxy_url.py``.
+
+    ``require_numeric_port`` and ``require_no_at`` carry the two guards this
+    body used to hold inline; the scheme is hard-coded ``http`` here and is
+    **not** read from the environment, which is why this extractor never needed
+    a ``default_proxy_scheme`` helper.  ``runtime/tmp/p0_compare.py`` pins the
+    equivalence against the pre-refactor revision.
+    """
+    return shared_normalize_provider_form(
+        proxy,
+        default_scheme="http",
+        require_numeric_port=True,
+        require_no_at=True,
+    )
 
 
 def new_proxy_session_id(length: int = 8) -> str:
@@ -330,7 +343,7 @@ def new_proxy_session_id(length: int = 8) -> str:
     return "".join(str(random.randint(0, 9)) for _ in range(size))
 
 
-def rotate_proxy_session(proxy: str, country: str) -> str:
+def rotate_direct_card_proxy_session(proxy: str, country: str) -> str:
     """Rotate a kookeey sticky proxy to a fresh session for ``country``.
 
     Password template: ``<base>-<CC>-<session>-<ttl>`` (TTL like ``5m``/``30s``/
@@ -861,7 +874,7 @@ class CheckoutExtractor:
                 if exc.cloudflare:
                     cloudflare_failures += 1
                     if cloudflare_failures >= self.config.cf_same_identity_attempts and not exit_rotated:
-                        rotated = rotate_proxy_session(current_proxy, self.config.checkout_proxy_country)
+                        rotated = rotate_direct_card_proxy_session(current_proxy, self.config.checkout_proxy_country)
                         if rotated != current_proxy:
                             current_proxy = rotated
                             set_proxy(session, current_proxy)
@@ -926,7 +939,7 @@ class CheckoutExtractor:
                 except Exception as exc:
                     if not is_retryable_network_error(exc) or attempt >= self.config.update_attempts:
                         raise ExtractorError(f"promotion update network error: {exc}") from exc
-                    current_proxy = rotate_proxy_session(
+                    current_proxy = rotate_direct_card_proxy_session(
                         current_proxy, self.config.update_proxy_country
                     )
                     if owns_session:
@@ -941,7 +954,7 @@ class CheckoutExtractor:
                     if error.cloudflare:
                         cloudflare_failures += 1
                         if cloudflare_failures >= self.config.cf_same_identity_attempts and not exit_rotated:
-                            rotated = rotate_proxy_session(
+                            rotated = rotate_direct_card_proxy_session(
                                 current_proxy, self.config.update_proxy_country
                             )
                             if rotated != current_proxy:
@@ -953,7 +966,7 @@ class CheckoutExtractor:
                         if self.config.cf_retry_delay > 0:
                             self.sleep(self.config.cf_retry_delay)
                     else:
-                        current_proxy = rotate_proxy_session(
+                        current_proxy = rotate_direct_card_proxy_session(
                             current_proxy, self.config.update_proxy_country
                         )
                         if owns_session:

@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 import requests as http_requests
 
-from ..config import CFG
+from ..config import current_config_data
 from ..mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from ..mailbox_types import MailboxAccount
 from ..paths import project_path, runtime_file
@@ -101,7 +101,7 @@ def _remail_request_id(error):
 
 
 def _email_cfg():
-    return CFG.get("email_registration", {})
+    return current_config_data().get("email_registration", {})
 
 
 def _remail_cfg():
@@ -112,11 +112,11 @@ def _remail_cfg():
 
 def _remail_proxy_health_path():
     configured = str(_remail_cfg().get("proxy_health_file") or "").strip()
-    return project_path(configured) if configured else runtime_file(CFG, "remail_proxy_health.json")
+    return project_path(configured) if configured else runtime_file(current_config_data(), "remail_proxy_health.json")
 
 
 def _remail_proxy_tracker():
-    return ProxyHealthTracker(CFG, path=_remail_proxy_health_path())
+    return ProxyHealthTracker(current_config_data(), path=_remail_proxy_health_path())
 
 
 def _remail_transport_attempts():
@@ -164,7 +164,11 @@ def _remail_base_url():
 
 def _dead_remail_registry_path():
     configured = str(_remail_cfg().get("dead_registry_file") or "").strip()
-    return project_path(configured) if configured else runtime_file(CFG, "remail_dead_accounts.json")
+    return (
+        project_path(configured)
+        if configured
+        else runtime_file(current_config_data(), "remail_dead_accounts.json")
+    )
 
 
 def _remail_dead_history_enabled():
@@ -306,7 +310,7 @@ def record_remail_batch_quality(batch_id, results, *, requested=0):
         "halt_replenishment": bool(total and dead_rate >= threshold),
         "created_at": int(time.time()),
     }
-    path = runtime_file(CFG, "remail_quality.jsonl")
+    path = runtime_file(current_config_data(), "remail_quality.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
     with _DEAD_REMAIL_LOCK:
         with path.open("a", encoding="utf-8") as handle:

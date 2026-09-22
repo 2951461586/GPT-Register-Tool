@@ -35,9 +35,35 @@ except ImportError:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+# ``common/`` is this script's sibling directory, while ``PROJECT_ROOT`` points
+# at the repository root (needed by the lazy ``sms_tool`` probe further down).
+# They are separate entries: adding only the repo root leaves ``common``
+# unimportable, because the extractor is launched with ``cwd=<its own dir>``.
+PROTOCOL_ROOT = SCRIPT_DIR.parent
 PROJECT_ROOT = SCRIPT_DIR.parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+for _root in (PROJECT_ROOT, PROTOCOL_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+from common.redaction import (
+    RedactionRegistry,
+    redact_log_text as shared_redact_log_text,
+    register_proxy_for_redaction as shared_register_proxy_for_redaction,
+)
+from common.proxy_bookkeeping import (
+    proxy_label as shared_proxy_label,
+    proxy_short as shared_proxy_short,
+)
+from common.proxy_url import (
+    HOST_FIRST,
+    default_scheme_from_env,
+    normalize_proxy_url as shared_normalize_proxy_url,
+)
+from common.protocol_core import (
+    env_bool as common_env_bool,
+    env_int as common_env_int,
+)
+from common.logging_setup import make_file_logger
 
 
 # ── Access-token liveness probe ──────────────────────────────────────────
@@ -72,6 +98,10 @@ def _default_access_token_probe(token: str, proxy: str) -> dict[str, Any]:
 
 LOG_DIR = SCRIPT_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Durable rotated copy alongside the legacy append-only kakao_extract.log. The
+# legacy file keeps its exact naming/content; this adds a size-capped,
+# rotation-resilient mirror. Files only, never stdout.
+_durable_logger = make_file_logger("kakao", LOG_DIR, redact=lambda text: redact_log_text(text))
 
 TIMEOUT = max(5, min(120, int(os.environ.get("KAKAO_PAY_TIMEOUT", "30") or "30")))
 POLL_TIMEOUT = max(30, min(300, int(os.environ.get("KAKAO_POLL_TIMEOUT", "120") or "120")))
@@ -109,9 +139,8 @@ _PROXY_COUNTRY_SELECTOR_RE = re.compile(
 _PROXY_SID_RE = re.compile(r"(?i)(?P<name>sid)(?P<separator>[-_=])(?P<value>[A-Za-z0-9]+)")
 _state_lock = RLock()
 _file_lock = RLock()
-_proxy_redaction_lock = RLock()
 _proxy_state: dict[str, Any] | None = None
-_proxy_redaction_values: set[str] = set()
+_proxy_redaction_registry = RedactionRegistry()
 
 KOREAN_FAMILY_NAMES = (
     "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황",
@@ -135,19 +164,18 @@ class TaskStopped(RuntimeError):
 
 
 def redact_log_text(text: str) -> str:
-    text = str(text or "")
-    with _proxy_redaction_lock:
-        values = sorted(_proxy_redaction_values, key=len, reverse=True)
-    for value in values:
-        if value:
-            try:
-                label = proxy_label(value)
-            except (TypeError, ValueError):
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            if label == "direct":
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            text = text.replace(value, label)
-    return text
+    """Delegate to the shared redactor (batch 2 of the consolidation).
+
+    ``registry`` is this module's own: it holds the proxies THIS extractor
+    registered.  A single shared registry would make one extractor's log output
+    depend on another extractor's registrations, and would leak one
+    extractor's proxy strings into another's dump files.
+    """
+    return shared_redact_log_text(
+        text,
+        registry=_proxy_redaction_registry,
+        proxy_label=proxy_label,
+    )
 
 
 def log(message: str, prefix: str = "") -> None:
@@ -158,21 +186,29 @@ def log(message: str, prefix: str = "") -> None:
             handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}\n")
     except OSError:
         pass
+    _durable_logger.info("%s%s", prefix, message)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    """Delegate to the shared parser in ``common/protocol_core.py``.
+
+    The local copy spelled the truthy set as a ``set`` literal rather than a
+    ``tuple``; ``in`` over either is identical, so this is behaviour-preserving.
+    """
+    return common_env_bool(name, default)
 
 
 def env_int(name: str, default: int, minimum: int = 1, maximum: int = 1000) -> int:
-    try:
-        value = int(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        value = default
-    return min(maximum, max(minimum, value))
+    """Delegate to the shared parser, which now takes a ``maximum`` ceiling.
+
+    ``maximum`` used to be the *only* thing distinguishing this from
+    ``common.protocol_core.env_int``.  Rather than drop the ceiling (which would
+    change production behaviour for the six call sites that rely on it) the
+    shared implementation gained the parameter, and the equivalence of the two
+    is pinned by ``runtime/tmp/p1_env_matrix.py``: 1440 (raw, default, min, max)
+    combinations, zero divergence.
+    """
+    return common_env_int(name, default, minimum, maximum)
 
 
 PREFLIGHT_TIMEOUT = env_int(
@@ -181,75 +217,61 @@ PREFLIGHT_TIMEOUT = env_int(
 
 
 def default_proxy_scheme() -> str:
-    raw = os.environ.get("KAKAO_PROXY_DEFAULT_SCHEME", "http").strip().lower().removesuffix("://")
-    return "socks5h" if raw in {"socks5", "socks5h"} else "http"
+    """Delegate to the shared resolver in ``common/proxy_url.py``.
+
+    ``allow_https=False`` preserves kakao's collapse of ``https`` to ``http``:
+    its transport is plain HTTP CONNECT.  That is a deliberate difference from
+    blik/ideal/twint, now stated as a parameter instead of hiding in a fifth
+    copy of the resolver.
+    """
+    return default_scheme_from_env("KAKAO_PROXY_DEFAULT_SCHEME", allow_https=False)
 
 
 def normalize_proxy_url(raw: str) -> str:
-    text = str(raw or "").strip()
-    if not text:
-        return ""
-    if "://" not in text:
-        if text.count(":") == 3 and "@" not in text:
-            host, port, username, password = text.split(":", 3)
-            text = f"{default_proxy_scheme()}://{username}:{password}@{host}:{port}"
-        else:
-            text = f"{default_proxy_scheme()}://{text}"
-    try:
-        parsed = urlsplit(text)
-        if not parsed.scheme or not parsed.hostname:
-            return ""
-        host = parsed.hostname
-        if ":" in host and not host.startswith("["):
-            host = f"[{host}]"
-        if parsed.port:
-            host = f"{host}:{parsed.port}"
-        username = quote(unquote(parsed.username or ""), safe="-._~")
-        auth = username
-        if parsed.password is not None:
-            auth = f"{auth}:{quote(unquote(parsed.password), safe='-._~')}"
-        netloc = f"{auth}@{host}" if auth else host
-        return urlunsplit((parsed.scheme.lower(), netloc, parsed.path, parsed.query, parsed.fragment))
-    except (TypeError, ValueError):
-        return ""
+    """Delegate to the shared skeleton in ``common/proxy_url.py``.
+
+    kakao is the extractor that (a) accepts the bare ``host:port:user:pass``
+    provider form, (b) returns ``""`` rather than the input when the parse
+    yields no host, and (c) swallows ``urlsplit`` / ``.port`` failures.  All
+    three are now named parameters instead of a fourth copy of the body.
+    ``runtime/tmp/p0_proxy_diff.py`` pins the equivalence.
+    """
+    return shared_normalize_proxy_url(
+        raw,
+        default_scheme=default_proxy_scheme(),
+        four_part=HOST_FIRST,
+        no_auth="rebuild",
+        require_hostname=True,
+        on_error="empty",
+    )
 
 
 def register_proxy_for_redaction(proxy: str) -> None:
-    raw = str(proxy or "").strip()
-    if not raw:
-        return
-    normalized = normalize_proxy_url(raw)
-    values = {raw}
-    if normalized:
-        values.add(normalized)
-        decoded = unquote(normalized)
-        values.add(decoded)
-        parsed = urlsplit(decoded)
-        if parsed.netloc:
-            values.add(parsed.netloc)
-        if parsed.hostname:
-            host = parsed.hostname
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-            try:
-                port = parsed.port
-            except ValueError:
-                port = None
-            values.add(f"{host}:{port}" if port else host)
-    with _proxy_redaction_lock:
-        _proxy_redaction_values.update(values)
+    """Delegate to the shared registrar (batch 2 of the consolidation).
 
+    ``normalize`` is this module's own normaliser and ``registry`` is this
+    module's own value set -- see ``redact_log_text`` for why neither is
+    shared.
+    """
+    shared_register_proxy_for_redaction(
+        proxy,
+        registry=_proxy_redaction_registry,
+        normalize=normalize_proxy_url,
+    )
 
 def proxy_short(proxy: str) -> str:
-    normalized = normalize_proxy_url(proxy)
-    if not normalized:
-        return "direct"
-    digest = hashlib.sha256(normalized.encode()).hexdigest()[:10]
-    return f"proxy#{digest}"
+    """Delegate to ``common/proxy_bookkeeping.py``.
+
+    The host-side body is shared; the normaliser is injected so blik keeps its
+    ``user:pass:host:port`` reading while the others keep ``host:port:user:pass``
+    (see ``common/proxy_url.py``).
+    """
+    return shared_proxy_short(proxy, normalize_proxy_url)
 
 
 def proxy_label(proxy: str) -> str:
-    return proxy_short(proxy)
+    """Delegate to ``common/proxy_bookkeeping.py`` (historical alias of proxy_short)."""
+    return shared_proxy_label(proxy, normalize_proxy_url)
 
 
 def proxy_chain_key(proxy: str) -> str:

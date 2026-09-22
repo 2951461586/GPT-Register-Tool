@@ -31,7 +31,7 @@ _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.Co
 _write_lock = threading.Lock()
 _PROGRESS_MAX_BYTES = 5 * 1024 * 1024
 _PROGRESS_BACKUPS = 5
-_PROGRESS_SCHEMA_VERSION = 2
+_PROGRESS_SCHEMA_VERSION = 3
 
 
 class RegistrationProgress:
@@ -199,13 +199,14 @@ class RegistrationProgress:
                 max(0.0, now_mono - self._stage_started_monotonic) * 1000
             )
             self.events[-1]["finished_at"] = int(time.time())
-        proxy_audit = (result or {}).get("proxy_audit")
+        from .registration_result import safe_proxy_audit
+
+        proxy_audit = safe_proxy_audit((result or {}).get("proxy_audit"))
         pool_index = -1
-        if isinstance(proxy_audit, dict):
-            try:
-                pool_index = int(proxy_audit.get("pool_index"))
-            except (TypeError, ValueError):
-                pool_index = -1
+        try:
+            pool_index = int(proxy_audit.get("pool_index"))
+        except (TypeError, ValueError):
+            pool_index = -1
         row = _sanitize({
             **correlation_fields(),
             "progress_schema_version": _PROGRESS_SCHEMA_VERSION,
@@ -219,9 +220,20 @@ class RegistrationProgress:
             "error": final_error,
             "failure_class": failure_class,
             "retryable": bool((result or {}).get("retryable", not success and registration_retry_decision(final_error).retryable)),
+            "future_batch_eligible": bool(
+                (result or {}).get(
+                    "future_batch_eligible",
+                    not success and registration_retry_decision(final_error).future_batch_eligible,
+                )
+            ),
+            "retry_disposition": str(
+                (result or {}).get("retry_disposition")
+                or ("" if success else registration_retry_decision(final_error).guard_action)
+            )[:40],
             "registration_state": str((result or {}).get("registration_state") or "")[:40],
             "registration_driver": str((result or {}).get("registration_driver") or self.driver or "unknown")[:32],
             "proxy_pool_index": pool_index,
+            "proxy_audit": proxy_audit,
             "started_at": self.started_at,
             "finished_at": int(time.time()),
             "last_stage": self.last_stage,

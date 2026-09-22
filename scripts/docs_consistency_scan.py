@@ -43,6 +43,7 @@ DOCS = (
     "docs/current/README.md",
     "docs/current/account-health.md",
     "docs/current/configuration.md",
+    "docs/current/mailbox.md",
     "docs/current/registration-architecture.md",
     "docs/current/registration-recovery.md",
     "docs/current/telemetry-and-runtime.md",

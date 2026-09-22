@@ -408,6 +408,42 @@ def test_scope_rebuilds_pool_when_driver_changes():
     assert pw._BROWSER_POOL.driver == "playwright"
 
 
+def test_scope_rebuilds_pool_when_runtime_config_changes():
+    from sms_tool.registration_drivers.browser_flow import flow_steps as pw
+
+    first = {
+        "registration": {
+            "browser_process_pool": {"enabled": True},
+            "drivers": {"camoufox": {"api_key": "first"}},
+        },
+    }
+    second = {
+        "registration": {
+            "browser_process_pool": {"enabled": True},
+            "drivers": {"camoufox": {"api_key": "second"}},
+        },
+    }
+    factory = RecordingFactory()
+    for config in (first, second):
+        with pw._browser_session_scope(
+            driver_name="camoufox",
+            config=config,
+            proxy=None,
+            headless=True,
+            timeout_ms=1000,
+            locale="en-US",
+            timezone_id="UTC",
+            browser_identity=None,
+            viewport=None,
+            session_factory=factory,
+        ):
+            pass
+
+    assert len(factory.calls) == 2
+    assert factory.calls[0]["config"] is first
+    assert factory.calls[1]["config"] is second
+
+
 def test_pool_relaunches_when_browser_identity_changes():
     # 复用路径曾静默丢弃 browser_identity（profile_id 只在 relaunch 时生效）。
     # profile_id 的意义就是把失败尝试与陈旧登录页隔离——身份变化必须触发

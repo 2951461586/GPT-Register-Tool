@@ -25,6 +25,7 @@ from ..config import CFG
 from ..http_client import is_transient_transport_error
 from ..proxy_routing import proxy_pool_for
 from ..paths import runtime_file
+from ..registration_state import _stored_registration_password
 from ..storage import (
     clear_stale_promotion_at_marker,
     get_account_record,
@@ -191,6 +192,12 @@ def relogin_chatgpt_email_account(
             csrf_token=csrf_token,
             proxy=proxy,
             totp_secret=str(account.get("totp_secret") or ""),
+            # The lane probes for a password step before spending an email code,
+            # so hand it the password we hold: a positive verdict then becomes a
+            # real login instead of "the account has a password we cannot
+            # submit".  ``_stored_registration_password`` already drops a value
+            # whose stored error says the verify failed.
+            password=_stored_registration_password(email),
             otp_timeout=max(30, int(timeout or 300)),
         )
         if not login.get("ok"):
@@ -278,11 +285,30 @@ def relogin_codex_account(
     attempts: list[dict[str, Any]] = []
     strategies = (
         ("oauth_refresh_token", relogin_refresh_token_account, timeout),
-        ("web_session", relogin_web_session_account, min(max(15, int(timeout or 180)), 30)),
+        # ``web_session`` is the only strategy with production successes on this
+        # fleet: every registered account has an empty refresh_token, so the
+        # first strategy can never win, and no OTP-mode success has ever been
+        # recorded.  It replays a session cookie and costs nothing, so it must
+        # not be starved -- the previous hard cap of 30s was shorter than a
+        # single blocked-exit retry window, and the chain answered that timeout
+        # by sending a real OTP.
+        #
+        # It stays bounded on purpose: the observed 403s are per-exit (one exit
+        # bursts 403s while another answers 200 immediately), so the fix for a
+        # blocked exit is to switch exits, not to wait longer.  A generous
+        # budget would only make a dead exit more expensive -- measured 124s
+        # before the chain moved on when this was briefly raised to 120s.
+        ("web_session", relogin_web_session_account, min(max(45, int(timeout or 180)), 60)),
         ("chatgpt_email_otp", relogin_chatgpt_email_account, timeout),
         ("codex_oauth_pkce", relogin_local_codex_account, timeout),
         ("browser_session", relogin_browser_session_account, timeout),
     )
+    # A blocked or rate-limited exit fails every strategy that goes through it.
+    # That is how a transient 403 turned into an OTP send, so the free
+    # strategies get retried across exits.  OTP strategies are deliberately
+    # excluded: retrying one would mail the same mailbox a second time.
+    proxy_candidates = _recovery_proxy_candidates(resolved_proxy, recovery_proxy)
+    retry_across_proxies = {"oauth_refresh_token", "web_session"}
     skip_strategies: set[str] = set()
     for strategy, handler, strategy_timeout in strategies:
         if strategy in skip_strategies:
@@ -293,16 +319,25 @@ def relogin_codex_account(
                 "skipped": True,
             })
             continue
-        result = dict(handler(account, proxy=recovery_proxy, timeout=strategy_timeout) or {})
-        if result.get("ok"):
-            success = _safe_relogin_result(result)
-            success["attempts"] = attempts
-            if proxy_attempts:
-                success["proxy_attempts"] = proxy_attempts
-            return success
-        attempt = _safe_relogin_result(result)
-        attempt.setdefault("mode", strategy)
-        attempts.append(attempt)
+        candidates = proxy_candidates if strategy in retry_across_proxies else [recovery_proxy]
+        result: dict[str, Any] = {}
+        for proxy_index, candidate in enumerate(candidates):
+            result = dict(handler(account, proxy=candidate, timeout=strategy_timeout) or {})
+            if result.get("ok"):
+                success = _safe_relogin_result(result)
+                success["attempts"] = attempts
+                if proxy_attempts:
+                    success["proxy_attempts"] = proxy_attempts
+                if proxy_index:
+                    success["proxy_index"] = proxy_index
+                return success
+            attempt = _safe_relogin_result(result)
+            attempt.setdefault("mode", strategy)
+            if proxy_index:
+                attempt["proxy_index"] = proxy_index
+            attempts.append(attempt)
+            if not _recoverable_on_other_proxy(result):
+                break
         if strategy == "chatgpt_email_otp" and "otp_poll_timeout" in str(result.get("error") or ""):
             # Both OTP strategies poll the same mailbox. When no mail arrived
             # for the first within its full window, the second 180s poll
@@ -700,6 +735,54 @@ def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[
         }]
 
 
+def _recovery_proxy_candidates(affinity_proxy: str | None, selected_proxy: str | None) -> list[str | None]:
+    """Exits to try for one strategy, best first.
+
+    The chain's own pick goes first, then the account's original (affinity)
+    exit.  These are usually the same host carrying a different sticky id, which
+    means two different egress IPs and therefore two different rate-limit
+    buckets -- enough to survive a blocked exit without leaving the pool.
+    """
+    ordered: list[str | None] = []
+    for value in (selected_proxy, affinity_proxy):
+        candidate = str(value or "").strip()
+        if candidate and candidate not in ordered:
+            ordered.append(candidate)
+    if not ordered:
+        ordered.append(None)
+    elif _recovery_allow_direct():
+        ordered.append(None)
+    return ordered
+
+
+def _recovery_allow_direct() -> bool:
+    """Whether the recovery chain may fall back to a direct (proxy-less) exit.
+
+    Off by default: routing a country-pinned account through the host's own
+    egress changes where the request comes from, so it stays an explicit
+    operator choice (``proxy.recovery_allow_direct``).
+    """
+    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    return bool(proxy_cfg.get("recovery_allow_direct"))
+
+
+def _recoverable_on_other_proxy(result: Any) -> bool:
+    """True when the same strategy deserves a retry through a different exit.
+
+    Only transport-level evidence counts.  A non-2xx from the target means the
+    exit was blocked or rate-limited and another exit can help; a 200 without an
+    access token means the session really is dead and no exit can help.
+    """
+    if not isinstance(result, dict) or result.get("ok"):
+        return False
+    if result.get("terminal") or _looks_account_deactivated(result):
+        return False
+    last_status = str(result.get("last_status") or "").strip()
+    if last_status:
+        return last_status != "200"
+    return is_transient_transport_error(result.get("error") or "")
+
+
 def is_permanently_deactivated(account: dict[str, Any]) -> bool:
     if not isinstance(account, dict):
         return False
@@ -956,17 +1039,163 @@ def _relogin_cooldown_active(account: dict[str, Any]) -> bool:
             return True
     try:
         data = json.loads(_relogin_guard_path().read_text(encoding="utf-8"))
-        until = float((data.get(email) or {}).get("cooldown_until") or 0)
+        entry = data.get(email) or {}
+        # A dead end is not released by the clock: the evidence is a closed
+        # server-side loop, so waiting only buys another burned OTP.
+        if entry.get("permanent"):
+            return True
+        until = float(entry.get("cooldown_until") or 0)
         return until > time.time()
     except (OSError, ValueError, TypeError, AttributeError):
         return False
+
+
+def _relogin_dead_end_reason(relogin: Any) -> str:
+    """The relogin outcome that cannot succeed however often it is retried.
+
+    Measured 2026-09-14 (``runtime/logs/backend_stdout.log``): landing on
+    ``/about-you`` for an address that already has an account is a closed
+    server-side loop.  ``create_account`` answers ``user_already_exists`` with
+    ``userAlreadyExistsRecovery.action=continue_to_login`` and
+    ``redirect_uri=chatgpt.com/auth/login_with`` (23/23 byte-identical), and
+    following that redirect produced no access token in 4/4 attempts while the
+    login lane landed back on the same page.
+
+    Each retry costs one OTP and changes nothing, so this must not be released
+    by the ordinary cooldown -- otherwise a 30-minute window turns into "one
+    burned OTP every 30 minutes, forever" (``aegis_coop.1e+oai02`` was retried
+    9 times across 15 hours exactly that way).
+    """
+    text = json.dumps(relogin or {}, ensure_ascii=False).lower()
+    if "user_already_exists" in text:
+        return "account_exists_login_loop"
+    return ""
+
+
+def _relogin_dead_end_permanent() -> bool:
+    """Whether a dead end blocks relogin indefinitely. Operator-reversible.
+
+    The guard file is plain JSON under ``runtime/``, so an operator who fixes the
+    underlying cause can delete the entry.  Configurable so the escalation can be
+    turned back into a plain cooldown without a code change.
+    """
+    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    return bool(health.get("relogin_dead_end_permanent", True))
+
+
+_RELOGIN_STATUS_RE = re.compile(r'"status"\s*:\s*(\d{3})')
+_RELOGIN_CODE_RE = re.compile(r'"code"\s*:\s*"([A-Za-z0-9_\-]{1,40})"')
+
+
+def _relogin_attempt_shape(attempt: dict[str, Any]) -> str:
+    """``mode`` plus the fields that say *why* -- minus anything per-attempt.
+
+    The OTP branches append a JSON body to ``error`` whose session ids and
+    messages differ on every attempt, so the raw text can never be compared
+    directly.  Two fields do distinguish one failure from another -- the HTTP
+    ``status`` and the error ``code`` (409 ``invalid_state`` is not 401
+    ``login_failed``) -- so they are lifted out and the rest of the body is
+    dropped.  ``last_status`` is kept for the ``web_session`` lane, where a
+    changed upstream answer is the whole difference between two attempts.
+
+    Dropping the body wholesale is not enough: measured with
+    ``runtime/_probe_relogin_repeat_cooldown.py``, a 409 turning into a 401
+    still produced the same fingerprint and kept the long window.
+    """
+    mode = str(attempt.get("mode") or "")
+    error = str(attempt.get("error") or "")
+    head = error.split("{", 1)[0].strip()[:80]
+    marks = []
+    status = _RELOGIN_STATUS_RE.search(error)
+    if status:
+        marks.append(f"status={status.group(1)}")
+    code = _RELOGIN_CODE_RE.search(error)
+    if code:
+        marks.append(f"code={code.group(1)}")
+    last_status = str(attempt.get("last_status") or "").strip()
+    if last_status:
+        marks.append(f"last={last_status}")
+    return f"{mode}={head}({','.join(marks)})" if marks else f"{mode}={head}"
+
+
+def _relogin_failure_shape(relogin: Any) -> str:
+    """A fingerprint of *why* relogin failed, stable across retries.
+
+    Measured 2026-09-14 (``runtime/account_relogin_guard.json``): 83 guarded
+    addresses, **82 of them past ``cooldown_until``**, so the ordinary 300s
+    window re-runs a known-failing address every few minutes.  ``elms-dopey.8t
+    +oai02`` was re-run 45 minutes after being judged dead and produced a
+    byte-identical failure -- same six methods, same six errors
+    (``runtime/logs/backend_stdout.log`` 8879-8905 vs 9482-9504).  An unchanged
+    shape is the evidence that the retry bought no information, so the next
+    window has to be longer.
+
+    Per-attempt detail is reduced by :func:`_relogin_attempt_shape`; comparing
+    the raw ``error`` text would never match twice, because the OTP branches
+    embed a JSON body whose session ids change on every attempt.
+    """
+    attempts = relogin.get("attempts") if isinstance(relogin, dict) else None
+    parts = []
+    if isinstance(attempts, list):
+        for attempt in attempts:
+            if isinstance(attempt, dict):
+                parts.append(_relogin_attempt_shape(attempt))
+    if not parts:
+        parts.append(_relogin_attempt_shape(relogin if isinstance(relogin, dict) else {}))
+    return "|".join(parts)
+
+
+def _relogin_repeat_cooldown_seconds() -> int:
+    """The window used when a retry reproduced the previous failure exactly.
+
+    Six hours rather than the ordinary 300s: the shape is the evidence that
+    waiting bought nothing, and the cost of being wrong is one OTP per window
+    instead of one OTP every five minutes.  A *different* shape resets the
+    window to ``relogin_cooldown_seconds``, so fixing the cause restores fast
+    retries without touching this key.
+    """
+    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    try:
+        return max(60, int(health.get("relogin_repeat_cooldown_seconds") or 21600))
+    except (TypeError, ValueError):
+        return 21600
+
+
+def _clear_relogin_failure(email: str) -> None:
+    """Drop the guard entry once a relogin succeeds.
+
+    The stored shape describes a failure that is over.  Leaving it behind would
+    let the *next*, unrelated failure compare equal to a stale shape and take
+    the six-hour window for a transient error.
+    """
+    key = _normalize_email(email)
+    if not key:
+        return
+    path = _relogin_guard_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError, TypeError):
+        return
+    if not isinstance(data, dict) or key not in data:
+        return
+    data.pop(key, None)
+    try:
+        temp = path.with_suffix(path.suffix + ".tmp")
+        temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
+        temp.replace(path)
+    except OSError:
+        return
 
 
 def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
     if not email or str(relogin.get("mode") or "").lower() == "cooldown":
         return
     text = json.dumps(relogin, ensure_ascii=False).lower()
-    if not any(marker in text for marker in ("otp", "mailbox", "email")):
+    dead_end = _relogin_dead_end_reason(relogin)
+    # A dead end is recorded on its own evidence.  Gating it on the OTP/mailbox
+    # markers below would make the stop depend on ``fallback_from`` happening to
+    # contain the word "email" -- which has nothing to do with why it is stuck.
+    if not dead_end and not any(marker in text for marker in ("otp", "mailbox", "email")):
         return
     path = _relogin_guard_path()
     try:
@@ -976,12 +1205,26 @@ def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
     except (OSError, ValueError, TypeError):
         data = {}
     key = _normalize_email(email)
-    data[key] = {
-        "failure_class": "relogin_otp_failed",
+    previous = data.get(key) if isinstance(data.get(key), dict) else {}
+    shape = _relogin_failure_shape(relogin)
+    # An unchanged shape means the last window bought nothing, so waiting the
+    # ordinary cooldown again would spend the next OTP on the same answer.
+    repeated = bool(shape) and previous.get("last_shape") == shape
+    cooldown = _relogin_repeat_cooldown_seconds() if repeated else _relogin_cooldown_seconds()
+    entry: dict[str, Any] = {
+        "failure_class": "account" if dead_end else "relogin_otp_failed",
         "last_error": str(relogin.get("error") or "relogin_failed")[:200],
-        "cooldown_until": int(time.time() + _relogin_cooldown_seconds()),
+        "cooldown_until": int(time.time() + cooldown),
         "updated_at": int(time.time()),
+        "last_shape": shape,
     }
+    if repeated:
+        entry["repeat_failure"] = True
+    if dead_end:
+        entry["dead_end"] = dead_end
+        if _relogin_dead_end_permanent():
+            entry["permanent"] = True
+    data[key] = entry
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")

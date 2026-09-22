@@ -24,6 +24,100 @@ def test_live_documentation_pointers_are_current():
     assert main() == 0
 
 
+def _mailbox_contract() -> dict[str, str]:
+    path = scan.ROOT / "docs" / "current" / "mailbox.md"
+    body = path.read_text(encoding="utf-8")
+    table = body.split("<!-- mailbox-contract:start -->", 1)[1].split(
+        "<!-- mailbox-contract:end -->", 1
+    )[0]
+    contract: dict[str, str] = {}
+    for line in table.splitlines():
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 2 and cells[0] not in {"Key", "---"}:
+            contract[cells[0]] = cells[1]
+    return contract
+
+
+def test_mailbox_document_is_live_and_matches_runtime_semantics():
+    from types import SimpleNamespace
+
+    from sms_tool.mailbox import _mailbox_proxy_candidates
+    from sms_tool.mailbox_errors import (
+        MailboxEndpointUnavailableError,
+        MailboxErrorDisposition,
+        mailbox_error_disposition,
+    )
+    from sms_tool.mailbox_strategies import (
+        FunctionMailboxProviderAdapter,
+        MailboxProviderRegistry,
+    )
+
+    assert "docs/current/mailbox.md" in scan.DOCS
+
+    registry = MailboxProviderRegistry()
+    always = lambda _mailbox, _config: True
+    fetch = lambda _mailbox, **_kwargs: []
+    registry.register(
+        FunctionMailboxProviderAdapter(
+            "fallback", always, message_fetcher=fetch, fallback=True
+        )
+    )
+    registry.register(
+        FunctionMailboxProviderAdapter("specific", always, message_fetcher=fetch)
+    )
+    resolved = registry.resolve_fetcher(SimpleNamespace(), {})
+
+    auth_error = RuntimeError("bad credentials")
+    auth_error.code = "mailbox_auth_invalid"
+    routes = _mailbox_proxy_candidates(
+        "http://operation.example:8003",
+        {
+            "chatgpt": {},
+            "mailbox_proxy": "http://mailbox.example:8001",
+            "mailbox_proxy_pool": ["http://pool.example:8002"],
+            "email_registration": {},
+        },
+    )
+    observed = {
+        "provider_resolution": (
+            "specific_then_fallback"
+            if resolved is not None and resolved.name == "specific"
+            else "fallback_first"
+        ),
+        "auth_invalid": (
+            "terminal_quarantine"
+            if mailbox_error_disposition(auth_error)
+            is MailboxErrorDisposition.AUTH_INVALID
+            else "retry_until_deadline"
+        ),
+        "endpoint_unavailable": (
+            "terminal_cooldown"
+            if mailbox_error_disposition(MailboxEndpointUnavailableError())
+            is MailboxErrorDisposition.ENDPOINT_UNAVAILABLE
+            else "retry_until_deadline"
+        ),
+        "other_errors": (
+            "retry_until_deadline"
+            if mailbox_error_disposition(RuntimeError("temporary"))
+            is MailboxErrorDisposition.RETRY
+            else "terminal"
+        ),
+        "operation_proxy_fallback_default": (
+            "true" if routes[-1] == "http://operation.example:8003" else "false"
+        ),
+        "proxy_order": ",".join(
+            {
+                "http://mailbox.example:8001": "mailbox_proxy",
+                "http://pool.example:8002": "mailbox_proxy_pool",
+                "http://operation.example:8003": "operation_proxy",
+            }[route]
+            for route in routes
+        ),
+    }
+
+    assert _mailbox_contract() == observed
+
+
 def test_symbol_table_pointer_matching_the_source_passes(tmp_path, monkeypatch):
     failures = _scan_doc(
         tmp_path,

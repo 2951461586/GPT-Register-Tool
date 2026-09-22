@@ -777,6 +777,9 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
         if email and isinstance(probe, dict) and probe:
             fresh_probes[email] = probe
     try:
+        from .account_health import resolve_account_health_budgets
+
+        budgets = resolve_account_health_budgets(CFG)
         quota = refresh_local_quota_statuses(
             emails=emails,
             workers=max(1, min(int(workers or 1), 8)),
@@ -787,10 +790,10 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
             # (email.otp_timeout), so reusing the scan timeout here capped
             # recovery at ~120s and every OTP poll was cut off before it could
             # land. Keep the two budgets independent.
-            relogin_timeout=max(60, int((CFG.get("account_health") or {}).get("relogin_timeout_seconds") or 240)),
+            relogin_timeout=budgets["relogin_timeout"],
             relogin_mode=relogin_mode,
-            batch_timeout=max(300, int((CFG.get("account_health") or {}).get("batch_timeout_seconds") or 900)),
-            account_timeout=max(60, int((CFG.get("account_health") or {}).get("account_timeout_seconds") or 360)),
+            batch_timeout=budgets["batch_timeout"],
+            account_timeout=budgets["account_timeout"],
             fresh_probes=fresh_probes,
         )
         if quota.get("total", 0):

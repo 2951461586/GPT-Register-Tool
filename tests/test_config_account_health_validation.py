@@ -56,6 +56,28 @@ def test_known_keys_produce_no_warning():
     )) == []
 
 
+def test_the_relogin_dead_end_switch_is_a_known_key():
+    """``account_recovery._relogin_dead_end_permanent()`` reads this key.
+
+    Left out of ``ACCOUNT_HEALTH_KEYS``, an operator who sets it would get a
+    spurious "unknown account_health key(s)" warning even though the value is
+    honoured -- which makes a documented, working switch look unsupported.
+    """
+    assert "relogin_dead_end_permanent" in ACCOUNT_HEALTH_KEYS
+    assert config_warnings(_config(relogin_dead_end_permanent=False)) == []
+
+
+def test_the_relogin_repeat_cooldown_is_a_known_key():
+    """``account_recovery._relogin_repeat_cooldown_seconds()`` reads this key.
+
+    Same contract as ``relogin_dead_end_permanent``: left out of
+    ``ACCOUNT_HEALTH_KEYS``, an operator who sets it would get a spurious
+    "unknown account_health key(s)" warning even though the value is honoured.
+    """
+    assert "relogin_repeat_cooldown_seconds" in ACCOUNT_HEALTH_KEYS
+    assert config_warnings(_config(relogin_repeat_cooldown_seconds=21600)) == []
+
+
 def test_every_documented_example_key_is_known():
     """config.example.json must not list a key we would warn about."""
     import json

@@ -258,7 +258,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在显式恢复或支付 JIT 流程中依次尝试 RT、Cookie、隔离浏览器邮箱 OTP 和 Codex OAuth。
 - 支持复制 AT、查看邮箱和重新注册；协议支付链接统一从协议提链入口生成。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
-- 账号列表展示优惠状态；“可试用 Plus”使用绿色成功状态，并支持在筛选后的完整账号集合上排序后再分页。
+- 账号列表展示优惠状态；“可试用 Plus”使用绿色成功状态，并支持在筛选后的完整账号集合上排序后再分页。查优惠时会同时枚举该账号可用的支付方式（`card`/`upi`/`momo` 等，一次 Checkout + Stripe init，零副作用），以 ` · ` 拼接在优惠状态之后（如 `可试用Plus · card/upi/momo`）；可用 `--no-payment-eligibility` 关闭这一步。
 - 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
 
 ### 桌面端批量支付操作
@@ -360,6 +360,7 @@ services/
 | `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
 | `sms_tool/accounts/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
 | `sms_tool/accounts/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
+| `sms_tool/accounts/account_payment_eligibility.py` | 查优惠后的支付资格探测薄封装：显式账单国家/货币/语言，一次 Checkout + Stripe init 枚举 `payment_method_types`，零副作用 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/providers/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
 | `sms_tool/providers/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |

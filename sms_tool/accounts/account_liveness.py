@@ -18,7 +18,11 @@ from .account_identity import account_identity, bind_account_identity
 from ..auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
-from ..proxy_routing import proxy_pool_for, select_operation_proxy
+from ..proxy_routing import (
+    proxy_pool_for,
+    select_operation_proxy,
+    select_operation_proxy_candidate,
+)
 
 
 CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -174,12 +178,14 @@ def probe_account_liveness(
     identity = bind_account_identity(account)
     # Health probes restore the registration proxy affinity so the access token
     # is presented from the same egress identity used during signup.
-    resolved_proxy = select_operation_proxy(
+    selected_proxy = select_operation_proxy_candidate(
         account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
         operation="liveness",
         explicit=proxy,
         config=CFG,
     )
+    resolved_proxy = selected_proxy.proxy if selected_proxy else None
+    proxy_source = selected_proxy.source if selected_proxy else "direct"
 
     device_id = str(identity.get("device_id") or "")
     headers = chatgpt_headers(device_id, accept="application/json")
@@ -204,19 +210,25 @@ def probe_account_liveness(
             if isinstance(result, dict) and "status_code" not in result and "status" in result:
                 result = {**result, "status_code": result.get("status")}
             if isinstance(result, dict) and "status_code" in result:
-                return quota_result_from_payload(
+                return {
+                    **quota_result_from_payload(
                     result,
                     status_code=result.get("status_code"),
                     mode="browser",
                     account_id=account_id,
-                )
-            return quota_result_from_payload(
+                    ),
+                    "proxy_source": proxy_source,
+                }
+            return {
+                **quota_result_from_payload(
                 {"status_code": 0, "body": result},
                 status_code=0,
                 mode="browser",
                 account_id=account_id,
                 transport_ok=False,
-            )
+                ),
+                "proxy_source": proxy_source,
+            }
         except Exception as exc:
             return {
                 "ok": False,
@@ -224,6 +236,7 @@ def probe_account_liveness(
                 "status": "unknown",
                 "quota_status": "检测失败",
                 "error": str(exc)[:500],
+                "proxy_source": proxy_source,
             }
 
     try:
@@ -238,12 +251,15 @@ def probe_account_liveness(
             body = response.json()
         except Exception:
             body = {"raw": str(response.text or "")[:500]}
-        return quota_result_from_payload(
+        return {
+            **quota_result_from_payload(
             {"status_code": response.status_code, "body": body},
             status_code=response.status_code,
             mode="local",
             account_id=account_id,
-        )
+            ),
+            "proxy_source": proxy_source,
+        }
     except Exception as exc:
         error = str(exc)
         for candidate in (str(proxy or "").strip(), str(resolved_proxy or "").strip(), normalized_proxy):
@@ -255,6 +271,7 @@ def probe_account_liveness(
             "status": "unknown",
             "quota_status": "检测失败",
             "error": error,
+            "proxy_source": proxy_source,
         }
 
 

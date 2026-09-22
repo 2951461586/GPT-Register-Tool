@@ -36,6 +36,8 @@ ACCOUNT_HEALTH_KEYS = frozenset({
     "batch_timeout_seconds",
     "account_timeout_seconds",
     "relogin_cooldown_seconds",
+    "relogin_repeat_cooldown_seconds",
+    "relogin_dead_end_permanent",
     "post_registration_enabled",
     "post_registration_deep_liveness",
     "proxy_pool",
@@ -467,6 +469,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         _validate_positive_numbers(account_health, (
             "workers", "max_pending", "batch_timeout_seconds",
             "account_timeout_seconds", "relogin_cooldown_seconds",
+            "relogin_repeat_cooldown_seconds",
             "fail_skip_after", "fail_cooldown_seconds",
         ), "account_health", errors)
 
@@ -475,6 +478,11 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         errors.append("registration must be an object")
     if isinstance(registration, Mapping):
         from .registration_drivers.base import KNOWN_DRIVER_ALIASES
+        if "browser_profile_pool" in registration:
+            errors.append(
+                "registration.browser_profile_pool is unsupported; "
+                "browser hardware profiles are built in"
+            )
         driver = str(registration.get("driver") or "protocol").strip().lower().replace("-", "_")
         if driver not in KNOWN_DRIVER_ALIASES:
             errors.append("registration.driver is unsupported")
@@ -549,6 +557,8 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         elif isinstance(pulse, Mapping):
             if "enabled" in pulse and not isinstance(pulse.get("enabled"), bool):
                 errors.append("registration.pulse.enabled must be a boolean")
+            if "canary_enabled" in pulse and not isinstance(pulse.get("canary_enabled"), bool):
+                errors.append("registration.pulse.canary_enabled must be a boolean")
             _validate_positive_numbers(
                 pulse,
                 ("wave_size", "wave_delay_seconds", "ban_threshold",
@@ -556,6 +566,22 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 "registration.pulse",
                 errors,
             )
+        retry_policy = registration.get("retry_policy", {})
+        if retry_policy is not None and not isinstance(retry_policy, Mapping):
+            errors.append("registration.retry_policy must be an object")
+        elif isinstance(retry_policy, Mapping):
+            for key in ("cross_batch_cooldown_seconds", "otp_pending_quarantine_threshold"):
+                if key not in retry_policy:
+                    continue
+                value = retry_policy.get(key)
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or value <= 0
+                ):
+                    errors.append(
+                        f"registration.retry_policy.{key} must be a positive number"
+                    )
         process_pool = registration.get("browser_process_pool", {})
         if process_pool is not None and not isinstance(process_pool, Mapping):
             errors.append("registration.browser_process_pool must be an object")
@@ -577,7 +603,27 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
     if email is not None and not isinstance(email, Mapping):
         errors.append("email_registration must be an object")
     if isinstance(email, Mapping):
-        _validate_positive_numbers(email, ("otp_timeout", "otp_poll_interval"), "email_registration", errors)
+        _validate_positive_numbers(
+            email,
+            (
+                "otp_timeout", "otp_poll_interval",
+                "sentinel_circuit_cooldown_seconds", "sentinel_circuit_failures",
+                "sentinel_max_concurrency", "sentinel_prewarm_window",
+            ),
+            "email_registration",
+            errors,
+        )
+        # URL-shaped fields: a malformed URL used to sail through validation and
+        # only fail at first use, deep in a registration batch.
+        for key in ("cfworker_url", "graph_messages_url", "oauth_token_url"):
+            value = str(email.get(key) or "").strip()
+            if value and urlsplit(value).scheme not in {"http", "https"}:
+                errors.append(f"email_registration.{key} must be an http(s) URL")
+        if "use_as_username" in email and not isinstance(email.get("use_as_username"), bool):
+            errors.append("email_registration.use_as_username must be a boolean")
+        for key in ("gmail", "remail", "smailr"):
+            if key in email and not isinstance(email.get(key), Mapping):
+                errors.append(f"email_registration.{key} must be an object")
 
     codex_oauth = config.get("codex_oauth", {})
     if codex_oauth is not None and not isinstance(codex_oauth, Mapping):

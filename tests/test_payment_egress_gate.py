@@ -117,6 +117,29 @@ class EgressGateTests(unittest.TestCase):
         # Same proxy + same expectation is one cache entry across stages.
         self.assertEqual(calls, ["checkout"])
 
+    def test_stripe_init_egress_is_checked(self):
+        calls = []
+
+        def probe(proxy, expected, stage, timeout):
+            calls.append((proxy, expected, stage))
+            return _ProbeResult(ok=True, country_code=expected)
+
+        options = {
+            "stripe_init_proxy": "http://u:p-CC@gate.kookeey.info:1000",
+            "stage_proxy_countries": {"stripe_init": "VN"},
+        }
+        payment_egress.assert_egress_countries(
+            options,
+            _cfg(),
+            probe=probe,
+            stages=("stripe_init",),
+        )
+
+        self.assertEqual(
+            calls,
+            [(options["stripe_init_proxy"], "VN", "stripe_init")],
+        )
+
     def test_protocol_script_adapter_blocks_on_mismatch_without_spawning(self):
         from sms_tool.payment_catalog import PAYMENT_METHODS
 

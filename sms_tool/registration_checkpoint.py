@@ -10,16 +10,31 @@ RESUMABLE_STATES 是线上数据：checkpoint payload 里已存在的 registrati
 
 from __future__ import annotations
 
+import time
+from http.cookiejar import Cookie
 from typing import Any, Callable, Mapping
 
 # 拥有 access_token 且停在这些状态上的 checkpoint 可以跳过邮箱/OTP 阶段续跑。
 RESUMABLE_STATES = frozenset({"at_probe_pending", "at_probe_transport_unknown"})
+SESSION_PENDING_STATE = "auth_session_pending"
+SESSION_RECOVERY_LIMIT = 2
+SESSION_RECOVERY_TTL_SECONDS = 900
 
 
 def build_checkpoint_payload(runtime: Any, mailbox_snapshot: Callable[[], dict]) -> dict[str, Any]:
     """Checkpoint payload 与最终 result 共享的键形状（邮箱快照由调用方注入，
     保持本模块与 mailbox 秘密白名单解耦）。"""
     s = runtime
+    cookies = []
+    if s.session is not None:
+        jar = getattr(getattr(s.session, "cookies", None), "jar", ())
+        cookies = [
+            {"name": cookie.name, "value": cookie.value, "domain": cookie.domain,
+             "path": cookie.path, "expires": cookie.expires, "secure": cookie.secure,
+             "domain_specified": cookie.domain_specified, "domain_initial_dot": cookie.domain_initial_dot,
+             "path_specified": cookie.path_specified}
+            for cookie in jar
+        ]
     return {
         "email": s.username,
         "source": "register",
@@ -28,7 +43,7 @@ def build_checkpoint_payload(runtime: Any, mailbox_snapshot: Callable[[], dict])
         "plan_type": "unknown",
         "success": False,
         "status": "at_probe_pending",
-        "password": s.password,
+        "password": "" if s.password_unknown else s.password,
         "device_id": s.device_id,
         "auth_session_logging_id": s.session_logging_id,
         "access_token": s.access_token,
@@ -37,6 +52,13 @@ def build_checkpoint_payload(runtime: Any, mailbox_snapshot: Callable[[], dict])
         "auth_session": s.auth_body,
         "mailbox": mailbox_snapshot(),
         "registration_mode": s.registration_mode,
+        "create_ok": s.create_ok and not s.existing_account,
+        "name": s.full_name,
+        "birthdate": s.birthdate,
+        "session_cookies": cookies,
+        "auth_headers": dict(s.base_headers),
+        "session_recovery_attempts": s.session_recovery_attempts,
+        "session_recovery_started_at": s.session_recovery_started_at,
     }
 
 
@@ -72,9 +94,13 @@ def load_resumable_checkpoint(
         payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
     except Exception:
         return None
-    if not isinstance(payload, dict) or not payload.get("access_token"):
+    if not isinstance(payload, dict):
         return None
     state = str(payload.get("registration_state") or (checkpoint or {}).get("state") or "")
+    if state == SESSION_PENDING_STATE and payload.get("create_ok"):
+        return payload
+    if not payload.get("access_token"):
+        return None
     if state not in RESUMABLE_STATES:
         return None
     return payload
@@ -96,3 +122,59 @@ def apply_resume_payload(runtime: Any, payload: Mapping[str, Any]) -> None:
     s.auth_session = {"cookie_header": str(payload.get("cookie_header") or "")}
     s.registration_mode = str(payload.get("registration_mode") or "passwordless")
     s.create_ok = True
+    s.full_name = str(payload.get("name") or "")
+    s.birthdate = str(payload.get("birthdate") or "")
+    s.session_recovery_attempts = int(payload.get("session_recovery_attempts") or 0)
+    s.session_recovery_started_at = int(payload.get("session_recovery_started_at") or 0)
+
+
+def session_recovery_error(payload: Mapping[str, Any]) -> str:
+    """Never fall back to signup after a known successful account creation."""
+    try:
+        attempts = int(payload.get("session_recovery_attempts") or 0)
+        started = int(payload.get("session_recovery_started_at") or 0)
+    except (TypeError, ValueError):
+        return "auth_session_recovery_context_missing"
+    if attempts >= SESSION_RECOVERY_LIMIT:
+        return "auth_session_recovery_exhausted"
+    if started <= 0 or time.time() - started > SESSION_RECOVERY_TTL_SECONDS:
+        return "auth_session_recovery_expired"
+    cookies = payload.get("session_cookies")
+    if not isinstance(cookies, list) or not cookies or any(
+        not isinstance(row, dict) or not row.get("name") or not row.get("domain")
+        or not isinstance(row.get("value"), str) for row in cookies
+    ):
+        return "auth_session_recovery_context_missing"
+    return ""
+
+
+def candidate_checkpoint_error(checkpoint: Mapping[str, Any] | None) -> str:
+    """Return a permanent recovery verdict before a candidate claims a slot."""
+    value = checkpoint if isinstance(checkpoint, Mapping) else {}
+    payload = value.get("payload")
+    if not isinstance(payload, Mapping):
+        return ""
+    state = str(payload.get("registration_state") or value.get("state") or "")
+    if (
+        state != SESSION_PENDING_STATE
+        or not payload.get("create_ok")
+        or payload.get("access_token")
+    ):
+        return ""
+    return session_recovery_error(payload)
+
+
+def restore_session_cookies(session: Any, payload: Mapping[str, Any]) -> None:
+    """Keep cookie scope/security attributes, not just the name/value pair."""
+    for row in payload["session_cookies"]:
+        expires = row.get("expires")
+        if expires is not None and int(expires) <= time.time():
+            continue
+        domain = row["domain"]
+        session.cookies.jar.set_cookie(Cookie(
+            version=0, name=row["name"], value=row["value"], port=None, port_specified=False,
+            domain=domain, domain_specified=bool(row.get("domain_specified", domain.startswith("."))),
+            domain_initial_dot=bool(row.get("domain_initial_dot", domain.startswith("."))),
+            path=row.get("path") or "/", path_specified=bool(row.get("path_specified", True)), secure=bool(row.get("secure")),
+            expires=expires, discard=expires is None, comment=None, comment_url=None, rest={},
+        ))

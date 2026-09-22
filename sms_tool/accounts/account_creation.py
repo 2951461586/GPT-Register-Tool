@@ -25,15 +25,25 @@ def _create_account_sentinel_token(sentinel_data, proxy=None):
 
 
 
-def _email_otp_send_url(reg_data, auth_base, resume_email_verification=False):
-    continue_url = ""
-    if isinstance(reg_data, dict):
-        continue_url = str(reg_data.get("continue_url") or "").strip()
-    if continue_url:
-        return continue_url
-    if resume_email_verification:
-        return _absolute_url(auth_base, "/api/accounts/email-otp/send")
-    return ""
+def _email_otp_send_url(reg_data):
+    """The send endpoint the **response body** named, or ``""`` when it named none.
+
+    🔴 The body is the only source.  There used to be a
+    ``resume_email_verification`` fallback to the canonical
+    ``/api/accounts/email-otp/send``; the flag lost its only writer when
+    password-first registration adopted fail-fast, so the branch was
+    unreachable and it (plus the now-unused ``auth_base`` parameter it was the
+    sole consumer of) was deleted on 2026-09-16.
+
+    Do **not** reintroduce a "guess the endpoint" fallback: a missing
+    ``continue_url`` has to surface as ``email_otp_send_missing_continue_url``
+    rather than silently resolving to an endpoint the server never named --
+    that guess is what burned OTPs for addresses the server had already
+    refused.
+    """
+    if not isinstance(reg_data, dict):
+        return ""
+    return str(reg_data.get("continue_url") or "").strip()
 
 
 def _create_account_continue_url(create_data):
@@ -178,13 +188,22 @@ def _contains_access_token_key(node, depth: int = 0) -> bool:
     return False
 
 
-def _fetch_auth_session(session, chat_base, base_headers, attempts=4, delay=0.5):
+def _fetch_auth_session(session, chat_base, base_headers, attempts=8, delay=0.5):
     """Fetch the post-signup session with a short, bounded readiness poll.
 
     The old six-round poll used the global HTTP retry policy on every round,
     which multiplied a single slow edge response into multi-minute waits.  A
     session endpoint is cheap to retry, so each round is now one request with
     a small backoff and explicit timing metadata for diagnostics.
+
+    attempts=8 (was 4): measured 2026-09-19 batch ``aaf7641d`` -- a slow
+    ``create_account`` (32.8s server-side) left the session unpropagated for
+    ~5s, so 4 rounds (~4.5s window) returned HTTP 200 ``{WARNING_BANNER}``
+    with no token and the run died as ``missing_auth_session_access_token``
+    even though the account *had* been created.  8 rounds extend the window
+    to ~9s, which covers the slow-egress tail without making the common case
+    any slower (the loop still exits on the first ready response, typically
+    attempt 1).
     """
     started = time.monotonic()
     try:
@@ -223,6 +242,18 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=4, delay=0.5)
         token_key_present = _contains_access_token_key(body)
         shape = _session_body_shape(body)
         jar = _cookie_presence(session)
+        # P2 (2026-09-19): a session whose jar never received the
+        # ``__Secure-next-auth.session-token`` cookie is structurally
+        # anonymous -- ``GET /api/auth/session`` will keep answering the bare
+        # ``WARNING_BANNER`` body no matter how many rounds we poll, because
+        # the server never established a session for this client in the first
+        # place.  Measured on batch ``629f5f99``: 2 runs burned 8 rounds
+        # (~8.5s) each with ``nextauth_session=False`` on every single round.
+        # Propagation delay only applies when the cookie *landed* but the
+        # token has not shown up yet; with no cookie at all, polling cannot
+        # help.  Bail after the first round so the caller's retry logic can
+        # re-drive ``auth_flow`` on a fresh egress instead of idling.
+        session_cookie_missing = not jar.get("nextauth_session")
         _LOGGER.info(
             "Auth session readiness status=%s attempt=%s/%s access_token_present=%s "
             "token_key_present=%s nextauth_session=%s cookie_count=%s shape=%s",
@@ -254,6 +285,9 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=4, delay=0.5)
         )
         if r.status_code == 200 and at_present:
             return last
+        if session_cookie_missing:
+            last["session_cookie_missing"] = True
+            break
         if attempt < attempts:
             time.sleep(min(max(0.0, float(delay or 0)), 2.0))
     return last

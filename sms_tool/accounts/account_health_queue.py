@@ -31,14 +31,6 @@ _TERMINAL = {"completed", "failed", "cancelled"}
 _PENDING_TTL_SECONDS = 6 * 60 * 60
 _LEASE_SECONDS = 120
 _HEARTBEAT_SECONDS = 30
-_BROWSER_FALLBACK_SLOTS = threading.BoundedSemaphore(2)
-# Wait for a browser-fallback slot instead of skipping after one second. The
-# 1.0s wait re-created the "concurrency_limited" pathology that
-# account_recovery already fixed; 30s covers queueing behind a browser start
-# plus teardown without letting a stuck browser pin the whole queue.
-_BROWSER_FALLBACK_WAIT_SECONDS = 30.0
-
-
 def queue_path() -> Path:
     return runtime_file(CFG, "account_health") / "queue.json"
 
@@ -337,79 +329,63 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
             error="account_not_found",
         )
         return result
-    account = _account_payload(record)
     transient = _TRANSIENT.get(str(job.get("id") or ""), {})
     proxy = transient.get("proxy")
-    from .account_identity import account_identity
-    from .account_liveness import browser_fetch_for_account
 
-    browser_identity = account_identity(account).get("browser_identity") or {}
     if job.get("kind") == HealthCheckKind.PLAN.value:
-        from .account_promotion import check_account_promotion
-        from ..storage import mark_promotion_status
+        from .account_promotion import refresh_promotion_statuses
 
-        with browser_fetch_for_account(account, proxy=proxy) as browser_fetch:
-            probe = (
-                {"ok": False, "promotion_status": "检测失败", "error": "browser_context_unavailable"}
-                if browser_identity and browser_fetch is None
-                else check_account_promotion(account, proxy=proxy, browser_fetch=browser_fetch)
-            )
-        result = plan_health_result(email, probe)
-        label_saved = mark_promotion_status(
-            email,
-            result.promotion_status,
-            promotion_result=probe,
+        report = refresh_promotion_statuses(
+            emails=[email],
+            workers=1,
+            proxy=proxy,
         )
-        persisted = bool(label_saved and mark_account_health_result(email, result.to_dict()))
+        item = _single_report_item(report, email)
+        probe = item.get("probe") if isinstance(item.get("probe"), Mapping) else {}
+        if not probe:
+            probe = {
+                "ok": False,
+                "promotion_status": "检测失败",
+                "error": str(report.get("error") or "plan_check_failed")[:300],
+            }
+        result = plan_health_result(email, probe)
+        persisted = bool(item.get("persisted") and mark_account_health_result(email, result.to_dict()))
         return result.with_persisted(persisted)
 
-    from .account_liveness import probe_account_liveness
-    from .account_recovery import _needs_browser_fallback, is_permanently_deactivated, relogin_codex_account
-    from ..storage import mark_quota_status
+    from .recovery_batch import refresh_local_quota_statuses
+    from .account_health import resolve_account_health_budgets
 
-    if is_permanently_deactivated(account):
-        initial = {
-            "ok": False,
-            "status": "account_deactivated",
-            "quota_status": "account_deactivated",
-            "error": "account_deactivated",
-        }
-        recovery: dict[str, Any] = {"terminal": True, "error": "account_deactivated"}
-        final = initial
-    else:
-        initial = probe_account_liveness(account, proxy=proxy)
-        if browser_identity and _needs_browser_fallback(initial):
-            # Queue for a browser slot instead of skipping. The one-second wait
-            # re-created the exact "concurrency_limited" pathology that
-            # account_recovery already fixed (deadline-bounded acquire with the
-            # comment quoting the old one-liner): with more than a couple of
-            # Cloudflare-blocked accounts in a queue, every account after the
-            # slot holders reported browser_fallback=concurrency_limited
-            # instead of just waiting its turn.
-            acquired = _BROWSER_FALLBACK_SLOTS.acquire(timeout=_BROWSER_FALLBACK_WAIT_SECONDS)
-            if acquired:
-                try:
-                    with browser_fetch_for_account(account, proxy=proxy) as browser_fetch:
-                        if browser_fetch is not None:
-                            initial = probe_account_liveness(account, proxy=proxy, browser_fetch=browser_fetch)
-                        else:
-                            initial = {**initial, "browser_fallback": "unavailable"}
-                finally:
-                    _BROWSER_FALLBACK_SLOTS.release()
-            else:
-                initial = {**initial, "browser_fallback": "concurrency_limited"}
-        recovery = {}
-        final = initial
-        if int(initial.get("status_code") or 0) == 401 or initial.get("status") == "token_invalid":
-            recovery = relogin_codex_account(account, proxy=proxy, mode="auto")
-            if recovery.get("ok"):
-                refreshed_record = get_account_record(email)
-                refreshed = _account_payload(refreshed_record or {})
-                final = probe_account_liveness(refreshed, proxy=proxy)
+    budgets = resolve_account_health_budgets(CFG)
+    report = refresh_local_quota_statuses(
+        emails=[email],
+        workers=1,
+        proxy=proxy,
+        relogin_on_401=True,
+        relogin_mode="auto",
+        relogin_timeout=budgets["relogin_timeout"],
+        batch_timeout=budgets["batch_timeout"],
+        account_timeout=budgets["account_timeout"],
+    )
+    item = _single_report_item(report, email)
+    initial = item.get("probe") if isinstance(item.get("probe"), Mapping) else {}
+    recovery = item.get("relogin") if isinstance(item.get("relogin"), Mapping) else {}
+    # The batch workflow replaces ``probe`` with the verified post-recovery
+    # observation on success. Preserve both meanings in the unified contract.
+    final = dict(initial)
     result = liveness_health_result(email, initial, recovery=recovery, final_probe=final)
-    quota_saved = mark_quota_status(email, result.quota_status, quota_result=final)
-    persisted = bool(quota_saved and mark_account_health_result(email, result.to_dict()))
+    persisted = bool(item.get("persisted") and mark_account_health_result(email, result.to_dict()))
     return result.with_persisted(persisted)
+
+
+def _single_report_item(report: Mapping[str, Any], email: str) -> dict[str, Any]:
+    """Return the requested row from a one-account workflow report."""
+    normalized = str(email or "").strip().lower()
+    for item in report.get("results", []) if isinstance(report, Mapping) else []:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("email") or "").strip().lower() == normalized:
+            return dict(item)
+    return {}
 
 
 def _account_payload(record: Mapping[str, Any]) -> dict[str, Any]:

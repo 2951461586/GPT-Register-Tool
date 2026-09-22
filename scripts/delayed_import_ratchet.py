@@ -102,9 +102,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.update_baseline:
         previous = load_baseline() if BASELINE.exists() else {"total": 0, "per_file": {}}
+        # 🔴 ``newline="\n"`` is mandatory -- see the identical note in
+        # ``bare_print_ratchet.py``: the ``newline=None`` default turns ``\n``
+        # into CRLF on Windows, silently desyncing the worktree copy from its
+        # LF index entry (``git diff`` cannot see it).
         BASELINE.write_text(
             json.dumps({"total": total, "per_file": per_file}, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
+            newline="\n",
         )
         delta = total - int(previous.get("total") or 0)
         print(f"baseline updated: {previous.get('total')} -> {total} ({delta:+d})")

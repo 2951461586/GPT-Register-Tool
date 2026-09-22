@@ -373,3 +373,65 @@ def test_public_read_surfaces_promotion_state_and_clears_stale_marker(tmp_path):
     stale_row = read_account(email="promo-stale@example.test", runtime_config=_config(tmp_path))
     assert "promotion_status" not in stale_row
     assert "promotion_state" not in stale_row
+
+
+def test_public_read_does_not_surface_payment_methods(tmp_path):
+    email = "trial-methods@example.test"
+    session = {
+        "email": email,
+        "success": True,
+        "access_token": "access-token-value",
+    }
+    path = tmp_path / f"session_{email}.json"
+    path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(
+        session,
+        json_path=str(path),
+        runtime_config=_config(tmp_path),
+    )
+    assert mark_promotion_status(
+        email,
+        "可试用Plus·-100%",
+        {
+            "ok": True,
+            "promotion_status": "可试用Plus·-100%",
+            "promotion_state": "trial_eligible",
+            "payment_methods": ["card", "link", "momo"],
+            "payment_methods_label": "银行卡/Link/MoMo",
+        },
+        runtime_config=_config(tmp_path),
+    )
+
+    row = read_account(email=email, runtime_config=_config(tmp_path))
+
+    assert row["promotion_status"] == "可试用Plus·-100%"
+    assert "payment_methods_label" not in row
+
+
+def test_public_read_drops_legacy_payment_suffix(tmp_path):
+    email = "legacy-methods@example.test"
+    session = {
+        "email": email,
+        "success": True,
+        "access_token": "access-token-value",
+        "promotion_status": "可试用Plus·-100%｜可支付:银行卡/MoMo",
+        "promotion_state": "trial_eligible",
+    }
+    path = tmp_path / f"session_{email}.json"
+    path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(
+        session,
+        json_path=str(path),
+        runtime_config=_config(tmp_path),
+    )
+    assert mark_promotion_status(
+        email,
+        "可试用Plus·-100%｜可支付:银行卡/MoMo",
+        {"ok": True, "promotion_state": "trial_eligible"},
+        runtime_config=_config(tmp_path),
+    )
+
+    row = read_account(email=email, runtime_config=_config(tmp_path))
+
+    assert row["promotion_status"] == "可试用Plus·-100%"
+    assert "payment_methods_label" not in row

@@ -232,12 +232,23 @@ def _normalize_registration_mode(value=None):
     return "passwordless"
 
 
-def _stored_registration_password(email):
+def _stored_registration_record(email):
+    """The stored account row for ``email``, or ``{}`` when unavailable.
+
+    One import site on purpose: the delayed-import ratchet counts every nested
+    import, so the two readers below share this helper instead of each reaching
+    for ``storage`` themselves.
+    """
     try:
         from .storage import get_account_record
-        row = get_account_record(email)
+
+        return get_account_record(email) or {}
     except Exception:
-        return ""
+        return {}
+
+
+def _stored_registration_password(email):
+    row = _stored_registration_record(email)
     if not row:
         return ""
     error = str(row.get("error") or "").lower()
@@ -251,3 +262,23 @@ def _stored_registration_password(email):
     except Exception:
         raw = {}
     return str(raw.get("password") or "").strip()
+
+
+def _stored_registration_totp(email):
+    """The saved TOTP secret for ``email``, or ``""`` when we do not have one.
+
+    A password login is followed by the account's own MFA challenge, so the
+    password alone is not enough to complete it -- without the secret the lane
+    can only answer ``existing_login_totp_secret_missing``.
+    """
+    row = _stored_registration_record(email)
+    if not row:
+        return ""
+    secret = str(row.get("totp_secret") or "").strip()
+    if secret:
+        return secret
+    try:
+        raw = json.loads(row.get("raw_json") or "{}")
+    except Exception:
+        raw = {}
+    return str(raw.get("totp_secret") or "").strip()

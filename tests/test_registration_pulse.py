@@ -46,6 +46,7 @@ def test_defaults_are_disabled_with_sane_wave_shape():
     assert cfg.ban_threshold == 2
     assert cfg.ban_pause_seconds == 60.0
     assert cfg.max_waves == 0
+    assert cfg.canary_enabled is True
 
 
 def test_from_config_reads_nested_registration_pulse():
@@ -58,12 +59,14 @@ def test_from_config_reads_nested_registration_pulse():
                 "ban_threshold": 5,
                 "ban_pause_seconds": 12,
                 "max_waves": 7,
+                "canary_enabled": False,
             }
         }
     })
     assert cfg.enabled is True
     assert (cfg.wave_size, cfg.wave_delay_seconds) == (3, 1.5)
     assert (cfg.ban_threshold, cfg.ban_pause_seconds, cfg.max_waves) == (5, 12.0, 7)
+    assert cfg.canary_enabled is False
 
 
 @pytest.mark.parametrize("payload", [None, {}, {"registration": None}, {"registration": {"pulse": "yes"}}])
@@ -104,9 +107,20 @@ def test_rate_limit_and_account_failures_are_excluded():
 
 
 def test_detect_ip_ban_requires_threshold():
-    wave = [_fail("otp_timeout"), _ok(1), _ok(2)]
-    assert _detect_ip_ban(wave, threshold=2) is False
-    assert _detect_ip_ban(wave, threshold=1) is True
+    """阈值仍然要拦得住：wave_size=1 时「整轮一致」是白送的。
+
+    2026-09-16 P0-2 起 ``_detect_ip_ban`` 还要求**整轮一致**（混合结局说明
+    出口是通的，见 ``test_registration_otp_timeout_discrimination``），所以这里
+    用整轮失败的 wave 来单独检验阈值这一维。
+    """
+    wave = [_fail("otp_timeout"), _fail("otp_timeout")]
+    assert _detect_ip_ban(wave, threshold=3) is False
+    assert _detect_ip_ban(wave, threshold=2) is True
+
+
+def test_detect_ip_ban_ignores_a_wave_with_a_success():
+    """混合结局不是出口封禁 —— 每个账号钉在池里各自的出口上。"""
+    assert _detect_ip_ban([_fail("otp_timeout"), _ok(1)], threshold=1) is False
 
 
 # --------------------------------------------------------------------------
@@ -132,6 +146,66 @@ def test_runs_every_account_once_and_preserves_order():
     assert [r["email"] for r in results] == [f"user{i}@example.com" for i in range(6)]
 
 
+def test_first_wave_is_a_single_account_canary():
+    waves = []
+    active_wave = []
+
+    def run_one(idx):
+        active_wave.append(idx)
+        return idx, _ok(idx)
+
+    run_pulse_batch(
+        5,
+        run_one_fn=run_one,
+        on_wave_complete=lambda indices, _results: waves.append(list(indices)),
+        workers=4,
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=4, wave_delay_seconds=0, canary_enabled=True,
+        ),
+    )
+
+    assert waves == [[0], [1, 2, 3, 4]]
+    assert active_wave == [0, 1, 2, 3, 4]
+
+
+def test_failed_canary_rotates_then_keeps_the_next_wave_as_a_canary(no_sleep):
+    waves = []
+    rotations = []
+
+    run_pulse_batch(
+        3,
+        run_one_fn=lambda idx: (idx, _fail("email_otp_send_stuck", "mailbox")),
+        on_dispatch_block=lambda: rotations.append("rotate") or True,
+        on_wave_complete=lambda indices, _results: waves.append(list(indices)),
+        workers=3,
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=3, wave_delay_seconds=0,
+            ban_threshold=2, ban_pause_seconds=10, canary_enabled=True,
+        ),
+    )
+
+    assert waves == [[0], [1], [2]]
+    assert rotations == ["rotate", "rotate"]
+    assert abs(sum(no_sleep) - 20) < 0.01
+
+
+def test_rotation_message_is_truthful_when_no_alternate_slot_exists(capsys, no_sleep):
+    run_pulse_batch(
+        2,
+        run_one_fn=lambda idx: (idx, _fail("email_otp_send_stuck", "mailbox")),
+        on_dispatch_block=lambda: False,
+        workers=1,
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=2, wave_delay_seconds=0,
+            ban_pause_seconds=10, canary_enabled=True,
+        ),
+    )
+
+    out = capsys.readouterr().out
+    assert "no alternate proxy slot" in out.lower()
+    assert "proxy pool cursor rotated" not in out.lower()
+
+
 def test_on_result_fires_for_every_account():
     notified = {}
     run_pulse_batch(
@@ -149,7 +223,9 @@ def test_wave_delay_is_applied_between_waves_only(no_sleep):
         4,
         run_one_fn=lambda idx: (idx, _ok(idx)),
         workers=1,
-        pulse_config=PulseConfig(enabled=True, wave_size=2, wave_delay_seconds=9),
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=2, wave_delay_seconds=9, canary_enabled=False,
+        ),
     )
     # 4 accounts / wave_size 2 => 2 waves => exactly one inter-wave gap.
     # The gap sleeps in bounded cancellable slices, so assert the total.
@@ -167,13 +243,13 @@ def test_ip_ban_pauses_before_next_wave(no_sleep):
         workers=2,
         pulse_config=PulseConfig(
             enabled=True, wave_size=2, wave_delay_seconds=3,
-            ban_threshold=2, ban_pause_seconds=30,
+            ban_threshold=2, ban_pause_seconds=30, canary_enabled=False,
         ),
     )
-    # Both the ban pause (30s) and the wave gap (3s) sleep in bounded
-    # cancellable slices, so assert the combined duration. The pause being
-    # skipped entirely is covered by test_no_pause_when_below_threshold.
-    assert abs(sum(no_sleep) - 33) < 0.01
+    # The blocked full wave forces the remaining accounts back through
+    # one-account canaries. Both remaining canaries fail, so two 30s cooldowns
+    # plus two 3s inter-wave gaps are expected.
+    assert abs(sum(no_sleep) - 66) < 0.01
 
 
 def test_no_pause_when_below_threshold(no_sleep):
@@ -186,7 +262,7 @@ def test_no_pause_when_below_threshold(no_sleep):
         workers=2,
         pulse_config=PulseConfig(
             enabled=True, wave_size=2, wave_delay_seconds=3,
-            ban_threshold=2, ban_pause_seconds=30,
+            ban_threshold=2, ban_pause_seconds=30, canary_enabled=False,
         ),
     )
     # Below the threshold no 30s ban pause is inserted: only the 3s wave gap.
@@ -204,7 +280,10 @@ def test_max_waves_reports_skipped_accounts_instead_of_dropping_them():
         10,
         run_one_fn=run_one,
         workers=2,
-        pulse_config=PulseConfig(enabled=True, wave_size=2, wave_delay_seconds=0, max_waves=1),
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=2, wave_delay_seconds=0,
+            max_waves=1, canary_enabled=False,
+        ),
     )
 
     assert seen == [0, 1]
@@ -232,7 +311,10 @@ def test_max_waves_notifies_callback_for_skipped_accounts():
         run_one_fn=lambda idx: (idx, _ok(idx)),
         on_result=lambda idx, result: notified.__setitem__(idx, result),
         workers=2,
-        pulse_config=PulseConfig(enabled=True, wave_size=2, wave_delay_seconds=0, max_waves=1),
+        pulse_config=PulseConfig(
+            enabled=True, wave_size=2, wave_delay_seconds=0,
+            max_waves=1, canary_enabled=False,
+        ),
     )
     assert sorted(notified) == [0, 1, 2, 3, 4, 5]
 

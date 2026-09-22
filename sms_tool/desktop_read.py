@@ -15,9 +15,14 @@ from typing import Any
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox_parsers import parse_mailbox_pool_line
 from .paths import PROJECT_ROOT
-from .promotion_states import promotion_marker_is_stale
+from .promotion_states import (
+    payment_eligibility_label,
+    promotion_marker_is_stale,
+    promotion_status_with_eligibility,
+)
+from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .sanitizer import sanitize
-from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, list_account_records
+from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, get_account_records, list_account_records
 
 
 _PUBLIC_COLUMNS = (
@@ -150,23 +155,37 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
                 result["at_probe_status_code"]
                 or _access_token_probe_status_code(session)
             )
-            # 优惠状态 (plan/promotion) lives in raw_json, not a dedicated column.
-            promotion_status = str(session.get("promotion_status") or "").strip()
-            promotion_state = str(session.get("promotion_state") or "").strip()
-            if not promotion_status and isinstance(session.get("promotion"), dict):
-                promotion_status = str(session["promotion"].get("status") or "").strip()
-            if not promotion_state and isinstance(session.get("promotion"), dict):
-                promotion_state = str(session["promotion"].get("state") or "").strip()
+            promotion_status, promotion_state = _promotion_presentation(session)
+            # Payment rails appended to the same 优惠状态 cell, e.g.
+            # ``可试用Plus-100% · card/upi/momo``.  Composed here (not stored in
+            # ``promotion_status``) so that field stays the pure promotion label
+            # -- see the ``｜可支付:`` strip in ``_promotion_presentation`` for
+            # why the two were separated in the first place.
+            # A probe that ran and enumerated nothing yields the explicit
+            # ``支付资格未知`` marker; an account that was never probed yields
+            # "" (the key is absent, or ``safe_snapshot`` wrote the empty
+            # mapping).  The two must not collapse into one blank suffix.
+            eligibility_label = payment_eligibility_label(session.get("payment_capability"))
             # A promotion probe that recorded an auth failure predates a later
             # verified relogin (quota/account-scan token probe HTTP 200). The
             # stale marker must not surface in the 优惠状态 column anymore.
+            # The payment-rail badge describes the same probe-time token, so a
+            # stale marker clears it too rather than pairing a fresh AT with a
+            # method list it never proved.
             if promotion_marker_is_stale(promotion_status, promotion_state, result.get("at_probe_status_code")):
                 promotion_status = ""
                 promotion_state = ""
+                eligibility_label = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
             if promotion_state:
                 result["promotion_state"] = promotion_state
+            if eligibility_label:
+                result["payment_eligibility"] = eligibility_label
+            if promotion_status or eligibility_label:
+                result["promotion_display"] = promotion_status_with_eligibility(
+                    promotion_status, eligibility_label
+                )
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
             if include_session:
@@ -183,6 +202,16 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
     elif include_session:
         result["session"] = {}
     return result
+
+
+def _promotion_presentation(session: dict[str, Any]) -> tuple[str, str]:
+    """Return promotion-only desktop fields, stripping legacy method suffixes."""
+    promotion = session.get("promotion")
+    promotion = promotion if isinstance(promotion, dict) else {}
+    status = str(session.get("promotion_status") or promotion.get("status") or "").strip()
+    state = str(session.get("promotion_state") or promotion.get("state") or "").strip()
+    status = status.split("｜可支付:", 1)[0].strip()
+    return status, state
 
 
 # raw_json strings repeat verbatim between refreshes; sanitize is deterministic
@@ -303,6 +332,7 @@ def read_mailbox_pool(
     """
     config = resolve_runtime_config(runtime_config, workflow="mailbox")
     root = Path(root_dir) if root_dir is not None else PROJECT_ROOT
+    partial = RegistrationRetryGuard(config.data).dead_end_emails()
     files = []
     for path in _known_mailbox_pool_files(config, extra_files, root):
         files.append({
@@ -310,6 +340,16 @@ def read_mailbox_pool(
             "name": path.name,
             "lines": _read_pool_lines(path),
         })
+    lines = [line for file in files for line in file["lines"]]
+    try:
+        records = get_account_records([line["email"] for line in lines], runtime_config=config)
+    except Exception:
+        records = {}
+    records = {str(email).strip().casefold(): row for email, row in records.items()}
+    for line in lines:
+        email = str(line["email"]).strip().casefold()
+        status = mailbox_registration_status(records.get(email), known_partial=email in partial)
+        line.update(registration_status=status, registration_eligible=status == "unknown")
     return {"files": files}
 
 

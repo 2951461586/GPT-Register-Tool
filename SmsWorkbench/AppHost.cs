@@ -5,6 +5,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using Serilog.Events;
 using System.IO;
 using System.Text;
 
@@ -19,7 +20,7 @@ namespace SmsWorkbench
             Directory.CreateDirectory(logDirectory);
 
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Information()
+                .MinimumLevel.Is(ResolveMinimumLevel())
                 .WriteTo.Async(sink => sink.File(
                     Path.Combine(logDirectory, "app_.log"),
                     rollingInterval: RollingInterval.Day,
@@ -50,6 +51,30 @@ namespace SmsWorkbench
                     services.AddSingleton<MainWindow>();
                 })
                 .Build();
+        }
+
+        /// <summary>
+        /// The panel log (<c>MainWindow.UiLog</c>) writes at <c>Debug</c> while
+        /// the file sink's floor is <c>Information</c>, so panel content never
+        /// reached <c>runtime/app_*.log</c> -- and there was no environment
+        /// override, which left offline replay as the only way to read it.
+        /// </summary>
+        /// <remarks>
+        /// <c>SMSWORKBENCH_LOG_LEVEL</c> lowers (or raises) that floor.  Any
+        /// <see cref="LogEventLevel"/> name is accepted
+        /// (<c>Verbose</c>/<c>Debug</c>/<c>Information</c>/<c>Warning</c>/
+        /// <c>Error</c>/<c>Fatal</c>); <c>Debug</c> is what persists the panel.
+        /// Unset, blank or unparsable keeps the previous <c>Information</c>
+        /// behaviour, so the default is unchanged.
+        /// </remarks>
+        public static LogEventLevel ResolveMinimumLevel()
+        {
+            var raw = Environment.GetEnvironmentVariable("SMSWORKBENCH_LOG_LEVEL");
+            if (string.IsNullOrWhiteSpace(raw))
+                return LogEventLevel.Information;
+            return Enum.TryParse<LogEventLevel>(raw.Trim(), ignoreCase: true, out var level)
+                ? level
+                : LogEventLevel.Information;
         }
     }
 }

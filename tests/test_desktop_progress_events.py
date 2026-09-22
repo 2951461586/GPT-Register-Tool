@@ -59,3 +59,36 @@ def test_one_click_sms_event_contains_terminal_failure_class(monkeypatch, capsys
     assert payload["account_ref"] == account_reference("user@example.com")
     assert payload["failure_class"] == "mailbox"
     assert payload["account_terminal"] is True
+
+
+def test_mailboxes_skipped_event_is_emitted_with_masked_list(monkeypatch, capsys):
+    """The backend's pre-attempt drop must surface to the desktop grid.
+
+    Before 2026-09-19 the skip lived only in the console line, so a row the
+    backend never attempted kept its stale pre-batch state in the grid.  The
+    event carries the masked list so the WPF side can refresh those rows.
+    """
+    from sms_tool import batch_runner
+
+    monkeypatch.setenv(desktop_ipc.EVENT_ENV, "1")
+    batch_runner._emit_mailboxes_skipped(
+        ["alpha.one@icloud.com", "beta.two@icloud.com"], reason="dead_end_or_quarantined"
+    )
+    out = capsys.readouterr().out.strip()
+    assert out.startswith(desktop_ipc.EVENT_PREFIX)
+    payload = json.loads(out[len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    assert payload["stage"] == "mailboxes_skipped"
+    assert payload["skipped_count"] == 2
+    assert payload["reason"] == "dead_end_or_quarantined"
+    # masked, never the raw addresses
+    assert "alpha.one@icloud.com" not in out
+    assert "beta.two@icloud.com" not in out
+    assert payload["detail"]
+
+
+def test_mailboxes_skipped_is_silent_without_desktop_events(monkeypatch, capsys):
+    from sms_tool import batch_runner
+
+    monkeypatch.delenv(desktop_ipc.EVENT_ENV, raising=False)
+    batch_runner._emit_mailboxes_skipped(["a@b.com"], reason="already_registered")
+    assert capsys.readouterr().out == ""

@@ -1,9 +1,7 @@
 """Stable browser-session factory; implementation lives behind this import path."""
 
-import logging
 from typing import Any, Mapping
 
-from ...browser_fingerprint_pool import provider_managed_fingerprint_notice
 from ...driver_env import driver_config as _driver_config
 from ..base import BROWSER_REGISTRATION_DRIVERS, BrowserRegistrationError, normalize_registration_driver
 from ..browser_session import PlaywrightBrowserSession, _playwright_proxy
@@ -23,9 +21,6 @@ _BROWSER_SESSION_FACTORIES: dict[str, type[PlaywrightBrowserSession]] = {
 }
 assert set(_BROWSER_SESSION_FACTORIES) == BROWSER_REGISTRATION_DRIVERS - {"playwright"}
 
-logger = logging.getLogger(__name__)
-
-
 def create_browser_session(
     driver: str, *, config: Mapping[str, Any], proxy: str | None, headless: bool,
     timeout_ms: int, locale: str, timezone_id: str,
@@ -43,11 +38,6 @@ def create_browser_session(
     # hardcoded 1280x900). Playwright consumes the same value as its viewport
     # below; provider-owned drivers get None and are left untouched.
     config = _inject_screen_size(config, driver, viewport)
-    # P1-3: make it explicit when a configured browser_profile_pool cannot apply,
-    # so an operator does not assume their pool took effect on a provider driver.
-    notice = provider_managed_fingerprint_notice(config, driver)
-    if notice:
-        logger.info("fingerprint: %s", notice)
     kwargs = {
         "proxy": proxy, "headless": headless, "timeout_ms": timeout_ms,
         "locale": locale, "timezone_id": timezone_id,

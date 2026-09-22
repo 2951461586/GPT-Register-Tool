@@ -17,7 +17,18 @@ internal static class MailboxCredentialLineParser
             if (separator <= 0) continue;
 
             string candidateEmail = value[..separator].Trim().ToLowerInvariant();
-            string candidateUrl = value[(separator + delimiter.Length)..].Trim();
+            // Only the first two fields are ever meaningful. Suppliers ship a four-part
+            // shape (email----url----account----2fa) and taking everything after the first
+            // delimiter glued the trailing fields onto the URL. Uri.TryCreate accepts the
+            // result (a trailing fragment is a legal path/query suffix), so the tail would
+            // travel into the request URL; on a query-style channel it lands inside
+            // auth_code and the server answers HTTP 403 "授权码无效". A 2026-08-10 probe
+            // read that as "the channel is dead" and 33 usable mailboxes were deleted.
+            // Cut at the next delimiter instead, mirroring
+            // sms_tool/providers/mailbox_icloud_url.py:split_icloud_url_line.
+            string remainder = value[(separator + delimiter.Length)..];
+            int nextSeparator = remainder.IndexOf(delimiter, StringComparison.Ordinal);
+            string candidateUrl = (nextSeparator >= 0 ? remainder[..nextSeparator] : remainder).Trim();
             int at = candidateEmail.LastIndexOf('@');
             if (at <= 0 || at == candidateEmail.Length - 1 || candidateEmail.Contains(' ')) continue;
             string domain = candidateEmail[(at + 1)..];

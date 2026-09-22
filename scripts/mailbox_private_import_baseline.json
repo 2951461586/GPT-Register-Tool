@@ -1,0 +1,191 @@
+{
+  "modules": {
+    "http_utils": {
+      "pairs": [
+        "sms_tool/accounts/account_creation.py:http_utils._absolute_url",
+        "sms_tool/accounts/account_creation.py:http_utils._cookie_header",
+        "sms_tool/accounts/account_creation.py:http_utils._cookie_presence",
+        "sms_tool/accounts/account_creation.py:http_utils._json_or_raw",
+        "sms_tool/accounts/account_creation.py:http_utils._minimal_chatgpt_cookie_header",
+        "sms_tool/auth_flow.py:http_utils._absolute_url",
+        "sms_tool/auth_flow.py:http_utils._cookie_presence",
+        "sms_tool/auth_flow.py:http_utils._follow_continue_url",
+        "sms_tool/auth_flow.py:http_utils._json_or_raw",
+        "sms_tool/auth_state.py:http_utils._json_or_raw",
+        "sms_tool/codex_oauth.py:http_utils._absolute_url",
+        "sms_tool/registration.py:http_utils._follow_continue_url"
+      ],
+      "per_file": {
+        "sms_tool/accounts/account_creation.py": 5,
+        "sms_tool/auth_flow.py": 4,
+        "sms_tool/auth_state.py": 1,
+        "sms_tool/codex_oauth.py": 1,
+        "sms_tool/registration.py": 1
+      },
+      "total": 12
+    },
+    "mail_otp": {
+      "pairs": [
+        "sms_tool/providers/mailbox_cfworker.py:mail_otp._email_otp_candidate",
+        "sms_tool/providers/mailbox_cfworker.py:mail_otp._message_id",
+        "sms_tool/providers/mailbox_icloud_url.py:mail_otp._extract_otp_from_text",
+        "sms_tool/providers/mailbox_icloud_url.py:mail_otp._message_received_ts",
+        "sms_tool/providers/mailbox_remail.py:mail_otp._candidate_is_newer",
+        "sms_tool/providers/mailbox_remail.py:mail_otp._email_otp_candidate",
+        "sms_tool/providers/mailbox_remail.py:mail_otp._extract_otp_from_text",
+        "sms_tool/providers/mailbox_remail.py:mail_otp._message_received_ts",
+        "sms_tool/providers/smailr_client.py:mail_otp._email_otp_candidate"
+      ],
+      "per_file": {
+        "sms_tool/providers/mailbox_cfworker.py": 2,
+        "sms_tool/providers/mailbox_icloud_url.py": 2,
+        "sms_tool/providers/mailbox_remail.py": 4,
+        "sms_tool/providers/smailr_client.py": 1
+      },
+      "total": 9
+    },
+    "mailbox": {
+      "pairs": [
+        "scripts/mailbox_pool_liveness.py:mailbox._fetch_mailbox_messages",
+        "sms_tool/accounts/account_email_change.py:mailbox._load_mailbox_pool",
+        "sms_tool/accounts/account_email_change.py:mailbox._poll_email_otp",
+        "sms_tool/accounts/recovery_batch.py:mailbox._load_mailbox_pool",
+        "sms_tool/auth_flow.py:mailbox._poll_email_otp",
+        "sms_tool/cli.py:mailbox._load_mailbox_pool",
+        "sms_tool/cli.py:mailbox._remail_enabled",
+        "sms_tool/codex_oauth.py:mailbox._load_mailbox_pool",
+        "sms_tool/codex_oauth.py:mailbox._mailbox_from_config",
+        "sms_tool/codex_oauth.py:mailbox._poll_email_otp",
+        "sms_tool/commands/helpers.py:mailbox._load_mailbox_pool",
+        "sms_tool/commands/mailbox_ops.py:mailbox._fetch_mailbox_messages",
+        "sms_tool/commands/mailbox_ops.py:mailbox._mailbox_from_config",
+        "sms_tool/mailbox_service.py:mailbox._email_cfg",
+        "sms_tool/mailbox_service.py:mailbox._mailbox_proxy_candidates",
+        "sms_tool/mailbox_service.py:mailbox._provider_otp_issued_after",
+        "sms_tool/mailbox_service.py:mailbox._resolve_mailbox_proxy",
+        "sms_tool/mailbox_strategies.py:mailbox._candidate_is_newer",
+        "sms_tool/mailbox_strategies.py:mailbox._email_otp_settle_seconds",
+        "sms_tool/mailbox_strategies.py:mailbox._fetch_mailbox_messages_local",
+        "sms_tool/mailbox_strategies.py:mailbox._latest_email_otp_candidate",
+        "sms_tool/mailbox_strategies.py:mailbox._otp_poll_interval",
+        "sms_tool/otp_strategy.py:mailbox._poll_email_otp",
+        "sms_tool/registration.py:mailbox._ensure_mailbox_account",
+        "sms_tool/registration.py:mailbox._poll_email_otp",
+        "sms_tool/registration.py:mailbox._snapshot_mailbox_message"
+      ],
+      "per_file": {
+        "scripts/mailbox_pool_liveness.py": 1,
+        "sms_tool/accounts/account_email_change.py": 2,
+        "sms_tool/accounts/recovery_batch.py": 1,
+        "sms_tool/auth_flow.py": 1,
+        "sms_tool/cli.py": 2,
+        "sms_tool/codex_oauth.py": 3,
+        "sms_tool/commands/helpers.py": 1,
+        "sms_tool/commands/mailbox_ops.py": 2,
+        "sms_tool/mailbox_service.py": 4,
+        "sms_tool/mailbox_strategies.py": 5,
+        "sms_tool/otp_strategy.py": 1,
+        "sms_tool/registration.py": 3
+      },
+      "total": 26
+    },
+    "sentinel_tokens": {
+      "pairs": [
+        "scripts/batch_enable_2fa.py:sentinel_tokens._set_oai_did_cookie",
+        "sms_tool/accounts/account_recovery.py:sentinel_tokens._set_oai_did_cookie",
+        "sms_tool/batch_runner.py:sentinel_tokens._extract_sentinel",
+        "sms_tool/batch_runner.py:sentinel_tokens._sentinel_max_concurrency",
+        "sms_tool/phone_registration.py:sentinel_tokens._import_sentinel_cookies",
+        "sms_tool/phone_registration.py:sentinel_tokens._sentinel_device_id",
+        "sms_tool/registration.py:sentinel_tokens._cookie_jar_header",
+        "sms_tool/registration.py:sentinel_tokens._extract_sentinel",
+        "sms_tool/registration.py:sentinel_tokens._extract_sentinel_http",
+        "sms_tool/registration.py:sentinel_tokens._import_sentinel_cookies",
+        "sms_tool/registration.py:sentinel_tokens._sentinel_device_id",
+        "sms_tool/registration.py:sentinel_tokens._sentinel_frame_version",
+        "sms_tool/registration.py:sentinel_tokens._set_oai_did_cookie",
+        "sms_tool/sentinel/client.py:sentinel_tokens._extract_sentinel"
+      ],
+      "per_file": {
+        "scripts/batch_enable_2fa.py": 1,
+        "sms_tool/accounts/account_recovery.py": 1,
+        "sms_tool/batch_runner.py": 2,
+        "sms_tool/phone_registration.py": 2,
+        "sms_tool/registration.py": 7,
+        "sms_tool/sentinel/client.py": 1
+      },
+      "total": 14
+    },
+    "session_refresh": {
+      "pairs": [
+        "scripts/batch_enable_2fa.py:session_refresh._auth_session_email",
+        "sms_tool/accounts/account_recovery.py:session_refresh._auth_session_email",
+        "sms_tool/accounts/account_recovery.py:session_refresh._refresh_session_protocol",
+        "sms_tool/accounts/account_recovery.py:session_refresh._save_refreshed",
+        "sms_tool/accounts/account_scan.py:session_refresh._load_seed_session",
+        "sms_tool/agent_identity.py:session_refresh._load_seed_session",
+        "sms_tool/agent_identity.py:session_refresh._save_refreshed",
+        "sms_tool/codex_export.py:session_refresh._load_seed_session",
+        "sms_tool/codex_export.py:session_refresh._session_token",
+        "sms_tool/commands/mailbox_ops.py:session_refresh._load_seed_session",
+        "sms_tool/commands/one_click.py:session_refresh._load_seed_session",
+        "sms_tool/commands/payment.py:session_refresh._load_seed_session",
+        "sms_tool/cpa_import.py:session_refresh._load_seed_session",
+        "sms_tool/paypal/flow_steps.py:session_refresh._poll_auth_session",
+        "sms_tool/paypal/flow_steps.py:session_refresh._session_token"
+      ],
+      "per_file": {
+        "scripts/batch_enable_2fa.py": 1,
+        "sms_tool/accounts/account_recovery.py": 3,
+        "sms_tool/accounts/account_scan.py": 1,
+        "sms_tool/agent_identity.py": 2,
+        "sms_tool/codex_export.py": 2,
+        "sms_tool/commands/mailbox_ops.py": 1,
+        "sms_tool/commands/one_click.py": 1,
+        "sms_tool/commands/payment.py": 1,
+        "sms_tool/cpa_import.py": 1,
+        "sms_tool/paypal/flow_steps.py": 2
+      },
+      "total": 15
+    },
+    "utils": {
+      "pairs": [
+        "sms_tool/codex_oauth.py:utils._random_birthdate",
+        "sms_tool/codex_oauth.py:utils._random_name",
+        "sms_tool/paypal/orchestrator.py:utils._generate_password",
+        "sms_tool/paypal/orchestrator.py:utils._random_name",
+        "sms_tool/phone_registration.py:utils._generate_password",
+        "sms_tool/phone_registration.py:utils._print_timings",
+        "sms_tool/phone_registration.py:utils._random_birthdate",
+        "sms_tool/phone_registration.py:utils._random_name",
+        "sms_tool/phone_registration.py:utils._safe_tock",
+        "sms_tool/phone_registration.py:utils._tick",
+        "sms_tool/phone_registration.py:utils._timing_summary",
+        "sms_tool/phone_registration.py:utils._tl",
+        "sms_tool/phone_registration.py:utils._tock",
+        "sms_tool/registration.py:utils._generate_password",
+        "sms_tool/registration.py:utils._print_timings",
+        "sms_tool/registration.py:utils._random_birthdate",
+        "sms_tool/registration.py:utils._random_name",
+        "sms_tool/registration.py:utils._safe_tock",
+        "sms_tool/registration.py:utils._tick",
+        "sms_tool/registration.py:utils._timing_summary",
+        "sms_tool/registration.py:utils._tl",
+        "sms_tool/registration.py:utils._tock",
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._generate_password",
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_birthdate",
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_name",
+        "sms_tool/registration_outcome.py:utils._timing_summary"
+      ],
+      "per_file": {
+        "sms_tool/codex_oauth.py": 2,
+        "sms_tool/paypal/orchestrator.py": 2,
+        "sms_tool/phone_registration.py": 9,
+        "sms_tool/registration.py": 9,
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py": 3,
+        "sms_tool/registration_outcome.py": 1
+      },
+      "total": 26
+    }
+  }
+}

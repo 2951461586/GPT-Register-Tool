@@ -9,3 +9,4 @@
 - [ADR-0007: email_verification_stuck 分类与一次性 reload 重试](0007-email-verification-stuck.md)
 - [ADR-0008: 注册结果契约统一到 registration_result](0008-registration-result-contract.md)
 - [ADR-0009: 注册显式依赖与分层错误策略](0009-registration-hardening.md)
+- [ADR-0010: 预检与预热请求的 attempts=1](0010-preflight-and-prime-request-attempts.md)

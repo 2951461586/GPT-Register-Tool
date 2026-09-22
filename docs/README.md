@@ -26,6 +26,8 @@ Directory layout (since 2026-09-06):
   注册恢复、邮箱验证卡死重试与协作取消的当前行为。
 - [Registration & Proxy Architecture](registration-and-proxy-architecture.md) -
   注册与代理链路的设计与风险控制说明。
+- [Mailbox Architecture](current/mailbox.md) - provider 能力解析、配置与
+  OTP 轮询错误契约。
 - [PayPal Zero-Due Link](paypal-zero-due-link.md) - promotion-update stage
   protocol, config keys, and region matrix search.
 - [Protocol Payment Enhancement](protocol-payment-enhancement.md) - 协议支付

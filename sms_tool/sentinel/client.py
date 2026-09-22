@@ -13,7 +13,7 @@ from curl_cffi import requests as curl_requests
 
 from ..auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
 from ..http_client import request_with_retry
-from ..phone_proxy import normalize_proxy_url
+from ..phone_proxy import normalize_proxy_url, redact_proxy_text
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 
@@ -77,6 +77,44 @@ def _legacy_fallback_enabled(config: Mapping[str, Any] | None) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+_REASON_LIMIT = 120
+
+
+def _root_reason(exc: BaseException, proxy: str | None = None) -> str:
+    """Render the deepest ``__cause__`` of ``exc`` as one bounded, redacted token.
+
+    ``sentinel_issue_failed:{type name}`` kept only the *wrapper's* type name, and
+    the actionable detail lives in the innermost message.  On 2026-09-17 the chain
+    ended at ``SentinelBundleError("sentinel_runtime_hash_mismatch:sentinel-runner.js")``
+    -- yet that literal string appeared in **no** log line of the entire batch
+    (3161 lines of ``backend_stdout.jsonl`` checked, 0 hits), so the failure read
+    as an upstream channel fault while the real defect was a corrupt vendored
+    asset.  Follow the explicit ``from`` chain to the root so the cause survives
+    into the log.
+
+    The result is bounded because the progress ledger truncates the error field to
+    300 characters (``registration_progress.py:180``) and the account store to 800
+    (``store/accounts.py:159``); an unbounded message would push the useful tail
+    out of both.
+    """
+    deepest = exc
+    seen = {id(exc)}
+    while isinstance(deepest.__cause__, BaseException) and id(deepest.__cause__) not in seen:
+        deepest = deepest.__cause__
+        seen.add(id(deepest))
+    try:
+        text = " ".join(str(deepest).split())
+    except Exception:
+        text = ""
+    if text:
+        text = redact_proxy_text(text, proxy)
+    if not text:
+        return type(deepest).__name__
+    if len(text) > _REASON_LIMIT:
+        text = text[: _REASON_LIMIT - 3].rstrip() + "..."
+    return f"{type(deepest).__name__}({text})"
 
 
 def _token_from_bundle(
@@ -269,7 +307,9 @@ def issue_sentinel_token(
     except (SentinelRunnerError, SentinelIssueError):
         raise
     except Exception as exc:
-        raise SentinelIssueError(f"sentinel_issue_failed:{type(exc).__name__}") from exc
+        raise SentinelIssueError(
+            f"sentinel_issue_failed:{_root_reason(exc, normalized_proxy)}"
+        ) from exc
     finally:
         if owned_session:
             try:
@@ -315,6 +355,7 @@ def issue_sentinel_flow(
     if supplied is not None:
         return supplied
     backend = sentinel_backend(config)
+    fallback_error: BaseException | None = None
     if backend == "node_runner":
         try:
             return issue_sentinel_token(
@@ -328,9 +369,10 @@ def issue_sentinel_flow(
         except Exception as runner_error:
             if not _legacy_fallback_enabled(config):
                 raise
+            fallback_error = runner_error
             print(
                 "  [Sentinel] Node runner failed; using configured legacy fallback "
-                f"for {flow}: {type(runner_error).__name__}"
+                f"for {flow}: {_root_reason(runner_error, proxy)}"
             )
 
     from ..sentinel_tokens import _extract_sentinel
@@ -343,6 +385,25 @@ def issue_sentinel_flow(
     )
     legacy = _token_from_bundle(data, flow=flow, device_id=device_id)
     if legacy is None:
+        if fallback_error is not None:
+            # Both issuers came up empty.  Naming only the legacy shortfall is
+            # what made the 2026-09-17 incident read as an upstream channel
+            # problem: the node runner had been failing on a corrupted vendored
+            # asset (``SentinelBundleError: sentinel_runtime_hash_mismatch``),
+            # the legacy issuer then produced no token either, and the batch was
+            # reported as ``sentinel_legacy_incomplete`` for all 42 accounts that
+            # reached ``create_account`` -- 126/126 failed and the real defect
+            # stayed hidden behind two layers of degradation.  Carry the original
+            # cause so it is visible without a second investigation.
+            #
+            # ``_root_reason`` (not ``type(...).__name__``) because the runner
+            # failure arrives already wrapped as
+            # ``SentinelIssueError("sentinel_issue_failed:SentinelBundleError")``
+            # -- reporting only that wrapper's type would reproduce the very
+            # blindness this branch exists to remove.
+            raise SentinelIssueError(
+                f"sentinel_fallback_incomplete:{flow}:{_root_reason(fallback_error, proxy)}"
+            ) from fallback_error
         raise SentinelIssueError(f"sentinel_legacy_incomplete:{flow}")
     return legacy
 

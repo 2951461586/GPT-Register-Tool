@@ -45,11 +45,21 @@ class SanitizingTextIO:
     flushed immediately so the host is never left waiting. An explicit
     ``flush()`` releases whatever is pending, which keeps
     ``print(..., flush=True)`` and dot-style progress output behaving as before.
+
+    ``mirror`` is an optional passive observer (see :mod:`sms_tool.stdout_mirror`)
+    that receives the same sanitized text so ``print()`` diagnostics reach disk.
+    It never sees the raw input and never writes to ``wrapped``.
     """
 
-    def __init__(self, wrapped: TextIO, line_buffer: bool = True) -> None:
+    def __init__(
+        self,
+        wrapped: TextIO,
+        line_buffer: bool = True,
+        mirror=None,
+    ) -> None:
         self._wrapped = wrapped
         self._line_buffer = line_buffer
+        self._mirror = mirror
         self._lock = threading.RLock()
         # Per-thread, not shared. A single shared buffer looks like it
         # serialises output but does not: print() calls write() once for the
@@ -71,6 +81,7 @@ class SanitizingTextIO:
         if not self._line_buffer:
             with self._lock:
                 self._wrapped.write(text)
+                self._mirror_write(text)
             return len(text)
         pending = self._pending() + text
         while "\n" in pending:
@@ -78,6 +89,7 @@ class SanitizingTextIO:
             with self._lock:
                 self._wrapped.write(line + "\n")
                 self._wrapped.flush()
+                self._mirror_write(line + "\n")
         self._buffers.pending = pending
         return len(text)
 
@@ -86,9 +98,39 @@ class SanitizingTextIO:
         if pending:
             with self._lock:
                 self._wrapped.write(pending)
+                self._mirror_write(pending)
             self._buffers.pending = ""
         with self._lock:
             self._wrapped.flush()
+            self._mirror_flush()
+
+    # -- passive mirror ----------------------------------------------------
+    def set_mirror(self, mirror) -> None:
+        """Attach (or replace) a line mirror.
+
+        The mirror is an observer: it receives the *sanitized* text and its
+        failures are swallowed, so it can neither leak a credential nor break the
+        stream the desktop host parses. See :mod:`sms_tool.stdout_mirror`.
+        """
+        self._mirror = mirror
+
+    def _mirror_write(self, text: str) -> None:
+        mirror = self._mirror
+        if mirror is None:
+            return
+        try:
+            mirror.write(text)
+        except Exception:
+            pass
+
+    def _mirror_flush(self) -> None:
+        mirror = self._mirror
+        if mirror is None:
+            return
+        try:
+            mirror.flush()
+        except Exception:
+            pass
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._wrapped, name)

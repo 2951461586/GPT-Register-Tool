@@ -64,11 +64,14 @@ or context. A run waiting for serialized auth work therefore does not consume a
 browser slot. The same stage-group lease is reused as the run enters the first
 auth stage.
 
-Repeated retryable failures are tracked in
-`runtime/registration_retry_guard.json`. The same mailbox is cooled down after
-two consecutive `network` or `auth_state` failures so a later batch cannot
-spin on the same broken browser state. Because the cooldown keys off the failure
-class, a misclassified failure is invisible here — see
+Cross-batch dispositions are tracked in
+`runtime/registration_retry_guard.json`. `network` and `auth_state` failures
+retain the existing class-based cooldown. `email_otp_send_stuck` has a stricter
+path: the first observation cools the mailbox down, and the second quarantines
+it independently of `partial_registered`. Immediate retry and future-batch
+eligibility are separate decisions; the compatibility key `retryable` means
+only immediate same-account retry. Because the guard action still depends on
+the exact failure code, a misclassified failure is invisible here — see
 [Failure Classification](#failure-classification) before changing any marker.
 
 Registration batches also expose cooperative cancellation through
@@ -86,10 +89,12 @@ Browser failure landmarks include the URL host/path and verification-input
 count, which distinguishes a stalled verification route from a proxy or
 browser-process failure without recording page content or secrets.
 
-Each progress row also carries `batch_id`, attempt number, driver, proxy slot,
-failure class, retryability, and registration state. Browser results include
-driver capability metadata so orchestration can distinguish Camoufox's
-full-process recycle from Playwright context reuse.
+Each progress row also carries `batch_id`, attempt number, driver, safe proxy
+audit, failure class, immediate retryability, future-batch eligibility, guard
+disposition, and registration state. Protocol and browser registration use the
+same audit shape. Browser results additionally include driver capability
+metadata so orchestration can distinguish Camoufox's full-process recycle from
+Playwright context reuse.
 
 When synchronous promotion checking is requested, the registration command
 does not enqueue a duplicate promotion-plan job. Account-health queue jobs use

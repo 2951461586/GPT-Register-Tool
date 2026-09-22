@@ -19,8 +19,13 @@ Playwright 浏览器：账号级值（代理、locale、时区、identity、view
 
 `batch_runner` 在 `workers > 1` 时可启用 `registration.pulse.enabled` 的
 脉冲调度（`registration_pulse.run_pulse_batch`）：批次拆成离散波，波间检测
-OTP 失败聚集（IP 封禁信号），触发 ban 停顿给代理轮换留时间。波间延迟与
-ban 停顿使用可取消的分片睡眠（见 ADR-0005）。
+OTP 派发侧失败聚集。默认第一波只运行一个 canary；整波受阻后，下一波也退回
+单账号 canary，避免继续批量消耗邮箱。
+
+阻断判定通过回调要求 `batch_runner` 推进代理池游标。只有游标确实推进时日志才
+报告已轮换；代理池只有一个槽位时只报告冷却，不再声称发生代理轮换。已启动账号
+仍固定原槽位，只有尚未启动的账号读取新游标。波间延迟与阻断冷却使用可取消的
+分片睡眠（见 ADR-0005）。
 
 ## Consequences
 

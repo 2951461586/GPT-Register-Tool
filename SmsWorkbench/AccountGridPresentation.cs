@@ -13,6 +13,7 @@ namespace SmsWorkbench
         {
             string status = (value as string ?? "").Trim();
             if (status.Length == 0) return "neutral";
+            if (RegistrationStatusPresentation.IsPartial(status)) return "warn";
 
             if (PromotionStatusPresentation.IsTrialEligible(status)
                 || status.Contains('✅') || status.Contains("完成") || status.Contains("已注册")

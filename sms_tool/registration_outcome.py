@@ -5,6 +5,8 @@
 - 账号创建阶段的错误归一化（_create_account_error）
 - AT 稳定性探测（_probe_registration_access_token）
 - 注册链路是否依赖 refresh_token / 手机验证码的开关（_requires_* 两个小函数）
+- 「已创建但拿不到 session 且无密码」的显式分流
+  （needs_manual_session_recovery —— 方案 B，2026-09-16）
 
 这些函数与主流程的 register_loop 主入口解耦，便于单独测试或复用。
 """
@@ -35,6 +37,41 @@ def _create_account_error(create_ok, create_data):
     if create_message:
         error += f": {create_message}"
     return error
+
+
+def _existing_account_error(create_data):
+    """The address is already registered, and that is the cause worth reporting.
+
+    ``registration_handlers.create_account`` deliberately flips ``create_ok`` to
+    ``True`` on ``user_already_exists`` -- "the account exists, so *creating* it
+    is not what failed". The side effect is that ``_create_account_error``
+    returns ``""`` and the reported cause falls through to whatever the *re-login*
+    fallback last hit.
+
+    Measured 2026-09-14: the fallback sends a second OTP for the same mailbox and
+    that send is rate-limited, so three addresses registered back on 09-06 were
+    reported as ``existing_login_otp_send_failed:429`` (classified ``unknown``)
+    while the signup lane had already answered ``user_already_exists``. The audit
+    trail blamed the OTP layer for an already-registered mailbox, and the
+    ``auth_state``-shaped symptoms retried the address -- one more OTP each time.
+
+    ``user_already_exists`` is classified ``account`` (not retryable, batch
+    dropped): no amount of retrying turns a used address into a free one, and
+    every retry spends another OTP on it.
+
+    The recovery action is appended when present because it is the only field
+    that says what the caller is supposed to do next.
+    """
+    if not isinstance(create_data, dict):
+        return ""
+    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    if str(error.get("code") or "").strip() != "user_already_exists":
+        return ""
+    recovery = error.get("userAlreadyExistsRecovery")
+    action = ""
+    if isinstance(recovery, dict):
+        action = str(recovery.get("action") or "").strip()
+    return "existing_account_user_already_exists" + (f":{action}" if action else "")
 
 
 def _probe_registration_access_token(
@@ -181,12 +218,71 @@ def _browser_mailbox_snapshot(mailbox):
     }
 
 
-def _failure_result(error, email="", mailbox=None, password=""):
+def needs_manual_session_recovery(
+    *,
+    success,
+    access_token="",
+    existing_account=False,
+    existing_account_password_known=False,
+) -> bool:
+    """True when the address exists server-side but we hold neither a session nor its password.
+
+    This is 方案 B of ``docs/audits/plan-2026-09-16-partial-account-protocol-login.md``
+    §五: the bucket of accounts that are **not failures** -- they exist -- but that
+    no code path of ours can turn into a session, so the only move left is a human
+    logging in once.  The point of naming it separately is that a panel can then
+    say "these are not failures, they are waiting for one manual login" instead of
+    showing them as 82 indistinguishable errors.
+
+    Three facts, all already recorded, and none inferable from the others:
+
+    * **Created** -- ``existing_account``.  Set only where ``create_account``
+      answered ``user_already_exists``.  ``registration_state`` is
+      ``partial_registered`` for exactly this flag, so this bucket is a *subset*
+      of the half-registered rows, not a new population.
+    * **No session** -- ``access_token`` is empty.  That also covers the
+      ``not success`` half: ``_registration_outcome`` only reports success with a
+      non-empty token *and* a 200 probe, so a token implies success.
+    * **No password** -- ``existing_account_password_known`` is False.  This is
+      the discriminator that makes the bucket actionable, and it is deliberately
+      **not** ``password_unknown``: that flag is set for *every*
+      ``user_already_exists`` (it is persistence hygiene -- see
+      ``RegistrationAccount.existing_account_password_known``), so keying on it
+      would sweep in the addresses whose password we do hold.  Those are
+      recoverable for free by the password login lane, so calling them "needs a
+      human" would be a false alarm on every one.
+
+    Deliberately **not** keyed on ``registration_state``: ``finalize`` computes
+    that string from the same flags, and ``_abort_result`` overwrites it with
+    ``cancelled`` / ``partial_registered`` after the fact -- reading it back would
+    make the bucket depend on which exit path the run happened to take.
+    """
+    if success or str(access_token or "").strip():
+        return False
+    return bool(existing_account) and not bool(existing_account_password_known)
+
+
+def _failure_result(
+    error,
+    email="",
+    mailbox=None,
+    password="",
+    *,
+    existing_account=False,
+    existing_account_password_known=False,
+    access_token="",
+):
     """协议路径失败装配 —— 2026-09-13 起走 ADR-0008 共享契约。
 
     此前这里手拼一份最小失败 dict（键集与浏览器路径漂移）。现在统一经由
     ``build_registration_failure_result``：完整 COMMON_RESULT_KEYS + 重试决策，
     协议路径专有的 timing 通过 extra 保留，密码保持历史脱敏语义。
+
+    2026-09-16 起额外带 ``needs_manual_session_recovery``（方案 B）。三个原始事实
+    走关键字参数而不是一个现成的 bool，是为了让判据只有
+    :func:`needs_manual_session_recovery` 一个 owner —— 否则 ``finalize`` 那条装配
+    路径会把同一个判据再抄一遍。``phone_registration`` 等调用方不传，默认全 False，
+    即「不声称需要人工」，这对没有 ``existing_account`` 概念的手机泳道是对的。
     """
     decision = registration_retry_decision(error)
     result = build_registration_failure_result(
@@ -199,6 +295,12 @@ def _failure_result(error, email="", mailbox=None, password=""):
             "error_advice": decision.advice,
             "password": "[REDACTED]" if password else "",
             "mailbox": _mailbox_snapshot(mailbox) or {},
+            "needs_manual_session_recovery": needs_manual_session_recovery(
+                success=False,
+                access_token=access_token,
+                existing_account=existing_account,
+                existing_account_password_known=existing_account_password_known,
+            ),
         },
     )
     return _sanitize(result)
@@ -213,6 +315,10 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe, existi
     ``invalid_state`` behind a name that suggests a code defect -- so the cause is
     always preferred over it.
 
+    Precedence: a genuine ``create_account`` failure, then
+    ``user_already_exists`` (the address is used; the re-login fallback's OTP
+    symptom is only its consequence), then ``existing_login_error``.
+
     The generic name is itself classified ``auth_state`` (retryable) since
     2026-09-13: it used to be ``unknown``, which reads as terminal, and 18 of the
     179 failures over 09-08..09-13 ended on it -- protocol runs that reached
@@ -224,11 +330,16 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe, existi
     except (TypeError, ValueError):
         status_code = 0
     create_error = _create_account_error(create_ok, create_data or {})
+    # ``user_already_exists`` is invisible to ``_create_account_error`` because
+    # the handler marks ``create_ok`` True for it -- see
+    # ``_existing_account_error``.  It must outrank the re-login fallback's
+    # symptom, which is a *consequence* of the address already being registered.
+    existing_account_error = _existing_account_error(create_data or {})
     success = bool(str(access_token or "").strip()) and status_code == 200
     if success:
         return True, "", create_error
     if not str(access_token or "").strip():
-        cause = create_error or str(existing_login_error or "").strip()
+        cause = create_error or existing_account_error or str(existing_login_error or "").strip()
         return False, cause or "missing_auth_session_access_token", ""
     if status_code:
         return False, f"access_token_probe_http_{status_code}", create_error

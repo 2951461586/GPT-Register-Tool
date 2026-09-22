@@ -11,7 +11,7 @@ import logging
 from typing import Callable, Iterable, Optional
 
 from .sanitizer import mask_otp
-from .mailbox_errors import MailboxEndpointUnavailableError
+from .mailbox_errors import is_terminal_mailbox_error
 from .desktop_ipc import progress_dots_enabled
 
 logger = logging.getLogger(__name__)
@@ -81,11 +81,9 @@ def _poll_otp_with_settle(
                 if otp_code:
                     print(f" code:{mask_otp(otp_code)}!")
                     return otp_code
-        except MailboxEndpointUnavailableError:
-            raise
-        except reraise or ():
-            raise
         except Exception as e:
+            if isinstance(e, reraise or ()) or is_terminal_mailbox_error(e):
+                raise
             print(f"[{log_prefix} error: {e}]")
         if dots:
             print(".", end="", flush=True)

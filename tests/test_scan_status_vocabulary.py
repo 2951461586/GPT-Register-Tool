@@ -43,6 +43,12 @@ _FALLTHROUGH_CLASSES = {
     # relogin_failed/scan_failed fallthrough，避免伪造账号故障状态。
     "internal",
     "configuration",
+    # UPI 支付提链失败（generic_decline / approve blocked / 提链超时等）。
+    # 它描述的是**支付流水线**的状态，不是账号的扫描状态——映射成任何
+    # scan status 都会把「这一轮提链没成功」伪装成「账号处于某状态」，
+    # 进而污染 :481 那条靠 scan 失败推断 token 死亡的 at_invalid 提升路径。
+    # 提链失败与账号是否还能登录正交，故保留 fallthrough。
+    "upi_payment",
 }
 
 _STATUS_WORD = re.compile(r"[a-z][a-z0-9_]*\Z")

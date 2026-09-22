@@ -42,10 +42,10 @@ from typing import Any
 from curl_cffi import requests as curl_requests
 
 from ..phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
+from ..timeouts import DEFAULT_TIMEOUT
 
 
 DEFAULT_BASE_URL = "https://smailr.com"
-DEFAULT_TIMEOUT = 30
 DEFAULT_RETRY_ATTEMPTS = 3
 DEFAULT_RETRY_BACKOFF_SECONDS = 1.0
 _RETRYABLE_CONNECT_ERROR_CODES = frozenset({5, 6, 7, 35})

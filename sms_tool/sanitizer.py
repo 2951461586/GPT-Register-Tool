@@ -166,6 +166,40 @@ def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
     return value
 
 
+def drop_sensitive_fields(value: Any, *, max_string_length: int = 1000) -> Any:
+    """Recursively remove sensitive mapping fields instead of redacting them.
+
+    Persisted diagnostic facts use omission: a redacted ``access_token`` key
+    still advertises a credential-shaped field and invites downstream code to
+    depend on it. Free-form strings are bounded but otherwise preserved.
+    """
+    if isinstance(value, Mapping):
+        result = {}
+        for key, item in value.items():
+            lowered = str(key or "").lower()
+            if (
+                lowered in _SENSITIVE_KEYS_LOWER
+                or (
+                    not lowered.endswith(_SAFE_KEY_SUFFIXES)
+                    and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
+                )
+            ):
+                continue
+            result[str(key)] = drop_sensitive_fields(
+                item,
+                max_string_length=max_string_length,
+            )
+        return result
+    if isinstance(value, (list, tuple)):
+        return [
+            drop_sensitive_fields(item, max_string_length=max_string_length)
+            for item in value
+        ]
+    if isinstance(value, str):
+        return value[:max(0, int(max_string_length))]
+    return value
+
+
 
 def sanitize_command_args(args: Any) -> list[str]:
     """Redact option values using the canonical cross-language policy."""

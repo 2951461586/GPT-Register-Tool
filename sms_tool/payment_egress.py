@@ -1,12 +1,11 @@
-"""Strong egress-country gate for protocol-payment subprocess extractors.
+"""Strong egress-country gate for payment traffic.
 
-Before a subprocess extractor (ideal/pix/kakao/blik/twint/direct_card/momo)
-spawns, the stage proxies it will use are probed through the proxy itself and
-the observed exit country must match the route plan's expected country.  This
-keeps a mis-routed proxy — for example a Kookeey sticky session whose country
-code was never rewritten — from starting a checkout/approve that would only
-fail (or worse, run with the wrong geography) mid-protocol.  The gate runs
-before any side effect, so a rejection costs one probe request, not a checkout.
+Before a subprocess extractor or trial payment-capability probe starts, the
+stage proxies it will use are probed through the proxy itself and the observed
+exit country must match the route plan's expected country. This keeps a
+mis-routed proxy from starting Checkout, Stripe init or approval in the wrong
+geography. The gate runs before any payment side effect, so a rejection costs
+one proxy probe rather than a disposable Checkout session.
 
 Gate behavior is configured under ``protocol_payments.egress_check``:
 ``{"enabled": true, "timeout_seconds": 12, "cache_ttl_seconds": 600}``.
@@ -24,9 +23,11 @@ from typing import Any
 # stage -> (options key holding the proxy, stage_proxy_countries keys, in order)
 _STAGE_EXPECTATIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("checkout", "checkout_proxy", ("checkout",)),
+    ("stripe_init", "stripe_init_proxy", ("stripe_init", "provider")),
     ("approve", "approve_proxy", ("approve",)),
     ("promotion", "promotion_proxy", ("promotion", "update")),
 )
+_DEFAULT_STAGES = frozenset({"checkout", "approve", "promotion"})
 
 _DEFAULT_TIMEOUT_SECONDS = 12.0
 _DEFAULT_CACHE_TTL_SECONDS = 600.0
@@ -139,6 +140,7 @@ def assert_egress_countries(
     runtime_config: Mapping[str, Any] | None = None,
     *,
     probe: Callable[..., Any] | None = None,
+    stages: tuple[str, ...] | None = None,
 ) -> None:
     """Assert every routed stage proxy egresses from its expected country.
 
@@ -149,10 +151,13 @@ def assert_egress_countries(
     if not enabled:
         return
     probe = probe or _default_probe
+    selected_stages = frozenset(stages) if stages is not None else _DEFAULT_STAGES
     countries = options.get("stage_proxy_countries")
     if not isinstance(countries, Mapping):
         countries = {}
     for stage, proxy_key, country_keys in _STAGE_EXPECTATIONS:
+        if stage not in selected_stages:
+            continue
         proxy = str(options.get(proxy_key) or "").strip()
         if not proxy:
             continue

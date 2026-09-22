@@ -60,6 +60,8 @@ from .mailbox_parsers import (
 from .providers import mailbox_remail
 from .providers import mailbox_graph
 from .providers.mailbox_graph import MailboxTokenExpiredError
+from .providers.mailbox_graph import MailboxAuthInvalidError
+from .mailbox_errors import MailboxEndpointUnavailableError
 from .mailbox_quarantine import filter_quarantined_mailboxes, prune_quarantine_against_pool
 from .providers import mailbox_icloud_url
 from .providers import mailbox_smailr
@@ -105,6 +107,11 @@ def _register_mailbox_strategies():
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "cfworker",
         lambda mb, **kw: _poll_cfworker_otp(mb, **kw),
     )
+    mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+        "cfworker",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "cfworker",
+        lambda mb, cfg: bool(getattr(mb, "email", "")),
+    )
 
     # remail
     mailbox_strategies.register_message_fetcher(
@@ -127,6 +134,11 @@ def _register_mailbox_strategies():
             poll_interval=None,
             proxy_candidates=kw.get("proxy_candidates"),
         ),
+    )
+    mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+        "remail",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "remail",
+        lambda mb, cfg: bool(getattr(mb, "token", "") and getattr(mb, "email", "")),
     )
 
     # smailr
@@ -152,6 +164,11 @@ def _register_mailbox_strategies():
             excluded_otps=excluded_otps,
         ),
     )
+    mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+        "smailr",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "smailr",
+        lambda mb, cfg: bool(getattr(mb, "token", "") and getattr(mb, "email", "")),
+    )
 
     # iCloud URL
     mailbox_strategies.register_message_fetcher(
@@ -165,6 +182,11 @@ def _register_mailbox_strategies():
         "icloud",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_icloud_url.PROVIDER,
         mailbox_strategies._icloud_poll_otp,
+    )
+    mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+        "icloud",
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_icloud_url.PROVIDER,
+        lambda mb, cfg: bool(getattr(mb, "token", "") and getattr(mb, "email", "")),
     )
 
     # Gmail
@@ -183,6 +205,11 @@ def _register_mailbox_strategies():
         )
 
     mailbox_strategies.register_message_fetcher("gmail", _gmail_matcher, _gmail_fetch)
+    mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+        "gmail",
+        lambda mb, cfg: mailbox_gmail.is_gmail_mailbox(mb),
+        lambda mb, cfg: mailbox_gmail.mailbox_has_credentials(mb, _gmail_cfg()),
+    )
 
     # Graph is registered once, in mailbox_strategies, with fallback=True. It
     # used to be re-registered here so that it sorted last - which is exactly
@@ -393,6 +420,8 @@ def _snapshot_mailbox_message(mailbox, proxy=None):
                 "seen_id_count": 0,
             },
         )
+        if isinstance(e, (MailboxEndpointUnavailableError, MailboxAuthInvalidError)):
+            raise
         return ""
 
 def _create_cfworker_mailboxes(args=None):
@@ -656,18 +685,10 @@ def _gmail_imap_port():
 
 
 def mailbox_has_inbox_credentials(mailbox):
-    provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
-    if provider == "cfworker":
-        return bool(getattr(mailbox, "email", ""))
-    if provider == "remail":
-        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
-    if provider == "smailr":
-        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
-    if provider == mailbox_icloud_url.PROVIDER:
-        return bool(getattr(mailbox, "token", "") and getattr(mailbox, "email", ""))
-    if mailbox_gmail.is_gmail_mailbox(mailbox):
-        return mailbox_gmail.mailbox_has_credentials(mailbox, _gmail_cfg())
-    return bool(getattr(mailbox, "refresh_token", ""))
+    return mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.has_credentials(
+        mailbox,
+        _email_cfg(),
+    )
 
 
 def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None, override_messages=None):
@@ -701,88 +722,6 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
         elif not latest_ts:
             latest = candidate
     return latest
-
-
-def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
-    """Fetch a non-provider mailbox through Microsoft Graph and optional IMAP."""
-    proxy = _resolve_mailbox_proxy(proxy)
-    graph_error = None
-    graph_messages = []
-    try:
-        cfg = _email_cfg()
-        token = mailbox.access_token or _ms_oauth_refresh(mailbox, proxy=proxy)
-        graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")
-        params = {
-            "$top": str(max(1, min(int(limit or 25), 100))),
-            "$orderby": "receivedDateTime desc",
-            "$select": "id,subject,from,bodyPreview,body,toRecipients,ccRecipients,bccRecipients,internetMessageHeaders,receivedDateTime",
-        }
-        headers = {
-            "Authorization": "Bearer " + token,
-            "Accept": "application/json",
-            "Prefer": 'outlook.body-content-type="text"',
-        }
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        response = curl_requests.get(
-            graph_url,
-            params=params,
-            headers=headers,
-            proxies=proxies,
-            impersonate="chrome124",
-            timeout=30,
-        )
-        if response.status_code in (401, 403):
-            token = _ms_oauth_refresh(mailbox, proxy=proxy)
-            headers["Authorization"] = "Bearer " + token
-            response = curl_requests.get(
-                graph_url,
-                params=params,
-                headers=headers,
-                proxies=proxies,
-                impersonate="chrome124",
-                timeout=30,
-            )
-        try:
-            body = response.json()
-        except Exception:
-            body = {"raw": response.text[:500]}
-        if not 200 <= response.status_code < 300:
-            raise RuntimeError(f"Graph messages failed: {body}")
-        graph_messages = body.get("value", [])
-    except Exception as exc:
-        graph_error = exc
-
-    imap_messages = []
-    if _outlook_imap_enabled() and outlook_imap_client.is_outlook_mailbox(mailbox):
-        try:
-            imap_messages = outlook_imap_client.fetch_outlook_imap_messages(
-                mailbox,
-                token_fetcher=lambda scope: _ms_oauth_refresh(
-                    mailbox, proxy=proxy, scope_override=scope,
-                ),
-                folders=_outlook_imap_folders(),
-                limit=limit,
-            )
-        except MailboxTokenExpiredError:
-            if graph_error:
-                raise
-        except Exception as exc:
-            print(f"[outlook imap error: {exc}]")
-
-    merged = []
-    seen = set()
-    for message in list(graph_messages or []) + list(imap_messages or []):
-        key = _message_id(message) or str(message.get("internetMessageId") or "")
-        if key and key in seen:
-            continue
-        if key:
-            seen.add(key)
-        merged.append(message)
-    if merged:
-        return merged
-    if graph_error:
-        raise graph_error
-    return []
 
 
 def _fetch_mailbox_messages(

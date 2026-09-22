@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import uuid
 import threading
+from urllib.parse import urlsplit
 
 from .batch_circuit_breaker import BatchCircuitBreaker
 from .error_classification import classify_error
@@ -13,8 +14,42 @@ from .sanitizer import sanitize_text
 from .sanitizer import account_reference, mask_account
 from .diagnostics import safe_print
 from .proxy_health import ProxyHealthTracker
-from .registration_retry_guard import RegistrationRetryGuard
+from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .registration_policy import registration_retry_decision
+from .registration_result import safe_proxy_audit
+from .storage import get_account_records, get_registration_checkpoints, list_account_records
+
+
+class RegistrationProxyPool(list):
+    """Selected registration proxies plus sanitized preflight observations."""
+
+    def __init__(self, values=(), *, actual_countries=None):
+        super().__init__(values)
+        self.actual_countries = dict(actual_countries or {})
+
+
+def _proxy_endpoint_group(proxy: str) -> str:
+    parsed = urlsplit(str(proxy or ""))
+    return f"{(parsed.hostname or '').lower()}:{int(parsed.port or 0)}"
+
+
+def _interleave_proxy_endpoints(proxies) -> list[str]:
+    """Keep healthy endpoints represented instead of flattening them by score."""
+    groups: dict[str, list[str]] = {}
+    for proxy in dict.fromkeys(proxies or []):
+        groups.setdefault(_proxy_endpoint_group(proxy), []).append(proxy)
+    if len(groups) <= 1:
+        return list(dict.fromkeys(proxies or []))
+    ordered = []
+    pending = list(groups.values())
+    while pending:
+        next_round = []
+        for group in pending:
+            ordered.append(group.pop(0))
+            if group:
+                next_round.append(group)
+        pending = next_round
+    return ordered
 
 
 def _registration_proxy_candidates(proxy_pool, fallback=None):
@@ -32,16 +67,15 @@ def _registration_proxy_candidates(proxy_pool, fallback=None):
 def select_registration_proxy_pool(proxy_pool, fallback=None):
     candidates = _registration_proxy_candidates(proxy_pool, fallback)
     if len(candidates) <= 1:
-        return candidates
+        return RegistrationProxyPool(candidates)
 
     tracker = ProxyHealthTracker(CFG)
-    candidates = tracker.rank(candidates)
+    candidates = _interleave_proxy_endpoints(tracker.rank(candidates))
 
-    def check(base: str) -> bool:
+    def check(base: str) -> dict:
         candidate = refresh_proxy_sid(base)
         expected = infer_proxy_country(candidate)
-        checked = probe_proxy_with_scheme_detection(candidate, expected, use_cache=True)
-        return bool(checked.get("ok"))
+        return probe_proxy_with_scheme_detection(candidate, expected, use_cache=True)
 
     # Serial probing made batch start-up delay grow linearly with pool size;
     # probe concurrently instead. executor.map preserves candidate order and
@@ -49,11 +83,21 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
     with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as executor:
         outcomes = list(executor.map(check, candidates))
     healthy = []
-    for base, ok in zip(candidates, outcomes):
+    actual_countries = {}
+    for base, checked in zip(candidates, outcomes):
+        ok = bool(checked.get("ok"))
         tracker.record(base, ok=ok, error="proxy_preflight_failed" if not ok else "")
         if ok:
             healthy.append(base)
-    return tracker.rank(healthy or candidates)
+            actual = str(checked.get("country_code") or "").strip().upper()
+            if actual:
+                actual_countries[base] = actual
+    ranked = tracker.rank(healthy or candidates)
+    selected = _interleave_proxy_endpoints(ranked)
+    return RegistrationProxyPool(
+        selected,
+        actual_countries={base: actual_countries[base] for base in selected if base in actual_countries},
+    )
 
 
 def select_registration_proxy_base(proxy_pool, fallback=None):
@@ -61,16 +105,21 @@ def select_registration_proxy_base(proxy_pool, fallback=None):
     return candidates[0] if candidates else str(fallback or "").strip()
 
 
-def _registration_proxy_metadata(proxy: str | None, *, pool_index: int, expected_country: str = "") -> dict:
+def _registration_proxy_metadata(
+    proxy: str | None,
+    *,
+    pool_index: int,
+    expected_country: str = "",
+    actual_country: str = "",
+) -> dict:
     """Return audit-safe proxy selection metadata without URL credentials."""
-    from urllib.parse import urlsplit
-
     parsed = urlsplit(str(proxy or ""))
     return {
         "pool_index": int(pool_index) if int(pool_index) >= 0 else -1,
         "expected_country": str(expected_country or "").strip().upper(),
-        "actual_country": "",
+        "actual_country": str(actual_country or "").strip().upper(),
         "scheme": str(parsed.scheme or "").strip().lower(),
+        "rotation_generation": 0,
     }
 
 
@@ -86,6 +135,213 @@ def _unique_mailboxes(mailboxes):
         seen.add(email)
         unique.append(mailbox)
     return unique
+
+
+def _alias_base_email(email):
+    """``local+tag@domain`` → ``local@domain``, lowercased.
+
+    This install mints a second address from one mailbox by appending ``+oaiNN``,
+    and OpenAI treats each alias as its own account: 119 bases on this install
+    hold two *successfully registered* variants, so normalizing addresses
+    everywhere would wrongly merge real accounts.  It is used here only as a
+    **heuristic**, never as a skip reason.
+    """
+    local, sep, domain = str(email or "").strip().lower().partition("@")
+    if not sep:
+        return ""
+    return f"{local.split('+', 1)[0]}@{domain}"
+
+
+def _registered_alias_bases():
+    """Base addresses that already hold at least one account row."""
+    try:
+        rows = list_account_records()
+    except Exception:
+        # An unreadable database must not silently reorder a batch.
+        return set()
+    bases = set()
+    for row in rows or []:
+        base = _alias_base_email((row or {}).get("email"))
+        if base:
+            bases.add(base)
+    return bases
+
+
+def _drop_already_registered(mailboxes):
+    """Remove mailboxes that already have a *registered* account row.
+
+    Measured 2026-09-14 on this install: ``mailbox_tokens.txt`` held 791
+    addresses and 751 of them (94.9%) were already ``status='registered'`` in
+    ``accounts.sqlite3``.  Signing one of those up again cannot succeed -- the
+    server answers ``user_already_exists`` -- but the signup lane only learns
+    that *after* spending an email OTP on the way to ``/about-you``, so every
+    such address is a burned OTP that could never have produced an account.
+
+    Skipping is the default because it cannot lose a signup that would
+    otherwise have succeeded.  Set ``registration.skip_registered_mailboxes``
+    to false to attempt them anyway (for example to deliberately re-drive a
+    half-finished account).
+
+    Returns ``(kept, skipped_registered, skipped_dead_end)``.  A lookup failure
+    keeps the original list: an unreadable account database must not silently
+    empty a batch.
+
+    The two skip reasons are reported separately because they need different
+    operator actions.  A ``registered`` row means the account exists in *our*
+    storage.  A dead end means the **server** already told us the address is
+    taken while we hold no credentials for it -- which is why it is absent from
+    ``accounts.sqlite3`` and why the database lookup cannot see it at all.  The
+    retry guard is the only place that remembers those.
+
+    **Alias conflicts are reordered, never skipped.**  Measured 2026-09-15: of
+    that day's 305 ``user_already_exists`` answers, 292 (96%) were aliases whose
+    base already held an account -- so a base conflict is a strong hint.  It is
+    *not* proof: 99 aliases on this install did register successfully against an
+    already-occupied base, so dropping them would lose real signups.  They move
+    behind the fresh addresses instead, where a scarce worker/proxy slot is
+    better spent.  Set ``registration.deprioritize_base_conflicts`` to false to
+    keep the caller's original order.
+    """
+    items = list(mailboxes or [])
+    if not items:
+        return items, [], []
+    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
+    skip_registered = registration_cfg.get("skip_registered_mailboxes", True) not in (
+        False, 0, "0", "false", "False", "no",
+    )
+    if not skip_registered:
+        return items, [], []
+    deprioritize = registration_cfg.get("deprioritize_base_conflicts", True) not in (
+        False, 0, "0", "false", "False", "no",
+    )
+
+    emails = [str(getattr(mailbox, "email", "") or "").strip() for mailbox in items]
+    try:
+        raw = get_account_records([email for email in emails if email])
+    except Exception:
+        raw = {}
+    records = {str(key).strip().lower(): value for key, value in (raw or {}).items()}
+    try:
+        retry_guard = RegistrationRetryGuard(CFG)
+        blocked_states = retry_guard.blocked_email_states()
+    except Exception:
+        retry_guard = None
+        blocked_states = {}
+    try:
+        checkpoints = get_registration_checkpoints([email for email in emails if email])
+    except Exception:
+        checkpoints = {}
+    from .registration_checkpoint import candidate_checkpoint_error
+
+    checkpoint_errors = {
+        email: error
+        for email, checkpoint in checkpoints.items()
+        if (error := candidate_checkpoint_error(checkpoint))
+    }
+    if retry_guard is not None:
+        for checkpoint_email, checkpoint_error in checkpoint_errors.items():
+            try:
+                retry_guard.record(
+                    checkpoint_email,
+                    failure_class="auth_state",
+                    error=checkpoint_error,
+                )
+            except Exception:
+                pass
+    alias_bases = _registered_alias_bases() if deprioritize else set()
+    kept, skipped, skipped_dead, deferred = [], [], [], []
+    for mailbox, email in zip(items, emails):
+        normalized = email.lower()
+        record = records.get(normalized) or {}
+        blocked_reason = blocked_states.get(normalized, "")
+        status = mailbox_registration_status(record, known_partial=blocked_reason == "dead_end")
+        if status == "registered":
+            skipped.append(email)
+        elif status == "partial_registered" or blocked_reason or normalized in checkpoint_errors:
+            skipped_dead.append(email)
+        else:
+            base = _alias_base_email(normalized)
+            # Only an *alias* can conflict with its own base: a plain address
+            # that already holds a row was caught by the ``registered`` branch.
+            if base and base != normalized and base in alias_bases:
+                deferred.append(mailbox)
+            else:
+                kept.append(mailbox)
+    return kept + deferred, skipped, skipped_dead
+
+
+def _announce_skipped(skipped) -> None:
+    preview = ", ".join(mask_account(email) for email in skipped[:5])
+    suffix = f" (+{len(skipped) - 5} more)" if len(skipped) > 5 else ""
+    safe_print(
+        f"[*] Skipped {len(skipped)} mailbox(es) that already have a registered account: {preview}{suffix}"
+    )
+    _emit_mailboxes_skipped(skipped, reason="already_registered")
+
+
+def _announce_dead_end(skipped) -> None:
+    preview = ", ".join(mask_account(email) for email in skipped[:5])
+    suffix = f" (+{len(skipped) - 5} more)" if len(skipped) > 5 else ""
+    safe_print(
+        f"[*] Skipped {len(skipped)} mailbox(es) the server already reports as registered, "
+        f"are cooling down/quarantined, or have unrecoverable registration state: "
+        f"{preview}{suffix}"
+    )
+    _emit_mailboxes_skipped(skipped, reason="dead_end_or_quarantined")
+
+
+def _emit_mailboxes_skipped(skipped, *, reason: str) -> None:
+    """Tell the desktop grid which rows the backend dropped before attempting.
+
+    The console line above is invisible to the grid: an operator watching the
+    pool sees a row stay in its pre-batch state and has to read the backend log
+    to learn it was never tried.  Emitting one event with the masked list lets
+    the WPF side mark those rows instead.  Passive and best-effort: a desktop
+    host that predates this stage simply ignores the unknown event, and a CLI
+    run has ``desktop_events_enabled()`` off so nothing is printed twice.
+    """
+    try:
+        from .desktop_ipc import desktop_events_enabled, emit_event
+
+        if not desktop_events_enabled():
+            return
+        preview = ", ".join(mask_account(email) for email in skipped[:3])
+        suffix = f" +{len(skipped) - 3}" if len(skipped) > 3 else ""
+        reason_zh = "已注册" if reason == "already_registered" else "冷却/隔离/死路"
+        emit_event({
+            "domain": "registration",
+            "operation": "registration",
+            "stage": "mailboxes_skipped",
+            "status": "running",
+            "detail": f"后端剔除 {len(skipped)} 个（{reason_zh}）：{preview}{suffix}",
+            "reason": reason,
+            "skipped_count": len(skipped),
+            "skipped": [mask_account(email) for email in skipped],
+        })
+    except Exception:
+        # Reporting skipped mailboxes must never break the batch that skipped
+        # them -- the console line above already carried the fact.
+        pass
+
+
+def filter_registered_mailboxes(mailboxes):
+    """Drop already-registered mailboxes *and report it*, for callers that size or bill a batch.
+
+    ``run_batch_impl`` filters internally as a last line of defence, but by then
+    the caller has already counted the mailboxes into its denominator -- and, on
+    the ``--target-at200`` path, into ``purchased``/``spent``.  Filtering after
+    that point reports skipped mailboxes as failures and can leave the
+    replenishment loop spinning over a pool that yields nothing.
+
+    Calling this first makes the second filter a no-op, so the line is printed
+    exactly once.
+    """
+    kept, skipped, skipped_dead = _drop_already_registered(mailboxes)
+    if skipped:
+        _announce_skipped(skipped)
+    if skipped_dead:
+        _announce_dead_end(skipped_dead)
+    return kept
 
 
 def run_batch_impl(
@@ -112,6 +368,21 @@ def run_batch_impl(
     explicit_registration_driver = registration_driver is not None
     registration_driver = normalize_registration_driver(registration_driver, CFG)
     mailboxes = _unique_mailboxes(mailboxes)
+    mailboxes, skipped_registered, skipped_dead = _drop_already_registered(mailboxes)
+    if skipped_registered or skipped_dead:
+        if skipped_registered:
+            _announce_skipped(skipped_registered)
+        if skipped_dead:
+            _announce_dead_end(skipped_dead)
+        if not mailboxes:
+            # Return [] rather than let the loop run with no mailboxes: _run_one
+            # resolves `mailbox = None` and hands that to the signup lane, which
+            # reads as a confusing failure instead of "the pool was already used".
+            safe_print(
+                "[!] Every available mailbox is already registered or a known dead end; nothing to sign up. "
+                "Add fresh mailboxes, or set registration.skip_registered_mailboxes=false to attempt them anyway."
+            )
+            return []
     proxy_pool = [normalize_proxy_url(str(item or "").strip()) for item in (proxy_pool or [])]
     proxy_pool = list(dict.fromkeys(item for item in proxy_pool if item))
     proxy = normalize_proxy_url(str(proxy or "").strip()) or None
@@ -127,6 +398,7 @@ def run_batch_impl(
         emit_event = None
     original_pool = list(proxy_pool)
     proxy_pool = select_registration_proxy_pool(proxy_pool, proxy)
+    preflight_actual_countries = dict(getattr(proxy_pool, "actual_countries", {}) or {})
     pool_indices = {value: index for index, value in enumerate(original_pool)}
     proxy = proxy_pool[0] if proxy_pool else proxy
     if mailboxes and int(count or 1) > len(mailboxes):
@@ -184,6 +456,8 @@ def run_batch_impl(
     prewarm_executor = None
     prewarmed = {}
     first_attempt_proxies = {}
+    proxy_pool_offset = 0
+    proxy_rotation_generation = 0
     if registration_driver != "protocol":
         prewarm_window = 0
     if prewarm_window:
@@ -208,6 +482,7 @@ def run_batch_impl(
             return None
 
     def _run_one(i):
+        nonlocal proxy_pool_offset, proxy_rotation_generation
         from .registration_cancel import registration_cancel_requested
 
         def _cancelled(attempt: int = 0):
@@ -247,23 +522,56 @@ def run_batch_impl(
         mailbox = mailboxes[i] if mailboxes else None
         mailbox_email = str(getattr(mailbox, "email", "") or "").strip()
         guard_state = retry_guard.check(mailbox_email)
+        if guard_state.get("dead_end"):
+            # Must be checked before ``deferred``: a dead end also reports
+            # ``deferred`` (so cooldown-only callers still skip it), but its
+            # verdict is terminal, not "come back later".
+            return i, {
+                "success": False,
+                "email": mailbox_email,
+                "error": "registration_dead_end",
+                "failure_class": "account",
+                "retryable": False,
+                "dropped": True,
+                "deferred": False,
+                "registration_state": "dead_end",
+                "dead_end_reason": str(guard_state.get("dead_end_reason") or ""),
+                "future_batch_eligible": False,
+                "retry_disposition": "dead_end",
+            }
+        if guard_state.get("quarantined"):
+            return i, {
+                "success": False,
+                "email": mailbox_email,
+                "error": "registration_otp_pending_quarantined",
+                "failure_class": "mailbox",
+                "retryable": False,
+                "dropped": False,
+                "deferred": True,
+                "registration_state": "quarantined",
+                "future_batch_eligible": False,
+                "retry_disposition": "otp_pending_quarantine",
+            }
         if guard_state.get("deferred"):
             return i, {
                 "success": False,
                 "email": mailbox_email,
                 "error": "registration_retry_cooldown",
                 "failure_class": "auth_state",
-                "retryable": True,
+                "retryable": False,
                 "deferred": True,
                 "retry_after_seconds": int(guard_state.get("remaining_seconds") or 0),
                 "registration_state": "retry_pending",
+                "future_batch_eligible": True,
+                "retry_disposition": "cooldown",
             }
         # Pin each account to a stable proxy egress for its entire lifetime.
         # Previously the index shifted on every retry (proxy_pool[(i+attempt-1)
         # % n]), which rotated the egress on each retry and looked like proxy
         # churn to registrars -- a ban trigger.  Retries now keep the same
         # egress and only refresh the session id (see refresh_proxy_sid below).
-        account_proxy_index = i % len(proxy_pool) if proxy_pool else 0
+        account_proxy_index = (i + proxy_pool_offset) % len(proxy_pool) if proxy_pool else 0
+        account_rotation_generation = proxy_rotation_generation
         for attempt in range(1, max_attempts + 1):
             if _cancel_requested():
                 return i, _cancelled(attempt - 1)
@@ -278,8 +586,10 @@ def run_batch_impl(
                 worker_proxy,
                 pool_index=pool_indices.get(base_proxy, i % len(proxy_pool) if proxy_pool else -1),
                 expected_country=expected_country,
+                actual_country=preflight_actual_countries.get(base_proxy, ""),
             )
             proxy_metadata["attempt"] = attempt
+            proxy_metadata["rotation_generation"] = account_rotation_generation
             sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
             try:
                 call_kwargs = dict(
@@ -296,8 +606,7 @@ def run_batch_impl(
                 )
                 if explicit_registration_driver or registration_driver != "protocol":
                     call_kwargs["registration_driver"] = registration_driver
-                if registration_driver != "protocol":
-                    call_kwargs["proxy_metadata"] = proxy_metadata
+                call_kwargs["proxy_metadata"] = proxy_metadata
                 result = run_email_func(**call_kwargs)
             except Exception as e:
                 # Worker exceptions may contain proxy credentials or tokens.
@@ -330,21 +639,26 @@ def run_batch_impl(
                     error=str(result.get("error") or failure_class or "")[:120],
                 )
             result["registration_attempts"] = attempt
-            result["proxy_rotation_count"] = max(0, attempt - 1)
+            result["proxy_rotation_count"] = account_rotation_generation
+            result["proxy_session_refresh_count"] = attempt
+            result.setdefault("proxy_audit", safe_proxy_audit(proxy_metadata))
             result["batch_id"] = batch_id
             if result.get("success", False):
                 retry_guard.record(mailbox_email, success=True)
                 breaker.record_success()
                 return i, result
             result.setdefault("failure_class", classify_error(result))
-            if result["failure_class"] in BATCH_RETRY_CLASSES:
-                result.setdefault("dropped", False)
-            elif result["failure_class"] == "account":
-                result.setdefault("dropped", True)
-            # Only transport and auth-state failures are retried with a new
-            # pool member. Rate limits and mailbox outcomes are terminal for
-            # this account and must not consume another proxy.
             decision = registration_retry_decision(result, failure_class=result["failure_class"])
+            if decision.future_batch_eligible:
+                result.setdefault("dropped", False)
+            elif decision.dropped:
+                result.setdefault("dropped", True)
+            # Same-account immediate retry is separate from future-batch
+            # eligibility. Network/auth-state may retry now; rate limits and
+            # mailbox outcomes stop this account and let the guard decide when
+            # or whether a later batch may reconsider the mailbox.
+            result["future_batch_eligible"] = decision.future_batch_eligible
+            result["retry_disposition"] = decision.guard_action
             if not decision.retryable or attempt >= max_attempts:
                 result["retryable"] = decision.retryable
                 result["error_advice"] = decision.advice
@@ -386,6 +700,15 @@ def run_batch_impl(
                 if cancellable_sleep(retry_delay_seconds, requested=_cancel_requested):
                     return i, _cancelled(attempt)
         return i, result
+
+    def _rotate_proxy_pool_cursor() -> bool:
+        """Move only future accounts to another configured pool slot."""
+        nonlocal proxy_pool_offset, proxy_rotation_generation
+        if len(proxy_pool) <= 1:
+            return False
+        proxy_pool_offset = (proxy_pool_offset + 1) % len(proxy_pool)
+        proxy_rotation_generation += 1
+        return True
 
     def _notify_result(index, result):
         nonlocal completed_count
@@ -477,6 +800,7 @@ def run_batch_impl(
                     workers=workers,
                     pulse_config=pulse_config,
                     cancel_event=cancel_event,
+                    on_dispatch_block=_rotate_proxy_pool_cursor,
                 )
                 if emit_event is not None:
                     emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(pulse_results)})

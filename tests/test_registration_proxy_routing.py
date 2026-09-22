@@ -221,6 +221,38 @@ def test_registration_preflight_accepts_unauthorized_backend_probe_response():
     assert result["ok"] is True
 
 
+def test_registration_preflight_uses_one_http_attempt_per_route_probe():
+    """Route rotation owns retry; one bad session must not burn 3x15 seconds."""
+    calls = []
+
+    class Session:
+        def __init__(self):
+            self.proxies = {}
+
+        def close(self):
+            pass
+
+    def request(_session, _method, _url, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(status_code=200)
+
+    with patch.object(registration_preflight.curl_requests, "Session", Session), \
+         patch.object(registration_preflight, "request_with_retry", side_effect=request), \
+         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
+             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
+         }), \
+         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
+         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
+         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+        result = registration.registration_network_preflight(
+            "http://proxy.example:8080", proxy_attempts=1,
+        )
+
+    assert result["ok"] is True
+    assert len(calls) == 4
+    assert all(call["attempts"] == 1 for call in calls)
+
+
 def test_sentinel_proxy_errors_redact_standard_and_provider_proxy_forms():
     legacy = "http://sg.cliproxy.io:443:user-region-JP:pass"
     standard = "http://user-region-JP:pass@sg.cliproxy.io:443"

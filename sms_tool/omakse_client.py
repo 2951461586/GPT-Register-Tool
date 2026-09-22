@@ -34,8 +34,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
 
+from .timeouts import DEFAULT_TIMEOUT
+
 DEFAULT_BASE_URL = "http://oai.omakse.xyz"
-DEFAULT_TIMEOUT = 30
 POLL_INTERVAL = 1.5          # seconds between status polls
 MAX_POLL_DURATION = 300      # 5 minutes default
 TERMINAL_STATES = {"completed", "failed", "stopped"}

@@ -8,6 +8,7 @@ from curl_cffi import requests as curl_requests
 from .config import CFG
 from .paths import output_dir
 from .storage import get_account_record, list_paypal_accounts, upsert_account
+from .http_client import _retry_after_seconds
 from .http_utils import _minimal_chatgpt_cookie_header
 
 
@@ -44,11 +45,30 @@ def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None
     if not _has_session_cookie(cookie_header):
         return {"ok": False, "email": target_email, "mode": "protocol", "error": "missing_session_cookie"}
 
-    auth_session = _fetch_protocol_auth_session(cookie_header, timeout=timeout, proxy=proxy)
+    # Filled by ``_fetch_protocol_auth_session`` with the transport outcome, so
+    # a failed refresh can say *which* hop failed instead of only "no token".
+    detail = {}
+    auth_session = _fetch_protocol_auth_session(cookie_header, timeout=timeout, proxy=proxy, detail=detail)
     access_token = _session_token(auth_session, "accessToken", "access_token")
     oauth_refresh_token = _session_token(auth_session, "refreshToken", "refresh_token")
     if not access_token:
-        return {"ok": False, "email": target_email, "mode": "protocol", "error": "auth_session_missing_access_token"}
+        # ``detail`` separates the two cases that used to collapse into one
+        # string.  A 200 without an accessToken means the session really is
+        # dead; never getting past a non-2xx means this exit could not reach the
+        # target at all (rate-limited / blocked).  Callers that retry on the
+        # first but not the second need the distinction to be visible.
+        failure = {
+            "ok": False,
+            "email": target_email,
+            "mode": "protocol",
+            "error": "auth_session_missing_access_token",
+            "last_status": str(detail.get("last_status") or ""),
+            "http_statuses": list(detail.get("http_statuses") or []),
+        }
+        retry_after = float(detail.get("retry_after") or 0.0)
+        if retry_after:
+            failure["retry_after"] = retry_after
+        return failure
 
     refreshed = _merge_refreshed_session(
         data=data,
@@ -163,7 +183,19 @@ def _load_seed_session(email="", session_file=""):
     return ({"email": email.strip().lower()} if email else {}, "")
 
 
-def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None):
+def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None, detail=None, unreachable_after=3):
+    """Return the auth-session body, or ``{}`` when the deadline expires.
+
+    ``detail`` (optional, filled in place) receives ``last_status``,
+    ``http_statuses`` and ``retry_after`` so the caller can tell a dead session
+    (200 without an accessToken) from an exit that never reached the target.
+
+    ``unreachable_after`` bounds how many *connection-level* failures (no HTTP
+    response at all) this exit gets before the loop gives up.  A dead exit used
+    to burn the strategy's whole budget -- measured 124s before the recovery
+    chain moved to another exit -- while an HTTP-level failure such as a 403 is
+    allowed to keep retrying, because those are observed to clear.
+    """
     chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com").rstrip("/")
     deadline = time.time() + max(5, int(timeout or 30))
     session = curl_requests.Session()
@@ -178,6 +210,9 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None):
         "Cookie": cookie_header,
     }
     last_status = ""
+    statuses = []
+    retry_after = 0.0
+    connection_failures = 0
     while time.time() < deadline:
         try:
             response = session.get(
@@ -187,15 +222,54 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None):
                 timeout=30,
             )
             last_status = str(response.status_code)
+            statuses.append(last_status)
             if response.status_code == 200:
                 body = response.json()
                 if _session_token(body, "accessToken", "access_token"):
                     print("[*] Protocol auth session refreshed.")
+                    if detail is not None:
+                        detail.update({
+                            "last_status": last_status,
+                            "http_statuses": statuses[-8:],
+                            "retry_after": retry_after,
+                        })
                     return body
+            elif response.status_code in {403, 429}:
+                # The edge answers a blocked/rate-limited exit with Retry-After.
+                # Retrying every 3s regardless is what turns a short block into a
+                # long one, and the chain then reads the empty body as "dead
+                # session" and falls through to the OTP strategy.
+                retry_after = max(retry_after, _retry_after_seconds(response, default=0.0))
         except Exception as e:
             last_status = str(e)
+            statuses.append(last_status)
+            connection_failures += 1
+            if connection_failures >= max(1, int(unreachable_after or 1)):
+                break
         print(f"[*] Waiting for protocol auth session... {last_status}")
-        time.sleep(3)
+        remaining = max(0.0, deadline - time.time())
+        wait = 3.0
+        if retry_after and last_status in {"403", "429"}:
+            if retry_after >= remaining:
+                # The edge asked to wait longer than this strategy's entire
+                # budget. Sleeping it out would spend the budget and still fail,
+                # so stop here and let the caller try a different exit.
+                break
+            wait = max(wait, retry_after)
+        time.sleep(min(wait, remaining))
+    if detail is not None:
+        detail.update({
+            "last_status": last_status,
+            "http_statuses": statuses[-8:],
+            "retry_after": retry_after,
+        })
+    return {}
+    if detail is not None:
+        detail.update({
+            "last_status": last_status,
+            "http_statuses": statuses[-8:],
+            "retry_after": retry_after,
+        })
     return {}
 
 
