@@ -139,6 +139,35 @@ def resolve_account_proxy(
     return normalized or None
 
 
+def proxy_egress_key(proxy: str | None) -> str:
+    """Credential-free identity of one *configured* egress.
+
+    Two proxies share a key only when they are the same endpoint **and** the
+    same sticky session -- i.e. when they are expected to leave through the same
+    exit.  The session id matters: this install's whole pool points at one host
+    (``us.lajiaohttp.net:2000``) and the only thing that separates the ten exits
+    is the ``-sid-XXXXXXXX-`` token inside the username.  Keying on host:port
+    alone would collapse the entire pool into a single identity and report a
+    collision for every concurrent account.
+
+    ``pool_index`` is deliberately not part of the key: the same configured entry
+    can sit at a different index after a rotation generation, and the exit it
+    describes does not change.  Keying on the slot would make the ledger see two
+    identities where the wire sees one.
+
+    This is the *configured* identity.  The measured exit IP is ground truth and
+    is recorded separately by ``store.environment_ledger`` -- the two can differ
+    (a provider may route two session ids out of the same address), which is
+    exactly the drift the ledger is meant to surface.
+    """
+    affinity = _proxy_affinity(proxy, pool_index=-1)
+    if not affinity:
+        return ""
+    endpoint = f"{affinity['scheme']}://{affinity['host']}:{affinity['port']}"
+    session_id = str(affinity.get("session_id") or "").strip()
+    return f"{endpoint}|sid={session_id}" if session_id else endpoint
+
+
 def _proxy_affinity(proxy: str | None, *, pool_index: int) -> dict[str, Any]:
     normalized = normalize_proxy_url(proxy)
     if not normalized:
@@ -257,5 +286,6 @@ __all__ = [
     "bind_account_identity",
     "complete_registration_identity",
     "create_registration_identity",
+    "proxy_egress_key",
     "resolve_account_proxy",
 ]

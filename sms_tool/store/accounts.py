@@ -26,6 +26,63 @@ def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
     return "active"
 
 
+# Columns where a BLANK incoming value means "this round did not touch it", not
+# "the value is gone" -- so the stored value must survive.
+#
+# The rule is deliberately narrow, because a blanket "blank never overwrites"
+# is wrong.  ``error`` / ``status`` / ``success`` must keep overwriting: a fresh
+# round is *entitled* to say "there is no error any more", and
+# ``test_upsert_reuses_existing_email_case_insensitively`` pins exactly that
+# (``error`` goes "first" -> "").  The token columns overwrite for the mirror
+# reason: a stale token is worse than a missing one.  Only facts that are minted
+# once and cannot be re-fetched belong in this table:
+#
+#   password / totp_secret -- OpenAI-side persistent state.  A re-run that lands
+#       on the passwordless branch never sets ``password``, and a re-run of an
+#       already-enrolled account never re-binds 2FA, so both arrive blank.  The
+#       blind ``col=excluded.col`` then erased them.  ``totp_secret`` is the
+#       worst case: it is issued once and the server cannot return it, so losing
+#       it locks that account's 2FA permanently.
+#   twofa_enrolled_at      -- companion of ``totp_secret``; it must follow the
+#       secret rather than be blanked while the secret stays.
+#   mailbox_* / purchase_* -- the mailbox is consumed at registration and is
+#       absent from every later relogin/scan round.  Erasing ``mailbox_provider``
+#       or ``mailbox_token`` makes ``account_recovery._has_relogin_material()``
+#       answer False, i.e. a recoverable account gets marked 掉号.
+#   registration_country   -- ``billing_country_for()`` silently falls back to
+#       "US" when it is empty, which would aim the payment-eligibility probe at
+#       the wrong catalog.
+#   batch_id / json_path   -- provenance, and the pointer to the session file.
+#
+# ``mailbox_refresh_token`` is NOT here: it is not an ``accounts`` column (it
+# lives in the session JSON only), so the SQL never sees it.
+#
+# In-repo precedent: ``scripts/batch_enable_2fa.persist_twofa`` already coalesces
+# ``totp_secret`` / ``twofa_enrolled_at`` this exact way -- and its docstring
+# says it bypasses ``upsert_account`` *because* that "would rewrite unrelated
+# columns".  This table is what removes the reason to bypass it.
+#
+# Known trade-off: an explicit ``twofa_enrolled_at=0`` cannot clear the column.
+# Nothing wants that -- the column only ever moves with ``totp_secret``, which
+# has its own guard.
+_COALESCE_IF_BLANK = {
+    "password": "excluded.password <> ''",
+    "totp_secret": "excluded.totp_secret <> ''",
+    "twofa_enrolled_at": "excluded.twofa_enrolled_at <> 0",
+    "mailbox_provider": "excluded.mailbox_provider <> ''",
+    "mailbox_source": "excluded.mailbox_source <> ''",
+    "mailbox_token": "excluded.mailbox_token <> ''",
+    "purchase_id": "excluded.purchase_id <> ''",
+    "project_name": "excluded.project_name <> ''",
+    "price": "excluded.price <> ''",
+    "purchase_total_cost": "excluded.purchase_total_cost <> ''",
+    "balance_after": "excluded.balance_after <> ''",
+    "registration_country": "excluded.registration_country <> ''",
+    "batch_id": "excluded.batch_id <> ''",
+    "json_path": "excluded.json_path <> ''",
+}
+
+
 def upsert_account(
     data: AccountSessionModel | Mapping[str, object],
     json_path="",
@@ -121,8 +178,18 @@ def upsert_account(
 
     columns = list(row)
     placeholders = ", ".join(":" + column for column in columns)
+    # Guarded columns keep their stored value when this round has nothing to say
+    # (see _COALESCE_IF_BLANK).  The coalesce lives in the write statement
+    # itself, so it is atomic with the insert: no extra read, no read-then-write
+    # window, and the implicit transaction that `_resolve_account_email`'s
+    # rename UPDATE opens still covers everything (tests/test_store_transaction.py).
     updates = ", ".join(
-        f"{column}=excluded.{column}"
+        (
+            f"{column}=CASE WHEN {_COALESCE_IF_BLANK[column]} "
+            f"THEN excluded.{column} ELSE accounts.{column} END"
+        )
+        if column in _COALESCE_IF_BLANK
+        else f"{column}=excluded.{column}"
         for column in columns
         if column not in {"email", "created_at"}
     )
