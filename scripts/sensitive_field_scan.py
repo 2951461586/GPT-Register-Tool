@@ -22,6 +22,18 @@ ARTIFACT_SECRET = re.compile(
 )
 ARTIFACT_CARD_FRAGMENT = re.compile(r"(?i)(?:card|卡片|尾号)[^\n]{0,30}\*{2,}\d{2,}")
 
+# A sensitive name only leaks if it reaches the sink *unredacted*, so a call that
+# hands the name to a redactor is fine.  The set is matched by name because that
+# is the only thing available at this layer:
+#   sanitize / redact / mask -- the convention used at every other call site
+#   root_reason              -- ``_root_reason(exc, proxy)``
+#                               (sms_tool/sentinel/client.py:85) runs the message
+#                               through ``redact_proxy_text(text, proxy)`` at
+#                               line 112, so its ``proxy`` argument is consumed by
+#                               a redactor even though neither the helper's name
+#                               nor the call site says "redact".
+SAFE_PRINT_WRAPPER = re.compile(r"(?i)(sanitize|redact|mask|root_reason)")
+
 
 def main(argv: list[str] | None = None) -> int:
     """扫描源码与产物。
@@ -92,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                         "proxy", "us_proxies", "promo_proxies", "access_token", "refresh_token",
                         "ba_token", "totp_secret", "password", "card_number", "cvv", "cvc",
                     }
-                    if names & sensitive_names and not re.search(r"(?i)(sanitize|redact|mask)", expression):
+                    if names & sensitive_names and not SAFE_PRINT_WRAPPER.search(expression):
                         failures.append(f"{path.relative_to(ROOT)}:{node.lineno}: sensitive output bypasses safe_print")
     for base in (ROOT / "runtime", ROOT / "logs", *extra_artifacts):
         if not base.is_dir():

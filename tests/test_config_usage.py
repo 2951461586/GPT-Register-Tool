@@ -24,7 +24,6 @@ from sms_tool import config_usage
 EXPECTED_UNREAD = {
     "chatgpt.chat_web_client_id",
     "email_registration.smailr.domains",
-    "email_registration.use_as_username",
     "omakse.default_concurrency",
     "omakse.default_max_attempts",
     "omakse.default_max_poll_seconds",
@@ -95,6 +94,13 @@ KNOWN_FALSE_POSITIVES = {
 # Note: paypal.link_mode / upi.link_mode ARE genuinely dead. They looked used
 # because `run_single_link_mode()` contains "link_mode" -- which is why the
 # detector only considers string literals, never identifiers.
+#
+# 2026-09-22: `email_registration.use_as_username` was dropped from the set --
+# `sms_tool/config.py:622` now validates it as a boolean, so it is read and the
+# detector correctly stops reporting it. The pin only ever failed on a local
+# operator config.json (which still carries the key); CI short-circuits because
+# its config.json is built from config.example.json, where the key is absent and
+# `actual` is empty. That asymmetry is why the stale pin survived in CI.
 
 
 class DetectionTests(unittest.TestCase):

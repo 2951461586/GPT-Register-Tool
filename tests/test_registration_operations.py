@@ -21,14 +21,27 @@ def test_operation_binding_respects_callers_patch_scope_and_is_immutable():
 
 
 def test_interface_covers_only_dependencies_the_workflow_uses():
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "sms_tool/registration_handlers.py").read_text(encoding="utf-8"))
-    names = {
-        node.attr for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and (
-            isinstance(node.value, ast.Name) and node.value.id == "r"
-            or isinstance(node.value, ast.Attribute) and node.value.attr == "r"
-        )
-    }
+    """The protocol workflow now spans two modules, so scan both.
+
+    2026-09-22: ``finalize`` / ``obtain_oauth_refresh_token`` / ``enroll_totp``
+    were extracted into ``sms_tool/registration_finalize.py`` (a2349d7), and
+    ``registration_handlers`` kept delegating wrappers.  Scanning only the
+    handlers module then reported ``_oauth_result_summary`` and
+    ``_retain_registration_checkpoint`` as unused interface members -- they are
+    used, just from the new module.  The invariant is unchanged ("the interface
+    declares exactly what the workflow reaches"); the workflow is what moved.
+    """
+    root = Path(__file__).resolve().parents[1] / "sms_tool"
+    names: set[str] = set()
+    for module in ("registration_handlers.py", "registration_finalize.py"):
+        tree = ast.parse((root / module).read_text(encoding="utf-8"))
+        names |= {
+            node.attr for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute) and (
+                isinstance(node.value, ast.Name) and node.value.id == "r"
+                or isinstance(node.value, ast.Attribute) and node.value.attr == "r"
+            )
+        }
     assert names == {item.name for item in fields(RegistrationOperations)}
 
 
