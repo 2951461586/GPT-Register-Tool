@@ -413,6 +413,40 @@ git grep -nF NAME -- '*.cs' | grep -c "^[^:]*:[0-9]*:[[:space:]]*//"
 实际是「子模块保留了原文件的完整头部 import」——那些 stdlib 名（`json`/`logging`/`os`/`uuid`/`dataclass`）
 **谁也不会** `from pay_link.base import json`，是真死导入。
 
+#### 🔴 v5 重算：总数仍是 87 / 369，但**成员集合**换了 4 处（判定器按「原名」查消费 ⇒ 双向出错）
+
+上表的「87 契约 / 369 死」出自判定器 **v3**。落地阶段又修了 v3 的**两处实现缺陷**
+（字符串索引按末段建桶 = §8.1 N18；**按「原名」而非「别名」查消费** = §8.1 N19），得到 **v5**：
+
+| 版本 | kept | dead | 通道（AST / dotted-token） | 已修正的实现缺陷 |
+|---|---|---|---|---|
+| v3 | 87 | 369 | 67 / 20 | — |
+| **v5** | **87** | **369** | **65 / 22** | 索引按**每段**登记（N18）+ 用**别名**查消费（N19） |
+
+**总数相同纯属巧合 —— 两个方向的错误各 4 项，恰好抵消**：
+
+| 方向 | 行 | v3 | v5 | 谁对 · 凭据 |
+|---|---|---|---|---|
+| v3 **假死** | `cli.py:19` | DEAD `mailbox_from_explicit_args` | KEEP `_mailbox_from_explicit_args` | ✅ v5 —— 消费方读的是**别名**：`tests/test_cli_one_click_sms.py:32`（`cli._mailbox_from_explicit_args(args)`）、`tests/test_desktop_ipc.py:72`（`setattr(cli, "_mailbox_from_explicit_args", …)`） |
+| v3 **假死** | `payment_link_manager.py:13` | DEAD `subprocess` | KEEP `subprocess` | ✅ v5 —— `tests/test_payment_link_manager.py` 有 **10 处** `patch("…payment_link_manager.subprocess.run")` |
+| v3 **假死** | `external_sessions/__init__.py:12` | DEAD `curl_requests` / `time` | KEEP 两者 | ✅ v5（N18）—— `…external_sessions.curl_requests.request` ×4、`…external_sessions.time.sleep` ×1 |
+| v3 **假活** | `pay_link/registry.py:24` | KEEP `coerce_approve_country` | DEAD `canonical_coerce_approve_country` | ✅ v5 —— 消费方 `pay_link/__init__.py:50` 读到的其实是 **`registry.py:178` 本地定义的同名函数**，不是第 24 行的别名导入 |
+| v3 **假活** | `payment_link_manager.py:26` / `:27` / `:40` | KEEP `PAYMENT_METHODS` / `normalize_payment_method` / `coerce_approve_country` | DEAD `CATALOG_METHODS` / `normalize_catalog_payment_method` / `canonical_coerce_approve_country` | ✅ v5 —— 这些**原名**由第 48 行 `from .pay_link import *` 提供（`pay_link/__init__.py` 再导出），三个**别名**全仓**零消费** |
+
+**两个相反的错误方向，根因是同一个**：判定器拿 ruff 报的**原名**去查消费，
+而**原名不是模块里绑定的那个名字**（绑的是别名）。
+
+- 「同名但不同绑定」的消费会被当成本导入的消费 ⇒ **假活**（`registry.py:24` 撞上本地同名函数；
+  `payment_link_manager.py` 撞上 `import *` 再提供的同名）；
+- **别名**侧的消费永远查不到 ⇒ **假死**（`cli.py:19`）。
+
+⇒ **v3 的 4 处假活，全部是"看起来有契约"的假象**：消费者存在，但吃的是**另一个绑定**。
+这也说明「有没有消费者」这个问题**必须带命名空间一起问** —— 只问名字会两头出错。
+
+**一处口径稳定性值得记**：§5.3 ① 的「8 行同行豁免 / 20 项死名」在 v3 与 v5 下**同值**（已复算），
+但**第 8 行换了身份**：v3 是 `pay_link/registry.py:24`，v5 是 `external_sessions/__init__.py:12`。
+⇒ **总数稳健不等于成员稳健**，跨版本引用时仍要按名字核对。
+
 **最终落地方式**（零删除、零语义风险）：
 
 1. **`pyproject.toml` 的 `select` 保持原样** `["E9", "F63", "F7", "F82"]` —— **不加 `F401`**。
@@ -509,6 +543,9 @@ ratchet 冻结了存量，所以下列三项**一处未动**，且各有明确�
 其中只有 `current_config_data` 被判契约）。行级 `noqa` 覆盖整行 ⇒ 那些真死名会被顺带豁免、**未删**。
 **不删的理由**：收益 20 项 vs 需要逐行拆行编辑 8 处，且"自信判定"已经翻车两次（§8.1 N12）。
 定位方式是把「预期 DEAD 清单」与「实测残留」做**集合差** —— 只看总数会对不上（349 vs 369）。
+⚠️ **「8 行 / 20 项」在 v3 与 v5 下同值（已复算，口径稳健），但第 8 行换了身份**：
+v3 记的是 `pay_link/registry.py:24`，v5 记的是 `external_sessions/__init__.py:12` ——
+**总数对不代表成员对**，引用这 8 行时请按名字核对。
 
 **② `registration_drivers/external_sessions/__init__.py` 的再导出块**（未删）。
 
@@ -521,7 +558,7 @@ ratchet 冻结了存量，所以下列三项**一处未动**，且各有明确�
 | **真契约**（包级绑定被消费） | **3** | `MOZ_DISABLE_CONTENT_SANDBOX`（`es.MOZ_DISABLE_CONTENT_SANDBOX`，`tests/test_camoufox_sandbox.py:25`）· `curl_requests`（`patch("…external_sessions.curl_requests.request")` ×4）· `time`（`patch("…external_sessions.time.sleep")`） |
 | **零消费**（可删） | **8** | `_playwright_proxy`、`ConnectedPlaywrightSession`、`_first`、`_require`、`_normalize_debugger_address`、`_roxy_retryable`、`apply_playwright_stealth`、`_browser_profile_dir` |
 
-**🔴 漏判的根因（判定器 v3 的实现缺陷，值得单独记）**：字符串索引是按
+**🔴 漏判的根因之一（判定器 v3 的实现缺陷，值得单独记）**：字符串索引是按
 **token 的最后一段**建桶的 —— `by_suffix[tok.rsplit(".", 1)[-1]]`。
 于是 `…external_sessions.curl_requests.request` 落进 **`request`** 桶，
 查 `curl_requests` 时**永远查不到**；`time` 同理（落进 `sleep` 桶）。
@@ -529,6 +566,8 @@ ratchet 冻结了存量，所以下列三项**一处未动**，且各有明确�
 于是留下 2 个假阴性。
 ⚠️ **这 2 个假阴性是被全量 pytest 抓住的**（`patch` 目标不存在 ⇒ `AttributeError`），
 **不是**被判定器抓住的 —— 恰好反向印证本节第 1 条硬规矩。
+（漏判的**第二处**根因在名字层：判定器按 ruff 报的**原名**查消费，而模块绑定的是**别名** ⇒
+`cli.py:19` 的 `_mailbox_from_explicit_args` 也被判死。详见 §8.1 N19 与上面「v5 重算」小节。）
 另外两个易误判的：`apply_playwright_stealth` 与 `_browser_profile_dir` 的**包级**绑定确实零消费，
 但它们的消费点在**子模块**上（`…external_sessions.managed.apply_playwright_stealth`、
 `from …external_sessions.profiles import _browser_profile_dir`）—— **删包级绑定不会动到它们**。
@@ -763,6 +802,7 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
 | N16 | 🔴 缺陷 | **回滚清单只覆盖了"被删改的文件"，漏掉了"由改动派生"的文件**：`select` 回滚了，但 `pyproject.toml` 的**注释**没回滚，一度声称「F401 was added on 2026-09-22」而 `select` 里根本没有 F401 —— **解释配置值的注释与配置值脱节**，且没有任何门禁会看注释 | ✅ 已改写注释为如实描述（说明为何**不**加 F401、ratchet 落在哪三个文件）。同类风险面：`scripts/*_baseline.json`（ratchet 基线）、文档符号行号。**判据：回滚后按「配置值 ↔ 解释该值的注释/文档」逐对复核**，而不是只 diff 代码 |
 | N17 | 🔴 缺陷 | **ratchet 会把"工具本身跑不起来"读成"零告警"而静默转绿**：`ruff check` 退出码为 `2`（配置错误 / 解释器缺失 / 崩溃）时，若按"无输出即无 findings"处理，门禁会在 ruff 坏掉的那一刻**假装通过** —— 这正是本报告 §9.12 批评的"门禁存在但不生效"的另一种形态 | ✅ `collect()` 对 `returncode not in (0, 1)` 直接 `raise SystemExit`；并用测试钉住（缺基线 ⇒ 退出码 2）。**通用判据：任何"解析外部工具输出"的门禁，都必须显式区分"无告警"与"没跑成"** |
 | N18 | 🔴🔴 缺陷 | **判定器的字符串索引按 token 的「最后一段」建桶**（`by_suffix[tok.rsplit(".", 1)[-1]]`），于是 `…external_sessions.curl_requests.request` 落进 `request` 桶，查 `curl_requests` **永远查不到**。这**就是通道 7**，但 §5.3 的散文是用**通道 6** 的产物写的、从未重算 ⇒ 留下 **2 个假阴性**（`curl_requests`、`time` 被写成「零消费」，实际各被 4 处 / 1 处 patch 消费） | ✅ §5.3 ② 已按 8 通道口径重算为「**8 零消费 + 3 契约**」；ADR-0009 原意已核实（约束是导入**路径**，非内部绑定）。⚠️ **这两个假阴性是被全量 pytest 抓住的，不是被判定器抓住的**。**通用判据：判定器的产物一旦被写成散文，通道升级后必须重算散文 —— 否则它会比代码活得更久** |
+| N19 | 🔴🔴 缺陷 | **判定器拿 ruff 报的「原名」当查找键，而模块里绑定的是「别名」** —— ruff 的 F401 message 给的是**原符号的限定名**（`from ..commands.helpers import mailbox_from_explicit_args as _mailbox_from_explicit_args` ⇒ message 写 `` `.commands.helpers.mailbox_from_explicit_args` ``），**从不写 ` as `**，所以 `raw.split(" as ")[-1] if " as " in raw else …` 里的 ` as ` 分支是**死代码**。后果**双向**：①「同名但不同绑定」的消费被当成本导入的消费 ⇒ **假活**（`pay_link/registry.py:24` 撞上 `registry.py:178` 的**本地同名函数**；`payment_link_manager.py:26/27/40` 撞上第 48 行 `from .pay_link import *` 提供的同名）② 别名侧消费永远查不到 ⇒ **假死**（`cli.py:19`，实际被 `tests/test_cli_one_click_sms.py:32` 与 `tests/test_desktop_ipc.py:72` 消费）。另：`import a.b.c` 只绑定 `a`，不是 `a.b.c` | ✅ v5 新增 `collect_aliases()`：用 ruff 报的 **row** 回源文件解析**本地绑定名**（`a.asname or a.name`；`ast.Import` 取 `a.name.split(".")[0]`），并用 `seg_index` 登记**每一段**（N18）。**v3↔v5 各 4 项双向对调，总数 87/369 不变（巧合）** —— 详见 §5.3「v5 重算」小节。**通用判据：外部工具报的"名字"是它视角下的名字，不等于运行时绑定的名字；拿它当键之前先写最小样例确认它报的是哪一个** |
 
 ---
 
@@ -908,3 +948,18 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
     ⇒ 那句话是**对拆分的约束**（别破坏导入路径），不是「保留包入口的每个内部绑定」。
     若只读字面「preserve imports」就照做，会把 8 个零消费名当成 ADR 保护的契约永久留存。
     **判据：确认被点名的对象在 ADR 写作时是什么形态**（用 `git log --diff-filter=D --follow` 查）。
+29. 🔴🔴 **外部工具报的「名字」不等于运行时绑定的「名字」—— 拿它当查找键之前必须先确认它报的是哪个**。
+    ruff 的 F401 message 给的是**原符号的限定名**：`from ..commands.helpers import
+    mailbox_from_explicit_args as _mailbox_from_explicit_args` 报的是
+    `` `.commands.helpers.mailbox_from_explicit_args` `` —— **消息里从不出现 ` as `**。
+    于是 `raw.split(" as ")[-1].strip() if " as " in raw else raw.split(".")[-1]` 里那个
+    ` as ` 分支**对当前 ruff 是死代码**，别名场景一律回落到**原名**；而模块里绑的是**别名** ⇒ 查不到 ⇒ **假死**。
+    **同一个缺陷还反向出错**：原名可能恰好被**另一个绑定**占着，于是把别人的消费算成自己的 ⇒ **假活** ——
+    `pay_link/registry.py:24` 的原名 `coerce_approve_country` 被 **`registry.py:178` 的本地函数**占着
+    （`pay_link/__init__.py:50` 的 `from .registry import coerce_approve_country` 读的是那个函数）；
+    `payment_link_manager.py:26/27/40` 的原名则由第 48 行 `from .pay_link import *` 再提供一次。
+    **一个根因、两个相反方向** —— 与 §9.25「假阳性与假阴性是同一种病的两个面」是同一现象。
+    顺带两条绑定规则也在这里踩到：**`import a.b.c` 只绑定 `a`**（不是 `a.b.c`）；
+    **`import *` 能让一个真死的导入"看起来被消费"**（同名被通配符再提供一次）。
+    代价：v3 与 v5 **各 4 项双向对调**，而**总数 87 / 369 一模一样** —— 只看总数会以为"重算过了、没变化"。
+    **判据：先写一个最小样例（`from x import y as z`）确认工具报的是 `y` 还是 `z`，再决定查找键。**
