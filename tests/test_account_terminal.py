@@ -47,7 +47,7 @@ def test_cleanup_removable_set_is_the_shared_vocabulary():
 def test_liveness_snapshot_prune_keeps_newest_and_excludes_current(tmp_path, monkeypatch):
     import os
 
-    from sms_tool.accounts.account_recovery import _prune_liveness_snapshots
+    from sms_tool.accounts.recovery_batch import _prune_liveness_snapshots
 
     for i in range(25):
         p = tmp_path / f"run{i:03d}.json"

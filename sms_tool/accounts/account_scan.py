@@ -20,9 +20,9 @@ from .account_terminal import text_has_account_deactivated
 from .account_liveness import probe_account_liveness
 from .account_recovery import (
     is_permanently_deactivated,
-    refresh_local_quota_statuses,
     relogin_codex_account,
 )
+from .recovery_batch import refresh_local_quota_statuses
 from ..http_client import is_transient_transport_error
 from ..session_refresh import _load_seed_session
 from ..storage import upsert_account

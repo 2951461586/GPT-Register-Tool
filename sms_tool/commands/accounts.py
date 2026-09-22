@@ -244,7 +244,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
 
 
 def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
-    from ..accounts.account_recovery import refresh_local_quota_statuses
+    from ..accounts.recovery_batch import refresh_local_quota_statuses
     from ..cpa_import import refresh_cpa_quota_statuses
 
     if bool(getattr(args, "mailbox_pool_repaired", False)):

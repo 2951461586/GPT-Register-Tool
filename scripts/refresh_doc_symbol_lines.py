@@ -143,7 +143,13 @@ def _scan(apply: bool) -> int:
         for lineno, before, after in changes:
             print(f"  line {lineno}: {before} -> {after}")
         if apply:
-            path.write_text(updated, encoding="utf-8")
+            # newline="\n" is mandatory: this repo pins `* text eol=lf` in
+            # .gitattributes, and the default on Windows translates every "\n"
+            # back to CRLF, silently flipping the whole file. The pre-commit
+            # line-ending guard only catches *mixed* endings, so a uniformly
+            # CRLF file sails through it -- `git ls-files --eol` is the only
+            # thing that sees it.
+            path.write_text(updated, encoding="utf-8", newline="\n")
     if drift and not apply:
         print(f"\n{drift} pointer(s) drifted -- rerun with --apply")
     elif not drift:

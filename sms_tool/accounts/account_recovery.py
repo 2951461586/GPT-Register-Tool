@@ -1290,27 +1290,3 @@ def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
 
 def _normalize_email(value: Any) -> str:
     return str(value or "").strip().lower()
-
-
-# ─────────────────── 批量引擎已拆至 recovery_batch（候选1） ───────────────────
-# 兼容再导出：既有调用方（account_scan / account_health_queue / commands /
-# tests）仍从本模块导入这些名字。PEP 562 模块级 __getattr__，导入期零成本。
-_BATCH_EXPORTS = frozenset({
-    "refresh_local_quota_statuses",
-    "_prune_liveness_snapshots",
-    "_probe_is_fresh_definitive",
-    "_heavy_lane_slots",
-    "_probe_liveness_with_retries",
-    "_needs_browser_fallback",
-    "_clear_promotion_marker_after_probe",
-    "_refresh_mailbox_quarantine_state",
-    "_emit_account_batch_event",
-})
-
-
-def __getattr__(name: str):
-    if name in _BATCH_EXPORTS:
-        from . import recovery_batch
-
-        return getattr(recovery_batch, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

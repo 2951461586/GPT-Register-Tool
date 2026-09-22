@@ -187,6 +187,30 @@ def test_apply_mode_rewrites_the_file_and_is_idempotent(tmp_path, monkeypatch):
     assert refresh._scan(apply=True) == 0  # second pass finds nothing left to do
 
 
+def test_apply_mode_writes_lf_bytes_not_crlf(tmp_path, monkeypatch):
+    """The writer must not let Windows translate ``\\n`` into CRLF.
+
+    ``.gitattributes`` pins ``* text eol=lf``. A default ``write_text`` on
+    Windows rewrites every newline as CRLF, and the pre-commit line-ending
+    guard only rejects *mixed* endings -- so a uniformly CRLF file passes every
+    gate and only ``git ls-files --eol`` sees it. Assert on raw bytes, because
+    ``read_text`` normalises the difference away.
+    """
+    doc = tmp_path / "architecture.md"
+    doc.write_text("见 `Widget()`（`widget.py:1`）定义。\n", encoding="utf-8", newline="\n")
+    src = tmp_path / "sms_tool"
+    src.mkdir(exist_ok=True)
+    (src / "widget.py").write_text(_source("# header", "class Widget:", "    pass"), encoding="utf-8")
+    monkeypatch.setattr(scan, "ROOT", tmp_path)
+    monkeypatch.setattr(scan, "SRC", src)
+    monkeypatch.setattr(scan, "DOCS", ("architecture.md",))
+
+    assert refresh._scan(apply=True) == 0
+    raw = doc.read_bytes()
+    assert b"\r\n" not in raw
+    assert raw.endswith("定义。\n".encode("utf-8"))
+
+
 def test_live_docs_have_no_drift_left():
     """The generator is part of CI: any future refactor that moves a symbol trips this."""
     assert refresh._scan(apply=False) == 0

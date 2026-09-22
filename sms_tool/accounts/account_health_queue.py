@@ -388,20 +388,6 @@ def _single_report_item(report: Mapping[str, Any], email: str) -> dict[str, Any]
     return {}
 
 
-def _account_payload(record: Mapping[str, Any]) -> dict[str, Any]:
-    value: dict[str, Any] = {"email": str(record.get("email") or "")}
-    try:
-        raw = json.loads(str(record.get("raw_json") or "{}"))
-        if isinstance(raw, dict):
-            value.update(raw)
-    except Exception:
-        pass
-    for key in ("access_token", "id_token", "cookie_header", "device_id", "json_path", "status"):
-        if record.get(key) not in (None, ""):
-            value[key] = record.get(key)
-    return value
-
-
 def _update(queue_id: str, **changes: Any) -> dict[str, Any]:
     with _LOCK:
         items = _load_unlocked()

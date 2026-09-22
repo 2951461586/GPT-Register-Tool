@@ -45,7 +45,7 @@ class CliQuotaTests(unittest.TestCase):
             cpa_api_token=None,
         )
         result = {"ok": True, "total": 1, "success": 1, "failed": 0, "results": []}
-        with patch("sms_tool.accounts.account_recovery.refresh_local_quota_statuses", return_value=result) as refresh:
+        with patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=result) as refresh:
             with redirect_stdout(io.StringIO()):
                 cli._refresh_cpa_quota(args)
 
@@ -72,7 +72,7 @@ class CliQuotaTests(unittest.TestCase):
             # quota_relogin_timeout intentionally absent -> exercise the default.
         )
         result = {"ok": True, "total": 1, "success": 1, "failed": 0, "results": []}
-        with patch("sms_tool.accounts.account_recovery.refresh_local_quota_statuses", return_value=result) as refresh:
+        with patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=result) as refresh:
             with redirect_stdout(io.StringIO()):
                 cli._refresh_cpa_quota(args)
 
@@ -93,7 +93,7 @@ class CliQuotaTests(unittest.TestCase):
             }],
         }
         with (
-            patch("sms_tool.accounts.account_recovery.refresh_local_quota_statuses", return_value=local),
+            patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=local),
             patch("sms_tool.cpa_import.refresh_cpa_quota_statuses") as fallback,
             redirect_stdout(io.StringIO()),
         ):
@@ -117,7 +117,7 @@ class CliQuotaTests(unittest.TestCase):
         }
         fallback_result = {"ok": False, "success": 1, "failed": 1, "results": []}
         with (
-            patch("sms_tool.accounts.account_recovery.refresh_local_quota_statuses", return_value=local),
+            patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=local),
             patch("sms_tool.cpa_import.refresh_cpa_quota_statuses", return_value=fallback_result) as fallback,
             redirect_stdout(io.StringIO()),
         ):

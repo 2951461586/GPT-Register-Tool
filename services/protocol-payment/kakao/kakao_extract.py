@@ -1337,18 +1337,6 @@ def kakao_link(
     }
 
 
-def no_kakao_method_error(reason: str) -> bool:
-    text = str(reason or "")
-    return (
-        "checkout_not_kakao_trial" in text.lower()
-        and "amount=0" in text
-        and "currency=krw" in text.lower()
-        and "kakao_pay" not in text.lower()
-    )
-
-
-
-
 def kakao_result_contract(
     *,
     ok: bool,
