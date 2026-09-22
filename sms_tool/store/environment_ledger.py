@@ -343,6 +343,19 @@ def release_environment_lease(
 
     Shared leases are reference-counted, so the first task to finish must not
     free an exit another task is still using.
+
+    The whole thing is **one statement**, not read-then-write.  The decrement and
+    the "did that reach zero" decision have to be the same atomic act: reading
+    ``active_holders``, subtracting in Python and writing back loses holders
+    whenever two tasks finish together -- both read 2, both write 1, and the
+    lease stays ``leased`` with nobody left to release it, squatting on its exit
+    until the TTL expires.  Measured 2026-09-22: 2 failures in 30 runs of the
+    two-worker batch test, which is how it was found.
+
+    Every reference to a column in a ``SET`` clause sees the *pre-update* row, so
+    ``active_holders - 1`` is the same value in all three CASE arms (verified
+    against SQLite 3.43.1).  ``WHERE ... AND active_holders > 0`` keeps a
+    duplicate release from driving the count negative.
     """
     try:
         lease = int(lease_id or 0)
@@ -351,35 +364,32 @@ def release_environment_lease(
     if lease <= 0:
         return False
     now = _now()
+    measured_ip = str(exit_ip or "").strip()
     conn = _ledger_connect(runtime_config)
     try:
-        row = conn.execute("SELECT * FROM environment_ledger WHERE id=?", (lease,)).fetchone()
-        if row is None:
-            return False
-        remaining = int(row["active_holders"] or 1) - 1
-        measured_ip = str(exit_ip or "").strip() or str(row["exit_ip"] or "")
-        if remaining > 0:
-            conn.execute(
-                "UPDATE environment_ledger SET active_holders=?, exit_ip=? WHERE id=?",
-                (remaining, measured_ip, lease),
-            )
-        else:
-            conn.execute(
-                """
-                UPDATE environment_ledger
-                SET state=?, reason=?, released_at=?, active_holders=0, exit_ip=?
-                WHERE id=?
-                """,
-                (
-                    str(state or STATE_RELEASED),
-                    str(reason or "")[:200],
-                    now,
-                    measured_ip,
-                    lease,
-                ),
-            )
+        cursor = conn.execute(
+            """
+            UPDATE environment_ledger
+            SET active_holders = active_holders - 1,
+                exit_ip = CASE WHEN ? <> '' THEN ? ELSE exit_ip END,
+                state = CASE WHEN active_holders - 1 <= 0 THEN ? ELSE state END,
+                reason = CASE WHEN active_holders - 1 <= 0 THEN ? ELSE reason END,
+                released_at = CASE WHEN active_holders - 1 <= 0 THEN ? ELSE released_at END
+            WHERE id=? AND active_holders > 0
+            """,
+            (
+                measured_ip,
+                measured_ip,
+                str(state or STATE_RELEASED),
+                str(reason or "")[:200],
+                now,
+                lease,
+            ),
+        )
         conn.commit()
-        return True
+        # False means "there was no holder left to drop": the lease is gone, or
+        # somebody else already took the last one.
+        return cursor.rowcount > 0
     finally:
         conn.close()
 

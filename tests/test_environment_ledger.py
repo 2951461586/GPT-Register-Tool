@@ -306,6 +306,64 @@ def test_shared_lease_is_reference_counted(tmp_path):
     assert environment_ledger_stats(runtime_config=config)["live"] == 0
 
 
+def test_concurrent_releases_never_strand_the_lease(tmp_path):
+    """Reference counting has to be atomic, not read-then-write.
+
+    Two tasks finishing in the same instant used to both read
+    ``active_holders`` as 2, both write back 1, and leave the lease ``leased``
+    with nobody left to release it -- a zombie row that keeps its exit gated
+    until the TTL expires.  Measured 2026-09-22: 2 failures in 30 runs of the
+    two-worker batch test, which is how it was found.
+
+    Four releasers make the overlap the normal case instead of a coin flip.
+    Against the fixed (single-statement) implementation the outcome is
+    deterministic, so this cannot go flaky on its own account.
+    """
+    import threading
+
+    config = _config(tmp_path)
+    key_a, _ = _keys()
+    first = acquire_environment_lease(
+        exit_key=key_a, account_ref="a@x.test", runtime_config=config
+    )
+    for index in range(3):
+        acquired = acquire_environment_lease(
+            exit_key=key_a,
+            account_ref=f"extra{index}@x.test",
+            allow_reuse=True,
+            runtime_config=config,
+        )
+        assert acquired["state"] == "reused"
+
+    lease_id = first["lease_id"]
+    live = list_environment_leases(state="leased", runtime_config=config)
+    assert [row["active_holders"] for row in live] == [4]
+
+    barrier = threading.Barrier(4, timeout=10)
+
+    def release():
+        try:
+            barrier.wait()
+        except threading.BrokenBarrierError:
+            # A timeout only makes the overlap less likely; it must not become
+            # an error, or the test would fail for the wrong reason.
+            pass
+        release_environment_lease(lease_id, reason="registered", runtime_config=config)
+
+    threads = [threading.Thread(target=release) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    row = list_environment_leases(limit=5, runtime_config=config)[0]
+    assert row["active_holders"] == 0, row
+    assert row["state"] == "released", row
+    assert row["released_at"] > 0, row
+    assert row["reason"] == "registered", row
+    assert environment_ledger_stats(runtime_config=config)["live"] == 0
+
+
 # --------------------------------------------------------------------------
 # 5. The measured exit IP is observation, not a gate
 # --------------------------------------------------------------------------
