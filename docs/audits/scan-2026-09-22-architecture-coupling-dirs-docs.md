@@ -512,16 +512,48 @@ ratchet 冻结了存量，所以下列三项**一处未动**，且各有明确�
 
 **② `registration_drivers/external_sessions/__init__.py` 的再导出块**（未删）。
 
-该包入口共 11 个 F401，其中 10 个零消费（`_playwright_proxy`、`ConnectedPlaywrightSession`、
-`_first`、`_require`、`_normalize_debugger_address`、`_roxy_retryable`、`apply_playwright_stealth`、
-`curl_requests`、`time`、`_browser_profile_dir`），1 个是契约（`MOZ_DISABLE_CONTENT_SANDBOX`）。
-零消费的那些可经 `external_sessions.<name>` 到达，但 `__all__` 只声明 5 个名字。
-**不删的两个理由**：
-① ruff 把它们标为 **unsafe fix**（它认为可能是隐式再导出）；
-② ADR-0009 原文点名 `Preserve external_sessions imports` —— 该 ADR 说的是保留**导入路径**，
-但「是否连这 10 个内部名一起保留」需要先确认 ADR 原意，**不应由一次清理动作代答**。
+该包入口共 **11 个 F401**。⚠️ **本节原写「10 个零消费 + 1 个契约」是错的** ——
+那是**通道 6** 判定器的产物，从未按通道 7/8 重算。按 8 通道口径实测重算后是
+**「8 个零消费 + 3 个契约」**：
 
-🔴 **要真正关闭这一项，需先回答**：`__init__.py` 的公开面是 `__all__`，还是全体绑定名？
+| 类别 | 数量 | 名字与消费点 |
+|---|---|---|
+| **真契约**（包级绑定被消费） | **3** | `MOZ_DISABLE_CONTENT_SANDBOX`（`es.MOZ_DISABLE_CONTENT_SANDBOX`，`tests/test_camoufox_sandbox.py:25`）· `curl_requests`（`patch("…external_sessions.curl_requests.request")` ×4）· `time`（`patch("…external_sessions.time.sleep")`） |
+| **零消费**（可删） | **8** | `_playwright_proxy`、`ConnectedPlaywrightSession`、`_first`、`_require`、`_normalize_debugger_address`、`_roxy_retryable`、`apply_playwright_stealth`、`_browser_profile_dir` |
+
+**🔴 漏判的根因（判定器 v3 的实现缺陷，值得单独记）**：字符串索引是按
+**token 的最后一段**建桶的 —— `by_suffix[tok.rsplit(".", 1)[-1]]`。
+于是 `…external_sessions.curl_requests.request` 落进 **`request`** 桶，
+查 `curl_requests` 时**永远查不到**；`time` 同理（落进 `sleep` 桶）。
+**这正是通道 7「dotted token 的所有前缀」，但本节散文是用通道 6 的产物写的、没有重算**，
+于是留下 2 个假阴性。
+⚠️ **这 2 个假阴性是被全量 pytest 抓住的**（`patch` 目标不存在 ⇒ `AttributeError`），
+**不是**被判定器抓住的 —— 恰好反向印证本节第 1 条硬规矩。
+另外两个易误判的：`apply_playwright_stealth` 与 `_browser_profile_dir` 的**包级**绑定确实零消费，
+但它们的消费点在**子模块**上（`…external_sessions.managed.apply_playwright_stealth`、
+`from …external_sessions.profiles import _browser_profile_dir`）—— **删包级绑定不会动到它们**。
+
+**`__all__` 只声明 5 个名字**（`CamoufoxBrowserSession` / `CloakBrowserSession` /
+`RoxyBrowserSession` / `create_browser_session` / `verify_browser_proxy_country`）。
+⇒ **公开面既不是「`__all__`」，也不是「全体绑定名」，而是「`__all__` ∪ 事实消费集」= 8 个名字。**
+
+**✅ ADR-0009 的原意已核实**（这原本是本项唯一的实质阻塞）：
+
+> Preserve `external_sessions` imports **through a package** separating lifecycle,
+> profile configuration and egress audit.
+
+`external_sessions` **当时是单文件模块** —— `sms_tool/registration_drivers/external_sessions.py`
+在 `5168671`（发布 v2026.09.08）被**删除**、改为包；而 ADR-0009 写于 **09-06**。
+且该 ADR 的兄弟条目写的是「**Preserve facade imports** and pre-invocation patch scopes」——
+两句合读，约束是「**拆分时不要破坏既有导入路径**」，**不是**「保留 `__init__.py` 的每一个内部绑定」。
+⇒ **那 8 个零消费名不受 ADR-0009 保护。**
+
+**为什么本轮仍然不删**：ratchet 的既定语义是「冻结存量、只禁增长」，本轮**不做删除**。
+**但有一条干净路径可以顺带解掉 2 个契约**：`curl_requests` / `time` 只被**测试 patch 锚点**消费，
+把这 5 处 patch 目标从 `…external_sessions.curl_requests` 改指向
+`…external_sessions.managed.curl_requests`（**同一个模块对象，patch 效果完全相同**），
+它们就也变成零消费 ⇒ **「3 契约 + 8 死」变成「1 契约 + 10 死」**。
+属独立改动（改测试、跑全量），留待拍板。
 
 **③ feature-detection 导入**：`paypal/orchestrator.py:339-340` 的 `camoufox`/`browserforge`
 导入是**可用性探测**（`except ImportError: use_camoufox = False`），删了会移除
@@ -730,6 +762,7 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
 | N15 | 缺陷 | **`docs/audits/README.md` 的自述计数会漂移**：本次 A7 期间它又被新报告带偏（`docs_consistency_scan` 不检查自述条目数） | ✅ 见 N7 —— 已加 `tests/test_audits_readme_index.py` 钉住计数与条目覆盖 |
 | N16 | 🔴 缺陷 | **回滚清单只覆盖了"被删改的文件"，漏掉了"由改动派生"的文件**：`select` 回滚了，但 `pyproject.toml` 的**注释**没回滚，一度声称「F401 was added on 2026-09-22」而 `select` 里根本没有 F401 —— **解释配置值的注释与配置值脱节**，且没有任何门禁会看注释 | ✅ 已改写注释为如实描述（说明为何**不**加 F401、ratchet 落在哪三个文件）。同类风险面：`scripts/*_baseline.json`（ratchet 基线）、文档符号行号。**判据：回滚后按「配置值 ↔ 解释该值的注释/文档」逐对复核**，而不是只 diff 代码 |
 | N17 | 🔴 缺陷 | **ratchet 会把"工具本身跑不起来"读成"零告警"而静默转绿**：`ruff check` 退出码为 `2`（配置错误 / 解释器缺失 / 崩溃）时，若按"无输出即无 findings"处理，门禁会在 ruff 坏掉的那一刻**假装通过** —— 这正是本报告 §9.12 批评的"门禁存在但不生效"的另一种形态 | ✅ `collect()` 对 `returncode not in (0, 1)` 直接 `raise SystemExit`；并用测试钉住（缺基线 ⇒ 退出码 2）。**通用判据：任何"解析外部工具输出"的门禁，都必须显式区分"无告警"与"没跑成"** |
+| N18 | 🔴🔴 缺陷 | **判定器的字符串索引按 token 的「最后一段」建桶**（`by_suffix[tok.rsplit(".", 1)[-1]]`），于是 `…external_sessions.curl_requests.request` 落进 `request` 桶，查 `curl_requests` **永远查不到**。这**就是通道 7**，但 §5.3 的散文是用**通道 6** 的产物写的、从未重算 ⇒ 留下 **2 个假阴性**（`curl_requests`、`time` 被写成「零消费」，实际各被 4 处 / 1 处 patch 消费） | ✅ §5.3 ② 已按 8 通道口径重算为「**8 零消费 + 3 契约**」；ADR-0009 原意已核实（约束是导入**路径**，非内部绑定）。⚠️ **这两个假阴性是被全量 pytest 抓住的，不是被判定器抓住的**。**通用判据：判定器的产物一旦被写成散文，通道升级后必须重算散文 —— 否则它会比代码活得更久** |
 
 ---
 
@@ -851,3 +884,27 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
     （这三个方向恰好就是 §5.3 那 8 种消费通道里最难想到的几种。）
     **更一般的形态**：这是同一个病 —— **把"我没找到"读成"它不存在"**，与 §9.8 的
     「把命中数当判定」是镜像关系：一个是**假阳性**，一个是**假阴性**。
+26. 🔴🔴 **「为了加速查找而做的键归一化」会静默丢掉信息 —— 索引设计本身可以是漏检源**。
+    判定器 v3 把 dotted token 按 **最后一段** 分桶：`by_suffix[tok.rsplit(".", 1)[-1]]`。
+    于是 `…external_sessions.curl_requests.request` **只存在于 `request` 桶里**，
+    查 `curl_requests` 恒为空 —— 而 `curl_requests` 恰恰是被那个 token 消费的那个名字。
+    这正是通道 7（「dotted token 的**每一个前缀**都是潜在消费面」）在**实现层**的表现：
+    通道想清楚了，索引却按末段建桶。**修法是登记所有前缀（或改前缀匹配），不是加通道。**
+    后果很重：`curl_requests` / `time` 被判「零消费」并写进了报告散文，差点成为删除依据。
+    ⚠️ **散文比代码活得久**：通道从 6 升到 8 之后，代码里的判定器改了，**报告里那段散文没重算**。
+    **通用判据两条**：① 任何「键归一化 / 取末段 / 取 basename」的加速结构，都要问
+    「这个归一化丢掉了什么信息」；② **判定器的输出一旦被写成散文，就必须和判定器一起版本化** ——
+    否则升级判定器时，散文会带着旧结论继续误导人。
+27. 🔴 **「公开面是什么」要用实测回答，不能用 `__all__` 或直觉回答**。
+    `external_sessions/__init__.py` 的 `__all__` 声明 5 个名字，但
+    `tests/test_camoufox_sandbox.py` 用 `es.MOZ_DISABLE_CONTENT_SANDBOX`（**不在 `__all__` 里**），
+    `tests/test_external_registration_drivers.py` 用 `patch("…external_sessions.curl_requests.request")`。
+    ⇒ **`__all__` 只描述意图，不描述事实**；事实是「`__all__` ∪ 事实消费集」。
+    判据：枚举**全部**属性访问点（含字符串 patch 目标、别名间接、子模块路径），
+    再与 `__all__` 取并集 —— 两者之差才是真正要判断的部分。
+28. 🔴 **读 ADR 要连它的「写作时刻」一起读**。ADR-0009 写于 09-06 说
+    「Preserve `external_sessions` imports **through a package**」；而
+    `external_sessions` **当时是单文件模块**（`external_sessions.py` 在 `5168671` 被删、改为包）。
+    ⇒ 那句话是**对拆分的约束**（别破坏导入路径），不是「保留包入口的每个内部绑定」。
+    若只读字面「preserve imports」就照做，会把 8 个零消费名当成 ADR 保护的契约永久留存。
+    **判据：确认被点名的对象在 ADR 写作时是什么形态**（用 `git log --diff-filter=D --follow` 查）。
