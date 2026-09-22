@@ -103,7 +103,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 | Lane | 用途 | 出口来源 |
 | --- | --- | --- |
-| ① 注册代理 | 注册 worker（全部 6 驱动） | `proxy.registration` + `proxy.pool`（动态 sticky session，**单地区 IN、rola 10 条**；9http 已于 2026-09-18 从活动注册池移除） |
+| ① 注册代理 | 注册 worker（全部 6 驱动） | `proxy.registration` + `proxy.pool`（动态 sticky session，**单地区 VN、lajiao 10 条**；9http 于 2026-09-22 从活动注册池移除，模板解析能力保留） |
 | ② 邮箱/OTP 代理 | OTP 轮询收件 | `mailbox_proxy` / `mailbox_proxy_pool` 优先；`email_registration.mailbox_proxy_fallback_to_operation_proxy=true` 时把本次 operation proxy 追加为故障回退 |
 | ③ 协议支付代理 | Checkout/Approve | **随用户选择的 checkout/approve 出口动态选择**：取 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool` 持有的候选池（如 IPWO US/JP/GB），**非固定 JP/US/GB 混用** |
 
@@ -133,15 +133,28 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 - **选池**：`load_proxy_pool()`（`proxy_entry.py:535`）/ `choose_proxy_entry()`（`proxy_entry.py:601`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
 - **池形态约束（以 `proxy.json` 为准）**：
-  🔴 **2026-09-18 现状：单地区 IN、rola 10 条。** `proxy.registration` /
-  `default` / `proxy.pool` 均使用 rola `country-in` 模板。9http 曾短暂作为第二供应商
-  接入，但本轮实测的最终失败集中在该供应商，现已从活动注册池移除。通用
-  `ProxyEntry` 仍保留 9http 模板解析能力，供历史配置和其他独立代理池兼容使用。
+  🔴 **2026-09-22 现状：单地区 VN、lajiao 10 条。** `proxy.registration` /
+  `default` / `proxy.pool` 均使用 lajiao `region-VN` 模板
+  （`us.lajiaohttp.net:2000`，与 Cliproxy/Novproxy 模板**逐字同构** ⇒ 解析 /
+  重定 / 轮换零代码改动）。09-21 曾为拆单点故障域接入 9http 6 条
+  （`geo-JP/DE/CA/US`）并交错排布，09-22 按运营指令移除，池由 16 条回到
+  10 条 —— **同账号、同密码、同地区、同主机**，只有 sid 不同。
+  通用 `ProxyEntry` 仍保留 9http `geo-XX` 模板解析能力，供历史配置、
+  支付 lane（`payment.json` 仍持有 9http 凭据）与其他独立代理池使用。
 
-  **IN 地理档案继续保留**：规范表 `geo/profiles.MARKET_PROFILES` 使用
-  `en-IN` / `Asia/Kolkata`，浏览器映射使用 `COUNTRY_LOCALE_PROFILE_MAP["IN"]="in"`，
-  Windows 时区名为 `India Standard Time`。守卫位于
-  `tests/test_registration_protocol_geo.py`。
+  ⚠️ **代价（别只看"池更干净了"）**：单供应商 + 单地区 ⇒ 回到
+  "一家被拒即整批同时死"（2026-09-13 的 403 就是这么打穿全池的）。
+  9http 6 条完整凭据保留在 `runtime/proxy-backups/proxy.json.before-remove-9http-*`，
+  可整体回滚。另：`runtime/registration_proxy_health.json` 里 9http 的历史
+  健康记录成为孤儿键（永不会被查询，无害）。
+
+  **VN 地理档案已接线**：规范表 `geo/profiles.MARKET_PROFILES["VN"]` 使用
+  `vi-VN` / `Asia/Ho_Chi_Minh`，浏览器映射使用
+  `COUNTRY_LOCALE_PROFILE_MAP["VN"]="vn"`。`TIMEZONE_NAME_BY_IANA` 同时含
+  `Asia/Ho_Chi_Minh` 与 `Asia/Bangkok` —— 后者是 VN IP 常见的**实测**时区
+  （10 条里 5 条落到曼谷），两者 CLDR 名同为 `Indochina Time`，
+  补键后输出字节不变。**IN 档案（`en-IN` / `Asia/Kolkata`）保留**，
+  供历史配置使用，守卫位于 `tests/test_registration_protocol_geo.py`。
 
   批次启动前会对候选路由逐条执行 OpenAI 边界预检，只把成功路由传给 batch。
   批次内的 IP/国家探测不再被当作 OpenAI 可达性的替代判据。
