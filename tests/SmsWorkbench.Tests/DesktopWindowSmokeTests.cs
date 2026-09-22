@@ -366,22 +366,32 @@ public sealed class DesktopWindowSmokeTests
             stage("show selected registration dialog");
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
+            string[] selectedDialogTexts = Array.Empty<string>();
             method = typeof(MainWindow).GetMethod(
                 "CreateSelectedRegisterOptionsDialog",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(method);
+            // Reflection.Invoke does NOT honour optional parameter defaults, so all
+            // three parameters must be supplied even though checkedCount defaults to 0.
             var selectedRegisterDialog = Assert.IsType<Window>(method.Invoke(
                 main,
-                new object[] { 1, new Action<RegisterOptions>(_ => { }) }));
+                new object[] { 1, new Action<RegisterOptions>(_ => { }), 3 }));
             InspectWindow(
                 selectedRegisterDialog,
                 dialog =>
                 {
                     selectedComboBoxCount = FindVisualChildren<ComboBox>(dialog).Count();
                     selectedCheckBoxCount = FindVisualChildren<CheckBox>(dialog).Count();
+                    selectedDialogTexts = FindVisualChildren<TextBlock>(dialog)
+                        .Select(label => label.Text)
+                        .Where(text => !string.IsNullOrWhiteSpace(text))
+                        .ToArray();
                 });
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(2, selectedCheckBoxCount);
+            // checkedCount(3) > usable(1) must surface the local-exclusion count
+            // (added 2026-09-19; see docs/audits/scan-2026-09-19-selected-22-vs-reported-3of6.md).
+            Assert.Contains(selectedDialogTexts, text => text.Contains("本地排除 2 个", StringComparison.Ordinal));
             stage("verify mailbox selection routing");
             VerifyMailboxSelectionFileRouting(main);
         }
