@@ -45,10 +45,10 @@
 | # | 轴 | 结论 | 证据 | 成本 |
 |---|---|---|---|---|
 | A1 | 耦合 | `account_recovery` 兼容壳只被 6 个文件消费，却制造了 SCC-8 并迫使 `recovery_batch` 在**函数体内 import 25 个名字** | §3.3 | 小（6 文件改导入路径） · ✅ **已落地 09-22**：SCC 8→7，残留 0，ruff 全过 |
-| A2 | 文档 | `docs/audits/README.md` 自述「31 files」，实际 38 行 / 39 个跟踪文件 | §5.1 | 极小（1 行） |
-| A3 | 文档 | 13 个库模块在任何 `.md` 中从未出现（含 `cli_parsers/`、`geo/`、`pay_link/` 三个整包） | §5.2 | 小 |
-| A4 | 架构 | `sms_tool/upi_link.py`（2914 行，sms_tool 最大模块）**不在**任何拆分/合并计划范围内 | §4.2 | 中（需立项） |
-| A5 | 死代码 | 23 个零引用模块级定义；其中 9 个是 blik/ideal/twint 提取器三胞胎 | §6 | 小（逐项确认后删） |
+| A2 | 文档 | `docs/audits/README.md` 自述「31 files」，实际 38 行 / 39 个跟踪文件 | §5.1 | 极小（1 行） · ✅ **已落地 09-22**：计数改为 **40**；并新增 `tests/test_audits_readme_index.py` 钉住（漂移从「无人可见」变成「测试失败」，见 N7） |
+| A3 | 文档 | 13 个库模块在任何 `.md` 中从未出现（含 `cli_parsers/`、`geo/`、`pay_link/` 三个整包） | §5.2 | 小 · ✅ **已落地 09-22**：三个包已补模块组行，**并补上原报告漏记的 `store/` 整包**；未文档化模块探针 **13 → 0** |
+| A4 | 架构 | `sms_tool/upi_link.py`（2914 行，sms_tool 最大模块）**不在**任何拆分/合并计划范围内 | §4.2 | 中 · ✅ **测量已落地 09-22，结论是「不立项拆分」**（零改动同构度探针，详见 §4.2） |
+| A5 | 死代码 | 23 个零引用模块级定义；其中 9 个是 blik/ideal/twint 提取器三胞胎 | §6 | 小 · ✅ **已落地 09-22**：实删 **10** 项；blik 4 项**有意不删**（属 `plan-2026-09-17` §2.5 未决的 Q1，删 = 替架构决策投票） |
 | ~~A6~~ | 架构 | ~~C# 第 6 轮死成员抽样 16 项，10 项 20 天后仍 def-only~~ → 🔴 **落地阶段推翻**：第 6 轮当天已全删，文件里只剩墓碑注释；我的「数命中次数」判定把注释当成了定义 | §4.3 · §7.3 | 无（无可落地） |
 | A7 | 文档 | 第 6 轮把「门面冗余导入」13 项**明确留待单独一轮**，至今未开 | §5.3 | ✅ **已落地 09-22（以 ratchet 形式）**：原案「`select` 加 `F401` 要求 456 → 0」**被两次实测证伪**（判定器无法穷举消费面，3 → 6 → 8 通道，每轮代价一次全量回滚）；`per-file-ignores` 亦被否决。最终落地 `scripts/unused_import_ratchet.py` + 逐文件基线（冻结 456 处 / 84 文件，**只禁增长、零删除**） |
 | A8 | 目录 | `local/` 是顶层目录但不在 `docs/directory-map.md` 顶层表内 | §2.2 | 极小 · ✅ **已落地 09-22**（随 A3 一起补） |
@@ -86,6 +86,8 @@
 
 同样未在该表出现的还有 `.githooks/`、`.github/`。属**低危文档缺口**：
 目录表自称是「物理放置」的真源，却漏了三个真实存在的顶层目录。
+
+**✅ 已落地 09-22**：顶层表已补 `local/`、`.githooks/`、`.github/` 三行（随 A3 一起补）。
 
 ---
 
@@ -147,17 +149,35 @@ SCC 1/2/3/6/7 有一个模块级方向 + 一个懒加载反边 ⇒ 同样在 imp
 | `tests/test_heavy_lane_slots.py:20` | `from ...account_recovery import _heavy_lane_slots` | 测试 |
 
 **为什么值得做**：删掉 `__getattr__` 后，`account_recovery` 不再（惰性地）依赖 `recovery_batch`，
-**SCC-8 消失**，`recovery_batch` 就能把 31 处函数体内导入提到模块级。
-副作用是 `account_recovery` 变成 `recovery_batch` 的**单向上游**，
-依赖方向与文件职责一致（单账号逻辑 ← 批量引擎）。
+**SCC-8 消失**。
+
+**✅ 已落地 09-22**：`commands/accounts.py:247` 与 `accounts/account_scan.py:23` 的导入已改到
+`recovery_batch`，4 个测试模块已重定向，`account_recovery.py:1298-1316` 的
+`_BATCH_EXPORTS` + `__getattr__` 已删。
+**验收实测**：SCC **8 → 7**；`git grep 'account_recovery\.\(refresh_local_quota_statuses\|_prune_liveness_snapshots\|_heavy_lane_slots\)'`
+只剩注释；全量 pytest 计数不降。
 
 **风险与已排除项**：
 
-- 已确认**没有**测试 patch `sms_tool.accounts.recovery_batch.<内部名>`
-  （`git grep 'patch("sms_tool.accounts.recovery_batch\.' tests/` 为空），
-  所以**不存在**「patch 到函数体内导入的名字上、静默失效」的假绿风险。
 - 改动是**显式的**：漏改的消费点会 `AttributeError` 而非静默走错路径。
 - 生产只有 2 个文件要改，测试 4 个 —— 消费面**可枚举、可验证**。
+
+🔴🔴 **但本节原计划的最后一步「把 31 处函数体内导入提到模块级」被落地阶段否决 ——
+而否决它的是本节自己那条「已排除项」的漏洞。** 原判断写的是：
+
+> 已确认**没有**测试 patch `sms_tool.accounts.recovery_batch.<内部名>`
+> （`git grep 'patch("sms_tool.accounts.recovery_batch\.' tests/` 为空），
+> 所以**不存在**「patch 到函数体内导入的名字上、静默失效」的假绿风险。
+
+**这条 grep 太窄**：真实的 patch 面根本不在 `recovery_batch` 上，而在它的**上游** ——
+`tests/test_account_recovery.py:1308` patch 的是 `account_recovery.CFG`。
+那 31 处函数体内导入之所以存在，正是为了让调用发生在 `account_recovery.CFG`
+**被读到之后**；提到模块级 ⇒ 该 patch **静默失效**（测试仍绿，但测的不再是同一件事）。
+**结论：函数体内导入保留原样。**
+
+**⚠️ 教训（已收录进 §9.25）**：**「我用某个模式 grep 过、结果为空」只证明那个模式为空，
+不证明风险不存在。** 排除一条风险时必须同时写明**在哪个命名空间、用什么模式**排除的，
+并反问「如果真实 patch 面在上游 / 在别名侧 / 在字符串字面量里呢」。
 
 ---
 
@@ -299,7 +319,19 @@ git grep -nF NAME -- '*.cs' | grep -c "^[^:]*:[0-9]*:[[:space:]]*//"
 这是 `docs/audits/README.md` 自称的「Contents」索引表：一张自称是清单的表，
 **行集对了、计数错了**，且没有任何门禁能发现。
 
+**✅ 已落地 09-22**：计数行改为 **40**（39 个已跟踪 + 本报告入库后 1 个），并补了复算命令；
+另新增 `tests/test_audits_readme_index.py`（2 项）把「自述计数 == 目录条目数」钉住 ——
+**漂移从「无人可见」变成「测试失败」**（见 §8.1 N7）。
+⚠️ **本节的原始观察仍然成立且值得保留**：`docs_consistency_scan.py` 至今不检查
+「自述条目数 vs 实际条目数」，这次是靠**新增测试**补的洞，不是靠加宽那个扫描器。
+
 ### 5.2 A3：13 个库模块在任何 `.md` 中从未出现
+
+**✅ 已落地 09-22**：`cli_parsers/`、`geo/`、`pay_link/` 三个包已在 `directory-map.md` 补模块组行；
+**并顺带补上原报告漏记的 `store/` 整包（8 个模块）** —— 比本节的「13 个模块」范围更大。
+**验收实测**：未文档化模块探针 **13 → 0**；`scripts/docs_consistency_scan.py` 绿。
+⚠️ 但 `store/environment_ledger.py` 是 `f987742` 当天新增的，**下一次新增模块仍会重现本节问题** ——
+本节记录的是「文档滞后于代码」这个**机制**，不是一次性缺口。
 
 对 266 个库模块逐个在全部 95 个跟踪 `.md` 中检索文件名：
 
@@ -524,8 +556,26 @@ AST 抽 **3765** 个模块级定义；引用计数**先剥 docstring**，且把
 |---|---|---|
 | blik/ideal/twint 提取器三胞胎 | **9** | `fetch_redirect_page` ×3、`run_attempt` ×3、`build_attempt_batches` ×3 |
 | blik 独有代理选址 | 4 | `proxy_country_cache_ttl:663`、`proxy_target_cache_ttl:688`、`expected_proxy_country:714`、`load_proxy_groups:1260` |
-| 第 6 轮已记录、至今未删 | 3 | `diagnostics.py:28 safe_exception`（round6:141）、`providers/smailr_client.py:234 _mailbox_id`（round6:151）、`blik fetch_redirect_page`（round6:153，行号已从 2764 漂到 2533） |
-| 其余 | 7 | `kakao_extract.py:1340 no_kakao_method_error`、`account_health_queue.py:391 _account_payload`、`browser_fingerprint_pool.py:279 _normalize_geo_response`、`k12_client.py:11 normalize_k12_route`、`k12_client.py:19 _refresh_access_token_from_cookie`、`cfworker_client.py:513 _contains_otp`、`cfworker_client.py:533 _message_matches_email`、`upi_link.py:718 _write_qr_svg` |
+| 第 6 轮已记录、至今未删 | **2** | `diagnostics.py:28 safe_exception`（round6:141）、`providers/smailr_client.py:234 _mailbox_id`（round6:151） |
+| 其余 | **8** | `kakao_extract.py:1340 no_kakao_method_error`、`account_health_queue.py:391 _account_payload`、`browser_fingerprint_pool.py:279 _normalize_geo_response`、`k12_client.py:11 normalize_k12_route`、`k12_client.py:19 _refresh_access_token_from_cookie`、`cfworker_client.py:513 _contains_otp`、`cfworker_client.py:533 _message_matches_email`、`upi_link.py:718 _write_qr_svg` |
+
+**🔴 计数勘误（落地阶段自查）**：本表原写作「9 + 4 + **3** + **7** = 23」，
+但第 3 行的 `blik fetch_redirect_page`（round6:153）**已经计入第 1 行的
+`fetch_redirect_page` ×3**，属重复计数；而第 4 行标 7 却列了 8 项。
+**两个错误恰好互相抵消**（3+7 = 2+8 = 10），所以总数 23 一直是对的 ——
+**这正是"总数对不代表分组对"的典型**（同 §9.16 的集合差教训）。
+去重后自洽口径：**23 = 9 + 4 + 2 + 8**。
+定位方式：**逐行清点明细条数**，而不是只看各行的声明数字加起来对不对。
+
+**✅ A5 已落地 09-22：实删 10 项**（`diagnostics.safe_exception`、`smailr_client._mailbox_id`、
+`kakao_extract.no_kakao_method_error`、`account_health_queue._account_payload`、
+`browser_fingerprint_pool._normalize_geo_response`、`k12_client.normalize_k12_route`、
+`k12_client._refresh_access_token_from_cookie`、`cfworker_client._contains_otp`、
+`cfworker_client._message_matches_email`、`upi_link._write_qr_svg`）
+⇒ **上表「第 6 轮已记录」与「其余」两行已清零**（10 = 2 + 8）。
+**未删的 13 项** = 三胞胎 9 + blik 代理选址 4，理由见 §8 第 6 项
+（前者等 §4.2 结论一并处置，后者属 `plan-2026-09-17` §2.5 未决的 Q1）。
+⚠️ 因此上表的**行号引用对已删项已失效**，保留原值仅作历史取证。
 
 逐项在**自身文件内** grep 确认「命中数 == 1（仅定义行）」，12 项抽样全部通过。
 `_normalize_geo_response` 的旁证：`browser_fingerprint_pool.py` 里留着一句
@@ -621,15 +671,25 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
 
 **第二批（小成本、有明确判据）**
 
-4. **A1** 把 `commands/accounts.py:247` 与 `accounts/account_scan.py:23` 的导入改到
-   `recovery_batch`，重定向 4 个测试模块，删 `account_recovery.py:1298-1316` 的
-   `_BATCH_EXPORTS` + `__getattr__`，再把 `recovery_batch` 的 31 处函数体内导入提到模块级。
-   **验收**：`git grep 'account_recovery\.\(refresh_local_quota_statuses\|_prune_liveness_snapshots\|_heavy_lane_slots\)'` 只剩注释；
-   §3.1 的 SCC 从 8 降到 7；全量 pytest 计数不降。
+4. ✅ **A1 已落地 09-22**：`commands/accounts.py:247` 与 `accounts/account_scan.py:23` 的导入已改到
+   `recovery_batch`，4 个测试模块已重定向，`account_recovery.py:1298-1316` 的
+   `_BATCH_EXPORTS` + `__getattr__` 已删。
+   **验收实测**：SCC **8 → 7**；`git grep 'account_recovery\.\(refresh_local_quota_statuses\|_prune_liveness_snapshots\|_heavy_lane_slots\)'`
+   只剩注释；全量 pytest 计数不降。
+   🔴 **原计划的最后一步「把 31 处函数体内导入提到模块级」已撤销**：那些导入是 **patch 面**
+   （`tests/test_account_recovery.py:1308` patch `account_recovery.CFG`，只有函数体内导入才读得到），
+   提到模块级会让该 patch **静默失效**。**函数体内导入保留原样。**
 5. **~~A6~~ 删 10 个 C# 死成员** —— 🔴 **落地阶段撤销：它们第 6 轮就已删除**，
    文件里只剩墓碑注释。改为：**不动 C#**（详见 §4.3）。
-6. **A5** 逐项确认后删 23 个零引用定义；blik/ideal/twint 的 9 项建议**等 §4.2 的 upi 度量一起做**，
-   避免同族重复删改。
+6. ✅ **A5 已落地 09-22**：实删 **10** 项。
+   **未删的 13 项各有明确理由**：
+   - **blik 4 项**（`proxy_country_cache_ttl` / `proxy_target_cache_ttl` / `expected_proxy_country` /
+     `load_proxy_groups`）—— 确实零引用，但它们属 `plan-2026-09-17` §2.5 的「blik 独有 32 函数」，
+     即该计划**尚未回答的 Q1**（「blik 特有需求」还是「blik 是新一代、ideal/twint 是旧版」）。
+     **删掉等于用一次清理动作替一次架构决策投票，且决策者看不到自己投过票。** 留给 A4。
+   - **其余 9 项**属 blik/ideal/twint 提取器三胞胎，同理由 §4.2 的度量结论一并处置，
+     避免同族重复删改。
+   🔴 **通用铁律（§9.9）：零引用 ≠ 可删 —— 先问「它是不是某个未决设计问题的一部分」。**
 
 **第三批（需要立项或老板拍板）**
 
@@ -780,3 +840,14 @@ C# 侧也已**集中化**（`SmsWorkbench.Contracts/BackendTextMarkers.cs:37` +
     此时把目标从「清零」换成「冻结存量、只禁增长」，**用 1 个脚本 + 7 个测试拿到同一个价值**
     （"F401 的增长被自动化拦住"），且**零删除风险**。
     **判据：如果一个方案的每轮迭代都在"暴露新未知"而不是"逼近完成"，那是目标选错了。**
+25. 🔴🔴 **「我用某个模式 grep 过、结果为空」只证明那个模式为空，不证明风险不存在**。
+    §3.3 的扫描阶段我用
+    `git grep 'patch("sms_tool.accounts.recovery_batch\.' tests/` 排除过「patch 到函数体内
+    导入上、静默失效」的风险，结果为空 ⇒ 写下了「**不存在**假绿风险」。落地时才发现
+    **真实 patch 面在它的上游**：`tests/test_account_recovery.py:1308` patch 的是
+    `account_recovery.CFG`。那 31 处函数体内导入正是为了让调用发生在该 patch **之后**。
+    **排除一条风险时必须同时写明「在哪个命名空间、用什么模式」排除的**，
+    并主动反问三个方向：**上游？别名侧？字符串字面量里？**
+    （这三个方向恰好就是 §5.3 那 8 种消费通道里最难想到的几种。）
+    **更一般的形态**：这是同一个病 —— **把"我没找到"读成"它不存在"**，与 §9.8 的
+    「把命中数当判定」是镜像关系：一个是**假阳性**，一个是**假阴性**。
