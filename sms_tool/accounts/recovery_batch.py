@@ -2,9 +2,17 @@
 
 从 ``account_recovery.py``（1530 行）拆出的批处理引擎：线程池、heavy-lane
 信号量、每账号/整批截止线、快照持久化与清理、IPC 批事件。恢复策略
-（``relogin_codex_account`` 等）仍归 ``account_recovery``——引擎通过**函数内
-延迟导入**引用策略层，避免导入期循环；``account_recovery`` 用 PEP 562
-``__getattr__`` 兼容再导出本模块的公共名。
+（``relogin_codex_account`` 等）仍归 ``account_recovery``。
+
+🔴 引擎对策略层的引用**必须留在函数体内**。这**不是**为了断环：
+``account_recovery`` 自 2026-09-22 起已不再反指本模块（PEP 562 兼容再导出
+``__getattr__`` 已删，SCC 消失），所以模块级导入在运行期是安全的。
+留函数内的理由是**保住 patch 面**：``tests/test_account_recovery.py:1308``
+等用例 patch 的是 ``sms_tool.accounts.account_recovery.CFG``，只有调用期才去
+解析 ``account_recovery`` 的模块属性，才读得到被 patch 的值。提升到模块级会让
+这些 patch **静默失效**（转而使用真实配置，不报错、不失败）。
+同理 ``_clear_promotion_marker_after_probe`` 里的 ``except TypeError`` 分支是
+为兼容只接受单参的旧注入替身，不是死代码。
 """
 
 from __future__ import annotations
@@ -93,8 +101,9 @@ def refresh_local_quota_statuses(
     account_timeout: int = 360,
     fresh_probes: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    # 策略层与既有助手在调用期经 account_recovery 解析：导入期零循环，
-    # 且测试对 account_recovery.* 的 patch 继续生效（切分不改变 patch 面）。
+    # 策略层与既有助手在调用期经 account_recovery 解析：测试对
+    # account_recovery.* 的 patch 才能生效（切分不改变 patch 面）。
+    # 🔴 不要提升到模块级 —— 理由见本模块 docstring。
     from .account_recovery import (
         CFG,
         _TRANSIENT_RELOGIN_MODES,
@@ -110,16 +119,13 @@ def refresh_local_quota_statuses(
         _record_relogin_failure,
         _relogin_cooldown_active,
         _relogin_failure_quota_status,
-        _safe_relogin_result,
         _timed_out_health_result,
         account_identity,
         browser_fetch_for_account,
-        clear_stale_promotion_at_marker,
         is_permanently_deactivated,
         mailbox_relogin_allowed,
         mark_quota_status,
         probe_account_liveness,
-        proxy_pool_for,
         relogin_codex_account,
         runtime_file,
     )
@@ -515,7 +521,6 @@ def _probe_liveness_with_retries(
     """Retry transport-only failures against the configured liveness pool."""
     from .account_recovery import (
         CFG,
-        browser_fetch_for_account,
         is_transient_transport_error,
         probe_account_liveness,
         proxy_pool_for,
@@ -563,8 +568,8 @@ def _needs_browser_fallback(probe: dict[str, Any]) -> bool:
 
 
 def _clear_promotion_marker_after_probe(email: str) -> None:
-    from .account_recovery import clear_stale_promotion_at_marker
     """Clear a stale promotion 401 while remaining compatible with test seams."""
+    from .account_recovery import clear_stale_promotion_at_marker
     try:
         clear_stale_promotion_at_marker(email, verified_at=int(time.time()))
     except TypeError:
@@ -578,7 +583,6 @@ def _clear_promotion_marker_after_probe(email: str) -> None:
 
 
 def _refresh_mailbox_quarantine_state() -> None:
-    from .account_recovery import CFG
     """Prune records for credentials removed or replaced in the repaired pool."""
     try:
         from ..mailbox import _load_mailbox_pool

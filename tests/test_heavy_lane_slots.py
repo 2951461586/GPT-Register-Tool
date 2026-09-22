@@ -1,12 +1,12 @@
 """heavy lane 容量不变量（round3 P2-15）。
 
-``account_recovery._heavy_lane_slots`` 必须保证：**只要 worker 池 >= 2，
+``recovery_batch._heavy_lane_slots`` 必须保证：**只要 worker 池 >= 2，
 heavy lane 就严格小于池大小**。
 
 heavy lane（browser fallback / 401 relogin）存在的意义是给便宜的 HTTP probe
 留余量。一旦它的容量等于池大小，慢恢复就能占满所有 worker，
 ``browser_slots`` / ``relogin_slots`` 两个 semaphore 形同虚设 ——
-而 acquire 是阻塞式的（``account_recovery.py:172/222``），所以表现不是"丢账号"，
+而 acquire 是阻塞式的（``recovery_batch.py:270/320``），所以表现不是"丢账号"，
 而是**轻 probe 排队等重活**。
 
 旧公式 ``max(1, min(max_workers, max(2, max_workers // 2)))`` 里的 ``max(2, ...)``
@@ -17,7 +17,7 @@ heavy lane（browser fallback / 401 relogin）存在的意义是给便宜的 HTT
 
 import pytest
 
-from sms_tool.accounts.account_recovery import _heavy_lane_slots
+from sms_tool.accounts.recovery_batch import _heavy_lane_slots
 
 
 # (max_workers, expected) —— 覆盖边界（1/2/3）与大池等比放大

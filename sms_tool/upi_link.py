@@ -715,27 +715,6 @@ def _write_qr_png(data: str, qr_path: str = "") -> str:
     return str(path)
 
 
-def _write_qr_svg(data: str, qr_path: str = "") -> str:
-    """把 payload 渲染成 SVG（远程 ``qr_image_url_svg`` 不可达时的本地兜底）。
-
-    参考实现把远程 SVG/PNG URL 直接当结果返回, 没有本地渲染兜底; 客户端的
-    ``artifact_kind`` 是 ``url_or_qr``, 因此这里补一个同构产物。
-    """
-    url = str(data or "").strip()
-    if not url:
-        return ""
-    path = Path(qr_path or _default_qr_path("upi_svg")).with_suffix(".svg")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        import qrcode
-        import qrcode.image.svg
-    except Exception as exc:  # pragma: no cover - exercised only when dependency missing
-        raise RuntimeError("qrcode package is required for UPI QR generation; run pip install qrcode[pil]") from exc
-    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage)
-    img.save(str(path))
-    return str(path)
-
-
 # ─── UPI 辅助函数 ──────────────────────────────────────────────────────────────
 
 

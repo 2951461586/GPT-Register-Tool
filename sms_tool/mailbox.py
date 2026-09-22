@@ -25,13 +25,10 @@ Two traps worth knowing before editing:
 """
 
 import argparse
-import json
 import logging
 import os
 import re
-import time
 from collections.abc import Mapping
-from datetime import datetime
 from pathlib import Path
 
 from curl_cffi import requests as curl_requests

@@ -276,15 +276,6 @@ _GEO_CACHE: dict[str, dict[str, Any]] = {}
 _GEO_CACHE_LOCK = threading.Lock()
 
 
-def _normalize_geo_response(data: Any) -> dict[str, Any]:
-    """Normalize ipinfo / ipapi / ipwho.is JSON into a common shape.
-
-    Thin shell over :func:`sms_tool.geo.normalize_geo_response` — the provider
-    field mapping now has one implementation.
-    """
-    return _geo.normalize_geo_response(data).to_dict()
-
-
 def _geo_probe_adapter(
     proxy: str,
     *,

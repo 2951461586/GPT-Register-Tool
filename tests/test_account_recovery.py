@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 from contextlib import contextmanager
 
 from sms_tool.accounts import account_recovery
+from sms_tool.accounts import recovery_batch
 from sms_tool import codex_oauth
 from sms_tool.mailbox import MailboxAccount
 from sms_tool.accounts.account_identity import create_registration_identity
@@ -39,7 +40,7 @@ def test_refresh_local_quota_uses_light_probe_before_browser(monkeypatch):
         patch.object(account_recovery, "mark_quota_status", return_value=True),
         patch.object(account_recovery, "clear_stale_promotion_at_marker"),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["fast@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["fast@example.com"])
 
     assert result["ok"]
     assert calls == ["light"]
@@ -49,7 +50,7 @@ def test_liveness_explicit_proxy_wins_over_configured_pool():
     account = {"email": "proxy@example.com", "access_token": "at"}
     with patch.object(account_recovery, "proxy_pool_for", return_value=["http://pool-a:1", "http://pool-b:2"]), \
          patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active"}) as probe:
-        account_recovery._probe_liveness_with_retries(account, proxy="http://explicit:3", timeout=10)
+        recovery_batch._probe_liveness_with_retries(account, proxy="http://explicit:3", timeout=10)
     assert probe.call_args.kwargs["proxy"] == "http://explicit:3"
 
 
@@ -84,7 +85,7 @@ def test_refresh_local_quota_statuses_persists_result():
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}),
         patch.object(account_recovery, "mark_quota_status", return_value=True) as marked,
     ):
-        result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["ok@example.com"])
 
     assert result["ok"]
     marked.assert_called_once()
@@ -104,7 +105,7 @@ def test_refresh_local_quota_reuses_definitive_scan_probe_without_reprobing():
         patch.object(account_recovery, "probe_account_liveness", side_effect=probe),
         patch.object(account_recovery, "mark_quota_status", return_value=True) as marked,
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["fresh@example.com"],
             fresh_probes={"fresh@example.com": {"ok": True, "status": "active", "quota_status": "可用"}},
         )
@@ -130,7 +131,7 @@ def test_refresh_local_quota_reprobes_transport_unknown_scan_probe():
         patch.object(account_recovery, "probe_account_liveness", side_effect=probe),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["stale@example.com"],
             fresh_probes={"stale@example.com": {"ok": False, "status": "unknown", "error": "timeout"}},
         )
@@ -146,7 +147,7 @@ def test_refresh_local_quota_keeps_probe_health_when_persistence_fails():
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "active"}),
         patch.object(account_recovery, "mark_quota_status", return_value=False),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["ok@example.com"])
 
     assert result["ok"]
     assert result["success"] == 1
@@ -167,7 +168,7 @@ def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypat
     monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda account, **kwargs: {"ok": True, "quota_status": "active"})
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
 
-    result = account_recovery.refresh_local_quota_statuses(["a@example.com", "b@example.com"], workers=2)
+    result = recovery_batch.refresh_local_quota_statuses(["a@example.com", "b@example.com"], workers=2)
 
     terminal = [event for event in events if event.get("stage") == "account_completed"]
     assert result["total"] == 2
@@ -187,7 +188,7 @@ def test_refresh_local_quota_statuses_recovers_401():
         ) as relogin,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["ok@example.com"],
             relogin_on_401=True,
             relogin_mode="codex_oauth",
@@ -240,7 +241,7 @@ def test_relogin_lane_follows_requested_concurrency():
         patch.object(account_recovery, "relogin_codex_account", side_effect=slow_relogin),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             emails,
             relogin_on_401=True,
             relogin_mode="codex_oauth",
@@ -285,7 +286,7 @@ def test_account_deadline_does_not_mask_confirmed_401_after_relogin():
         # must not leak a synthetic test row into the production database.
         patch.object(account_recovery, "upsert_account", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["slow@example.com"],
             workers=1,
             relogin_on_401=True,
@@ -318,7 +319,7 @@ def test_account_deadline_still_marks_undetermined_probe_as_timeout():
         patch.object(account_recovery, "probe_account_liveness", side_effect=slow_probe),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["hang@example.com"],
             workers=1,
             account_timeout=30,
@@ -350,7 +351,7 @@ def test_refresh_local_quota_statuses_does_not_count_persisted_401_as_success():
         # keep the test hermetic by stubbing the upsert.
         patch.object(account_recovery, "upsert_account", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["invalid@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["invalid@example.com"])
 
     assert not result["ok"]
     assert result["success"] == 0
@@ -387,7 +388,7 @@ def test_refresh_local_quota_statuses_accepts_http_401_without_normalized_status
         ) as relogin,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["status-code-only@example.com"],
             relogin_on_401=True,
         )
@@ -411,7 +412,7 @@ def test_refresh_local_quota_statuses_classifies_terminal_account_without_relogi
         patch.object(account_recovery, "relogin_codex_account") as relogin,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["closed@example.com"],
             relogin_on_401=True,
         )
@@ -450,7 +451,7 @@ def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_
     # stub the upsert to keep the test hermetic.
     monkeypatch.setattr(account_recovery, "upsert_account", lambda *args, **kwargs: True)
 
-    result = account_recovery.refresh_local_quota_statuses(
+    result = recovery_batch.refresh_local_quota_statuses(
         ["user@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
     )
 
@@ -480,7 +481,7 @@ def test_token_invalid_without_recovery_material_is_marked_dropped():
             side_effect=lambda data, json_path="": persisted.append(data) or True,
         ),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["drop@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["drop@example.com"])
 
     assert not result["ok"]
     assert result["results"][0]["probe"]["dropped"] == "token_revoked"
@@ -519,7 +520,7 @@ def test_token_invalid_with_password_only_is_marked_dropped():
             side_effect=lambda data, json_path="": persisted.append(data) or True,
         ),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["pwonly@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["pwonly@example.com"])
 
     assert result["results"][0]["probe"]["dropped"] == "token_revoked"
     assert persisted and persisted[0]["status"] == "at_invalid"
@@ -605,7 +606,7 @@ def test_dropped_account_skips_probe_and_relogin():
         patch.object(account_recovery, "mark_quota_status", return_value=True),
         patch.object(account_recovery, "upsert_account", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["gone@example.com"], relogin_on_401=True
         )
 
@@ -628,7 +629,7 @@ def test_token_invalid_with_mailbox_material_is_not_marked_when_breaker_closed(m
     dropped = []
     monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
 
-    result = account_recovery.refresh_local_quota_statuses(
+    result = recovery_batch.refresh_local_quota_statuses(
         ["keep@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
     )
 
@@ -649,7 +650,7 @@ def test_token_invalid_during_relogin_cooldown_is_not_marked(monkeypatch):
     dropped = []
     monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
 
-    result = account_recovery.refresh_local_quota_statuses(
+    result = recovery_batch.refresh_local_quota_statuses(
         ["cool@example.com"], relogin_on_401=True, batch_timeout=30, account_timeout=30
     )
 
@@ -671,7 +672,7 @@ def test_token_revoked_drop_skips_probe_and_relogin_on_later_runs():
         patch.object(account_recovery, "mark_quota_status", return_value=True),
         patch.object(account_recovery, "upsert_account", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["gone@example.com"], relogin_on_401=True)
+        result = recovery_batch.refresh_local_quota_statuses(["gone@example.com"], relogin_on_401=True)
 
     probe.assert_not_called()
     relogin.assert_not_called()
@@ -695,7 +696,7 @@ def test_relogin_terminal_deactivation_is_not_double_marked(monkeypatch):
     dropped = []
     monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
 
-    result = account_recovery.refresh_local_quota_statuses(
+    result = recovery_batch.refresh_local_quota_statuses(
         ["term@example.com"], relogin_on_401=True, batch_timeout=60, account_timeout=60
     )
 
@@ -1190,7 +1191,7 @@ def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogi
         patch.object(account_recovery, "clear_stale_promotion_at_marker", side_effect=fake_clear),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(
+        result = recovery_batch.refresh_local_quota_statuses(
             ["stale@example.com"],
             relogin_on_401=True,
             relogin_mode="codex_oauth",
@@ -1215,7 +1216,7 @@ def test_refresh_local_quota_statuses_clears_promotion_marker_after_verified_pro
         patch.object(account_recovery, "clear_stale_promotion_at_marker") as clear_marker,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["ok@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["ok@example.com"])
 
     assert result["ok"]
     clear_marker.assert_called_once()
@@ -1238,7 +1239,7 @@ def test_liveness_transport_failure_retries_configured_pool(monkeypatch):
         "account_health": {"use_registration_affinity": True},
     })
     monkeypatch.setattr(account_recovery, "probe_account_liveness", fake_probe)
-    result = account_recovery._probe_liveness_with_retries(
+    result = recovery_batch._probe_liveness_with_retries(
         account, proxy="http://127.0.0.1:7897", timeout=5
     )
     assert result["ok"]
@@ -1352,7 +1353,7 @@ def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_p
         patch.object(account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["browser@example.com"])
 
     assert result["ok"]
     # Must have opened a browser session with the saved driver
@@ -1392,7 +1393,7 @@ def test_browser_liveness_reuses_persisted_geo_aligned_profile():
         patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["browser@example.com"])
 
     assert result["ok"]
     assert create_session.call_args.kwargs["locale"] == "ja-JP"
@@ -1420,7 +1421,7 @@ def test_refresh_local_quota_statuses_falls_back_to_curl_when_no_browser_identit
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["plain@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["plain@example.com"])
 
     assert result["ok"]
     # Must NOT have opened a browser session
@@ -1451,7 +1452,7 @@ def test_browser_liveness_does_not_downgrade_to_curl_when_context_unavailable():
         patch.object(account_recovery, "probe_account_liveness") as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
-        result = account_recovery.refresh_local_quota_statuses(["browser@example.com"])
+        result = recovery_batch.refresh_local_quota_statuses(["browser@example.com"])
 
     assert not result["ok"]
     assert result["results"][0]["probe"].get("browser_fallback") == "unavailable"

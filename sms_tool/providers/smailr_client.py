@@ -231,12 +231,6 @@ def _unwrap_data(value: Any) -> Any:
     return nested if isinstance(nested, (dict, list)) else value
 
 
-def _mailbox_id(mb: dict) -> str:
-    if not isinstance(mb, dict):
-        return ""
-    return str(mb.get("id") or mb.get("mailbox_id") or mb.get("uuid") or "").strip()
-
-
 def _format_received(value: Any) -> str:
     if isinstance(value, (int, float)):
         ts = float(value)

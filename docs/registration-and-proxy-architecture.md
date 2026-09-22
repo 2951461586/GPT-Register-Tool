@@ -268,8 +268,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `shared_fingerprint_pool` | `fingerprint_pool.py:347` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:121` / `:37` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:246` | 浏览器路径内置指纹池单例 |
-| `select_browser_profile` | `browser_fingerprint_pool.py:549` | 取浏览器硬件档案（seed 稳定） |
-| `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:329` | 穿透代理查出口地理 |
+| `select_browser_profile` | `browser_fingerprint_pool.py:540` | 取浏览器硬件档案（seed 稳定） |
+| `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:320` | 穿透代理查出口地理 |
 | `BrowserProfilePool` / `BROWSER_PROFILE_POOL` | `browser_fingerprint_pool.py:210` / `:160` | 7 个内置桌面硬件档案（4 个浏览器驱动共享） |
 | `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:69` | 5 浏览器驱动统一入口 |
 | `PoolConfig`（进程池） | `browser_pool.py:62` | `registration.browser_process_pool` 解析 |

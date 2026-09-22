@@ -25,11 +25,6 @@ def safe_print(
     print(sanitize_log_text(text), end=end, file=target, flush=flush)
 
 
-def safe_exception(value: BaseException | Any) -> str:
-    return sanitize_log_text(value)
-
-
-
 class SanitizingTextIO:
     """Text stream proxy that guarantees policy enforcement at process output.
 

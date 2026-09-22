@@ -510,10 +510,6 @@ class _ReadableHtmlParser(HTMLParser):
         return "".join(self.parts)
 
 
-def _contains_otp(text):
-    return bool(OTP_RE.search(str(text or "")))
-
-
 def _first(mapping, *keys):
     for key in keys:
         if key in mapping and mapping[key] not in (None, ""):
@@ -528,11 +524,6 @@ def _sender(msg):
             return str(value["emailAddress"].get("address") or "")
         return str(value.get("address") or value.get("email") or value.get("name") or "")
     return str(value or "")
-
-
-def _message_matches_email(msg, email):
-    target = str(email or "").strip().lower()
-    return bool(target and target in _message_recipients(msg))
 
 
 def _messages_for_mailbox(messages, email, allow_missing_recipient=False):

@@ -274,8 +274,6 @@ class RegistrationEmailWorkflow:
       (persistence); see ``docs/architecture.md`` "Dependency Direction".
     """
 
-    """Email-registration stage handlers with one failure and cleanup policy."""
-
     def __init__(
         self,
         machine: RegistrationStateMachine,
