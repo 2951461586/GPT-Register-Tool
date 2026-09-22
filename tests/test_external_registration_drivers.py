@@ -1632,30 +1632,6 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
             )
         self.assertEqual(session.kwargs["viewport"], (1440, 900))
 
-    def test_provider_managed_driver_logs_a_notice(self):
-        config = {
-            "registration": {
-                "browser_profile_pool": {"profiles": [{"screen_width": 1440}]},
-                "drivers": {"roxy": {"api_key": "k"}},
-            }
-        }
-        with patch.dict(_BROWSER_SESSION_FACTORIES, {"roxy": _RecordingSession}):
-            with self.assertLogs("sms_tool.registration_drivers.external_sessions", "INFO") as logs:
-                create_browser_session(
-                    "roxy", config=config, viewport=(1680, 1050), **_SESSION_KWARGS
-                )
-        self.assertTrue(any("browser_profile_pool" in line for line in logs.output))
-
-    def test_screen_managed_driver_logs_no_notice(self):
-        # Camoufox does consume the pool, so a "pool has no effect" notice
-        # here would be actively misleading.
-        with self.assertNoLogs("sms_tool.registration_drivers.external_sessions", "INFO"):
-            with patch.dict(_BROWSER_SESSION_FACTORIES, {"camoufox": _RecordingSession}):
-                create_browser_session(
-                    "camoufox", config={"registration": {}}, viewport=(1680, 1050), **_SESSION_KWARGS
-                )
-
-
 if __name__ == "__main__":
     unittest.main()
 

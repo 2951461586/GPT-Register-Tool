@@ -323,24 +323,29 @@ def test_storage_persists_unified_health_result_without_token():
 
 
 def test_deep_liveness_runs_light_probe_recovery_and_final_probe():
-    records = [
-        {"email": "recover@example.com", "access_token": "old-at", "raw_json": "{}"},
-        {"email": "recover@example.com", "access_token": "new-at", "raw_json": "{}"},
-    ]
-    probes = [
-        {"ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效"},
-        {"ok": True, "status": "active", "status_code": 200, "quota_status": "可用"},
-    ]
+    record = {"email": "recover@example.com", "access_token": "new-at", "raw_json": "{}"}
+    report = {
+        "results": [{
+            "email": "recover@example.com",
+            "ok": True,
+            "probe_ok": True,
+            "persisted": True,
+            "probe": {
+                "ok": True,
+                "status": "active",
+                "status_code": 200,
+                "quota_status": "可用",
+            },
+            "relogin": {"ok": True, "mode": "chatgpt_email_otp"},
+        }],
+    }
     with (
-        patch("sms_tool.storage.get_account_record", side_effect=records),
-        patch("sms_tool.storage.mark_quota_status", return_value=True),
+        patch("sms_tool.storage.get_account_record", return_value=record),
         patch("sms_tool.storage.mark_account_health_result", return_value=True) as persist,
-        patch("sms_tool.accounts.account_recovery.is_permanently_deactivated", return_value=False),
         patch(
-            "sms_tool.accounts.account_recovery.relogin_codex_account",
-            return_value={"ok": True, "mode": "chatgpt_email_otp"},
-        ) as recover,
-        patch("sms_tool.accounts.account_liveness.probe_account_liveness", side_effect=probes) as probe,
+            "sms_tool.accounts.recovery_batch.refresh_local_quota_statuses",
+            return_value=report,
+        ) as workflow,
     ):
         result = account_health_queue._handle_job(
             {
@@ -353,6 +358,14 @@ def test_deep_liveness_runs_light_probe_recovery_and_final_probe():
     assert result.ok is True
     assert result.recovered is True
     assert result.state == "recovered"
-    assert probe.call_count == 2
-    recover.assert_called_once()
+    workflow.assert_called_once_with(
+        emails=["recover@example.com"],
+        workers=1,
+        proxy=None,
+        relogin_on_401=True,
+        relogin_mode="auto",
+        relogin_timeout=300,
+        batch_timeout=900,
+        account_timeout=360,
+    )
     persist.assert_called_once()

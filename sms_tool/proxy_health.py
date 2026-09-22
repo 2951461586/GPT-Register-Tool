@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .cross_process_gate import cross_process_write_lock
 from .paths import runtime_file
 
 
@@ -65,7 +66,8 @@ class ProxyHealthTracker:
         key = self.key(proxy)
         if key == ":0":
             return
-        with _FILE_LOCK:
+        lock_path = self._path.with_suffix(self._path.suffix + ".lock")
+        with _FILE_LOCK, cross_process_write_lock(lock_path):
             data = self._read()
             keys = [key]
             endpoint = self._endpoint_key(proxy)

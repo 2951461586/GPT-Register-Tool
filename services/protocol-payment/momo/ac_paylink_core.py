@@ -21,6 +21,19 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+# ``common/`` is the sibling of this script's own directory. The host launches
+# extractors with ``cwd=<their own dir>`` (sms_tool/pay_link/adapters.py), so
+# neither the repository root nor ``common``'s parent is on ``sys.path`` yet.
+# ``os.path`` rather than ``pathlib``: this module deliberately keeps its import
+# surface small, and ``os`` is already imported above.
+PROTOCOL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROTOCOL_ROOT not in sys.path:
+    sys.path.insert(0, PROTOCOL_ROOT)
+
+from common.proxy_url import (
+    normalize_provider_form as shared_normalize_provider_form,
+)
+
 CHECKOUT_ENDPOINT = "https://chatgpt.com/backend-api/payments/checkout"
 DEFAULT_PLAN_NAME = "chatgptplusplan"
 DEFAULT_PROMO_CAMPAIGN_ID = "plus-1-month-free"
@@ -257,19 +270,26 @@ def build_checkout_payload(
     return payload
 
 
+def _proxy_form_error() -> PaylinkError:
+    return PaylinkError("proxy must be URL or host:port:user:pass")
+
+
 def normalize_proxy_url(proxy: str | None) -> str:
-    value = str(proxy or "").strip()
-    if not value:
-        return ""
-    if "://" in value:
-        return value
-    parts = value.split(":", 3)
-    if len(parts) != 4:
-        raise PaylinkError("proxy must be URL or host:port:user:pass")
-    host, port, user, password = parts
-    user_q = urllib.parse.quote(user, safe="")
-    pass_q = urllib.parse.quote(password, safe="")
-    return f"http://{user_q}:{pass_q}@{host}:{port}"
+    """Delegate to the shared light skeleton in ``common/proxy_url.py``.
+
+    ``on_unparseable="raise"`` with the injected factory preserves the original
+    ``PaylinkError`` type *and* message; ``quote_safe=""`` preserves this
+    extractor's stricter percent-encoding (a literal ``-`` or ``.`` inside a
+    credential is encoded here but not by ``direct_card``).
+    ``runtime/tmp/p0_compare.py`` pins the equivalence.
+    """
+    return shared_normalize_provider_form(
+        proxy,
+        default_scheme="http",
+        on_unparseable="raise",
+        unparseable_error=_proxy_form_error,
+        quote_safe="",
+    )
 
 
 def build_opener(proxy_url: str = "") -> urllib.request.OpenerDirector:

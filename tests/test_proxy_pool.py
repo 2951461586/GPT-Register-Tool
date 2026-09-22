@@ -342,6 +342,16 @@ class TestHealthSyncP1_2(unittest.TestCase):
         server._apply_health(u, False, error="x")
         self.assertEqual(u.fail_count, 1)
 
+    def test_async_health_update_persists_off_event_loop(self):
+        server, tracker = self._make_server_with_tracker()
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label="a", healthy=True)
+
+        asyncio.run(server._apply_health_async(u, False, error="async timeout"))
+
+        row = tracker._read()["1.2.3.4:1080"]
+        self.assertEqual(int(row["failure"]), 1)
+        self.assertEqual(row["last_error"], "async timeout")
+
 
 class TestStatsJson(unittest.TestCase):
     def test_stats_json_structure(self):

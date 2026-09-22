@@ -294,14 +294,36 @@ def env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-def env_int(name: str, default: int, minimum: int = 1) -> int:
+def env_int(
+    name: str, default: int, minimum: int = 1, maximum: int | None = None
+) -> int:
+    """Parse an int environment variable, clamped to ``[minimum, maximum]``.
+
+    ``maximum`` defaults to ``None`` = unbounded, which is what blik / ideal /
+    twint have always used.  ``kakao`` needs a ceiling (it passes 86_400 for a
+    cooldown, 100 for a retry count), and used to carry its own private copy
+    that differed from this one in exactly that respect.  Rather than pick one
+    behaviour and change the other's production meaning, the ceiling is a
+    parameter -- see ``runtime/tmp/p1_env_matrix.py`` for the differential.
+
+    Historically ``kakao`` also parsed via ``int(os.environ.get(name, default))``,
+    so an *unset* variable fell back to ``default`` by way of ``int(default)``
+    and a ``TypeError`` was caught rather than an empty string being detected.
+    Both routes yield ``default`` for every input that reaches them, so folding
+    them into the single empty-check above is behaviour-preserving.
+    """
     raw = os.environ.get(name, "").strip()
     if not raw:
-        return max(minimum, default)
-    try:
-        return max(minimum, int(raw))
-    except ValueError:
-        return max(minimum, default)
+        value = default
+    else:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = default
+    value = max(minimum, value)
+    if maximum is not None:
+        value = min(maximum, value)
+    return value
 
 
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:

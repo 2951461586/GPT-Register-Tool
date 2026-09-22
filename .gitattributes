@@ -1,0 +1,70 @@
+# 换行符策略（2026-09-17 固化）
+#
+# 背景：仓库有 499 个 .py、108 个 .cs、87 个 .md。本机 `core.autocrlf=true` 且此前
+# **没有任何 .gitattributes**，于是换行符完全靠 autocrlf 隐式决定，结果是
+# 「索引里是 LF、工作区是 CRLF」，而一旦某个工具（或某次手改）漏写了 CR，
+# 文件就会变成**单文件内部混用** —— 实测 18 个 .py 就是这样，其中
+# `tests/test_remail_mailbox.py` 716 行里 136 行是孤立 LF。
+#
+# 混用的真实危害不是「不好看」，而是：
+#   1. `git diff` 会把整文件标成改动，掩盖真正的逻辑改动；
+#   2. `git blame` 的归属被打乱（换行符差异也算一行改动）；
+#   3. 逐字节比对工具（本项目大量使用：`git show HEAD:path` + SHA256 做基线归属）
+#      会在「语义相同的两份文件」上报出差异。
+#
+# 策略：**索引与工作区统一 LF**，`eol=lf` 同时约束两者，不再依赖 autocrlf。
+#   注意：`eol=lf` 与 `core.autocrlf=true` 并存是安全的 —— 取更严格的属性。
+#   取证时全部 746 个文本文件的索引**本来就已是 i/lf**，因此本文件落地
+#   **不产生任何重写**（`git ls-files --eol` 无变化）。
+#
+# 例外：Windows 原生脚本必须 CRLF，否则 cmd.exe / PowerShell 解析可能出错。
+#   实测 `.bat`/`.cmd`/`.ps1` 保持 CRLF。
+
+* text=auto eol=lf
+
+# 显式声明，避免 `text=auto` 的二值探测在边缘文件上猜错
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.jsonl text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.sh    text eol=lf
+*.cs    text eol=lf
+*.xaml  text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.slnx  text eol=lf
+*.editorconfig text eol=lf
+*.gitignore    text eol=lf
+*.gitattributes text eol=lf
+*.manifest text eol=lf
+*.js    text eol=lf
+*.example text eol=lf
+
+# Windows 原生脚本：保留 CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二进制：禁止任何换行符转换，也不要在 diff 里比较
+*.png   -text -diff
+*.jpg   -text -diff
+*.jpeg  -text -diff
+*.gif   -text -diff
+*.ico   -text -diff
+*.pdf   -text -diff
+*.zip   -text -diff
+*.woff  -text -diff
+*.woff2 -text -diff
+*.ttf   -text -diff
+*.dll   -text -diff
+*.exe   -text -diff
+*.pdb   -text -diff
+*.so    -text -diff
+*.pyd   -text -diff

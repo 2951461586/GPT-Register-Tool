@@ -2,7 +2,7 @@
 
 Call :func:`configure_logging` once at process start (CLI entry points such as
 ``chatgpt_phone_reg.py`` / ``cli``). It installs two size-capped, rotated
-handlers under ``runtime/logs/`` so Python-side output is observable instead of
+handlers under ``runtime/logs/processes/<pid>/`` so Python-side output is observable instead of
 being swallowed by the WPF stdout capture:
 
 - ``sms_tool.log`` — the operator log. :class:`HumanLogFormatter` renders one
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import json
+import os
 import re
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -40,6 +41,12 @@ _STRUCTURED_RECORD_FIELDS = (
     "failure_class",
     "batch_id",
     "account_ref",
+    "provider",
+    "result",
+    "seen_id_count",
+    "seen_newest_ts",
+    "matched",
+    "registration_status",
 )
 
 class CorrelatedJsonFormatter(logging.Formatter):
@@ -264,15 +271,15 @@ class ResilientRotatingFileHandler(RotatingFileHandler):
         )
 
 
-def _default_log_path() -> Path:
-    """Resolve ``<runtime dir>/logs/sms_tool.log``.
+def default_log_dir() -> Path:
+    """Resolve ``<runtime dir>/logs``, creating it if needed.
 
     ``paths.runtime_file(cfg, filename)`` takes the **config** as its first
     argument, not a directory. The previous call passed ``"logs"`` there, which
     raised ``AttributeError`` on ``cfg.get``; the broad ``except Exception``
     then silently fell back to a repo-root ``logs/`` directory. It went
     unnoticed for as long as ``configure_logging`` had zero callers.
-    Resolve via ``runtime_dir`` so the log lands in the git-ignored runtime tree.
+    Resolve via ``runtime_dir`` so logs land in the git-ignored runtime tree.
     """
     from .paths import PROJECT_ROOT
 
@@ -284,7 +291,18 @@ def _default_log_path() -> Path:
     except Exception:  # pragma: no cover - defensive fallback only
         directory = PROJECT_ROOT / "runtime" / "logs"
     directory.mkdir(parents=True, exist_ok=True)
-    return directory / "sms_tool.log"
+    return directory
+
+
+def _default_log_path() -> Path:
+    """Each backend owns its open handles; Windows rotation cannot cross owners."""
+    return process_log_dir() / "sms_tool.log"
+
+
+def process_log_dir() -> Path:
+    directory = default_log_dir() / "processes" / str(os.getpid())
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
 
 
 def configure_logging(

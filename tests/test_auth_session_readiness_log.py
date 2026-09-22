@@ -209,7 +209,13 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
             _Response(200, {"_raw": "<html>challenge</html>"}),
             _Response(200, {"user": {}, "expires": "x"}),
         ]
-        self._fetch(responses)
+        # attempts=4 explicitly: the default readiness window grew 4 -> 8 on
+        # 2026-09-19 to survive slow-egress session propagation, but this test
+        # pins the *per-attempt* logging contract, not the window size.
+        # The session must carry the next-auth session cookie, otherwise the
+        # 2026-09-19 P2 early-bail (no session cookie => polling cannot help)
+        # stops the loop after round 1 and the four shapes never get logged.
+        self._fetch(responses, attempts=4, session=_Session("__Secure-next-auth.session-token"))
 
         events = self._events()
         self.assertEqual(len(events), 4)
@@ -247,6 +253,38 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         event = self._events()[0]
         self.assertIs(event.nextauth_session, False)
         self.assertEqual(event.cookie_count, 2)
+
+    def test_missing_session_cookie_bails_after_round_one(self):
+        """P2 (2026-09-19): without ``__Secure-next-auth.session-token`` the
+        session is structurally anonymous -- no amount of polling makes a
+        token appear.  The loop must stop after the first round and mark the
+        result, instead of burning all 8 rounds like batch ``629f5f99`` did
+        (~8.5s of guaranteed-failure polling per run)."""
+        result = self._fetch(
+            [_Response(200, {"WARNING_BANNER": "x"}) for _ in range(8)],
+            session=_Session("oai-did"),  # no next-auth session cookie
+        )
+
+        self.assertEqual(len(self._events()), 1, "must stop after round 1")
+        self.assertTrue(result.get("session_cookie_missing"))
+        self.assertFalse(account_creation._auth_session_access_token(result["body"]))
+
+    def test_present_session_cookie_keeps_polling_for_the_token(self):
+        """The early-bail only fires when the cookie is *absent*.  With the
+        cookie in the jar, a token-less round is a propagation delay and the
+        loop must keep going until the token shows up."""
+        result = self._fetch(
+            [
+                _Response(200, {"user": {}, "expires": "x"}),
+                _Response(200, {"user": {}, "expires": "x"}),
+                _Response(200, {"accessToken": "tok"}),
+            ],
+            session=_Session("__Secure-next-auth.session-token"),
+        )
+
+        self.assertEqual(len(self._events()), 3)
+        self.assertNotIn("session_cookie_missing", result)
+        self.assertEqual(account_creation._auth_session_access_token(result["body"]), "tok")
 
     def test_success_is_logged_and_stops_the_poll(self):
         responses = [_Response(200, {"accessToken": "tok"})]
@@ -295,7 +333,10 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
             _Response(200, {"user": {}, "expires": "x"}),
             _Response(200, {"accessToken": "tok"}),
         ]
-        self._fetch(responses)
+        # Session cookie present so the P2 early-bail does not fire -- this
+        # test asserts message/extra agreement across *two* rounds, and round
+        # 2 only happens when the poll is allowed to continue.
+        self._fetch(responses, session=_Session("__Secure-next-auth.session-token"))
 
         events = self._events()
         self.assertEqual(len(events), 2)

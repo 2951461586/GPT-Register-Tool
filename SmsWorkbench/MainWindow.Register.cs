@@ -62,7 +62,7 @@ namespace SmsWorkbench
                 await TryCreateSelectedUnregisteredMailboxFileAsync().ConfigureAwait(true);
             if (pending.Selection is { } pendingSelection)
             {
-                RegisterOptions? selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelection.Count);
+                RegisterOptions? selectedOptions = ShowSelectedRegisterOptionsDialog(pendingSelection.Count, pending.SelectedRowCount);
                 if (selectedOptions == null) return;
                 var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
                     "选中未注册邮箱注册",
@@ -80,6 +80,13 @@ namespace SmsWorkbench
             if (pending.PendingRowCount > 0)
             {
                 ShowThemedInfoDialog("邮箱记录不完整", "选中的未注册邮箱缺少可用邮箱原始记录，无法直接注册。");
+                return;
+            }
+
+            if (SelectedRowsOrCurrent().Any(row => RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
+                || RegistrationStatusPresentation.IsPartial(row.Status)))
+            {
+                ShowThemedInfoDialog("半注册", "所选邮箱已有服务端账号，不能再次新建注册。请使用已有账号恢复流程。");
                 return;
             }
 
@@ -358,14 +365,14 @@ namespace SmsWorkbench
         // payment window, which own their own payment-method pickers.
 
         // Returns null when the operator cancels the dialog.
-        private RegisterOptions? ShowSelectedRegisterOptionsDialog(int selectedCount)
+        private RegisterOptions? ShowSelectedRegisterOptionsDialog(int selectedCount, int checkedCount = 0)
         {
             RegisterOptions? selected = null;
-            Window dialog = CreateSelectedRegisterOptionsDialog(selectedCount, options => selected = options);
+            Window dialog = CreateSelectedRegisterOptionsDialog(selectedCount, options => selected = options, checkedCount);
             return dialog.ShowDialog() == true ? selected : null;
         }
 
-        private Window CreateSelectedRegisterOptionsDialog(int selectedCount, Action<RegisterOptions> accept)
+        private Window CreateSelectedRegisterOptionsDialog(int selectedCount, Action<RegisterOptions> accept, int checkedCount = 0)
         {
             var dialog = new Window
             {
@@ -388,9 +395,20 @@ namespace SmsWorkbench
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
+            int usable = Math.Max(1, selectedCount);
+            // checkedCount > usable means the local unregistered filter already
+            // dropped some rows (已注册 / 半注册 / 无可用邮箱行); the backend will
+            // drop more (冷却中 / OTP 派发隔离 / 死路地址) before the first
+            // account is even attempted.  Surfacing both numbers here kills the
+            // "I checked N but the report says N-k" confusion measured on
+            // 2026-09-19 (docs/audits/scan-2026-09-19-selected-22-vs-reported-3of6.md).
+            string hintText = checkedCount > usable
+                ? $"已选择 {usable} 个可注册邮箱（勾选 {checkedCount} 个，本地排除 {checkedCount - usable} 个已注册/半注册/记录不完整；后端还会剔除冷却/隔离/死路地址）"
+                : "已选择 " + usable.ToString() + " 个邮箱";
             var hint = new TextBlock
             {
-                Text = "已选择 " + Math.Max(1, selectedCount).ToString() + " 个邮箱",
+                Text = hintText,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
             };
@@ -631,26 +649,32 @@ namespace SmsWorkbench
             return new MailboxFileSelection(mailboxArg, mailboxFile, lines.Count);
         }
 
-        /// Selection plus the count of rows that were considered, which the
-        /// caller needs to tell "nothing selected" apart from "selected rows have
-        /// no usable mailbox line".
-        private sealed record PendingMailboxSelection(MailboxFileSelection? Selection, int PendingRowCount);
+        /// Selection plus the row counts on both sides of the unregistered
+        /// filter, which the caller needs to tell "nothing selected" apart
+        /// from "selected rows have no usable mailbox line" -- and to show the
+        /// operator how many checked rows the local filter dropped before the
+        /// backend even ran.
+        private sealed record PendingMailboxSelection(MailboxFileSelection? Selection, int PendingRowCount, int SelectedRowCount);
 
         private async Task<PendingMailboxSelection> TryCreateSelectedUnregisteredMailboxFileAsync(CancellationToken ct = default)
         {
+            var selectedRows = SelectedRowsOrCurrent().ToList();
             var pending = new List<PoolRow>();
-            foreach (PoolRow row in SelectedRowsOrCurrent())
+            foreach (PoolRow row in selectedRows)
             {
                 if (await IsUnregisteredMailboxRowAsync(row, ct).ConfigureAwait(true)) pending.Add(row);
             }
             return new PendingMailboxSelection(
                 await TryCreateMailboxFileAsync(pending, ct).ConfigureAwait(true),
-                pending.Count);
+                pending.Count,
+                selectedRows.Count);
         }
 
         private async Task<bool> IsUnregisteredMailboxRowAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return false;
+            if (RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
+                || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
             if (HasRegisteredAccountState(row)) return false;
             if (IsCfWorkerRow(row)) return true;
             if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return true;

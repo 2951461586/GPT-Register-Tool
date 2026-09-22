@@ -47,6 +47,35 @@ public sealed class MailboxPoolFileStoreTests
         Assert.StartsWith("http", receiveUrl, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ICloudReceiveUrlDropsEverythingAfterTheUrlField()
+    {
+        // Supplier lines ship a four-part shape (email----url----account----2fa). Only the
+        // first two fields are meaningful; keeping the tail put it inside the request URL,
+        // and on a query-style channel it lands inside auth_code -- the server then answers
+        // HTTP 403 "授权码无效", which a 2026-08-10 probe misread as a dead channel.
+        const string line =
+            "jags-burly4k+oai02@icloud.com----"
+            + "https://api798.com/latest?email=jags-burly4k%40icloud.com&auth_code=SSS888----"
+            + "cyc08286688.----U43AD7FV2SAXY2MDO76PSOGO22OUOWLS";
+
+        Assert.True(MailboxPoolFileStore.TryParseICloudUrlLine(line, out string email, out string receiveUrl));
+        Assert.Equal("jags-burly4k+oai02@icloud.com", email);
+        Assert.Equal("https://api798.com/latest?email=jags-burly4k%40icloud.com&auth_code=SSS888", receiveUrl);
+        Assert.DoesNotContain("----", receiveUrl, StringComparison.Ordinal);
+        Assert.DoesNotContain("cyc08286688.", receiveUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ICloudReceiveUrlKeepsTwoFieldLinesIntact()
+    {
+        const string line = "user@icloud.com----https://mail.example/inbox/private-token";
+
+        Assert.True(MailboxPoolFileStore.TryParseICloudUrlLine(line, out string email, out string receiveUrl));
+        Assert.Equal("user@icloud.com", email);
+        Assert.Equal("https://mail.example/inbox/private-token", receiveUrl);
+    }
+
     [Theory]
     [InlineData("user@example.com----https://mail.example/inbox/private-token")]
     [InlineData("user@icloud.com----ftp://mail.example/inbox/private-token")]

@@ -138,6 +138,10 @@ def _repo_module_stems() -> set[str]:
     package there (``services/protocol-payment/common/__init__.py``), ``pix_core``
     is a module. Both are first-party but unresolvable without that path hack,
     so a resolution-only check would flag them.
+
+    Note that this set is *not* needed when the same name resolves into the
+    repository: :func:`_resolves_outside_the_repo` already reports that as
+    first-party. It is consulted only for the unresolvable case.
     """
     names: set[str] = set()
     for dirpath, dirnames, filenames in _walk_repo():
@@ -233,8 +237,17 @@ def _imported_third_party() -> tuple[dict[str, list[str]], dict[str, list[str]]]
     for top, path in _iter_imported_top_level_names():
         rel = path.relative_to(ROOT).as_posix()
         verdict = _resolves_outside_the_repo(top)
-        if verdict is None and top in stems:
-            continue  # first-party script on a self-added sys.path entry
+        # ``verdict is False`` means the name resolves to a path inside this
+        # repository, i.e. first-party by definition. Bucketing that as
+        # undeclared third-party made this guard order-dependent: whether a
+        # first-party bare import resolves at all depends on whether some
+        # earlier test module already put ``services/protocol-payment`` on
+        # ``sys.path`` (pytest imports this module at collection time, so the
+        # verdict is frozen before any test body runs). ``None`` is the genuine
+        # third case and still needs ``stems`` to tell "first-party script on a
+        # self-added sys.path entry" apart from "package that is not installed".
+        if verdict is False or (verdict is None and top in stems):
+            continue
         dist = _normalise(MODULE_TO_DIST.get(top, top))
         bucket = resolved if verdict else unresolvable
         bucket.setdefault(dist, [])

@@ -300,6 +300,21 @@ class FollowContinueUrlTests(unittest.TestCase):
         self.assertEqual(recorder.calls[0]["label"], "email-otp")
         self.assertEqual(recorder.calls[0]["impersonate"], "IMPERSONATE")
 
+    def test_the_follow_verb_is_get_which_is_what_the_server_asks_for(self):
+        """🔴 跟法必须是 GET —— 服务端在 200 体里明说了。
+
+        ``user/register`` 的 200 响应体自带跟法：
+
+            {"continue_url": ".../api/accounts/email-otp/send",
+             "method": "GET", "page": {"type": "email_otp_send"}}
+
+        2026-09-16 判定（H1）：跟响应的一组 12/12 ``validate`` 200，忽略响应的一组
+        85/85 409，Fisher 单侧 p = 1.4e-15。当年的缺陷是**根本没跟**，不是跟错动词；
+        这条用例把动词钉住，免得修「跟错动词」时把 GET 改成 POST。
+        """
+        _response, recorder = self._run("/api/accounts/email-otp/send")
+        self.assertEqual([call["method"] for call in recorder.calls], ["get"])
+
     def test_uses_the_default_auth_base_when_config_has_none(self):
         recorder = _RequestRecorder(_FakeResponse(200, {}))
         with patch("sms_tool.http_utils.CFG", {"chatgpt": {}}), \

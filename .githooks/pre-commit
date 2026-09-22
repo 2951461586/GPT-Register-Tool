@@ -36,4 +36,28 @@ if [ -z "$PYTHON_BIN" ]; then
     exit 1
 fi
 
-exec "$PYTHON_BIN" scripts/precommit_guard.py
+# Four gates, all must pass:
+#   1. precommit_guard   -- credentials / runtime state dumps (content-based)
+#   2. line_ending_guard -- a file that mixes CRLF and LF internally.
+#      Added 2026-09-17: 18 of 499 .py files were mixed, which made `git diff`
+#      show whole-file changes and broke byte-exact baseline reconciliation.
+#      See .gitattributes for the storage policy (LF in the index).
+#   3. mailbox_private_import_ratchet -- a new cross-module reach into a hub
+#      module's `_`-prefixed surface. Added 2026-09-17 alongside the line-ending
+#      gate; extended the same day from `mailbox` to six hubs (session_refresh,
+#      mail_otp, sentinel_tokens, http_utils, utils). Fails only when a
+#      per-module consumer set GROWS -- lowering a baseline stays a deliberate,
+#      reviewed act via --update-baseline.
+#   4. sentinel_asset_guard -- a vendored Sentinel asset whose content no longer
+#      matches the SHA256 pin that validate_runtime_bundle() enforces.
+#      Added 2026-09-18 after sentinel-runner.js was rewritten uniformly from
+#      CRLF to LF: gate 2 passed it (the file was uniform, not mixed) and
+#      `git status` could not see it (the index entry was already LF), yet the
+#      raw digest moved, every Sentinel issue call raised, issuance silently
+#      degraded to the legacy issuer, and 126/126 accounts failed.
+#      See docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md
+"$PYTHON_BIN" scripts/precommit_guard.py || exit 1
+"$PYTHON_BIN" scripts/line_ending_guard.py || exit 1
+"$PYTHON_BIN" scripts/mailbox_private_import_ratchet.py || exit 1
+"$PYTHON_BIN" scripts/sentinel_asset_guard.py || exit 1
+exit 0

@@ -43,6 +43,7 @@ COMMON_RESULT_KEYS = frozenset({
     "name",
     "password",
     "plan_type",
+    "proxy_audit",
     "post_registration_ready",
     "quota_status",
     "register_method",
@@ -59,6 +60,26 @@ COMMON_RESULT_KEYS = frozenset({
     "twofa_enrollment",
     "id_token",
 })
+
+
+def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Allow-list non-sensitive registration egress facts."""
+    value = metadata if isinstance(metadata, Mapping) else {}
+    try:
+        pool_index = int(value.get("pool_index", -1))
+    except (TypeError, ValueError):
+        pool_index = -1
+    try:
+        rotation_generation = max(0, int(value.get("rotation_generation", 0)))
+    except (TypeError, ValueError):
+        rotation_generation = 0
+    return {
+        "pool_index": pool_index if pool_index >= 0 else -1,
+        "expected_country": str(value.get("expected_country") or "").strip().upper(),
+        "actual_country": str(value.get("actual_country") or "").strip().upper(),
+        "scheme": str(value.get("scheme") or "").strip().lower(),
+        "rotation_generation": rotation_generation,
+    }
 
 
 def build_registration_result(
@@ -89,6 +110,7 @@ def build_registration_result(
     registration_warning: Any = "",
     post_registration_ready: bool = False,
     mailbox_snapshot: Mapping[str, Any] | None = None,
+    proxy_audit: Mapping[str, Any] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble one registration result dict from already-computed values.
@@ -126,12 +148,16 @@ def build_registration_result(
         "identity_context": identity_context,
         "auth_fingerprint_profile": auth_fingerprint_profile,
         "mailbox": mailbox_snapshot or {},
+        "proxy_audit": safe_proxy_audit(proxy_audit),
     }
     if extra:
         result.update(extra)
+    result["proxy_audit"] = safe_proxy_audit(result.get("proxy_audit"))
     decision = registration_retry_decision(result.get("error"))
     result.setdefault("failure_class", "" if success else decision.failure_class)
     result.setdefault("retryable", not success and decision.retryable)
+    result.setdefault("future_batch_eligible", not success and decision.future_batch_eligible)
+    result.setdefault("retry_disposition", "" if success else decision.guard_action)
     result.setdefault("error_advice", "" if success else decision.advice)
     missing = COMMON_RESULT_KEYS - result.keys()
     if missing:  # pragma: no cover - guards future edits to this function
@@ -172,4 +198,9 @@ def build_registration_failure_result(
     )
 
 
-__all__ = ["COMMON_RESULT_KEYS", "build_registration_result", "build_registration_failure_result"]
+__all__ = [
+    "COMMON_RESULT_KEYS",
+    "build_registration_result",
+    "build_registration_failure_result",
+    "safe_proxy_audit",
+]

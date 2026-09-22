@@ -45,7 +45,7 @@ from sms_tool.gen_pp_link import (
     _new_session,
     _proxies_from_config,
     proxy_for_country_template,
-    rotate_proxy_session,
+    rotate_proxy_session_id,
     stripe_amount_details,
 )
 from sms_tool.storage import list_paypal_accounts
@@ -150,7 +150,7 @@ def _region_proxy(template: str, region: str) -> str:
     ``region-XX`` username) to the target country AND rotates the sticky session
     id so each region gets a fresh IP (a fixed sid pins every region to one exit).
     """
-    return rotate_proxy_session(proxy_for_country_template(template, region))
+    return rotate_proxy_session_id(proxy_for_country_template(template, region))
 
 
 def _resolve_accounts(emails: list[str]) -> list[dict[str, str]]:

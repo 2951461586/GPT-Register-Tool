@@ -23,6 +23,8 @@
   },
   "registration": {
     "driver": "protocol",
+    "skip_registered_mailboxes": true,
+    "existing_login_continue_on_verified_page": true,
     "browser_headless": true,
     "browser_timeout_seconds": 90,
     "browser_worker_limit": 0,
@@ -91,9 +93,15 @@
     "password_charset": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
     "retry_attempts": 2,
     "retry_delay_seconds": 1,
+    "retry_policy": {
+      "cross_batch_cooldown_seconds": 1800,
+      "otp_pending_quarantine_threshold": 2
+    },
     "at_stability_probe_count": 2,
     "at_stability_probe_delay_seconds": 10,
     "at_probe_timeout_seconds": 30,
+    "batch_circuit_breaker_enabled": true,
+    "batch_circuit_breaker_threshold": 3,
     "stage_concurrency": {
       "auth": 1,
       "network": 4,
@@ -114,7 +122,8 @@
       "wave_delay_seconds": 5,
       "ban_threshold": 2,
       "ban_pause_seconds": 60,
-      "max_waves": 0
+      "max_waves": 0,
+      "canary_enabled": true
     },
     "browser_process_pool": {
       "enabled": true,
@@ -169,6 +178,7 @@
     "sentinel_circuit_failures": 3,
     "sentinel_circuit_cooldown_seconds": 60,
     "remail_otp_resend_after_seconds": 30,
+    "otp_resend_providers": ["remail", "icloud_url"],
     "cfworker_otp_settle_seconds": 3,
     "cfworker_timeout_seconds": 30,
     "cfworker_poll_proxy": true,
@@ -572,6 +582,8 @@
     "batch_timeout_seconds": 900,
     "account_timeout_seconds": 360,
     "relogin_cooldown_seconds": 300,
+    "relogin_repeat_cooldown_seconds": 21600,
+    "relogin_dead_end_permanent": true,
     "post_registration_enabled": true,
     "post_registration_deep_liveness": true,
     "proxy_pool": [
@@ -610,7 +622,7 @@
     "billing_regions": [
       "JP"
     ],
-    "checkout_ui_mode": "hosted",
+    "checkout_ui_mode": "custom",
     "max_checkout_retries": 3,
     "stage_proxies": {
       "checkout": "socks5h://user:pass-JP@gate:1000",

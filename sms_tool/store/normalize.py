@@ -273,6 +273,8 @@ def _status(data, paypal, access_token, has_refresh_token=False):
         return "at_invalid"
     if _looks_account_deactivated(data, paypal):
         return "account_deactivated"
+    if str(_get(data, "registration_state")).strip().lower() == "partial_registered" and not data.get("success"):
+        return "partial_registered"
     failure_class = str(_get(data, "failure_class")).strip().lower()
     if failure_class == "network" and data.get("success") is False:
         return "network_failed"

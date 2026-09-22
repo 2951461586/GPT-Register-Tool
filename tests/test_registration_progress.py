@@ -129,7 +129,13 @@ class RegistrationProgressTests(unittest.TestCase):
                     "failure_class": "auth_state",
                     "retryable": True,
                     "registration_state": "retry_pending",
-                    "proxy_audit": {"pool_index": 0},
+                    "proxy_audit": {
+                        "pool_index": 0,
+                        "scheme": "http",
+                        "rotation_generation": 2,
+                    },
+                    "future_batch_eligible": True,
+                    "retry_disposition": "cooldown",
                 })
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(stored["batch_id"], "batch-1")
@@ -137,6 +143,18 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertEqual(stored["failure_class"], "auth_state")
             self.assertTrue(stored["retryable"])
             self.assertEqual(stored["proxy_pool_index"], 0)
+            self.assertEqual(
+                stored["proxy_audit"],
+                {
+                    "pool_index": 0,
+                    "expected_country": "",
+                    "actual_country": "",
+                    "scheme": "http",
+                    "rotation_generation": 2,
+                },
+            )
+            self.assertTrue(stored["future_batch_eligible"])
+            self.assertEqual(stored["retry_disposition"], "cooldown")
 
     def test_constructor_preserves_batch_and_attempt_when_result_omits_them(self):
         with tempfile.TemporaryDirectory() as temp_dir:

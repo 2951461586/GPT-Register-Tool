@@ -59,8 +59,8 @@ DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").stri
     "ViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
-DEFAULT_TIMEOUT = 30
-CHATGPT_TIMEOUT = 45
+from .timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+
 RETRY_ATTEMPTS = 3
 
 _SIDE_EFFECT_STAGES = frozenset({"confirm", "approve", "poll", "follow_redirect"})
@@ -165,7 +165,7 @@ def proxy_for_country_template(template: str, country: str) -> str:
     return rewritten
 
 
-def rotate_proxy_session(proxy: str) -> str:
+def rotate_proxy_session_id(proxy: str) -> str:
     """轮转代理会话标识（如果代理模板支持）。"""
     return rotate_stage_proxy_session(proxy)
 

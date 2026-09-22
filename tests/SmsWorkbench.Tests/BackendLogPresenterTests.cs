@@ -14,20 +14,45 @@ public class BackendLogPresenterTests
     }
 
     [Theory]
-    [InlineData("@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"result\",\"payload\":{\"ok\":true}}",
-        "[*] 任务返回结构化结果（详情见结果弹窗与任务列表）")]
-    public void ResultEnvelopeIsFoldedIntoOneLine(string raw, string expected)
+    // The terminal `result` frame is routine and fully redundant: every lane
+    // prints its own human-readable closing line immediately before it, the
+    // `batch_completed` stage line already closes scan/promotion runs, and the
+    // outcome lands in the task grid and the result dialog anyway. Showing it
+    // only ever repeated "go look at the dialog". `ok:false` is included on
+    // purpose -- a failed run is still reported by its own `[!]` lines, so the
+    // frame stays dropped regardless of the verdict it carries.
+    [InlineData("@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"result\",\"payload\":{\"ok\":true}}")]
+    [InlineData("@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"result\",\"payload\":{\"ok\":false}}")]
+    // Same frame after the progress-dot run that used to defeat the prefix
+    // test, so the drop cannot be dodged by a glued head.
+    [InlineData(".........@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"result\",\"payload\":{\"ok\":true}}")]
+    public void TerminalResultEnvelopeIsNotShown(string raw)
     {
-        Assert.Equal(expected, BackendLogPresenter.FormatLine(raw));
+        Assert.Null(BackendLogPresenter.FormatLine(raw));
     }
 
     [Theory]
-    // The failure this whole pass exists for: a dot run glued to the head of
-    // the envelope used to defeat the prefix test, so the raw frame reached
-    // the panel as hundreds of characters of JSON instead of this one line.
+    // A progress `event` frame reaching the presenter means event parsing
+    // already failed upstream, so it is a genuine diagnostic rather than
+    // routine noise -- the pointer line has to stay. The dot run is glued on
+    // purpose: it is the exact shape that used to defeat the prefix test and
+    // leak hundreds of characters of raw JSON into the panel.
     [InlineData(".........@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"event\"}")]
     [InlineData("..@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":\"event\"}")]
-    public void EnvelopeIsStillFoldedWhenGluedBehindProgressDots(string raw)
+    public void MalformedEventEnvelopeKeepsThePointerLine(string raw)
+    {
+        Assert.Equal("[*] 任务返回结构化结果（详情见结果弹窗与任务列表）",
+            BackendLogPresenter.FormatLine(raw));
+    }
+
+    [Theory]
+    // Fail loud: an envelope that cannot be parsed carries no frame type, so
+    // it must not be silently swallowed by the `result` drop. Kept visible.
+    [InlineData("@@SMSWORKBENCH_V2@@not json at all")]
+    [InlineData("@@SMSWORKBENCH_V2@@{\"version\":2,\"type\":")]
+    [InlineData("@@SMSWORKBENCH_V2@@{\"version\":2,\"payload\":{\"ok\":true}}")]
+    [InlineData("@@SMSWORKBENCH_V2@@[1,2,3]")]
+    public void UnparseableEnvelopeKeepsThePointerLine(string raw)
     {
         Assert.Equal("[*] 任务返回结构化结果（详情见结果弹窗与任务列表）",
             BackendLogPresenter.FormatLine(raw));
@@ -217,10 +242,22 @@ public class BackendLogPresenterTests
     [InlineData("{\"ok\": true}", true)]
     [InlineData("    \"email\": \"user@example.com\",", true)]
     [InlineData("}", true)]
+    [InlineData("[", true)]
+    [InlineData("[{", true)]
     [InlineData("[*] marker stays", false)]
     [InlineData("[!] failure marker stays", false)]
     [InlineData("[-] dash marker stays", false)]
     [InlineData("[*] Account 1/50: registered", false)]
+    // The backend's bracketed marker vocabulary must never be read as JSON.
+    // Each of these used to open an unparseable block, so the line was
+    // swallowed and replaced by the "无法解析的多行输出" line -- 231 of the
+    // 240 such lines measured in one real backend_stdout.log came from here.
+    [InlineData("[0-Extract sentinel token]", false)]
+    [InlineData("[2-Auth flow]", false)]
+    [InlineData("[10-Finalize registration]", false)]
+    [InlineData("[Error] registration_preflight_failed:no_healthy_route", false)]
+    [InlineData("[WARN] config_unread_keys: 61 key(s) set but never read", false)]
+    [InlineData("[ OK ] python: 3.11.8", false)]
     public void JsonLookingLinesAreClassified(string trimmed, bool expected)
     {
         Assert.Equal(expected, BackendLogPresenter.LooksLikeJson(trimmed));
@@ -282,14 +319,61 @@ public class BackendLogPresenterTests
         Assert.Equal("[*] Account 1/50 user@example.com: registered", lines[1]);
     }
 
-    [Fact]
-    public void EnvelopeInsideFolderIsFoldedWithoutJsonLeak()
+    [Theory]
+    [InlineData("[0-Extract sentinel token]")]
+    [InlineData("[2-Auth flow]")]
+    [InlineData("[8d-Validate access token]")]
+    [InlineData("[10-Finalize registration]")]
+    [InlineData("[Error] registration_preflight_failed:no_healthy_route:RuntimeError")]
+    [InlineData("[WARN] config_unread_keys: 61 key(s) set but never read")]
+    [InlineData("[ OK ] python: 3.11.8")]
+    public void BracketedMarkersReachThePanelUnfolded(string raw)
     {
         var folder = new BackendLogFolder();
-        var lines = folder.Feed(
-            "@@SMSWORKBENCH_V2@@{\"version\":2,\"schema\":\"smsworkbench.ipc.v2\",\"type\":\"result\",\"payload\":{\"results\":[],\"total\":0}}").ToList();
+        var lines = folder.Feed(raw).ToList();
+
         Assert.Single(lines);
-        Assert.DoesNotContain("payload", lines[0]);
+        Assert.Equal(raw, lines[0]);
+        Assert.DoesNotContain("折叠", lines[0]);
+    }
+
+    [Fact]
+    public void BlockLargerThanTheOldLineCapStillFolds()
+    {
+        // A `--doctor --json` report measures 569 lines. The old 500-line cap
+        // tripped mid-document, the partial buffer failed to parse, and the
+        // operator got "无法解析的多行输出" instead of a summary.
+        var folder = new BackendLogFolder();
+        var lines = new List<string>();
+        lines.AddRange(folder.Feed("{"));
+        lines.AddRange(folder.Feed("  \"checks\": ["));
+        for (int i = 0; i < 600; i++)
+            lines.AddRange(folder.Feed($"    {{\"name\": \"check{i}\", \"status\": \"ok\"}},"));
+        lines.AddRange(folder.Feed("    {\"name\": \"last\", \"status\": \"ok\"}"));
+        lines.AddRange(folder.Feed("  ]"));
+        lines.AddRange(folder.Feed("}"));
+
+        Assert.Single(lines);
+        Assert.Equal("[*] 后端返回了结构化结果（已在日志中折叠）", lines[0]);
+    }
+
+    [Fact]
+    public void EnvelopeInsideFolderNeverLeaksJson()
+    {
+        // End-to-end through the folder: a terminal `result` frame is dropped
+        // outright (its lane prints its own closing line first), so nothing
+        // must surface -- least of all the payload. A progress `event` frame
+        // that reaches the folder still yields the pointer line, and that line
+        // must stay free of raw JSON.
+        var resultLines = new BackendLogFolder().Feed(
+            "@@SMSWORKBENCH_V2@@{\"version\":2,\"schema\":\"smsworkbench.ipc.v2\",\"type\":\"result\",\"payload\":{\"results\":[],\"total\":0}}").ToList();
+        Assert.Empty(resultLines);
+
+        var eventLines = new BackendLogFolder().Feed(
+            "@@SMSWORKBENCH_V2@@{\"version\":2,\"schema\":\"smsworkbench.ipc.v2\",\"type\":\"event\",\"payload\":{\"stage\":\"batch_started\"}}").ToList();
+        Assert.Single(eventLines);
+        Assert.DoesNotContain("payload", eventLines[0]);
+        Assert.DoesNotContain("{", eventLines[0]);
     }
 
     [Fact]

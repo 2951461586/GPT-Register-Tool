@@ -105,10 +105,19 @@ namespace SmsWorkbench
             if (body.Length == 0)
                 return null;
 
-            // A prefixed line that reaches the presenter failed event parsing
-            // — it is the terminal result envelope (whole payload inline).
+            // A prefixed line that reaches the presenter failed event parsing.
+            // The terminal `result` frame is dropped outright: every lane
+            // prints its own human-readable summary immediately before it
+            // (`[*] Done. N/M registered successfully`, `[*] 优惠检测完成：…`,
+            // `[*] 测活完成：…`), the `batch_completed` stage line already closes
+            // scan and promotion runs, and the outcome also lands in the task
+            // grid and the result dialog -- so the pointer line only ever
+            // repeated "go look at the dialog". A malformed `event` frame keeps
+            // the pointer, so a bad envelope cannot vanish silently.
             if (body.StartsWith(EnvelopePrefix, StringComparison.Ordinal))
-                return "[*] 任务返回结构化结果（详情见结果弹窗与任务列表）";
+                return IsTerminalResultFrame(body)
+                    ? null
+                    : "[*] 任务返回结构化结果（详情见结果弹窗与任务列表）";
 
             if (IsNoiseLine(body))
                 return null;
@@ -140,6 +149,32 @@ namespace SmsWorkbench
             return body;
         }
 
+        /// <summary>Whether an envelope line carries the terminal `result`
+        /// frame rather than a progress `event` frame.
+        ///
+        /// The Python side emits exactly two frame kinds
+        /// (`sms_tool/desktop_ipc.py`): one terminal `result` per invocation,
+        /// and any number of progress `event` frames. An `event` frame that
+        /// reaches <see cref="FormatLine"/> already failed event parsing, so it
+        /// is a real diagnostic; a `result` frame is routine. Anything that
+        /// cannot be parsed is treated as not-a-result, i.e. kept visible.
+        /// </summary>
+        private static bool IsTerminalResultFrame(string body)
+        {
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(body[EnvelopePrefix.Length..]);
+                return document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("type", out JsonElement type)
+                    && type.ValueKind == JsonValueKind.String
+                    && string.Equals(type.GetString(), "result", StringComparison.Ordinal);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
         private static readonly string[] ScanLikeDomains = { "account_scan", "account_promotion", "one_click_sms" };
 
         /// <summary>
@@ -155,6 +190,13 @@ namespace SmsWorkbench
         {
             if (progressEvent == null) return null;
             string domain = progressEvent.Domain ?? "";
+            if (domain == "registration" && progressEvent.Stage == "registration_status_changed")
+                return $"注册 · {progressEvent.AccountRef} · 半注册";
+            if (domain == "registration" && progressEvent.Stage == "mailboxes_skipped")
+            {
+                string detail = (progressEvent.Detail ?? "").Trim();
+                return detail.Length > 0 ? $"注册 · {detail}" : "注册 · 后端剔除部分邮箱（详见后端日志）";
+            }
             if (Array.FindIndex(ScanLikeDomains,
                     d => string.Equals(d, domain, StringComparison.OrdinalIgnoreCase)) < 0)
                 return null;
@@ -209,22 +251,44 @@ namespace SmsWorkbench
                 && (trimmed.All(c => c == '=') || trimmed.All(c => c == '#'));
 
         /// <summary>Whether a line looks like pretty-printed JSON and must be
-        /// folded instead of displayed. `[*]`-style markers keep their leading
-        /// bracket, so a bare JSON array opener is only matched at exact
-        /// line start after trim.</summary>
+        /// folded instead of displayed.
+        ///
+        /// A `[`-prefixed line is only JSON when it is a *bare* array opener
+        /// (see <see cref="IsBareArrayOpener"/>); every other bracketed line is
+        /// a human marker and has to reach the panel. This used to accept any
+        /// `[`-prefixed line except the `[*]`/`[!]`/`[-]` markers, which swept
+        /// up the backend's whole bracketed vocabulary -- `[Error] ...`,
+        /// `[WARN] ...`, `[ OK ] python: ...` and the twelve protocol stage
+        /// headers `[0-Extract sentinel token]` .. `[10-Finalize registration]`.
+        /// Each one opened a block that could never parse, so it was swallowed
+        /// and replaced by the "无法解析的多行输出" line: measured on
+        /// `runtime/logs/backend_stdout.log`, 231 of 240 such lines came from
+        /// this rule alone.</summary>
         public static bool LooksLikeJson(string raw)
         {
             string trimmed = (raw ?? "").Trim();
             if (trimmed.StartsWith("{", StringComparison.Ordinal))
                 return true;
             if (trimmed.StartsWith("[", StringComparison.Ordinal))
-                return !trimmed.StartsWith("[*]", StringComparison.Ordinal)
-                    && !trimmed.StartsWith("[!]", StringComparison.Ordinal)
-                    && !trimmed.StartsWith("[-]", StringComparison.Ordinal);
+                return IsBareArrayOpener(trimmed);
             return trimmed.StartsWith("\"", StringComparison.Ordinal)
                 || trimmed.StartsWith("}", StringComparison.Ordinal)
                 || trimmed.StartsWith("]", StringComparison.Ordinal);
         }
+
+        /// <summary>Whether a `[`-prefixed line opens a JSON array rather than
+        /// being a bracketed marker such as `[Error]` or `[2-Auth flow]`.
+        ///
+        /// Only a bare opener qualifies: `[` alone (what `json.dumps(indent=2)`
+        /// emits for a top-level array) or a one-line opener `[{`/`[[`/`[]`.
+        /// Anything else after the bracket -- a letter, a digit, a space, `*`,
+        /// `!`, `-` -- is a marker. Known cost: a single-line JSON array such
+        /// as `[1, 2, 3]` now reaches the panel verbatim instead of folding; no
+        /// emitter in this repo produces one.</summary>
+        private static bool IsBareArrayOpener(string trimmed)
+            => trimmed.Length == 1
+                || (trimmed.Length >= 2
+                    && (trimmed[1] == '{' || trimmed[1] == '[' || trimmed[1] == ']'));
     }
 
     /// <summary>
@@ -234,7 +298,17 @@ namespace SmsWorkbench
     /// </summary>
     public sealed class BackendLogFolder
     {
-        private const int MaxBlockLines = 500;
+        /// <summary>Safety valve on a single buffered JSON block.
+        ///
+        /// 500 was below the only pretty-printed payload this repo actually
+        /// emits: a `--doctor --json` report measures 569 lines, so the cap
+        /// tripped mid-document, the partial buffer could not parse, and the
+        /// block flushed as "无法解析的多行输出" -- twice per report (the 500
+        /// lines, then the 69-line remainder). 2000 keeps ~3.5x headroom over
+        /// the measured 569 while still bounding a runaway emitter
+        /// (2000 x ~80 chars ~ 160 KB, against a panel that already caps
+        /// retained history at MaxLogBufferChars).</summary>
+        private const int MaxBlockLines = 2000;
         private readonly List<string> block = new();
 
         /// <summary>Feed one raw backend line; returns 0..n panel lines.</summary>

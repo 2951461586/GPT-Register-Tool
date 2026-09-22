@@ -18,7 +18,7 @@ def test_terminal_failures_never_retry_even_with_transport_keywords(error, tmp_p
     assert not decision.retryable
     guard = RegistrationRetryGuard(path=tmp_path / "guard.json", threshold=1)
     guard.record("test@example.com", failure_class="network", error=error)
-    assert not guard.check("test@example.com")["deferred"]
+    assert guard.check("test@example.com")["deferred"] is decision.future_batch_eligible
 
 
 def test_transport_and_auth_state_remain_retryable():

@@ -19,6 +19,15 @@ from .http_utils import _absolute_url
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
 from .providers import mailbox_gmail
 from .storage import upsert_account
+# ``/about-you`` completion reuses the signup lane's own primitives instead of
+# re-deriving them: ``_create_account_continue_url`` already knows that an
+# already-existing account states its recovery redirect under
+# ``error.redirect_uri``, and ``issue_sentinel_flow`` is the only supported way
+# to mint an ``oauth_create_account`` token (the recovery lane's cached sentinel
+# is bound to a different flow).
+from .accounts.account_creation import _create_account_continue_url, _is_user_already_exists
+from .sentinel.client import issue_sentinel_flow
+from .utils import _random_birthdate, _random_name
 
 
 AUTH_URL = "https://auth.openai.com/oauth/authorize"
@@ -98,7 +107,14 @@ def collect_codex_oauth_tokens(
         _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
         if _has_callback_code(current_url):
             tokens = _exchange_callback(current_url, oauth, proxy=proxy)
-            return {"ok": True, "mode": "codex_oauth_pkce", "tokens": tokens}
+            return {
+                "ok": True,
+                "mode": "codex_oauth_pkce",
+                # Which of the two paths ran -- see the note on the login
+                # branch below.
+                "login_stage": "live_session",
+                "tokens": tokens,
+            }
 
         result = _login_and_exchange(
             session=session,
@@ -113,9 +129,18 @@ def collect_codex_oauth_tokens(
             phone_probe_only=phone_probe_only,
             browser_headless=browser_headless,
         )
-        if not result.get("ok"):
-            return result
         result.setdefault("mode", "codex_oauth_pkce")
+        # ``login_stage`` is the one field that tells the two costs apart.
+        # ``mode`` cannot: it is ``codex_oauth_pkce`` on every branch, so a
+        # summary carrying only it could not say whether this run reused the
+        # live session (free) or walked the login stage machine (pays an email
+        # code).  The opt-in ``registration.obtain_refresh_token`` needs exactly
+        # that distinction to be measurable -- otherwise "the switch is on and
+        # every account still burned a code" is indistinguishable from "the
+        # switch is on and the short circuit fired".  Recorded on failures too,
+        # because walking the stages and *then* failing is the worst case: the
+        # code was spent for nothing.
+        result.setdefault("login_stage", "login_required")
         return result
     except Exception as exc:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": str(exc)}
@@ -380,6 +405,10 @@ def _passwordless_login_and_exchange(
     }
     last_error = ""
     last_validate_body = ""
+    # Bound outside the loop: the ``continue`` paths below (a wrong or expired
+    # code) skip the ``/about-you`` handling entirely, and the final return still
+    # has to be able to name it.
+    about_attempt = None
     for attempt in range(attempts):
         if attempt > 0:
             resend_issued_after = int(time.time())
@@ -448,10 +477,38 @@ def _passwordless_login_and_exchange(
             continue
         next_url = _next_url(validate)
         _, current_url = _follow_redirects(session, next_url, proxy=proxy)
+        # ``/about-you`` is the profile step for an account that exists but was
+        # never finished.  It used to end the attempt outright with a bare
+        # ``passwordless_about_you_required``, which made the account
+        # permanently unusable while each retry burned another OTP.  The attempt
+        # below reports *why* the page cannot be passed, and stops when the
+        # answer is the known closed loop.
+        about_attempt = None
+        if current_url.endswith("/about-you"):
+            about_attempt = _complete_about_you(session, did, current_url, proxy=proxy)
+            if about_attempt.get("ok"):
+                current_url = about_attempt.get("url") or current_url
+            elif about_attempt.get("error"):
+                # The page states *why* the account cannot be finished (an
+                # existing address the server refuses to re-create).  Report
+                # that reason and stop, instead of degrading it into a generic
+                # "about-you required" and letting the caller spend another OTP
+                # walking the same loop.  ``terminal`` is intentionally absent:
+                # the chain reserves it for deactivated accounts.
+                return {
+                    "ok": False,
+                    "mode": "codex_oauth_pkce",
+                    "error": about_attempt.get("error") or "passwordless_about_you_required",
+                    "fallback_from": reason,
+                    "last_url": _safe_url(current_url),
+                    "about_you": about_attempt,
+                }
         final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
         if final.get("ok"):
             final["login_method"] = "passwordless_email_otp"
             final["fallback_from"] = reason
+            if about_attempt and about_attempt.get("ok"):
+                final["completed_about_you"] = True
             return final
         if final.get("phone_attempt"):
             phone_error = (final.get("phone_attempt") or {}).get("error", "phone_verification_failed")
@@ -464,13 +521,19 @@ def _passwordless_login_and_exchange(
                 "phone_attempt": final.get("phone_attempt"),
             }
         if current_url.endswith("/about-you"):
-            return {
+            # Reachable only when ``_complete_about_you`` reported success yet
+            # authorization still could not resume from where it landed.  The
+            # dead-end cases return earlier, from inside the attempt itself.
+            failure = {
                 "ok": False,
                 "mode": "codex_oauth_pkce",
                 "error": "passwordless_about_you_required",
                 "fallback_from": reason,
                 "last_url": _safe_url(current_url),
             }
+            if about_attempt:
+                failure["about_you"] = about_attempt
+            return failure
     return {
         "ok": False,
         "mode": "codex_oauth_pkce",
@@ -478,6 +541,7 @@ def _passwordless_login_and_exchange(
         "fallback_from": reason,
         "last_url": _safe_url(current_url),
         "body": last_validate_body,
+        **({"about_you": about_attempt} if about_attempt else {}),
     }
 
 
@@ -590,6 +654,138 @@ def _resend_email_otp(session, did, current_url):
         return {"ok": response.status_code in (200, 409), "status_code": response.status_code}
     except Exception:
         return {"ok": False, "status_code": 0}
+
+
+def _complete_about_you(session, did, current_url, proxy=None):
+    """Diagnose the ``/about-you`` step that blocks passwordless login.
+
+    Landing on ``/about-you`` after a successful OTP means the account exists
+    server-side but its profile was never completed.  This used to end the
+    attempt with a bare ``passwordless_about_you_required``, which named the page
+    but said nothing about *why* the page could not be passed -- so the caller
+    kept retrying, and every retry costs another OTP.
+
+    The signup lane leaves this page by POSTing ``create_account``
+    (``registration_handlers.create_account``), so this does the same thing and
+    then reports whatever the server answers:
+
+    * ``200`` with a ``continue_url`` -- a genuinely unfinished account.  Follow
+      it and let authorization resume (see ``_complete_about_you``'s caller).
+    * ``400 user_already_exists`` -- the address already has an account, so
+      *creating* it cannot succeed.  Measured 2026-09-14: 23/23 samples returned
+      ``redirect_uri=chatgpt.com/auth/login_with`` with
+      ``userAlreadyExistsRecovery.action=continue_to_login``, and following that
+      redirect yielded no access token in 4/4 attempts -- the login lane then
+      lands back on ``/about-you``.  It is a closed loop, so this is reported
+      **without** following the redirect, under an error string that carries the
+      ``user_already_exists`` marker so the account is dropped instead of
+      retried.
+
+    Returns ``{"ok": True, "url": ...}`` with the URL to resume authorization
+    from, or ``{"ok": False, ...}`` carrying the transport detail.  A failure
+    here is reported, never raised: the caller still has to decide whether the
+    next strategy in the chain is worth trying.
+    """
+    first, last = _random_name()
+    full_name = f"{first} {last}".strip()
+    birthdate = _random_birthdate()
+    try:
+        sentinel = issue_sentinel_flow(
+            flow="oauth_create_account",
+            device_id=did,
+            session=session,
+            proxy=proxy,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"about_you_sentinel_failed:{exc}",
+            "last_url": _safe_url(current_url),
+        }
+
+    response = request_with_retry(
+        session,
+        "post",
+        "https://auth.openai.com/api/accounts/create_account",
+        label="Complete about-you",
+        json={"name": full_name, "birthdate": birthdate},
+        headers=with_sentinel(
+            _oai_headers(did, {"Referer": "https://auth.openai.com/about-you", "content-type": "application/json"}),
+            {"sentinel_token": sentinel.token, "sentinel_so_token": sentinel.so_token},
+        ),
+        impersonate=auth_impersonate(),
+    )
+    try:
+        body = response.json()
+    except (ValueError, TypeError):
+        body = {"_raw": str(getattr(response, "text", "") or "")[:300]}
+    print(f"  About-you: {response.status_code}")
+    detail = {
+        "status_code": int(getattr(response, "status_code", 0) or 0),
+        "last_url": _safe_url(current_url),
+    }
+    # 🔴 Measured 2026-09-14 (23/23 samples in ``runtime/logs/backend_stdout.log``):
+    # an address that already has an account is answered with 400
+    # ``user_already_exists``, ``redirect_uri=chatgpt.com/auth/login_with`` and
+    # ``userAlreadyExistsRecovery.action=continue_to_login``.  Following that
+    # redirect lands on ChatGPT's *login* page and produced no access token in
+    # 4/4 attempts, while the login lane itself ends up back on ``/about-you``.
+    # The recovery lane only ever logs into accounts that already exist, so this
+    # is the expected answer here, not an edge case.
+    #
+    # Report it and do NOT follow the redirect: walking the loop is what turned
+    # a diagnosable dead end into "some OTP strategy failed", and every lap
+    # costs another OTP.
+    #
+    # 🔴 The error string deliberately contains ``user_already_exists``: that is
+    # the marker ``classify_error`` maps to the ``account`` class, which is in
+    # ``BATCH_DROPPED_CLASSES`` -- so the address stops being retried without
+    # touching ``terminal``.  ``terminal`` must NOT be used here: the recovery
+    # chain answers ``terminal`` by calling ``_persist_permanent_deactivation``
+    # and rewriting the error to ``account_deactivated``, which would brand a
+    # perfectly live account as deactivated.
+    if _is_user_already_exists(body):
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        recovery = error.get("userAlreadyExistsRecovery")
+        action = str((recovery or {}).get("action") or "") if isinstance(recovery, dict) else ""
+        return {
+            **detail,
+            "ok": False,
+            "error": "about_you_existing_account_user_already_exists" + (f":{action}" if action else ""),
+            "recovery_action": action,
+            "redirect_uri": _create_account_continue_url(body),
+        }
+    next_url = _create_account_continue_url(body)
+    if not next_url:
+        # Shape, not content.  This dict travels into ``_oauth_result_summary``,
+        # which keeps every key except ``tokens``, and from there into the
+        # ``obtain_oauth_refresh_token`` log line and the ``finalize`` payload
+        # under ``codex_oauth``.  Returning the raw ``body`` therefore put a
+        # whole response document on a single log line -- measured 2026-09-14
+        # with ``runtime/_probe_oauth_summary_surface.py``: a 3 KB body
+        # rendered a 3418-character summary.  Key names keep the diagnostic
+        # value this branch was added for (``_raw`` here means "the answer was
+        # not JSON"), while the values are not needed to act on it.
+        raw = body.get("_raw") if isinstance(body, dict) else None
+        digest = (
+            # The answer was not JSON (``json()`` raised above).  Keep the
+            # truncated text: for a Cloudflare block page or an empty body,
+            # *what* came back is the whole diagnosis.  Not re-truncated here
+            # on purpose -- the caller already caps it at 300 characters, and a
+            # second cap would be a branch no test could tell apart from this
+            # one (an equivalent mutant).
+            {"raw": str(raw)}
+            if raw
+            else {"keys": sorted(body)[:12] if isinstance(body, dict) else []}
+        )
+        return {
+            **detail,
+            "ok": False,
+            "error": "about_you_no_continue_url",
+            "body_digest": digest,
+        }
+    _, landed = _follow_redirects(session, next_url, proxy=proxy)
+    return {**detail, "ok": True, "url": landed or next_url, "continued": True}
 
 
 def _finish_authorization(session, oauth, did, current_url, proxy=None, phone_pool=None, phone_probe_only=False):

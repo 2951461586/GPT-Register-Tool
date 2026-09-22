@@ -95,13 +95,41 @@ from common.protocol_core import (
     find_submission_attempt as common_find_submission_attempt,
     first_value_by_key as common_first_value_by_key,
 )
+from common.file_loading import (
+    load_proxy_file as shared_load_proxy_file,
+    load_token as shared_load_token,
+)
+from common.redaction import (
+    RedactionRegistry,
+    redact_log_text as shared_redact_log_text,
+    register_proxy_for_redaction as shared_register_proxy_for_redaction,
+)
+from common.proxy_bookkeeping import (
+    find_named_token as shared_find_named_token,
+    is_known_static_host as shared_is_known_static_host,
+    proxy_key as shared_proxy_key,
+    proxy_label as shared_proxy_label,
+    proxy_short as shared_proxy_short,
+    token_key_name as shared_token_key_name,
+)
+from common.proxy_selection import (
+    pick_random_proxies as shared_pick_random_proxies,
+    proxy_for_country as shared_proxy_for_country,
+)
+from common.proxy_url import (
+    USER_FIRST,
+    default_scheme_from_env,
+    normalize_proxy_url as shared_normalize_proxy_url,
+)
+from common.logging_setup import make_file_logger
+from common import geo as shared_geo
+from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+from common import stripe_flow as shared_stripe_flow
 
 LOG_DIR = SCRIPT_DIR / "logs"
 DUMP_DIR = SCRIPT_DIR / "dumps"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_TIMEOUT = 30
-CHATGPT_TIMEOUT = 45
 STRIPE_VERSION_FULL = (
     "2025-03-31.basil; checkout_server_update_beta=v1; "
     "checkout_manual_approval_preview=v1"
@@ -191,31 +219,33 @@ PL_BILLING_ADDRESSES = [
 EMAIL_DOMAINS = ("gmail.com", "outlook.com", "icloud.com", "hotmail.com")
 
 _log_file = LOG_DIR / f"blik_{time.strftime('%Y%m%d-%H%M%S')}.log"
+# Durable rotated copy alongside the legacy append-only file above. The legacy
+# file keeps its exact naming/content; this channel only adds a size-capped,
+# rotation-resilient mirror. It writes to files only, never stdout.
+_durable_logger = make_file_logger("blik", LOG_DIR, redact=lambda text: redact_log_text(text))
 _dump_counter = 0
 _proxy_state: dict[str, Any] | None = None
 _proxy_state_lock = RLock()
 _log_lock = RLock()
 _dump_lock = RLock()
 _proxy_file_lock = RLock()
-_proxy_redaction_lock = RLock()
-_proxy_redaction_values: set[str] = set()
+_proxy_redaction_registry = RedactionRegistry()
 _log_context = local()
 
 
 def redact_log_text(text: str) -> str:
-    text = str(text or "")
-    with _proxy_redaction_lock:
-        values = sorted(_proxy_redaction_values, key=len, reverse=True)
-    for value in values:
-        if value:
-            try:
-                label = proxy_label(value)
-            except (TypeError, ValueError):
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            if label == "direct":
-                label = f"proxy#{hashlib.sha256(value.encode()).hexdigest()[:10]}"
-            text = text.replace(value, label)
-    return text
+    """Delegate to the shared redactor (batch 2 of the consolidation).
+
+    ``registry`` is this module's own: it holds the proxies THIS extractor
+    registered.  A single shared registry would make one extractor's log output
+    depend on another extractor's registrations, and would leak one
+    extractor's proxy strings into another's dump files.
+    """
+    return shared_redact_log_text(
+        text,
+        registry=_proxy_redaction_registry,
+        proxy_label=proxy_label,
+    )
 
 
 def log(message: str, prefix: str = "") -> None:
@@ -223,8 +253,12 @@ def log(message: str, prefix: str = "") -> None:
     line = redact_log_text(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {prefix}{context}{message}")
     with _log_lock:
         print(line, flush=True)
-        with open(_log_file, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        try:
+            with open(_log_file, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+        _durable_logger.info("%s%s%s", prefix, context, message)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -299,7 +333,7 @@ def payment_method_type() -> str:
     return value if value in {"ideal", "blik"} else "ideal"
 
 
-def payment_method_label() -> str:
+def current_payment_method_label() -> str:
     return "BLIK" if payment_method_type() == "blik" else "iDEAL"
 
 
@@ -392,85 +426,60 @@ def payment_accept_language() -> str:
 
 
 def normalize_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if not proxy:
-        return ""
-    if "://" not in proxy:
-        parts = proxy.split(":")
-        if len(parts) == 4 and parts[3].isdigit() and not parts[1].isdigit():
-            username, password, hostname, port = parts
-            username = quote(unquote(username), safe="-._~")
-            password = quote(unquote(password), safe="-._~")
-            proxy = f"{default_proxy_scheme()}://{username}:{password}@{hostname}:{port}"
-        else:
-            proxy = f"{default_proxy_scheme()}://{proxy}"
+    """Delegate to the shared skeleton in ``common/proxy_url.py``.
 
-    parsed = urlsplit(proxy)
-    if parsed.username is None and parsed.password is None:
-        return proxy
-
-    hostname = parsed.hostname or ""
-    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    username = quote(unquote(parsed.username or ""), safe="-._~")
-    auth = username
-    if parsed.password is not None:
-        auth = f"{auth}:{quote(unquote(parsed.password), safe='-._~')}"
-    return urlunsplit((parsed.scheme, f"{auth}@{host}", parsed.path, parsed.query, parsed.fragment))
+    ``four_part=USER_FIRST`` records blik's inverse four-field convention
+    (``user:pass:host:port``), which disagrees with the ``host:port:user:pass``
+    order used by kakao / direct_card / ac_paylink_core and by the host-side
+    authority ``sms_tool/proxy_entry.parse_proxy``.  The disagreement is
+    preserved here rather than silently unified -- see the module docstring of
+    ``common/proxy_url.py``.  ``runtime/tmp/p0_proxy_diff.py`` pins it.
+    """
+    return shared_normalize_proxy_url(
+        proxy, default_scheme=default_proxy_scheme(), four_part=USER_FIRST
+    )
 
 
 def register_proxy_for_redaction(proxy: str) -> None:
-    raw = str(proxy or "").strip()
-    if not raw:
-        return
-    normalized = normalize_proxy_url(raw)
-    values = {raw}
-    if normalized:
-        values.add(normalized)
-        decoded = unquote(normalized)
-        values.add(decoded)
-        parsed = urlsplit(decoded)
-        if parsed.netloc:
-            values.add(parsed.netloc)
-        if parsed.hostname:
-            host = parsed.hostname
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-            try:
-                port = parsed.port
-            except ValueError:
-                port = None
-            values.add(f"{host}:{port}" if port else host)
-    with _proxy_redaction_lock:
-        _proxy_redaction_values.update(values)
+    """Delegate to the shared registrar (batch 2 of the consolidation).
 
+    ``normalize`` is this module's own normaliser and ``registry`` is this
+    module's own value set -- see ``redact_log_text`` for why neither is
+    shared.
+    """
+    shared_register_proxy_for_redaction(
+        proxy,
+        registry=_proxy_redaction_registry,
+        normalize=normalize_proxy_url,
+    )
 
 def default_proxy_scheme() -> str:
-    raw = os.environ.get("IDEAL_PROXY_DEFAULT_SCHEME", "http").strip().lower()
-    raw = raw[:-3] if raw.endswith("://") else raw
-    if raw in ("socks5", "socks5h"):
-        return "socks5h"
-    if raw in ("http", "https"):
-        return raw
-    return "http"
+    """Delegate to the shared resolver in ``common/proxy_url.py``.
+
+    ``allow_https`` defaults to true here, so ``IDEAL_PROXY_DEFAULT_SCHEME=https``
+    survives -- unlike kakao, which collapses it to ``http``.
+    """
+    return default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
 
 
 def proxy_short(proxy: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    if not proxy:
-        return "direct"
-    digest = hashlib.sha256(proxy.encode()).hexdigest()[:10]
-    return f"proxy#{digest}"
+    """Delegate to ``common/proxy_bookkeeping.py``.
+
+    The host-side body is shared; the normaliser is injected so blik keeps its
+    ``user:pass:host:port`` reading while the others keep ``host:port:user:pass``
+    (see ``common/proxy_url.py``).
+    """
+    return shared_proxy_short(proxy, normalize_proxy_url)
 
 
 def proxy_label(proxy: str) -> str:
-    return proxy_short(proxy)
+    """Delegate to ``common/proxy_bookkeeping.py`` (historical alias of proxy_short)."""
+    return shared_proxy_label(proxy, normalize_proxy_url)
 
 
 def proxy_key(proxy: str) -> str:
-    proxy = normalize_proxy_url(proxy)
-    return hashlib.sha256(proxy.encode()).hexdigest() if proxy else ""
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_proxy_key(proxy, normalize_proxy_url)
 
 
 _PROXY_COUNTRY_SELECTOR_RE = re.compile(
@@ -489,40 +498,24 @@ def proxy_chain_key(proxy: str) -> str:
 
 
 def proxy_for_country(proxy: str, country: str) -> str:
-    """Rewrite only the country selector and retain the source sticky session."""
-    proxy = normalize_proxy_url(proxy)
-    target_country = normalize_country(country).lower()
-    if not proxy:
-        raise RuntimeError("代理为空，无法派生地区链路")
+    """Delegate to the shared rewriter (batch 5 of the consolidation).
 
-    parsed = urlsplit(proxy)
-    username = unquote(parsed.username or "")
-    password = unquote(parsed.password or "")
-    replacements = 0
-
-    def replace_country(match: re.Match[str]) -> str:
-        nonlocal replacements
-        replacements += 1
-        current = match.group("value")
-        value = target_country.upper() if current.isupper() else target_country
-        return f"{match.group('name')}{match.group('separator')}{value}"
-
-    username = _PROXY_COUNTRY_SELECTOR_RE.sub(replace_country, username)
-    password = _PROXY_COUNTRY_SELECTOR_RE.sub(replace_country, password)
-    if not replacements:
-        raise RuntimeError(f"代理未包含可改写的 country/region 选择器: {proxy_label(proxy)}")
-
-    hostname = parsed.hostname or ""
-    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
-    auth = quote(username, safe="-._~")
-    if parsed.password is not None:
-        auth = f"{auth}:{quote(password, safe='-._~')}"
-    derived = urlunsplit((parsed.scheme, f"{auth}@{host}", parsed.path, parsed.query, parsed.fragment))
-    register_proxy_for_redaction(derived)
-    return derived
-
+    Every knob is this module's own: the proxy normaliser, the country
+    normaliser (whose fallback differs per provider), the selector pattern --
+    which this module also uses for ``proxy_chain_key`` -- the redaction label
+    used in the error text, and the registrar that keeps the *derived* proxy out
+    of the logs.  The derived proxy is a new credential, not a restatement of
+    the seed, so registering it is not optional.
+    """
+    return shared_proxy_for_country(
+        proxy,
+        country,
+        normalize=normalize_proxy_url,
+        country_normalizer=normalize_country,
+        selector=_PROXY_COUNTRY_SELECTOR_RE,
+        label=proxy_label,
+        register=register_proxy_for_redaction,
+    )
 
 def blik_proxy_chain(proxy_seed: str) -> tuple[str, str]:
     """Use one sticky seed for all BLIK stages, with a PL country selector."""
@@ -664,7 +657,7 @@ def proxy_pair_key(checkout_proxy: str, provider_proxy: str) -> str:
 
 
 def clean_country_code(value: str) -> str:
-    return re.sub(r"[^A-Z]", "", str(value or "").upper())[:2]
+    return shared_geo.clean_country_code(value)
 
 
 def proxy_country_cache_ttl() -> int:
@@ -672,70 +665,24 @@ def proxy_country_cache_ttl() -> int:
 
 
 def geo_lookup_urls() -> list[tuple[str, str]]:
-    return [
-        ("ip-api", "http://ip-api.com/json/?fields=status,countryCode,as,message"),
-        ("ipwho", "https://ipwho.is/?fields=success,country_code,connection,message"),
-        ("ipapi", "https://ipapi.co/json/"),
-    ]
+    return shared_geo.geo_lookup_urls()
 
 
 def parse_geo_country(source: str, payload: dict[str, Any]) -> tuple[str, str]:
-    if source == "ip-api":
-        if payload.get("status") != "success":
-            return "", str(payload.get("message") or "")
-        return clean_country_code(str(payload.get("countryCode") or "")), str(payload.get("as") or "")
-    if source == "ipwho":
-        if payload.get("success") is False:
-            return "", str(payload.get("message") or "")
-        connection = payload.get("connection") if isinstance(payload.get("connection"), dict) else {}
-        return clean_country_code(str(payload.get("country_code") or "")), str(connection.get("asn") or "")
-    if source == "ipapi":
-        error = payload.get("error")
-        if error:
-            return "", str(payload.get("reason") or payload.get("message") or error)
-        return clean_country_code(str(payload.get("country_code") or "")), str(payload.get("org") or "")
-    return "", ""
+    return shared_geo.parse_geo_country(source, payload)
 
 
 def lookup_proxy_country(group: str, proxy: str, timeout: int | None = None) -> tuple[str, str, str]:
-    record = proxy_record(group, proxy)
-    now = int(time.time())
-    use_pre_proxy = env_bool("IDEAL_PROXY_GEO_USE_PRE_PROXY", False)
-    cached_country = clean_country_code(str(record.get("country") or ""))
-    checked_at = int(record.get("country_checked_at") or 0)
-    cache_matches = "country_pre_proxy" in record and bool(record.get("country_pre_proxy")) == use_pre_proxy
-    if cached_country and cache_matches and now - checked_at <= proxy_country_cache_ttl():
-        return cached_country, str(record.get("country_as") or ""), "cache"
-
-    last_error = ""
-    request_timeout = timeout or env_int("IDEAL_PROXY_GEO_TIMEOUT", 15)
-    session = new_session(proxy, use_pre_proxy=use_pre_proxy)
-    for source, url in geo_lookup_urls():
-        try:
-            resp = session.get(url, timeout=request_timeout)
-            if resp.status_code != 200:
-                last_error = f"{source}:HTTP_{resp.status_code}"
-                continue
-            payload = resp.json() or {}
-            country, asn = parse_geo_country(source, payload)
-            if country:
-                record["country"] = country
-                record["country_as"] = asn
-                record["country_source"] = source
-                record["country_checked_at"] = now
-                record["country_pre_proxy"] = use_pre_proxy
-                save_proxy_state()
-                return country, asn, source
-            last_error = f"{source}:{asn or 'no_country'}"
-        except Exception as exc:
-            last_error = f"{source}:{str(exc)[:80]}"
-
-    record["country"] = ""
-    record["country_error"] = redact_log_text(last_error)
-    record["country_checked_at"] = now
-    record["country_pre_proxy"] = use_pre_proxy
-    save_proxy_state()
-    return "", last_error, "error"
+    return shared_geo.lookup_proxy_country(
+        group, proxy, timeout,
+        record=proxy_record(group, proxy),
+        save_state=save_proxy_state,
+        new_session=new_session,
+        env_bool=env_bool,
+        env_int=env_int,
+        redact=redact_log_text,
+        env_prefix="IDEAL",
+    )
 
 
 def proxy_target_cache_ttl() -> int:
@@ -743,61 +690,25 @@ def proxy_target_cache_ttl() -> int:
 
 
 def target_probe_urls(group: str) -> list[tuple[str, str]]:
-    if group == "checkout":
-        return [("chatgpt", "https://chatgpt.com/")]
-    return [
-        ("chatgpt", "https://chatgpt.com/"),
-        ("stripe", "https://api.stripe.com/"),
-    ]
+    return shared_geo.target_probe_urls(group)
 
 
 def target_response_error(resp: Any) -> str:
-    headers = getattr(resp, "headers", {}) or {}
-    status_code = int(getattr(resp, "status_code", 0) or 0)
-    origin = str(headers.get("x-response-origin") or headers.get("X-Response-Origin") or "").lower()
-    proxy_auth = str(headers.get("proxy-authenticate") or headers.get("Proxy-Authenticate") or "").lower()
-    if "proxy-server" in origin:
-        return f"HTTP_{status_code}:proxy-server"
-    if status_code == 407 or proxy_auth:
-        return f"HTTP_{status_code}:proxy-auth"
-    if status_code >= 500:
-        return f"HTTP_{status_code}"
-    return ""
+    return shared_geo.target_response_error(resp)
 
 
 def lookup_proxy_targets(group: str, proxy: str, timeout: int | None = None) -> tuple[bool, str]:
-    record = proxy_record(group, proxy)
-    now = int(time.time())
-    use_pre_proxy = env_bool("IDEAL_PROXY_TARGET_USE_PRE_PROXY", True)
-    checked_at = int(record.get("target_checked_at") or 0)
-    cached_ok = record.get("target_ok")
-    ttl = proxy_target_cache_ttl()
-    cache_matches = "target_pre_proxy" in record and bool(record.get("target_pre_proxy")) == use_pre_proxy
-    if isinstance(cached_ok, bool) and cache_matches and checked_at and (ttl <= 0 or now - checked_at <= ttl):
-        return cached_ok, "cache" if cached_ok else str(record.get("target_error") or "cache_failed")
-
-    request_timeout = timeout or env_int("IDEAL_PROXY_TARGET_TIMEOUT", env_int("IDEAL_PROXY_PRECHECK_TIMEOUT", 20))
-    session = new_session(proxy, use_pre_proxy=use_pre_proxy)
-    session.headers.update({"User-Agent": DEFAULT_USER_AGENT, "Accept": "*/*"})
-    last_error = ""
-    for name, url in target_probe_urls(group):
-        try:
-            resp = session.get(url, timeout=request_timeout, allow_redirects=False)
-            response_error = target_response_error(resp)
-            if response_error:
-                last_error = f"{name}:{response_error}"
-                break
-        except Exception as exc:
-            last_error = f"{name}:{str(exc)[:120]}"
-            break
-
-    ok = not last_error
-    record["target_ok"] = ok
-    record["target_error"] = "" if ok else redact_log_text(last_error)
-    record["target_checked_at"] = now
-    record["target_pre_proxy"] = use_pre_proxy
-    save_proxy_state()
-    return ok, "ok" if ok else last_error
+    return shared_geo.lookup_proxy_targets(
+        group, proxy, timeout,
+        record=proxy_record(group, proxy),
+        save_state=save_proxy_state,
+        new_session=new_session,
+        env_bool=env_bool,
+        env_int=env_int,
+        redact=redact_log_text,
+        env_prefix="IDEAL",
+        user_agent=DEFAULT_USER_AGENT,
+    )
 
 
 def expected_proxy_country(group: str) -> str:
@@ -809,129 +720,56 @@ def expected_proxy_country(group: str) -> str:
 
 
 def expected_proxy_countries(group: str) -> set[str]:
-    if group == "checkout":
-        return {expected_proxy_country(group)}
-    raw = os.environ.get(
-        "IDEAL_PROVIDER_PROXY_COUNTRIES",
-        os.environ.get("IDEAL_PROVIDER_PROXY_COUNTRY", default_provider_proxy_countries()),
+    return shared_geo.expected_proxy_countries(
+        group,
+        env_prefix="IDEAL",
+        default_checkout_country=default_checkout_proxy_country,
+        default_country=default_payment_country,
+        default_provider_countries=default_provider_proxy_countries,
     )
-    countries = {clean_country_code(item) for item in re.split(r"[,;\s]+", raw) if clean_country_code(item)}
-    return countries or {expected_proxy_country(group)}
 
 
 def format_expected_countries(countries: set[str]) -> str:
-    return ",".join(sorted(countries))
+    return shared_geo.format_expected_countries(countries)
 
 
 def ensure_proxy_country(group: str, proxy: str) -> None:
-    if not env_bool("IDEAL_PROXY_GEO_CHECK", True):
-        return
-    expected = expected_proxy_countries(group)
-    if not expected:
-        return
-    country, asn, source = lookup_proxy_country(group, proxy)
-    log(
-        f"{group} 出口检测: {proxy_label(proxy)} country={country or 'UNKNOWN'} "
-        f"expected={format_expected_countries(expected)} source={source}"
+    return shared_geo.ensure_proxy_country(
+        group, proxy,
+        lookup_country=lookup_proxy_country,
+        expected_countries=expected_proxy_countries,
+        env_bool=env_bool,
+        log=log,
+        label=proxy_label,
+        remove_failed=remove_failed_proxy,
+        env_prefix="IDEAL",
     )
-    if not country:
-        return
-    if country not in expected:
-        reason = f"{group} 代理出口国家不符: actual={country}, expected={format_expected_countries(expected)}"
-        remove_failed_proxy(group, proxy, reason)
-        raise RuntimeError(reason)
 
 
 def ensure_proxy_targets(group: str, proxy: str) -> None:
-    if not env_bool("IDEAL_PROXY_TARGET_CHECK", True):
-        return
-    ok, reason = lookup_proxy_targets(group, proxy)
-    log(f"{group} 目标站检测: {proxy_label(proxy)} reachable={ok} source={reason}")
-    if not ok:
-        raise RuntimeError(f"{group} 代理目标站不可达: {reason}")
+    return shared_geo.ensure_proxy_targets(
+        group, proxy,
+        lookup_targets=lookup_proxy_targets,
+        env_bool=env_bool,
+        log=log,
+        label=proxy_label,
+        env_prefix="IDEAL",
+    )
 
 
 def precheck_proxy_group(group: str, proxies: list[str]) -> list[str]:
-    if not env_bool("IDEAL_PROXY_PRECHECK", True):
-        return proxies
-    geo_enabled = env_bool("IDEAL_PROXY_GEO_CHECK", True)
-    target_enabled = env_bool("IDEAL_PROXY_TARGET_CHECK", True) and env_bool("IDEAL_PROXY_TARGET_PRECHECK", True)
-    if not geo_enabled and not target_enabled:
-        return proxies
-    expected = expected_proxy_countries(group)
-    if geo_enabled and not expected:
-        return proxies
-
-    total = len(proxies)
-    requested_workers = env_int("IDEAL_PROXY_PRECHECK_WORKERS", 50)
-    worker_limit = env_int("IDEAL_PROXY_PRECHECK_WORKERS_MAX", 50)
-    workers = min(requested_workers, worker_limit, total)
-    timeout = env_int("IDEAL_PROXY_PRECHECK_TIMEOUT", 20)
-    if requested_workers > workers:
-        log(f"{group} 代理预筛并发从 {requested_workers} 限制为 {workers}", "[WARN] ")
-    log(
-        f"{group} 代理预筛开始: total={total}, "
-        f"expected={format_expected_countries(expected) if geo_enabled else 'SKIP'}, "
-        f"target={'on' if target_enabled else 'off'}, workers={workers}, timeout={timeout}s"
+    return shared_geo.precheck_proxy_group(
+        group, proxies,
+        lookup_country=lookup_proxy_country,
+        lookup_targets=lookup_proxy_targets,
+        expected_countries=expected_proxy_countries,
+        env_bool=env_bool,
+        env_int=env_int,
+        log=log,
+        record_health_failure=record_proxy_health_failure,
+        remove_failed_proxies=remove_failed_proxies,
+        env_prefix="IDEAL",
     )
-
-    kept_set: set[str] = set()
-    country_failures: list[tuple[str, str]] = []
-    target_failures: list[tuple[str, str]] = []
-    failed = 0
-    unknown = 0
-
-    def check(proxy: str) -> tuple[str, str, str, bool, str]:
-        country = ""
-        source = "skip"
-        if geo_enabled:
-            country, _asn, source = lookup_proxy_country(group, proxy, timeout=timeout)
-        target_ok = True
-        target_reason = "skip"
-        if target_enabled and (not geo_enabled or country in expected):
-            target_ok, target_reason = lookup_proxy_targets(group, proxy, timeout=timeout)
-        return proxy, country, source, target_ok, target_reason
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(check, proxy) for proxy in proxies]
-        for index, future in enumerate(as_completed(futures), start=1):
-            try:
-                proxy, country, source, target_ok, target_reason = future.result()
-            except Exception:
-                failed += 1
-                continue
-            country_ok = (not geo_enabled) or country in expected
-            if country_ok and target_ok:
-                kept_set.add(proxy)
-            else:
-                failed += 1
-                if not country_ok and not country:
-                    unknown += 1
-                elif not country_ok:
-                    country_failures.append(
-                        (
-                            proxy,
-                            f"预筛出口国家不符: actual={country}, expected={format_expected_countries(expected)}, source={source}",
-                        )
-                    )
-                else:
-                    reason = f"预筛目标站不可达: {target_reason}"
-                    target_failures.append((proxy, reason))
-                    record_proxy_health_failure(group, proxy, reason)
-            if index % 50 == 0 or index == total:
-                log(f"{group} 代理预筛进度: {index}/{total}, kept={len(kept_set)}, failed={failed}, unknown={unknown}")
-
-    remove_failed_proxies(group, country_failures)
-    if not kept_set:
-        failed_set = {proxy for proxy, _reason in country_failures}
-        failed_set.update(proxy for proxy, _reason in target_failures)
-        remaining = [proxy for proxy in proxies if proxy not in failed_set]
-        if remaining:
-            log(f"{group} 代理预筛无明确可用结果，仅保留 {len(remaining)} 条出口未知代理继续跑", "[WARN] ")
-        return remaining
-    kept = [proxy for proxy in proxies if proxy in kept_set]
-    log(f"{group} 代理预筛完成: kept={len(kept)}/{total}, removed={total - len(kept)}, unknown={unknown}")
-    return kept
 
 
 def record_proxy_result(group: str, proxy: str, success: bool, reason: str = "") -> dict[str, Any]:
@@ -1232,17 +1070,17 @@ def pre_proxy_url() -> str:
 
 
 def load_proxy_file(path: Path) -> list[str]:
-    proxies: list[str] = []
-    if not path.exists():
-        return proxies
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            register_proxy_for_redaction(line)
-            proxy = normalize_proxy_url(line)
-            if proxy:
-                proxies.append(proxy)
-    random.shuffle(proxies)
-    return proxies
+    """Delegate to the shared loader (batch 3 of the consolidation).
+
+    The two injected knobs are this module's own: redaction registration writes
+    into *this* extractor's registry, and the normaliser is the one that knows
+    blik's four-field convention.
+    """
+    return shared_load_proxy_file(
+        path,
+        register_for_redaction=register_proxy_for_redaction,
+        normalize=normalize_proxy_url,
+    )
 
 
 def proxy_seed_file() -> Path:
@@ -1444,7 +1282,7 @@ def load_proxy_groups() -> tuple[list[str], list[str]]:
         raise RuntimeError("Provider 代理已全部被失败状态过滤")
     log(f"加载 Checkout 代理 {len(checkout_proxies)} 条: {checkout_file}")
     log(f"加载 Provider 代理 {len(provider_proxies)} 条: {provider_file}")
-    log(f"代理策略: checkout/0元资格/approve 用 Checkout；Stripe/{payment_method_label()} 用 Provider")
+    log(f"代理策略: checkout/0元资格/approve 用 Checkout；Stripe/{current_payment_method_label()} 用 Provider")
     log(f"裸代理默认协议: {default_proxy_scheme()}://")
     log(f"本机前置代理: {proxy_label(pre_proxy_url())}")
     log(
@@ -1533,33 +1371,13 @@ def dump_http(
 
 
 def token_key_name(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_token_key_name(value)
 
 
 def find_named_token(payload: Any, aliases: tuple[str, ...]) -> str:
-    wanted = {token_key_name(item) for item in aliases}
-    if isinstance(payload, dict):
-        cookie_name = token_key_name(payload.get("name") or payload.get("key"))
-        if cookie_name in wanted:
-            for value_key in ("value", "token", "content"):
-                value = str(payload.get(value_key) or "").strip()
-                if value:
-                    return value
-        for key, value in payload.items():
-            if token_key_name(key) in wanted and isinstance(value, (str, int, float)):
-                found = str(value).strip()
-                if found:
-                    return found
-        for value in payload.values():
-            found = find_named_token(value, aliases)
-            if found:
-                return found
-    elif isinstance(payload, list):
-        for item in payload:
-            found = find_named_token(item, aliases)
-            if found:
-                return found
-    return ""
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_find_named_token(payload, aliases)
 
 
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
@@ -1611,41 +1429,20 @@ def normalize_token(raw: str) -> tuple[str, str]:
 
 
 def load_token() -> tuple[str, str]:
-    for env_name in ("PP_TOKEN", "IDEAL_TOKEN"):
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            log(f"使用环境变量 {env_name}")
-            token, session_token = normalize_token(value)
-            env_session = os.environ.get("PP_SESSION_TOKEN", "").strip()
-            if env_session or session_token:
-                log("已加载 sessionToken cookie")
-            return token, env_session or session_token
+    """Delegate to the shared loader (batch 3 of the consolidation).
 
-    candidates = [SCRIPT_DIR / "token.txt"]
-    for path in candidates:
-        if not path.exists():
-            continue
-        raw = path.read_bytes()
-        for enc in ("utf-8-sig", "utf-16", "utf-8", "ascii"):
-            try:
-                text = raw.decode(enc).strip()
-                break
-            except UnicodeError:
-                continue
-        else:
-            text = raw.decode("utf-8", errors="ignore").strip()
-        if text:
-            log("使用 token 文件")
-            token, session_token = normalize_token(text)
-            env_session = os.environ.get("PP_SESSION_TOKEN", "").strip()
-            if env_session or session_token:
-                log("已加载 sessionToken cookie")
-            return token, env_session or session_token
-
-    token = input("请输入 access_token: ").strip()
-    session_token = os.environ.get("PP_SESSION_TOKEN", "").strip()
-    token, parsed_session = normalize_token(token)
-    return token, session_token or parsed_session
+    ``env_names`` is passed explicitly.  It reuses ideal's ``IDEAL_TOKEN`` name,
+    which looks like a copy-paste slip -- but it is the shipped behaviour, and
+    changing it here would change which env var blik honours.  If that is ever
+    intended to change, change it as its own unit of work with its own
+    verification; do not "tidy" it during a refactor.
+    """
+    return shared_load_token(
+        env_names=("PP_TOKEN", "IDEAL_TOKEN"),
+        token_file=SCRIPT_DIR / "token.txt",
+        normalize_token=normalize_token,
+        log=log,
+    )
 
 
 def build_chatgpt_session(access_token: str, device_id: str, proxy: str, session_token: str = "") -> requests.Session:
@@ -2153,43 +1950,21 @@ def add_inline_blik_payment_method_data(body: dict[str, Any], cs_id: str, billin
 
 
 def processor_entity_for_country(country: str, processor_entity: str = "") -> str:
-    if processor_entity:
-        return processor_entity
-    return "openai_llc" if normalize_country(country) == "US" else "openai_ie"
+    return shared_stripe_flow.processor_entity_for_country(country, processor_entity, normalize_country=normalize_country)
 
 
 def stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str) -> str:
-    processor = processor_entity_for_country(country, processor_entity)
-    success = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor}&plan_type=plus"
-    return (
-        f"https://checkout.stripe.com/c/pay/{cs_id}"
-        f"?returned_from_redirect=true&ui_mode=custom&return_url={quote(success, safe='')}"
-    )
+    return shared_stripe_flow.stripe_checkout_long_url(cs_id, country, processor_entity, normalize_country=normalize_country)
 
 
 def to_openai_pay_url(stripe_hosted_url: str) -> str:
-    url = str(stripe_hosted_url or "").strip()
-    if not url:
-        return ""
-    if url.startswith("https://checkout.stripe.com"):
-        return "https://pay.openai.com" + url[len("https://checkout.stripe.com") :]
-    parsed = urlsplit(url)
-    if parsed.netloc.lower() == "checkout.stripe.com":
-        return urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
-    return url
+    return shared_stripe_flow.to_openai_pay_url(stripe_hosted_url)
 
 
 def stripe_confirm_return_url(cs_id: str, checkout: dict[str, str], stripe_hosted_url: str) -> str:
-    country = normalize_country(checkout.get("billing_country") or "NL")
-    processor = processor_entity_for_country(country, checkout.get("processor_entity") or "")
-    success = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor}&plan_type=plus"
-    hosted = to_openai_pay_url(stripe_hosted_url) or stripe_checkout_long_url(cs_id, country, processor)
-    if "pay.openai.com/" in hosted or "checkout.stripe.com/" in hosted:
-        parsed = urlsplit(hosted)
-        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        query.setdefault("success_return_url", success)
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
-    return hosted
+    return shared_stripe_flow.stripe_confirm_return_url(
+        cs_id, checkout, stripe_hosted_url, normalize_country=normalize_country, default_country="NL"
+    )
 
 
 def stripe_confirm_ideal(
@@ -2318,14 +2093,8 @@ def is_resource_url(url: str) -> bool:
 
 
 def is_known_static_host(url: str) -> bool:
-    host = (urlparse(url).netloc or "").lower()
-    return host in {
-        "stripe-camo.global.ssl.fastly.net",
-        "files.stripe.com",
-        "js.stripe.com",
-        "m.stripe.network",
-        "q.stripe.com",
-    }
+    """Delegate to ``common/proxy_bookkeeping.py``."""
+    return shared_is_known_static_host(url)
 
 
 def is_redirect_like_url(url: str, from_action_field: bool = False) -> bool:
@@ -2818,7 +2587,7 @@ def run_provider_flow(
 ) -> tuple[str, list[str]]:
     checkout_country = normalize_country(os.environ.get("IDEAL_CHECKOUT_COUNTRY", default_payment_country()))
     expected_method = payment_method_type()
-    expected_label = payment_method_label()
+    expected_label = current_payment_method_label()
     stripe_pk = checkout.get("stripe_pk") or DEFAULT_STRIPE_PK
 
     log(f"Stripe init (PM={billing['country']}, proxy={proxy_label(provider_proxy)})...")
@@ -2982,7 +2751,7 @@ def run_once(
     device_id = str(uuid.uuid4())
     checkout_country = normalize_country(os.environ.get("IDEAL_CHECKOUT_COUNTRY", default_payment_country()))
     billing = ideal_billing_profile()
-    expected_label = payment_method_label()
+    expected_label = current_payment_method_label()
     log(f"开始 {expected_label} 提取，第 {attempt}/{max_retry} 次")
     log(
         "组合测试: "
@@ -3179,20 +2948,20 @@ def is_preferred_proxy(group: str, proxy: str) -> bool:
 
 
 def pick_random_proxies(proxies: list[str], limit: int, group: str = "") -> list[str]:
-    if group:
-        proxies = order_proxy_group(group, proxies)
-    preferred = [proxy for proxy in proxies if is_preferred_proxy(group, proxy)]
-    preferred_set = set(preferred)
-    rest = [proxy for proxy in proxies if proxy not in preferred_set]
-    if limit >= len(proxies):
-        random.shuffle(rest)
-        return preferred + rest
-    selected = preferred[:limit]
-    remain_count = limit - len(selected)
-    if remain_count > 0:
-        selected.extend(random.sample(rest, min(remain_count, len(rest))))
-    return selected
+    """Delegate to the shared picker (batch 5 of the consolidation).
 
+    ``is_preferred`` is this module's own rule.  blik's is deliberately not the
+    shared one (it keys records by group and honours ``zero_ok``), so passing
+    the callable keeps that difference explicit instead of hiding it behind a
+    flag.
+    """
+    return shared_pick_random_proxies(
+        proxies,
+        limit,
+        group,
+        order_group=order_proxy_group,
+        is_preferred=is_preferred_proxy,
+    )
 
 def run_single_link_attempt(
     access_token: str,
@@ -3208,7 +2977,7 @@ def run_single_link_attempt(
     stop_event: Event,
 ) -> tuple[int, str, str, bool]:
     previous_log_context = getattr(_log_context, "prefix", "")
-    expected_label = payment_method_label()
+    expected_label = current_payment_method_label()
     _log_context.prefix = f"[{expected_label} {attempt}/{ideal_retry}] "
     last_error = ""
     approve_blocked = False
@@ -3333,7 +3102,7 @@ def run_single_link_parallel_mode(access_token: str, session_token: str, checkou
     requested_workers = env_int("IDEAL_WORKERS", 1)
     worker_limit = env_int("IDEAL_WORKERS_MAX", requested_workers)
     workers = min(max(1, requested_workers), max(1, worker_limit), ideal_retry)
-    expected_label = payment_method_label()
+    expected_label = current_payment_method_label()
     checkout_country = normalize_country(os.environ.get("IDEAL_CHECKOUT_COUNTRY", default_payment_country()))
     checkout_currency = currency_for_country(checkout_country)
     max_blocked = env_int("IDEAL_MAX_APPROVE_BLOCKED", ideal_retry)
@@ -3419,7 +3188,7 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
     checkout_retry = env_int("IDEAL_CHECKOUT_RETRY_MAX", 5)
     provider_retry = env_int("IDEAL_PROVIDER_RETRY_MAX", 3)
     ideal_retry = env_int("IDEAL_MAX_RETRY", 5)
-    expected_label = payment_method_label()
+    expected_label = current_payment_method_label()
     checkout_country = normalize_country(os.environ.get("IDEAL_CHECKOUT_COUNTRY", default_payment_country()))
     checkout_currency = currency_for_country(checkout_country)
     max_blocked = env_int("IDEAL_MAX_APPROVE_BLOCKED", ideal_retry)

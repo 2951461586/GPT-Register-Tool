@@ -252,6 +252,29 @@ public sealed class SettingsServiceTests
     }
 
     [Fact]
+    public void CatalogExposesPulseCanaryAndCrossBatchRetryPolicy()
+    {
+        SettingDefinition canary = SettingsCatalog.AllFields.Single(
+            field => field.Key == "pulse_canary_enabled");
+        Assert.Equal(SettingFieldKind.Boolean, canary.Kind);
+        Assert.Equal("registration.pulse.canary_enabled", canary.JsonPath);
+
+        SettingDefinition cooldown = SettingsCatalog.AllFields.Single(
+            field => field.Key == "registration_cross_batch_cooldown");
+        Assert.Equal(SettingFieldKind.Number, cooldown.Kind);
+        Assert.Equal(
+            "registration.retry_policy.cross_batch_cooldown_seconds",
+            cooldown.JsonPath);
+
+        SettingDefinition quarantine = SettingsCatalog.AllFields.Single(
+            field => field.Key == "registration_otp_pending_quarantine");
+        Assert.Equal(SettingFieldKind.Number, quarantine.Kind);
+        Assert.Equal(
+            "registration.retry_policy.otp_pending_quarantine_threshold",
+            quarantine.JsonPath);
+    }
+
+    [Fact]
     public void SaveDoesNotOverwriteSmsBowerBusinessDefaults()
     {
         using var fixture = new TemporaryDirectory();

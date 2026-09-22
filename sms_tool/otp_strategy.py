@@ -59,6 +59,51 @@ def otp_fallback_send_enabled():
     return bool(value)
 
 
+#: 允许「两段式轮询 + 重发」的邮箱 provider 默认名单。
+#:
+#: 2026-09-16 之前这里的门槛是硬编码的 ``provider != "remail"``，于是
+#: ``resend_callback`` / ``resend_after_seconds`` 对 gmail / imap / icloud /
+#: icloud_url / smailr **全是死参数**（round-2 审计 P1-2）：邮件只是晚到，也
+#: 只能烧满整个 ``otp_timeout`` 然后失败 —— 哪怕再等 30 秒就能收到。
+#:
+#: ``icloud_url`` 进名单的依据（2026-09-16 批次 25116 取证）：它是**转发 URL**
+#: 渠道，邮件要先经上游转发才可见，晚到是常态。那一轮 10 个账号、18/18 次轮询
+#: 全是 ``matched=False``；而**同一份代码**在 4.5 小时前的批次 25288 上是
+#: 6 次命中（7.9–25.4s）⇒ 给它第二次发码机会是有意义的。
+#:
+#: 🔴 ``remail`` 必须留在名单里 —— 它原本就走这条路，改成名单不能把老行为丢掉。
+DEFAULT_OTP_RESEND_PROVIDERS: tuple[str, ...] = ("remail", "icloud_url")
+
+
+def otp_resend_providers() -> tuple[str, ...]:
+    """重发名单，可由 ``email_registration.otp_resend_providers`` 覆盖。
+
+    接受 list 或逗号分隔字符串。**写坏了就回落默认值**（与
+    ``registration_pulse._coerce`` 同一条原则：一个笔误不该让整批注册起不来）。
+    显式写空（``[]`` / ``""``）也回落默认值 —— 要停用重发请用
+    ``remail_otp_resend_after_seconds=0``，那条路径本来就有。
+    """
+    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    value = cfg.get("otp_resend_providers")
+    if isinstance(value, str):
+        value = value.split(",")
+    if not isinstance(value, (list, tuple)):
+        return DEFAULT_OTP_RESEND_PROVIDERS
+    providers = tuple(str(item).strip().lower() for item in value if str(item).strip())
+    return providers or DEFAULT_OTP_RESEND_PROVIDERS
+
+
+def otp_resend_eligible(provider) -> bool:
+    """该邮箱渠道有没有「第二段轮询 + 重发」的能力。
+
+    🔴 这是**渠道级**判据，**不是**「这一轮真的重发过」：重发窗口还会被
+    ``remail_otp_resend_after_seconds`` 关掉（见 ``_poll_registration_email_otp``
+    的第二条单次分支）。两处共用这一个 owner —— ``registration_handlers``
+    也调它，决定失败原因里要不要标「该渠道无重发」。
+    """
+    return str(provider or "").strip().lower() in otp_resend_providers()
+
+
 def send_registration_email_otp(session, auth_base, base_headers, current_url="", mode="passwordless"):
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/email-verification"
     did = str((base_headers or {}).get("oai-device-id") or (base_headers or {}).get("Oai-Device-Id") or "").strip()
@@ -169,17 +214,26 @@ def _poll_registration_email_otp(
         )
         return code
 
-    if provider != "remail" or resend_callback is None:
-        # Single-shot window: only remail wires a resend callback, so every
-        # other provider gets exactly one poll for the whole budget.  If the
-        # mail is late the run burns the entire timeout and dies -- record the
-        # budget so the log attributes it instead of showing a silent gap.
+    if resend_callback is None:
+        reason = "no_callback"
+    elif not otp_resend_eligible(provider):
+        reason = "provider_not_eligible"
+    else:
+        reason = ""
+    if reason:
+        # Single-shot window: this channel has no second-chance resend, so the
+        # whole budget is one poll.  If the mail is late the run burns the
+        # entire timeout and dies -- record the budget *and why there was no
+        # resend*.  ``resend=none`` alone used to conflate two different fixes:
+        # "the caller wired no callback" (a bug here) vs "this channel cannot
+        # resend" (a capability gap, see ``DEFAULT_OTP_RESEND_PROVIDERS``).
         _otp_poll_log(
             "start",
             provider,
-            f"timeout={total_timeout}s resend=none",
+            f"timeout={total_timeout}s resend=none reason={reason}",
             otp_timeout_s=total_timeout,
             otp_resend_enabled=False,
+            otp_resend_reason=reason,
         )
         return finish(poll(total_timeout))
     if resend_after_seconds is None:
@@ -194,20 +248,16 @@ def _poll_registration_email_otp(
         _otp_poll_log(
             "start",
             provider,
-            f"timeout={total_timeout}s resend=disabled",
+            f"timeout={total_timeout}s resend=disabled reason=window_disabled",
             otp_timeout_s=total_timeout,
             otp_resend_enabled=False,
+            otp_resend_reason="window_disabled",
         )
-        return finish(
-            _poll_email_otp(
-                mailbox,
-                subject_keyword=subject_keyword,
-                timeout=total_timeout,
-                issued_after_unix=issued_after_unix,
-                proxy=proxy,
-                excluded_otps=excluded_otps,
-            )
-        )
+        # ``poll()``，不是模块级的 ``_poll_email_otp`` —— 这条分支以前绕过
+        # ``poll_otp_fn`` 直连默认轮询器，于是注册泳道注入的
+        # ``MailboxService.poll_otp`` 在「重发窗口被关掉」时被静默跳过。
+        # 同一件事两条路径（本项目铁律 5）：三条分支必须都走 ``poll``。
+        return finish(poll(total_timeout))
     _otp_poll_log(
         "start",
         provider,

@@ -592,7 +592,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             self.assertTrue(qr_path.exists())
             checkout_body = posted[0][2]
             self.assertEqual(checkout_body["billing_details"], {"country": "JP", "currency": "JPY"})
-            self.assertEqual(checkout_body["checkout_ui_mode"], "hosted")
+            self.assertEqual(checkout_body["checkout_ui_mode"], "custom")
             self.assertEqual(calls[:2], ["socks5h://jp-checkout", "http://in-provider:11001"])
 
     def test_generate_upi_qr_requires_upi_payment_method(self):

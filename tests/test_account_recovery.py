@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from contextlib import contextmanager
 
 from sms_tool.accounts import account_recovery
@@ -712,6 +712,173 @@ def test_relogin_otp_failure_enters_cooldown(tmp_path, monkeypatch):
     assert account_recovery._relogin_cooldown_active(account)
 
 
+def _guard_entry(tmp_path, email="dead@example.com"):
+    import json
+
+    path = account_recovery._relogin_guard_path()
+    assert path.is_file(), "the failure was not recorded at all"
+    return json.loads(path.read_text(encoding="utf-8"))[email]
+
+
+# What the ``/about-you`` lane returns for an address that already has an account.
+# Measured 2026-09-14: ``create_account`` answers 400 ``user_already_exists`` with
+# ``userAlreadyExistsRecovery.action=continue_to_login``, 23/23 byte-identical.
+ABOUT_YOU_DEAD_END = {
+    "ok": False,
+    "mode": "codex_oauth_pkce",
+    "error": "about_you_existing_account_user_already_exists:continue_to_login",
+    "last_url": "https://auth.openai.com/about-you",
+}
+
+
+def test_relogin_dead_end_is_recorded_as_a_permanent_account_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {}})
+    account_recovery._record_relogin_failure("dead@example.com", ABOUT_YOU_DEAD_END)
+
+    entry = _guard_entry(tmp_path)
+    assert entry["failure_class"] == "account"
+    assert entry["dead_end"] == "account_exists_login_loop"
+    assert entry["permanent"] is True
+
+
+def test_relogin_dead_end_is_recorded_even_without_an_otp_marker(tmp_path, monkeypatch):
+    """The stop must rest on the dead end itself, not on ``fallback_from`` wording.
+
+    ``ABOUT_YOU_DEAD_END`` mentions neither ``otp`` nor ``mailbox`` nor ``email``:
+    gating the record on those markers would silently drop exactly the failure
+    this fix exists for.
+    """
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {}})
+    text = str(ABOUT_YOU_DEAD_END).lower()
+    assert not any(marker in text for marker in ("otp", "mailbox", "email"))
+
+    account_recovery._record_relogin_failure("dead@example.com", ABOUT_YOU_DEAD_END)
+
+    assert _guard_entry(tmp_path)["dead_end"] == "account_exists_login_loop"
+
+
+def test_an_ordinary_otp_failure_is_not_marked_permanent(tmp_path, monkeypatch):
+    """Negative control: the escalation must not swallow every relogin failure."""
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {}})
+    account_recovery._record_relogin_failure(
+        "flaky@example.com", {"ok": False, "mode": "chatgpt_email_otp", "error": "otp_timeout"}
+    )
+
+    entry = _guard_entry(tmp_path, "flaky@example.com")
+    assert entry["failure_class"] == "relogin_otp_failed"
+    assert "permanent" not in entry
+    assert "dead_end" not in entry
+
+
+def test_a_permanent_dead_end_survives_an_expired_cooldown(tmp_path, monkeypatch):
+    """The one case where the two implementations disagree.
+
+    A clock-based cooldown releases the address once ``cooldown_until`` passes,
+    which is what produced one burned OTP every window.  The dead end must not be
+    released by the clock.
+    """
+    import json
+    import time
+
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}})
+    past = int(time.time()) - 10_000
+    path = account_recovery._relogin_guard_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "dead@example.com": {
+                    "failure_class": "account",
+                    "dead_end": "account_exists_login_loop",
+                    "permanent": True,
+                    "cooldown_until": past,
+                    "updated_at": past,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert account_recovery._relogin_cooldown_active({"email": "dead@example.com"}) is True
+
+
+def test_an_expired_cooldown_without_a_dead_end_is_released(tmp_path, monkeypatch):
+    """Negative control for the test above: the clock must still work."""
+    import json
+    import time
+
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}})
+    past = int(time.time()) - 10_000
+    path = account_recovery._relogin_guard_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "flaky@example.com": {
+                    "failure_class": "relogin_otp_failed",
+                    "cooldown_until": past,
+                    "updated_at": past,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert account_recovery._relogin_cooldown_active({"email": "flaky@example.com"}) is False
+
+
+def test_the_dead_end_escalation_can_be_turned_back_into_a_cooldown(tmp_path, monkeypatch):
+    """Operator escape hatch: with the flag off, the clock releases the address."""
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_dead_end_permanent": False}},
+    )
+    account_recovery._record_relogin_failure("dead@example.com", ABOUT_YOU_DEAD_END)
+
+    entry = _guard_entry(tmp_path)
+    assert entry["dead_end"] == "account_exists_login_loop"
+    assert "permanent" not in entry
+
+
+def test_a_cooldown_pass_does_not_erase_the_permanent_marker(tmp_path, monkeypatch):
+    """Once marked, the dead end must survive the very next batch.
+
+    ``_record_relogin_failure`` replaces ``data[key]`` wholesale, so a later
+    "cooldown" outcome written over it would silently drop ``permanent`` and
+    restart the OTP burn.  Two gates guard that (the ``mode == "cooldown"``
+    early return, plus the marker filter), which also means a single-point
+    mutation of either gate is unobservable -- this test pins the outcome
+    rather than either gate.
+    """
+    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {}})
+    account_recovery._record_relogin_failure("dead@example.com", ABOUT_YOU_DEAD_END)
+    account_recovery._record_relogin_failure(
+        "dead@example.com", {"ok": False, "mode": "cooldown", "error": "relogin_cooldown"}
+    )
+
+    entry = _guard_entry(tmp_path)
+    assert entry.get("permanent") is True
+    assert entry.get("dead_end") == "account_exists_login_loop"
+    assert account_recovery._relogin_cooldown_active({"email": "dead@example.com"}) is True
+
+
+def test_the_dead_end_switch_is_read_through_the_real_config_path():
+    """End-to-end through ``CFG``, not a monkeypatched dict.
+
+    ``CFG`` is a compatibility view over the workflow-scoped ``RuntimeConfig``,
+    so setting ``account_health.relogin_dead_end_permanent`` has to actually
+    reach ``_relogin_dead_end_permanent()``.  A switch that only works in tests
+    is not a switch.
+    """
+    from sms_tool.config import runtime_config_scope
+
+    with runtime_config_scope({"chatgpt": {}, "account_health": {"relogin_dead_end_permanent": False}}):
+        assert account_recovery._relogin_dead_end_permanent() is False
+    with runtime_config_scope({"chatgpt": {}, "account_health": {}}):
+        assert account_recovery._relogin_dead_end_permanent() is True
+
+
 def test_relogin_auto_uses_refresh_cookie_email_then_oauth():
     with (
         patch.object(
@@ -1289,3 +1456,412 @@ def test_browser_liveness_does_not_downgrade_to_curl_when_context_unavailable():
     assert not result["ok"]
     assert result["results"][0]["probe"].get("browser_fallback") == "unavailable"
     probe.assert_called_once()
+
+
+def test_recovery_proxy_candidates_orders_selected_then_affinity_then_direct():
+    """The chain's own pick goes first, then the account's original exit, then
+    (only when the operator allowed it) a direct exit."""
+    with patch.object(account_recovery, "_recovery_allow_direct", return_value=True):
+        got = account_recovery._recovery_proxy_candidates("http://affinity:1", "http://selected:2")
+    assert got == ["http://selected:2", "http://affinity:1", None]
+
+    with patch.object(account_recovery, "_recovery_allow_direct", return_value=False):
+        got = account_recovery._recovery_proxy_candidates("http://affinity:1", "http://selected:2")
+    assert got == ["http://selected:2", "http://affinity:1"]
+
+    with patch.object(account_recovery, "_recovery_allow_direct", return_value=True):
+        assert account_recovery._recovery_proxy_candidates("", "") == [None]
+
+
+def test_recoverable_on_other_proxy_only_trusts_transport_evidence():
+    """A different exit can fix a blocked exit; it cannot resurrect a dead
+    session. Only non-2xx / transport markers may trigger the retry."""
+    retry = account_recovery._recoverable_on_other_proxy
+    assert retry({"ok": False, "last_status": "403"}) is True
+    assert retry({"ok": False, "last_status": "429"}) is True
+    assert retry({"ok": False, "error": "curl: (28) Operation timed out"}) is True
+    # A 200 that carried no access token is a dead session, not a bad exit.
+    assert retry({"ok": False, "last_status": "200"}) is False
+    assert retry({"ok": False, "error": "auth_session_missing_access_token"}) is False
+    assert retry({"ok": True}) is False
+    assert retry({"ok": False, "terminal": True, "last_status": "403"}) is False
+
+
+def test_relogin_retries_web_session_on_the_next_exit_before_burning_an_otp():
+    """A blocked exit fails every strategy that goes through it. web_session is
+    free, so it must be retried on the account's other exit before the chain
+    reaches the OTP strategy -- that retry is what keeps a transient 403 from
+    turning into a real OTP send."""
+    seen = []
+
+    def web_session(account, proxy=None, timeout=None):
+        seen.append(proxy)
+        if len(seen) == 1:
+            return {
+                "ok": False,
+                "mode": "web_session",
+                "error": "auth_session_missing_access_token",
+                "last_status": "403",
+                "http_statuses": ["403", "403"],
+            }
+        return {"ok": True, "mode": "web_session", "persisted": True}
+
+    with (
+        patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+        patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "error": "missing_refresh_token"},
+        ),
+        patch.object(account_recovery, "relogin_web_session_account", side_effect=web_session),
+        patch.object(account_recovery, "relogin_chatgpt_email_account") as otp,
+    ):
+        result = account_recovery.relogin_codex_account({"email": "retry@example.com"}, mode="auto")
+
+    assert result["ok"] is True
+    assert result["proxy_index"] == 1
+    assert seen == ["http://selected:2", "http://affinity:1"]
+    otp.assert_not_called()
+
+
+def test_relogin_does_not_retry_web_session_when_the_session_is_dead():
+    """Negative control for the retry above: the same strategy with
+    ``last_status`` 200 must not spend a second exit, otherwise the retry would
+    fire unconditionally and the discriminator would not be what gates it."""
+    seen = []
+
+    def web_session(account, proxy=None, timeout=None):
+        seen.append(proxy)
+        return {
+            "ok": False,
+            "mode": "web_session",
+            "error": "auth_session_missing_access_token",
+            "last_status": "200",
+        }
+
+    with (
+        patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+        patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "error": "missing_refresh_token"},
+        ),
+        patch.object(account_recovery, "relogin_web_session_account", side_effect=web_session),
+        patch.object(
+            account_recovery, "relogin_chatgpt_email_account", return_value={"ok": False, "error": "otp_failed"}
+        ),
+        patch.object(
+            account_recovery, "relogin_local_codex_account", return_value={"ok": False, "error": "codex_failed"}
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_browser_session_account",
+            return_value={"ok": False, "error": "browser_failed"},
+        ),
+    ):
+        result = account_recovery.relogin_codex_account({"email": "dead@example.com"}, mode="auto")
+
+    assert result["ok"] is False
+    assert seen == ["http://selected:2"]
+
+
+def test_relogin_never_retries_otp_strategies_across_exits():
+    """Retrying an OTP strategy on another exit would mail the same mailbox a
+    second time, so the cross-exit retry is limited to the free strategies.
+
+    The OTP failure is deliberately transport-shaped (``last_status`` 403): with
+    a non-transport failure the retry gate alone would suppress the second call,
+    and the test would pass even if OTP strategies were listed as retryable.
+    """
+    otp_calls = []
+
+    def otp(account, proxy=None, timeout=None):
+        otp_calls.append(proxy)
+        return {
+            "ok": False,
+            "error": "existing_login_otp_validate",
+            "last_status": "403",
+        }
+
+    with (
+        patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+        patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "error": "missing_refresh_token"},
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_web_session_account",
+            return_value={"ok": False, "error": "web_session_probe_failed:401"},
+        ),
+        patch.object(account_recovery, "relogin_chatgpt_email_account", side_effect=otp),
+        patch.object(
+            account_recovery, "relogin_local_codex_account", return_value={"ok": False, "error": "codex_failed"}
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_browser_session_account",
+            return_value={"ok": False, "error": "browser_failed"},
+        ),
+    ):
+        account_recovery.relogin_codex_account({"email": "otp@example.com"}, mode="auto")
+
+    assert otp_calls == ["http://selected:2"]
+
+
+def test_auto_chain_gives_web_session_a_workable_but_bounded_budget():
+    """The old 30s cap was shorter than a single blocked-exit retry window (which
+    is how a transient 403 became an OTP send); an unbounded budget makes a dead
+    exit expensive. The budget must stay inside a known band."""
+    budgets = []
+
+    def web_session(account, proxy=None, timeout=None):
+        budgets.append(timeout)
+        return {"ok": False, "error": "auth_session_missing_access_token", "last_status": "200"}
+
+    def run(timeout):
+        with (
+            patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+            patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+            patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+            patch.object(
+                account_recovery,
+                "relogin_refresh_token_account",
+                return_value={"ok": False, "error": "missing_refresh_token"},
+            ),
+            patch.object(account_recovery, "relogin_web_session_account", side_effect=web_session),
+            patch.object(
+                account_recovery, "relogin_chatgpt_email_account", return_value={"ok": False, "error": "otp"}
+            ),
+            patch.object(
+                account_recovery, "relogin_local_codex_account", return_value={"ok": False, "error": "codex"}
+            ),
+            patch.object(
+                account_recovery, "relogin_browser_session_account", return_value={"ok": False, "error": "browser"}
+            ),
+        ):
+            account_recovery.relogin_codex_account({"email": "budget@example.com"}, mode="auto", timeout=timeout)
+
+    run(30)
+    run(600)
+
+    assert budgets[0] == 45, "a short caller timeout must still leave a workable floor"
+    assert budgets[1] == 60, "the budget must stay bounded so a dead exit is cheap"
+
+
+def test_relogin_hands_the_stored_password_to_the_login_probe():
+    """The lane probes before spending an email code, so it needs the password.
+
+    A positive probe verdict is only actionable if there is a password to
+    submit; without this the recovery lane would stop at "the account has a
+    password we cannot submit" instead of logging in.  ``registration`` binds
+    the symbol at call time (it is imported inside the function), so patching
+    that module reaches the call site.
+    """
+    captured = {}
+
+    def fake_login(**kwargs):
+        captured.update(kwargs)
+        return {"ok": False, "error": "existing_login_password_verify_failed:401"}
+
+    with (
+        patch("sms_tool.codex_oauth._mailbox_from_data", return_value=Mock()),
+        patch("sms_tool.auth_headers.select_auth_fingerprint"),
+        patch("sms_tool.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.http_client.request_with_retry", return_value=Mock(status_code=200)),
+        patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
+        patch(
+            "sms_tool.accounts.account_recovery._stored_registration_password",
+            return_value="StoredPass123",
+        ),
+        patch("sms_tool.registration._login_existing_account_with_email_otp", side_effect=fake_login),
+    ):
+        account_recovery.relogin_chatgpt_email_account({"email": "ok@example.com"})
+
+    assert captured["password"] == "StoredPass123"
+
+
+# ---------------------------------------------------------------------------
+# Repeat-failure backoff: an unchanged shape means the window bought nothing.
+# ---------------------------------------------------------------------------
+
+# The OTP body as it actually arrives: 200 characters of it, which is why the
+# ``code`` field is usually cut off and ``status`` is the field left to compare.
+_OTP_409 = (
+    'existing_login_otp_validate:{"endpoint": "/api/accounts/email-otp/validate", "status": 409,'
+    ' "body": {"error": {"message": "Your sign-in session is no longer valid. Please start over'
+    ' to continue.", "type": "invalid_request_error", "code": "invalid_state"}}'
+)
+_OTP_401 = (
+    'existing_login_otp_validate:{"endpoint": "/api/accounts/email-otp/validate", "status": 401,'
+    ' "body": {"error": {"message": "Login failed.", "code": "login_failed"}}'
+)
+
+
+def _relogin_all_methods_failed(otp_error=_OTP_409):
+    """The real ``results[0].relogin`` recorded for ``elms-dopey.8t+oai02``.
+
+    Six attempts, all failed (``runtime/account_liveness_batches/
+    65f6f49ca967464fa614419537ba853d.json``, 2026-09-14 16:04).
+    """
+    return {
+        "ok": False,
+        "mode": "auto",
+        "error": "all_relogin_methods_failed",
+        "attempts": [
+            {"ok": False, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": True},
+            {"ok": False, "mode": "web_session", "error": "auth_session_missing_access_token", "last_status": "403"},
+            {"ok": False, "mode": "web_session", "error": "web_session_access_token_probe_failed:401", "proxy_index": 1},
+            {"ok": False, "mode": "chatgpt_email_otp", "error": otp_error},
+            {"ok": False, "mode": "codex_oauth_pkce", "error": "passwordless_email_otp_poll_timeout"},
+            {"ok": False, "mode": "browser_session", "error": "page_state"},
+        ],
+    }
+
+
+def _patch_health_cfg(tmp_path, monkeypatch, **health):
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {"runtime": {"directory": str(tmp_path)}, "account_health": health},
+    )
+
+
+def test_a_repeated_relogin_failure_takes_the_long_window(tmp_path, monkeypatch):
+    """The bug: an identical retry 45 minutes later burned another OTP.
+
+    Measured 2026-09-14: ``elms-dopey.8t+oai02`` was judged dead at 16:04 and
+    re-run at 17:49 with a byte-identical failure, because the ordinary 300s
+    window had long since expired.  The unchanged shape is what says the retry
+    bought no information, so the next window has to be longer.
+    """
+    _patch_health_cfg(tmp_path, monkeypatch, relogin_cooldown_seconds=300, relogin_repeat_cooldown_seconds=21600)
+
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+    first = _guard_entry(tmp_path, "dead@example.com")
+    assert first["cooldown_until"] - first["updated_at"] == 300
+    assert "repeat_failure" not in first
+
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+    second = _guard_entry(tmp_path, "dead@example.com")
+    assert second["cooldown_until"] - second["updated_at"] == 21600
+    assert second["repeat_failure"] is True
+
+
+def test_a_changed_relogin_failure_falls_back_to_the_ordinary_window(tmp_path, monkeypatch):
+    """Negative control: fixing the cause must restore fast retries.
+
+    Without this the long window would be a one-way ratchet, and an account
+    whose blocker had been repaired would stay parked for six hours.
+    """
+    _patch_health_cfg(tmp_path, monkeypatch, relogin_cooldown_seconds=300, relogin_repeat_cooldown_seconds=21600)
+
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed(_OTP_401))
+    third = _guard_entry(tmp_path, "dead@example.com")
+    assert third["cooldown_until"] - third["updated_at"] == 300
+    assert "repeat_failure" not in third
+
+
+def test_the_shape_ignores_per_attempt_json_bodies():
+    """Raw ``error`` text can never be compared: the OTP body carries ids.
+
+    ``session_id`` and the message differ on every attempt, so a fingerprint
+    built from the raw string would report "changed" for an identical failure
+    and the long window would never trigger at all.
+
+    Two probes, because they land in different places: ``session_id`` sits past
+    the 80-character head and ``endpoint`` sits inside it.  Only varying the
+    first would pass even with the body kept whole -- the first version of this
+    test did exactly that and let ``runtime/_mut_relogin_repeat_and_dump_diag.py``
+    mutant M3 survive.
+    """
+    plain = _relogin_all_methods_failed()
+    past_the_head = _relogin_all_methods_failed(
+        _OTP_409.replace('"code": "invalid_state"', '"code": "invalid_state", "session_id": "abc123"')
+    )
+    inside_the_head = _relogin_all_methods_failed(
+        _OTP_409.replace('"/api/accounts/email-otp/validate"', '"/api/accounts/email-otp/validate?v=2"')
+    )
+
+    assert account_recovery._relogin_failure_shape(plain) == account_recovery._relogin_failure_shape(past_the_head)
+    assert account_recovery._relogin_failure_shape(plain) == account_recovery._relogin_failure_shape(inside_the_head)
+
+
+def test_the_shape_separates_two_different_otp_statuses():
+    """Dropping the whole JSON body is not enough -- 409 is not 401.
+
+    ``runtime/_probe_relogin_repeat_cooldown.py`` caught this: the first version
+    cut ``error`` at the first ``{``, so a 409 turning into a 401 produced the
+    same fingerprint and kept the six-hour window for a *different* failure.
+    """
+    shape_409 = account_recovery._relogin_failure_shape(_relogin_all_methods_failed(_OTP_409))
+    shape_401 = account_recovery._relogin_failure_shape(_relogin_all_methods_failed(_OTP_401))
+
+    assert shape_409 != shape_401
+    assert "status=409" in shape_409
+    assert "status=401" in shape_401
+
+
+def test_a_successful_relogin_clears_the_recorded_shape(tmp_path, monkeypatch):
+    """A stale shape would make the next transient failure look like a repeat."""
+    import json
+
+    _patch_health_cfg(tmp_path, monkeypatch)
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+
+    account_recovery._clear_relogin_failure("dead@example.com")
+
+    data = json.loads(account_recovery._relogin_guard_path().read_text(encoding="utf-8"))
+    assert "dead@example.com" not in data
+
+
+def test_clearing_one_address_leaves_the_others(tmp_path, monkeypatch):
+    """``data.clear()`` instead of ``pop(key)`` would wipe every guard entry."""
+    import json
+
+    _patch_health_cfg(tmp_path, monkeypatch)
+    account_recovery._record_relogin_failure("a@example.com", _relogin_all_methods_failed())
+    account_recovery._record_relogin_failure("b@example.com", _relogin_all_methods_failed())
+
+    account_recovery._clear_relogin_failure("a@example.com")
+
+    data = json.loads(account_recovery._relogin_guard_path().read_text(encoding="utf-8"))
+    assert "a@example.com" not in data
+    assert "b@example.com" in data
+
+
+def test_clearing_an_unknown_address_keeps_the_other_entries(tmp_path, monkeypatch):
+    """Negative control: the success path runs for every recovered account."""
+    import json
+
+    _patch_health_cfg(tmp_path, monkeypatch)
+    account_recovery._record_relogin_failure("dead@example.com", _relogin_all_methods_failed())
+
+    account_recovery._clear_relogin_failure("never@example.com")
+
+    data = json.loads(account_recovery._relogin_guard_path().read_text(encoding="utf-8"))
+    assert "dead@example.com" in data
+
+
+def test_the_repeat_window_switch_is_read_through_the_real_config_path():
+    """End-to-end through ``CFG``, not a monkeypatched dict.
+
+    Same contract as ``_relogin_dead_end_permanent``: a switch that only works
+    in tests is not a switch.
+    """
+    from sms_tool.config import runtime_config_scope
+
+    with runtime_config_scope({"chatgpt": {}, "account_health": {"relogin_repeat_cooldown_seconds": 60}}):
+        assert account_recovery._relogin_repeat_cooldown_seconds() == 60
+    with runtime_config_scope({"chatgpt": {}, "account_health": {}}):
+        assert account_recovery._relogin_repeat_cooldown_seconds() == 21600

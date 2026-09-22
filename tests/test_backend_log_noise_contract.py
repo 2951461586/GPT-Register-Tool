@@ -113,7 +113,19 @@ def python_emitted_lines() -> list[str]:
 
 
 def _matches(prefix: str, heads: list[str]) -> bool:
-    return any(h.startswith(prefix) or prefix.startswith(h) for h in heads)
+    """Does some ``print()`` in ``sms_tool/`` emit a line starting with ``prefix``?
+
+    Strict by design.  An earlier revision also accepted
+    ``prefix.startswith(head)`` -- "some shorter emitter head is a prefix of the
+    entry" -- which is backwards: the panel filters by prefix, so an entry
+    longer than any real emitter (``"Foo: bar"`` when the print says
+    ``"Foo: {x}"``) would under-filter, and that is a dead entry the contract
+    exists to catch.  Measured 2026-09-14 with
+    ``runtime/_probe_noise_prefix_match.py``: all 13 entries already match
+    strictly and **none** matched only loosely, so dropping the loose direction
+    changed no outcome -- it only removes a way for a wrong entry to pass.
+    """
+    return any(h.startswith(prefix) for h in heads)
 
 
 class NoisePrefixContract(unittest.TestCase):
@@ -136,6 +148,16 @@ class NoisePrefixContract(unittest.TestCase):
         prefixes = csharp_noise_prefixes()
         dupes = {p for p in prefixes if prefixes.count(p) > 1}
         self.assertEqual(set(), dupes, f"duplicate noise prefixes: {sorted(dupes)}")
+
+    def test_an_over_specific_entry_is_orphaned(self):
+        # The panel filters by prefix, so an entry *longer* than any real
+        # emitter under-filters -- it is dead weight and must be reported.  This
+        # pins the strict match direction: accepting "a shorter head is a prefix
+        # of the entry" is what would let such an entry pass unnoticed.
+        self.assertFalse(_matches("Foo: bar", ["Foo: "]))
+        # ...while a genuine prefix still matches, so the check is not vacuous.
+        self.assertTrue(_matches("Foo", ["Foo: "]))
+        self.assertTrue(_matches("Foo: ", ["Foo: "]))
 
 
 if __name__ == "__main__":

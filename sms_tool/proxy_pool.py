@@ -506,7 +506,7 @@ class Socks5Server:
                 # health probe, so a single blip in real traffic does not instantly
                 # kill an upstream (and recovery must still earn consecutive success).
                 # P1-2: the error string is mirrored into the shared tracker too.
-                self._apply_health(upstream, False, error=str(exc)[:120])
+                await self._apply_health_async(upstream, False, error=str(exc)[:120])
                 upstream.total_connections += 1
                 self._stats.total_errors += 1
                 tried.add(upstream.addr)
@@ -547,7 +547,14 @@ class Socks5Server:
 
     # ── upstream selection ──
 
-    def _apply_health(self, upstream: UpstreamProxy, success: bool, error: str = "") -> None:
+    def _apply_health(
+        self,
+        upstream: UpstreamProxy,
+        success: bool,
+        error: str = "",
+        *,
+        persist: bool = True,
+    ) -> None:
         """Update an upstream's health with hysteresis (P0-3).
 
         Death: an upstream goes unhealthy only after ``fail_threshold`` *consecutive*
@@ -570,8 +577,25 @@ class Socks5Server:
             upstream.healthy = upstream.fail_count == 0
         upstream.last_check = time.time()
 
-        if self._health_tracker is not None:
+        if persist and self._health_tracker is not None:
             self._health_tracker.record(upstream.proxy_url, ok=success, error=error)
+
+    async def _apply_health_async(
+        self,
+        upstream: UpstreamProxy,
+        success: bool,
+        error: str = "",
+    ) -> None:
+        """Update memory immediately and persist shared state off the event loop."""
+        tracker = self._health_tracker
+        self._apply_health(upstream, success, error=error, persist=False)
+        if tracker is not None:
+            await asyncio.to_thread(
+                tracker.record,
+                upstream.proxy_url,
+                ok=success,
+                error=error,
+            )
 
     def _pick_upstream(self, exclude: set[str] | None = None) -> UpstreamProxy | None:
         if not self._upstreams:
@@ -721,7 +745,11 @@ class Socks5Server:
                         probe_error = str(_probe_exc)[:120]
 
                     # P1-2: a shared tracker (if configured) sees the same event.
-                    self._apply_health(upstream, success, error=probe_error if not success else "")
+                    await self._apply_health_async(
+                        upstream,
+                        success,
+                        error=probe_error if not success else "",
+                    )
 
                     if upstream.healthy != was_healthy:
                         level = logging.INFO if upstream.healthy else logging.WARNING

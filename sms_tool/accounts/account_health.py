@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
+from ..sanitizer import drop_sensitive_fields
 
 class HealthCheckKind(str, Enum):
     PLAN = "plan"
@@ -20,21 +21,6 @@ class HealthState(str, Enum):
     DEACTIVATED = "deactivated"
     FAILED = "failed"
     UNKNOWN = "unknown"
-
-
-_SENSITIVE_KEY_FRAGMENTS = (
-    "token", "secret", "password", "cookie", "authorization", "api_key",
-    "apikey", "clientsecret", "cardnumber", "cvv", "proxy",
-)
-
-
-def _canonical_key(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
-
-
-def _is_sensitive_key(value: Any) -> bool:
-    key = _canonical_key(value)
-    return any(fragment in key for fragment in _SENSITIVE_KEY_FRAGMENTS)
 
 
 @dataclass(frozen=True)
@@ -140,17 +126,48 @@ def liveness_health_result(
 
 
 def sanitize_health_details(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return {
-            str(key): sanitize_health_details(item)
-            for key, item in value.items()
-            if not _is_sensitive_key(key)
-        }
-    if isinstance(value, (list, tuple)):
-        return [sanitize_health_details(item) for item in value]
-    if isinstance(value, str):
-        return value[:1000]
-    return value
+    """Compatibility name for the shared persisted-diagnostic sanitizer."""
+    return drop_sensitive_fields(value, max_string_length=1000)
+
+
+def resolve_account_health_budgets(
+    config: Mapping[str, Any] | None,
+    *,
+    relogin_timeout: Any = None,
+    batch_timeout: Any = None,
+    account_timeout: Any = None,
+) -> dict[str, int]:
+    """Resolve health workflow budgets once for every entrypoint."""
+    health = config.get("account_health") if isinstance(config, Mapping) else {}
+    health = health if isinstance(health, Mapping) else {}
+
+    def resolve(explicit: Any, key: str, default: int, minimum: int) -> int:
+        raw = explicit if explicit is not None else health.get(key)
+        try:
+            return max(minimum, int(raw if raw is not None else default))
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "relogin_timeout": resolve(
+            relogin_timeout,
+            "relogin_timeout_seconds",
+            300,
+            30,
+        ),
+        "batch_timeout": resolve(
+            batch_timeout,
+            "batch_timeout_seconds",
+            900,
+            30,
+        ),
+        "account_timeout": resolve(
+            account_timeout,
+            "account_timeout_seconds",
+            360,
+            30,
+        ),
+    }
 
 
 def _email(value: str) -> str:
@@ -163,5 +180,6 @@ __all__ = [
     "HealthState",
     "liveness_health_result",
     "plan_health_result",
+    "resolve_account_health_budgets",
     "sanitize_health_details",
 ]

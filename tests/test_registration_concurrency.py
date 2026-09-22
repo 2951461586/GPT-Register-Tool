@@ -32,6 +32,7 @@ from sms_tool.registration import (
     _validate_email_otp,
     _signup_signin_attempts,
     _stored_registration_password,
+    _stored_registration_totp,
     run_batch,
 )
 
@@ -43,8 +44,14 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertNotIn("secret", str(diagnostic))
 
     def test_stability_probe_uses_registration_proxy_and_releases_gate_while_waiting(self):
+        # 2026-09-19: production default dropped to a single probe (batch
+        # aaf7641d showed 9/9 runs at [200, 200] -- the second probe never
+        # caught anything), so this test pins the multi-round machinery with
+        # an explicit count rather than relying on the now-1 default.
+        # The wrapper resolves cfg via ``registration.current_config_data()``,
+        # not ``registration.CFG`` -- patch the function actually read.
         stages = []
-        with patch.object(registration, "CFG", {"registration": {
+        with patch.object(registration, "current_config_data", return_value={"registration": {
                  "at_stability_probe_count": 2,
                  "at_stability_probe_delay_seconds": 10,
              }}), \
@@ -58,6 +65,23 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs["proxy"] == "http://proxy.example:8080" for call in probe.call_args_list))
         self.assertEqual(stages, ["access_token_stability_wait", "access_token_probe"])
         sleep.assert_called_once_with(10.0)
+
+    def test_single_probe_default_skips_the_stability_wait(self):
+        """count=1 (the production default since 2026-09-19) never sleeps and
+        never re-emits the probe stage -- one 200 settles the token."""
+        stages = []
+        with patch.object(registration, "current_config_data", return_value={"registration": {
+                 "at_stability_probe_count": 1,
+             }}), \
+             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
+             patch.object(registration, "registration_stage", side_effect=stages.append), \
+             patch.object(registration.time, "sleep") as sleep:
+            result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
+
+        self.assertEqual(result["stability_status_codes"], [200])
+        self.assertEqual(probe.call_count, 1)
+        self.assertEqual(stages, [])
+        sleep.assert_not_called()
 
     def test_http_200_access_token_is_registration_success_even_when_create_step_warned(self):
         success, error, warning = _registration_outcome(
@@ -292,16 +316,17 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         }))
         self.assertFalse(_invalid_state_auth_response({"error": {"code": "user_already_exists"}}))
 
-    def test_email_otp_send_url_resumes_email_verification_without_continue_url(self):
-        self.assertEqual(
-            _email_otp_send_url({}, "https://auth.openai.com", resume_email_verification=True),
-            "https://auth.openai.com/api/accounts/email-otp/send",
-        )
-        self.assertEqual(
-            _email_otp_send_url({"continue_url": "/custom/send"}, "https://auth.openai.com", resume_email_verification=True),
-            "/custom/send",
-        )
-        self.assertEqual(_email_otp_send_url({}, "https://auth.openai.com"), "")
+    def test_email_otp_send_url_only_ever_reads_the_response_body(self):
+        """``_email_otp_send_url`` 只认响应体，**没有**「猜端点」的回落。
+
+        原先 ``resume_email_verification`` 会在缺 ``continue_url`` 时回落到
+        ``/api/accounts/email-otp/send``。该标志 2026-09-16 已整体删除（唯一写入点
+        随 fail-fast 一起消失 ⇒ 回落分支生产不可达），现在缺落点就是空串，
+        由 ``send_email_otp`` 抛 ``email_otp_send_missing_continue_url``。
+        """
+        self.assertEqual(_email_otp_send_url({"continue_url": "/custom/send"}), "/custom/send")
+        self.assertEqual(_email_otp_send_url({}), "")
+        self.assertEqual(_email_otp_send_url(None), "")
 
     def test_passwordless_email_otp_resend_400_falls_back_to_send_when_opted_in(self):
         resend = Mock(status_code=400, text='{"error":"bad resend"}')
@@ -582,6 +607,30 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "raw_json": "{}",
         }):
             self.assertEqual(_stored_registration_password("a+oai01@hotmail.com"), "")
+    def test_stored_registration_totp_returns_the_saved_secret(self):
+        """A password login is followed by the account's own MFA challenge.
+
+        Without the secret the lane can only answer
+        ``existing_login_totp_secret_missing``, which makes the probe's positive
+        verdict useless.
+        """
+        with patch("sms_tool.storage.get_account_record", return_value={
+            "totp_secret": "BASE32SECRET",
+            "raw_json": "{}",
+        }):
+            self.assertEqual(_stored_registration_totp("a+oai01@hotmail.com"), "BASE32SECRET")
+
+    def test_stored_registration_totp_falls_back_to_raw_json(self):
+        with patch("sms_tool.storage.get_account_record", return_value={
+            "totp_secret": "",
+            "raw_json": '{"totp_secret": "FROMRAW"}',
+        }):
+            self.assertEqual(_stored_registration_totp("a+oai01@hotmail.com"), "FROMRAW")
+
+    def test_stored_registration_totp_is_empty_without_a_record(self):
+        """The inverse guard: a reader that always answers would submit a wrong code."""
+        with patch("sms_tool.storage.get_account_record", return_value=None):
+            self.assertEqual(_stored_registration_totp("a+oai01@hotmail.com"), "")
 
 
 if __name__ == "__main__":

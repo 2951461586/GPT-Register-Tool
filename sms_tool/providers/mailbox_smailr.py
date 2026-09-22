@@ -25,7 +25,7 @@ import os
 import secrets
 from typing import Any
 
-from ..config import CFG
+from ..config import current_config_data
 from ..mailbox_types import MailboxAccount
 
 
@@ -38,7 +38,7 @@ SMAILR_LV1_DOMAINS = (
 
 
 def _email_cfg() -> dict:
-    return CFG.get("email_registration") or {}
+    return current_config_data().get("email_registration") or {}
 
 
 def _smailr_cfg() -> dict:

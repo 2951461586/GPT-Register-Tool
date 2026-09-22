@@ -30,7 +30,6 @@ headless registration no longer silently defaults to one fixed environment.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import threading
 import time
@@ -74,7 +73,10 @@ IP_GEO_ENDPOINTS = [
 COUNTRY_LOCALE_PROFILE_MAP = {
     "JP": "jp", "CN": "cn", "HK": "hk", "TW": "tw", "US": "us", "CA": "ca",
     "SG": "sg", "GB": "gb", "AU": "au", "DE": "de", "FR": "fr", "NL": "nl",
-    "VN": "vn",
+    "VN": "vn", "PH": "ph",
+    # 2026-09-18：第二供应商（9http ``geo-IN``）接入时补。漏这一项会让
+    # ``locale_profile_key_from_geo`` 静默回退 ``'us'`` —— 印度出口配美国指纹。
+    "IN": "in",
 }
 DEFAULT_LOCALE_PROFILE = "us"
 
@@ -99,6 +101,30 @@ TIMEZONE_NAME_BY_IANA = {
     "Europe/Paris": "Central European Summer Time",
     "Europe/Amsterdam": "Central European Summer Time",
     "Asia/Ho_Chi_Minh": "Indochina Time",
+    # 2026-09-16 实测补充：VN 出口的 geo 库常把越南 IP 归到 ``Asia/Bangkok``
+    # （rola 新池 10 条里 7 条、旧 9http 池也出现过）。CLDR 里
+    # ``Asia/Bangkok`` 的 long name **就是** "Indochina Time"（与
+    # ``Asia/Ho_Chi_Minh`` 同值、同 UTC+7），所以这里补上**不改变任何输出**。
+    # 补的理由是去掉对 ``build_browser_environment`` 那个隐式回退的依赖：
+    # ``TIMEZONE_NAME_BY_IANA.get(tz, locale.get("timezone_name", ""))`` 会保留
+    # 国家档案的名字 —— 只要国家档案本身不是 VN（例如实测 Bangkok 却选了 us 档案），
+    # 就会产出 ``timezone_iana=Asia/Bangkok`` + ``timezone_name=Pacific Daylight Time``
+    # 这种自相矛盾的指纹，而且**不报错**。
+    "Asia/Bangkok": "Indochina Time",
+    "Asia/Saigon": "Indochina Time",
+    # Windows 没有菲律宾专属时区；CLDR 把 Asia/Manila 映射到
+    # "Singapore Standard Time"（实测该 ID 存在，UTC+08:00），与上面的
+    # Asia/Singapore 同值。写成别的名字会让浏览器报一个不存在的时区名。
+    "Asia/Manila": "Singapore Standard Time",
+    # 2026-09-18（第二供应商 9http ``geo-IN``）：Windows 有印度专属时区
+    # ``India Standard Time``（UTC+05:30，无 DST），所以这里**不需要**像 VN/PH
+    # 那样借用别国时区名 —— 直接用真名。``Asia/Calcutta`` 是
+    # ``Asia/Kolkata`` 的 IANA 历史别名，geo 库偶尔返回别名；两者同区同值，
+    # 登记两条只为去掉对 ``build_browser_environment`` 那个隐式回退的依赖
+    # （回退会保留**国家档案**的 timezone_name，实测别名 + 选错档案时会产出
+    # 自相矛盾的指纹且不报错）。
+    "Asia/Kolkata": "India Standard Time",
+    "Asia/Calcutta": "India Standard Time",
 }
 
 
@@ -182,10 +208,10 @@ def _stable_index(seed: str, n: int) -> int:
 # Browser profile rotation pool
 # ---------------------------------------------------------------------------
 class BrowserProfilePool:
-    """Thread-safe rotation pool of desktop browser hardware profiles."""
+    """Thread-safe rotation over the built-in browser hardware profiles."""
 
-    def __init__(self, profiles: list[dict[str, Any]] | None = None) -> None:
-        self._profiles = list(profiles) if profiles else list(BROWSER_PROFILE_POOL)
+    def __init__(self) -> None:
+        self._profiles = list(BROWSER_PROFILE_POOL)
         self._index = 0
         self._lock = threading.Lock()
 
@@ -195,12 +221,11 @@ class BrowserProfilePool:
     def next(self) -> dict[str, Any]:
         """Round-robin: next profile (wraps)."""
         with self._lock:
-            if not self._profiles:
-                return dict(BROWSER_PROFILE_POOL[0])
-            profile = dict(self._profiles[self._index % len(self._profiles)])
+            index = self._index % len(self._profiles)
+            profile = dict(self._profiles[index])
             self._index += 1
-        profile["browser_profile_index"] = self._index - 1
-        profile["browser_fingerprint_profile"] = _label_for_index(self._index - 1)
+        profile["browser_profile_index"] = index
+        profile["browser_fingerprint_profile"] = _label_for_index(index)
         return profile
 
     def select(self, seed: str | None = None) -> dict[str, Any]:
@@ -214,23 +239,24 @@ class BrowserProfilePool:
         return profile
 
 
-_SHARED_POOLS: dict[str, BrowserProfilePool] = {}
-_SHARED_POOLS_LOCK = threading.Lock()
+_SHARED_POOL: BrowserProfilePool | None = None
+_SHARED_POOL_LOCK = threading.Lock()
 
 
 def shared_browser_profile_pool(config: Mapping[str, Any] | None = None) -> BrowserProfilePool:
-    """One process-lifetime pool (config keyed, for future per-config pools)."""
-    key = "default"
-    if isinstance(config, Mapping):
-        reg = config.get("registration") if isinstance(config.get("registration"), Mapping) else {}
-        fp = reg.get("browser_profile_pool") if isinstance(reg.get("browser_profile_pool"), Mapping) else {}
-        key = json.dumps(fp if isinstance(fp, Mapping) else {}, sort_keys=True, default=str)
-    with _SHARED_POOLS_LOCK:
-        pool = _SHARED_POOLS.get(key)
-        if pool is None:
-            pool = BrowserProfilePool()
-            _SHARED_POOLS[key] = pool
-        return pool
+    """Return the process-lifetime built-in pool.
+
+    ``config`` remains accepted while callers migrate, but profile contents are
+    intentionally not configurable. Static config validation rejects the
+    retired ``registration.browser_profile_pool`` key instead of pretending to
+    apply it.
+    """
+    del config
+    global _SHARED_POOL
+    with _SHARED_POOL_LOCK:
+        if _SHARED_POOL is None:
+            _SHARED_POOL = BrowserProfilePool()
+        return _SHARED_POOL
 
 
 # ---------------------------------------------------------------------------
@@ -518,39 +544,6 @@ def validate_browser_profile(profile: Any) -> list[str]:
     issues.extend(_range_issue(profile, "device_memory", _DEVICE_MEMORY_RANGE))
     issues.extend(_range_issue(profile, "device_pixel_ratio", _DEVICE_PIXEL_RATIO_RANGE))
     return issues
-
-
-# P1-3: drivers whose fingerprint is owned end-to-end by the anti-detect provider.
-# Screen size / UA / platform come from the provider profile, so a locally
-# configured ``registration.browser_profile_pool`` has no effect for them.
-PROVIDER_MANAGED_FINGERPRINT_DRIVERS = frozenset({"roxy", "cloak"})
-
-
-def provider_managed_fingerprint_notice(
-    config: Mapping[str, Any] | None, driver_name: Any
-) -> str:
-    """Explain that ``browser_profile_pool`` does not apply to this driver.
-
-    Non-empty only when the operator actually configured
-    ``registration.browser_profile_pool`` *and* selected a provider-owned driver.
-    The built-in default pool is not "configured", so this stays silent in the
-    common case instead of logging on every single registration.
-    """
-    driver = str(driver_name or "").strip().lower()
-    if driver not in PROVIDER_MANAGED_FINGERPRINT_DRIVERS:
-        return ""
-    cfg = config if isinstance(config, Mapping) else {}
-    registration = cfg.get("registration")
-    if not isinstance(registration, Mapping):
-        return ""
-    pool = registration.get("browser_profile_pool")
-    if not isinstance(pool, Mapping) or not pool:
-        return ""
-    return (
-        f"driver {driver!r} is provider-managed: its screen/UA/platform come from "
-        "the provider profile, so registration.browser_profile_pool has no effect "
-        "for this driver (it applies to playwright and camoufox only)"
-    )
 
 
 def select_browser_profile(

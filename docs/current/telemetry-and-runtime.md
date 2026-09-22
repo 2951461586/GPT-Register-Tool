@@ -4,11 +4,14 @@
 
 ### Log destinations
 
-- `runtime/logs/sms_tool.log`: Python operator log. Human-readable, sanitized,
+- `runtime/logs/processes/<pid>/sms_tool.log`: Python operator log. Human-readable, sanitized,
   rotated; use for registration, liveness, promotion, mailbox and one-click SMS
   stage messages.
-- `runtime/logs/sms_tool.jsonl`: Python machine log. One sanitized JSON record
+- `runtime/logs/processes/<pid>/sms_tool.jsonl`: Python machine log. One sanitized JSON record
   per event with `command_id`, `run_id`, `account_ref`, stage and failure class.
+- `runtime/logs/processes/<pid>/backend_stdout.jsonl`: sanitized stdout/stderr
+  mirror with UTC timestamp, command ID and run ID, including ordinary `print`
+  diagnostics. Only the disk copy is structured; desktop IPC bytes are unchanged.
 - `runtime/app_*.log`: WPF host lifecycle and backend-process correlation log.
   It records task start/exit, command ids and UI-side diagnostics, but not the
   full Python event stream.
@@ -20,7 +23,13 @@ shows stage summaries, and keeps a bounded in-memory buffer. For post-run
 diagnosis, use the two Python files plus `runtime/app_*.log` and correlate on
 `command_id`/`run_id`.
 
-Python file logs rotate under `runtime/logs/` in two channels:
+New processes own separate log files so the desktop read server and registration
+workers no longer hold each other's rotation targets open on Windows. Existing
+shared files under `runtime/logs/` remain historical evidence and are not moved or
+deleted. Each file has bounded rotation; old process directories still require
+explicit retention review. Custom `log_path` overrides keep their chosen location.
+
+Python file logs rotate under `runtime/logs/processes/<pid>/`:
 
 - `sms_tool.log` — the operator log, one normalized line per record:
   `HH:MM:SS [*] [模块] 消息 · account_ref=<hash>`. Level markers are
@@ -61,6 +70,10 @@ Registration JSONL rows also include driver, batch, attempt, failure class and
 retryability. `proxy_pool_index=-1` means no pool index was supplied. Explicit
 `source=test` rows are excluded by `registration_quality_metrics`; legacy rows
 without a source remain ambiguous and need review before business reporting.
+
+The registration ledger counts attempts, not batch accounts. Use the final IPC
+result's `total`, `success` and `failed` for batch account counts; retries and
+deferred accounts must not be silently folded into an attempt success rate.
 
 The registration `run_id` is bound before the first `started` event. Stage
 duration is settled when leaving the current stage. `completed` is a **stage

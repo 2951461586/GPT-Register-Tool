@@ -161,10 +161,27 @@ public static class BackendResultInterpreter
         if (rows == null) return false;
         foreach (Dictionary<string, object> row in rows)
         {
-            if (row != null && BackendJson.GetString(row, "promotion_status").Trim().Length > 0)
+            if (row != null && PromotionBadge(row).Length > 0)
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// The 优惠状态 badge for one row: the promotion label with the account's
+    /// available payment rails appended ("可试用Plus-100% · card/upi/momo").
+    ///
+    /// The composition is owned by Python
+    /// (<c>sms_tool/promotion_states.promotion_status_with_eligibility</c>) and
+    /// arrives pre-joined as <c>promotion_display</c>, so the separator rule has
+    /// exactly one owner. Rows from an older backend carry only
+    /// <c>promotion_status</c>.
+    /// </summary>
+    private static string PromotionBadge(Dictionary<string, object> row)
+    {
+        string display = BackendJson.GetString(row, "promotion_display").Trim();
+        if (display.Length > 0) return display;
+        return BackendJson.GetString(row, "promotion_status").Trim();
     }
 
     /// <summary>
@@ -174,7 +191,7 @@ public static class BackendResultInterpreter
     public static string ResultRowStatus(Dictionary<string, object> row)
     {
         if (row == null) return "未知";
-        string promotion = BackendJson.GetString(row, "promotion_status").Trim();
+        string promotion = PromotionBadge(row);
         if (promotion.Length > 0) return promotion;
         if (BackendJson.TryGetMap(row, "probe", out var probe))
         {
@@ -204,7 +221,7 @@ public static class BackendResultInterpreter
                 if (IsProbeSucceeded(row)) ok++;
                 else if (IsProbeReturned401(row)) tokenInvalid++;
                 else failed++;
-                string badge = BackendJson.GetString(row, "promotion_status").Trim();
+                string badge = PromotionBadge(row);
                 if (badge.Length == 0) badge = "未知";
                 badges.TryGetValue(badge, out int count);
                 badges[badge] = count + 1;

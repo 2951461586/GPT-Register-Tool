@@ -15,6 +15,7 @@ Both are now fixed. These tests lock the fixes so neither can regress quietly.
 """
 import inspect
 import logging
+import os
 import sys
 import tempfile
 import unittest
@@ -31,7 +32,9 @@ class DefaultLogPathTests(unittest.TestCase):
     def test_path_is_named_sms_tool_log_under_a_logs_dir(self):
         path = logging_setup._default_log_path()
         self.assertEqual(path.name, "sms_tool.log")
-        self.assertEqual(path.parent.name, "logs")
+        self.assertEqual(path.parent.name, str(os.getpid()))
+        self.assertEqual(path.parent.parent.name, "processes")
+        self.assertEqual(path.parent.parent.parent.name, "logs")
 
     def test_path_lives_under_the_runtime_tree_not_the_repo_root(self):
         """The old fallback polluted <repo>/logs/ because of the config/dir mix-up."""

@@ -76,6 +76,14 @@ class AccountSessionModel:
     pipeline_timing: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     quota: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     workspace: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    # Payment-method enumeration written by
+    # ``store.markers.mark_promotion_status``.  It has to be a declared field
+    # because ``safe_snapshot()`` is a *closed* whitelist and
+    # ``store.accounts.upsert_account`` rebuilds raw_json from it: a key that is
+    # not listed there is silently dropped by the next relogin or account-health
+    # pass.  That is exactly how the ``promotion*`` keys were lost on
+    # 2026-09-21 (three accounts went from 65 keys to 16).
+    payment_capability: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     _raw: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), repr=False)
 
     @classmethod
@@ -145,6 +153,7 @@ class AccountSessionModel:
             pipeline_timing=MappingProxyType(dict(_mapping(value.get("pipeline_timing")))),
             quota=MappingProxyType(dict(_mapping(value.get("quota")))),
             workspace=MappingProxyType(dict(_mapping(value.get("workspace_scan")))),
+            payment_capability=MappingProxyType(dict(_mapping(value.get("payment_capability")))),
             _raw=MappingProxyType(dict(value)),
         )
 
@@ -209,6 +218,7 @@ class AccountSessionModel:
             "pipeline_timing": dict(self.pipeline_timing),
             "quota": dict(self.quota),
             "workspace_scan": dict(self.workspace),
+            "payment_capability": dict(self.payment_capability),
             "identity_context": dict(self.identity_context),
         }
         return sanitize(value)

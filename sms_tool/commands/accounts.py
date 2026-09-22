@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
+from ..operator_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
         proxy=args.proxy,
         proxy_pool=getattr(args, "proxy_pool", None),
         timeout=max(5, int(args.refresh_timeout or 20)),
+        payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
     )
     from ..desktop_ipc import emit_result
 
@@ -266,16 +268,25 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             timeout=max(5, int(args.refresh_timeout or 30)),
         )
     else:
+        from ..accounts.account_health import resolve_account_health_budgets
+        from ..config import CFG
+
+        budgets = resolve_account_health_budgets(
+            CFG,
+            relogin_timeout=getattr(args, "quota_relogin_timeout", None),
+            batch_timeout=getattr(args, "quota_batch_timeout", None),
+            account_timeout=getattr(args, "quota_account_timeout", None),
+        )
         result = refresh_local_quota_statuses(
             emails=emails,
             workers=max(1, int(args.quota_workers or args.workers or 4)),
             proxy=args.proxy,
             timeout=max(5, int(args.refresh_timeout or 30)),
             relogin_on_401=bool(getattr(args, "quota_auto_relogin", False)),
-            relogin_timeout=max(30, int(getattr(args, "quota_relogin_timeout", 300) or 300)),
+            relogin_timeout=budgets["relogin_timeout"],
             relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
-            batch_timeout=max(30, int(getattr(args, "quota_batch_timeout", 840) or 840)),
-            account_timeout=max(30, int(getattr(args, "quota_account_timeout", 120) or 120)),
+            batch_timeout=budgets["batch_timeout"],
+            account_timeout=budgets["account_timeout"],
         )
         fallback_emails = [
             item.get("email")
@@ -319,6 +330,18 @@ def _print_promotion_summary(result):
     ok = sum(1 for item in rows if item.get("ok"))
     print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}")
     logger.info("promotion check finished: ok=%s/%s", ok, len(rows))
+    # Payment eligibility rides along with the promotion probe; report it on its
+    # own line so "promotion failed" and "rail list unknown" stay separable.
+    eligibility_rows = [item for item in rows if isinstance(item.get("payment_capability"), dict)]
+    if eligibility_rows:
+        eligibility_ok = sum(1 for item in eligibility_rows if item["payment_capability"].get("ok"))
+        methods = result.get("payment_methods_seen")
+        seen = "/".join(methods) if isinstance(methods, list) and methods else "无"
+        emit(
+            logger,
+            f"[*] 支付资格：{eligibility_ok}/{len(eligibility_rows)} 个账号枚举成功；"
+            f"本批出现过的方式：{seen}",
+        )
     for item in rows:
         if item.get("ok"):
             continue

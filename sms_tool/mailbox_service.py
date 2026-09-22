@@ -9,7 +9,7 @@ from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config, runtime_config_scope
 from .mailbox_strategies import DEFAULT_MAILBOX_PROVIDERS, MailboxProviderRegistry
-from .mailbox_errors import MailboxEndpointUnavailableError
+from .mailbox_errors import MailboxErrorDisposition, mailbox_error_disposition
 from .mailbox_quarantine import (
     raise_if_mailbox_quarantined, record_mailbox_auth_invalid,
     record_mailbox_endpoint_unavailable,
@@ -24,11 +24,11 @@ def _mailbox_access(mailbox: Any):
     raise_if_mailbox_quarantined(mailbox)
     try:
         yield
-    except MailboxEndpointUnavailableError:
-        record_mailbox_endpoint_unavailable(mailbox)
-        raise
     except Exception as exc:
-        if getattr(exc, "code", "") == "mailbox_auth_invalid":
+        disposition = mailbox_error_disposition(exc)
+        if disposition is MailboxErrorDisposition.ENDPOINT_UNAVAILABLE:
+            record_mailbox_endpoint_unavailable(mailbox)
+        elif disposition is MailboxErrorDisposition.AUTH_INVALID:
             record_mailbox_auth_invalid(mailbox)
         raise
 

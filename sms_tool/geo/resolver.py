@@ -34,7 +34,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -119,6 +119,62 @@ class ProxyGeo:
 _EMPTY = ProxyGeo()
 
 
+def _extract_country_code(data: Mapping[str, Any]) -> str:
+    """Return an ISO-3166 alpha-2 country code, or ``""`` when there is none.
+
+    Why this is not just ``data.get("country")``
+    --------------------------------------------
+    The ``country`` field means different things per provider. ipinfo.io and
+    ipapi.co put the alpha-2 **code** there, but ipwho.is puts the full
+    **name**::
+
+        {"country": "Philippines", "country_code": "PH", ...}
+
+    Reading ``country`` first therefore wrote a country *name* into
+    :attr:`ProxyGeo.country`, and every consumer of that field compares it
+    against a code:
+
+    * ``browser_fingerprint_pool.locale_profile_key_from_geo`` looks it up in
+      ``COUNTRY_LOCALE_PROFILE_MAP`` (keyed on ISO codes) and silently falls
+      back to the **US** locale profile — no error, no log line;
+    * the protocol lane compares it against ``infer_region``'s hint.
+
+    Measured 2026-09-13 through a Philippine exit: ``country="PHILIPPINES"``
+    produced ``locale_profile="us"`` next to ``timezone="Asia/Manila"`` — a
+    browser claiming US English while its clock reads UTC+8. This was not
+    PH-specific: ipwho.is sits second in :data:`GEO_ENDPOINTS` and always
+    carries a timezone, so when ``need_timezone`` is set (the browser lane
+    always sets it) it is the answer that gets returned for **every** country.
+
+    Invariant: this field is an alpha-2 code or empty. A name is *not*
+    translated — ``phone_proxy.COUNTRY_NAME_TO_ISO`` looks like a fit but is
+    scoped to SMS-provider ``country_name`` values (18 entries: it has
+    Philippines and Japan but not Vietnam, Germany, Singapore, Canada…), so
+    reusing it would silently break exactly the markets this tool registers in.
+    A name is therefore dropped and logged, and :func:`probe_exit_geo` then
+    keeps the code an earlier endpoint already measured.
+    """
+    rejected = ""
+    for field_name in ("country_code", "countryCode", "country"):
+        raw = str(data.get(field_name) or "").strip()
+        if not raw:
+            continue
+        if len(raw) == 2 and raw.isalpha():
+            return raw.upper()
+        rejected = rejected or raw
+    if rejected:
+        # Loud on purpose: the failure this guards against was completely
+        # silent.  A non-empty country that is not a code means the answer is
+        # about to be discarded, and the caller will fall back to the default
+        # (US) locale profile.
+        logger.warning(
+            "geo answer carried a country that is not an ISO alpha-2 code (%r); "
+            "ignoring it — the locale profile lookup is keyed on codes",
+            rejected,
+        )
+    return ""
+
+
 def normalize_geo_response(data: Any) -> ProxyGeo:
     """Normalize ipinfo / ipapi / ipwho.is JSON into a :class:`ProxyGeo`.
 
@@ -130,9 +186,7 @@ def normalize_geo_response(data: Any) -> ProxyGeo:
     timezone = data.get("timezone")
     if isinstance(timezone, Mapping):
         timezone = timezone.get("id") or timezone.get("name")
-    country = str(
-        data.get("country") or data.get("country_code") or data.get("countryCode") or ""
-    ).strip().upper()
+    country = _extract_country_code(data)
     org = data.get("org") or data.get("isp")
     if not org and isinstance(data.get("connection"), Mapping):
         org = data["connection"].get("org")
@@ -224,6 +278,14 @@ def probe_exit_geo(
         if not geo.known:
             continue
         if geo.timezone or not need_timezone:
+            if not geo.country and best.country:
+                # A richer document can carry a clock but no usable country
+                # code.  Returning it as-is would erase the code an earlier
+                # endpoint already measured, and the caller needs *both*: the
+                # country picks the locale profile, the timezone sets the
+                # clock.  Losing only the country is how a browser ends up
+                # speaking the default (US) English next to a UTC+8 clock.
+                geo = replace(geo, country=best.country)
             return geo
         if best.country == "":
             best = geo

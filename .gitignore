@@ -78,6 +78,7 @@ SmsWorkbench.Contracts/obj/
 .idea/
 .vscode/
 .workbuddy-ai/
+.workbuddy/
 /.zcode/
 /gates/
 TestResults/

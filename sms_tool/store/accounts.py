@@ -163,6 +163,28 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
         "probe_status": str(probe.get("status") or "")[:80],
         "registration_attempts": _as_int(data.get("registration_attempts")),
         "terminal": "account_deactivated" in error.lower(),
+        # The re-login lane's cause, carried because ``error`` cannot show it:
+        # ``_registration_outcome`` prefers ``user_already_exists``, so for an
+        # already-registered address this is the *only* record of whether that
+        # lane ran and whether it spent an email code.  Measured 2026-09-15:
+        # ``existing_login`` appeared in 0 of 4377 rows before this field
+        # existed, which is why the question could not be answered from storage.
+        # Already sanitized by the caller (``_sanitize_text`` at the assignment
+        # site) and token-free: the values are lane error codes and server
+        # messages.
+        "existing_login_error": str(data.get("existing_login_error") or "")[:300],
+        # 方案 B (2026-09-16).  ``registration_state='partial_registered'`` already
+        # says "the server has this address", but it does *not* say whether we can
+        # still get a session for it: the half-registered rows whose password we
+        # hold are recoverable by the password login lane, the rest are not.  This
+        # is the boolean that separates them, so a panel can show "waiting for one
+        # manual login" instead of another wall of errors.
+        #
+        # 🔴 This dict is a **closed whitelist**: a key that is not listed here is
+        # silently dropped, which is how ``existing_login`` stayed at 0 rows out of
+        # 4377 before its entry was added.  Any new result key that the audit row
+        # needs has to be added here in the same change.
+        "needs_manual_session_recovery": bool(data.get("needs_manual_session_recovery")),
     }
     init_database(runtime_config=runtime_config)
     conn = _connect(runtime_config=runtime_config)

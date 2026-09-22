@@ -67,6 +67,7 @@ jobs:
         run: python scripts/scan_sensitive_history.py config.json proxy.json runtime.json payment.json mailbox_tokens.txt kyl_state.json
       - run: python scripts/sensitive_field_scan.py
       - run: python scripts/architecture_scan.py
+      - run: python scripts/extractor_parity_report.py
       - run: python scripts/config_schema_check.py
       - run: python scripts/ipc_schema_check.py
       - run: python scripts/docs_consistency_scan.py

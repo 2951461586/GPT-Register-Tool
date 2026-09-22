@@ -283,6 +283,7 @@ public sealed class DesktopWindowSmokeTests
                 column => (column.Header?.ToString() ?? "") == "优惠状态");
             Assert.True(promotionColumn.CanUserSort);
             Assert.Equal("PromotionStatus", promotionColumn.SortMemberPath);
+            Assert.DoesNotContain("支付方式", headers);
 
             var contextMenu = Assert.IsType<ContextMenu>(accountGrid.ContextMenu);
             contextMenu.PlacementTarget = accountGrid;

@@ -162,6 +162,7 @@ namespace SmsWorkbench
         public static string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus, string importedStatus)
         {
             if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
+            if (status.Equals("partial_registered", StringComparison.OrdinalIgnoreCase)) return RegistrationStatusPresentation.PartialLabel;
             bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
             if (status.Equals("account_deactivated", StringComparison.OrdinalIgnoreCase)

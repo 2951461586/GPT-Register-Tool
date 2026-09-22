@@ -63,9 +63,12 @@ def test_liveness_snapshot_prune_keeps_newest_and_excludes_current(tmp_path, mon
     assert "run000.json" not in remaining  # oldest pruned
 
 
-def test_queue_browser_fallback_waits_instead_of_skipping():
-    # The 1.0s acquire re-created the "concurrency_limited" pathology that
-    # account_recovery already fixed; pin the bounded wait against a revert.
-    from sms_tool.accounts import account_health_queue as queue
+def test_recovery_batch_browser_fallback_uses_remaining_budget():
+    # Pin the bounded deadline wait against reintroducing the old 1-second
+    # queue-local acquire that produced false "concurrency_limited" results.
+    import inspect
 
-    assert queue._BROWSER_FALLBACK_WAIT_SECONDS >= 30
+    from sms_tool.accounts import recovery_batch
+
+    source = inspect.getsource(recovery_batch.refresh_local_quota_statuses)
+    assert "browser_slots.acquire(timeout=remaining)" in source

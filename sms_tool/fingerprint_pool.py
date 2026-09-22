@@ -128,7 +128,12 @@ class FingerprintPool:
         headers = profile.apply_to(base_headers)
     """
 
-    def __init__(self, profiles: list[ProtocolEnvironmentProfile] | None = None, mode: str | None = None) -> None:
+    def __init__(
+        self,
+        profiles: list[ProtocolEnvironmentProfile] | None = None,
+        mode: str | None = None,
+        verify_hint: bool = False,
+    ) -> None:
         self._profiles = profiles or _build_profiles()
         self._index = 0
         self._lock = threading.Lock()
@@ -137,6 +142,12 @@ class FingerprintPool:
         # (including the default "random") draws weighted-random by browser
         # family so consecutive accounts don't share a predictable fingerprint.
         self._mode = (mode or "random").strip().lower()
+        # Off by default on purpose: the credential's region token is free and
+        # is trusted as-is, so turning this on costs one probe round-trip per
+        # selection. It exists to *validate* a newly added egress -- a provider
+        # that silently ignores the retargeted country code would otherwise bind
+        # a claimed-region fingerprint to a different real exit.
+        self._verify_hint = bool(verify_hint)
         if self._mode == "round_robin" or not self._profiles:
             self._weights = None
         else:
@@ -157,7 +168,7 @@ class FingerprintPool:
         registration = config.get("registration", {}) if isinstance(config, Mapping) else {}
         fp_cfg = registration.get("fingerprint_pool", {}) if isinstance(registration, Mapping) else {}
         mode = fp_cfg.get("mode") if isinstance(fp_cfg, Mapping) else None
-        pool = cls(mode=mode)
+        pool = cls(mode=mode, verify_hint=bool(fp_cfg.get("verify_hint")) if isinstance(fp_cfg, Mapping) else False)
         if not isinstance(fp_cfg, Mapping):
             return pool
         # ``allowed_countries`` narrows the geo-bound selection in ``next``.
@@ -221,8 +232,7 @@ class FingerprintPool:
             country=country,
         )
 
-    @staticmethod
-    def _resolve_geo(proxy: str, hint: str, need_timezone: bool):
+    def _resolve_geo(self, proxy: str, hint: str, need_timezone: bool):
         """Template hint first, real probe as the fallback (P0-1).
 
         This used to be ``infer_proxy_country(proxy)`` alone.  A proxy whose
@@ -236,12 +246,21 @@ class FingerprintPool:
         the registration hot path for proxies that already advertise their
         region would cost a round-trip per batch.  ``need_timezone`` is what a
         caller sets when the hint alone is not enough to place a clock.
+
+        ``verify_hint`` is the deliberate exception to "the hint still wins":
+        with it on, the exit is measured anyway and a disagreement is logged and
+        resolved in favour of the measurement.  That is how a newly added egress
+        gets validated — a provider that ignores the retargeted country code
+        would otherwise look correct while binding a mismatched fingerprint.
         """
         try:
             from .geo import shared_geo_resolver
 
             return shared_geo_resolver().resolve(
-                proxy, hint=hint, need_timezone=need_timezone
+                proxy,
+                hint=hint,
+                need_timezone=need_timezone,
+                verify_hint=self._verify_hint,
             )
         except Exception:
             return ProxyGeo(country=hint, source="hint") if hint else _EMPTY_GEO

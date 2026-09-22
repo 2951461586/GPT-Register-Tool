@@ -149,7 +149,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
                     },
                 )
                 response = request_with_retry(session, "get", url, headers=headers,
-                                              timeout=15, impersonate=auth_impersonate(),
+                                              timeout=15, attempts=1, impersonate=auth_impersonate(),
                                               label=f"preflight {label}")
                 if not allow_http_error and int(getattr(response, "status_code", 0) or 0) >= 400:
                     raise RuntimeError(f"registration_preflight_failed:{label}:http_{response.status_code}")

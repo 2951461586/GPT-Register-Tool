@@ -51,7 +51,7 @@ def payment_method(args):
     return normalize_payment_method(getattr(args, "payment_method", "")) or "paypal"
 
 
-def payment_method_label(payment_method):
+def cli_payment_method_label(payment_method):
     """Human-readable payment method label."""
     from ..payment_link_manager import payment_method_label as label
 

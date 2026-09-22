@@ -11,7 +11,7 @@ from .diagnostics import install_safe_stdio, safe_print
 from .desktop_ipc import emit_result
 from .paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
-from .batch_runner import run_batch_impl as run_batch
+from .batch_runner import filter_registered_mailboxes, run_batch_impl as run_batch
 from .storage import database_path, get_paypal_url, list_paypal_accounts, rebuild_from_session_dir, upsert_account
 from .commands.helpers import (
     read_email_file as _read_email_file,
@@ -215,197 +215,35 @@ def build_parser():
     ``--registration-driver`` choices) is unit-testable without triggering the
     runtime/config initialization that ``main`` performs.
     """
+
     parser = argparse.ArgumentParser(description="ChatGPT Email Registration + PayPal link generation")
-    parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--desktop-serve", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--doctor", action="store_true", help="Offline environment self-check (python/node/playwright/curl_cffi/config), then exit")
-    parser.add_argument("--json", dest="json_output", action="store_true", help="Machine-readable JSON output for --doctor")
-    parser.add_argument(
-        "--desktop-read",
-        choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file", "mailbox-pool"],
-        default=None,
-        help=argparse.SUPPRESS,
+
+    from .cli_parsers import (
+        codex,
+        core,
+        email_change,
+        omakse,
+        one_click,
+        payment,
+        paypal,
+        quota,
+        session,
+        sub2api,
     )
-    parser.add_argument("--account-id", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--proxy", default=None)
-    parser.add_argument("--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated")
-    parser.add_argument("--count", type=int, default=1)
-    parser.add_argument("--workers", type=int, default=4, help="Concurrent workers for batch registration and account operations")
-    parser.add_argument("--target-at200", type=int, default=0, help="Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved")
-    parser.add_argument("--max-mailbox-purchases", type=int, default=0, help="Hard mailbox purchase cap for --target-at200 (default: target x 2)")
-    parser.add_argument("--max-remail-cost", type=float, default=0.0, help="Optional total ReMail purchase-cost cap for --target-at200")
-    parser.add_argument("--password", default=None, help="Use a specific password")
-    parser.add_argument("--email", default=None, help="Mailbox email address")
-    parser.add_argument("--email-password", default=None, help="Mailbox password")
-    parser.add_argument("--email-refresh-token", default=None, help="Mailbox refresh token")
-    parser.add_argument("--email-access-token", default=None, help="Mailbox access token")
-    parser.add_argument("--remail-token", default=None, help="ReMail service token; requires --email")
-    parser.add_argument("--buy-remail-mailbox", action="store_true", help="Buy ReMail long-term mailbox before registration")
-    parser.add_argument("--buy-cfworker-mailbox", action="store_true", help="Use CF Worker temp mailboxes before registration")
-    parser.add_argument("--cfworker-domain", default=None, help="CF Worker mailbox domain, default cfworker_domain in config.json")
-    parser.add_argument("--buy-smailr-mailbox", action="store_true", help="Use Smailr disposable mailboxes before registration")
-    parser.add_argument("--smailr-domain", default=None, help="Smailr mailbox domain, default smailr.default_domain in config.json")
-    parser.add_argument("--remail-service-mode", choices=["code", "purchase"], default=None, help="ReMail service mode override")
-    parser.add_argument("--remail-supply", choices=["private_first", "public_only"], default=None, help="ReMail inventory policy")
-    parser.add_argument("--remail-email-suffix", default=None, help="ReMail mailbox domain suffix")
-    parser.add_argument("--remail-project-id", type=int, default=None, help="ReMail project ID")
-    parser.add_argument("--remail-product-id", type=int, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--mailbox-file", default=None, help="Unified mailbox file: Graph, Gmail, ReMail, CFWorker, or iCloud receive URL")
-    parser.add_argument("--chatai-mailbox-file", default=None, help="Legacy mixed mailbox file: Chatai plus all unified mailbox formats")
-    parser.add_argument("--phone-register", action="store_true", help="Register with phone number via SMSBower instead of email")
-    parser.add_argument("--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)")
-    parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--registration-mode", choices=["passwordless", "password", "har", "legacy"], default=None, help="Registration auth mode: passwordless/HAR login_or_signup (default) or legacy password")
-    parser.add_argument("--registration-driver", choices=driver_choices(), default=None, help="Registration driver (default: protocol)")
-    parser.add_argument("--browser-headless", dest="browser_headless", action="store_true", default=None, help="Run Playwright registration headless")
-    parser.add_argument("--browser-visible", dest="browser_headless", action="store_false", help="Run Playwright registration with a visible browser")
-    parser.add_argument("--registration-batch-id", default=None, help="Stable registration cohort ID stored with active accounts and audit rows")
-    parser.add_argument("--payment-method", "--payment-link-method", choices=_payment_method_choices(), default=None, help="Protocol payment-link method")
-    parser.add_argument("--paypal-generation-type", default=None, help="Override PayPal link generation type: hosted_long_url, paypal_direct, or paypal_direct_zero_due")
-    parser.add_argument("--output-dir", default=None)
-    parser.add_argument("--rebuild-sqlite", action="store_true", help="Rebuild SQLite account index from session JSON files")
-    parser.add_argument("--delete-account", action="store_true", help="Delete/archive one or more accounts through the lifecycle adapter")
-    parser.add_argument("--list-paypal-links", action="store_true", help="List saved PayPal payment links")
-    parser.add_argument("--open-paypal-link", action="store_true", help="Open saved PayPal payment link for --email")
-    parser.add_argument("--export-codex-json", action="store_true", help="Export paid account session as Codex JSON")
-    parser.add_argument("--import-cpa", action="store_true", help="Import an existing AT-only session JSON into CPA/SUB2API")
-    parser.add_argument("--register-and-import", action="store_true", help="Register new account(s), then import only the successful registrations into CPA/SUB2API")
-    parser.add_argument("--import-target", choices=["cpa", "sub2api", "cliproxyapi"], default="cpa", help="Target for --import-cpa and 401 re-import")
-    parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
-    parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
-    parser.add_argument("--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json")
-    parser.add_argument("--cpa-api-token", default=None, help="CPA API token, defaults to cpa/cpa_mode.api_token in config.json")
-    parser.add_argument("--refresh-cpa-quota", action="store_true", help="Refresh quota status and update SQLite; defaults to local access_token probing")
-    parser.add_argument("--refresh-local-quota", action="store_true", help="Refresh quota status locally with saved access_token and update SQLite")
-    parser.add_argument("--quota-usage", action="store_true", help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)")
-    parser.add_argument("--check-promotion", action="store_true", help="Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status")
-    parser.add_argument("--check-promotion-after-registration", action="store_true", help="After registration, probe saved successful accounts for Plus trial/discount eligibility")
-    parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")
-    parser.add_argument("--quota-auto-relogin", action="store_true", help="When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT")
-    parser.add_argument("--mailbox-pool-repaired", action="store_true", help="Acknowledge repaired mailbox credentials and reopen automatic 401 relogin")
-    parser.add_argument("--quota-relogin-timeout", type=int, default=300, help="Timeout in seconds for --quota-auto-relogin")
-    parser.add_argument("--quota-batch-timeout", type=int, default=840, help="Maximum total seconds for a local quota batch")
-    parser.add_argument("--quota-account-timeout", type=int, default=120, help="Maximum seconds allowed per local quota account")
-    parser.add_argument("--quota-workers", type=int, default=4, help="Concurrent workers for quota refresh")
-    parser.add_argument("--sub2api-url", default=None, help="SUB2API base URL, defaults to sub2api.api_url in config.json")
-    parser.add_argument("--sub2api-token", default=None, help="SUB2API bearer access token, defaults to sub2api.api_token in config.json")
-    parser.add_argument("--sub2api-email", default=None, help="SUB2API login email when no bearer token is configured")
-    parser.add_argument("--sub2api-password", default=None, help="SUB2API login password when no bearer token is configured")
-    parser.add_argument("--sub2api-group", default=None, help="SUB2API target group name(s), defaults to codex")
-    parser.add_argument("--sub2api-group-ids", default=None, help="SUB2API target group id list, comma separated")
-    parser.add_argument("--sub2api-proxy", default=None, help="SUB2API default proxy name or id")
-    parser.add_argument("--sub2api-proxy-id", type=int, default=None, help="SUB2API default proxy id")
-    parser.add_argument("--sub2api-priority", type=int, default=None, help="SUB2API account priority, defaults to config or 1")
-    parser.add_argument("--sub2api-concurrency", type=int, default=None, help="SUB2API account concurrency, defaults to config or 10")
-    parser.add_argument("--sub2api-auth-mode", choices=["auto", "oauth", "agent_identity"], default="", help="SUB2API credential mode; auto prefers Agent Identity for free accounts")
-    parser.add_argument("--sub2api-no-verify", dest="sub2api_verify_after_import", action="store_false", default=None, help="Skip the SUB2API post-import connectivity test")
-    parser.add_argument("--no-session-refresh", action="store_true", help="Do not refresh session before Codex JSON export")
-    parser.add_argument("--generate-ba-link", action="store_true", help="Generate PayPal BA link directly from Access Token")
-    parser.add_argument("--generate-upi-qr", action="store_true", help="Generate India UPI hosted payment link and QR directly from Access Token")
-    parser.add_argument("--extract-payment-link", action="store_true", help="Extract a protocol payment link through the unified manager")
-    parser.add_argument("--payment-batch-id", default=None, help="Batch ID; reused only together with --payment-resume-checkpoint")
-    parser.add_argument("--payment-resume-checkpoint", action="store_true", help="Explicitly resume matching accounts from an existing payment batch checkpoint")
-    parser.add_argument("--no-jit-at-refresh", action="store_true", help="Probe the saved AT but do not run email OTP OAuth on HTTP 401")
-    parser.add_argument("--payment-probe-only", action="store_true", help="Create Checkout and run Stripe capability detection without creating a payment method")
-    parser.add_argument("--payment-matrix", default=None, help="Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix")
-    parser.add_argument("--payment-canary", type=int, default=0, help="Limit a payment batch to the first N unique accounts")
-    parser.add_argument("--payment-retries", type=int, default=3, help="Retries for classified transient payment failures")
-    parser.add_argument("--payment-token-map", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--list-payment-methods", action="store_true", help="List protocol payment methods and adapter availability")
-    parser.add_argument("--at", default=None, help="Access Token (JWT) for --generate-ba-link/--generate-upi-qr")
-    parser.add_argument("--qr-path", default=None, help="Output PNG path for --generate-upi-qr")
-    parser.add_argument("--target-country", default=None, help="Target/order country for PayPal generation; legacy checkout-country alias for UPI")
-    parser.add_argument("--checkout-country", "--billing-country", dest="checkout_country", default=None, help="Hosted/UPI checkout billing country/currency, e.g. US or JP")
-    parser.add_argument("--payment-country", default=None, help="UPI local payment-method country, e.g. IN")
-    parser.add_argument("--checkout-proxy", default=None, help="Stage 1 proxy for checkout (JP/TH exit)")
-    parser.add_argument("--checkout-proxy-pool", default="", help="Checkout proxy pool; comma or newline separated")
-    parser.add_argument("--provider-proxy", default=None, help="Stage 2 proxy for Stripe init/PM/confirm (target country exit)")
-    parser.add_argument("--stripe-init-proxy", default=None, help="Explicit Stripe init proxy (falls back to provider proxy)")
-    parser.add_argument("--payment-method-proxy", default=None, help="Explicit payment-method creation proxy")
-    parser.add_argument("--confirm-proxy", default=None, help="Explicit Stripe confirm proxy")
-    parser.add_argument("--approve-proxy", default=None, help="Stage 3 proxy for ChatGPT approve (target country exit)")
-    parser.add_argument("--approve-proxy-pool", default="", help="Approve proxy pool; comma or newline separated")
-    parser.add_argument("--redirect-proxy", default=None, help="Explicit final provider redirect proxy")
-    parser.add_argument("--promotion-proxy", default=None, help="Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due")
-    payment_proxy_countries = ["US", "GB", "DE", "JP", "BR", "TR", "TH", "VN", "ID", "IN", "NL", "KR", "PL", "CH", "PH"]
-    parser.add_argument("--checkout-proxy-country", choices=payment_proxy_countries, default=None, help="Rotate checkout proxy credentials to this exit country")
-    parser.add_argument("--approve-proxy-country", choices=payment_proxy_countries, default=None, help="Rotate approve proxy credentials to this exit country")
-    parser.add_argument("--promotion-proxy-country", "--update-proxy-country", dest="promotion_proxy_country", choices=payment_proxy_countries, default=None, help="Rotate checkout/update proxy credentials to this exit country")
-    parser.add_argument("--auto-proxy-country", action="store_true", help="Let the payment router probe each proxy and match the backend-required exit country")
-    parser.add_argument("--test-payment-proxies", action="store_true", help="Probe checkout/approve/update proxy exits and print JSON")
-    parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
-    parser.add_argument("--require-ba-token", action="store_true", help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback")
-    parser.add_argument("--blik-code", default=None, help="Six-digit BLIK code; supplying it explicitly executes the BLIK payment")
-    # ─── Omakse integration ───────────────────────────────────────────────
-    parser.add_argument("--omakse-extract", action="store_true", help="Extract PayPal links via omakse server (POST /api/link-extract/jobs)")
-    parser.add_argument("--omakse-us-pay", action="store_true", help="Run US PayPal protocol payment via omakse server")
-    parser.add_argument("--omakse-base-url", default=None, help="Omakse server base URL (default: http://oai.omakse.xyz)")
-    parser.add_argument("--omakse-local-proxy", default=None, help="Local proxy to reach the omakse server")
-    parser.add_argument("--omakse-us-proxies", default=None, help="US proxy list for link extraction (newline-separated)")
-    parser.add_argument("--omakse-promo-proxies", default=None, help="Promotion-region proxy list for link extraction (newline-separated)")
-    parser.add_argument("--omakse-provider-country", default="US", help="PayPal provider country for link extraction")
-    parser.add_argument("--omakse-promo-country", default="VN", help="Promotion region country for link extraction")
-    parser.add_argument("--omakse-concurrency", type=int, default=5, help="Concurrency for link extraction")
-    parser.add_argument("--omakse-max-attempts", type=int, default=3, help="Max attempts per credential for link extraction")
-    parser.add_argument("--omakse-poll-interval", type=float, default=1.5, help="Seconds between status polls")
-    parser.add_argument("--omakse-max-poll-seconds", type=int, default=300, help="Max seconds to poll for job completion")
-    parser.add_argument("--ba-token", default=None, help="PayPal BA token for --omakse-us-pay")
-    parser.add_argument("--omakse-phone-country", default="US", help="Phone country for US protocol payment")
-    parser.add_argument("--omakse-phone-cc", default="1", help="Phone country code for US protocol payment")
-    parser.add_argument("--omakse-proxy-region", default="US", help="Proxy region for US protocol payment")
-    parser.add_argument("--omakse-client-id", default=None, help="Client ID for US protocol payment (auto-generated if omitted)")
-    parser.add_argument("--omakse-randomize-device", action="store_true", help="Randomize device fingerprint for US payment")
-    parser.add_argument("--omakse-preconfirm-phone", action="store_true", help="Pre-confirm phone in US payment flow")
-    parser.add_argument("--omakse-send-otp", action="store_true", help="Send phone OTP in US payment flow")
-    parser.add_argument("--omakse-load-return-url", action="store_true", help="Load return URL in US payment flow")
-    parser.add_argument("--refresh-session", action="store_true", help="Refresh ChatGPT auth session with protocol requests")
-    parser.add_argument("--session-file", default=None, help="Session JSON path for account and payment operations")
-    parser.add_argument("--email-file", default=None, help="One email per line for batch operations")
-    parser.add_argument("--refresh-timeout", type=int, default=300, help="Seconds to wait for interactive auth refresh")
-    parser.add_argument("--view-inbox", action="store_true", help="Fetch recent mailbox messages for --email/--session-file and print JSON")
-    parser.add_argument("--inbox-limit", type=int, default=20, help="Max messages for --view-inbox")
-    parser.add_argument("--gmail-send", action="store_true", help="Send mail through a configured/selected Gmail mailbox")
-    parser.add_argument("--gmail-send-to", default=None, help="Recipient list for --gmail-send, separated by comma/newline")
-    parser.add_argument("--gmail-send-subject", default=None, help="Subject for --gmail-send")
-    parser.add_argument("--gmail-send-body", default=None, help="Plain-text body for --gmail-send")
-    parser.add_argument("--gmail-send-html", default=None, help="Optional HTML body for --gmail-send")
-    parser.add_argument("--gmail-send-self", action="store_true", help="Send --gmail-send to the Gmail mailbox itself")
-    parser.add_argument("--auto-pay", action="store_true", help="Automate PayPal payment (reverse protocol first, browser fallback)")
-    parser.add_argument("--auto-pay-reverse-only", action="store_true", help="Use reverse protocol only, no browser fallback")
-    parser.add_argument("--auto-pay-headless", action="store_true", help="Run auto-pay browser headless")
-    parser.add_argument("--auto-pay-timeout", type=int, default=180, help="Seconds to wait for auto-pay completion")
-    parser.add_argument("--batch-auto-pay", action="store_true", help="Run auto-pay for all pending accounts in SQLite")
-    parser.add_argument("--batch-auto-pay-limit", type=int, default=0, help="Max accounts to process in batch (0=all)")
-    parser.add_argument("--list-paypal-ba-queue", action="store_true", help="List durable PayPal BA authorization queue")
-    parser.add_argument("--process-paypal-ba-queue", action="store_true", help="Process pending PayPal BA authorization jobs")
-    parser.add_argument("--paypal-ba-queue-limit", type=int, default=0, help="Max PayPal BA authorization jobs (0=all)")
-    parser.add_argument("--one-click-sms", action="store_true", help="Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT")
-    parser.add_argument("--one-click-scan", action="store_true", help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification")
-    parser.add_argument("--no-scan-workspace-status", action="store_true", help="Deprecated compatibility flag; --one-click-scan no longer performs workspace checks")
-    parser.add_argument("--scan-switch-workspace-id", default=None, help="Deprecated compatibility flag; no longer used")
-    parser.add_argument("--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used")
-    parser.add_argument("--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used")
-    parser.add_argument("--scan-relogin-mode", choices=["auto", "web_session", "codex_oauth"], default="auto", help="Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth")
-    parser.add_argument("--scan-deep-probe", action="store_true", help="Allow --one-click-scan to run OAuth/email-OTP deep probing; default is AT probe-only")
-    
-    parser.add_argument("--convert-session-json", default=None, help="Convert ChatGPT/Codex session JSON file to another import format")
-    parser.add_argument("--convert-format", choices=["cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"], default="cpa", help="Output format for --convert-session-json")
-    parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
-    parser.add_argument("--registration-at-only", action="store_true", default=True, help="Compatibility flag; protocol registration is AT-only by default")
-    parser.add_argument("--no-2fa", action="store_true", help="Skip TOTP 2FA enrollment after a successful registration")
-    parser.add_argument("--phone-reuse", action="store_true", help="Enable phone number reuse: one phone verifies up to N accounts")
-    parser.add_argument("--no-phone-reuse", action="store_true", help="Disable phone verification even when smsbower is configured")
-    parser.add_argument("--phone-source", default=None, choices=["smsbower", "phone_pool"], help="Override phone source for registration/one-click SMS")
-    parser.add_argument("--max-reuse-count", type=int, default=0, help="Max times a phone can be reused (0=config default or 1)")
-    parser.add_argument("--phone-send-cooldown", type=int, default=None, help="Seconds to wait before sending another OTP to the same phone")
-    parser.add_argument("--change-email", action="store_true", help="Batch change ChatGPT protocol email addresses")
-    parser.add_argument("--change-email-provider", choices=["remail", "cfworker", "smailr", "icloud", "outlook", "hotmail"], default=None)
-    parser.add_argument("--change-email-mailbox-file", default=None, help="Credential pool for persistent target email providers")
-    parser.add_argument("--change-email-workers", type=int, default=None)
-    parser.add_argument("--change-email-timeout", type=int, default=180)
-    parser.add_argument("--change-email-otp-timeout", type=int, default=300)
-    parser.add_argument("--change-email-service-mode", choices=["code", "purchase"], default="purchase")
-    parser.add_argument("--change-email-smailr-domain", default="")
+
+    # Registration order is the original cli.py order, so --help output and
+    # any ordering-sensitive parsing behaviour are unchanged.
+    core.register(parser)
+    payment.register(parser)
+    omakse.register(parser)
+    session.register(parser)
+    paypal.register(parser)
+    sub2api.register(parser)
+    quota.register(parser)
+    codex.register(parser)
+    one_click.register(parser)
+    email_change.register(parser)
+
     return parser
 
 
@@ -415,6 +253,14 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     install_safe_stdio()
+    # Mirror stdout/stderr to `runtime/logs/backend_stdout.log`. Most of the
+    # protocol lane reports through print(), which only ever reached the host's
+    # IPC pipe -- so a run that failed before its first progress record left no
+    # evidence on disk at all. The mirror is passive: it copies complete lines
+    # without rerouting or decorating the stream the host parses.
+    from .stdout_mirror import install_stdout_mirror
+
+    install_stdout_mirror()
     # Wire the rotating file logger (`runtime/logs/sms_tool.log`). Without this
     # the module is dead code and `logger.*` calls vanish: the codebase reports
     # through print(), so nothing is ever persisted and no exception carries a
@@ -439,48 +285,7 @@ def main():
         args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
 
     base_dir = args.output_dir or str(output_dir(CFG))
-    if getattr(args, "desktop_serve", False):
-        from .desktop_serve import serve_forever
-
-        raise SystemExit(serve_forever())
-    if getattr(args, "doctor", False):
-        from .config import default_config_path
-        from .doctor import print_doctor_report, run_doctor
-
-        # The canonical config now lives in the proxy/runtime/payment shards under
-        # the project root, so report the project root (not the legacy single
-        # config.json path) as the source to avoid a false bundled-fallback warning.
-        report = run_doctor(CFG, str(Path(default_config_path()).parent))
-        if getattr(args, "json_output", False):
-            print(json.dumps(report, ensure_ascii=False, indent=2))
-        elif getattr(args, "desktop_ipc", False):
-            emit_result(dict(report), enabled=True)
-        else:
-            print_doctor_report(report)
-        raise SystemExit(0 if getattr(args, "desktop_ipc", False) else report["failed"])
-    if args.desktop_read:
-        from .desktop_read import (
-            create_account_file,
-            create_mailbox_file,
-            create_payment_url_file,
-            read_account,
-            read_accounts,
-            read_mailbox_pool,
-        )
-        if args.desktop_read == "accounts":
-            payload = {"ok": True, "accounts": read_accounts(CFG, include_session=False)}
-        elif args.desktop_read == "account":
-            payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
-        elif args.desktop_read == "mailbox-pool":
-            extra_files = (args.chatai_mailbox_file,) if args.chatai_mailbox_file else ()
-            payload = {"ok": True, **read_mailbox_pool(CFG, extra_files=extra_files)}
-        elif args.desktop_read == "mailbox-file":
-            payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
-        elif args.desktop_read == "account-file":
-            payload = create_account_file(args.account_id or "", args.email or "", CFG)
-        else:
-            payload = create_payment_url_file(args.account_id or "", args.email or "", CFG)
-        emit_result(payload, enabled=True)
+    if _main_early_commands(args):
         return
     if args.delete_account:
         from .accounts.account_lifecycle import AccountDeleteRequest, AccountLifecycle
@@ -611,6 +416,69 @@ def main():
         _emit_registration_error(args, str(exc), exit_code=2)
         raise SystemExit(2) from None
 
+    _main_registration_pipeline(args, base_dir)
+
+
+def _main_early_commands(args) -> bool:
+    """Early-exit commands that run before the registration pipeline.
+
+    Returns True when the command was handled (desktop serve/doctor/read).
+    Extracted from ``main`` so the pipeline bootstrap, the early exits, and
+    the dispatch chain are three visible segments instead of one 402-line
+    body.
+    """
+    if getattr(args, "desktop_serve", False):
+        from .desktop_serve import serve_forever
+
+        raise SystemExit(serve_forever())
+    if getattr(args, "doctor", False):
+        from .config import default_config_path
+        from .doctor import print_doctor_report, run_doctor
+
+        # The canonical config now lives in the proxy/runtime/payment shards under
+        # the project root, so report the project root (not the legacy single
+        # config.json path) as the source to avoid a false bundled-fallback warning.
+        report = run_doctor(CFG, str(Path(default_config_path()).parent))
+        if getattr(args, "json_output", False):
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        elif getattr(args, "desktop_ipc", False):
+            emit_result(dict(report), enabled=True)
+        else:
+            print_doctor_report(report)
+        raise SystemExit(0 if getattr(args, "desktop_ipc", False) else report["failed"])
+    if args.desktop_read:
+        from .desktop_read import (
+            create_account_file,
+            create_mailbox_file,
+            create_payment_url_file,
+            read_account,
+            read_accounts,
+            read_mailbox_pool,
+        )
+        if args.desktop_read == "accounts":
+            payload = {"ok": True, "accounts": read_accounts(CFG, include_session=False)}
+        elif args.desktop_read == "account":
+            payload = {"ok": True, "account": read_account(args.account_id or "", args.email or "", CFG)}
+        elif args.desktop_read == "mailbox-pool":
+            extra_files = (args.chatai_mailbox_file,) if args.chatai_mailbox_file else ()
+            payload = {"ok": True, **read_mailbox_pool(CFG, extra_files=extra_files)}
+        elif args.desktop_read == "mailbox-file":
+            payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
+        elif args.desktop_read == "account-file":
+            payload = create_account_file(args.account_id or "", args.email or "", CFG)
+        else:
+            payload = create_payment_url_file(args.account_id or "", args.email or "", CFG)
+        emit_result(payload, enabled=True)
+        return
+    return False
+
+
+def _main_registration_pipeline(args, base_dir) -> None:
+    """The registration pipeline: load mailboxes, preflight, register, report.
+
+    Extracted from ``main`` unchanged except for the two parameters --
+    ``args`` and ``base_dir`` were the only locals it closed over.
+    """
     if getattr(args, "target_at200", 0):
         _run_target_at200(args, base_dir)
         return
@@ -619,6 +487,21 @@ def main():
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)
     mailbox_seconds = time.time() - mailbox_started
+    # Drop already-registered mailboxes before anything counts or bills them.
+    # ``run_batch_impl`` filters as well, but by then they are already inside
+    # ``effective_count`` -- and, on the replenishment path, inside
+    # ``purchased``/``spent``, which turns skipped mailboxes into reported
+    # failures and lets the loop spin over a pool that yields nothing.
+    loaded_mailboxes = mailboxes
+    mailboxes = filter_registered_mailboxes(mailboxes)
+    if loaded_mailboxes and not mailboxes:
+        _emit_registration_error(
+            args,
+            "every loaded mailbox already has a registered account; add fresh mailboxes, "
+            "or set registration.skip_registered_mailboxes=false to attempt them anyway",
+            exit_code=2,
+        )
+        raise SystemExit(2)
     explicit_mailbox_source = bool(
         args.chatai_mailbox_file
         or args.mailbox_file
@@ -714,6 +597,9 @@ def main():
         )
         if bool(getattr(args, "desktop_ipc", False)):
             emit_result(report, enabled=True)
+        exit_code = _registration_exit_code(report)
+        if exit_code:
+            raise SystemExit(exit_code)
         return
 
     register_started = time.time()
@@ -777,6 +663,40 @@ def main():
     )
     if bool(getattr(args, "desktop_ipc", False)):
         emit_result(report, enabled=True)
+    # `save_registration_results` has always reported `failed`, but this path
+    # used to fall off the end of `main()` -- so a batch that registered 0 of 3
+    # accounts still exited 0, and any script or CI job watching the exit status
+    # read it as success.  Code 3 is the documented runtime/provider failure slot
+    # (docs/architecture.md) and is what `--target-at200` and `--delete-account`
+    # already raise for a batch that did not fully succeed.
+    exit_code = _registration_exit_code(report)
+    if exit_code:
+        raise SystemExit(exit_code)
+
+
+def _registration_exit_code(report) -> int:
+    """Map a finished registration batch report onto a process exit code.
+
+    Returns 3 when the batch did not fully succeed, 0 otherwise.  The failure
+    is read from the report itself rather than recomputed, so the exit code can
+    never disagree with the ``N/M registered successfully`` line printed next to
+    it.
+
+    The two fields are a union, not a vote: either an explicit ``ok: False`` or
+    a non-zero ``failed`` marks the batch failed.  A real report sets both
+    consistently (``ok`` *is* ``success == total``), so the union only decides
+    the outcome for a truncated or hand-built report.  A report that carries
+    neither field is left at 0 -- a missing verdict is not evidence of failure,
+    and guessing would fail batches that actually succeeded.
+    """
+    data = report if isinstance(report, dict) else {}
+    if data.get("ok") is False:
+        return 3
+    try:
+        failed = int(data.get("failed") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return 3 if failed > 0 else 0
 
 
 def _save_registration_results(
@@ -819,9 +739,14 @@ def _emit_registration_error(args, error: str, *, exit_code: int) -> dict:
     return payload
 
 
-def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
+def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=True):
     return registration_commands.check_registered_promotions(
-        emails, workers=workers, proxy=proxy, timeout=timeout, proxy_pool=proxy_pool
+        emails,
+        workers=workers,
+        proxy=proxy,
+        timeout=timeout,
+        proxy_pool=proxy_pool,
+        payment_eligibility=payment_eligibility,
     )
 
 

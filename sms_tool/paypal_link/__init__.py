@@ -165,7 +165,7 @@ from .gen_link import (
     proxy_for_country_template,
     redact_proxy_url,
     resolve_external_redirect,
-    rotate_proxy_session,
+    rotate_proxy_session_id,
     rotate_stage_proxy_session,
     run_batch,
     sanitize_text,
@@ -201,7 +201,7 @@ __all__ = [
     'html', 'infer_proxy_country', 'is_paypal_ba_approve_url', 'is_retryable_network_error', 'json', 'main',
     'normalize_proxy_template', 'normalize_proxy_url', 'normalize_return_state', 'os', 'parse_qs', 'parse_token',
     'probe_proxy', 'proxy_for_country_template', 're', 'reconcile_paypal_return', 'redact_proxy_url', 'resolve_external_redirect',
-    'rotate_proxy_session', 'rotate_stage_proxy_session', 'run_batch', 'sanitize_text', 'stripe_amount_details', 'stripe_confirm_error_diagnostics',
+    'rotate_proxy_session_id', 'rotate_stage_proxy_session', 'run_batch', 'sanitize_text', 'stripe_amount_details', 'stripe_confirm_error_diagnostics',
     'sys', 'unquote', 'urljoin', 'urlsplit',
 ]
 

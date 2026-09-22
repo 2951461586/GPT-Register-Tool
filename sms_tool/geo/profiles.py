@@ -11,9 +11,18 @@
 * 浏览器渲染器 → ``browser_fingerprint_pool.BROWSER_LOCALE_PROFILES``
   （navigator_language/accept_language/timezone_iana/…）
 
-新增市场只改这里一处，两条 lane 同时生效。时区偏移与 Windows 时区名不进
-本表：偏移在运行时按 IANA 名重算（DTP 安全，见 browser_fingerprint_pool
-P1-4 注释），Windows 名在浏览器渲染器的 ``TIMEZONE_NAME_BY_IANA`` 里。
+新增市场要改**两处**（协议 lane 只需本表；浏览器 lane 还要补两张硬编码表）：
+
+1. 本模块 ``MARKET_PROFILES`` —— ``_GEO_PROFILES`` 与
+   ``BROWSER_LOCALE_PROFILES`` 都从这里派生，加一行两条 lane 同时生效。
+2. ``browser_fingerprint_pool`` 里**非派生的两张表**：
+   ``COUNTRY_LOCALE_PROFILE_MAP`` 与 ``TIMEZONE_NAME_BY_IANA``。
+   漏前者 ⇒ ``locale_profile_key_from_geo`` 静默回退 ``'us'``（美国指纹配别国
+   出口）；漏后者 ⇒ ``timezone_name`` 变空串。
+   ``tests/test_geo_profile_parity.py`` 的 4 条用例会把两处漏项都判红。
+
+时区偏移与 Windows 时区名不进本表：偏移在运行时按 IANA 名重算（DST 安全，见
+browser_fingerprint_pool P1-4 注释），Windows 名在 ``TIMEZONE_NAME_BY_IANA`` 里。
 """
 
 from __future__ import annotations
@@ -30,6 +39,18 @@ MARKET_PROFILES: dict[str, dict[str, str]] = {
     "SG": {"timezone_iana": "Asia/Singapore", "lang": "en-SG", "lang_full": "en-SG,en-US;q=0.9,en;q=0.8"},
     "AU": {"timezone_iana": "Australia/Sydney", "lang": "en-AU", "lang_full": "en-AU,en-US;q=0.9,en;q=0.8"},
     "VN": {"timezone_iana": "Asia/Ho_Chi_Minh", "lang": "vi-VN", "lang_full": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7"},
+    #  2026-09-18 接入第二供应商（9http ``geo-IN``）时补。
+    # 印度只有一个时区（Asia/Kolkata，UTC+05:30，无夏令时），所以不存在
+    # "一国多时区"的歧义；``en-IN`` 是 Chrome 在印度出口上的常见首选语言
+    # （英语是印度联邦官方语言之一）。``Asia/Calcutta`` 是 IANA 的历史别名，
+    # 与 ``Asia/Kolkata`` 同区，geo 库偶尔返回别名，故在
+    # ``TIMEZONE_NAME_BY_IANA`` 里两者都登记。
+    "IN": {"timezone_iana": "Asia/Kolkata", "lang": "en-IN", "lang_full": "en-IN,en;q=0.9,en-US;q=0.8"},
+    # PH 的 (locale, IANA) 组合与 ``checkout_contract.COUNTRY_BROWSER_PROFILES``
+    # 及 ``payment_methods.json`` 的 ``payment_locale`` 保持一致（en-PH /
+    # Asia/Manila）—— 支付 lane 与注册 lane 报的是同一个国家时不能各说各话。
+    # 英语是菲律宾的官方语言，浏览器首选 en-PH 属常见组合。
+    "PH": {"timezone_iana": "Asia/Manila", "lang": "en-PH", "lang_full": "en-PH,en;q=0.9,en-US;q=0.8"},
     "CN": {"timezone_iana": "Asia/Shanghai", "lang": "zh-CN", "lang_full": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
     "HK": {"timezone_iana": "Asia/Hong_Kong", "lang": "zh-HK", "lang_full": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6"},
     "TW": {"timezone_iana": "Asia/Taipei", "lang": "zh-TW", "lang_full": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"},

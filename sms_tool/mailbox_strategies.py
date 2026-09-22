@@ -3,13 +3,9 @@
 Replaces the if-elif chains in ``_fetch_mailbox_messages`` and
 ``_poll_email_otp`` with a dispatch table (provider -> handler).
 
-Each provider module exposes a ``ProviderStrategy`` dataclass with:
-  * ``can_handle(mailbox, cfg) -> bool``
-  * ``fetch_messages(mailbox, *, limit, proxy, email_cfg, ...) -> list``
-  * ``poll_otp(mailbox, *, subject_keyword, timeout, issued_after_unix, proxy, ...) -> Optional[str]``
-
-New providers register themselves by appending to ``MESSAGE_FETCHERS`` and
-``OTP_POLLERS`` lists in their own module body — no central if-elif grows.
+The composition point binds each provider's matcher, fetcher, poller and
+credential capability into one adapter. Provider modules own wire behaviour;
+this module owns only the immutable routing Interface.
 """
 
 from __future__ import annotations
@@ -36,6 +32,8 @@ class MailboxProviderAdapter(Protocol):
     @property
     def capabilities(self) -> frozenset[str]: ...
 
+    def has_credentials(self, mailbox: Any, config: Mapping[str, Any]) -> bool: ...
+
 
 class MailboxProviderResolutionError(RuntimeError):
     pass
@@ -47,6 +45,7 @@ class FunctionMailboxProviderAdapter:
     matcher: Callable[[Any, Mapping[str, Any]], bool]
     message_fetcher: MessageFetcher | None = None
     otp_poller: OtpPoller | None = None
+    credential_checker: Callable[[Any, Mapping[str, Any]], bool] | None = None
     # True for a catch-all adapter (Graph). A fallback only wins when no
     # specific adapter matched, so it never has to enumerate the providers it
     # should not steal from - see _graph_matcher.
@@ -54,7 +53,11 @@ class FunctionMailboxProviderAdapter:
 
     @property
     def capabilities(self) -> frozenset[str]:
-        return frozenset(item for item, value in (("fetch", self.message_fetcher), ("poll", self.otp_poller)) if value is not None)
+        return frozenset(item for item, value in (
+            ("fetch", self.message_fetcher),
+            ("poll", self.otp_poller),
+            ("credentials", self.credential_checker),
+        ) if value is not None)
 
     def matches(self, mailbox: Any, config: Mapping[str, Any]) -> bool:
         return bool(self.matcher(mailbox, config))
@@ -68,6 +71,9 @@ class FunctionMailboxProviderAdapter:
         if self.otp_poller is None:
             raise NotImplementedError(f"{self.name} does not support OTP polling")
         return self.otp_poller(mailbox, **kwargs)
+
+    def has_credentials(self, mailbox: Any, config: Mapping[str, Any]) -> bool:
+        return bool(self.credential_checker and self.credential_checker(mailbox, config))
 
 
 class MailboxProviderRegistry:
@@ -93,18 +99,52 @@ class MailboxProviderRegistry:
     def register_fetcher(self, name: str, matcher: Callable[..., bool], fetcher: MessageFetcher, *, fallback: bool = False) -> None:
         existing = self._find(name)
         self.register(FunctionMailboxProviderAdapter(
-            name, matcher, fetcher, existing.otp_poller if existing else None, fallback))
+            name,
+            matcher,
+            fetcher,
+            existing.otp_poller if existing else None,
+            existing.credential_checker if existing else None,
+            fallback,
+        ))
 
     def register_poller(self, name: str, matcher: Callable[..., bool], poller: OtpPoller, *, fallback: bool = False) -> None:
         existing = self._find(name)
         self.register(FunctionMailboxProviderAdapter(
-            name, matcher, existing.message_fetcher if existing else None, poller, fallback))
+            name,
+            matcher,
+            existing.message_fetcher if existing else None,
+            poller,
+            existing.credential_checker if existing else None,
+            fallback,
+        ))
+
+    def register_credentials(
+        self,
+        name: str,
+        matcher: Callable[..., bool],
+        checker: Callable[[Any, Mapping[str, Any]], bool],
+        *,
+        fallback: bool = False,
+    ) -> None:
+        existing = self._find(name)
+        self.register(FunctionMailboxProviderAdapter(
+            name,
+            matcher,
+            existing.message_fetcher if existing else None,
+            existing.otp_poller if existing else None,
+            checker,
+            fallback,
+        ))
 
     def resolve_fetcher(self, mailbox: Any, config: Mapping[str, Any]) -> FunctionMailboxProviderAdapter | None:
         return self._resolve(mailbox, config, require="fetch")
 
     def resolve_poller(self, mailbox: Any, config: Mapping[str, Any]) -> FunctionMailboxProviderAdapter | None:
         return self._resolve(mailbox, config, require="poll")
+
+    def has_credentials(self, mailbox: Any, config: Mapping[str, Any]) -> bool:
+        adapter = self._resolve(mailbox, config, require="credentials")
+        return bool(adapter and adapter.has_credentials(mailbox, config))
 
     def names(self) -> tuple[str, ...]:
         return tuple(adapter.name for adapter in self._adapters)
@@ -121,7 +161,11 @@ class MailboxProviderRegistry:
         """
         matched_fallback: FunctionMailboxProviderAdapter | None = None
         for adapter in self._adapters:
-            supported = adapter.message_fetcher is not None if require == "fetch" else adapter.otp_poller is not None
+            supported = {
+                "fetch": adapter.message_fetcher,
+                "poll": adapter.otp_poller,
+                "credentials": adapter.credential_checker,
+            }.get(require) is not None
             if not supported:
                 continue
             try:
@@ -318,3 +362,9 @@ def _icloud_poll_otp(
 # and not an exclusion list - is what makes it lose to every named provider.
 register_message_fetcher("graph_api", _graph_matcher, _graph_fetch_messages, fallback=True)
 register_otp_poller("graph_api", _graph_matcher, _graph_poll_otp, fallback=True)
+DEFAULT_MAILBOX_PROVIDERS.register_credentials(
+    "graph_api",
+    _graph_matcher,
+    lambda mailbox, _config: bool(getattr(mailbox, "refresh_token", "")),
+    fallback=True,
+)

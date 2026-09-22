@@ -33,7 +33,7 @@ def test_probe_uses_saved_access_token_and_account_id():
     assert call.kwargs["proxies"]["https"] == "http://proxy.example:8080"
 
 
-def test_liveness_uses_dedicated_health_proxy_with_account_fingerprint_and_device():
+def test_liveness_prefers_explicit_proxy_with_account_fingerprint_and_device():
     base_proxy = "http://user-region-US-sid-OLD1234-t-5:secret@proxy.example:443"
     registration_proxy = "http://user-region-US-sid-NEW5678-t-5:secret@proxy.example:443"
     health_proxy = "http://health.example:8000"
@@ -70,7 +70,8 @@ def test_liveness_uses_dedicated_health_proxy_with_account_fingerprint_and_devic
         )
 
     assert result["ok"]
-    assert get.call_args.kwargs["proxies"]["https"] == health_proxy
+    assert get.call_args.kwargs["proxies"]["https"] == "http://127.0.0.1:7897"
+    assert result["proxy_source"] == "explicit"
     assert get.call_args.kwargs["impersonate"] == "chrome146"
     assert get.call_args.kwargs["headers"]["oai-device-id"] == "device-123"
     assert "Chrome/146" in get.call_args.kwargs["headers"]["User-Agent"]

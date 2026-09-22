@@ -34,6 +34,7 @@ def no_sleep(monkeypatch):
 
 @pytest.fixture
 def one_account(monkeypatch):
+    monkeypatch.setattr(account_promotion, "CFG", {})
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
         "email": email,
         "access_token": "at",
@@ -50,7 +51,12 @@ def _refresh(monkeypatch, probe, **kwargs):
         return probe(account, calls)
 
     monkeypatch.setattr(account_promotion, "check_account_promotion", fake)
-    result = account_promotion.refresh_promotion_statuses(["a@example.com"], workers=1, timeout=5, **kwargs)
+    # Throttle/status-coding subject: skip the payment-eligibility probe, which
+    # is a separate network boundary (Checkout + Stripe init) and would fire
+    # real requests from here.
+    result = account_promotion.refresh_promotion_statuses(
+        ["a@example.com"], workers=1, timeout=5, payment_eligibility=False, **kwargs
+    )
     return result, calls
 
 

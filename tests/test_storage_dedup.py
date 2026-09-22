@@ -38,6 +38,58 @@ class StorageDedupTests(unittest.TestCase):
         self.assertEqual(audit["at_status_code"], 401)
         self.assertEqual(audit["token_hash"], "hash")
 
+    def test_the_audit_row_keeps_the_relogin_cause_that_the_error_column_hides(self):
+        """``user_already_exists`` outranks the re-login cause, so it needs its own field.
+
+        Measured 2026-09-15: ``existing_login`` appeared in 0 of 4377
+        ``registration_audit.detail_json`` values, and the stdout log that would
+        have shown it stopped at 09-15 04:18 -- so "did the recovery lane spend
+        an email code?" could not be answered from storage at all.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                self.assertTrue(storage.record_registration_audit({
+                    "email": "half@example.com",
+                    "success": False,
+                    "error": "existing_account_user_already_exists:continue_to_login",
+                    "existing_login_error": "existing_login_password_step_unknown",
+                    "response": {"access_token_probe": {"status_code": 0}},
+                }, batch_id="batch-2", state="partial_registered"))
+                conn = storage._connect()
+                try:
+                    row = conn.execute(
+                        "SELECT state,error,detail_json FROM registration_audit"
+                    ).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(row["state"], "partial_registered")
+        self.assertEqual(row["error"], "existing_account_user_already_exists:continue_to_login")
+        self.assertEqual(
+            json.loads(row["detail_json"])["existing_login_error"],
+            "existing_login_password_step_unknown",
+        )
+
+    def test_the_audit_row_reports_an_absent_relogin_cause_as_empty(self):
+        """The key is always present, so "the lane never ran" is distinguishable
+        from "the lane ran and this column predates the field"."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "accounts.sqlite3"
+            with patch.object(storage, "database_path", return_value=db_path):
+                storage.record_registration_audit({
+                    "email": "fresh@example.com",
+                    "success": False,
+                    "error": "create_account_failed",
+                }, state="failed")
+                conn = storage._connect()
+                try:
+                    row = conn.execute("SELECT detail_json FROM registration_audit").fetchone()
+                finally:
+                    conn.close()
+
+        self.assertEqual(json.loads(row["detail_json"])["existing_login_error"], "")
+
     def test_deactivated_remail_account_is_added_to_dead_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"

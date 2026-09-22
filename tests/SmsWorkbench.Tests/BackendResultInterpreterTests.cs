@@ -138,6 +138,43 @@ public sealed class BackendResultInterpreterTests
     }
 
     [Fact]
+    public void ResultRowStatus_PrefersThePreComposedPromotionDisplay()
+    {
+        // The payment-rail badge is appended by Python
+        // (promotion_states.promotion_status_with_eligibility) and arrives as
+        // `promotion_display`; the C# side must not re-derive the separator.
+        var row = Row(
+            ("email", "a@example.com"),
+            ("ok", true),
+            ("promotion_status", "可试用Plus-100%"),
+            ("promotion_display", "可试用Plus-100% · card/upi/momo"),
+            ("probe", Row(("ok", true), ("status_code", "200"))));
+        Assert.Equal("可试用Plus-100% · card/upi/momo", BackendResultInterpreter.ResultRowStatus(row));
+    }
+
+    [Fact]
+    public void ResultRowStatus_FallsBackToTheBareLabelWithoutPromotionDisplay()
+    {
+        // Rows written before the eligibility probe existed carry no
+        // `promotion_display` and must keep rendering exactly as before.
+        var row = Row(
+            ("email", "a@example.com"),
+            ("ok", true),
+            ("promotion_status", "可试用Plus-100%"),
+            ("probe", Row(("ok", true), ("status_code", "200"))));
+        Assert.Equal("可试用Plus-100%", BackendResultInterpreter.ResultRowStatus(row));
+    }
+
+    [Fact]
+    public void IsPromotionRows_DetectsAPromotionDisplayOnlyRow()
+    {
+        Assert.True(BackendResultInterpreter.IsPromotionRows(new[]
+        {
+            Row(("email", "a@example.com"), ("promotion_display", "Free·无优惠 · card")),
+        }));
+    }
+
+    [Fact]
     public void ResultRowStatus_KeepsProbeLabellingForLiveness()
     {
         var alive = Row(("probe", Row(("ok", true), ("status_code", "200"))));

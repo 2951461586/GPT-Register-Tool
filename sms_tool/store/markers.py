@@ -121,9 +121,9 @@ def mark_account_health_result(
                     data = {**file_data, **data}
             except Exception:
                 pass
-        from ..accounts.account_health import sanitize_health_details
+        from ..sanitizer import drop_sensitive_fields
 
-        safe_result = sanitize_health_details(dict(health_result))
+        safe_result = drop_sensitive_fields(dict(health_result), max_string_length=1000)
         check = str(safe_result.get("check") or "unknown")
         health = data.get("account_health") if isinstance(data.get("account_health"), dict) else {}
         checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
@@ -164,11 +164,70 @@ def mark_account_health_result(
 
 
 
-def mark_promotion_status(email, promotion_status="", promotion_result=None, *, promotion_state: str = "", runtime_config: ConfigInput = None):
+# Never persist these into raw_json even if a caller hands them over: the
+# eligibility probe is designed to return an enumerable, token-free dict, and
+# this is the backstop that keeps it that way.
+_PAYMENT_CAPABILITY_BLOCKED_KEYS = frozenset({
+    "access_token",
+    "authorization",
+    "cookie",
+    "cookie_header",
+    "proxy",
+    "auth_context",
+    "refresh_token",
+    "id_token",
+})
+
+
+def _payment_capability_snapshot(value, *, updated_at: int):
+    """Normalize a payment-eligibility result for raw_json, or ``None`` to clear.
+
+    An empty/falsey ``value`` means the caller knows the stored answer is stale
+    (the access token died before the probe could run); returning ``None`` drops
+    the key instead of leaving a method list next to a fresh 401.
+    """
+    if not isinstance(value, dict) or not value:
+        return None
+    snapshot = {
+        str(key): item
+        for key, item in value.items()
+        if str(key).strip().lower() not in _PAYMENT_CAPABILITY_BLOCKED_KEYS
+    }
+    snapshot["updated_at"] = int(updated_at)
+    return snapshot
+
+
+def mark_promotion_status(
+    email,
+    promotion_status="",
+    promotion_result=None,
+    *,
+    promotion_state: str = "",
+    payment_capability=None,
+    runtime_config: ConfigInput = None,
+):
     """Persist the account plan/promotion (优惠) probe result into raw_json + session.
 
     Stored alongside the account without a dedicated DB column; ``desktop_read``
     surfaces ``promotion_status`` from raw_json for the 优惠状态 list column.
+
+    ``payment_capability`` carries the payment-method enumeration produced by
+    ``account_payment_eligibility.probe_account_payment_eligibility``.  Three
+    distinct meanings, because "no probe ran" and "the probe proved nothing is
+    left" must not collapse into one:
+
+    * ``None``  -- no probe ran (feature off, or the caller has nothing to say);
+                   the previously stored value is left untouched.
+    * ``{}``    -- the stored value is known to be stale (the access token died
+                   before the probe could run); clear it rather than leaving a
+                   method list next to a fresh 401.
+    * a dict    -- replace the stored value with it.
+
+    🔴 Anything written here must also be added to
+    ``AccountSessionModel.safe_snapshot()`` in ``account_models.py``.  That
+    whitelist is closed and ``upsert_account`` rebuilds raw_json from it, so a
+    missing entry means the field is silently dropped by the next relogin or
+    account-health pass (2026-09-21: three accounts lost 65 keys -> 16).
     """
     init_database(runtime_config=runtime_config)
     now = int(time.time())
@@ -209,6 +268,14 @@ def mark_promotion_status(email, promotion_status="", promotion_result=None, *, 
         data["promotion"] = promotion
         data["promotion_status"] = str(promotion_status or "")
         data["promotion_updated_at"] = now
+        if payment_capability is not None:
+            snapshot = _payment_capability_snapshot(payment_capability, updated_at=now)
+            if snapshot is None:
+                data.pop("payment_capability", None)
+                promotion.pop("payment_capability", None)
+            else:
+                data["payment_capability"] = snapshot
+                promotion["payment_capability"] = snapshot
         # Machine state next to the display label (sms_tool/promotion_states.py):
         # the desktop filter/sort keys off this, not off the Chinese copy.
         promotion_state = str(

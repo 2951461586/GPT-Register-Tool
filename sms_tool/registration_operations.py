@@ -61,6 +61,7 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
         "_create_account_continue_url",
         "_follow_continue_url",
         "_is_chatgpt_auth_login_landing",
+        "_is_existing_login_redirect",
         "_is_signup_password_step",
         "_is_user_already_exists",
         "_login_existing_account_with_email_otp",
@@ -73,6 +74,7 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
         "_random_birthdate",
         "_random_name",
         "_stored_registration_password",
+        "_stored_registration_totp",
     ),
     "email_otp_mailbox": (
         "_email_otp_send_url",
@@ -141,6 +143,7 @@ class RegistrationOperations:
     _create_account_continue_url: Callable[..., Any]
     _follow_continue_url: Callable[..., Any]
     _is_chatgpt_auth_login_landing: Callable[..., Any]
+    _is_existing_login_redirect: Callable[..., Any]
     _is_signup_password_step: Callable[..., Any]
     _is_user_already_exists: Callable[..., Any]
     _login_existing_account_with_email_otp: Callable[..., Any]
@@ -153,6 +156,7 @@ class RegistrationOperations:
     _random_birthdate: Callable[..., Any]
     _random_name: Callable[..., Any]
     _stored_registration_password: Callable[..., Any]
+    _stored_registration_totp: Callable[..., Any]
 
     # --- email otp & mailbox -----------------------------------------------
     _email_otp_send_url: Callable[..., Any]

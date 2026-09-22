@@ -13,10 +13,10 @@ from sms_tool.registration_state import (
     prepare_registration_context,
 )
 from sms_tool.registration_handlers import (
-    BoundRegistrationStage,
     RegistrationEmailWorkflow,
     RegistrationStageRunner,
 )
+from sms_tool.registration_runtime import RegistrationRuntimeState
 
 
 class Mailbox:
@@ -68,24 +68,23 @@ class RegistrationStateTests(unittest.TestCase):
         states = [call.args[0] for call in workflow._run_stage.call_args_list]
         self.assertNotIn(RegistrationState.CODEX_OAUTH, states)
 
-    def test_stage_runner_shares_state_and_runs_cleanup(self):
-        events = []
-        machine = RegistrationStateMachine(lambda *event: events.append(event))
-        context = object()
-        cleaned = []
-        runner = RegistrationStageRunner(context, machine, cleanup=lambda state: cleaned.append(dict(state)))
-        first = BoundRegistrationStage(
-            RegistrationStage(RegistrationState.AUTH_FLOW, lambda _ctx: {"auth": "ok"}),
-            lambda *_: {"auth": "ok"},
+    def test_stage_runner_uses_one_runtime_across_real_stage_seam(self):
+        machine = RegistrationStateMachine(lambda *_: None)
+        runtime = RegistrationRuntimeState()
+        runner = RegistrationStageRunner(runtime, machine)
+
+        runner.run_stage(
+            RegistrationState.AUTH_FLOW,
+            lambda: setattr(runtime, "username", "user@example.test"),
         )
-        second = BoundRegistrationStage(
-            RegistrationStage(RegistrationState.ACCESS_TOKEN_PROBE, lambda _ctx: {"probe": 200}),
-            lambda *_: {"probe": 200},
+        runner.run_stage(
+            RegistrationState.ACCESS_TOKEN_PROBE,
+            lambda: setattr(runtime, "access_token", f"token-for:{runtime.username}"),
         )
-        # Stage handlers are represented by the stage callback in this minimal contract.
-        result = runner.run([first, second])
-        self.assertEqual(result, {"auth": "ok", "probe": 200})
-        self.assertEqual(cleaned, [{"auth": "ok", "probe": 200}])
+
+        self.assertEqual(runtime.username, "user@example.test")
+        self.assertEqual(runtime.access_token, "token-for:user@example.test")
+        self.assertEqual(machine.snapshot()["state"], "access_token_probe")
 
     def test_stage_runner_single_stage_is_the_production_execution_seam(self):
         machine = RegistrationStateMachine(lambda *_: None)

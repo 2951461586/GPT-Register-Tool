@@ -330,6 +330,7 @@ namespace SmsWorkbench
         public string SessionType { get; set; } = "";
         public string PlanType { get; set; } = "";
         public string RegistrationCountry { get; set; } = "";
+        public string RegistrationStatus { get; set; } = "";
         public string Status { get; set; } = "";
         public string PayPalStatus { get; set; } = "";
         public string PayPalAmount { get; set; } = "";

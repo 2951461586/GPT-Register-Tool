@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import base64
+import json
 import re
-from datetime import datetime
+import html
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Any
@@ -35,6 +37,34 @@ _OTP_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: 「API 型」转发渠道返回的 JSON 里代表验证码的字段名。
+#:
+#: 同一份 ``icloud_url`` 池里混着两种渠道形态：``icloud-api.top`` 回 HTML 页面，
+#: 而 ``ima3.52dfd.top`` 回 JSON。旧实现只认 HTML，于是后者被解析成「0 封邮件」，
+#: 轮询跑满 300s 也读不到码（2026-09-16 batch 25116：18/18 ``matched=False``）。
+#:
+#: 键名沿用参考实现（abai ``core/api_mailbox.py:_extract_code``）的优先键集合。
+#: ⚠️ ``code`` 在这个渠道的「无码」响应里取值 ``"no_code"`` —— 不是 6 位数字，
+#: 所以 ``_six_digit_code`` 不会把它当成验证码（这是刻意的：宁可漏报不误报）。
+_API_OTP_KEYS: tuple[str, ...] = (
+    "verification_code", "verificationcode", "verify_code", "verifycode",
+    "mail_code", "mailcode", "otp", "one_time_code", "onetimecode", "code",
+)
+
+#: 递归遍历 JSON 时跳过的键：它们的值经常是数字但不是验证码。
+#: 除参考实现的集合外多加了 ``id`` —— 消息/请求 id 是 6 位数字的概率不低，
+#: 且它**永远**不可能是验证码，所以这里刻意比参考实现更保守。
+_API_IGNORED_KEYS: frozenset[str] = frozenset({
+    "email", "mail", "url", "api_url", "password", "pass", "token",
+    "status", "status_code", "timestamp", "created_at", "updated_at",
+    "id",
+})
+
+#: 合成邮件的外观：下游 ``_normalize_otp_subject`` 会把带上下文的主题改写成
+#: ``… login code``，从而命中注册泳道的 ``verification code|login code`` 关键词。
+_API_OTP_SUBJECT = "Your temporary ChatGPT verification code"
+_API_OTP_SENDER = "OpenAI <noreply@openai.com>"
+
 # The OTP wait re-fetches the *same* forwarding URL every ``otp_poll_interval``
 # seconds.  If that page -- or a CDN in front of it -- serves a cached body, every
 # poll inside the window returns the same stale listing and a mail that lands
@@ -59,11 +89,31 @@ def is_icloud_url_line(value: Any) -> bool:
 
 
 def split_icloud_url_line(value: Any) -> tuple[str, str]:
+    """Return ``(email, url)`` from a pool line, dropping every field after the URL.
+
+    ``split(delimiter, 1)`` used to keep everything after the first delimiter, so a
+    four-part supplier line (``email----url----account----2fa``) yielded a ``url`` with
+    the trailing fields glued on.  ``_valid_mailbox_url`` only checks scheme + hostname,
+    so that tail passed validation and travelled into the request URL through
+    ``MailboxAccount.token``:
+
+    * on a **path**-style channel (``icloud-api.top``) the server tolerates it;
+    * on a **query**-style channel (``api798.com``) it lands inside ``auth_code`` and the
+      server answers ``HTTP 403 错误：授权码无效``.
+
+    That asymmetry is why the 2026-08-10 probe read as "api798 0/33, channel dead" when
+    the channel was healthy and the *import format* was broken -- 33 usable mailboxes were
+    deleted on that verdict.  Only the first two fields are ever meaningful, so drop the
+    rest here, at the parse boundary, rather than trying to repair it downstream.
+    """
     text = str(value or "").strip().lstrip("\ufeff")
     for delimiter in ("----", "---"):
         if delimiter not in text:
             continue
-        email, url = (part.strip() for part in text.split(delimiter, 1))
+        parts = [part.strip() for part in text.split(delimiter)]
+        if len(parts) < 2:
+            continue
+        email, url = parts[0], parts[1]
         if url.lower().startswith(("http://", "https://")):
             return email.lower(), url
     return "", ""
@@ -71,6 +121,15 @@ def split_icloud_url_line(value: Any) -> tuple[str, str]:
 
 def fetch_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None) -> list[dict[str, Any]]:
     page_url, email, text = _fetch_icloud_url_page(mailbox, limit=limit, proxy=proxy)
+    # 「API 型」渠道回 JSON 而不是 HTML，必须在这里分流：下面两条 HTML 路径
+    # 都会把它解析成「0 封邮件」，与「邮箱里确实没邮件」完全无法区分。
+    api_messages = _api_payload_messages(text, email=email)
+    if api_messages is not None:
+        return api_messages
+    # 「最新邮件」型渠道（api798.com）把正文藏在 JS 字符串里，卡片分支必然读成 0 封。
+    latest_messages = _latest_mail_js_message(text, email=email)
+    if latest_messages is not None:
+        return latest_messages
     api_paths = _yangyang_api_paths(text)
     if api_paths:
         messages = _fetch_yangyang_messages(
@@ -87,6 +146,13 @@ def fetch_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None
 
 def snapshot_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None) -> list[dict[str, Any]]:
     page_url, email, text = _fetch_icloud_url_page(mailbox, limit=limit, proxy=proxy)
+    api_messages = _api_payload_messages(text, email=email)
+    if api_messages is not None:
+        return api_messages
+    # 快照走的是另一个入口，必须同样分流，否则基线会把「有邮件」记成「0 封」。
+    latest_messages = _latest_mail_js_message(text, email=email)
+    if latest_messages is not None:
+        return latest_messages
     api_paths = _yangyang_api_paths(text)
     if not api_paths:
         messages = _parse_card_messages(text, email=email, limit=limit)
@@ -182,6 +248,196 @@ def _with_message_limit(url: str, limit: int) -> str:
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     query["n"] = str(max(1, min(int(limit or 25), 50)))
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
+
+
+#: ``api798.com`` 的 ``/latest`` 页面形态 —— 与 ``icloud-api.top`` **完全不同**。
+#:
+#: 它的邮件正文**不在 DOM 里**：正文被塞进一段 JS 字符串（``var htmlContent = "…"``）
+#: 再写进一个没有 ``src`` 的 ``<iframe>``。页面级可见文本因此**只有主题、没有验证码**，
+#: 而 ``_parse_card_messages`` 期待的是 ``<div class="card">`` 布局 ⇒ 一封都读不出。
+#: 「0 封」与「邮箱里确实没邮件」在返回值上完全一样，所以只会表现为轮询跑满超时。
+#:
+#: 2026-09-16 实测（批次抽中 ``jags-burly4k+oai02@icloud.com``，provider ``api798.com``）：
+#: OpenAI 于 23:48:03 发码，页面显示**同一秒**的接收时间与越南语主题，
+#: 验证码 ``494652`` 就嵌在那段 JS 字符串里 —— 而 ``fetch_icloud_url_messages``
+#: 返回 **0 封**，轮询 303s 后 ``email_otp_poll_timeout``。
+#: 同批 17 个 ``icloud-api.top`` 邮箱不受影响（它们的正文在 DOM 卡片里）。
+_LATEST_MAIL_MARKERS = ("最新邮件信息", "接收时间：", "邮件主题：")
+_JS_HTML_CONTENT_RE = re.compile(r'var\s+htmlContent\s*=\s*"((?:[^"\\]|\\.)*)"', re.S)
+_LATEST_RECEIVED_RE = re.compile(
+    r'class="label">\s*接收时间：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S
+)
+_LATEST_SUBJECT_RE = re.compile(
+    r'class="label">\s*邮件主题：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S
+)
+_CN_TIME_RE = re.compile(
+    r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})"
+)
+
+
+def _label_value(pattern: re.Pattern[str], text: str) -> str:
+    match = pattern.search(text)
+    return match.group(1) if match else ""
+
+
+def _decode_js_string(raw: str) -> str:
+    """把 JS 字符串字面量的**内容**解回文本（``\\"``、``\\r\\n``、``\\uXXXX``）。
+
+    解出来的就是一封完整邮件（HTML），所以直接交给下游的验证码提取，
+    而不是再走一遍卡片解析。
+    """
+    try:
+        return json.loads(f'"{raw}"')
+    except ValueError:
+        return raw.replace("\\r\\n", "\n").replace('\\"', '"').replace("\\/", "/")
+
+
+def _latest_mail_received_at(value: str) -> str:
+    """``2026年09月16日 23:48:03 (北京时间)`` → ISO8601（``+08:00``）。
+
+    页面已标注北京时间，所以显式带上 ``+08:00``，让下游 ``issued_after_unix``
+    的比较拿到真实时刻，而不是落到「解析不出 ⇒ 不参与比较」那条宽容分支上。
+    """
+    match = _CN_TIME_RE.search(value or "")
+    if not match:
+        return ""
+    year, month, day, hour, minute, second = (int(part) for part in match.groups())
+    try:
+        return datetime(
+            year, month, day, hour, minute, second, tzinfo=timezone(timedelta(hours=8))
+        ).isoformat()
+    except ValueError:
+        return ""
+
+
+def _latest_mail_js_message(text: str, *, email: str) -> list[dict[str, Any]] | None:
+    """解析 ``api798.com`` ``/latest`` 的「最新邮件」页；``None`` = 不是这种版式。
+
+    返回列表即代表**确认是这种版式**（页面出现本身就说明有邮件），所以恒返回一条。
+    无邮件时服务端回的是「未找到匹配的邮件」页面（不含本函数的标记）⇒ 返回 ``None``，
+    由下面的卡片分支处理 —— 这样「我们读不出」与「确实没邮件」仍然分得开。
+    """
+    if not all(marker in text for marker in _LATEST_MAIL_MARKERS):
+        return None
+    received_at = _latest_mail_received_at(_label_value(_LATEST_RECEIVED_RE, text))
+    subject = html.unescape(_clean_text(_label_value(_LATEST_SUBJECT_RE, text)))
+    body_match = _JS_HTML_CONTENT_RE.search(text)
+    body = _decode_js_string(body_match.group(1)) if body_match else ""
+    return [
+        _message(
+            email=email,
+            message_id=hashlib.sha256(
+                f"api798-latest:{subject}\n{received_at}".encode("utf-8")
+            ).hexdigest()[:24],
+            subject=subject,
+            sender="",
+            received_at=received_at,
+            body=body,
+        )
+    ]
+
+
+def _api_payload_messages(text: str, *, email: str) -> list[dict[str, Any]] | None:
+    """解析「API 型」转发渠道回的 JSON；``None`` = 这不是 JSON 响应。
+
+    返回列表表示这确实是 JSON：**空列表即「此刻没有验证码」**，调用方继续轮询。
+    这两种「空」必须分开 —— 合成不出码却回非空，会把「渠道没投递」误报成
+    「我们读到了邮件但没码」。
+    """
+    payload = _load_json_payload(text)
+    if payload is None:
+        return None
+    code = _api_payload_otp(payload)
+    if not code:
+        return []
+    return [_message(
+        email=email,
+        message_id=hashlib.sha256(f"icloud-api-otp:{code}".encode("utf-8")).hexdigest()[:24],
+        subject=_API_OTP_SUBJECT,
+        sender=_API_OTP_SENDER,
+        received_at=_now_iso(),
+        body=f"{_API_OTP_SUBJECT}. Enter this code to continue: {code}",
+    )]
+
+
+def _load_json_payload(text: str) -> Any:
+    """只有整体是 JSON 对象/数组才认；HTML 以 ``<`` 开头，天然进不来。"""
+    stripped = str(text or "").strip()
+    if not stripped or stripped[0] not in "[{":
+        return None
+    try:
+        return json.loads(stripped)
+    except Exception:
+        return None
+
+
+def _api_payload_otp(payload: Any) -> str:
+    """取 6 位验证码：先按字段名找，再回落到「非忽略键」文本的噪声过滤提取。
+
+    兜底**不能**直接喂 ``json.dumps(payload)``：``{"code":"ok","id":"123456"}``
+    会被文本提取器读成验证码 —— 忽略键在字段名那一层跳过了，在整段文本里却
+    重新露出来。所以先按同一份忽略键集合把 payload 压成文本再提取。
+    """
+    preferred = _walk_api_code(payload)
+    if preferred:
+        return preferred
+    return _extract_otp_from_text(_api_payload_text(payload))
+
+
+def _api_payload_text(value: Any) -> str:
+    """把 payload 压成「非忽略键」的文本，供噪声过滤提取器兜底。
+
+    忽略键的过滤只有 **dict 分支**这一个 owner：能走到字符串分支，就说明它的
+    父键已经过了那道过滤，再判一次是死代码。
+    """
+    chunks: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if str(key or "").strip().lower().replace("-", "_") in _API_IGNORED_KEYS:
+                continue
+            chunks.append(_api_payload_text(child))
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            chunks.append(_api_payload_text(child))
+    elif isinstance(value, str):
+        chunks.append(value)
+    return "\n".join(chunk for chunk in chunks if chunk)
+
+
+def _walk_api_code(value: Any) -> str:
+    """递归找 6 位验证码；忽略键的过滤同样只有 dict 分支一个 owner。"""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if str(key or "").strip().lower().replace("-", "_") in _API_OTP_KEYS:
+                code = _six_digit_code(child)
+                if code:
+                    return code
+        for key, child in value.items():
+            if str(key or "").strip().lower().replace("-", "_") in _API_IGNORED_KEYS:
+                continue
+            code = _walk_api_code(child)
+            if code:
+                return code
+        return ""
+    if isinstance(value, (list, tuple)):
+        for child in value:
+            code = _walk_api_code(child)
+            if code:
+                return code
+        return ""
+    if isinstance(value, str):
+        return _six_digit_code(value)
+    return ""
+
+
+def _six_digit_code(value: Any) -> str:
+    """整串就是 6 位数字才算 —— ``"no_code"`` 这种状态码必须落空。"""
+    match = re.fullmatch(r"\d{6}", str(value if value is not None else "").strip())
+    return match.group(0) if match else ""
+
+
+def _now_iso() -> str:
+    return datetime.now().astimezone().isoformat()
 
 
 def _yangyang_api_paths(text: str) -> tuple[str, str, str] | None:

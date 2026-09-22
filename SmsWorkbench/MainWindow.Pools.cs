@@ -19,7 +19,7 @@ namespace SmsWorkbench
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
             if (scope == "有试用" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
-            if (scope == "待处理" && !row.Status.Contains("待") && !row.Status.Contains("缺") && !row.Status.Contains("失败")) return false;
+            if (scope == "待处理" && !RegistrationStatusPresentation.NeedsAttention(row)) return false;
             if (term.Length == 0) return true;
 
             string text = (row.Identifier + " " + row.AccountType + " " + row.Status + " " + row.Notes).ToLowerInvariant();
@@ -137,7 +137,7 @@ namespace SmsWorkbench
         {
             int trialEligible = allRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState));
             int registered = allRows.Count(IsRegisteredRow);
-            int attention = allRows.Count(r => r.Status.Contains("待") || r.Status.Contains("缺") || r.Status.Contains("失败"));
+            int attention = allRows.Count(RegistrationStatusPresentation.NeedsAttention);
             TotalCountText = allRows.Count.ToString();
             TrialCountText = trialEligible.ToString();
             RegisteredCountText = registered.ToString();
@@ -146,6 +146,8 @@ namespace SmsWorkbench
 
         private bool IsRegisteredRow(PoolRow row)
         {
+            if (RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
+                || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
             return row.AccountType.Contains("Session")
                 || row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
                 || row.Status.Contains("已注册")
@@ -264,7 +266,9 @@ namespace SmsWorkbench
                 CompletedAt = fileTime,
                 Identifier = email,
                 AccountType = MailboxPoolAccountType(provider),
-                Status = MailboxPoolStatus(provider, authMode),
+                RegistrationStatus = JsonString(line, "registration_status"),
+                Status = RegistrationStatusPresentation.MailboxStatus(
+                    JsonString(line, "registration_status"), MailboxPoolStatus(provider, authMode)),
                 RefreshToken = MailboxPoolRefreshDisplay(provider, refreshToken),
                 Notes = path,
                 SourcePath = path,
@@ -416,10 +420,19 @@ namespace SmsWorkbench
                 PlanType = FirstNonEmpty(GetString(data, "plan_type"), GetString(data, "account_type")),
                 RegistrationCountry = GetString(data, "registration_country"),
                 Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, importedStatus),
+                RegistrationStatus = FirstNonEmpty(GetString(data, "registration_status"), GetString(data, "registration_state")),
                 PayPalStatus = paypalStatusDisplay,
                 PayPalAmount = paypalAmount,
+                // The Python side composes the payment-rail badge into
+                // `promotion_display` ("可试用Plus-100% · card/upi/momo") so the
+                // separator rule has a single owner
+                // (sms_tool/promotion_states.promotion_status_with_eligibility).
+                // Rows written before the eligibility probe existed carry only
+                // `promotion_status`, hence the fallback.
                 PromotionStatus = AccountStatusInterpreter.DisplayPromotionStatus(
-                    GetString(data, "promotion_status"),
+                    FirstNonEmpty(
+                        GetString(data, "promotion_display"),
+                        GetString(data, "promotion_status")),
                     paypalStatusDisplay,
                     paypalAmount),
                 PromotionState = GetString(data, "promotion_state"),

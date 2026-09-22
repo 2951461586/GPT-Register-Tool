@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_module
 from sms_tool import mailbox_icloud_url, mailbox_parsers
-from sms_tool.mail_otp import _email_otp_candidate
+from sms_tool.mail_otp import _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from sms_tool.mailbox_types import MailboxAccount
 from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
 
@@ -364,6 +364,343 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response()):
             mailbox_icloud_url._request("https://mail.example/show/token/target@icloud.com")
         self.assertEqual(mailbox_icloud_url._NO_CACHE_HEADERS, before)
+
+    def test_api_json_channel_without_code_yields_no_messages(self):
+        """``ima3.52dfd.top`` 这类渠道回 JSON，不回 HTML。
+
+        实测形状（2026-09-16，batch 25116）：该渠道每次回
+        ``{"code":"no_code","message":"暂未收到验证码",...}``。旧实现把它当 HTML
+        解析成「0 封邮件」，与「邮箱里确实没邮件」完全无法区分。这里断言
+        ``_parse_card_messages`` **未被调用** —— 只断言返回 ``[]`` 无法区分
+        「走了 JSON 分支」和「HTML 分支恰好也没解析出卡片」。
+        """
+        payload = '{"code":"no_code","message":"暂未收到验证码","retryable":true,"success":false}'
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://ima3.example/api/secret/target@icloud.com",
+        )
+        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
+             patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(messages, [])
+        card.assert_not_called()
+
+    def test_api_json_channel_code_reaches_the_registration_otp_filter(self):
+        """JSON 里的 6 位码必须能穿过下游关键词/发件人过滤。
+
+        合成邮件只在「主题含 verification code / login code、发件人不是黑名单」
+        时才被注册泳道接受，所以这里直接跑 ``_email_otp_candidate``，而不是只看
+        消息条数。
+        """
+        payload = '{"code":"483920","message":"","retryable":false,"success":true}'
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://ima3.example/api/secret/target@icloud.com",
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(len(messages), 1)
+        candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code|login code")
+        self.assertEqual(candidate["otp"], "483920")
+
+    def test_api_json_channel_reads_nested_and_text_only_codes(self):
+        """码可能不在顶层 ``code`` 上：嵌套字段与纯文本兜底都要能取到。"""
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://ima3.example/api/secret/target@icloud.com",
+        )
+        for payload, expected in (
+            ('{"code":"ok","data":{"otp":"445566"}}', "445566"),
+            ('{"code":"ok","message":"Your code is 778899"}', "778899"),
+        ):
+            with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+                messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+            candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code|login code")
+            self.assertEqual(candidate["otp"], expected)
+
+    def test_api_json_channel_does_not_read_ids_or_timestamps_as_codes(self):
+        """6 位数字不等于验证码：``id`` / ``timestamp`` 这类忽略键必须被挡掉。
+
+        字段名那一层跳过它们还不够 —— 兜底的文本提取器会重新看到整段 JSON，
+        所以 ``_api_payload_text`` 要用同一份忽略键集合先把 payload 压干净。
+        """
+        payload = '{"code":"ok","id":"123456","timestamp":"178952","success":true}'
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://ima3.example/api/secret/target@icloud.com",
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(messages, [])
+
+    def test_api_json_channel_snapshot_also_routes_through_the_json_branch(self):
+        """快照走的是另一个入口，必须同样分流，否则基线会把 JSON 记成「无邮件」。"""
+        payload = '{"code":"no_code","success":false}'
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://ima3.example/api/secret/target@icloud.com",
+        )
+        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
+             patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+            messages = mailbox_icloud_url.snapshot_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(messages, [])
+        card.assert_not_called()
+
+    def test_html_page_never_enters_the_json_branch(self):
+        """HTML 以 ``<`` 开头，``_load_json_payload`` 必须原样放行给卡片解析。"""
+        self.assertIsNone(mailbox_icloud_url._load_json_payload("<div class='card'></div>"))
+        self.assertIsNone(mailbox_icloud_url._load_json_payload(""))
+        self.assertEqual(mailbox_icloud_url._load_json_payload('{"code":"no_code"}'), {"code": "no_code"})
+
+
+class ICloudUrlSplitContractTests(unittest.TestCase):
+    """``split_icloud_url_line`` must drop every field after the URL.
+
+    The supplier ships four-part lines (``email----url----account----2fa``).  Keeping the
+    tail put it inside ``MailboxAccount.token`` and therefore inside the request URL.
+    On ``api798.com`` the tail lands in the ``auth_code`` query value and the server
+    answers ``HTTP 403 错误：授权码无效``; a 2026-08-10 probe read that as "channel dead"
+    and 33 usable mailboxes were deleted.  These tests pin the parse-boundary fix.
+    """
+
+    QUERY_STYLE = (
+        "jags-burly4k+oai02@icloud.com----"
+        "https://api798.com/latest?email=jags-burly4k%40icloud.com&auth_code=SSS888----"
+        "cyc08286688.----U43AD7FV2SAXY2MDO76PSOGO22OUOWLS"
+    )
+    PATH_STYLE = (
+        "slides-loosest-9i+oai02@icloud.com----"
+        "https://icloud-api.top/s/MRtNSlokiiLDRYx5HdUczYam78p9R2WO/slides-loosest-9i+oai02@icloud.com----"
+        "cyc08286688.----7E6Q5G2G3TG7I5NVU3WI5WRSIWYNKNCK"
+    )
+
+    def test_four_field_line_keeps_only_the_first_two_fields(self):
+        email, url = mailbox_icloud_url.split_icloud_url_line(self.QUERY_STYLE)
+        self.assertEqual(email, "jags-burly4k+oai02@icloud.com")
+        self.assertEqual(
+            url, "https://api798.com/latest?email=jags-burly4k%40icloud.com&auth_code=SSS888"
+        )
+        self.assertNotIn("----", url)
+        self.assertNotIn("cyc08286688.", url)
+
+    def test_query_style_tail_never_reaches_the_request_url(self):
+        """The decisive regression guard: ``auth_code`` must survive intact."""
+        from urllib.parse import parse_qsl, urlsplit
+
+        mailbox = mailbox_parsers._parse_icloud_url_line(self.QUERY_STYLE, "pool.txt", 1)
+        request_url = mailbox_icloud_url._with_message_limit(mailbox.token, 25)
+        query = dict(parse_qsl(urlsplit(request_url).query))
+
+        self.assertEqual(query["auth_code"], "SSS888")
+        self.assertNotIn("----", request_url)
+        self.assertEqual(query["n"], "25")
+
+    def test_path_style_tail_is_also_dropped(self):
+        email, url = mailbox_icloud_url.split_icloud_url_line(self.PATH_STYLE)
+        self.assertEqual(email, "slides-loosest-9i+oai02@icloud.com")
+        self.assertEqual(
+            url,
+            "https://icloud-api.top/s/MRtNSlokiiLDRYx5HdUczYam78p9R2WO/"
+            "slides-loosest-9i+oai02@icloud.com",
+        )
+        self.assertNotIn("----", url)
+
+    def test_two_field_line_is_unchanged(self):
+        line = "plain@icloud.com----https://mail.example/messages/secret/plain@icloud.com"
+        self.assertEqual(
+            mailbox_icloud_url.split_icloud_url_line(line),
+            ("plain@icloud.com", "https://mail.example/messages/secret/plain@icloud.com"),
+        )
+
+    def test_concatenated_records_keep_the_first_record_intact(self):
+        """Two records glued on one line: the first must parse, not be corrupted."""
+        line = (
+            "first@icloud.com----https://icloud-api.top/s/T/first@icloud.com"
+            "--------"
+            "second@icloud.com----https://icloud-api.top/s/T2/second@icloud.com"
+        )
+        email, url = mailbox_icloud_url.split_icloud_url_line(line)
+        self.assertEqual(email, "first@icloud.com")
+        self.assertEqual(url, "https://icloud-api.top/s/T/first@icloud.com")
+
+    def test_three_hyphen_two_field_line_is_unchanged(self):
+        line = "second@icloud.com---http://mail.example/messages/secret/second@icloud.com"
+        self.assertEqual(
+            mailbox_icloud_url.split_icloud_url_line(line),
+            ("second@icloud.com", "http://mail.example/messages/secret/second@icloud.com"),
+        )
+
+    def test_a_non_http_second_field_is_still_rejected(self):
+        self.assertEqual(
+            mailbox_icloud_url.split_icloud_url_line("who@icloud.com----notaurl----tail"),
+            ("", ""),
+        )
+
+    def test_a_non_icloud_domain_is_still_rejected(self):
+        self.assertFalse(
+            mailbox_icloud_url.is_icloud_url_line("who@gmail.com----https://h/s/T/who@gmail.com")
+        )
+
+    def test_pool_loader_drops_the_tail_for_a_four_field_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "icloud.txt"
+            path.write_text(self.QUERY_STYLE + "\n" + self.PATH_STYLE + "\n", encoding="utf-8")
+
+            records = mailbox_parsers._parse_mailbox_token_file(path)
+
+        self.assertEqual(len(records), 2)
+        self.assertTrue(all(record.provider == "icloud_url" for record in records))
+        for record in records:
+            self.assertNotIn("----", record.token)
+            self.assertNotIn("cyc08286688.", record.token)
+
+
+class LatestMailJsChannelTests(unittest.TestCase):
+    """``api798.com`` 的 ``/latest`` 页面：正文藏在 JS 字符串里，卡片分支必然读成 0 封。
+
+    实测背景（2026-09-16）：批次抽中 ``jags-burly4k+oai02@icloud.com``（provider
+    ``api798.com``），OpenAI 于 23:48:03 发码，页面显示同一秒的接收时间与越南语主题，
+    验证码 ``494652`` 就嵌在 ``var htmlContent = "…"`` 里 —— 而
+    ``fetch_icloud_url_messages`` 返回 0 封，轮询 303s 后 ``email_otp_poll_timeout``。
+    同批 17 个 ``icloud-api.top`` 邮箱不受影响。
+    """
+
+    LATEST_PAGE = (
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>最新邮件</title></head><body>"
+        "<div class=\"container\"><h1>最新邮件信息</h1>"
+        "<div class=\"info\"><div class=\"label\">接收时间：</div>"
+        "<div class=\"time\">2026年09月16日 23:48:03 (北京时间)</div></div>"
+        "<div class=\"info\"><div class=\"label\">邮件主题：</div>"
+        "<div class=\"subject\">Mã xác minh tạm thời của bạn cho ChatGPT</div></div>"
+        "<div class=\"info\"><div class=\"label\">邮件内容：</div>"
+        "<iframe class=\"email-frame\" id=\"emailFrame\"></iframe></div></div>"
+        "<script>setTimeout(function(){ location.reload(); }, 30000);\n"
+        "(function() { var frame = document.getElementById(\"emailFrame\");"
+        # 正文必须是**完整邮件**：验证码提取器要求验证码附近有 code/verification/chatgpt
+        # 之类的上下文标记（否则 `_looks_fake_otp_context` 会把它当样式数字丢掉），
+        # 所以这里保留真实邮件里的 "ChatGPT" 标题与 font-size 样式。
+        " var htmlContent = \"<html>\\r\\n  <head><title>M\\u00e3 x\\u00e1c minh</title></head>"
+        "\\r\\n  <body><p style=\\\"font-size: 16px;\\\">Your login code</p>"
+        "\\r\\n  <p>494652</p></body>\\r\\n</html>\";"
+        " frame.srcdoc = htmlContent; })();</script></body></html>"
+    )
+    EMAIL = "jags-burly4k+oai02@icloud.com"
+    URL = "https://api798.example/latest?email=jags-burly4k%40icloud.com&auth_code=SSS888"
+
+    def _mailbox(self):
+        return MailboxAccount(email=self.EMAIL, provider="icloud_url", token=self.URL)
+
+    def test_latest_page_yields_the_embedded_js_body(self):
+        messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
+
+        self.assertIsNotNone(messages)
+        self.assertEqual(len(messages), 1)
+        body = messages[0]["body"]["content"]
+        self.assertIn("<html>", body)
+        self.assertIn("494652", body)
+        # 转义必须被解开，否则验证码会被埋在 \\uXXXX 与 \\r\\n 里
+        self.assertNotIn("\\r\\n", body)
+        self.assertIn("Mã xác minh", body)
+
+    def test_latest_mail_otp_is_extractable_by_the_shared_extractor(self):
+        messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
+
+        self.assertEqual(_extract_otp_from_text(messages[0]["body"]["content"]), "494652")
+
+    def test_latest_mail_subject_is_normalized_to_login_code(self):
+        """主题必须被改写成 ``… login code``，否则过不了注册泳道的关键词过滤。"""
+        messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
+
+        self.assertTrue(messages[0]["subject"].endswith("login code"))
+        self.assertIn("ChatGPT", messages[0]["subject"])
+
+    def test_latest_mail_received_at_is_beijing_time(self):
+        messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
+
+        self.assertEqual(messages[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
+        # 解析得出时刻才会参与 issued_after 比较，而不是落回「0 ⇒ 不比较」
+        self.assertEqual(_message_received_ts(messages[0]), 1789573683)
+
+    def test_the_no_mail_page_is_not_mistaken_for_the_latest_layout(self):
+        self.assertIsNone(
+            mailbox_icloud_url._latest_mail_js_message(
+                "<h1>未找到匹配的邮件</h1>", email=self.EMAIL
+            )
+        )
+
+    def test_a_card_page_is_not_mistaken_for_the_latest_layout(self):
+        self.assertIsNone(
+            mailbox_icloud_url._latest_mail_js_message(
+                "<div class='card'><div class='su'>x</div></div>", email=self.EMAIL
+            )
+        )
+        self.assertIsNone(mailbox_icloud_url._latest_mail_js_message("", email=self.EMAIL))
+
+    def test_markers_without_the_js_body_still_report_the_subject(self):
+        """版式对但没有正文时不返回 None —— 否则「读不出」会伪装成「没邮件」。"""
+        page = (
+            "<h1>最新邮件信息</h1>"
+            "<div class=\"label\">接收时间：</div><div class=\"time\">2026年09月16日 23:48:03 (北京时间)</div>"
+            "<div class=\"label\">邮件主题：</div><div class=\"subject\">Subject only</div>"
+        )
+        messages = mailbox_icloud_url._latest_mail_js_message(page, email=self.EMAIL)
+
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["subject"], "Subject only")
+        self.assertEqual(messages[0]["body"]["content"], "")
+
+    def test_js_string_escapes_are_decoded(self):
+        self.assertEqual(
+            mailbox_icloud_url._decode_js_string('a\\"b\\r\\nM\\u00e3\\/c'), 'a"b\r\nMã/c'
+        )
+        self.assertEqual(mailbox_icloud_url._decode_js_string("plain"), "plain")
+
+    def test_unparseable_time_does_not_invent_a_timestamp(self):
+        self.assertEqual(mailbox_icloud_url._latest_mail_received_at("刚刚"), "")
+        self.assertEqual(mailbox_icloud_url._latest_mail_received_at(""), "")
+
+    def test_fetch_dispatches_the_latest_layout_before_the_card_parser(self):
+        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
+             patch.object(mailbox_icloud_url.curl_requests, "get",
+                          return_value=_Response(text=self.LATEST_PAGE)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
+
+        card.assert_not_called()
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
+
+    def test_snapshot_also_dispatches_the_latest_layout(self):
+        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
+             patch.object(mailbox_icloud_url.curl_requests, "get",
+                          return_value=_Response(text=self.LATEST_PAGE)):
+            messages = mailbox_icloud_url.snapshot_icloud_url_messages(self._mailbox(), limit=5)
+
+        card.assert_not_called()
+        self.assertEqual(len(messages), 1)
+
+    def test_a_card_page_still_reaches_the_card_parser(self):
+        """新分支不许把 ``icloud-api.top`` 的卡片页截胡。"""
+        page = (
+            "<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div>"
+            "<div class=\"su\">你的临时 ChatGPT 登录代码</div>"
+            "<div class=\"dt\">Mon, 03 Aug 2026 06:32:17 +0000 (UTC)</div>"
+            "<div class=\"bd\">你的临时代码：654321</div></div>"
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get",
+                          return_value=_Response(text=page)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn("654321", messages[0]["body"]["content"])
 
 
 if __name__ == "__main__":
