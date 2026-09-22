@@ -51,11 +51,22 @@ PLACEHOLDER = re.compile(
 #   site_key  —— reCAPTCHA / hCaptcha 的**公钥**，设计上就随页面公开，不是秘密
 #   probe / placeholder / persistence / fallback —— 探测串、占位串、注册表键名
 #   unauthorized / error / status —— 错误码常量，只是名字里恰好含 auth/code
+#   passwordless —— 同上，`PASSWORDLESS_SIGNUP_CODE = "identity_provider_mismatch"`
+#                   是「无密码注册撞上身份提供方」的错误码，名字里的 PASSWORDLESS
+#                   恰好含 PASSWORD 才被 PAT2 命中，值是错误码不是凭据
 # 原则：宁可漏也不吵。一吵就被 --no-verify 绕过，门禁等于没有。
 VARNAME_SKIP = re.compile(
-    r'(site[_-]?key|probe|placeholder|persistence|fallback|unauthorized|error|status)',
+    r'(site[_-]?key|probe|placeholder|persistence|fallback|unauthorized|error|status|passwordless)',
     re.I,
 )
+
+# 名字以 `_ENV` / `_VAR` 结尾的，存的是**环境变量名**，不是值本身。
+# 实测：`SESSION_TOKEN_ENV = "PP_SESSION_TOKEN"`（services/protocol-payment/common/
+# file_loading.py:57）是各提取器读取 session cookie 时查的那个环境变量名，
+# 字面量就是查找键，里面没有秘密 —— 但它含 TOKEN 且长度 16，被 PAT2 命中。
+# 用**后缀**而不是子串来跳过，`ENVIRONMENT_TOKEN = "ghp_..."` 这类仍会被抓。
+VARNAME_SKIP_SUFFIX = re.compile(r'(_env|_env_name|_var|_var_name)$', re.I)
+
 
 # tests/ 不扫：测试必须构造假凭据才能验证脱敏逻辑，通用高熵匹配在这里必然误报
 # （本仓实测 11 条命中全是 fixture 假值）。测试文件由 test_precommit_guard.py
@@ -115,7 +126,7 @@ for fp in iter_files():
             m = p.search(line)
             if not m:
                 continue
-            if VARNAME_SKIP.search(m.group('name')):
+            if VARNAME_SKIP.search(m.group('name')) or VARNAME_SKIP_SUFFIX.search(m.group('name')):
                 continue
             val = m.group('val')
             if PLACEHOLDER.match(val):

@@ -18,7 +18,15 @@ from sms_tool.registration_result import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HANDLERS = REPO_ROOT / "sms_tool" / "registration_handlers.py"
+FINALIZE = REPO_ROOT / "sms_tool" / "registration_finalize.py"
 ORCHESTRATOR = REPO_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
+
+# The protocol path's result assembly moved from HANDLERS to FINALIZE in a2349d7
+# ("extract result-assembly stages into registration_finalize"), which left
+# HANDLERS with a delegating wrapper.  Both files are scanned, and the shared
+# builder must be called exactly once across the pair -- that keeps the guard
+# meaningful wherever the assembly lives next.
+PROTOCOL_PATH = (HANDLERS, FINALIZE)
 
 
 class BuildRegistrationFailureResultTests(unittest.TestCase):
@@ -100,12 +108,12 @@ class SharedAssemblyGuardTests(unittest.TestCase):
     """Both paths must assemble results through the shared builder."""
 
     def test_both_paths_call_the_shared_builder(self):
-        for path in (HANDLERS, ORCHESTRATOR):
-            with self.subTest(file=path.name):
-                tree = ast.parse(path.read_text(encoding="utf-8"))
+        for label, paths in (("protocol", PROTOCOL_PATH), ("browser", (ORCHESTRATOR,))):
+            with self.subTest(path=label):
                 calls = [
-                    node
-                    for node in ast.walk(tree)
+                    path.name
+                    for path in paths
+                    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
                     if isinstance(node, ast.Call)
                     and (
                         (isinstance(node.func, ast.Name) and node.func.id == "build_registration_result")
@@ -115,7 +123,12 @@ class SharedAssemblyGuardTests(unittest.TestCase):
                         )
                     )
                 ]
-                self.assertEqual(len(calls), 1)
+                self.assertEqual(
+                    len(calls),
+                    1,
+                    f"{label} path must assemble its result through the shared "
+                    f"builder exactly once, found it in {calls}",
+                )
 
     def test_no_raw_result_literal_with_contract_keys_remains(self):
         # Failure-path dicts and the resume checkpoint legitimately carry a
@@ -123,7 +136,7 @@ class SharedAssemblyGuardTests(unittest.TestCase):
         # assembly shape: a dict literal assigned to a variable named
         # ``result`` that sets assembly-only keys.
         sentinel_keys = {"register_method", "session_type", "plan_type", "registration_success_basis"}
-        for path in (HANDLERS, ORCHESTRATOR):
+        for path in PROTOCOL_PATH + (ORCHESTRATOR,):
             with self.subTest(file=path.name):
                 tree = ast.parse(path.read_text(encoding="utf-8"))
                 for node in ast.walk(tree):
