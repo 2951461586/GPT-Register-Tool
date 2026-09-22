@@ -10,7 +10,12 @@ import re
 # this file?" answerable, which is the prerequisite for writing a real
 # migration. Bump it whenever EXTRA_COLUMNS or the CREATE TABLE statements
 # change shape.
-SCHEMA_VERSION = 1
+#
+# 2 (2026-09-22): added the `environment_ledger` table plus its two partial
+#   unique indexes. Purely additive -- `CREATE TABLE IF NOT EXISTS` and
+#   `CREATE INDEX IF NOT EXISTS` create it on an existing database, so a v1 file
+#   upgrades by being opened. Nothing to backfill.
+SCHEMA_VERSION = 2
 
 
 EXTRA_COLUMNS = {

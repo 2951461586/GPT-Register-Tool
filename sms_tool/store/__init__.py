@@ -60,6 +60,16 @@ from .markers import (
     mark_promotion_status,
     clear_stale_promotion_at_marker,
 )
+from .environment_ledger import (
+    DEFAULT_LEASE_TTL_SECONDS,
+    acquire_environment_lease,
+    environment_ledger_stats,
+    exit_key_from_affinity,
+    list_environment_leases,
+    record_environment_observations,
+    release_environment_lease,
+    sweep_expired_environment_leases,
+)
 from .constants import (
     EMAIL_RE,
     EXTRA_COLUMNS,
@@ -76,5 +86,7 @@ __all__ = [
     'get_account_record', 'get_account_record_by_id', 'get_account_records', 'list_account_records', 'get_device_context', 'migrate_account_email', 'rebuild_from_session_dir',
     'list_terminal_remail_accounts', 'mark_quota_status', 'mark_account_health_result', 'mark_promotion_status', 'clear_stale_promotion_at_marker', 'EMAIL_RE',
     'EXTRA_COLUMNS', 'KNOWN_EMAIL_DOMAINS',
+    'DEFAULT_LEASE_TTL_SECONDS', 'acquire_environment_lease', 'environment_ledger_stats', 'exit_key_from_affinity',
+    'list_environment_leases', 'record_environment_observations', 'release_environment_lease', 'sweep_expired_environment_leases',
 ]
 

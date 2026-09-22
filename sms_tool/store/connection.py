@@ -222,6 +222,56 @@ def _init_database_uncached(path=None, runtime_config: ConfigInput = None):
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_registration_checkpoints_state ON registration_checkpoints(state)")
+        # Time-boxed egress/fingerprint leases (store/environment_ledger.py).
+        #
+        # The two UNIQUE indexes are PARTIAL, filtered to live leases.  That
+        # predicate is the whole point: this install's pool is ten entries, so a
+        # batch of fifty has to reuse exits -- a permanent-uniqueness index (the
+        # shape the reference project uses) would refuse to allocate the
+        # eleventh task.  Filtering on `state` turns the constraint into a
+        # concurrency arbiter instead of a capacity wall; `expires_at` is checked
+        # by sweep_expired_environment_leases() before every acquire, so any row
+        # still marked 'leased' at insert time is genuinely live.
+        #
+        # The `<> ''` term keeps unkeyed rows out of the index entirely, so a
+        # lease with no exit key cannot collide with another keyless one.
+        #
+        # `exit_ip` and `observed_fingerprint_key` are deliberately NOT unique:
+        # they are only knowable after the registration ran (one measured, one
+        # chosen by the driver mid-attempt), so they cannot gate anything --
+        # record_environment_observations() reports a collision instead of
+        # refusing a write that is already a fact.  Measured: making the observed
+        # profile unique turns a collision report into an IntegrityError.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS environment_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exit_key TEXT NOT NULL DEFAULT '',
+                exit_ip TEXT NOT NULL DEFAULT '',
+                fingerprint_key TEXT NOT NULL DEFAULT '',
+                observed_fingerprint_key TEXT NOT NULL DEFAULT '',
+                account_ref TEXT NOT NULL DEFAULT '',
+                batch_id TEXT NOT NULL DEFAULT '',
+                state TEXT NOT NULL DEFAULT 'leased',
+                reason TEXT NOT NULL DEFAULT '',
+                leased_at INTEGER NOT NULL DEFAULT 0,
+                expires_at INTEGER NOT NULL DEFAULT 0,
+                released_at INTEGER NOT NULL DEFAULT 0,
+                active_holders INTEGER NOT NULL DEFAULT 1,
+                reuse_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_ledger_live_exit
+            ON environment_ledger(exit_key)
+            WHERE state='leased' AND exit_key <> ''
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_ledger_live_fingerprint
+            ON environment_ledger(fingerprint_key)
+            WHERE state='leased' AND fingerprint_key <> ''
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_ledger_expires ON environment_ledger(expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_ledger_exit_ip ON environment_ledger(exit_ip)")
         # Stamp the schema shape. PRAGMA cannot be parameterised, and the value
         # is a module constant (not user data), so this interpolation is safe.
         # Written before commit() so a failed init never leaves a version stamp

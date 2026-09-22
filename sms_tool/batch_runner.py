@@ -8,6 +8,8 @@ from .batch_circuit_breaker import BatchCircuitBreaker
 from .error_classification import classify_error
 from .failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from .config import CFG
+from .accounts.account_identity import proxy_egress_key
+from .geo import shared_geo_resolver
 from .paypal_proxy import infer_proxy_country
 from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection, refresh_proxy_sid
 from .sanitizer import sanitize_text
@@ -17,7 +19,14 @@ from .proxy_health import ProxyHealthTracker
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .registration_policy import registration_retry_decision
 from .registration_result import safe_proxy_audit
-from .storage import get_account_records, get_registration_checkpoints, list_account_records
+from .storage import (
+    acquire_environment_lease,
+    get_account_records,
+    get_registration_checkpoints,
+    list_account_records,
+    record_environment_observations,
+    release_environment_lease,
+)
 
 
 class RegistrationProxyPool(list):
@@ -121,6 +130,75 @@ def _registration_proxy_metadata(
         "scheme": str(parsed.scheme or "").strip().lower(),
         "rotation_generation": 0,
     }
+
+
+def _cached_exit_ip(proxy: str | None) -> str:
+    """Measured exit IP for this egress, from the shared geo cache ONLY.
+
+    Never probes.  This runs on the way out of a registration attempt, so a geo
+    round-trip here would be latency bought for a bookkeeping field.  The cache is
+    warm whenever an upstream stage already measured this egress (the payment
+    preflight, the orchestrator), which is the common case; otherwise the field
+    stays blank rather than inventing a value.
+    """
+    try:
+        geo = shared_geo_resolver().cached(proxy)
+    except Exception:
+        return ""
+    return str(getattr(geo, "ip", "") or "") if geo else ""
+
+
+def _hold_environment_lease(worker_proxy: str | None, *, account_ref: str, batch_id: str) -> dict:
+    """Take a time-boxed lease on the egress this attempt is about to use.
+
+    Advisory, never blocking.  A registration must not be refused because of
+    bookkeeping, and with ten exits a batch of fifty has to share them -- so
+    ``allow_reuse`` records the sharing (holder count + reason) rather than
+    failing.  The point is that the sharing becomes visible, which it never was.
+
+    The lease covers one ATTEMPT, not the whole account: ``refresh_proxy_sid``
+    mints a new sticky session per attempt, so the exit that goes on the wire
+    differs between attempts and an account-lifetime lease would be pinned to the
+    wrong key from the second attempt on.
+    """
+    try:
+        return acquire_environment_lease(
+            exit_key=proxy_egress_key(worker_proxy),
+            account_ref=account_ref,
+            batch_id=batch_id,
+            allow_reuse=True,
+        )
+    except Exception:
+        # The ledger is an observation channel; it must never take a batch down.
+        return {}
+
+
+def _release_environment_lease(lease, result, worker_proxy: str | None) -> None:
+    """Attach what the wire actually showed, then let the egress go.
+
+    The profile is read from the result rather than passed in: the driver picks it
+    inside the attempt (``registration_handlers`` sets ``auth_fingerprint_profile``
+    from the bound fingerprint), so it is not knowable before the call.  Both
+    observations are best-effort -- the request has already gone out by now, so a
+    bookkeeping failure must not turn a success into a failure.
+    """
+    if not isinstance(lease, dict) or not lease.get("lease_id"):
+        return
+    payload = result if isinstance(result, dict) else {}
+    lease_id = int(lease["lease_id"])
+    try:
+        record_environment_observations(
+            lease_id,
+            exit_ip=_cached_exit_ip(worker_proxy),
+            fingerprint_key=str(payload.get("auth_fingerprint_profile") or ""),
+        )
+    except Exception:
+        pass
+    reason = "registered" if payload.get("success") else str(payload.get("failure_class") or "failed")
+    try:
+        release_environment_lease(lease_id, reason=reason[:60])
+    except Exception:
+        pass
 
 
 def _unique_mailboxes(mailboxes):
@@ -591,6 +669,13 @@ def run_batch_impl(
             proxy_metadata["attempt"] = attempt
             proxy_metadata["rotation_generation"] = account_rotation_generation
             sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
+            # Hold this attempt's egress for as long as it is on the wire.  The
+            # pool is round-robined, so two live accounts would otherwise leave
+            # through the same address and nothing recorded it
+            # (store/environment_ledger.py).
+            environment_lease = _hold_environment_lease(
+                worker_proxy, account_ref=mailbox_email, batch_id=batch_id
+            )
             try:
                 call_kwargs = dict(
                     proxy=worker_proxy,
@@ -623,6 +708,7 @@ def run_batch_impl(
                 }
             if not isinstance(result, dict):
                 result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
+            _release_environment_lease(environment_lease, result, worker_proxy)
             # Only transport failures are evidence about the selected proxy.
             # Internal/configuration/account/mailbox failures must not poison
             # the shared proxy-health journal.
