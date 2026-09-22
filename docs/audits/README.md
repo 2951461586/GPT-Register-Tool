@@ -39,11 +39,19 @@ from `docs/README.md`.
 
 ## Contents
 
-31 files. Grouped by kind; newest first within each group.
+40 files. Grouped by kind; newest first within each group.
+
+> Recount: `ls docs/audits/*.md docs/audits/*.txt | wc -l` — this number is
+> pinned by `tests/test_audits_readme_index.py`, which fails when it and the
+> directory disagree. It read "31 files" while the directory held 39 for weeks,
+> and no gate could see it: `docs_consistency_scan.py` checks line-number
+> pointers, symbol tables, release pointers and `sms_tool/providers/*.py`
+> paths — never a document's self-reported entry count.
 ### Scan reports（针对具体链路的横向扫描）
 
 | File | Date | Subject |
 |---|---|---|
+| `scan-2026-09-22-architecture-coupling-dirs-docs.md` | 09-22 | 四轴只读扫描（耦合 / 架构 / 目录 / 文档）：门禁 9 项全绿、**0 个 import-time 环**（8 组静态互指边全由懒加载或门面断开）；A1 `account_recovery` 兼容壳只被 6 文件消费却逼出 `recovery_batch` 31 处函数体内导入（删壳即消 SCC-8）；A2 `docs/audits/README.md` 自述「31 files」实际 40；A3 13 个库模块从未入文档（`cli_parsers/`、`geo/`、`pay_link/` 三整包）；A4 `upi_link.py` 2914 行不在任何拆分计划内；A6 初判「C# 第 6 轮死成员 10/16 项仍在」**在落地阶段被自己推翻**（第 6 轮当天已全删，只剩墓碑注释 —— 数命中次数不读命中行的误报）。**含对第 6 轮两处结论的纠正**（`store/connection` 反向依赖属有意设计；`account_deatived` 有跨语言契约测试钉住，非死分支）与 8 条探针误报坑清单 |
 | `scan-2026-09-16-icloud2-api798-false-negative.md` | 09-16 | `api798.com` 的「0/33」是**测量假象**而非渠道故障：4 段格式的尾巴被拼进 `auth_code` ⇒ 403「授权码无效」；同日同出口实测干净 URL 回 200、带尾巴回 403、`GARBAGE` 对照回同样的 403 ⇒ 渠道活着，33 个邮箱曾被 `icloud2_remove403.py` 误删。含 50 条按 2 段形态导入的处置、残留风险与回收路径 |
 | `scan-2026-09-09-round3-architecture-coupling-docs.md` | 09-09 | 注册 / 支付 / 测活 / 日志四个方向：架构、耦合、文档规范。P0 三条 + P1 七条已落地，P2 部分落地（§17–§20 为落地记录） |
 | `scan-2026-09-08-round2-protocol-browser-registration.md` | 09-08 | 第二轮：注册链路本体（协议注册 + 无头浏览器），对照 `Regert888/gpt-auto-register`。四个 P0 |

@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import json
 import unittest
 from sms_tool import workspace_scan

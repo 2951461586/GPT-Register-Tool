@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import Mock, patch
 
 from sms_tool import phone_proxy

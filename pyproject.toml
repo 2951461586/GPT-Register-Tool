@@ -4,9 +4,24 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-# Narrow gate: syntax errors + ambiguous names + undefined names. Wider rule
-# sets would flag the documented facade re-exports (ADR-0009) — widen only
-# together with per-file-ignores for the compat facades.
+# Syntax errors + ambiguous names + undefined names.
+#
+# F401 is deliberately NOT in this list, and that is a *decision*, not an
+# oversight.  The four-axis audit on 2026-09-22 found 456 unused imports that no
+# automation could see (`select` is an allow-list, so "ruff passes" only ever
+# meant "the selected rules passed").  Widening `select` to include F401 would
+# require driving those 456 to zero, and two attempts at that both failed:
+# "unused" is a claim about *every* consumption channel, and a static analyser
+# cannot enumerate them -- 3 -> 6 -> 8 channels were discovered the hard way,
+# each round costing a full revert of the 456 edits.
+#
+# The gap is closed by a ratchet instead of a delete:
+#   scripts/unused_import_ratchet.py     -- per-file count, fails on growth
+#   scripts/unused_import_baseline.json  -- frozen baseline (456 across 84 files)
+#   tests/test_unused_import_ratchet.py  -- wires it into pytest
+# Per-file rather than a single total, so a shrink in one file cannot mask
+# growth in another.  Rationale, measurements and the failure history:
+# docs/audits/scan-2026-09-22-architecture-coupling-dirs-docs.md
 select = ["E9", "F63", "F7", "F82"]
 
 [tool.ruff.lint.isort]
