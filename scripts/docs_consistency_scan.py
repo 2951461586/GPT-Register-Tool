@@ -215,7 +215,13 @@ def check_csharp_file_refs(failures: list[str]) -> None:
 
     * a reference containing ``*`` or ``?`` is skipped -- glob expansion is
       tool-dependent (git pathspec ``*`` crosses ``/``; shell and ``pathlib``
-      do not), and guessing would make the gate lie in either direction;
+      do not), and guessing would make the gate lie in either direction.
+      Measured 2026-09-23: ``CSHARP_REF``'s character classes already exclude
+      both characters, so a glob-shaped reference is never matched in the first
+      place and the guard below is **unreachable today**. It is kept because it
+      becomes load-bearing the moment the regex is widened --
+      ``tests/test_docs_consistency.py`` pins the property with a mutation that
+      does exactly that;
     * a bare name passes if **any** root has it, even when the doc's prose sits
       next to a different project's table -- a filename is not a path claim;
     * ``bin``/``obj`` are excluded from the index, so a generated copy cannot
