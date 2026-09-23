@@ -48,6 +48,12 @@ public sealed class DesktopReadProtocolTests
         public void UpdateConfig(Action<JsonObject> mutate)
         {
         }
+
+        // The provider-scoped reload is a settings-dialog concern; this stub is
+        // only here to satisfy ISettingsService for the backend client tests.
+        public void ReloadProviderScopedFields(IEnumerable<SettingFieldViewModel> fields, string provider)
+        {
+        }
     }
 
     /// <summary>Records one-shot invocations so a fallback is observable.</summary>

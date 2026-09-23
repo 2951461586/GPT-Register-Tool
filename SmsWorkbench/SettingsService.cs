@@ -15,6 +15,14 @@ namespace SmsWorkbench
         string GetString(string path, string fallback = "");
         IReadOnlyList<string> GetStringList(string path);
         void UpdateConfig(Action<JsonObject> mutate);
+
+        /// <summary>
+        /// Re-resolve the provider-scoped fields in place for an explicit
+        /// 供应商 selection. Called when the dropdown changes, so the API Key
+        /// box cannot keep displaying another provider's key. See
+        /// <see cref="SettingsService.ReloadProviderScopedFields"/>.
+        /// </summary>
+        void ReloadProviderScopedFields(IEnumerable<SettingFieldViewModel> fields, string provider);
     }
 
     public sealed class SettingsService : ISettingsService
@@ -240,6 +248,20 @@ namespace SmsWorkbench
         }
 
         private string ReadValue(JsonObject root, SettingDefinition definition)
+            => ReadValue(root, definition, SelectedProvider(Text(root, "phone_reuse.source")));
+
+        /// <summary>
+        /// Value of <paramref name="definition"/> resolved as if
+        /// <paramref name="provider"/> were the 供应商 selection.
+        ///
+        /// <para>
+        /// The provider is a parameter instead of being read from
+        /// `phone_reuse.source` inside, because the dialog can change that
+        /// selection before anything is saved -- see
+        /// <see cref="ReloadProviderScopedFields"/>.
+        /// </para>
+        /// </summary>
+        private string ReadValue(JsonObject root, SettingDefinition definition, string provider)
         {
             string value = definition.Key switch
             {
@@ -274,18 +296,66 @@ namespace SmsWorkbench
                     "DE").ToUpperInvariant(),
                 "token_file" or "python_path" => NormalizePathSetting(
                     Text(root, definition.JsonPath), definition.DefaultValue),
-                // Provider-scoped fields resolve against whatever
-                // phone_reuse.source currently says, so switching provider in
-                // the dialog shows that provider's own key rather than the
-                // previously selected one's.
-                _ when definition.JsonPath.Contains(ProviderToken, StringComparison.Ordinal) => Text(
+                // Provider-scoped fields resolve against the provider passed in,
+                // so switching provider in the dialog shows that provider's own
+                // key rather than the previously selected one's -- provided the
+                // dialog actually re-resolves them, which is what
+                // ReloadProviderScopedFields is for. Resolving here once, at
+                // Load time, is not enough: the operator changes the selector
+                // afterwards.
+                _ when IsProviderScoped(definition) => Text(
                     root,
-                    ResolveProviderPath(
-                        definition.JsonPath,
-                        SelectedProvider(Text(root, "phone_reuse.source")))),
+                    ResolveProviderPath(definition.JsonPath, provider)),
                 _ => Text(root, definition.JsonPath)
             };
             return string.IsNullOrWhiteSpace(value) ? definition.DefaultValue : value;
+        }
+
+        /// <summary>
+        /// Whether a catalog entry lives under the selected SMS provider, i.e.
+        /// its path carries the <c>{provider}</c> placeholder.
+        /// </summary>
+        internal static bool IsProviderScoped(SettingDefinition definition)
+            => definition.JsonPath.Contains(ProviderToken, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Re-resolve every provider-scoped field against an explicit provider
+        /// selection, in place, without writing anything to disk.
+        ///
+        /// <para>
+        /// 🔴 This exists because the 供应商 dropdown and the API Key box are
+        /// **separate controls that must stay in step**. Resolving
+        /// provider-scoped paths only at <see cref="Load"/> time leaves the box
+        /// showing the provider that was selected when the dialog opened. The
+        /// operator then picks a different provider and saves, and
+        /// <see cref="Save"/> -- correctly, by its own contract -- writes the
+        /// displayed value to the **newly selected** section. The result is not
+        /// a harmless no-op but a cross-provider overwrite: measured on
+        /// 2026-09-23, one pass through the dropdown stamped smsbower's key into
+        /// `phone_reuse.herosms`, `.grizzly` and `.nexsms`, plus its empty
+        /// endpoint and its `sms_timeout`. All three vendors then answered with a
+        /// credential error (herosms `401 BAD_KEY`, grizzly `NO_KEY`, nexsms
+        /// `401`), which the desktop surfaced as "无法读取 OpenAI 号码地区和价格档位"
+        /// -- a message that names neither the key nor the section, so the
+        /// config looked broken rather than stale.
+        /// </para>
+        ///
+        /// <para>
+        /// Note the earlier `ResolveProviderPath` fix in <see cref="Save"/>
+        /// addressed the write *target*; this addresses the displayed *value*.
+        /// Both are needed, and fixing only the first is what turned a
+        /// misdirected write into a silently mislabelled one.
+        /// </para>
+        /// </summary>
+        public void ReloadProviderScopedFields(IEnumerable<SettingFieldViewModel> fields, string provider)
+        {
+            JsonObject? root = ReadRootIfExists();
+            if (root == null) return;
+            string resolved = SelectedProvider(provider);
+            foreach (SettingFieldViewModel field in fields.Where(field => IsProviderScoped(field.Definition)))
+            {
+                field.Value = ReadValue(root, field.Definition, resolved);
+            }
         }
 
         /// <summary>

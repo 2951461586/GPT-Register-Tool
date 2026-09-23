@@ -154,8 +154,40 @@ def _missing_key_hint(provider: str) -> str:
         return f"set phone_reuse.{provider}.api_key in proxy.json, or its provider env var"
 
 
+def _phone_key_collisions(config: Mapping[str, Any]) -> list[str]:
+    """Providers sharing one api_key, or ``[]``.
+
+    Lazy import for the same reason as :func:`_phone_provider_rows`: ``doctor``
+    has to stay runnable on a machine where the registration dependencies are
+    not installed yet.
+    """
+    try:
+        from .phone_reuse import provider_key_collisions
+    except Exception:  # pragma: no cover - advisory only
+        return []
+    section = config.get("phone_reuse")
+    try:
+        return provider_key_collisions(dict(section) if isinstance(section, Mapping) else {})
+    except Exception:  # pragma: no cover - advisory only
+        return []
+
+
 def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
-    """Warn when the provider ``phone_reuse.source`` selects has no usable key.
+    """Warn when the SMS provider keys cannot be right.
+
+    Two conditions, both warn rather than fail:
+
+    1. The provider ``phone_reuse.source`` selects has no usable key -- that is
+       the one that blocks a run.
+    2. Two or more providers share one *resolved* key. No single vendor account
+       serves two of these registries, so a shared key always means a save wrote
+       one vendor's credential into another vendor's section. Measured
+       2026-09-23: one pass through the desktop's 设置 → 接码供应商 dropdown did
+       exactly that for three providers, and every vendor then answered with a
+       credential error that the desktop rendered as "无法读取 OpenAI 号码地区和价格档位"
+       -- a message naming neither the key nor the section, so a stale
+       credential looked like a broken vendor. This check is offline, which is
+       what lets it run on a machine with no network.
 
     Only the selected provider can block a run, so the other three being
     unconfigured is normal and must not become three separate warnings -- that
@@ -179,6 +211,24 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
         "%s=%s" % (row["provider"], row["origin"] if row["configured"] else "missing")
         for row in rows
     )
+    collisions = _phone_key_collisions(config)
+    if collisions:
+        detail = "providers sharing one api_key: %s; %s" % (", ".join(collisions), summary)
+        hint = (
+            "Give each provider its own key: %s. A shared key means one vendor's "
+            "credential was written into another vendor's section -- on the desktop "
+            "that is the 设置 → 接码供应商 dropdown, which decides which section the "
+            "API Key box writes to."
+            % ", ".join("phone_reuse.%s.api_key" % provider for provider in collisions)
+        )
+        if not selected["configured"]:
+            # Both facts, in this order: a missing key for the selected provider
+            # is what blocks a run, and letting the collision branch return first
+            # would hide it -- the collision is the more surprising finding, not
+            # the more urgent one.
+            detail = "selected=%s has no key; %s" % (selected["provider"], detail)
+            hint = _missing_key_hint(selected["provider"]) + " " + hint
+        return _check("phone_providers", "warn", detail, hint)
     if selected["configured"]:
         return _check(
             "phone_providers", "ok",

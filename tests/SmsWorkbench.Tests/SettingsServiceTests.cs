@@ -450,6 +450,86 @@ public sealed class SettingsServiceTests
         Assert.Equal("smsbower", root["phone_reuse"]!["source"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// 🔴 Regression test for the 2026-09-23 cross-provider key overwrite.
+    ///
+    /// <para>
+    /// The 供应商 dropdown and the API Key box are separate controls. Loading
+    /// resolves provider-scoped paths once, so without a reload the box keeps
+    /// showing the provider selected at open time; picking another provider and
+    /// saving then writes that value into the newly selected section. Measured
+    /// on 2026-09-23: one pass through the dropdown put smsbower's key into
+    /// `phone_reuse.herosms`, `.grizzly` and `.nexsms`, and all three vendors
+    /// answered with a credential error (401 BAD_KEY / NO_KEY / 401).
+    /// </para>
+    ///
+    /// <para>
+    /// Driven through <see cref="SettingsViewModel"/> rather than by calling
+    /// <c>ReloadProviderScopedFields</c> directly, because the subscription that
+    /// makes it happen is the part that was missing -- a direct call would pass
+    /// against the unfixed view model.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void SwitchingProviderReloadsProviderScopedBoxesSoSaveCannotStampAnotherProvidersKey()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
+            {
+              "phone_reuse": {
+                "source": "smsbower",
+                "smsbower": { "api_key": "bower-key", "sms_timeout": 60 },
+                "herosms": { "api_key": "hero-key", "sms_timeout": 120, "endpoint": "https://hero" }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        var viewModel = new SettingsViewModel(service, new StubFileLauncher());
+
+        Assert.Equal("bower-key", Field(viewModel.Categories, "phone_provider_api_key").Value);
+        Assert.Equal("60", Field(viewModel.Categories, "phone_provider_sms_timeout").Value);
+
+        Field(viewModel.Categories, "phone_provider").Value = "herosms";
+
+        // Reloaded, not carried over.
+        Assert.Equal("hero-key", Field(viewModel.Categories, "phone_provider_api_key").Value);
+        Assert.Equal("120", Field(viewModel.Categories, "phone_provider_sms_timeout").Value);
+        Assert.Equal("https://hero", Field(viewModel.Categories, "phone_provider_endpoint").Value);
+
+        SettingsSaveResult result = service.Save(viewModel.Categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal("herosms", root["phone_reuse"]!["source"]!.GetValue<string>());
+        Assert.Equal("hero-key", root["phone_reuse"]!["herosms"]!["api_key"]!.GetValue<string>());
+        // The negative half: before the fix this leaf held "bower-key", i.e. the
+        // wrong provider's credential sitting under the right section name.
+        Assert.Equal("bower-key", root["phone_reuse"]!["smsbower"]!["api_key"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The reload subscription is keyed on a field key string, so a catalog
+    /// rename would silently stop it firing -- the failure mode being "the box
+    /// keeps the previous provider's key" again. Pin the coupling.
+    /// </summary>
+    [Fact]
+    public void ProviderSelectorFieldIsAnOptionsFieldOnPhoneReuseSource()
+    {
+        using var fixture = new TemporaryDirectory();
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+
+        SettingFieldViewModel selector = Field(categories, SettingsViewModel.ProviderSelectorKey);
+
+        Assert.Equal(SettingFieldKind.Options, selector.Kind);
+        Assert.Equal("phone_reuse.source", selector.Definition.JsonPath);
+        // And the token the reload filters on must actually be present, or every
+        // provider-scoped box is skipped.
+        Assert.Contains(
+            categories.SelectMany(category => category.Sections).SelectMany(section => section.Fields),
+            field => field.Definition.JsonPath == "phone_reuse.{provider}.api_key");
+    }
+
     private static SettingFieldViewModel Field(
         IEnumerable<SettingsCategoryViewModel> categories,
         string key)

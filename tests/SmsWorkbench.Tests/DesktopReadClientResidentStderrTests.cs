@@ -51,6 +51,12 @@ public sealed class DesktopReadClientResidentStderrTests
         public void UpdateConfig(Action<JsonObject> mutate)
         {
         }
+
+        // The provider-scoped reload is a settings-dialog concern; this stub is
+        // only here to satisfy ISettingsService for the backend client tests.
+        public void ReloadProviderScopedFields(IEnumerable<SettingFieldViewModel> fields, string provider)
+        {
+        }
     }
 
     /// <summary>Flood stderr, then echo each request back on stdout.</summary>
