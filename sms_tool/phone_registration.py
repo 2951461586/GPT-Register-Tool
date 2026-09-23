@@ -93,15 +93,18 @@ def run_phone_register(
 
     # Step 0: Acquire phone number from the selected provider
     _tick("0-Acquire phone number")
-    from .smsbower import SmsBowerClient, normalize_phone
-    sms_client = SmsBowerClient(api_key=api_key, endpoint=endpoint)
+    from .phone_reuse import rental_client, rental_handle_for
+    from .smsbower import normalize_phone
+
+    sms_client = rental_client(provider, api_key, endpoint)
     try:
         activation = sms_client.get_number(service="dr", country=country)
     except Exception as e:
         _safe_tock()
         return _failure_result(f"{provider}_get_number_failed: {e}")
     phone = normalize_phone(activation.phone)
-    print(f"[*] Phone: {phone}  Activation ID: {activation.activation_id}")
+    handle = rental_handle_for(provider, activation)
+    print(f"[*] Phone: {phone}  rental={handle}")
     _tock()
 
     # Step 1: Establish the device identity. Flow tokens are minted immediately
@@ -173,7 +176,7 @@ def run_phone_register(
         print(f"  Redirect: {redirect_path}")
 
         if _is_existing_login_redirect(r.url):
-            sms_client.cancel(activation.activation_id)
+            sms_client.cancel(handle)
             return _failure_result("phone_already_registered_or_login_redirect", email=phone)
 
         # Step 3: Register with phone + password
@@ -212,17 +215,17 @@ def run_phone_register(
         if r.status_code != 200:
             err_code = reg_data.get("error", {}).get("code", "")
             err_msg = reg_data.get("error", {}).get("message", str(reg_data))
-            sms_client.cancel(activation.activation_id)
+            sms_client.cancel(handle)
             return _failure_result(f"user_register: {err_msg}", email=phone)
 
         # Step 4: Wait for SMS code from SMSBower
         _tick("4-Wait SMS code")
         print(f"[*] Waiting for SMS code on {phone}...")
-        code_result = sms_client.wait_for_code(activation.activation_id, timeout=180, interval=5)
+        code_result = sms_client.wait_for_code(handle, timeout=180, interval=5)
         _tock()
 
         if not code_result or not code_result.get("code"):
-            sms_client.cancel(activation.activation_id)
+            sms_client.cancel(handle)
             return _failure_result("sms_code_timeout", email=phone)
 
         sms_code = code_result["code"]
@@ -251,12 +254,12 @@ def run_phone_register(
 
         if validate_resp.status_code != 200:
             err_msg = validate_data.get("error", {}).get("message", str(validate_data))
-            sms_client.cancel(activation.activation_id)
+            sms_client.cancel(handle)
             return _failure_result(f"phone_otp_validate: {err_msg}", email=phone)
 
         # Mark SMSBower activation as complete
         try:
-            sms_client.complete(activation.activation_id)
+            sms_client.complete(handle)
         except Exception:
             pass
 
@@ -306,7 +309,7 @@ def run_phone_register(
 
     except Exception as e:
         _safe_tock()
-        try: sms_client.cancel(activation.activation_id)
+        try: sms_client.cancel(handle)
         except Exception: pass
         return _failure_result(f"transport_error: {e}", email=phone)
 
