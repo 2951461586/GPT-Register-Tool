@@ -3,6 +3,7 @@ import contextlib
 import io
 import logging
 import unittest
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
@@ -11,6 +12,7 @@ from sms_tool import phone_reuse
 from sms_tool import sms_providers
 from sms_tool.phone_reuse import PhonePool, PhoneSlot, _complete_smsbower_activation, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
 from sms_tool.sms_provider_adapter import SmsProviderAdapter
+from sms_tool.nexsms import NexSmsClient
 from sms_tool.smsbower import SmsBowerActivation, SmsBowerClient, normalize_country, normalize_phone, normalize_service
 
 
@@ -1006,17 +1008,47 @@ class RentalProviderLifecycleTests(unittest.TestCase):
             with self.subTest(provider=key):
                 self.assertTrue(phone_reuse._is_rental_slot(self._slot(key)))
 
-    def test_a_provider_without_a_client_is_not_a_rental_slot(self):
-        """``nexsms`` is declared but unverified, so it must fail loudly rather
-        than be routed to a rental adapter that would rent nothing."""
+    def test_the_nexsms_family_is_a_rental_slot_with_its_own_client(self):
+        """``nexsms`` rents through a different protocol family, so it must be a
+        rental slot *and* must get its own client.
+
+        Sending it the sms-activate client would put an ``?action=`` query string
+        on a REST endpoint: the vendor would answer an envelope with a non-zero
+        ``code``, the tool would report a vendor error, and the real defect --
+        wrong client for the protocol -- would never be named.
+
+        This replaced a test asserting the opposite (that ``nexsms`` was refused
+        because it had no client). The invariant moved with the code: what
+        matters now is *which* client it gets, not whether it gets one.
+        """
         slot = self._slot("nexsms")
+        self.assertTrue(phone_reuse._is_rental_slot(slot))
+        self.assertIsInstance(phone_reuse._rental_client(slot), NexSmsClient)
+        self.assertIsInstance(
+            phone_reuse._sms_provider_adapter(slot),
+            phone_reuse._RentalSmsProviderAdapter,
+        )
+
+    def test_an_unknown_provider_is_not_a_rental_slot(self):
+        slot = self._slot("nope")
         self.assertFalse(phone_reuse._is_rental_slot(slot))
         with self.assertRaises(ValueError) as caught:
             phone_reuse._sms_provider_adapter(slot)
-        self.assertIn("nexsms", str(caught.exception))
+        self.assertIn("nope", str(caught.exception))
+
+    def test_the_nexsms_client_uses_the_slots_own_endpoint(self):
+        slot = self._slot("nexsms")
+        with patch("sms_tool.phone_reuse.NexSmsClient") as factory:
+            phone_reuse._nexsms_client(slot)
+        factory.assert_called_once_with(
+            api_key="test-key",
+            endpoint=sms_providers.PROVIDERS["nexsms"].default_endpoint,
+        )
 
     def test_the_rental_client_uses_the_slots_own_endpoint(self):
         for key in sms_providers.available_provider_keys():
+            if not sms_providers.PROVIDERS[key].speaks_sms_activate:
+                continue
             with self.subTest(provider=key):
                 slot = self._slot(key)
                 with patch("sms_tool.phone_reuse.SmsBowerClient") as factory:
@@ -1147,6 +1179,80 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         self.assertEqual({}, section)
         self.assertEqual(
             sms_providers.default_endpoint(sms_providers.DEFAULT_PROVIDER), endpoint)
+
+    # -- the other half of `_provider_selection` ---------------------------- #
+    #
+    # Selecting the right provider/key/endpoint is only half the job: the flow
+    # also has to build the right *client* and address the rental by the right
+    # *key*. Both were hardcoded to the sms-activate family, which stayed
+    # harmless only while every selectable vendor spoke it.
+
+    def test_the_standalone_flow_gets_the_protocol_appropriate_client(self):
+        """`--phone-register` used to construct `SmsBowerClient` unconditionally.
+
+        That was a shape defect rather than a live one while all three selectable
+        vendors spoke sms-activate -- the class name was wrong but the wire format
+        matched. Offering `nexsms` turned it into a real failure: the sms-activate
+        client would post ``/stubs/handler_api.php?action=…`` at
+        ``api.nexsms.net`` and surface an opaque vendor error.
+        """
+        nexsms = phone_reuse.rental_client("nexsms", "nex-key", "https://api.nexsms.net")
+        self.assertIsInstance(nexsms, NexSmsClient)
+        self.assertEqual("nex-key", nexsms.api_key)
+        self.assertEqual("https://api.nexsms.net", nexsms.endpoint)
+
+        sms_activate = phone_reuse.rental_client("herosms", "hero-key", "https://hero.example")
+        self.assertIsInstance(sms_activate, SmsBowerClient)
+        self.assertEqual("hero-key", sms_activate.api_key)
+
+        with self.assertRaises(ValueError):
+            phone_reuse.rental_client("not-a-provider", "k", "https://x.example")
+
+    def test_the_lifecycle_key_follows_the_protocol_family(self):
+        from types import SimpleNamespace
+
+        # NexSMS issues no activation id, so the phone number *is* the key.
+        self.assertEqual(
+            "+233555123456",
+            phone_reuse.rental_handle_for(
+                "nexsms", SimpleNamespace(phone="+233555123456", activation_id="")
+            ),
+        )
+        self.assertEqual(
+            "act-9",
+            phone_reuse.rental_handle_for(
+                "herosms", SimpleNamespace(phone="+233555123456", activation_id="act-9")
+            ),
+        )
+        # Nothing rented yet reads as "no handle" for either family.
+        self.assertEqual(
+            "", phone_reuse.rental_handle_for("nexsms", SimpleNamespace(phone=""))
+        )
+
+    def test_the_slot_and_the_standalone_flow_share_one_rule(self):
+        """Two entry points, one rule -- otherwise they drift apart silently."""
+        for provider in sms_providers.available_provider_keys():
+            slot = PhoneSlot(provider=provider, phone="+233555123456", activation_id="act-9")
+            self.assertEqual(
+                phone_reuse.rental_handle_for(provider, slot),
+                slot.rental_handle,
+                provider,
+            )
+
+    def test_the_standalone_flow_never_names_a_concrete_client(self):
+        """Read the source: the defect *is* a hardcoded class name.
+
+        Exercising `run_phone_register` end to end needs a live registration, so
+        no behavioural test can reach the choice of client class. The invariant is
+        therefore pinned where it actually lives -- the module must route through
+        `rental_client`, and must not name a vendor's client at all.
+        """
+        source = (
+            Path(__file__).resolve().parents[1] / "sms_tool" / "phone_registration.py"
+        ).read_text(encoding="utf-8")
+        for name in ("SmsBowerClient", "NexSmsClient"):
+            self.assertNotIn(name, source)
+        self.assertIn("rental_client(provider, api_key, endpoint)", source)
 
 
 if __name__ == "__main__":
