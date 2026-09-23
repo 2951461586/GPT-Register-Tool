@@ -27,9 +27,17 @@ from sms_tool.batch_runner import (
 from sms_tool.geo import ProxyGeo, remember_proxy_geo, reset_shared_geo_resolver
 from sms_tool.store import environment_ledger_stats, list_environment_leases
 
-# Two entries of the real pool shape: one host, two sticky session ids.
-POOL_A = "http://w7wgt28979-region-VN-sid-AAAAAAAA-t-5:xum33c6k@us.lajiaohttp.net:2000"
-POOL_B = "http://w7wgt28979-region-VN-sid-BBBBBBBB-t-5:xum33c6k@us.lajiaohttp.net:2000"
+# Two entries of the pool shape: one host, two sticky session ids.
+#
+# 🔴 The account and password are SYNTHETIC placeholders, not a live proxy
+# account.  An earlier revision hard-coded a real one here, which put a
+# working credential into a public repository.  Only the host + sid pair is
+# load-bearing (`proxy_egress_key` drops the credentials), and the host is
+# already named in docs/registration-and-proxy-architecture.md.
+POOL_ACCOUNT = "testacct1"
+POOL_PASSWORD = "testpw12"
+POOL_A = f"http://{POOL_ACCOUNT}-region-VN-sid-AAAAAAAA-t-5:{POOL_PASSWORD}@us.lajiaohttp.net:2000"
+POOL_B = f"http://{POOL_ACCOUNT}-region-VN-sid-BBBBBBBB-t-5:{POOL_PASSWORD}@us.lajiaohttp.net:2000"
 
 
 class _TempDb:

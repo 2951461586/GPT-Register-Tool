@@ -34,9 +34,17 @@ from sms_tool.store import (
 )
 from sms_tool.store.constants import SCHEMA_VERSION
 
-# Two entries of the real pool shape: one host, two sticky session ids.
-POOL_A = "http://w7wgt28979-region-VN-sid-AAAAAAAA-t-5:xum33c6k@us.lajiaohttp.net:2000"
-POOL_B = "http://w7wgt28979-region-VN-sid-BBBBBBBB-t-5:xum33c6k@us.lajiaohttp.net:2000"
+# Two entries of the pool shape: one host, two sticky session ids.
+#
+# 🔴 The account and password are SYNTHETIC placeholders, not a live proxy
+# account.  An earlier revision hard-coded a real one here, which put a
+# working credential into a public repository.  Only the host + sid pair is
+# load-bearing (`proxy_egress_key` drops the credentials), and the host is
+# already named in docs/registration-and-proxy-architecture.md.
+POOL_ACCOUNT = "testacct1"
+POOL_PASSWORD = "testpw12"
+POOL_A = f"http://{POOL_ACCOUNT}-region-VN-sid-AAAAAAAA-t-5:{POOL_PASSWORD}@us.lajiaohttp.net:2000"
+POOL_B = f"http://{POOL_ACCOUNT}-region-VN-sid-BBBBBBBB-t-5:{POOL_PASSWORD}@us.lajiaohttp.net:2000"
 
 
 def _config(tmp_path: Path) -> dict:
@@ -71,8 +79,10 @@ def test_egress_key_separates_sticky_sessions_on_one_host():
 def test_egress_key_is_stable_and_credential_free():
     key_a, _ = _keys()
     assert proxy_egress_key(POOL_A) == key_a
-    assert "xum33c6k" not in key_a, "the password must not reach the ledger"
-    assert "w7wgt28979" not in key_a, "the account name must not reach the ledger"
+    # Derived from the fixture, not a copied literal: with a hard-coded
+    # string these assertions went vacuous the moment POOL_A changed.
+    assert POOL_PASSWORD not in key_a, "the password must not reach the ledger"
+    assert POOL_ACCOUNT not in key_a, "the account name must not reach the ledger"
 
 
 def test_egress_key_of_nothing_is_empty():
