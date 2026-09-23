@@ -16,7 +16,9 @@ this exists to prevent.
 
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252.
 """
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -255,12 +257,28 @@ class CSharpConsumerTests(unittest.TestCase):
 
     def test_the_report_names_what_it_excluded(self):
         """A silent exclusion is indistinguishable from a bug. `--doctor` has to
-        say which keys it is not judging."""
-        report = config_usage.format_unread_report(config_usage.unread_config_keys())
-        for key in config_usage.CSHARP_CONSUMED_KEYS:
-            with self.subTest(key=key):
-                self.assertIn(key, report)
-        self.assertIn("never read by Python source", report)
+        say which keys it is not judging -- **including when the unread set is
+        empty**.
+
+        The empty case is not hypothetical: CI builds ``config.json`` from
+        ``config.example.json``, where every documented key is wired, so
+        ``unread_config_keys()`` returns ``[]`` there. Driving this off whatever
+        the local operator config happens to contain made the assertion green
+        locally and red in CI -- and hid the real defect, which was
+        ``format_unread_report`` returning early on the empty case and dropping
+        the exclusion note entirely.
+        """
+        for keys in ([], config_usage.unread_config_keys()):
+            report = config_usage.format_unread_report(keys)
+            for key in config_usage.CSHARP_CONSUMED_KEYS:
+                with self.subTest(key=key, empty=not keys):
+                    self.assertIn(key, report)
+        # The Python-only wording must survive too, which needs at least one
+        # unread key -- so build one instead of borrowing the operator's.
+        populated = config_usage.format_unread_report(
+            [config_usage.UnreadKey("demo.key", ("config.json",), False)]
+        )
+        self.assertIn("never read by Python source", populated)
 
     def test_write_only_keys_are_still_reported(self):
         """The counter-example that justifies keeping the scan Python-only.
@@ -269,17 +287,33 @@ class CSharpConsumerTests(unittest.TestCase):
         nothing reads them back. If C# were scanned wholesale they would leave
         the dead set -- 1 fixed false positive traded for 2 new false negatives.
         They must stay reported.
+
+        The config is **built here** rather than read from the operator's shards.
+        CI's ``config.json`` is a copy of ``config.example.json`` and carries
+        neither key, so the earlier form asserted against an empty set in CI
+        while passing locally -- the same asymmetry that let the stale pin in
+        ``test_detector_produces_the_pinned_set`` survive.
         """
-        writes = csharp_literals("SmsWorkbench/MainWindow.SmsProvider.cs")
-        reported = {item.path for item in config_usage.unread_config_keys()}
-        for key in (
+        keys = (
             "phone_reuse.smsbower.service_name",
             "phone_reuse.smsbower.country_name_zh",
-        ):
+        )
+        writes = csharp_literals("SmsWorkbench/MainWindow.SmsProvider.cs")
+        for key in keys:
             with self.subTest(key=key):
                 self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
-                self.assertIn(key, reported, "write-only key was suppressed")
                 self.assertNotIn(key, config_usage.CSHARP_CONSUMED_KEYS)
+
+        section = {key.rsplit(".", 1)[-1]: "demo" for key in keys}
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "config.json").write_text(
+                json.dumps({"phone_reuse": {"smsbower": section}}),
+                encoding="utf-8",
+            )
+            reported = {item.path for item in config_usage.unread_config_keys(tmp)}
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertIn(key, reported, "write-only key was suppressed")
 
     def test_the_extractor_ignores_commented_out_literals(self):
         """Prove the extractor can fail, so the checks above are not vacuous."""
