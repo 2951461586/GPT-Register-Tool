@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
 
 from .config import CFG, initialize_runtime_config
 from .diagnostics import install_safe_stdio, safe_print
@@ -432,13 +431,18 @@ def _main_early_commands(args) -> bool:
 
         raise SystemExit(serve_forever())
     if getattr(args, "doctor", False):
-        from .config import default_config_path
+        from .config import default_config_dir
         from .doctor import print_doctor_report, run_doctor
 
-        # The canonical config now lives in the proxy/runtime/payment shards under
-        # the project root, so report the project root (not the legacy single
-        # config.json path) as the source to avoid a false bundled-fallback warning.
-        report = run_doctor(CFG, str(Path(default_config_path()).parent))
+        # The canonical config is the proxy/runtime/payment shards under the
+        # project root, so report that directory as the source. This used to be
+        # `default_config_path().parent`, which silently became `sms_tool/` once
+        # the legacy project-root config.json was archived -- i.e. the report
+        # named the directory holding the *bundled fallback* as the live config
+        # source. Nothing flagged it: `_probe_config` compares against the
+        # bundled *file* path, so a directory never matches and the status stays
+        # `ok`. The operator just read the wrong path.
+        report = run_doctor(CFG, str(default_config_dir()))
         if getattr(args, "json_output", False):
             print(json.dumps(report, ensure_ascii=False, indent=2))
         elif getattr(args, "desktop_ipc", False):
