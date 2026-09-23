@@ -93,7 +93,7 @@ namespace SmsWorkbench
                     Boolean("camoufox_keep_browser_open", "保留浏览器现场", "registration.drivers.camoufox.keep_browser_open", false)),
                 Section("接码供应商",
                     Options("phone_provider", "供应商", "phone_reuse.source", DefaultPhoneProvider,
-                        "smsbower", "herosms", "grizzly"),
+                        "smsbower", "herosms", "grizzly", "nexsms"),
                     Secret("phone_provider_api_key", "API Key", "phone_reuse.{provider}.api_key"),
                     Text("phone_provider_endpoint", "API 地址（留空用内置默认）", "phone_reuse.{provider}.endpoint"),
                     Integer("phone_provider_sms_timeout", "短信等待秒", "phone_reuse.{provider}.sms_timeout", "120"),

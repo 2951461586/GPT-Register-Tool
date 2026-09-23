@@ -66,17 +66,51 @@ class TestRegistryInvariants(unittest.TestCase):
             spec = registry.PROVIDERS[key]
             self.assertTrue(spec.default_endpoint, f"{key} has no default endpoint")
             self.assertTrue(spec.api_key_env, f"{key} has no api_key_env")
-            self.assertTrue(spec.speaks_sms_activate, f"{key} is available but not sms-activate")
+            self.assertTrue(
+                spec.has_client,
+                f"{key} is available but ships no client for protocol {spec.protocol!r}",
+            )
+
+    def test_the_available_flag_cannot_drift_from_the_protocol(self):
+        """``client_available`` is a hand-written declaration; ``has_client`` is
+        derived from ``protocol`` via ``IMPLEMENTED_PROTOCOLS``. They must agree
+        for every provider -- that agreement is what makes "we offer it" and "we
+        can talk to it" the same statement.
+
+        This replaces an assertion that at least one provider was unwired. That
+        held only while ``nexsms`` was reserved, so wiring it up would have
+        forced the assertion to be *deleted* rather than strengthened -- and the
+        risk was never "is some vendor unwired", it was "is the flag lying".
+        """
+        for key, spec in registry.PROVIDERS.items():
+            with self.subTest(provider=key):
+                self.assertEqual(
+                    spec.client_available,
+                    spec.has_client,
+                    f"{key}: client_available={spec.client_available} but protocol "
+                    f"{spec.protocol!r} implies has_client={spec.has_client}",
+                )
 
     def test_unavailable_providers_are_excluded_from_choices(self):
-        unavailable = [k for k, s in registry.PROVIDERS.items() if not s.client_available]
-        self.assertTrue(unavailable, "expected at least one reserved-but-unwired provider")
-        for key in unavailable:
-            self.assertNotIn(key, registry.available_provider_keys())
-            # Reserved names still resolve, so a config naming one is
-            # *recognised* and can be rejected with a reason rather than
-            # silently falling back to the default provider.
-            self.assertEqual(key, registry.normalize_provider(key))
+        """Conditional, not existential: *if* a provider is declared unwired it
+        must not be offered as a choice.
+
+        Nothing is unwired right now -- ``nexsms`` was the last reserved name and
+        it is wired -- so the loop passes vacuously. That is deliberate: the
+        previous ``assertTrue(unavailable)`` turned a *property* of the registry
+        into a *snapshot* of it, so a correct change (wiring the vendor up) made
+        it red for the wrong reason.
+        """
+        for key, spec in registry.PROVIDERS.items():
+            with self.subTest(provider=key):
+                if spec.client_available:
+                    self.assertIn(key, registry.available_provider_keys())
+                    continue
+                self.assertNotIn(key, registry.available_provider_keys())
+                # Reserved names still resolve, so a config naming one is
+                # *recognised* and can be rejected with a reason rather than
+                # silently falling back to the default provider.
+                self.assertEqual(key, registry.normalize_provider(key))
 
     def test_declaration_order_is_preserved_in_both_key_views(self):
         expected = tuple(registry.PROVIDERS)

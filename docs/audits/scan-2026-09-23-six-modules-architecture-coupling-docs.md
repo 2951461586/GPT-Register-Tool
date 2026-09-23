@@ -192,7 +192,7 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 - 下拉框选项 == C# 表；默认值必须是 `DefaultPhoneProvider` **常量**而不是字面量
 - **全 C# 生产面扫描**：`SmsProviderCatalog.cs` / `SettingsCatalog.cs` 之外**不许出现供应商键字面量**
   （按取值判，不按调用形态判 ⇒ 换供应商名、换调用点同样被抓）
-- `nexsms` 双向钉住（Python 侧保留但 `client_available=false`，桌面侧不许出现）
+- `nexsms` 由「双向钉住」升级为**双向一致**（09-23 接入后：Python 侧 `client_available=true` 且 `protocol=nexsms_json`，桌面侧**必须**出现第四行）。门禁判据从「两侧都不许有」改成三条更强的：`client_available == has_client`（手写声明不得与派生值分叉）、`nexsms` 端点**不带 handler 路径**（独立用例，因为逐项相等那条两侧一起写错也会通过）、以及 `nexsms` 的默认值必须等于 `DefaultPhoneProvider` 常量。
 - 注册表内**不许有凭据形态的 token**（`_CREDENTIAL` 正则，与 `sms_providers` 自己的守卫同判据）
 
 昨日实测的三处同源缺陷（弹窗选中供应商从没传到后端 / `phone_reuse.py` 的 12 个 `provider == "smsbower"` 守卫 /
@@ -200,13 +200,18 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 
 **本轮新发现（文档缺口，两条）**：
 
-1. `sms_providers.py` 是**唯一真源**，但全仓 `docs/**.md` 里只有 **1 个文件**提到它（`docs/TROUBLESHOOTING.md`）。
+1. `sms_providers.py` 是**唯一真源**，但扫描时全仓 `docs/**.md` 里只有 **1 个文件**提到它（`docs/TROUBLESHOOTING.md`）。
    对比：`phone_reuse` 出现在 17 个 md、`paypal_link` 20 个 —— **最新落地的架构基石文档足迹最小**。
+   ✅ **已落地 09-23**：N3-1 的交叉引用 + 当晚 `nexsms` 接入后，`docs/**.md` 里提到它的已有 **4 个**
+   （`docs/directory-map.md`、`docs/TROUBLESHOOTING.md`、`docs/audits/README.md`、本报告）。
 2. `docs/directory-map.md:58` 的「Mailbox and phone inventory」行原本只列举了 `sms_tool/sms_provider.py`（该文件 09-23 已改名为 `sms_provider_adapter.py`），
    **没有列 `sms_tool/sms_providers.py`**（两个名字只差一个字母，见 N3）。
-   ⚠️ 原因：`sms_providers.py` 目前**未跟踪**（§1），所以它连覆盖率测量的分母都进不去 ——
-   提交后「60」本会变成 61。✅ **已落地 09-23**：该行已补 `sms_providers.py` 并写明分工
-   ⇒ 提交后分母 241、命名 181、**未归属仍是 60**，不产生新的缺口。
+   ⚠️ 原因：`sms_providers.py` 当时**未跟踪**（§1），所以它连覆盖率测量的分母都进不去。
+   ✅ **已落地 09-23**：该行已补 `sms_providers.py` 并写明分工；当晚又补了 `sms_tool/nexsms.py`
+   （新协议族，见本节测试覆盖清单）。🔴 **原估计错了三处**：提交后分母不是 241 而是 **244** ——
+   同一提交还带进 `mailbox_pool_writer.py` / `page_truth.py` / `browser_profile_reclaim.py`
+   三个**未归属**模块，所以未归属是 **32** 而不是 30；`nexsms.py` 接入后为 **245 / 213 / 32**。
+   三列读数记在 `docs/directory-map.md:113-120`。
 
 ### 3.5 ⑤ config.json —— 判据措辞不严（N5），但机制本身很扎实
 
@@ -295,6 +300,16 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 这正好复用该脚本已有的「弱层只查存在性、不查语义」的设计（它的 docstring 明说弱层「必须永不因看不懂的指针而失败」）。
 ✅ **② 已落地 09-23**：新增 `check_csharp_file_refs`（三层设计里的第三层，理由见该函数 docstring）。
 **自证会红**：注入两个不存在的 `.cs` 引用 ⇒ 抓到 2 条；真实文档上仍 `passed`。
+✅ **守卫测试已补 09-23（当晚）**：`tests/test_docs_consistency.py` 新增 **7 条** ——
+一条断言（文档里引用的 `.cs` 必须存在）+ **六条钉住它的静默与边界**（裸名按任一项目解析 /
+路径形引用**不回落**裸名索引 / 只写类型名不算文件声明 / `bin`·`obj` 里的生成副本不能让已删名复活 /
+glob 形引用永不管 / 裸名只按声明的项目根解析）。
+**变异验证 5/5 按设计**：整体短路 ⇒ 4 红 · `bin`/`obj` 重新入索引 ⇒ 1 红 · 路径形回落裸名 ⇒ 2 红 ·
+**只放宽正则 ⇒ 保持绿** · 放宽正则**且**删守卫 ⇒ 1 红。
+🔴 顺带实测出一条事实：`CSHARP_REF` 的字符类本就排除 `*`/`?`，所以那条
+`if "*" in ref or "?" in ref: continue` 守卫**今天是不可达的**（glob 形引用根本没被匹配到，
+行为上一样不管，但守卫本身永不触发）。已在该函数 docstring 里写明，并由上面那个组合变异钉住
+「正则一旦放宽，它就真的承重」。
 ⚠️ **加之前它就先抓到一个真实缺陷** —— `docs/directory-map.md:179` 列着 `AccountScanResultInterpreter.cs`，
 而该文件三周前已作为零引用死代码删除（职责被 `BackendResultInterpreter.cs` 吸收）。
 
@@ -362,8 +377,8 @@ sms_tool/ 子包内模块         107 个
 
 ✅ **已落地 09-23**：4 行已补（`Mailbox facades and polling primitives` 10 · `Account domain core` 7 ·
 `Payment contracts, catalog and stage gates` 10 · `Proxy authority, lanes, health and bridge` 4，共 31 文件，
-全部具名清单）。命名覆盖 **180 → 211（88%）**，未归属 **60 → 29**，且**零新增跨行重复**（仍是 5 个）。
-⚠️ 提交后 `sms_providers.py` 进跟踪面，分母会 +1 ⇒ 未归属实际是 30（已在 §3.4 ② 记明）。
+全部具名清单）。**扫描树**上命名覆盖 **180 → 211（88%）**，未归属 **60 → 29**，且**零新增跨行重复**（仍是 5 个）。
+🔴 **211 / 29 是脏工作区的读数**：当时该提交引入的 4 个模块尚未跟踪，`git ls-files` 看不见它们，分母停在 240。提交后实测 **tracked 244 / 命名 212 / 未归属 32** —— 原估计「未归属 30」只算了 `sms_providers.py`，漏了同批的 `mailbox_pool_writer.py`、`page_truth.py`、`browser_profile_reclaim.py`。09-23 接入 `nexsms.py` 后为 **245 / 213 / 32**。三列读数记在 `docs/directory-map.md:113-120`（已在 §3.4 ② 记明）。
 
 ---
 
@@ -376,7 +391,7 @@ sms_tool/ 子包内模块         107 个
 | 3 | ✅ **已落地 09-23**：目录表给 `pay_link/` / `paypal_link/` / `sms_provider_adapter.py` / `sms_providers.py` 加交叉引用（N3-1） | 极小 | 零 | 否 |
 | 4 | ✅ **已落地 09-23**：`account-health.md` 顶部注明「本文件同时是 promotion 的契约文档」（§3.2） | 极小 | 零 | 否 |
 | 5 | ✅ **已落地 09-23**：修 `runtime.python_path` 的假阳性措辞（N5）—— 未读键 **61 → 60** | 极小 | 零 | 否 |
-| 6 | ✅ **已落地 09-23**：目录表补 4 个族行（具名清单），未归属 **60 → 29**、命名覆盖 **180 → 211（88%）**（N4） | 低 | 零 | 否 |
+| 6 | ✅ **已落地 09-23**：目录表补 4 个族行（具名清单）；扫描树读数未归属 **60 → 29**、命名覆盖 **180 → 211（88%）**，提交后实测 **212 / 32**（N4） | 低 | 零 | 否 |
 | 7 | ✅ **已落地 09-23**：`docs_consistency_scan.py` 加「文档提到的 `Xxx.cs` 必须存在」弱检查（N2-②），已自证会红 | 低 | 低（**已自测**：不因看不懂的引用而红） | 否 |
 | 8 | ✅ **已落地 09-23**：`sms_provider.py` → `sms_provider_adapter.py`（含测试改名） | 中 | 零（实测全绿，见 §5.1） | 是（已拍板） |
 
@@ -449,8 +464,11 @@ sms_tool/ 子包内模块         107 个
 2. **「文档说了 60」不等于「我能复算 60」**：复算前先确认自己的展开语义与文档一致，
    否则会得出「文档记错了」的错误结论（我第一版就是 127，差点据此报告文档陈旧）。
 3. **未跟踪文件不在 `git ls-files` 里** ⇒ 任何基于 `git ls-files` 的覆盖率测量，
-   都会把「新写但没提交」的模块**静默排除在分母之外**。本轮 `sms_providers.py` 就是这样消失的
-   —— 提交后「60」会变成 61。**测量未提交的工作区时，分母要单独确认。**
+   都会把「新写但没提交」的模块**静默排除在分母之外**。本轮 4 个新模块（`sms_providers.py` /
+   `mailbox_pool_writer.py` / `page_truth.py` / `browser_profile_reclaim.py`）都是这样消失的。
+   🔴 **我随后又把这个坑犯了第二次**：落地记录（§4.3）只把 `sms_providers.py` 算进分母，
+   估成「未归属 30」，漏了同批的另外 3 个 ⇒ 实测是 **32**（`docs/directory-map.md:113-120` 的三列对照表）。
+   **测量未提交的工作区时，分母要单独确认 —— 而且要把同批的每一个新文件都数进去。**
 4. **「未读配置键」的判据是 Python-only**（`SOURCE_DIRS` 不含 `SmsWorkbench/`）——
    拿它当「没人读」的证据前，必须补一次 C# 侧字面量扫描（本轮扫出 1 个假阳性）。
 5. **棘轮基线会有「陈旧键」，而且它不会红**：某文件早已清空未用导入，基线里那条键却还在。

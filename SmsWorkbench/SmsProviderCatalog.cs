@@ -22,9 +22,12 @@ namespace SmsWorkbench
     /// </para>
     ///
     /// <para>
-    /// `nexsms` is deliberately absent. The Python registry carries it as a
-    /// reserved entry whose wire protocol is unverified (`client_available =
-    /// false`), so it cannot serve a request; offering it here would put a
+    /// `nexsms` speaks a different protocol family from the other three: REST
+    /// under `/api/` with a `{code, message, data}` envelope and a lifecycle
+    /// keyed on the phone number rather than an activation id. It is listed here
+    /// because the Python side now ships a client for it
+    /// (`sms_tool/nexsms.py`); before that it was a reserved name with
+    /// `client_available = false`, and offering it would have put a
     /// selectable-but-broken choice in front of the operator.
     /// </para>
     /// </summary>
@@ -45,6 +48,13 @@ namespace SmsWorkbench
             new SmsProvider(
                 "grizzly", "Grizzly SMS",
                 "https://api.grizzlysms.com/stubs/handler_api.php", "GRIZZLY_API_KEY"),
+            // Base host only, no handler path: this vendor's client appends its
+            // own `/api/...` per call. A path copied from the rows above would
+            // still pass the parity test's string comparison but every request
+            // would 404.
+            new SmsProvider(
+                "nexsms", "NexSMS",
+                "https://api.nexsms.net", "NEXSMS_API_KEY"),
         };
 
         /// <summary>

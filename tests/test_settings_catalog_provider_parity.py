@@ -94,16 +94,16 @@ def dropdown_fallback_argument(text=None):
 class ExtractorTests(unittest.TestCase):
     """抽取器本身 —— 它读源码文本，解析失败会静默改变结论。"""
 
-    def test_the_three_row_parses(self):
+    def test_the_four_rows_parse(self):
         rows = csharp_providers()
-        self.assertEqual(len(rows), 3, rows)
+        self.assertEqual(len(rows), 4, rows)
 
     def test_a_reformatted_row_still_parses(self):
         text = 'new SmsProvider(\n    "k",\n    "L",\n    "https://h/x",\n    "K_ENV")\n'
         self.assertEqual(csharp_providers(text), [("k", "L", "https://h/x", "K_ENV")])
 
     def test_a_row_with_a_missing_field_is_not_silently_skipped(self):
-        """少一个字段时正则不匹配 ⇒ 行数变少 ⇒ 上面的 ``len == 3`` 会红。
+        """少一个字段时正则不匹配 ⇒ 行数变少 ⇒ 上面的 ``len == 4`` 会红。
         这条钉住「不匹配就是缺陷」，而不是「匹配到几个算几个」。"""
         text = 'new SmsProvider("k", "L", "https://h/x")\n'
         self.assertEqual(csharp_providers(text), [])
@@ -159,13 +159,32 @@ class ProviderParityTests(unittest.TestCase):
                          "supply the constant, not a literal: %r" % fallback)
         self.assertEqual(default_provider_constant(), sms_providers.DEFAULT_PROVIDER)
 
-    def test_nexsms_stays_out_of_the_desktop_surface(self):
-        """``nexsms`` 在 Python 里是保留条目（协议未验证、``client_available``
-        为假），不能出现在下拉框里 —— 否则操作员能选中一个必然失败的供应商。"""
-        self.assertNotIn("nexsms", {row[0] for row in csharp_providers()})
-        self.assertNotIn("nexsms", dropdown_options())
-        # 反向：Python 侧必须还留着它。真删了这条会红，提醒有人来重新评估。
-        self.assertIn("nexsms", sms_providers.provider_keys())
+    def test_nexsms_is_offered_once_a_client_exists(self):
+        """``nexsms`` 曾经是「保留但未接线」的条目，桌面端**故意不列它** ——
+        选中一个必然失败的供应商比不提供更糟。协议确认并接上客户端之后，
+        它就和其他三家一样必须出现在桌面上，否则操作员选不到。
+
+        这条是上面那条的**反向**：它不再断言「不在」，而是断言「在且端点对」。
+        真删掉客户端而忘了把 C# 行拿掉时，上面那条双向相等会红；反过来把
+        Python 的 ``client_available`` 关掉时这条会红。
+        """
+        self.assertIn("nexsms", {row[0] for row in csharp_providers()})
+        self.assertIn("nexsms", dropdown_options())
+        self.assertIn("nexsms", sms_providers.available_provider_keys())
+
+    def test_the_nexsms_endpoint_carries_no_handler_path(self):
+        """🔴 这一家是**基址**，不是 ``/stubs/handler_api.php``。
+
+        上面 ``test_the_default_endpoints_match`` 只做字符串相等，两侧一起写错
+        也会通过 —— 而后果是所有请求 404，且要到真跑一次才发现。这条独立钉住
+        形状：其余三家都带 handler 路径，唯独这家不能带。
+        """
+        endpoint = dict(
+            (key, url) for key, _label, url, _env in csharp_providers()
+        )["nexsms"]
+        self.assertNotIn("/stubs/", endpoint)
+        self.assertFalse(endpoint.rstrip("/").endswith(".php"), endpoint)
+        self.assertEqual(endpoint, sms_providers.default_endpoint("nexsms"))
 
 
 class NoCredentialsInCsharpCatalogTests(unittest.TestCase):

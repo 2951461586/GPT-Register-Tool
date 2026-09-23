@@ -273,15 +273,31 @@ class DispatcherTests(unittest.TestCase):
         for key in sms_providers.available_provider_keys():
             self.assertIn(key, message)
 
-    def test_a_reserved_but_unwired_provider_raises(self):
-        """``nexsms`` is declared so the name is taken, but no client exists --
-        it must not be dispatchable."""
+    def test_a_declared_name_without_a_client_protocol_is_not_dispatchable(self):
+        """The gate follows the *protocol*, not a hand-maintained key list.
+
+        Nothing in the registry is unwired today -- ``nexsms`` was the last
+        reserved name and it is wired -- so the loop is vacuous. The load-bearing
+        part is the synthetic spec: ``unverified`` is not in
+        ``IMPLEMENTED_PROTOCOLS``, so a vendor declared with it is neither
+        rentable nor dispatchable. That is the mechanism the previous
+        ``assertTrue(unwired)`` was standing in for, and unlike that assertion it
+        does not go red when a correct change wires a vendor up.
+        """
         unwired = [k for k, s in sms_providers.PROVIDERS.items() if not s.client_available]
-        self.assertTrue(unwired)
         for key in unwired:
             with self.subTest(provider=key):
                 with self.assertRaises(ValueError):
                     self._adapter(key)
+
+        synthetic = sms_providers.SmsProviderSpec(
+            "synthetic", "Synthetic", protocol=sms_providers.PROTOCOL_UNVERIFIED
+        )
+        self.assertNotIn(
+            sms_providers.PROTOCOL_UNVERIFIED, sms_providers.IMPLEMENTED_PROTOCOLS
+        )
+        self.assertFalse(synthetic.has_client)
+        self.assertFalse(synthetic.is_rental)
 
     def test_a_bare_slot_routes_to_the_default_provider(self):
         from sms_tool import phone_reuse
