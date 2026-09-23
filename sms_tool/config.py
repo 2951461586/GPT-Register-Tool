@@ -117,7 +117,33 @@ def _split_into_shards(data: Mapping[str, Any]) -> dict[str, dict]:
     return shards
 
 
-def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
+def _dump_json(data: Mapping[str, Any]) -> str:
+    """Canonical on-disk form of a shard.
+
+    This is the *only* place that decides how a shard is serialized, because
+    :func:`_atomic_write_json` compares its output against what is already on
+    disk to decide whether to write at all. A second serializer -- differing in
+    anything, even just ``ensure_ascii`` -- would make every save look like a
+    change, and the "write only what changed" path would silently degrade back
+    into the unconditional rewrite it replaced.
+    """
+    return json.dumps(dict(data), indent=2, ensure_ascii=False) + "\n"
+
+
+def _read_text_or_none(path: Path) -> str | None:
+    """Existing content of ``path``, or ``None`` when it is missing/unreadable.
+
+    Read with ``utf-8-sig`` -- the same codec :func:`load_merged_config` uses --
+    so a shard that picked up a BOM is compared on equal footing instead of
+    looking changed on every single save.
+    """
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+
+
+def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> bool:
     """Write JSON atomically: a temp file in the *same* directory + ``os.replace``.
 
     The temp file lives beside the target so ``os.replace`` is a same-volume
@@ -125,7 +151,15 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
     the previous content is kept first, because the three shard files *are*
     the whole application configuration — a crash mid-write used to leave a
     truncated JSON and take the app down with it.
+
+    Returns ``True`` when the file was written. A payload identical to what is
+    already on disk is a no-op, for two reasons that only show up in a sharded
+    layout: the mtime stays put (so "which shard changed" is again a usable
+    audit signal), and the previous ``.bak`` survives instead of being
+    overwritten by a save that changed nothing.
     """
+    if _read_text_or_none(path) == _dump_json(data):
+        return False
     directory = path.parent
     directory.mkdir(parents=True, exist_ok=True)
     backup = path.with_name(path.name + ".bak")
@@ -139,7 +173,7 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
     fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(json.dumps(dict(data), indent=2, ensure_ascii=False) + "\n")
+            handle.write(_dump_json(data))
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_name, path)
@@ -149,11 +183,21 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
         except OSError:
             pass
         raise
+    return True
 
 
-def _write_shards(shards: Mapping[str, Mapping], config_dir: Path) -> None:
+def _write_shards(shards: Mapping[str, Mapping], config_dir: Path) -> list[str]:
+    """Persist the shards, skipping any whose content is unchanged.
+
+    Returns the file names actually written. Callers and regression tests need
+    that list: "all three files exist" stays true whether or not anything was
+    written, so it cannot distinguish a working trim from a broken one.
+    """
+    written: list[str] = []
     for name, filename in SHARD_FILES.items():
-        _atomic_write_json(config_dir / filename, dict(shards[name]))
+        if _atomic_write_json(config_dir / filename, dict(shards[name])):
+            written.append(filename)
+    return written
 
 
 def load_merged_config() -> dict[str, Any]:
@@ -352,8 +396,28 @@ class LegacyConfigView(MutableMapping[str, Any]):
         self._overrides.clear()
 
 
+def default_config_dir() -> Path:
+    """Directory that holds the active configuration.
+
+    Configuration is a *set of shards* (proxy/runtime/payment) sitting in the
+    project root, not a single file, so "where does config live" is a directory
+    question. This exists because the previous idiom -- ``default_config_path()
+    .parent`` -- silently degraded the moment the legacy project-root
+    ``config.json`` was archived: the path then fell through to the *bundled
+    package* fallback and callers reported ``sms_tool/`` as the config source.
+    """
+    return _CONFIG_DIR
+
+
 def default_config_path() -> Path:
-    """Resolve config independently of the process current directory."""
+    """Legacy single-file path; prefer :func:`default_config_dir` in new code.
+
+    Resolves independently of the process current directory, preferring the
+    project-root ``config.json`` and falling back to the bundled package copy.
+    With the sharded layout the project-root file normally does not exist, so
+    this returns a path that is *not* a real config source -- any ``.parent``
+    derived from it points at the wrong directory.
+    """
     package_dir = Path(__file__).resolve().parent
     project_file = package_dir.parent / "config.json"
     package_file = package_dir / "config.json"

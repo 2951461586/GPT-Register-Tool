@@ -3,6 +3,7 @@
 #nullable enable
 
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -58,7 +59,20 @@ namespace SmsWorkbench
             ["sub2api"] = PaymentShard,
         };
 
-        private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions IndentedJson = new()
+        {
+            WriteIndented = true,
+            // Python serializes shards with json.dumps(..., ensure_ascii=False),
+            // which emits "+" and CJK literally. The default JavaScriptEncoder
+            // escapes both ("\u002B", "\u667A\u5229"), so a desktop save rewrote
+            // every non-ASCII byte in the file -- and the change-detection in
+            // WriteAtomic then saw a "changed" file on the Python side forever.
+            // UnsafeRelaxedJsonEscaping is the matching setting; the "unsafe" in
+            // its name refers to embedding JSON in HTML, which a config file
+            // never does. Observed before the fix: proxy.json held
+            // "\u667A\u5229" for what should have been "智利".
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
 
         /// <summary>Every file that participates in configuration, in the order
         /// used by the cache signature (shards first, then the legacy file).</summary>
@@ -74,6 +88,13 @@ namespace SmsWorkbench
             };
         }
 
+        /// <summary>
+        /// True when the sharded layout is in use. An empty <c>{}</c> shard counts
+        /// as present, which is the whole point of writing empty shards rather than
+        /// deleting them: this predicate must not flip back to false -- and hand
+        /// the app to the legacy branch -- just because the operator cleared every
+        /// setting.
+        /// </summary>
         public static bool AnyShardExists(IApplicationPaths paths)
         {
             string root = paths.RootDirectory;
@@ -148,12 +169,28 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Split a merged config object into the owned shard files. Each top-level
-        /// key is routed to its owning shard by ShardOwnership. A shard that ends
-        /// up with no keys has its file removed, otherwise the stale file would be
-        /// merged back on the next ReadMerged and resurrect keys the caller just
-        /// deleted.
+        /// key is routed to its owning shard by ShardOwnership.
+        ///
+        /// <para>
+        /// A shard that ends up with no keys is written as <c>{}</c> instead of
+        /// having its file deleted. Both languages read "at least one shard file
+        /// exists" as "the sharded layout is in use", so deleting all three used to
+        /// flip the app back onto the legacy single-file branch and resurrect
+        /// configuration the caller had just removed. An empty object merges to
+        /// nothing, so it still cannot bring a deleted key back -- the protection
+        /// the delete existed for is preserved, without the layout-flipping.
+        /// </para>
+        ///
+        /// <para>
+        /// Returns the shard file names actually written. A shard whose serialized
+        /// content already matches the file on disk is skipped: its mtime stays put
+        /// (so "which shard changed" is again a usable audit signal) and the
+        /// previous <c>.bak</c> is not overwritten by a save that changed nothing.
+        /// Callers that need "all three files exist" must assert on the files, not
+        /// on this list -- a fully unchanged save legitimately returns an empty one.
+        /// </para>
         /// </summary>
-        public static void WriteShards(IApplicationPaths paths, JsonObject root)
+        public static IReadOnlyList<string> WriteShards(IApplicationPaths paths, JsonObject root)
         {
             var buckets = new Dictionary<string, JsonObject>
             {
@@ -167,26 +204,13 @@ namespace SmsWorkbench
                 string owner = ShardOwnership.TryGetValue(pair.Key, out string? shard) ? shard : RuntimeShard;
                 buckets[owner][pair.Key] = pair.Value.DeepClone();
             }
-            foreach (var bucket in buckets)
+            var written = new List<string>();
+            foreach (string file in ShardFiles)
             {
-                if (bucket.Value.Count == 0)
-                    DeleteShard(paths, bucket.Key);
-                else
-                    WriteAtomic(paths, bucket.Key, bucket.Value);
+                if (WriteAtomic(paths, file, buckets[file]))
+                    written.Add(file);
             }
-        }
-
-        private static void DeleteShard(IApplicationPaths paths, string fileName)
-        {
-            try
-            {
-                string path = Path.Combine(paths.RootDirectory, fileName);
-                if (File.Exists(path)) File.Delete(path);
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
+            return written;
         }
 
         private static void DeepMerge(JsonObject target, JsonObject source)
@@ -207,14 +231,52 @@ namespace SmsWorkbench
             }
         }
 
-        private static void WriteAtomic(IApplicationPaths paths, string fileName, JsonObject content)
+        /// <summary>
+        /// Atomic, change-detecting write of a single shard.
+        ///
+        /// <para>
+        /// Mirrors Python's <c>_atomic_write_json</c> step for step: a temp file
+        /// beside the target, a <c>.bak</c> of the previous content, an fsync
+        /// before the rename, and a no-op when the payload already matches the
+        /// file. The desktop previously did none of that, so "the desktop writes
+        /// and Python keeps the backup" was a chain that never actually ran, and a
+        /// crash mid-write could leave a truncated shard -- which <em>is</em> the
+        /// entire application configuration.
+        /// </para>
+        ///
+        /// <returns><c>true</c> when the file was written.</returns>
+        /// </summary>
+        private static bool WriteAtomic(IApplicationPaths paths, string fileName, JsonObject content)
         {
             string path = Path.Combine(paths.RootDirectory, fileName);
+            // Trailing newline to match Python's `json.dumps(...) + "\n"`. The two
+            // writers must agree byte-for-byte, otherwise each side's change
+            // detection sees the other side's file as modified.
+            string payload = content.ToJsonString(IndentedJson) + "\n";
+            if (ReadTextOrNull(path) == payload) return false;
+
             string temporary = path + ".tmp." + Guid.NewGuid().ToString("N");
             try
             {
-                File.WriteAllText(temporary, content.ToJsonString(IndentedJson), new UTF8Encoding(false));
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        File.Copy(path, path + ".bak", overwrite: true);
+                    }
+                    catch
+                    {
+                        // Best-effort only; a locked backup must not fail the write.
+                    }
+                }
+                byte[] bytes = new UTF8Encoding(false).GetBytes(payload);
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(flushToDisk: true);
+                }
                 File.Move(temporary, path, overwrite: true);
+                return true;
             }
             finally
             {
@@ -226,6 +288,18 @@ namespace SmsWorkbench
                 {
                     // best-effort cleanup
                 }
+            }
+        }
+
+        private static string? ReadTextOrNull(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : null;
+            }
+            catch
+            {
+                return null;
             }
         }
     }
