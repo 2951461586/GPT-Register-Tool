@@ -228,7 +228,12 @@ HTML** 的场景，配置文件不涉及。
 
 ## 附：本次一并清理的本地产物
 
-`runtime/tmp` 下 84 个条目（含 15 个备份目录、`got.txt` 等含真实凭据的一次性 dump，
-共 9.8 MB）退役到 `runtime/_retired_20260924/`；56 个 flaky 循环日志与空目录删除；
-`dist/` 三个陈旧构建日志删除。**被跟踪文档/源码引用的 49 个复现脚本一律保留**
+`runtime/tmp` 下 84 个条目（含 16 个子目录、`got.txt` 等含真实凭据的一次性 dump，
+共 9.8 MB）退役到 `runtime/_retired_20260924/`；另有 57 个 flaky 复现循环日志
+（`flaky-*.log` 30 + `flaky-FAIL-*.log` 2 + `flaky2-*.log` 25）与 `dist/` 三个陈旧构建
+日志（`wpf_build_20260913.log` / `wpf_build_20260914.log` / `installer_build_20260914.log`）
+删除。**被跟踪文档/源码引用的 49 个复现脚本一律保留**
 （如 `p0_compare.py` / `p0_proxy_diff.py` 被支付模块源码点名，删了会让公开仓库的引用悬空）。
+
+> 计数口径：退役区可 `ls runtime/_retired_20260924 | wc -l`（84 = 16 目录 + 68 文件）复算；
+> 删除批次以**回收站 `$I` 元数据**为准 —— 它带原始路径，是「删了什么」唯一可追溯的来源。
