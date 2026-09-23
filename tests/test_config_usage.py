@@ -160,6 +160,17 @@ class DetectionTests(unittest.TestCase):
     def test_data_keyed_mappings_are_not_reported(self):
         """domain_ids.<domain> is data, not config."""
         actual = {item.path for item in config_usage.unread_config_keys()}
+        if not actual:
+            # 2026-09-23: this used to pass silently. `domain_ids` is `{}` in
+            # config.example.json, so the data-key path this guards cannot even
+            # be *produced* on a checkout whose config.json is that copy -- the
+            # loop below then asserted `assertNotIn(x, set())`, which is true for
+            # every x and proves nothing. Say so instead of passing.
+            self.skipTest(
+                "no untracked config shards in this checkout: `domain_ids` is "
+                "empty in config.example.json, so the data-key path this guards "
+                "cannot be produced. Needs a real operator config."
+            )
         for path in KNOWN_FALSE_POSITIVES:
             self.assertNotIn(path, actual)
 
