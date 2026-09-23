@@ -22,9 +22,22 @@ Protocol families
 ``sms_activate_handler`` is the ``/stubs/handler_api.php`` protocol (GET with an
 ``action`` query parameter) that ``sms_tool.smsbower`` already implements.
 Vendors that speak it are drop-in: only the host changes, which is why
-``SmsBowerClient`` takes ``endpoint`` per instance. ``unverified`` marks a vendor
-whose protocol has not been established from its own documentation -- those
+``SmsBowerClient`` takes ``endpoint`` per instance.
+
+``nexsms_json`` is a *different* family and does **not** fit the adapter above.
+It answers a JSON envelope (``{code, message, data}``) on plain REST paths, and
+its lifecycle is keyed on the **rented phone number** rather than on an
+activation id -- there is no ``activationId`` and no ``setStatus``, so
+"ready for another code" and "activation complete" have no wire representation
+at all. ``sms_tool.nexsms`` implements it. Because the two families disagree on
+what the lifecycle key *is*, callers must not assume ``activation_id`` is the
+handle they pass to a client; see ``PhoneSlot.rental_handle``.
+
+``unverified`` marks a vendor whose protocol has not been established -- those
 carry ``client_available=False`` so no surface offers them as a working choice.
+:data:`IMPLEMENTED_PROTOCOLS` is what makes that flag checkable rather than
+merely asserted: a spec may only be ``client_available`` when its protocol is
+in that set.
 
 Scope note
 ----------
@@ -39,7 +52,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 PROTOCOL_SMS_ACTIVATE = "sms_activate_handler"
+PROTOCOL_NEXSMS = "nexsms_json"
+#: Reserved for a vendor whose protocol has not been established. Currently
+#: unused -- ``nexsms`` was the last entry in this state and its protocol is now
+#: confirmed -- but kept because that is the state a *new* vendor starts in.
 PROTOCOL_UNVERIFIED = "unverified"
+
+#: Protocols this repository ships a client for. A spec may only claim
+#: ``client_available`` when its ``protocol`` is in here; that is what
+#: ``tests/test_sms_provider_registry.py`` pins, so "we offer it" can never drift
+#: away from "we can actually talk to it".
+IMPLEMENTED_PROTOCOLS: frozenset[str] = frozenset({PROTOCOL_SMS_ACTIVATE, PROTOCOL_NEXSMS})
 
 #: Provider used when ``phone_reuse.source`` is absent or unrecognised.
 DEFAULT_PROVIDER = "smsbower"
@@ -62,9 +85,15 @@ class SmsProviderSpec:
     api_key_env: str = ""
     docs_url: str = ""
     # False => this repository ships no client for the vendor's protocol, so no
-    # CLI choice, settings row, or dialog may offer it.
+    # CLI choice, settings row, or dialog may offer it. Must equal
+    # :attr:`has_client`; the registry test pins that.
     client_available: bool = True
     note: str = ""
+
+    @property
+    def has_client(self) -> bool:
+        """True when a client for :attr:`protocol` ships with this repository."""
+        return self.protocol in IMPLEMENTED_PROTOCOLS
 
     @property
     def config_section(self) -> str:
@@ -82,6 +111,23 @@ class SmsProviderSpec:
     @property
     def speaks_sms_activate(self) -> bool:
         return self.protocol == PROTOCOL_SMS_ACTIVATE
+
+    @property
+    def speaks_nexsms(self) -> bool:
+        return self.protocol == PROTOCOL_NEXSMS
+
+    @property
+    def is_rental(self) -> bool:
+        """True when the vendor rents a number whose lifecycle we can drive.
+
+        Both implemented families rent, so this is currently the same as
+        :attr:`has_client`; it exists as the predicate call sites should use, so
+        that a future non-rental family does not silently become rentable.
+        """
+        return self.has_client and self.protocol in {
+            PROTOCOL_SMS_ACTIVATE,
+            PROTOCOL_NEXSMS,
+        }
 
 
 # Canonical provider registry. This is the only place the provider vocabulary,
@@ -120,15 +166,19 @@ PROVIDERS: dict[str, SmsProviderSpec] = {
         "nexsms",
         "NexSMS",
         frozenset({"nexsms", "nex_sms", "nex-sms"}),
-        protocol=PROTOCOL_UNVERIFIED,
+        protocol=PROTOCOL_NEXSMS,
+        # Base host only: this family's paths are ``/api/...`` and each call
+        # appends its own, so the endpoint must NOT carry a handler path the way
+        # the sms-activate vendors' ``/stubs/handler_api.php`` does.
+        default_endpoint="https://api.nexsms.net",
         api_key_env="NEXSMS_API_KEY",
         docs_url="https://doc.nexsms.net/index-en.html",
-        client_available=False,
         note=(
-            "Not wired: several unrelated products ship under this name "
-            "(nexsms.ai, doc.nexsms.net, nexsms.net) with different request "
-            "shapes, and no documentation confirmed the SMS-Activate protocol. "
-            "Declared so the name is reserved and the gap is visible."
+            "JSON REST family, not sms-activate: GET/POST with apiKey in the "
+            "query string, a {code, message, data} envelope, and a lifecycle "
+            "keyed on the phone number (no activationId, no setStatus). "
+            "Service codes and country ids follow the sms-activate numbering "
+            "(OpenAI = dr), so those are shared with the other vendors."
         ),
     ),
 }

@@ -16,6 +16,7 @@ the code had arrived. Every slot is now a rental with an activation id.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -27,6 +28,8 @@ from typing import Optional
 from . import sms_providers
 from .config import CFG
 from .cross_process_gate import cross_process_write_lock
+from .nexsms import NexSmsClient
+from .operator_output import emit
 from .smsbower import (
     DEFAULT_ENDPOINT,
     GHANA_COUNTRY_CODE,
@@ -39,8 +42,14 @@ from .smsbower import (
 from .auth_headers import openai_auth_headers_lower
 from .sms_provider_adapter import SmsProviderAdapter, provider_name
 
-SMSBOWER_NO_NUMBERS_MAX_ATTEMPTS = 10
-SMSBOWER_PHONE_IN_USE_MAX_ATTEMPTS = 10
+#: Retry budgets shared by both protocol families. Renamed off the vendor name
+#: when the second family landed: they are per-rental, not per-vendor, and a
+#: vendor-named constant applied to another vendor is how "this only ever
+#: matched one provider" bugs start.
+RENTAL_NO_NUMBERS_MAX_ATTEMPTS = 10
+RENTAL_PHONE_IN_USE_MAX_ATTEMPTS = 10
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -103,6 +112,18 @@ class PhoneSlot:
     @property
     def remaining(self) -> int:
         return max(0, self.max_reuse_count - self.reuse_count)
+
+    @property
+    def rental_handle(self) -> str:
+        """The key this slot's vendor addresses the rental by.
+
+        The two protocol families disagree on what that key *is*: an
+        sms-activate vendor issues an activation id, while NexSMS issues none and
+        is addressed by the phone number itself. Client calls take this value, so
+        no call site has to know which family it is talking to, and a slot that
+        has not rented yet reports ``""`` either way.
+        """
+        return rental_handle_for(self.provider, self)
 
     def mark_used(self):
         self.reuse_count += 1
@@ -198,10 +219,14 @@ class PhonePool:
             phone.total_verified = int(saved.get("total_verified") or 0)
             phone.last_sms_code = str(saved.get("last_sms_code") or "")
             phone.slot_id = phone.slot_id or str(saved.get("slot_id") or f"slot:{index}")
-            # A saved slot with no number yet has no activation either, so its
-            # reuse counter is meaningless -- restart it rather than letting a
-            # stale count exhaust a slot that never rented anything.
-            if not phone.phone or not phone.activation_id:
+            # A saved slot with no rental has no handle either, so its reuse
+            # counter is meaningless -- restart it rather than letting a stale
+            # count exhaust a slot that never rented anything. The handle is the
+            # right test, not ``activation_id``: a NexSMS slot keeps its number
+            # and *never* has an activation id, so testing that field would reset
+            # its reuse counter on every load and silently make reuse impossible
+            # for that vendor.
+            if not phone.rental_handle:
                 phone.reuse_count = 0
                 phone.last_sms_code = ""
 
@@ -211,11 +236,15 @@ class PhonePool:
             if not phone.is_exhausted:
                 continue
             old_phone = phone.phone
-            old_activation_id = phone.activation_id
-            if old_activation_id:
+            handle = phone.rental_handle
+            # Branch on the handle, not on ``activation_id``: a NexSMS slot has a
+            # live rental and *no* activation id, so testing that field sent it
+            # down the "nothing to complete" path. Harmless today only because
+            # this vendor's ``complete`` is a no-op -- i.e. it worked by accident.
+            if handle:
                 print(
-                    f"  [{phone.provider}] activation "
-                    f"{old_activation_id} reached reuse limit; completing before next purchase"
+                    f"  [{phone.provider}] rental "
+                    f"{handle} reached reuse limit; completing before next purchase"
                 )
                 _complete_provider_activation(phone)
             else:
@@ -446,8 +475,75 @@ def _country_candidates(value) -> list[str]:
     return [item for item in candidates if item]
 
 
+def rental_protocol(provider: str) -> str:
+    """The protocol family that drives ``provider`` -- the one place it is decided.
+
+    Both client entry points below consult this instead of each re-deriving the
+    rule, and an unrecognised provider raises rather than defaulting to the
+    sms-activate client: that default would send a NexSMS endpoint sms-activate
+    query parameters and surface an opaque vendor error, hiding the real defect.
+    """
+    spec = sms_providers.provider_spec(provider)
+    if spec is not None and spec.has_client:
+        return spec.protocol
+    raise ValueError(f"unsupported SMS provider {provider!r}")
+
+
+def rental_client(provider: str, api_key: str, endpoint: str):
+    """Protocol-appropriate client for an explicit ``(provider, key, endpoint)``.
+
+    The two families share a call surface -- ``get_number``/``wait_for_code``/
+    ``complete``/``cancel`` -- but not a wire format, so the choice is made once
+    here rather than at each call site.
+
+    Takes the triple rather than a slot so callers that own no
+    :class:`PhoneSlot` -- the standalone ``--phone-register`` entry point --
+    share this rule instead of re-deriving it.
+    """
+    client_class = (
+        NexSmsClient
+        if rental_protocol(provider) == sms_providers.PROTOCOL_NEXSMS
+        else SmsBowerClient
+    )
+    return client_class(api_key=api_key, endpoint=endpoint)
+
+
+def rental_handle_for(provider: str, activation) -> str:
+    """The key ``provider`` addresses this activation by.
+
+    sms-activate vendors issue an activation id; NexSMS issues none and is
+    addressed by the phone number itself. :class:`PhoneSlot` and the standalone
+    phone-registration flow both go through here, so the rule cannot drift
+    between the two entry points. An activation that has not rented yet reports
+    ``""`` either way.
+
+    Deliberately lenient where :func:`rental_protocol` raises: this is a *read*,
+    and an unrecognised provider still has an ``activation_id`` worth returning.
+    """
+    spec = sms_providers.provider_spec(provider)
+    if spec is not None and spec.speaks_nexsms:
+        return str(getattr(activation, "phone", "") or "").strip()
+    return str(getattr(activation, "activation_id", "") or "").strip()
+
+
 def _smsbower_client(slot: PhoneSlot) -> SmsBowerClient:
     return SmsBowerClient(api_key=slot.api_key, endpoint=slot.endpoint)
+
+
+def _nexsms_client(slot: PhoneSlot) -> NexSmsClient:
+    return NexSmsClient(api_key=slot.api_key, endpoint=slot.endpoint)
+
+
+def _rental_client(slot: PhoneSlot):
+    """Protocol-appropriate client for ``slot`` -- see :func:`rental_protocol`.
+
+    Goes through the slot-shaped ``_smsbower_client``/``_nexsms_client`` seams
+    rather than constructing the class directly, because those are the patch
+    targets the pool tests substitute. Same rule, same seam.
+    """
+    if rental_protocol(provider_name(slot)) == sms_providers.PROTOCOL_NEXSMS:
+        return _nexsms_client(slot)
+    return _smsbower_client(slot)
 
 
 def _price_matches(left, right) -> bool:
@@ -487,7 +583,7 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
     client = _smsbower_client(slot)
     countries = _country_candidates(slot.country)
     for country in countries:
-        for attempt in range(1, SMSBOWER_NO_NUMBERS_MAX_ATTEMPTS + 1):
+        for attempt in range(1, RENTAL_NO_NUMBERS_MAX_ATTEMPTS + 1):
             try:
                 _refresh_smsbower_provider_ids(client, slot, country)
             except Exception as exc:
@@ -502,7 +598,7 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
                 )
             except Exception as exc:
                 error = str(exc)
-                print(f"  [{slot.provider}] country={country} acquire failed ({attempt}/{SMSBOWER_NO_NUMBERS_MAX_ATTEMPTS}): {error}")
+                print(f"  [{slot.provider}] country={country} acquire failed ({attempt}/{RENTAL_NO_NUMBERS_MAX_ATTEMPTS}): {error}")
                 if "NO_BALANCE" in error or "BAD_KEY" in error:
                     return False
                 if "NO_NUMBERS" not in error:
@@ -510,7 +606,7 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
                 if slot.activation_id:
                     client.cancel(slot.activation_id)
                     _reset_smsbower_slot(slot)
-                if attempt < SMSBOWER_NO_NUMBERS_MAX_ATTEMPTS:
+                if attempt < RENTAL_NO_NUMBERS_MAX_ATTEMPTS:
                     time.sleep(1)
                 continue
             previous_phone = slot.phone
@@ -529,17 +625,81 @@ def _acquire_smsbower_number(slot: PhoneSlot) -> bool:
     return False
 
 
+def _acquire_nexsms_number(slot: PhoneSlot) -> bool:
+    """Acquire through the JSON REST family: no activation id, no price params.
+
+    The retry budget matches the sms-activate path, but the classification does
+    not: this vendor answers ``{code, message}`` rather than ``NO_NUMBERS``-style
+    tokens, so "stop now" comes from the client's ``retryable`` flag instead of
+    substring matching. A vendor whose failures cannot be classified would burn
+    the whole budget on a rejected key.
+    """
+    client = _nexsms_client(slot)
+    countries = _country_candidates(slot.country)
+    for country in countries:
+        for attempt in range(1, RENTAL_NO_NUMBERS_MAX_ATTEMPTS + 1):
+            try:
+                activation = client.get_number(
+                    service=slot.service,
+                    country=country,
+                    min_price=slot.min_price,
+                    max_price=slot.max_price,
+                )
+            except Exception as exc:
+                emit(
+                    _LOGGER,
+                    "  [%s] country=%s acquire failed (%s/%s): %s",
+                    slot.provider, country, attempt, RENTAL_NO_NUMBERS_MAX_ATTEMPTS, exc,
+                )
+                if not getattr(exc, "retryable", True):
+                    return False
+                if attempt < RENTAL_NO_NUMBERS_MAX_ATTEMPTS:
+                    time.sleep(1)
+                continue
+            previous_phone = slot.phone
+            slot.phone = normalize_phone(activation.phone)
+            slot.activation_id = activation.activation_id
+            slot.service = activation.service
+            slot.country = activation.country
+            if not previous_phone or previous_phone != slot.phone:
+                slot.reuse_count = 0
+                slot.last_sms_code = ""
+            emit(
+                _LOGGER,
+                "  [%s] acquired %s (country=%s, price=%s)",
+                slot.provider, slot.phone, country, activation.price,
+            )
+            return True
+    return False
+
+
+def _acquire_rental_number(slot: PhoneSlot) -> bool:
+    """Acquire a number through the slot's own protocol family."""
+    spec = sms_providers.provider_spec(getattr(slot, "provider", ""))
+    if spec is not None and spec.speaks_nexsms:
+        return _acquire_nexsms_number(slot)
+    return _acquire_smsbower_number(slot)
+
+
 def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
-    if not slot.activation_id or not slot.phone:
-        return _acquire_smsbower_number(slot)
+    if not slot.rental_handle or not slot.phone:
+        return _acquire_rental_number(slot)
     if slot.reuse_count <= 0:
         return True
-    if _smsbower_client(slot).request_additional(slot.activation_id):
-        print(f"  [{slot.provider}] activation {slot.activation_id} ready for another code")
+    if _rental_client(slot).request_additional(slot.rental_handle):
+        emit(
+            _LOGGER,
+            "  [%s] rental %s ready for another code",
+            slot.provider, slot.rental_handle,
+        )
         return True
-    print(f"  [{slot.provider}] activation {slot.activation_id} could not request another code; cancelling and acquiring a new number")
+    emit(
+        _LOGGER,
+        "  [%s] rental %s could not request another code; cancelling and acquiring a new number",
+        slot.provider, slot.rental_handle,
+    )
     _cancel_smsbower_activation(slot)
-    return _acquire_smsbower_number(slot)
+    return _acquire_rental_number(slot)
 
 
 def _prepare_provider_for_send(slot: PhoneSlot) -> bool:
@@ -623,8 +783,8 @@ def _send_phone_otp_with_retries(session, did, current_url, phone_slot: PhoneSlo
 
 
 def _wait_smsbower_code(slot: PhoneSlot) -> Optional[str]:
-    return _smsbower_client(slot).wait_for_code(
-        slot.activation_id,
+    return _rental_client(slot).wait_for_code(
+        slot.rental_handle,
         timeout=slot.sms_timeout,
         poll_interval=slot.sms_poll_interval,
         previous_code=slot.last_sms_code,
@@ -644,29 +804,36 @@ def _reset_smsbower_slot(slot: PhoneSlot):
 
 
 def _complete_smsbower_activation(slot: PhoneSlot):
-    if slot.activation_id:
-        client = _smsbower_client(slot)
-        activation_id = slot.activation_id
-        if client.complete(activation_id):
-            print(f"  [{slot.provider}] activation {activation_id} completed")
+    handle = slot.rental_handle
+    if handle:
+        client = _rental_client(slot)
+        if client.complete(handle):
+            emit(_LOGGER, "  [%s] rental %s completed", slot.provider, handle)
         else:
-            client.cancel(activation_id)
-            print(f"  [{slot.provider}] activation {activation_id} completion failed; cancelled")
+            client.cancel(handle)
+            emit(
+                _LOGGER,
+                "  [%s] rental %s completion failed; cancelled",
+                slot.provider, handle,
+            )
     _reset_smsbower_slot(slot)
 
 
 def _cancel_smsbower_activation(slot: PhoneSlot):
-    if slot.activation_id:
-        _smsbower_client(slot).cancel(slot.activation_id)
+    handle = slot.rental_handle
+    if handle:
+        _rental_client(slot).cancel(handle)
     _reset_smsbower_slot(slot)
 
 
 class _RentalSmsProviderAdapter(SmsProviderAdapter):
-    """Adapter for any provider speaking the sms-activate handler protocol.
+    """Adapter for any provider whose rental lifecycle this repo can drive.
 
-    Named for the lifecycle rather than the vendor: ``smsbower``, ``herosms``
-    and ``grizzly`` all rent a number, poll its activation, then complete or
-    cancel it, so they share one adapter and differ only by endpoint.
+    Named for the lifecycle rather than the vendor. Both protocol families rent
+    a number, wait for a code, then complete or cancel it -- they differ in how
+    the rental is *addressed* (activation id vs phone number) and in the wire
+    format, both of which live behind ``_rental_client`` and
+    ``PhoneSlot.rental_handle``. The adapter itself is protocol-agnostic.
     """
 
     provider_key = sms_providers.DEFAULT_PROVIDER
@@ -695,7 +862,7 @@ def _sms_provider_adapter(slot: PhoneSlot) -> SmsProviderAdapter:
     """
     name = provider_name(slot)
     spec = sms_providers.provider_spec(name)
-    if spec is None or not spec.speaks_sms_activate:
+    if spec is None or not spec.is_rental:
         supported = ", ".join(sms_providers.available_provider_keys())
         raise ValueError(f"unsupported SMS provider {name!r}; expected one of: {supported}")
     return _RentalSmsProviderAdapter(slot)
@@ -833,7 +1000,7 @@ def _complete_phone_verification_locked(
         last_result = result
         should_retry = _should_retry_with_new_provider_number(phone_pool, result)
         if _phone_number_already_in_use(result):
-            attempts = SMSBOWER_PHONE_IN_USE_MAX_ATTEMPTS
+            attempts = RENTAL_PHONE_IN_USE_MAX_ATTEMPTS
         if should_retry and attempt >= attempts:
             if _should_retry_until_success_with_new_provider_number(result):
                 attempts = attempt + 1
@@ -882,9 +1049,9 @@ def _phone_number_already_in_use(result: dict) -> bool:
 
 
 def _is_rental_slot(slot: PhoneSlot) -> bool:
-    """True when ``slot`` rents its number through the sms-activate protocol."""
+    """True when ``slot`` rents its number through a protocol we can drive."""
     spec = sms_providers.provider_spec(getattr(slot, "provider", ""))
-    return bool(spec and spec.speaks_sms_activate)
+    return bool(spec and spec.is_rental)
 
 
 def _should_retry_with_new_provider_number(phone_pool: PhonePool, result: dict) -> bool:
@@ -986,7 +1153,7 @@ def _complete_phone_verification_once_locked(
     phone_pool.save_state()
     if not send_result.get("ok"):
         if _is_rental_slot(phone_slot) and _phone_number_already_in_use(send_result):
-            print(f"  [{phone_slot.provider}] phone already in use; cancelling activation {phone_slot.activation_id} before retry")
+            print(f"  [{phone_slot.provider}] phone already in use; cancelling rental {phone_slot.rental_handle} before retry")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         elif _is_terminal_send_rejection(send_result):
@@ -1009,7 +1176,7 @@ def _complete_phone_verification_once_locked(
 
     if not code:
         if _is_rental_slot(phone_slot):
-            print(f"  [{phone_slot.provider}] SMS timeout; cancelling activation {phone_slot.activation_id} so this run can buy a new number")
+            print(f"  [{phone_slot.provider}] SMS timeout; cancelling rental {phone_slot.rental_handle} so this run can buy a new number")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -1024,7 +1191,7 @@ def _complete_phone_verification_once_locked(
     if not validate_result.get("ok"):
         if _is_rental_slot(phone_slot):
             if _is_terminal_validate_rejection(validate_result):
-                print(f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling activation {phone_slot.activation_id} so next round buys a new number")
+                print(f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling rental {phone_slot.rental_handle} so next round buys a new number")
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -1042,7 +1209,7 @@ def _complete_phone_verification_once_locked(
     max_reuse_count = phone_slot.max_reuse_count
     remaining = phone_slot.remaining
     if _is_rental_slot(phone_slot) and phone_slot.is_exhausted:
-        print(f"  [{phone_slot.provider}] activation {phone_slot.activation_id} reached reuse limit; completing now")
+        print(f"  [{phone_slot.provider}] rental {phone_slot.rental_handle} reached reuse limit; completing now")
         _complete_provider_activation(phone_slot)
         phone_pool.save_state()
 
