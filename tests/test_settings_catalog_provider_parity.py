@@ -234,20 +234,37 @@ class ProviderParityTests(unittest.TestCase):
         """🔴 这条是本次缺口的**回归守卫**：它把「读在线目录」这一步钉在协议判断**之内**。
 
         只断言 ``assertIn("CatalogIsSmsActivate", text)`` 是没用的 —— 判断可以写
-        在文件里却包不住那次调用。所以这里按花括号配平切出 ``if`` 的**整个块**，
-        再要求目录调用落在块内、且块外不再出现（否则说明还有一条未受保护的调用）。
+        在文件里却包不住那次调用。所以这里改钉**三元表达式**的形状：两个协议族
+        各有一个读取器，条件写反（把 nexsms 交给 sms-activate 读取器）的症状与本次
+        缺陷一模一样 —— 一次 403，弹窗里什么都读不出来。
+
+        2026-09-23 更新：对话框从 ``if (provider.CatalogIsSmsActivate) { ... } else { 离线 }``
+        改成了 ``provider.CatalogIsSmsActivate ? A : B`` 的三元分派，因为 nexsms 现在
+        也读在线目录了（它有 ``/api/countries`` + ``/api/getCountryByService``）。
+        契约没变 —— 仍按协议选读取器 —— 但**锚点变了**，所以守卫跟着换。
         """
         text = DIALOG.read_text(encoding="utf-8")
-        gate = "if (provider.CatalogIsSmsActivate)"
-        self.assertIn(gate, text, "the dialog no longer gates on the protocol")
+        code = strip_csharp_comments(text)
 
-        block = brace_block(text, gate)
-        guarded = strip_csharp_comments(block)
-        self.assertIn("LoadOpenAiCatalogAsync", guarded,
-                      "the catalog call is not inside the protocol gate")
-        after = text[text.index(block) + len(block):]
-        self.assertNotIn("LoadOpenAiCatalogAsync", after,
-                         "a second, ungated catalog call exists after the gate")
+        # 目录读取：两个读取器都必须出现，且都挂在同一个协议判断上。
+        # 参数列表不展开匹配（它会跨行、且与这里要钉的契约无关），只要求
+        # 「条件 → 吗 / 冒号 → 两个已知读取器名」这个形状。
+        ternary = (r"provider\.CatalogIsSmsActivate\s*\?\s*await\s+SmsProviderCatalogClient\.(\w+)"
+                   r".{0,200}?:\s*await\s+SmsProviderCatalogClient\.(\w+)")
+        matches = re.findall(ternary, code, re.S)
+        self.assertTrue(matches, "the dialog no longer dispatches the catalog read on the protocol")
+        # 三元分派有两处：目录与余额，各自的读取器都必须是「激活族 / nexsms 族」这一对。
+        self.assertIn(("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"), matches,
+                      "the catalog dispatch does not pair the sms-activate reader with the nexsms one")
+        self.assertIn(("LoadBalanceAsync", "LoadNexsmsBalanceAsync"), matches,
+                      "the balance dispatch does not pair the sms-activate reader with the nexsms one")
+
+        # 不得有第二个、脱离协议判断的读取调用。
+        for reader in ("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"):
+            with self.subTest(reader=reader):
+                self.assertEqual(
+                    code.count(reader), 1,
+                    "%s must be called from exactly one place (the protocol dispatch)" % reader)
 
     def test_the_fallback_path_reads_the_saved_choice(self):
         """回退路径必须真的从配置读国家与档位 —— 写死一个默认国会让「切到
@@ -282,55 +299,87 @@ class ProviderParityTests(unittest.TestCase):
                          "the config-derived path must not write the provider section")
 
     def test_only_a_successful_online_lookup_marks_the_choice_as_catalog_sourced(self):
-        """``fromCatalog`` 是上面那条闸门的**唯一**开关，所以它必须默认为假、
-        且只在在线目录**成功**那一支被置真。
+        """``fromCatalog`` 是上面那条闸门的**唯一**开关，所以它必须由在线目录的
+        成功与否**直接派生**。
 
-        不钉这个的话，``fromCatalog = true`` 可以写在任何地方 —— 无条件写在方法
-        开头就行 —— 上面那条闸门就永久失效，而它自己仍然绿。这与
-        「``if`` 的条件没被钉住」是同一个失效模式，只是换了层。
+        2026-09-23 更新：原来是「默认为假、只在成功那一支置真」。现在是
+        ``bool fromCatalog = online is not null;`` —— 同一条契约，换了一种更难写错的
+        写法：不存在「忘了在成功分支里赋值」和「无条件赋真」这两种失效模式，因为
+        根本没有赋值语句。守卫随之改为钉**派生表达式本身**，并禁止任何后续赋值
+        （``fromCatalog = true;`` 这类写回会让派生关系失效）。
         """
         text = DIALOG.read_text(encoding="utf-8")
-        self.assertIn("bool fromCatalog = false;", text,
-                      "fromCatalog must default to false")
-        self.assertEqual(text.count("fromCatalog = true;"), 1,
-                         "fromCatalog must be set in exactly one place")
+        code = strip_csharp_comments(text)
 
-        success = strip_csharp_comments(brace_block(text, "if (online is not null)"))
-        self.assertIn("fromCatalog = true;", success,
-                      "fromCatalog must be set on the successful-lookup branch only")
+        self.assertIn("bool fromCatalog = online is not null;", code,
+                      "fromCatalog must be derived from the lookup result, not assigned later")
+        self.assertNotIn("fromCatalog = true;", code,
+                         "fromCatalog must not be re-assigned after the derivation")
+        self.assertNotIn("fromCatalog = false;", code,
+                         "fromCatalog must not be re-assigned after the derivation")
+
+        # 派生出来的旗子必须真的驱动闸门，否则它只是一个没接线的变量。
+        self.assertIn("if (!fromCatalog)", code,
+                      "the write-back gate no longer keys off fromCatalog")
 
     def test_a_failed_online_lookup_reports_why_before_falling_back(self):
         """回退**必须**把失败原因带出来，不能静默。
 
         静默回退会让一份陈旧的配置看起来像刚刚核验过 —— 同一个国家、同一个价格，
-        操作者在弹窗里看不出任何区别。所以异常消息要既进日志、又进 ``notice``。
+        操作者在弹窗里看不出任何区别。所以异常消息要既进日志、又进提示。
+
+        2026-09-23 更新：原来原因只挂在弹窗里的 ``notice`` 文本块上，而 ``notice``
+        是常显的（哪怕回退成功也一直显示）。现在分成两处，各自面向正确的读者：
+
+        * **配置里也没有国家/档位**（无路可退）⇒ 弹窗，必须含插值后的原因；
+        * **有配置可回退** ⇒ 日志（``logger?.Warning``），因为这不是需要操作者
+          处理的错误，不该拦着弹窗让人先点掉一个提示。
+
+        两条路径都要钉：只留日志会让「无路可退」时操作者看不到为什么，只留弹窗
+        则会让正常回退变成一个多余的模态框。
         """
         text = DIALOG.read_text(encoding="utf-8")
-        self.assertIn("catalogError = exc.Message;", text,
+        code = strip_csharp_comments(text)
+
+        self.assertIn("catalogError = exc.Message;", code,
                       "the catalog failure reason is no longer captured")
-        # 原因必须被**插值**进提示，而不是只写一句通用的「读取失败」。
-        self.assertRegex(text, r"未能读取在线目录（\{catalogError\}）")
+        # 无路可退时，原因必须被**插值**进弹窗正文，而不是只写一句通用的「读取失败」。
+        self.assertRegex(code, r"无法读取 OpenAI 号码地区和价格档位：\{catalogError\}")
+        # 有路可退时，原因必须进日志（含占位符 ``{Error}`` 与实参 ``catalogError``）。
+        self.assertRegex(code, r"catalog unavailable \(\{Error\}\)")
+        self.assertRegex(code, r'provider\.Label,\s*catalogError\)')
 
     def test_a_failed_online_lookup_does_not_end_the_flow(self):
         """在线目录读失败**不能**结束流程 —— 只有「配置里也没有国家与档位」才可以。
 
         上面那条钉的是「失败被说出来」，这条钉的是「失败不致命」。少了这条，把
-        ``if (savedChoice is null)`` 改成 ``if (true)`` 就能让回退永不生效，而上面
-        那条仍然绿（``notice`` 只是变成死代码）—— 也就是回到了本次要修的原始缺陷。
+        条件改成 ``if (true)`` 就能让回退永不生效，而上面那条仍然绿 —— 也就是回到了
+        本次要修的原始缺陷。
 
-        条件用「往前找最近的 ``if (``」定位，而不是匹配整段原文：后者会因为重新
-        排版而误报，而这里真正要钉的是**条件本身**。
+        2026-09-23 更新：分派从 ``if (savedChoice is null) { 报错 } else { 回退 }``
+        改成了 ``if (online is not null) { ... } else if (savedChoice is not null) { 回退 }
+        else { 报错 }``。条件本身没变（「配置里没有才报错」），但**位置**变了，所以
+        锚点从「往前找最近的 ``if (``」改成直接钉那一条 ``else if``。
         """
         text = DIALOG.read_text(encoding="utf-8")
+        code = strip_csharp_comments(text)
         marker = 'provider.Label + " 加载失败"'
-        self.assertIn(marker, text, "the load-failure dialog disappeared")
+        self.assertIn(marker, code, "the load-failure dialog disappeared")
 
-        head = strip_csharp_comments(text[:text.index(marker)])
-        open_paren = head.rindex("if (")
-        condition = head[open_paren + len("if ("):head.index(")", open_paren)]
-        self.assertEqual(
-            condition.strip(), "savedChoice is null",
+        # 加载失败弹窗必须落在「在线失败 且 配置回退不可用」这一支里。
+        self.assertRegex(
+            code, r"else\s+if\s*\(\s*savedChoice\s+is\s+not\s+null\s*\)\s*\{",
+            "the saved-config fallback branch disappeared")
+        self.assertRegex(
+            code, r"else\s*\{\s*ShowThemedInfoDialog\(\s*" + re.escape(marker),
             "the load-failure dialog must fire only when the config has no country/tier")
+
+        # 回退那一支必须是**可用的**：先取配置里的选择项，再继续往下走。
+        fallback = brace_block(code, "else if (savedChoice is not null)")
+        self.assertIn("countries = new[] { savedChoice };", fallback,
+                      "the fallback branch must actually use the configured choice")
+        self.assertNotIn("return false;", fallback,
+                         "the fallback branch must not end the flow")
 
     def test_the_labels_are_not_empty_and_unique(self):
         labels = [row[1] for row in csharp_providers()]

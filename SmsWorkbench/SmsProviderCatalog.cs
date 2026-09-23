@@ -34,14 +34,15 @@ namespace SmsWorkbench
     ///
     /// <para>
     /// 🔴 <b>That protocol difference is carried in the table below</b> and must
-    /// be, because the one-click dialog is *not* provider-agnostic: it reads the
-    /// online country/price catalog over the sms-activate handler API
-    /// (`?action=getCountries` / `getPricesV3`, and a balance reply that starts
-    /// with `ACCESS_BALANCE:`). nexsms answers all three of those with
-    /// `403 Forbidden`, so a dialog that assumed one protocol would fail on it
-    /// with an opaque HTTP error. `CatalogIsSmsActivate` is what the dialog
-    /// gates on, and `tests/test_settings_catalog_provider_parity.py` pins every
-    /// row's `Protocol` against `sms_tool/sms_providers.py` -- the same
+    /// be, because the one-click dialog is *not* provider-agnostic: each family
+    /// is read by a different reader in `SmsProviderCatalogClient`. The
+    /// sms-activate rows use `?action=getCountries` / `getPricesV3` and a
+    /// balance reply that starts with `ACCESS_BALANCE:`; the `nexsms` row uses
+    /// REST paths under its own `/api/` and a `{code, message, data}` envelope,
+    /// and answers every `?action=` call with `403 Forbidden`. `CatalogIsSmsActivate`
+    /// is what the dialog dispatches on, and
+    /// `tests/test_settings_catalog_provider_parity.py` pins every row's
+    /// `Protocol` against `sms_tool/sms_providers.py` -- the same
     /// no-compiler-between-the-two-languages argument as the endpoint and
     /// API-key-env columns.
     /// </para>
@@ -52,16 +53,17 @@ namespace SmsWorkbench
             string Key, string Label, string DefaultEndpoint, string ApiKeyEnv, string Protocol)
         {
             /// <summary>
-            /// Whether the one-click dialog can read this provider's catalog over
-            /// the sms-activate handler API.
+            /// Whether this provider's catalog is read over the sms-activate
+            /// handler API (`?action=getCountries` / `getPricesV3`, balance via
+            /// `ACCESS_BALANCE:`).
             ///
             /// <para>
-            /// `false` is not "unsupported" -- the backend still rents from this
-            /// provider, and the dialog still runs. It only means the dialog must
-            /// take the country and price tier from the config instead of asking
-            /// the vendor, because reading them here would mean a second,
-            /// C#-side implementation of a protocol that `sms_tool` already
-            /// implements (`sms_tool/nexsms.py`).
+            /// 🔴 This is **not** "can the dialog read this provider's catalog".
+            /// Both families are readable online -- `false` here means the other
+            /// reader is the right one (`nexsms_json`, which is REST under
+            /// `/api/`), not that the provider is unsupported or that the dialog
+            /// will fall back to the config. The backend rents from either
+            /// family regardless.
             /// </para>
             /// </summary>
             internal bool CatalogIsSmsActivate => Protocol == SmsActivateProtocol;
