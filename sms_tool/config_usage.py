@@ -231,12 +231,19 @@ def format_unread_report(keys: list[UnreadKey]) -> str:
     The wording says **Python** on purpose. The detector scans ``sms_tool/`` and
     ``services/``, so "no code reads this" would be an overclaim -- see the
     module docstring and :data:`CSHARP_CONSUMED_KEYS`.
+
+    The exclusion note is emitted **unconditionally**, including when nothing is
+    unread. It describes what the detector refused to judge, which is just as
+    true for an empty result -- and the empty result is precisely what CI sees,
+    because its ``config.json`` is a copy of ``config.example.json``. Until
+    2026-09-23 this returned early on the empty case and dropped the note, so
+    ``--doctor`` silently failed to say which keys it was not judging; that is
+    the "silent exclusion" this report exists to prevent, and it stayed
+    invisible locally because a real operator config is never empty.
     """
-    if not keys:
-        return "  (none - every configured key is read by Python source or a cited C# consumer)"
     live = [k for k in keys if k.shards]
     documented = [k for k in keys if not k.shards]
-    lines = []
+    lines: list[str] = []
     if live:
         lines.append(f"  {len(live)} live-shard key(s) set but never read by Python source:")
         for key in live:
@@ -246,7 +253,10 @@ def format_unread_report(keys: list[UnreadKey]) -> str:
         lines.append(f"  {len(documented)} key(s) documented in config.example.json only:")
         for key in documented:
             lines.append(f"    - {key.path}")
-    lines.append("  These values have no effect. Remove them or wire them up.")
+    if keys:
+        lines.append("  These values have no effect. Remove them or wire them up.")
+    else:
+        lines.append("  (none - every configured key is read by Python source or a cited C# consumer)")
     if CSHARP_CONSUMED_KEYS:
         lines.append(
             f"  (excluded: {len(CSHARP_CONSUMED_KEYS)} key(s) read by the desktop -- "
