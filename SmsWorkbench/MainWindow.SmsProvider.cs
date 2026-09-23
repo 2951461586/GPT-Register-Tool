@@ -30,12 +30,27 @@ namespace SmsWorkbench
         /// <para>
         /// When the provider is not sms-activate the dialog therefore skips the
         /// network entirely and takes the country and price tier **from the
-        /// config**, which is what the backend reads anyway. It does not write
-        /// them back: the values it shows *are* the config values, so a write
-        /// could only reformat them -- and it would add `service_name` /
-        /// `country_name_zh`, two write-only leaves whose appearance in a
-        /// non-`smsbower` section turns `tests/test_config_usage.py` red
-        /// (see `docs/TROUBLESHOOTING.md` §13).
+        /// config**, which is what the backend reads anyway.
+        /// </para>
+        ///
+        /// <para>
+        /// 🔴 And that fallback is not protocol-specific: **any** failure to read
+        /// the online catalog lands there, not just the non-sms-activate case.
+        /// The catalog is an enhancement -- it is what gives the operator a
+        /// dropdown of every country and tier -- but it is not a precondition for
+        /// renting. Treating it as one is what made a single 404 (`herosms`
+        /// answers `getPricesV3` with 404 and serves only `getPrices`) or a
+        /// single 403 read as "this vendor is unusable", when the vendor was
+        /// fine. The reason for the failure is still shown in the dialog; it just
+        /// no longer ends the flow.
+        /// </para>
+        ///
+        /// <para>
+        /// A config-derived choice is never written back. The values shown *are*
+        /// the config values, so a write could only reformat them -- and it would
+        /// add `service_name` / `country_name_zh`, two write-only leaves whose
+        /// appearance in a non-`smsbower` section turns
+        /// `tests/test_config_usage.py` red (see `docs/TROUBLESHOOTING.md` §13).
         /// </para>
         /// </summary>
         private async Task<bool> ShowSmsProviderOneClickDialogAsync(CancellationToken ct = default)
@@ -53,40 +68,84 @@ namespace SmsWorkbench
                 return false;
             }
 
+            // Read once, before the branch: both the non-sms-activate path and
+            // the "online lookup failed" fallback need it, and reading it twice
+            // would let the two paths disagree if the config changed mid-dialog.
+            SmsProviderCountryChoice? savedChoice = ReadSavedSmsProviderChoice(section);
+
             IReadOnlyList<SmsProviderCountryChoice> countries;
             string balance = "--";
             string notice = "";
+            bool fromCatalog = false;
             if (provider.CatalogIsSmsActivate)
             {
                 string endpoint = FirstNonEmpty(settingsService.GetString(section + ".endpoint"), provider.DefaultEndpoint);
+                string catalogError = "";
+                IReadOnlyList<SmsProviderCountryChoice>? online = null;
                 try
                 {
                     System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-                    countries = await SmsProviderCatalogClient.LoadOpenAiCatalogAsync(httpClient, apiKey, endpoint);
-                    try
+                    online = await SmsProviderCatalogClient.LoadOpenAiCatalogAsync(httpClient, apiKey, endpoint);
+                    if (online.Count == 0)
                     {
-                        balance = await SmsProviderCatalogClient.LoadBalanceAsync(httpClient, apiKey, endpoint);
+                        catalogError = "在线目录没有返回任何可用国家";
+                        online = null;
                     }
-                    catch (Exception balanceError)
+                    else
                     {
-                        logger?.Warning(balanceError, "Failed to load {Provider} balance", provider.Label);
+                        try
+                        {
+                            balance = await SmsProviderCatalogClient.LoadBalanceAsync(httpClient, apiKey, endpoint);
+                        }
+                        catch (Exception balanceError)
+                        {
+                            logger?.Warning(balanceError, "Failed to load {Provider} balance", provider.Label);
+                        }
                     }
                 }
                 catch (Exception exc)
                 {
                     logger?.Error(exc, "Failed to load {Provider} OpenAI catalog", provider.Label);
-                    ShowThemedInfoDialog(provider.Label + " 加载失败", "无法读取 OpenAI 号码地区和价格档位：" + exc.Message);
-                    return false;
+                    catalogError = exc.Message;
                 }
                 finally
                 {
                     System.Windows.Input.Mouse.OverrideCursor = null;
                 }
 
-                if (countries.Count == 0)
+                if (online is not null)
                 {
-                    ShowThemedInfoDialog("暂无号码", provider.Label + " 当前没有可用的 OpenAI 号码。");
-                    return false;
+                    countries = online;
+                    fromCatalog = true;
+                }
+                else
+                {
+                    // 🔴 The online lookup is an *enhancement*, not a
+                    // precondition. It fails for reasons that say nothing about
+                    // whether the vendor can rent: herosms answers `getPricesV3`
+                    // with 404, a vendor can be briefly down, a proxy can be
+                    // filtering. Dead-ending here is what turned "该供应商的在线
+                    // 目录读不到" into "该供应商完全不可用" -- and the backend
+                    // reads the same two config keys anyway, so the config values
+                    // are exactly what a rental would use.
+                    //
+                    // The failure is still surfaced, in `notice`: falling back
+                    // silently would let a stale config look freshly verified.
+                    if (savedChoice is null)
+                    {
+                        ShowThemedInfoDialog(
+                            provider.Label + " 加载失败",
+                            "无法读取 OpenAI 号码地区和价格档位：" + catalogError
+                            + $"。配置里也没有可用的国家与档位，请先填写 {section}.country 与"
+                            + $" {section}.target_price（或 .max_price / .min_price），"
+                            + $"或改用命令行查询 {provider.Label} 的可用国家与价格。");
+                        return false;
+                    }
+
+                    countries = new[] { savedChoice };
+                    notice = $"⚠️ 未能读取在线目录（{catalogError}），"
+                           + $"下方国家与档位取自配置 {section}.country / .target_price。"
+                           + "如需更换，请在命令行查询该供应商的可用国家与价格档位。";
                 }
             }
             else
@@ -95,8 +154,7 @@ namespace SmsWorkbench
                 // instead of the wire. Reimplementing this vendor's REST catalog
                 // here would be a second copy of a protocol `sms_tool` already
                 // implements, and the copy is the one that would rot.
-                SmsProviderCountryChoice? saved = ReadSavedSmsProviderChoice(section);
-                if (saved is null)
+                if (savedChoice is null)
                 {
                     ShowThemedInfoDialog(
                         provider.Label + " 缺少国家或档位",
@@ -105,7 +163,7 @@ namespace SmsWorkbench
                     return false;
                 }
 
-                countries = new[] { saved };
+                countries = new[] { savedChoice };
                 notice = $"{provider.Label} 不使用 sms-activate 协议，桌面端不读取在线目录 —— "
                        + $"下方国家与档位取自配置 {section}.country / .target_price。"
                        + "如需更换，请在命令行查询该供应商的可用国家与价格档位。";
@@ -285,12 +343,14 @@ namespace SmsWorkbench
                 return false;
             }
 
-            if (!provider.CatalogIsSmsActivate)
+            if (!fromCatalog)
             {
-                // The two choices above were read *from* the config, so writing
-                // them back could only reformat them. Skipping the write also
-                // keeps `service_name` / `country_name_zh` -- two write-only
-                // leaves -- out of this provider's section, which is what keeps
+                // The two choices above were read *from* the config -- either
+                // because this provider has no sms-activate catalog, or because
+                // reading that catalog failed. Writing them back could only
+                // reformat them. Skipping the write also keeps `service_name` /
+                // `country_name_zh` -- two write-only leaves -- out of this
+                // provider's section, which is what keeps
                 // `tests/test_config_usage.py` green after this dialog runs.
                 return true;
             }

@@ -256,27 +256,81 @@ class ProviderParityTests(unittest.TestCase):
         self.assertIn("ReadSavedSmsProviderChoice(section)", text)
         self.assertIn('section + ".country"', text)
 
-    def test_the_fallback_path_does_not_write_the_dead_leaves(self):
-        """回退路径的选择项本来就是从配置读出来的，回写只会把
-        ``service_name`` / ``country_name_zh`` 这两个**只写不读**的叶子塞进
-        当前供应商的 section —— 那会让 ``tests/test_config_usage.py`` 变红
-        （见 `docs/TROUBLESHOOTING.md` §13）。
+    def test_the_config_derived_path_does_not_write_the_dead_leaves(self):
+        """配置派生的选择项**永不回写**：回写只会把 ``service_name`` /
+        ``country_name_zh`` 这两个**只写不读**的叶子塞进当前供应商的 section ——
+        那会让 ``tests/test_config_usage.py`` 变红（见 `docs/TROUBLESHOOTING.md` §13）。
 
-        注意这两行**必须留在 sms-activate 分支里**：``test_config_usage`` 的
+        闸门是 ``fromCatalog``（来源）而不是 ``CatalogIsSmsActivate``（协议）：
+        在线目录**读失败**的 sms-activate 供应商同样走配置回退，对它回写一样只是
+        纯格式化。用协议当闸门会漏掉这一支。
+
+        注意这两个字面量**必须留在文件里**：``test_config_usage`` 的
         `counter-example moved` 断言要求它们仍出现在本文件中。所以这条只钉
-        「回退分支在回写之前就 return」，不钉「文件里没有这两个字面量」。
+        「配置派生分支在回写之前就 return」，不钉「文件里没有这两个字面量」。
         """
         text = DIALOG.read_text(encoding="utf-8")
-        gate = "if (!provider.CatalogIsSmsActivate)"
+        gate = "if (!fromCatalog)"
         # 先钉条件本身：只检查块内文本的话，把条件改成 `if (false)` 能让块内
         # 一个字都不变，而回写就会真的执行。
-        self.assertIn(gate, text, "the fallback path no longer gates the write-back")
+        self.assertIn(gate, text, "the config-derived path no longer gates the write-back")
 
         block = strip_csharp_comments(brace_block(text, gate))
         self.assertIn("return true;", block,
-                      "the fallback path must return before the write-back")
+                      "the config-derived path must return before the write-back")
         self.assertNotIn("UpdateConfig", block,
-                         "the fallback path must not write the provider section")
+                         "the config-derived path must not write the provider section")
+
+    def test_only_a_successful_online_lookup_marks_the_choice_as_catalog_sourced(self):
+        """``fromCatalog`` 是上面那条闸门的**唯一**开关，所以它必须默认为假、
+        且只在在线目录**成功**那一支被置真。
+
+        不钉这个的话，``fromCatalog = true`` 可以写在任何地方 —— 无条件写在方法
+        开头就行 —— 上面那条闸门就永久失效，而它自己仍然绿。这与
+        「``if`` 的条件没被钉住」是同一个失效模式，只是换了层。
+        """
+        text = DIALOG.read_text(encoding="utf-8")
+        self.assertIn("bool fromCatalog = false;", text,
+                      "fromCatalog must default to false")
+        self.assertEqual(text.count("fromCatalog = true;"), 1,
+                         "fromCatalog must be set in exactly one place")
+
+        success = strip_csharp_comments(brace_block(text, "if (online is not null)"))
+        self.assertIn("fromCatalog = true;", success,
+                      "fromCatalog must be set on the successful-lookup branch only")
+
+    def test_a_failed_online_lookup_reports_why_before_falling_back(self):
+        """回退**必须**把失败原因带出来，不能静默。
+
+        静默回退会让一份陈旧的配置看起来像刚刚核验过 —— 同一个国家、同一个价格，
+        操作者在弹窗里看不出任何区别。所以异常消息要既进日志、又进 ``notice``。
+        """
+        text = DIALOG.read_text(encoding="utf-8")
+        self.assertIn("catalogError = exc.Message;", text,
+                      "the catalog failure reason is no longer captured")
+        # 原因必须被**插值**进提示，而不是只写一句通用的「读取失败」。
+        self.assertRegex(text, r"未能读取在线目录（\{catalogError\}）")
+
+    def test_a_failed_online_lookup_does_not_end_the_flow(self):
+        """在线目录读失败**不能**结束流程 —— 只有「配置里也没有国家与档位」才可以。
+
+        上面那条钉的是「失败被说出来」，这条钉的是「失败不致命」。少了这条，把
+        ``if (savedChoice is null)`` 改成 ``if (true)`` 就能让回退永不生效，而上面
+        那条仍然绿（``notice`` 只是变成死代码）—— 也就是回到了本次要修的原始缺陷。
+
+        条件用「往前找最近的 ``if (``」定位，而不是匹配整段原文：后者会因为重新
+        排版而误报，而这里真正要钉的是**条件本身**。
+        """
+        text = DIALOG.read_text(encoding="utf-8")
+        marker = 'provider.Label + " 加载失败"'
+        self.assertIn(marker, text, "the load-failure dialog disappeared")
+
+        head = strip_csharp_comments(text[:text.index(marker)])
+        open_paren = head.rindex("if (")
+        condition = head[open_paren + len("if ("):head.index(")", open_paren)]
+        self.assertEqual(
+            condition.strip(), "savedChoice is null",
+            "the load-failure dialog must fire only when the config has no country/tier")
 
     def test_the_labels_are_not_empty_and_unique(self):
         labels = [row[1] for row in csharp_providers()]
