@@ -40,6 +40,6 @@ dotnet_diagnostic.CA1859.severity = none
 [**/MailboxPoolFileStore.cs]
 dotnet_diagnostic.CA1861.severity = none
 
-[**/SmsBowerCatalogClient.cs]
+[**/SmsProviderCatalogClient.cs]
 dotnet_diagnostic.CA1859.severity = none
 dotnet_diagnostic.CA1865.severity = none

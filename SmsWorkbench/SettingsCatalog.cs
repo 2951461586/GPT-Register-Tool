@@ -9,6 +9,13 @@ namespace SmsWorkbench
 
     public static class SettingsCatalog
     {
+        /// <summary>
+        /// Default SMS provider key. Mirrors `sms_providers.DEFAULT_PROVIDER`
+        /// on the Python side; the two are pinned together by
+        /// tests/test_settings_catalog_provider_parity.py.
+        /// </summary>
+        public const string DefaultPhoneProvider = "smsbower";
+
         private static SettingDefinition Text(string key, string label, string path, string fallback = "")
             => new(key, label, path, SettingFieldKind.Text, fallback);
         private static SettingDefinition Secret(string key, string label, string path)
@@ -84,10 +91,13 @@ namespace SmsWorkbench
                     Text("camoufox_timezone", "浏览器时区", "registration.drivers.camoufox.timezone"),
                     Text("camoufox_user_data_dir", "持久化用户目录", "registration.drivers.camoufox.user_data_dir"),
                     Boolean("camoufox_keep_browser_open", "保留浏览器现场", "registration.drivers.camoufox.keep_browser_open", false)),
-                Section("SMSBower",
-                    Secret("smsbower_api_key", "SMSBower API Key", "phone_reuse.smsbower.api_key"),
-                    Integer("smsbower_sms_timeout", "短信等待秒", "phone_reuse.smsbower.sms_timeout"),
-                    Integer("smsbower_sms_poll_interval", "短信轮询间隔秒", "phone_reuse.smsbower.sms_poll_interval"),
+                Section("接码供应商",
+                    Options("phone_provider", "供应商", "phone_reuse.source", DefaultPhoneProvider,
+                        "smsbower", "herosms", "grizzly"),
+                    Secret("phone_provider_api_key", "API Key", "phone_reuse.{provider}.api_key"),
+                    Text("phone_provider_endpoint", "API 地址（留空用内置默认）", "phone_reuse.{provider}.endpoint"),
+                    Integer("phone_provider_sms_timeout", "短信等待秒", "phone_reuse.{provider}.sms_timeout", "120"),
+                    Integer("phone_provider_sms_poll_interval", "短信轮询间隔秒", "phone_reuse.{provider}.sms_poll_interval", "5"),
                     Integer("phone_max_reuse_count", "复用次数", "phone_reuse.max_reuse_count"),
                     Integer("phone_send_cooldown_seconds", "发码冷却秒", "phone_reuse.send_cooldown_seconds"),
                     Integer("phone_send_retry_attempts", "发码重试次数", "phone_reuse.send_retry_attempts"),

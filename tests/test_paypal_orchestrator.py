@@ -62,7 +62,6 @@ def rec(monkeypatch):
                                      "sessions/fixture.json"))
     monkeypatch.setattr(orchestrator, "_extract_access_token", lambda data: data.get("access_token"))
     monkeypatch.setattr(orchestrator, "_pick_card_and_address", r("card", ({"number": "4242"}, {})))
-    monkeypatch.setattr(orchestrator, "_pick_phone_and_sms", r("phone", ("5550100134", "https://sms.example")))
     monkeypatch.setattr(orchestrator, "_random_name", r("name", ("Ada", "Lovelace")))
     monkeypatch.setattr(orchestrator, "_generate_password", r("password", "pw-fixture"))
     monkeypatch.setattr(orchestrator, "_generate_alias_email", r("alias", "alias@example.com"))
@@ -214,7 +213,7 @@ def test_auto_pay_tries_nodriver_then_browser_when_reverse_fails(rec, configured
     monkeypatch.setattr(orchestrator, "_try_nodriver_pay", rec("nodriver", {"ok": False}))
     monkeypatch.setattr(orchestrator, "_try_browser_pay", rec("browser", {"ok": True}))
     assert orchestrator.auto_pay()["ok"] is True
-    assert names(rec) == ["card", "phone", "name", "password", "alias",
+    assert names(rec) == ["card", "name", "password", "alias",
                           "reverse", "nodriver", "browser", "save"]
 
 
@@ -535,3 +534,37 @@ def test_try_browser_pay_allows_manual_verification_when_headed(monkeypatch):
                                headless=False)
     assert sms_cfg["manual_human_verification"] is True
     assert sms_cfg["human_verification_timeout"] == 300
+
+
+# ─────────────────────── the removed phone-pool source ───────────────────────
+
+
+def test_auto_pay_hands_the_engines_no_phone_number(rec, configured):
+    """The static phone pool fed ``phone`` + ``sms_api_url`` from
+    ``paypal_auto.phone_numbers``. That source was removed on 2026-09-22, so
+    both are now empty -- and *explicitly* empty rather than dropped from the
+    call, because every layer below still accepts a source and the SMS gates
+    key off whether one is present."""
+    orchestrator.auto_pay()
+    reverse_kwargs = next(kw for name, _args, kw in rec.calls if name == "reverse")
+    assert reverse_kwargs["phone"] == ""
+    assert reverse_kwargs["sms_api_url"] == ""
+
+
+def test_auto_pay_hands_the_browser_engines_no_phone_number(rec, configured, monkeypatch):
+    """The browser fallbacks must agree with the reverse path: an empty source
+    all the way down, so no engine can quietly invent a number."""
+    monkeypatch.setattr(orchestrator, "_try_reverse_pay", rec("reverse", {"ok": False, "error": "x"}))
+    monkeypatch.setattr(orchestrator, "_try_nodriver_pay", rec("nodriver", {"ok": False}))
+    monkeypatch.setattr(orchestrator, "_try_browser_pay", rec("browser", {"ok": True}))
+    orchestrator.auto_pay()
+    for name in ("nodriver", "browser"):
+        kwargs = next(kw for n, _args, kw in rec.calls if n == name)
+        assert kwargs["phone"] == "", f"{name} was handed a phone number"
+        assert kwargs["sms_api_url"] == "", f"{name} was handed an SMS URL"
+
+
+def test_the_phone_picker_is_not_an_orchestrator_symbol():
+    """It used to be imported here. Re-adding the import would let a future
+    edit reach for the removed config section without noticing it is gone."""
+    assert not hasattr(orchestrator, "_pick_phone_and_sms")

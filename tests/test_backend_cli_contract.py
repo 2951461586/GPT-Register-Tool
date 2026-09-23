@@ -35,7 +35,7 @@ Design notes (why this will not become noise)
     in this repo does not honour ``.gitignore`` - so the exclusion has to be
     written down rather than assumed;
   * the flag regex requires an alphanumeric character right after ``--``, so
-    ``"--"`` (a placeholder in ``MainWindow.SmsBower.cs``) and ``"----"`` (the
+    ``"--"`` (a placeholder in ``MainWindow.SmsProvider.cs``) and ``"----"`` (the
     mailbox-file separator) are not mistaken for flags.
 """
 

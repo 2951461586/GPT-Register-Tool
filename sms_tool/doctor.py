@@ -167,12 +167,19 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
 
 
 def _probe_unread_config_keys() -> dict[str, str]:
-    """Report config values that no code path reads.
+    """Report config values that no Python code path reads.
 
     These are the worst kind of configuration: they look like they are doing
     something, they survive review because the key name is plausible, and they
     quietly do nothing. Reported as a warning, never a failure -- an unread key
     is untidy, not broken, and failing would train people to ignore --doctor.
+
+    Scope is Python on purpose. The detector scans ``sms_tool/`` + ``services/``;
+    keys with a cited C# reader are excluded via
+    ``config_usage.CSHARP_CONSUMED_KEYS``, so the wording must not claim more
+    than the scan covers -- telling an operator that ``runtime.python_path`` has
+    no effect, while the desktop resolves its interpreter from it, is worse than
+    saying nothing.
     """
     try:
         from .config_usage import unread_config_keys
@@ -181,11 +188,15 @@ def _probe_unread_config_keys() -> dict[str, str]:
     except Exception as exc:  # pragma: no cover - advisory only
         return _check("config_unread_keys", "warn", f"could not inspect config usage: {exc}")
     if not unread:
-        return _check("config_unread_keys", "ok", "every configured key is read somewhere")
+        return _check(
+            "config_unread_keys",
+            "ok",
+            "every configured key is read by Python source or a cited C# consumer",
+        )
     return _check(
         "config_unread_keys",
         "warn",
-        "%d key(s) set but never read: %s"
+        "%d key(s) set but never read by Python source: %s"
         % (len(unread), ", ".join(item.path for item in unread[:6]) + ("..." if len(unread) > 6 else "")),
         "remove them or wire them up; run with --json for the full list",
     )

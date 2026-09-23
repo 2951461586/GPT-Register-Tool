@@ -4,12 +4,14 @@
 
 namespace SmsWorkbench
 {
-    internal static class SmsBowerCatalogClient
+    internal static class SmsProviderCatalogClient
     {
-        internal const string DefaultEndpoint = "https://smsbower.page/stubs/handler_api.php";
+        // The default host is NOT declared here: it depends on the selected
+        // provider, and a second copy of it in this file is exactly what would
+        // drift. See SmsProviderCatalog.
         internal const string OpenAiService = "dr";
 
-        internal static async Task<IReadOnlyList<SmsBowerCountryChoice>> LoadOpenAiCatalogAsync(
+        internal static async Task<IReadOnlyList<SmsProviderCountryChoice>> LoadOpenAiCatalogAsync(
             HttpClient httpClient,
             string apiKey,
             string endpoint)
@@ -39,9 +41,9 @@ namespace SmsWorkbench
             return body[prefix.Length..].Trim();
         }
 
-        private static Dictionary<string, SmsBowerCountryMetadata> ParseCountries(string json)
+        private static Dictionary<string, SmsProviderCountryMetadata> ParseCountries(string json)
         {
-            var metadata = new Dictionary<string, SmsBowerCountryMetadata>(StringComparer.OrdinalIgnoreCase);
+            var metadata = new Dictionary<string, SmsProviderCountryMetadata>(StringComparer.OrdinalIgnoreCase);
             using JsonDocument document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Object) return metadata;
 
@@ -49,18 +51,18 @@ namespace SmsWorkbench
             {
                 JsonElement item = property.Value;
                 string id = JsonString(item, "id", property.Name);
-                metadata[id] = new SmsBowerCountryMetadata(
+                metadata[id] = new SmsProviderCountryMetadata(
                     JsonString(item, "eng", id),
                     JsonString(item, "chn", ""));
             }
             return metadata;
         }
 
-        private static IReadOnlyList<SmsBowerCountryChoice> ParsePriceTiers(
+        private static IReadOnlyList<SmsProviderCountryChoice> ParsePriceTiers(
             string json,
-            Dictionary<string, SmsBowerCountryMetadata> metadata)
+            Dictionary<string, SmsProviderCountryMetadata> metadata)
         {
-            var countries = new List<SmsBowerCountryChoice>();
+            var countries = new List<SmsProviderCountryChoice>();
             using JsonDocument document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
@@ -79,7 +81,7 @@ namespace SmsWorkbench
                     .Select(ParseOffer)
                     .Where(item => item != null && item.Count > 0)
                 .GroupBy(item => item!.Price)
-                .Select(group => new SmsBowerPriceTier(
+                .Select(group => new SmsProviderPriceTier(
                     group.Key.ToString("0.########", CultureInfo.InvariantCulture),
                     group.Sum(item => item!.Count),
                     string.Join(",", group.Select(item => item!.ProviderId).Where(value => value.Length > 0).Distinct())))
@@ -87,9 +89,9 @@ namespace SmsWorkbench
                     .ToList();
                 if (tiers.Count == 0) continue;
 
-                metadata.TryGetValue(countryProperty.Name, out SmsBowerCountryMetadata? info);
-                info ??= new SmsBowerCountryMetadata(countryProperty.Name, "");
-                countries.Add(new SmsBowerCountryChoice(
+                metadata.TryGetValue(countryProperty.Name, out SmsProviderCountryMetadata? info);
+                info ??= new SmsProviderCountryMetadata(countryProperty.Name, "");
+                countries.Add(new SmsProviderCountryChoice(
                     countryProperty.Name,
                     info.EnglishName,
                     info.ChineseName,
@@ -102,7 +104,7 @@ namespace SmsWorkbench
                 .ToList();
         }
 
-        private static SmsBowerProviderOffer? ParseOffer(JsonProperty property)
+        private static SmsProviderOffer? ParseOffer(JsonProperty property)
         {
             string priceText = property.Value.ValueKind == JsonValueKind.Object
                 ? JsonString(property.Value, "price", "")
@@ -119,7 +121,7 @@ namespace SmsWorkbench
             {
                 return null;
             }
-            return new SmsBowerProviderOffer(price, count, providerId);
+            return new SmsProviderOffer(price, count, providerId);
         }
 
         private static async Task<string> GetTextAsync(
@@ -163,17 +165,17 @@ namespace SmsWorkbench
             return int.TryParse(element.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ? number : 0;
         }
 
-        private sealed record SmsBowerCountryMetadata(string EnglishName, string ChineseName);
-        private sealed record SmsBowerProviderOffer(decimal Price, int Count, string ProviderId);
+        private sealed record SmsProviderCountryMetadata(string EnglishName, string ChineseName);
+        private sealed record SmsProviderOffer(decimal Price, int Count, string ProviderId);
     }
 
-    internal sealed class SmsBowerCountryChoice
+    internal sealed class SmsProviderCountryChoice
     {
-        internal SmsBowerCountryChoice(
+        internal SmsProviderCountryChoice(
             string id,
             string englishName,
             string chineseName,
-            IReadOnlyList<SmsBowerPriceTier> tiers)
+            IReadOnlyList<SmsProviderPriceTier> tiers)
         {
             Id = id;
             EnglishName = string.IsNullOrWhiteSpace(englishName) ? id : englishName;
@@ -184,15 +186,15 @@ namespace SmsWorkbench
         public string Id { get; }
         public string EnglishName { get; }
         public string ChineseName { get; }
-        public IReadOnlyList<SmsBowerPriceTier> Tiers { get; }
+        public IReadOnlyList<SmsProviderPriceTier> Tiers { get; }
         public string DisplayName => string.IsNullOrWhiteSpace(ChineseName)
             ? $"{EnglishName} ({Id})"
             : $"{ChineseName} / {EnglishName} ({Id})";
     }
 
-    internal sealed class SmsBowerPriceTier
+    internal sealed class SmsProviderPriceTier
     {
-        internal SmsBowerPriceTier(string price, int count, string providerIds = "")
+        internal SmsProviderPriceTier(string price, int count, string providerIds = "")
         {
             Price = price;
             Count = count;

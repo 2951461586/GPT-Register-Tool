@@ -11,7 +11,12 @@ import time
 from typing import Any
 
 from ..session_refresh import _poll_auth_session, _session_token
-from ..sms_utils import _poll_sms_code, _sms_baseline
+from ..sms_utils import (
+    NO_NUMBER_SOURCE,
+    _number_source_or_none,
+    _poll_sms_code,
+    _sms_baseline,
+)
 from .dom_fields import _click_with_fallback
 from .errors import _PayPalStepError
 from .form_steps import (
@@ -124,9 +129,16 @@ def _handle_sms_verification(page, sms_cfg: dict, baseline: str) -> str | None:
     if not needs_sms:
         return None
 
+    # Check *before* polling: an empty api_url would otherwise spin for the
+    # full timeout and report ``sms_code_timeout``, which blames the code for
+    # not arriving when the truth is that no number source was configured.
+    api_url = _number_source_or_none(sms_cfg.get("api_url", ""))
+    if not api_url:
+        raise _PayPalStepError("sms_verify", NO_NUMBER_SOURCE)
+
     print("[*] SMS verification required, polling for code...")
     code = _poll_sms_code(
-        sms_cfg["api_url"], baseline,
+        api_url, baseline,
         timeout=sms_cfg["timeout"],
         poll_interval=sms_cfg["poll_interval"],
     )

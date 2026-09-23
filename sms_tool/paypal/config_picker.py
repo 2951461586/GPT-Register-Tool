@@ -1,7 +1,13 @@
-"""PayPal payment input selection: cards, addresses, phone/SMS and result persistence.
+"""PayPal payment input selection: cards, addresses and result persistence.
 
 Extracted from ``sms_tool.paypal_auto``. Owns every helper that *chooses* or
 *persists* payment inputs; it contains no browser automation at all.
+
+``_pick_phone_and_sms`` used to live here too, reading the static phone pool
+(``paypal_auto.phone_numbers`` / ``phone_number`` + ``sms_api_url``). It was
+removed on 2026-09-22 with the rest of that mode: the numbers it handed out
+pointed at activations this codebase never created, so nothing completed or
+cancelled them. See :data:`sms_tool.sms_utils.NO_NUMBER_SOURCE_MESSAGE`.
 """
 
 from __future__ import annotations
@@ -64,24 +70,6 @@ def _write_index(path: str, value: int):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(str(value), encoding="utf-8")
-
-def _pick_phone_and_sms(cfg: dict) -> tuple[str, str]:
-    """Pick a phone number and SMS API URL via round-robin.
-
-    Supports two config formats:
-      - New:  "phone_numbers": [{"phone": "...", "sms_api_url": "..."}, ...]
-      - Legacy fallback: single "phone_number" + "sms_api_url"
-    """
-    phone_list = cfg.get("phone_numbers") or []
-    if phone_list:
-        index_file = cfg.get("phone_index_file", "runtime/paypal_phone_index.txt")
-        idx = _read_index(index_file)
-        entry = phone_list[idx % len(phone_list)]
-        _write_index(index_file, idx + 1)
-        return entry["phone"], entry["sms_api_url"]
-
-    # Legacy fallback
-    return cfg.get("phone_number", ""), cfg.get("sms_api_url", "")
 
 def _generate_alias_email(base_email: str) -> str:
     """Generate a PayPal alias email (always Gmail) from base mailbox email."""

@@ -6,24 +6,26 @@
 - ``_verify_with_reuse_pool`` 的成功/失败整形共用 ``result.get("ok")`` 一个判据，
   池子返回 ``{"ok": 0}`` 和 ``{"ok": True}`` 走的是完全不同的一组字段 —— 键名对不上，
   调用方拿到的就是一堆空串。
-- ``_next_url`` 的三级兜底链决定注册下一步跳哪；断在任意一级，账号就卡在验证页。
+
+2026-09-22 之前这个模块有**两条**路径：池子路径和"legacy 单号"路径（从
+``paypal_auto.phone_number`` / ``sms_api_url`` 取一个固定号码，轮询一个固定 URL）。
+legacy 路径随静态号池模式一起被移除，理由是它**绕过租号生命周期**：两次 POST 之间
+没有任何激活 id，所以既不会 ``complete`` 也不会 ``cancel``。它的用例（``LegacyConfigTest``
+/ ``LegacyFlowTest``）与随之删除的 ``_next_url`` / ``_oai_headers`` 用例一并消失，
+代之以 ``DispatchTest`` 里"没池子但要求接码"必须**响亮失败**的契约。
 
 模块级依赖都是 ``from X import f``，所以 patch 目标**必须打在 ``codex_phone`` 自己的
-命名空间上**（``codex_phone.load_cached_sentinel`` 等）；legacy 分支的两个依赖是
-**函数内 import**，所以打在**源模块**上才生效（见各测试里的注释）。
+命名空间上**；池子入口是**函数内 import**，所以打在**源模块**上才生效。
 """
 
 from __future__ import annotations
 
-import sys
-import types
+import ast
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from sms_tool import codex_phone
-
-SEND_URL = "https://auth.openai.com/api/accounts/add-phone/send"
-VALIDATE_URL = "https://auth.openai.com/api/accounts/phone-otp/validate"
 
 POOL_SUCCESS_KEYS = {
     "ok", "next_url", "phone", "provider", "activation_id",
@@ -32,30 +34,33 @@ POOL_SUCCESS_KEYS = {
 POOL_FAILURE_KEYS = {"ok", "error", "phone", "body", "message"}
 
 
-class _FakeResponse:
-    def __init__(self, status_code=200, text="", payload=None, headers=None, url=""):
-        self.status_code = status_code
-        self.text = text
-        self._payload = payload
-        self.headers = headers or {}
-        self.url = url
+def _docstring_node_ids(tree: ast.AST) -> set[int]:
+    """``id()`` of every ``Constant`` node that *is* a docstring.
 
-    def json(self):
-        if self._payload is None:
-            raise ValueError("no json body")
-        return self._payload
+    Docstrings are the only string literals that describe rather than act, so
+    the residue guard excludes exactly these and nothing else.
+    """
+    found: set[int] = set()
+    owners = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    for node in ast.walk(tree):
+        if not isinstance(node, owners):
+            continue
+        body = getattr(node, "body", None)
+        if not body:
+            continue
+        first = body[0]
+        if (isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            found.add(id(first.value))
+    return found
 
 
 class _FakeSession:
-    def __init__(self, responses=None):
-        self.responses = responses or {}
-        self.calls = []
+    """身份对象。``post`` 直接抛 —— 这个模块自己不该发任何 HTTP 请求。"""
 
-    def post(self, url, **kwargs):
-        self.calls.append({"url": url, **kwargs})
-        if url not in self.responses:
-            raise AssertionError(f"unexpected POST to {url}")
-        return self.responses[url]
+    def post(self, *args, **kwargs):
+        raise AssertionError("codex_phone must not perform HTTP itself")
 
 
 class CodexPhoneTestBase(unittest.TestCase):
@@ -63,32 +68,13 @@ class CodexPhoneTestBase(unittest.TestCase):
         self.sentinel = {"sentinel_token": "ST", "sentinel_so_token": "SO"}
         self.pool_result = {"ok": True}
         self.pool_calls = []
-        self.pick_result = ("+15550000000", "https://sms.example/api")
-        self.poll_code = "123456"
-        self.baseline = {"raw": "seed", "timestamp": 0}
 
         self._start(mock.patch.object(codex_phone, "load_cached_sentinel",
                                       return_value=self.sentinel))
-        # 头部的真实构造另有测试覆盖（test_auth_headers_and_classification.py），
-        # 这里只关心 codex_phone 有没有把 did / extra 正确递下去。
-        self._start(mock.patch.object(
-            codex_phone, "openai_auth_headers_lower",
-            side_effect=lambda did="", extra=None: {
-                **{str(k).lower(): v for k, v in (extra or {}).items()},
-                "oai-did": did,
-            }))
-        self._start(mock.patch.object(codex_phone, "CFG", {}))
-
         # 函数内 import → 打在源模块上，调用时才重新读属性。
         self._start(mock.patch(
             "sms_tool.phone_reuse.complete_phone_verification_with_reuse",
             side_effect=self._pool))
-        self._start(mock.patch("sms_tool.paypal.config_picker._pick_phone_and_sms",
-                               side_effect=lambda cfg: self.pick_result))
-        self._start(mock.patch("sms_tool.sms_utils._sms_baseline",
-                               side_effect=lambda url: self.baseline))
-        self._start(mock.patch("sms_tool.sms_utils._poll_sms_code",
-                               side_effect=lambda *a, **kw: self.poll_code))
 
     def _start(self, patcher):
         started = patcher.start()
@@ -99,14 +85,8 @@ class CodexPhoneTestBase(unittest.TestCase):
         self.pool_calls.append(kwargs)
         return self.pool_result
 
-    def _session(self, overrides=None):
-        """注意：URL 里带点和斜杠，不能用 ``**kwargs`` 传（键会变成字面量）。"""
-        responses = {
-            SEND_URL: _FakeResponse(200, text="ok"),
-            VALIDATE_URL: _FakeResponse(200, text="ok", payload={"continue_url": "https://next"}),
-        }
-        responses.update(overrides or {})
-        return _FakeSession(responses)
+    def _session(self):
+        return _FakeSession()
 
 
 class DispatchTest(CodexPhoneTestBase):
@@ -133,11 +113,24 @@ class DispatchTest(CodexPhoneTestBase):
         })
         self.assertEqual(self.pool_calls, [])
 
-    def test_without_a_pool_and_enabled_the_legacy_path_runs(self):
+    def test_without_a_pool_and_enabled_the_failure_names_the_config_keys(self):
+        """🔴 这条取代了原来的 legacy 路径。
+
+        以前"要求接码但没给池子"会退回读 ``paypal_auto`` 的固定号码 —— 那条路已经
+        没有了。**不能**退回默认供应商（会拿操作员没写过的配置去花钱租号），
+        所以必须响亮失败，并且把该改哪个键写进 message。"""
         result = codex_phone.complete_phone_verification(
-            self._session(), "did", "https://cur", enabled=True)
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["phone"], "+15550000000")
+            _FakeSession(), "did", "https://cur", enabled=True)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "phone_pool_unavailable")
+        self.assertIn("phone_reuse.source", result["message"])
+        self.assertIn("phone_reuse.smsbower.api_key", result["message"])
+        self.assertEqual(self.pool_calls, [], "没有池子就不该走到池子入口")
+
+    def test_the_unavailable_result_has_exactly_three_keys(self):
+        result = codex_phone.complete_phone_verification(
+            _FakeSession(), "did", "https://cur", enabled=True)
+        self.assertEqual(set(result), {"ok", "error", "message"})
 
     def test_the_disabled_path_is_taken_by_default(self):
         """``enabled`` 的默认值是 ``False`` —— 没传就是不开。"""
@@ -147,16 +140,17 @@ class DispatchTest(CodexPhoneTestBase):
 
     def test_an_empty_pool_is_still_no_pool(self):
         """⚠️ 判据是 ``if phone_pool:`` 的真值，不是 ``is not None``。
-        空字典/空列表/0 都会被当成"没给池子"，掉进 legacy 分支。"""
+        空字典/空列表/0 都会被当成"没给池子"。"""
         for label, pool in {"empty dict": {}, "empty list": [], "zero": 0,
                             "empty str": ""}.items():
             with self.subTest(label=label):
                 self.pool_calls.clear()
-                codex_phone.complete_phone_verification(
+                result = codex_phone.complete_phone_verification(
                     _FakeSession(), "did", "https://cur",
-                    enabled=False, phone_pool=pool)
+                    enabled=True, phone_pool=pool)
                 self.assertEqual(self.pool_calls, [],
                                  f"{label!r} 应当被当成「没给池子」")
+                self.assertEqual(result["error"], "phone_pool_unavailable")
 
     def test_the_disabled_result_has_exactly_three_keys(self):
         result = codex_phone.complete_phone_verification(
@@ -258,322 +252,65 @@ class ReusePoolTest(CodexPhoneTestBase):
         self.assertEqual(self.pool_calls[0]["current_url"], "https://cur")
 
 
-class LegacyConfigTest(CodexPhoneTestBase):
-    """legacy 单号路径：配置与依赖缺失时的降级。"""
+class NoStaticResidueTest(unittest.TestCase):
+    """The static phone-pool mode is gone from this module, structurally."""
 
-    def _run(self, session=None):
-        return codex_phone._verify_with_legacy(session or self._session(),
-                                               "did", "https://cur")
+    def test_the_legacy_helper_is_gone(self):
+        self.assertFalse(hasattr(codex_phone, "_verify_with_legacy"))
 
-    def test_a_missing_paypal_auto_section_reaches_the_picker_as_empty(self):
-        """⚠️ ``phone_sms_config_missing`` 的真正触发点是**选择器返回空值**，
-        不是"CFG 里没有这一节" —— 选择器是外部依赖，CFG 只决定它收到什么。
-        所以这里断言的是"选择器收到了空配置"这个可观测事实。"""
-        with mock.patch("sms_tool.paypal.config_picker._pick_phone_and_sms",
-                        return_value=("", "")) as pick:
-            result = self._run()
-        self.assertEqual(result["error"], "phone_sms_config_missing")
-        self.assertEqual(pick.call_args.args[0], {})
+    def test_the_static_url_helpers_are_gone(self):
+        for name in ("_next_url", "_oai_headers"):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(codex_phone, name))
 
-    def test_a_non_dict_paypal_auto_section_is_normalised_to_empty(self):
-        """``CFG.get("paypal_auto") if isinstance(...) else {}`` ——
-        非 dict 的整节被当成空配置，不是崩溃。"""
-        for value in ("paypal", 42, [1]):
-            with self.subTest(value=repr(value)):
-                codex_phone.CFG = {"paypal_auto": value}
-                with mock.patch("sms_tool.paypal.config_picker._pick_phone_and_sms",
-                                return_value=("", "")) as pick:
-                    result = self._run()
-                self.assertEqual(result["error"], "phone_sms_config_missing")
-                self.assertEqual(pick.call_args.args[0], {})
+    def test_the_module_no_longer_reads_the_paypal_auto_section(self):
+        """``CFG`` was imported only for the legacy branch. Keeping the import
+        would let a future edit reach for ``paypal_auto`` again without noticing
+        that the section is no longer a supported number source."""
+        self.assertFalse(hasattr(codex_phone, "CFG"))
 
-    def test_a_dict_section_is_passed_through_untouched(self):
-        section = {"phone_number": "+1", "sms_api_url": "https://u"}
-        codex_phone.CFG = {"paypal_auto": section}
-        with mock.patch("sms_tool.paypal.config_picker._pick_phone_and_sms",
-                        return_value=("", "")) as pick:
-            self._run()
-        self.assertEqual(pick.call_args.args[0], section)
+    def test_the_module_reads_no_removed_config_key(self):
+        """🔴 判据必须打在**代码**上，不是原文上。
 
-    def test_a_missing_phone_or_sms_url_is_reported(self):
-        for label, pick in {
-            "no phone": ("", "https://sms.example/api"),
-            "no url": ("+1555", ""),
-            "neither": ("", ""),
-            "none pair": (None, None),
-        }.items():
-            with self.subTest(label=label):
-                self.pick_result = pick
-                self.assertEqual(self._run()["error"], "phone_sms_config_missing")
+        第一版用的是 ``assertNotIn(needle, source)``，它把两样东西当成了回归：
 
-    def test_the_picked_values_are_stripped(self):
-        self.pick_result = ("  +15550000000  ", "  https://sms.example/api  ")
-        session = self._session()
-        result = codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["phone"], "+15550000000")
-        self.assertEqual(session.calls[0]["json"], {"phone_number": "+15550000000"})
+        - 模块自己的 docstring（**说明**了这些键被移除，正是我们要写的东西）；
+        - 模块自己的错误码 ``"phone_pool_unavailable"``（含子串 ``phone_pool``）。
 
-    def test_an_import_failure_is_degraded_not_raised(self):
-        """``try: from ... import ...`` / ``except Exception`` ——
-        依赖装不上时返回 ``phone_helpers_unavailable:<异常>``，不炸调用方。"""
-        stub = types.ModuleType("sms_tool.paypal.config_picker")
-        with mock.patch.dict(sys.modules, {"sms_tool.paypal.config_picker": stub}):
-            result = self._run()
-        self.assertTrue(result["error"].startswith("phone_helpers_unavailable:"),
-                        result["error"])
-        self.assertFalse(result["ok"])
-
-    def test_a_dependency_that_fails_with_a_non_import_error_is_also_degraded(self):
-        """🔴 上一条用的是"模块里没有这个属性"，触发的是 **ImportError**；
-        把 ``except Exception`` 收窄成 ``except ImportError`` 它照样绿。
-        而这个 ``except`` 的真实价值恰恰在于**接住非 ImportError**：
-        依赖模块内部炸了（语法错、循环导入里的 NameError、读配置失败）时抛出来的
-        不是 ImportError，收窄之后这些会直接穿透到调用方、整个注册流程崩掉。"""
-        stub = types.ModuleType("sms_tool.paypal.config_picker")
-
-        def _boom(name):
-            raise ValueError(f"boom:{name}")
-
-        stub.__getattr__ = _boom
-        with mock.patch.dict(sys.modules, {"sms_tool.paypal.config_picker": stub}):
-            result = self._run()
-        self.assertFalse(result["ok"])
-        self.assertIn("phone_helpers_unavailable:", result["error"])
-        self.assertIn("boom", result["error"], "原始异常文本必须带出来，否则没法排障")
-
-    def test_the_picked_sms_url_is_stripped_before_it_reaches_the_helpers(self):
-        """🔴 和 ``phone`` 一样要 strip，但现有用例只断言了 **phone** 被 strip ——
-        URL 上的空白会原样传给 ``_sms_baseline`` 和 ``_poll_sms_code``，
-        取到的基线就对不上，轮询永远等不到新短信。"""
-        self.pick_result = ("+1555", "  https://sms.example/api?a=1\n")
-        with mock.patch("sms_tool.sms_utils._sms_baseline",
-                        side_effect=lambda url: {"raw": url}) as baseline, \
-             mock.patch("sms_tool.sms_utils._poll_sms_code",
-                        side_effect=lambda *a, **kw: "123456") as poll:
-            self._run()
-        self.assertEqual(baseline.call_args.args[0], "https://sms.example/api?a=1")
-        self.assertEqual(poll.call_args.args[0], "https://sms.example/api?a=1")
-
-    def test_a_none_phone_is_normalised_to_empty_not_the_string_none(self):
-        """🔴 ``str(phone or "").strip()`` 里的 ``or ""`` 是**有语义的**。
-
-        去掉之后 ``None`` 会变成字符串 ``"None"``（真值！），于是
-        "没选到号码"被当成"选到了号码 None"，直接往下发验证码 POST。
-        现有用例之所以抓不到：``(None, None)`` 那一组里 URL 也是 ``None``，
-        第二个条件照样拦住了 —— **必须让 URL 有效、只有 phone 缺失**才测得出来。
+        放宽成"豁免这个文件"会把假阳性换成盲区，所以改成解析 AST、只看**会被执行**
+        的字符串字面量（排除模块/类/函数 docstring），并且用**精确相等**而不是子串 ——
+        因为这里要守的契约是"不再**读**这些配置键"，而读配置在这套代码里就写作
+        ``cfg.get("phone_pool")`` / ``cfg["sms_api_url"]``，字面量与键名逐字相等。
+        错误码 ``"phone_pool_unavailable"`` 与键名不相等，因此不再误报。
         """
-        self.pick_result = (None, "https://sms.example/api")
-        session = self._session()
-        result = codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(result["error"], "phone_sms_config_missing")
-        self.assertEqual(session.calls, [], "没选到号码就不该发出任何请求")
+        tree = ast.parse(Path(codex_phone.__file__).read_text(encoding="utf-8"))
+        docstrings = _docstring_node_ids(tree)
+        executed = {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+        }
+        removed_keys = {
+            "phone_pool", "phone_number", "phone_numbers",
+            "sms_api_url", "phone_index_file",
+        }
+        for needle in sorted(removed_keys):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, executed)
 
-
-class LegacyFlowTest(CodexPhoneTestBase):
-    """legacy 单号路径：两次 POST 的契约。"""
-
-    def test_both_posts_hit_the_documented_endpoints(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual([c["url"] for c in session.calls],
-                         [SEND_URL, VALIDATE_URL])
-
-    def test_the_send_post_carries_the_phone_number(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(session.calls[0]["json"], {"phone_number": "+15550000000"})
-
-    def test_the_validate_post_carries_the_code(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(session.calls[1]["json"], {"code": "123456"})
-
-    def test_the_two_posts_use_different_referers(self):
-        """send 用的是**当前** URL，validate 用的是固定的验证页 URL。"""
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur/page")
-        self.assertEqual(session.calls[0]["headers"]["referer"], "https://cur/page")
-        self.assertEqual(session.calls[1]["headers"]["referer"],
-                         "https://auth.openai.com/phone-verification")
-
-    def test_the_sentinel_token_is_attached_to_both_posts(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        for call in session.calls:
-            self.assertEqual(call["headers"]["openai-sentinel-token"], "ST")
-
-    def test_the_proxy_is_accepted_but_never_used(self):
-        """🔴 钉住现状，这是个**真问题**，不是设计意图。
-
-        ``_verify_with_legacy(session, did, current_url, proxy=proxy)`` 收下
-        ``proxy`` 之后**再没用过一次** —— 两次 POST 都不带它，也不走
-        ``session.proxies``。后果：legacy 单号路径的手机验证流量**全部不走代理**，
-        而同一批账号的注册流程是走代理的 —— IP 直接关联。
-        池子路径（``_verify_with_reuse_pool``）是**正常传**的，对比起来更明显。
-        修的时候注意：这条用例必须一起改。
-        """
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur",
-                                        proxy="http://p:8080")
-        for call in session.calls:
-            self.assertNotIn("proxies", call)
-            self.assertNotIn("proxy", call)
-        self.assertIsNone(getattr(session, "proxies", None))
-
-    def test_the_proxy_does_reach_the_pool_path(self):
-        """对照上一条：池子路径的 proxy 是正常往下传的。"""
-        codex_phone._verify_with_reuse_pool(_FakeSession(), "did", "https://cur",
-                                            object(), proxy="http://p:8080")
-        self.assertEqual(self.pool_calls[0]["proxy"], "http://p:8080")
-
-    def test_both_posts_declare_a_json_content_type(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        for call in session.calls:
-            self.assertEqual(call["headers"]["content-type"], "application/json")
-
-    def test_both_posts_use_a_thirty_second_timeout(self):
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual([c["timeout"] for c in session.calls], [30, 30])
-
-    def test_the_impersonation_profile_is_pinned_at_chrome110(self):
-        """⚠️ 钉住现状，**不是**在推荐这个值。
-
-        ``paypal_fingerprints.PAYPAL_CHROME_VERSION`` 已经是 136，这里仍然写死
-        ``chrome110`` —— UA 头说 Chrome 136、TLS/JA3 指纹说 Chrome 110，
-        **两者不一致**。要改得三个模块一起改，别只动这一处。"""
-        session = self._session()
-        codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual([c["impersonate"] for c in session.calls],
-                         ["chrome110", "chrome110"])
-
-    def test_a_non_200_send_stops_the_flow_and_truncates_the_body(self):
-        session = self._session({SEND_URL: _FakeResponse(429, text="x" * 900)})
-        result = codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(result["error"], "phone_send_failed:429")
-        self.assertEqual(len(result["body"]), 300)
-        self.assertEqual(len(session.calls), 1, "send 失败后不该再发 validate")
-
-    def test_a_non_200_validate_stops_after_the_second_post(self):
-        session = self._session({VALIDATE_URL: _FakeResponse(400, text="bad code")})
-        result = codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(result["error"], "phone_validate_failed:400")
-        self.assertEqual(result["body"], "bad code")
-
-    def test_a_non_200_validate_truncates_the_body(self):
-        """🔴 send 分支的 300 字截断有用例钉着，validate 分支没有 ——
-        变异探针显示去掉这里的 ``[:300]`` 现有用例全绿。
-        验证失败的响应体可能是整页 HTML，不截断就会灌进日志和 UI。"""
-        session = self._session({VALIDATE_URL: _FakeResponse(500, text="z" * 900)})
-        result = codex_phone._verify_with_legacy(session, "did", "https://cur")
-        self.assertEqual(result["error"], "phone_validate_failed:500")
-        self.assertEqual(len(result["body"]), 300)
-        self.assertEqual(result["body"], "z" * 300)
-
-    def test_a_short_validate_body_is_kept_whole(self):
-        """截断只在超长时生效，短响应体必须原样保留。"""
-        session = self._session({VALIDATE_URL: _FakeResponse(400, text="bad code")})
-        self.assertEqual(codex_phone._verify_with_legacy(
-            session, "did", "https://cur")["body"], "bad code")
-
-    def test_an_unreceived_sms_code_is_a_timeout(self):
-        self.poll_code = None
-        result = self._run_flow()
-        self.assertEqual(result["error"], "phone_sms_timeout")
-        self.assertEqual(len(self._session_calls), 1, "收不到码就不该发 validate")
-
-    def test_the_sms_polling_windows_come_from_the_config(self):
-        codex_phone.CFG = {"paypal_auto": {"sms_timeout": 15, "sms_poll_interval": 2}}
-        with mock.patch("sms_tool.sms_utils._poll_sms_code",
-                        side_effect=lambda *a, **kw: "") as poll:
-            self._run_flow()
-        self.assertEqual(poll.call_args.kwargs["timeout"], 15)
-        self.assertEqual(poll.call_args.kwargs["poll_interval"], 2)
-
-    def test_the_sms_polling_windows_have_documented_defaults(self):
-        with mock.patch("sms_tool.sms_utils._poll_sms_code",
-                        side_effect=lambda *a, **kw: "") as poll:
-            self._run_flow()
-        self.assertEqual(poll.call_args.kwargs["timeout"], 120)
-        self.assertEqual(poll.call_args.kwargs["poll_interval"], 5)
-
-    def test_the_sms_baseline_is_taken_from_the_picked_url(self):
-        with mock.patch("sms_tool.sms_utils._sms_baseline",
-                        side_effect=lambda url: {"raw": "seed"}) as baseline:
-            self._run_flow()
-        self.assertEqual(baseline.call_args.args[0], "https://sms.example/api")
-
-    def test_success_returns_only_three_fields(self):
-        """⚠️ 和池子路径的形状**不一样**（那边是 9 个字段）。
-        调用方如果按池子的键名取值，legacy 成功时会拿到 KeyError。"""
-        result = self._run_flow()
-        self.assertEqual(set(result), {"ok", "next_url", "phone"})
-        self.assertEqual(result["next_url"], "https://next")
-
-    # -- helpers -------------------------------------------------------------
-    def _run_flow(self):
-        self._session_calls = []
-        session = self._session()
-
-        def _post(url, **kwargs):
-            self._session_calls.append(url)
-            return session.responses[url]
-
-        session.post = _post
-        return codex_phone._verify_with_legacy(session, "did", "https://cur")
-
-
-
-class NextUrlTest(unittest.TestCase):
-    """``_next_url`` 的三级兜底链。"""
-
-    def _resp(self, payload=None, headers=None, url="https://fallback"):
-        return _FakeResponse(payload=payload, headers=headers, url=url)
-
-    def test_the_continue_url_from_the_json_body_wins(self):
-        resp = self._resp(payload={"continue_url": "https://a"},
-                          headers={"Location": "https://b"})
-        self.assertEqual(codex_phone._next_url(resp), "https://a")
-
-    def test_it_falls_back_to_the_location_header(self):
-        resp = self._resp(payload={}, headers={"Location": "https://b"})
-        self.assertEqual(codex_phone._next_url(resp), "https://b")
-
-    def test_it_falls_back_to_the_response_url(self):
-        resp = self._resp(payload={}, headers={}, url="https://c")
-        self.assertEqual(codex_phone._next_url(resp), "https://c")
-
-    def test_a_body_that_is_not_json_is_treated_as_empty(self):
-        resp = self._resp(payload=None, headers={"Location": "https://b"})
-        self.assertEqual(codex_phone._next_url(resp), "https://b")
-
-    def test_an_empty_continue_url_does_not_win(self):
-        """``or`` 链：空串是假值，会继续往下一级走。"""
-        resp = self._resp(payload={"continue_url": ""},
-                          headers={"Location": "https://b"})
-        self.assertEqual(codex_phone._next_url(resp), "https://b")
-
-    def test_a_missing_location_header_key_falls_through(self):
-        resp = self._resp(payload={}, headers={}, url="https://c")
-        self.assertEqual(codex_phone._next_url(resp), "https://c")
-
-
-class OaiHeadersTest(CodexPhoneTestBase):
-    def test_it_delegates_to_the_lower_cased_header_builder(self):
-        with mock.patch.object(codex_phone, "openai_auth_headers_lower",
-                               return_value={"A": "1"}) as builder:
-            result = codex_phone._oai_headers("did-9", {"Referer": "https://r"})
-        self.assertEqual(result, {"A": "1"})
-        self.assertEqual(builder.call_args.args[0], "did-9")
-        self.assertEqual(builder.call_args.kwargs["extra"], {"Referer": "https://r"})
-
-    def test_extra_defaults_to_none(self):
-        with mock.patch.object(codex_phone, "openai_auth_headers_lower",
-                               return_value={}) as builder:
-            codex_phone._oai_headers("did-9")
-        self.assertIsNone(builder.call_args.kwargs["extra"])
+    def test_the_module_imports_no_removed_config_section(self):
+        """配套判据：``paypal_auto`` 这个 section 本身也不许再被 import 进来。"""
+        tree = ast.parse(Path(codex_phone.__file__).read_text(encoding="utf-8"))
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+        self.assertEqual(
+            {name for name in imported if "paypal_auto" in name}, set())
 
 
 if __name__ == "__main__":

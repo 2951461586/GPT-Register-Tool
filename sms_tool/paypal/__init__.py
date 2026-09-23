@@ -14,14 +14,13 @@ Dependency direction is strictly one-way (no cycles)::
         |
     session        browser context helpers (cookies, waits, screenshots)
     dom_fields     generic locator / fill / read primitives
-    config_picker  card / address / phone selection and result persistence
+    config_picker  card / address selection and result persistence
     errors         ``_PayPalStepError`` (dependency-free leaf)
 """
 
 from .config_picker import (
     _generate_alias_email,
     _pick_card_and_address,
-    _pick_phone_and_sms,
     _read_index,
     _save_paypal_result,
     _write_index,
@@ -146,7 +145,6 @@ __all__ = [
     # config / persistence
     "_generate_alias_email",
     "_pick_card_and_address",
-    "_pick_phone_and_sms",
     "_read_index",
     "_save_paypal_result",
     "_write_index",

@@ -28,6 +28,31 @@ from .utils import (
 )
 
 
+def _provider_selection(phone_reuse_cfg: Mapping, api_key_override=None) -> tuple[str, dict, str, str]:
+    """``(provider, section, api_key, endpoint)`` for the configured source.
+
+    The provider is whatever ``phone_reuse.source`` selects, and its settings
+    live under ``phone_reuse.<provider>``. This path used to read
+    ``phone_reuse.smsbower`` unconditionally, so a config switched to HeroSMS or
+    Grizzly still rented -- and paid for -- an SMSBower number.
+
+    Imported lazily: :mod:`sms_tool.phone_reuse` pulls in the sms-activate
+    client, while this module is itself imported by the ``registration`` shim at
+    import time. The key resolution is reused rather than reimplemented, so the
+    ``$ENV`` / ``YOUR_<VENDOR>_API_KEY`` indirection cannot drift between the two
+    entry points.
+    """
+    from . import sms_providers
+    from .phone_reuse import _phone_source, _provider_api_key, _provider_cfg
+
+    cfg = dict(phone_reuse_cfg)
+    provider = _phone_source(cfg)
+    section = _provider_cfg(cfg, provider)
+    api_key = str(api_key_override or "").strip() or _provider_api_key(cfg, provider)
+    endpoint = str(section.get("endpoint") or "").strip() or sms_providers.default_endpoint(provider)
+    return provider, section, api_key, endpoint
+
+
 def run_phone_register(
     proxy=None,
     password=None,
@@ -45,18 +70,16 @@ def run_phone_register(
     auth_base = config["chatgpt"].get("auth_base_url", "https://auth.openai.com")
     chat_base = config["chatgpt"].get("chat_base_url", "https://chatgpt.com")
 
-    # Load SMSBower config before buying a number so the proxy can be matched
-    # to the phone country and verified first.
+    # Load the selected provider's config before buying a number so the proxy
+    # can be matched to the phone country and verified first.
     phone_value = config.get("phone_reuse")
     phone_reuse_cfg = phone_value if isinstance(phone_value, Mapping) else {}
-    smsbower_value = phone_reuse_cfg.get("smsbower")
-    smsbower_cfg = smsbower_value if isinstance(smsbower_value, Mapping) else {}
-    country = smsbower_country or smsbower_cfg.get("country", "38")
-    api_key = smsbower_api_key or smsbower_cfg.get("api_key", "")
+    provider, provider_cfg, api_key, endpoint = _provider_selection(phone_reuse_cfg, smsbower_api_key)
+    country = smsbower_country or provider_cfg.get("country", "38")
 
     try:
         from .phone_proxy import select_phone_proxy
-        proxy_result = select_phone_proxy(proxy, country=country, provider="smsbower", country_cfg=smsbower_cfg)
+        proxy_result = select_phone_proxy(proxy, country=country, provider=provider, country_cfg=provider_cfg)
     except Exception as exc:
         proxy_result = {"ok": False, "error": f"phone_proxy_select_failed:{exc}"}
     if not proxy_result.get("ok"):
@@ -68,15 +91,15 @@ def run_phone_register(
     if proxy:
         print(f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}")
 
-    # Step 0: Acquire phone number from SMSBower
+    # Step 0: Acquire phone number from the selected provider
     _tick("0-Acquire phone number")
     from .smsbower import SmsBowerClient, normalize_phone
-    sms_client = SmsBowerClient(api_key=api_key)
+    sms_client = SmsBowerClient(api_key=api_key, endpoint=endpoint)
     try:
         activation = sms_client.get_number(service="dr", country=country)
     except Exception as e:
         _safe_tock()
-        return _failure_result(f"smsbower_get_number_failed: {e}")
+        return _failure_result(f"{provider}_get_number_failed: {e}")
     phone = normalize_phone(activation.phone)
     print(f"[*] Phone: {phone}  Activation ID: {activation.activation_id}")
     _tock()

@@ -27,7 +27,12 @@ from .config import CFG
 from .paypal_fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
 from .paypal_fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
 from .paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
-from .sms_utils import _extract_sms_code, _sms_baseline
+from .sms_utils import (
+    NO_NUMBER_SOURCE_MESSAGE,
+    _extract_sms_code,
+    _number_source_or_none,
+    _sms_baseline,
+)
 
 
 # ──────────────────────────── data types ────────────────────────────
@@ -405,12 +410,20 @@ class PayPalReverseClient:
         if not self._sms_input_present():
             return None
 
+        # The static phone pool that used to fill ``api_url`` is gone (see
+        # sms_utils.NO_NUMBER_SOURCE_MESSAGE). Bail out now: polling an empty
+        # URL would burn the whole timeout and then report "SMS code timeout",
+        # which points the operator at the wrong cause.
+        api_url = _number_source_or_none(self.sms_cfg.get("api_url", ""))
+        if not api_url:
+            raise _NeedBrowserFallback("sms", NO_NUMBER_SOURCE_MESSAGE)
+
         print("[re] SMS verification required, polling for code...")
-        baseline = _sms_baseline(self.sms_cfg.get("api_url", ""))
+        baseline = _sms_baseline(api_url)
 
         # Poll for code
         code = self._poll_sms(
-            self.sms_cfg.get("api_url", ""),
+            api_url,
             baseline,
             timeout=int(self.sms_cfg.get("timeout", 120)),
             interval=int(self.sms_cfg.get("poll_interval", 5)),

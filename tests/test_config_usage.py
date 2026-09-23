@@ -16,7 +16,9 @@ this exists to prevent.
 
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252.
 """
+import re
 import unittest
+from pathlib import Path
 
 from sms_tool import config_usage
 
@@ -65,6 +67,7 @@ EXPECTED_UNREAD = {
     "paypal_nocard.fallback_to_saved_url",
     "paypal_nocard.locale_country",
     "paypal_nocard.locale_lang",
+    "paypal_nocard.phone_index_file",
     "paypal_nocard.reuse_saved_ready_url",
     "paypal_nocard.reuse_saved_url",
     "paypal_nocard.saved_url_max_age_seconds",
@@ -76,13 +79,20 @@ EXPECTED_UNREAD = {
     "protocol_payments.proxy_pools.momo_checkout",
     "protocol_payments.proxy_pools.short_lived",
     "protocol_payments.proxy_pools.us_checkout",
-    "runtime.python_path",
     "upi.approve_missing_redirect",
     "upi.auto_generate",
     "upi.link_mode",
     "upi.redirect_url_format",
     "upi.use_elements_session",
 }
+# 2026-09-23: `runtime.python_path` was dropped from the set. It is NOT wired up
+# on the Python side -- it is read by the desktop
+# (`SmsWorkbench/PythonBackendClient.cs`, `SmsWorkbench/DesktopReadClient.cs`),
+# which this Python-only scan cannot see. It now lives in
+# `config_usage.CSHARP_CONSUMED_KEYS`, whose citations are pinned by
+# `CSharpConsumerTests` below. The detector still stops reporting it, so the pin
+# had to shrink -- that is the "NO LONGER dead" direction working, with the
+# reason recorded rather than the key silently disappearing.
 
 # Keys an early draft flagged that are NOT dead. Documented so the false
 # positives stay fixed rather than being rediscovered by the next audit.
@@ -101,6 +111,27 @@ KNOWN_FALSE_POSITIVES = {
 # operator config.json (which still carries the key); CI short-circuits because
 # its config.json is built from config.example.json, where the key is absent and
 # `actual` is empty. That asymmetry is why the stale pin survived in CI.
+
+
+# 2026-09-22: `paypal_nocard.phone_index_file` joined the pin. Its only reader
+# was `paypal.config_picker._pick_phone_and_sms`, deleted with the rest of the
+# static phone-pool mode -- so the key went from "read" to "dead" without anyone
+# adding anything.
+#
+# It is pinned rather than deleted because the only place it still exists is the
+# operator's *untracked* `payment.json` / `config.json`, sitting next to live
+# SMS-relay credentials. Editing those is the operator's call, not a side effect
+# of removing a code path.
+#
+# Its `paypal_browser` twin did NOT join the pin: that key lived only in
+# `config.example.json`, so deleting it from the template removed it from the
+# set entirely. The ratchet catching that -- "NO LONGER dead, delete from
+# EXPECTED_UNREAD" -- is the other direction working.
+#
+# Note the detector matches on the *leaf* name, so `paypal_*.phone_pool` never
+# appears here: the literal `"phone_pool"` still exists in `registration.py`
+# (a forwarded parameter) and in `sms_providers.REMOVED_SOURCE_VALUES`. Those
+# two keys are dead in exactly the same way and stay invisible to this ratchet.
 
 
 class DetectionTests(unittest.TestCase):
@@ -162,6 +193,102 @@ class ShardScanTests(unittest.TestCase):
         self.assertGreater(len(literals), 500)
         # a key that IS read must be present as a literal
         self.assertIn("driver", literals)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+#: C# string literal, comment-stripped. Mirrors the provider-parity scanner's
+#: approach: strip ``/* */`` and ``//`` first, because the exception list's whole
+#: job is to prove a *real* read, and a commented-out mention proves nothing.
+_CS_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_CS_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def csharp_literals(relative_path):
+    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    text = _CS_BLOCK_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    found = set()
+    for line in text.splitlines():
+        found.update(_CS_STRING.findall(line.split("//", 1)[0]))
+    return found
+
+
+class CSharpConsumerTests(unittest.TestCase):
+    """``CSHARP_CONSUMED_KEYS`` is an exception list, so it must not rot.
+
+    The Python-only scan cannot see the desktop, which makes this list the one
+    place where a key can be suppressed from the dead-key report. An exception
+    list with no guard becomes an excuse: add a key, forget why, and a genuinely
+    dead setting stays invisible forever. So every citation is verified against
+    the real C# source here.
+    """
+
+    def test_the_list_is_not_empty(self):
+        self.assertTrue(config_usage.CSHARP_CONSUMED_KEYS)
+
+    def test_every_cited_file_exists(self):
+        for key, files in config_usage.CSHARP_CONSUMED_KEYS.items():
+            for relative in files:
+                with self.subTest(key=key, file=relative):
+                    self.assertTrue(
+                        (REPO_ROOT / relative).is_file(),
+                        "citation no longer resolves: %s" % relative,
+                    )
+
+    def test_every_citation_actually_contains_the_key(self):
+        """The cited file must mention the key -- otherwise the citation is
+        fiction and the key was suppressed for no reason."""
+        for key, files in config_usage.CSHARP_CONSUMED_KEYS.items():
+            leaf = key.rsplit(".", 1)[-1]
+            with self.subTest(key=key):
+                self.assertTrue(
+                    any(leaf in csharp_literals(f) or key in csharp_literals(f) for f in files),
+                    "no cited C# file mentions %r: %s" % (key, list(files)),
+                )
+
+    def test_a_consumed_key_is_not_reported_as_dead(self):
+        reported = {item.path for item in config_usage.unread_config_keys()}
+        for key in config_usage.CSHARP_CONSUMED_KEYS:
+            with self.subTest(key=key):
+                self.assertNotIn(key, reported)
+                self.assertNotIn(key, EXPECTED_UNREAD)
+
+    def test_the_report_names_what_it_excluded(self):
+        """A silent exclusion is indistinguishable from a bug. `--doctor` has to
+        say which keys it is not judging."""
+        report = config_usage.format_unread_report(config_usage.unread_config_keys())
+        for key in config_usage.CSHARP_CONSUMED_KEYS:
+            with self.subTest(key=key):
+                self.assertIn(key, report)
+        self.assertIn("never read by Python source", report)
+
+    def test_write_only_keys_are_still_reported(self):
+        """The counter-example that justifies keeping the scan Python-only.
+
+        ``SmsWorkbench/MainWindow.SmsProvider.cs`` **writes** these two keys and
+        nothing reads them back. If C# were scanned wholesale they would leave
+        the dead set -- 1 fixed false positive traded for 2 new false negatives.
+        They must stay reported.
+        """
+        writes = csharp_literals("SmsWorkbench/MainWindow.SmsProvider.cs")
+        reported = {item.path for item in config_usage.unread_config_keys()}
+        for key in (
+            "phone_reuse.smsbower.service_name",
+            "phone_reuse.smsbower.country_name_zh",
+        ):
+            with self.subTest(key=key):
+                self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
+                self.assertIn(key, reported, "write-only key was suppressed")
+                self.assertNotIn(key, config_usage.CSHARP_CONSUMED_KEYS)
+
+    def test_the_extractor_ignores_commented_out_literals(self):
+        """Prove the extractor can fail, so the checks above are not vacuous."""
+        text = '// providerSection["service_name"] = "x";\nvar a = 1;\n'
+        stripped = _CS_BLOCK_COMMENT.sub("", text)
+        found = set()
+        for line in stripped.splitlines():
+            found.update(_CS_STRING.findall(line.split("//", 1)[0]))
+        self.assertEqual(found, set())
 
 
 if __name__ == "__main__":

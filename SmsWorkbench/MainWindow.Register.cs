@@ -197,7 +197,7 @@ namespace SmsWorkbench
             var rows = SelectedEmailRowsOrNotify("接码");
             if (rows.Count == 0) return;
 
-            if (!await ShowSmsBowerOneClickDialogAsync())
+            if (!await ShowSmsProviderOneClickDialogAsync())
             {
                 return;
             }
@@ -215,7 +215,8 @@ namespace SmsWorkbench
                 mailbox.File,
                 rows.Select(r => r.Identifier.Trim()).ToList(),
                 rows.Count == 1 ? SessionFileFor(rows[0]) : "",
-                GetRegistrationProxyPool());
+                GetRegistrationProxyPool(),
+                SmsProviderCatalog.Resolve(settingsService.GetString("phone_reuse.source")).Key);
             // Ensure temp files are cleaned up by the coordinator
             RunBackend(plan.TaskName, plan.Arguments.ToList());
         }

@@ -1,19 +1,23 @@
 """Phone verification integration for ChatGPT registration.
 
-Uses phone_reuse.py pool for multi-account phone verification,
-or falls back to single-phone paypal.config_picker helpers when no pool is given.
+Every number comes from a provider pool built by
+:func:`phone_reuse.create_phone_pool`. The single-phone fallback that read
+``paypal_auto.phone_number`` / ``sms_api_url`` was removed on 2026-09-22 along
+with the rest of the static phone-pool mode: it bypassed the rental lifecycle,
+so nothing ever completed or cancelled an activation, and the number kept
+billing after the registration had moved on.
 """
 
-from .config import CFG
-from .codex_sentinel import load_cached_sentinel, with_sentinel
-from .auth_headers import openai_auth_headers_lower
+from .codex_sentinel import load_cached_sentinel
 
 
 def complete_phone_verification(session, did, current_url, proxy=None, enabled=False, phone_pool=None):
     """Complete phone verification during registration.
 
-    If phone_pool is provided (PhonePool from phone_reuse.py), uses the reuse pool.
-    Otherwise falls back to the legacy single-phone flow from paypal.config_picker.
+    ``phone_pool`` is a ``PhonePool`` from :mod:`phone_reuse`. When it is absent
+    while ``enabled`` is set, the caller asked for phone handling without giving
+    it a number source -- a configuration error, reported as one rather than
+    silently degrading to a no-op.
     """
     if phone_pool:
         return _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=proxy)
@@ -25,7 +29,15 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
             "message": "OpenAI requested phone verification; automatic phone handling is disabled.",
         }
 
-    return _verify_with_legacy(session, did, current_url, proxy=proxy)
+    return {
+        "ok": False,
+        "error": "phone_pool_unavailable",
+        "message": (
+            "Phone verification is enabled but no provider pool was built. "
+            "Set phone_reuse.source and that provider's api_key, e.g. "
+            "phone_reuse.smsbower.api_key or SMSBOWER_API_KEY."
+        ),
+    }
 
 
 def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
@@ -61,79 +73,3 @@ def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
         "body": result.get("body", ""),
         "message": result.get("message", ""),
     }
-
-
-def _verify_with_legacy(session, did, current_url, proxy=None):
-    """Legacy single-phone verification from the paypal_auto config section."""
-    try:
-        # Import from config_picker directly: this path only needs the
-        # round-robin phone picker, not the whole PayPal browser stack.
-        from .paypal.config_picker import _pick_phone_and_sms
-        from .sms_utils import _poll_sms_code, _sms_baseline
-    except Exception as exc:
-        return {"ok": False, "error": f"phone_helpers_unavailable:{exc}"}
-
-    sms_cfg = CFG.get("paypal_auto") if isinstance(CFG.get("paypal_auto"), dict) else {}
-    phone, sms_api_url = _pick_phone_and_sms(sms_cfg)
-    phone = str(phone or "").strip()
-    sms_api_url = str(sms_api_url or "").strip()
-    if not phone or not sms_api_url:
-        return {"ok": False, "error": "phone_sms_config_missing"}
-
-    baseline = _sms_baseline(sms_api_url)
-    sentinel = load_cached_sentinel()
-    send_resp = session.post(
-        "https://auth.openai.com/api/accounts/add-phone/send",
-        headers=with_sentinel(
-            _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
-            sentinel,
-        ),
-        json={"phone_number": phone},
-        timeout=30,
-        impersonate="chrome110",
-    )
-    if send_resp.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"phone_send_failed:{send_resp.status_code}",
-            "body": send_resp.text[:300],
-        }
-
-    code = _poll_sms_code(
-        sms_api_url,
-        baseline,
-        timeout=int(sms_cfg.get("sms_timeout", 120)),
-        poll_interval=int(sms_cfg.get("sms_poll_interval", 5)),
-    )
-    if not code:
-        return {"ok": False, "error": "phone_sms_timeout"}
-
-    validate = session.post(
-        "https://auth.openai.com/api/accounts/phone-otp/validate",
-        headers=with_sentinel(
-            _oai_headers(did, {"Referer": "https://auth.openai.com/phone-verification", "content-type": "application/json"}),
-            sentinel,
-        ),
-        json={"code": code},
-        timeout=30,
-        impersonate="chrome110",
-    )
-    if validate.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"phone_validate_failed:{validate.status_code}",
-            "body": validate.text[:300],
-        }
-    return {"ok": True, "next_url": _next_url(validate), "phone": phone}
-
-
-def _oai_headers(did, extra=None):
-    return openai_auth_headers_lower(did, extra=extra)
-
-
-def _next_url(response):
-    try:
-        body = response.json()
-    except Exception:
-        body = {}
-    return body.get("continue_url") or response.headers.get("Location") or response.url

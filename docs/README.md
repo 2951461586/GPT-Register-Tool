@@ -32,6 +32,9 @@ Directory layout (since 2026-09-06):
   protocol, config keys, and region matrix search.
 - [Protocol Payment Enhancement](protocol-payment-enhancement.md) - 协议支付
   提取器与终端报告契约。
+- [Troubleshooting](TROUBLESHOOTING.md) - 故障 → 编号检查清单（先跑
+  `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
+  `file.py:line`。排错时**先读这个**，再去读契约文档。
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 

@@ -105,9 +105,9 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         source_override=args.phone_source,
     )
     if not phone_pool.phones:
-        print("[Error] --one-click-sms requires a phone pool. Configure phone_reuse.smsbower.api_key/SMSBOWER_API_KEY or phone_reuse.phone_pool.")
+        print("[Error] --one-click-sms requires a phone pool. Configure the selected provider's key, e.g. phone_reuse.smsbower.api_key / SMSBOWER_API_KEY.")
         raise SystemExit(2)
-    phone_pool.reset_exhausted_smsbower_slots()
+    phone_pool.reset_exhausted_slots()
     print_phone_pool_status(phone_pool)
     if phone_pool.total_capacity <= 0:
         print("[Error] --one-click-sms requires at least one available phone slot; current phone pool is exhausted.")

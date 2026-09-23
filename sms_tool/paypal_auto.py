@@ -10,7 +10,7 @@ module                     responsibility
 ``paypal.form_steps``      semantic PayPal form fields
 ``paypal.session``         browser context helpers
 ``paypal.dom_fields``      generic locate / fill / read primitives
-``paypal.config_picker``   card / address / phone selection
+``paypal.config_picker``   card / address selection
 ``paypal.errors``          ``_PayPalStepError``
 =========================  ============================================
 
@@ -23,6 +23,5 @@ from __future__ import annotations
 from .paypal import *  # noqa: F401,F403  (back-compat re-export surface)
 from .paypal import (  # noqa: F401  (explicit primary API)
     _PayPalStepError,
-    _pick_phone_and_sms,
     auto_pay,
 )

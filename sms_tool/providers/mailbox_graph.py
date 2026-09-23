@@ -1,5 +1,7 @@
 from curl_cffi import requests as curl_requests
 
+from ..mailbox_pool_writer import apply_rotation
+
 
 class MailboxTokenExpiredError(RuntimeError):
     """Raised when the mailbox refresh token is permanently invalid (invalid_grant)."""
@@ -45,6 +47,14 @@ def ms_oauth_refresh(mailbox, cfg, proxy=None, scope_override=None):
     if not access_token:
         raise RuntimeError("mailbox token refresh returned empty access token")
     if body.get("refresh_token"):
-        mailbox.refresh_token = body["refresh_token"]
+        # Microsoft rotates the refresh token on (some) refreshes.  Keep the
+        # in-memory record and the pool file in step -- a pool that still holds
+        # the retired token fails the *next* run with invalid_grant, which reads
+        # as "mailbox dead" while the mailbox is perfectly healthy.
+        apply_rotation(
+            mailbox,
+            previous=str(getattr(mailbox, "refresh_token", "") or ""),
+            current=str(body["refresh_token"]),
+        )
     mailbox.access_token = access_token
     return access_token

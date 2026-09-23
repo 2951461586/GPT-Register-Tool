@@ -53,7 +53,6 @@
     "sms_tool/registration_handlers.py": 4,
     "sms_tool/registration_outcome.py": 1,
     "sms_tool/registration_pulse.py": 1,
-    "sms_tool/sms_provider.py": 1,
     "sms_tool/wallet_transport.py": 1,
     "tests/test_account_email_change.py": 2,
     "tests/test_account_promotion.py": 1,
@@ -85,5 +84,5 @@
     "tests/test_smailr_provider.py": 1,
     "tests/test_wallet_transport.py": 1
   },
-  "total": 456
+  "total": 455
 }

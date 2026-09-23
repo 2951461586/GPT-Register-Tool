@@ -76,11 +76,19 @@ namespace SmsWorkbench
             try
             {
                 JsonObject root = ReadRoot();
+                // Provider-scoped settings are declared as
+                // `phone_reuse.{provider}.<key>`. Substitute the selected
+                // provider once, before the generic write loop, so the API-key
+                // box cannot keep writing to `phone_reuse.smsbower.*` after the
+                // operator switched to another provider -- a silent
+                // wrong-provider write, where the key looks saved but the
+                // backend reads a different section.
+                string selectedProvider = SelectedProvider(FindValue(fields, "phone_provider"));
                 foreach (SettingFieldViewModel field in fields.Where(field => field.Definition.JsonPath.Length > 0))
                 {
                     if (field.Key is "python_path" or "token_file")
                         field.Value = NormalizePathSetting(field.Value, field.Definition.DefaultValue);
-                    SetPath(root, field.Definition.JsonPath, ToJsonValue(field));
+                    SetPath(root, ResolveProviderPath(field.Definition.JsonPath, selectedProvider), ToJsonValue(field));
                 }
 
                 // Registration must never silently fall back to a direct
@@ -123,13 +131,17 @@ namespace SmsWorkbench
                 // mode; keep pinning it so saving unrelated settings cannot silently
                 // switch the purchase flow back to code mode.
                 SetPath(root, "email_registration.remail.service_mode", "purchase");
-                // phone_reuse.py defaults source to "auto", which falls back to the static
-                // phone pool when no SMSBower key is configured.  The desktop surface
-                // intentionally dropped static phone-pool editing, so keep pinning the
-                // SMSBower seam here.
-                SetPath(root, "phone_reuse.source", "smsbower");
-                RemovePath(root, "phone_reuse.smsbower.pool_size");
+                // phone_reuse.source is written by the catalog's provider
+                // selector. Do NOT pin it here: the selector exists precisely so
+                // the operator can choose a provider, and a late pin would
+                // overwrite that choice with the default on every save.
+                //
+                // These two are migrations for configs written by older builds.
+                // The static phone pool was removed on 2026-09-22 (see
+                // docs/current/configuration.md); the keys have no reader left,
+                // so leaving them would advertise settings that do nothing.
                 RemovePath(root, "phone_reuse.phone_pool");
+                RemovePath(root, "phone_reuse.smsbower.pool_size");
                 RemovePath(root, "protocol_payments.methods.blik.blik_code");
                 RemovePath(root, "agent_identity.register_on_free_signup");
                 RemovePath(root, "agent_identity.registration_timeout");
@@ -262,6 +274,15 @@ namespace SmsWorkbench
                     "DE").ToUpperInvariant(),
                 "token_file" or "python_path" => NormalizePathSetting(
                     Text(root, definition.JsonPath), definition.DefaultValue),
+                // Provider-scoped fields resolve against whatever
+                // phone_reuse.source currently says, so switching provider in
+                // the dialog shows that provider's own key rather than the
+                // previously selected one's.
+                _ when definition.JsonPath.Contains(ProviderToken, StringComparison.Ordinal) => Text(
+                    root,
+                    ResolveProviderPath(
+                        definition.JsonPath,
+                        SelectedProvider(Text(root, "phone_reuse.source")))),
                 _ => Text(root, definition.JsonPath)
             };
             return string.IsNullOrWhiteSpace(value) ? definition.DefaultValue : value;
@@ -342,6 +363,43 @@ namespace SmsWorkbench
 
         private static SettingFieldViewModel Find(IEnumerable<SettingFieldViewModel> fields, string key)
             => fields.First(field => string.Equals(field.Key, key, StringComparison.Ordinal));
+
+        /// <summary>
+        /// Placeholder the catalog uses for settings that live under the
+        /// selected SMS provider (`phone_reuse.&lt;provider&gt;.*`). Substituted at
+        /// read and save time -- see <see cref="ResolveProviderPath"/>.
+        /// </summary>
+        private const string ProviderToken = "{provider}";
+
+        /// <summary>
+        /// Non-throwing sibling of <see cref="Find"/>, for lookups where an
+        /// absent field must not abort the save.
+        /// </summary>
+        private static string FindValue(IEnumerable<SettingFieldViewModel> fields, string key)
+            => fields.FirstOrDefault(field => string.Equals(field.Key, key, StringComparison.Ordinal))?.Value ?? "";
+
+        /// <summary>
+        /// Path segment for provider-scoped settings. Falls back to the default
+        /// provider when the selector is blank, because an empty value must
+        /// still produce a valid path.
+        ///
+        /// A hand-edited alias (for example "hero_sms") is deliberately NOT
+        /// canonicalised here: that would need a second copy of the Python alias
+        /// map in C#, which is exactly the hand-mirrored registry that drifts.
+        /// The failure stays loud instead -- Python resolves the alias, finds no
+        /// `phone_reuse.herosms.api_key`, and reports `phone_pool_unavailable`
+        /// naming the key to set.
+        /// </summary>
+        private static string SelectedProvider(string raw)
+        {
+            string value = (raw ?? "").Trim().ToLowerInvariant();
+            return value.Length > 0 ? value : SettingsCatalog.DefaultPhoneProvider;
+        }
+
+        private static string ResolveProviderPath(string path, string provider)
+            => path.Contains(ProviderToken, StringComparison.Ordinal)
+                ? path.Replace(ProviderToken, provider, StringComparison.Ordinal)
+                : path;
 
         private static string[] ParseList(string value)
             => (value ?? "")

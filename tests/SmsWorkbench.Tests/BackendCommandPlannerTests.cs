@@ -124,7 +124,10 @@ public sealed class BackendCommandPlannerTests
             count: 2,
             proxyPool: new[] { "http://proxy:8080" });
 
-        Assert.Equal("手机号注册 (SMSBower)", plan.TaskName);
+        // The label carries no vendor: this plan does not override
+        // `phone_reuse.source`, so naming one would misreport the run.
+        Assert.Equal("手机号注册", plan.TaskName);
+        Assert.DoesNotContain("--phone-source", plan.Arguments);
         Assert.Contains("--phone-register", plan.Arguments);
         Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("--count", plan.Arguments);
@@ -223,6 +226,50 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--email-file", plan.Arguments);
         Assert.DoesNotContain("--email", plan.Arguments);
         Assert.Single(plan.TempFiles);
+    }
+
+    [Fact]
+    public void CreateOneClickSms_WithPhoneSource_EmitsTheResolvedProvider()
+    {
+        var plan = BackendCommandPlanner.CreateOneClickSms(
+            mailboxArgument: "--mailbox-file",
+            mailboxFile: "C:\\mbox.txt",
+            emails: new[] { "user@example.com" },
+            sessionFile: "C:\\session.json",
+            proxyPool: Array.Empty<string>(),
+            phoneSource: "herosms");
+
+        int index = -1;
+        for (int i = 0; i < plan.Arguments.Count; i++)
+        {
+            if (plan.Arguments[i] == "--phone-source")
+            {
+                index = i;
+                break;
+            }
+        }
+        Assert.True(index >= 0, "--phone-source missing from " + string.Join(" ", plan.Arguments));
+        Assert.Equal("herosms", plan.Arguments[index + 1]);
+    }
+
+    [Fact]
+    public void CreateOneClickSms_WithoutPhoneSource_OmitsTheOverride()
+    {
+        // Blank means "let the backend read phone_reuse.source", which is the
+        // same key the settings page writes. Emitting `--phone-source ""` would
+        // instead be rejected by argparse.
+        foreach (string? blank in new[] { null, "", "   " })
+        {
+            var plan = BackendCommandPlanner.CreateOneClickSms(
+                mailboxArgument: "--mailbox-file",
+                mailboxFile: "C:\\mbox.txt",
+                emails: new[] { "user@example.com" },
+                sessionFile: "C:\\session.json",
+                proxyPool: Array.Empty<string>(),
+                phoneSource: blank);
+
+            Assert.DoesNotContain("--phone-source", plan.Arguments);
+        }
     }
 
     // ── Account liveness ────────────────────────────────────────────────
