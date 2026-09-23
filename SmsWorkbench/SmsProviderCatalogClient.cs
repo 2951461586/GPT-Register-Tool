@@ -11,17 +11,74 @@ namespace SmsWorkbench
         // drift. See SmsProviderCatalog.
         internal const string OpenAiService = "dr";
 
+        //: Wire names for an offer's unit price. `price` = smsbower / grizzly,
+        //: `cost` = herosms. Measured 2026-09-23 -- see TryReadPrice.
+        private static readonly string[] PriceFields = { "price", "cost" };
+
         internal static async Task<IReadOnlyList<SmsProviderCountryChoice>> LoadOpenAiCatalogAsync(
             HttpClient httpClient,
             string apiKey,
             string endpoint)
         {
             Task<string> countriesTask = GetTextAsync(httpClient, endpoint, apiKey, "getCountries");
-            Task<string> pricesTask = GetTextAsync(httpClient, endpoint, apiKey, "getPricesV3", OpenAiService);
+            Task<string> pricesTask = LoadPricesAsync(httpClient, endpoint, apiKey);
             await Task.WhenAll(countriesTask, pricesTask);
 
-            var metadata = ParseCountries(await countriesTask);
-            return ParsePriceTiers(await pricesTask, metadata);
+            return ParseCatalog(await countriesTask, await pricesTask);
+        }
+
+        /// <summary>
+        /// The two catalog payloads in, the country/tier list out.
+        ///
+        /// Split out of the HTTP call purely so it can be tested: the shapes below
+        /// are the part that silently produced "no numbers" for two of three
+        /// vendors, and none of that is reachable through a mocked
+        /// <see cref="HttpClient"/> without also re-stating the shape being
+        /// tested.
+        /// </summary>
+        internal static IReadOnlyList<SmsProviderCountryChoice> ParseCatalog(
+            string countriesJson,
+            string pricesJson)
+        {
+            return ParsePriceTiers(pricesJson, ParseCountries(countriesJson));
+        }
+
+        /// <summary>
+        /// The OpenAI price list, trying the newer action first.
+        ///
+        /// <para>
+        /// 🔴 `getPricesV3` is not universal even inside the sms-activate family:
+        /// smsbower and grizzly answer it, **herosms returns `404`** and serves
+        /// only the older `getPrices`. Deciding this from the endpoint's answer
+        /// rather than from a per-provider table is deliberate -- a table would
+        /// have to be re-verified against every vendor's docs forever, and the
+        /// failure mode of a stale entry is the worst kind: a dialog that looks
+        /// fine and reports "no numbers".
+        /// </para>
+        /// </summary>
+        private static async Task<string> LoadPricesAsync(
+            HttpClient httpClient,
+            string endpoint,
+            string apiKey)
+        {
+            try
+            {
+                return await GetTextAsync(httpClient, endpoint, apiKey, "getPricesV3", OpenAiService);
+            }
+            catch (Exception v3Error) when (v3Error is HttpRequestException or InvalidDataException)
+            {
+                try
+                {
+                    return await GetTextAsync(httpClient, endpoint, apiKey, "getPrices", OpenAiService);
+                }
+                catch (Exception legacyError)
+                {
+                    throw new InvalidDataException(
+                        "价格接口不可用：getPricesV3 与 getPrices 都失败"
+                        + $"（V3: {v3Error.Message} / 旧版: {legacyError.Message}）",
+                        legacyError);
+                }
+            }
         }
 
         internal static async Task<string> LoadBalanceAsync(HttpClient httpClient, string apiKey, string endpoint)
@@ -77,14 +134,13 @@ namespace SmsWorkbench
                     continue;
                 }
 
-                var tiers = service.EnumerateObject()
-                    .Select(ParseOffer)
-                    .Where(item => item != null && item.Count > 0)
-                .GroupBy(item => item!.Price)
-                .Select(group => new SmsProviderPriceTier(
-                    group.Key.ToString("0.########", CultureInfo.InvariantCulture),
-                    group.Sum(item => item!.Count),
-                    string.Join(",", group.Select(item => item!.ProviderId).Where(value => value.Length > 0).Distinct())))
+                var tiers = ParseOffers(service)
+                    .Where(item => item.Count > 0)
+                    .GroupBy(item => item.Price)
+                    .Select(group => new SmsProviderPriceTier(
+                        group.Key.ToString("0.########", CultureInfo.InvariantCulture),
+                        group.Sum(item => item.Count),
+                        string.Join(",", group.Select(item => item.ProviderId).Where(value => value.Length > 0).Distinct())))
                     .OrderBy(item => item.NumericPrice)
                     .ToList();
                 if (tiers.Count == 0) continue;
@@ -104,24 +160,106 @@ namespace SmsWorkbench
                 .ToList();
         }
 
-        private static SmsProviderOffer? ParseOffer(JsonProperty property)
+        /// <summary>
+        /// Every offer under one country's `dr` node.
+        ///
+        /// <para>
+        /// 🔴 There are two nestings in the wild, and the three sms-activate
+        /// vendors disagree about which they use:
+        /// </para>
+        /// <list type="bullet">
+        /// <item><description>
+        /// nested -- <c>country → service → provider_id → {price, count, provider_id}</c>
+        /// (smsbower, measured 2026-09-23)
+        /// </description></item>
+        /// <item><description>
+        /// flat -- <c>country → service → {price|cost, count}</c>
+        /// (grizzly uses `price`, herosms uses `cost`; both measured the same day)
+        /// </description></item>
+        /// </list>
+        /// <para>
+        /// The shape is read from the payload rather than from a per-provider
+        /// table: a table is one more thing that goes stale silently, and getting
+        /// it wrong produces a dialog that reports "no numbers" for a vendor that
+        /// has thousands. Note the earlier code assumed the nested shape only,
+        /// which is why grizzly's 9310 numbers and herosms' 617597 both showed up
+        /// as "当前没有可用的 OpenAI 号码".
+        /// </para>
+        /// </summary>
+        private static IReadOnlyList<SmsProviderOffer> ParseOffers(JsonElement service)
         {
-            string priceText = property.Value.ValueKind == JsonValueKind.Object
-                ? JsonString(property.Value, "price", "")
-                : property.Name;
-            int count = property.Value.ValueKind == JsonValueKind.Object
-                && property.Value.TryGetProperty("count", out JsonElement countElement)
-                    ? JsonInteger(countElement)
-                    : JsonInteger(property.Value);
-            string providerId = property.Value.ValueKind == JsonValueKind.Object
-                ? JsonString(property.Value, "provider_id", property.Name)
-                : "";
-            if (count <= 0
-                || !decimal.TryParse(priceText, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal price))
+            if (service.ValueKind != JsonValueKind.Object) return Array.Empty<SmsProviderOffer>();
+
+            // Flat: the node itself carries the price.
+            if (TryReadOffer(service, "", out SmsProviderOffer flat))
             {
-                return null;
+                return new[] { flat };
             }
-            return new SmsProviderOffer(price, count, providerId);
+
+            var offers = new List<SmsProviderOffer>();
+            foreach (JsonProperty child in service.EnumerateObject())
+            {
+                if (TryReadOffer(child.Value, child.Name, out SmsProviderOffer nested))
+                {
+                    offers.Add(nested);
+                }
+            }
+            if (offers.Count > 0) return offers;
+
+            // Legacy last resort: `{"0.054": 12}` -- price as the key, count as the
+            // value. No observed vendor answers this today, but the earlier parser
+            // accepted it and dropping that silently would turn a working path
+            // into an empty list.
+            foreach (JsonProperty child in service.EnumerateObject())
+            {
+                if (!decimal.TryParse(child.Name, NumberStyles.Number, CultureInfo.InvariantCulture,
+                                      out decimal price))
+                {
+                    continue;
+                }
+                int count = JsonInteger(child.Value);
+                if (count > 0) offers.Add(new SmsProviderOffer(price, count, ""));
+            }
+            return offers;
+        }
+
+        private static bool TryReadOffer(JsonElement node, string fallbackProviderId, out SmsProviderOffer offer)
+        {
+            offer = null!;
+            if (node.ValueKind != JsonValueKind.Object) return false;
+            if (!TryReadPrice(node, out decimal price)) return false;
+            if (!node.TryGetProperty("count", out JsonElement countElement)) return false;
+            int count = JsonInteger(countElement);
+            if (count <= 0) return false;
+            offer = new SmsProviderOffer(price, count, JsonString(node, "provider_id", fallbackProviderId));
+            return true;
+        }
+
+        /// <summary>
+        /// The offer's unit price.
+        ///
+        /// <para>
+        /// `price` is what smsbower and grizzly report; herosms reports the same
+        /// field as `cost`. Read whichever is present instead of switching on the
+        /// provider -- the wire field is a property of the payload, and the
+        /// provider is not available here anyway.
+        /// </para>
+        /// </summary>
+        private static bool TryReadPrice(JsonElement node, out decimal price)
+        {
+            foreach (string field in PriceFields)
+            {
+                if (!node.TryGetProperty(field, out JsonElement element)) continue;
+                string text = element.ValueKind == JsonValueKind.String
+                    ? element.GetString() ?? ""
+                    : element.ToString();
+                if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out price))
+                {
+                    return true;
+                }
+            }
+            price = 0m;
+            return false;
         }
 
         private static async Task<string> GetTextAsync(

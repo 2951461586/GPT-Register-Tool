@@ -268,6 +268,36 @@
    `country_name` **不用写**：数字国家 id 由 `phone_proxy.COUNTRY_ID_TO_ISO` 直接解析成 ISO
    （如 `"6" -> "ID"`），只有查不到 id 时才回退到 `country_name`。
 
+8. 🔴🔴 **`min=max=target` 钉死单档的隐患：厂商的档位表会漂移，而失败是静默的。**
+
+   上面第 7 条的修法（三价钉同一档）有一个副作用：**一旦该档位消失，配置就再也租不到号**，
+   而症状与第 7 条一样 —— `--doctor` 全绿、余额充足、就是买不到。
+
+   **已实测到的实例（2026-09-23，未改动，仅记录）**：`smsbower`（当前**活跃**供应商）
+   配的是 `country=151`（智利）+ 三价钉 `0.07`，而 `0.07` 这一档**在 122 个有号国家里
+   出现 0 次** —— 智利的档位是 `0.045 / 0.047 / 0.087 / 0.100 / …`。`get_number` 会把
+   `minPrice=0.07&maxPrice=0.07` **逐字**发给 `getNumberV2`（`smsbower.py:112-115`），
+   且 `_country_candidates("151")` 只有 `["151"]`（没有回退国）。
+
+   ⚠️ **这里有一个尚未验证的前提**：厂商是否**严格按 `minPrice` 过滤**。
+   - 若**按区间过滤**（`0.045 ≤ 0.07` 就能过）⇒ 当前配置是好的，`target_price` 只是用来选档；
+   - 若**按精确档位过滤** ⇒ 当前配置结构性买不到号。
+   仓库里**没有任何关于这一点的既有结论**，两种都说得通。判定方法（零成本，未执行）：
+   用 `maxPrice=0.0001` 与 `minPrice=99` 两个不可能成交的请求测厂商是否真的按价格过滤 ——
+   预期回 `NO_NUMBERS`；若厂商忽略该过滤会真的发号（约 $0.045，可用 `cancel` 退）。
+
+   更稳的写法是**给窗口留区间**（如 `min=0.045 max=0.108 target=0.045`）：厂商仍按 `target`
+   钉到最便宜那一档，但档位表变动时不会全盘失效。改不改由操作者定 —— 本机**没动**。
+
+   三家的实测价（2026-09-23，零成本报价接口；`dr` / OpenAI）：
+
+   | 供应商 | 余额 | 协议 | 报价接口 | 现配国家 | 现配价 |
+   |---|---|---|---|---|---|
+   | `smsbower` | 1.109 | `sms_activate_handler` | `getPricesV3` ✅ | 151 智利 | 0.07（⚠️ 见上） |
+   | `herosms` | 7.6232 | `sms_activate_handler` | **`getPricesV3` 404**，只有 `getPrices` | 4 越南 | 0.03 |
+   | `grizzly` | 8.8000 | `sms_activate_handler` | `getPricesV3` ✅ | 3 斐济 | 0.013 |
+   | `nexsms` | 0.2000 | `nexsms_json`（REST） | `/api/getCountryByService` | 6 印尼 | 0.1207 |
+
 ## 13. 桌面端点过「开始接码」之后，本地 `test_config_usage` 变红
 
 **症状**：`tests/test_config_usage.py::test_detector_produces_the_pinned_set` 报
@@ -351,12 +381,74 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 - `test_the_dialog_gates_the_online_catalog_on_the_protocol` —— 按花括号配平切出协议判断的**整块**，
   要求目录调用在**块内**、且块外不再出现。只断言「文件里出现过 `CatalogIsSmsActivate`」是没用的：
   判断可以写在那里却**包不住**那次调用；
-- `test_the_fallback_path_does_not_write_the_dead_leaves` —— 回退分支必须在回写之前 return。
+- `test_the_config_derived_path_does_not_write_the_dead_leaves` —— 配置派生分支必须在回写之前 return。
+  闸门是**来源**（`fromCatalog`）不是协议，因为在线目录**读失败**的 sms-activate 供应商也走配置回退
+  （见 §15）；
+- `test_only_a_successful_online_lookup_marks_the_choice_as_catalog_sourced` —— 上面那个闸门自己也要钉：
+  `fromCatalog` 必须默认为假、且只在在线目录成功那一支被置真。否则把 `fromCatalog = true` 无条件写在
+  方法开头，闸门就永久失效而它自己仍然绿；
+- `test_a_failed_online_lookup_reports_why_before_falling_back` / `test_a_failed_online_lookup_does_not_end_the_flow`
+  —— 见 §15。
 
 **变异验证**（守卫必须实测会红，否则是同义反复）：`runtime/tmp/mutate_protocol_guards.py`
-破坏 6 处行为（表里换协议标识符 / 常量值写错 / 去掉协议分派 / 回退不读配置 /
-条件改成 `if (false)` / 把提前返回注释掉），要求对应测试**全部变红**，并核对还原后字节一致。
+破坏 11 处行为（表里换协议标识符 / 常量值写错 / 去掉协议分派 / 回退不读配置 /
+闸门条件改成 `if (false)` / 把提前返回注释掉 / 来源开关默认值翻真 / 来源开关挪出成功分支 /
+失败时不再回退 / 失败原因不进提示 / 失败原因不从异常捕获），要求对应测试**全部变红**，
+并核对还原后字节一致。
 
 ⚠️ 其中「把提前返回注释掉」这一处**第一次漏过了**：`assertIn("return true;", block)`
 会被**注释里**的同名子串满足。所以断言前必须用 `strip_csharp_comments()` 剥注释 ——
 这与 `test_config_usage` 的 `test_the_extractor_ignores_commented_out_literals` 是同一类缺陷。
+
+## 15. 换了接码供应商之后，桌面端「一键接码」报「暂无号码」或 `getPricesV3` 404
+
+**症状**（两种，都不抛异常到操作员面前，所以特别容易误判）：
+
+- `grizzly`：弹窗说「Grizzly SMS 当前没有可用的 OpenAI 号码」—— 而它实际有 9310 个；
+- `herosms`：弹窗说「HeroSMS 加载失败 … 404 (Not Found)」—— 而它只是不认 `getPricesV3`。
+
+**根因**（两个独立缺陷，都在 `SmsProviderCatalogClient`）：
+
+1. **价格解析只认一种嵌套形态。** 旧代码把 `country → service` 的**子节点**当成 offer，于是：
+
+   | 供应商 | `getPricesV3` | 层级 | 价格字段 |
+   |---|---|---|---|
+   | `smsbower` | ✅ | `country → service → provider_id → {…}` | `price` |
+   | `herosms` | **404**（只有 `getPrices`） | `country → service → {…}` | **`cost`** |
+   | `grizzly` | ✅ | `country → service → {…}` | `price` |
+
+   后两家的 `service` 节点**自己就带价格**，被读成「子节点里没有价格」⇒ 国家全部被丢弃
+   ⇒ `countries.Count == 0` ⇒ 「暂无号码」。**没有任何异常**，所以只看日志是查不出来的。
+
+2. **`getPricesV3` 在 sms-activate 家族内部也不通用** —— `herosms` 对它回 404，
+   只认旧版 `getPrices`。旧代码只打 V3，于是 404 被 `EnsureSuccessStatusCode()` 抛成
+   `HttpRequestException`。
+
+**现在的行为**（2026-09-23 起）：
+
+- `LoadPricesAsync` 先打 `getPricesV3`，**只有**在它 404 / 响应体不是 JSON 时才回退到 `getPrices`
+  （`TheLegacyActionIsNotRequestedWhenV3Answers` 钉住「V3 成功时不多打一次」）；两个都失败时
+  异常消息**同时带上两次尝试的原因**，好让操作者能区分「厂商挂了」和「我们问错了接口」。
+- `ParseOffers` 从**载荷**判形态（先看 `service` 节点自己有没有价格，再看子节点），
+  `TryReadPrice` 依次试 `price` / `cost`。**不按供应商分表**：表会静默过期，而它过期时的
+  表现恰恰就是「看着正常、报告没有号码」。
+- 🔴 **在线目录降级为「增强项」，不再是前置条件。** 任何读取失败（403 / 404 / 形态不符 /
+  返回零个国家）都回退到配置里已存的 `<section>.country` 与 `.target_price`，并把**失败原因**
+  显示在弹窗的提示行里。理由：目录读不到说明不了这家厂商能不能租，而 Python 后端读的
+  **就是这两个配置键**，所以配置值正是真正会被用来下单的值。
+  **失败原因必须显示** —— 静默回退会让一份陈旧配置看起来像刚刚核验过。
+
+**为什么在线目录失败不该致命**：它失败的原因与「能否租号」无关 —— `herosms` 是 404、
+厂商可能短暂宕机、代理可能在做过滤。把它当前置条件，等于让任何一个偶发故障都升级成
+「这家供应商完全不可用」。
+
+**回归守卫**（`tests/SmsWorkbench.Tests/SmsProviderCatalogClientTests.cs`，用假 `HttpMessageHandler`
+做**真行为**测试而不是源码守卫）：
+
+- 三种形态各一条（`NestedShapeKeepsEveryProviderAsItsOwnOffer` / `FlatShapeWithPriceFieldIsRead` /
+  `FlatShapeWithCostFieldIsRead`），载荷是**真实响应的逐字前缀**（数字裁剪过，形态与字段名未动）；
+- `ThePriceActionFallsBackToTheLegacyOneWhenV3IsMissing` / `TheLegacyActionIsNotRequestedWhenV3Answers` /
+  `FailingBothActionsNamesBothInTheError`；
+- ⚠️ 假 handler **按 `action=` 解析**而不是 `Contains`：`action=getPrices` 是
+  `action=getPricesV3` 的**前缀**，用子串匹配的话无论回退有没有发生都会通过。
+
