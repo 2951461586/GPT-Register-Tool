@@ -22,6 +22,9 @@ class DoctorUnitTests(unittest.TestCase):
             {
                 "proxy": {"default": "http://p:1", "pool": []},
                 "email_registration": {"remail": {"enabled": True, "api_key": "rk-test"}},
+                # A literal key, so the phone-provider check does not depend on
+                # whatever the developer happens to have exported.
+                "phone_reuse": {"source": "smsbower", "smsbower": {"api_key": "k"}},
             },
             "F:/repo/config.json",
             probes=probes,
@@ -77,6 +80,74 @@ class DoctorUnitTests(unittest.TestCase):
         payload = json.loads(buffer.getvalue())
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["warned"], 1)
+
+
+class PhoneProviderCheckTests(unittest.TestCase):
+    """`phone_providers`: which SMS vendors actually have a usable key.
+
+    Warns rather than fails -- a machine set up for mailbox-only work has no
+    reason to own an SMS key, and a check that fails there would be turned off
+    rather than fixed.
+    """
+
+    def test_the_selected_provider_having_a_key_is_ok(self):
+        check = doctor._check_phone_providers(
+            {"phone_reuse": {"source": "herosms", "herosms": {"api_key": "k"}}}
+        )
+        self.assertEqual(check["status"], "ok")
+        self.assertIn("selected=herosms", check["detail"])
+        self.assertIn("origin=config", check["detail"])
+
+    def test_the_selected_provider_missing_a_key_warns_with_the_fix(self):
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers(
+                {"phone_reuse": {"source": "nexsms", "smsbower": {"api_key": "k"}}}
+            )
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("selected=nexsms has no key", check["detail"])
+        self.assertIn("phone_reuse.nexsms.api_key", check["hint"])
+        self.assertIn("NEXSMS_API_KEY", check["hint"])
+
+    def test_the_other_providers_being_unconfigured_is_not_a_second_warning(self):
+        """One warning for the provider that blocks the run, not four."""
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers(
+                {"phone_reuse": {"source": "herosms", "herosms": {"api_key": "k"}}}
+            )
+        self.assertEqual(check["status"], "ok")
+        # All four are still named -- that is the question asked right after.
+        for provider in ("smsbower", "herosms", "grizzly", "nexsms"):
+            self.assertIn(provider, check["detail"])
+
+    def test_an_unset_placeholder_is_not_configured(self):
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers(
+                {"phone_reuse": {"source": "grizzly", "grizzly": {"api_key": "$GRIZZLY_API_KEY"}}}
+            )
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("selected=grizzly has no key", check["detail"])
+
+    def test_an_empty_config_warns_about_the_default_provider(self):
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers({})
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("selected=smsbower has no key", check["detail"])
+
+    def test_the_report_carries_the_structured_rows_as_well(self):
+        """The desktop probe wants rows, not a string to re-parse."""
+        probes = {name: _ok(name) for name in
+                  ("python", "node", "playwright", "curl_cffi", "requests", "pyotp", "qrcode", "nacl",
+                   "config_unread_keys")}
+        report = doctor.run_doctor(
+            {"phone_reuse": {"source": "herosms", "herosms": {"api_key": "k"}}},
+            "F:/repo/config.json",
+            probes=probes,
+        )
+        rows = {row["provider"]: row for row in report["phone_providers"]}
+        self.assertTrue(rows["herosms"]["configured"])
+        self.assertEqual(rows["herosms"]["endpoint"], "https://hero-sms.com/stubs/handler_api.php")
+        check = next(item for item in report["checks"] if item["name"] == "phone_providers")
+        self.assertEqual(check["status"], "ok")
 
 
 if __name__ == "__main__":

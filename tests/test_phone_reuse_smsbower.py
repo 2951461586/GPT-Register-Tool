@@ -1255,5 +1255,102 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         self.assertIn("rental_client(provider, api_key, endpoint)", source)
 
 
+class ProviderKeyStatusTests(unittest.TestCase):
+    """`provider_key_status` -- the report `--doctor` builds its advice from.
+
+    Its whole contract is "say what resolved, never say what the key is", and
+    both halves need pinning: a report that leaks the key is a new leak vector,
+    and one that guesses the origin is worse than useless when the question is
+    "why does this machine work and that one not".
+    """
+
+    def _rows(self, section, env=None):
+        with patch.dict("os.environ", env or {}, clear=True):
+            return phone_reuse.provider_key_status(section)
+
+    def test_every_available_provider_gets_a_row_with_exactly_one_selected(self):
+        rows = self._rows({"source": "herosms", "herosms": {"api_key": "k"}})
+        self.assertEqual(
+            [row["provider"] for row in rows],
+            list(sms_providers.available_provider_keys()),
+        )
+        selected = [row["provider"] for row in rows if row["selected"]]
+        self.assertEqual(selected, ["herosms"])
+
+    def test_a_literal_key_is_reported_as_coming_from_the_config(self):
+        rows = {row["provider"]: row for row in self._rows({"smsbower": {"api_key": "literal-key"}})}
+        self.assertTrue(rows["smsbower"]["configured"])
+        self.assertEqual(rows["smsbower"]["origin"], phone_reuse.KEY_ORIGIN_CONFIG)
+
+    def test_a_placeholder_needs_the_variable_to_actually_be_set(self):
+        """`$ENV` in the config is not the same as a key being available."""
+        section = {"source": "grizzly", "grizzly": {"api_key": "$GRIZZLY_API_KEY"}}
+        with_env = {row["provider"]: row for row in self._rows(section, {"GRIZZLY_API_KEY": "from-env"})}
+        self.assertTrue(with_env["grizzly"]["configured"])
+        self.assertEqual(with_env["grizzly"]["origin"], phone_reuse.KEY_ORIGIN_ENV)
+
+        without_env = {row["provider"]: row for row in self._rows(section)}
+        self.assertFalse(without_env["grizzly"]["configured"])
+        self.assertEqual(without_env["grizzly"]["origin"], phone_reuse.KEY_ORIGIN_MISSING)
+
+    def test_the_vendor_placeholder_spelling_is_also_an_env_lookup(self):
+        """`YOUR_<ENV>` is the other documented placeholder shape."""
+        section = {"source": "herosms", "herosms": {"api_key": "YOUR_HEROSMS_API_KEY"}}
+        rows = {row["provider"]: row for row in self._rows(section, {"HEROSMS_API_KEY": "from-env"})}
+        self.assertTrue(rows["herosms"]["configured"])
+        self.assertEqual(rows["herosms"]["origin"], phone_reuse.KEY_ORIGIN_ENV)
+
+    def test_a_blank_key_falls_back_to_the_providers_own_variable(self):
+        rows = {row["provider"]: row for row in self._rows({"smsbower": {"api_key": ""}}, {"SMSBOWER_API_KEY": "env"})}
+        self.assertTrue(rows["smsbower"]["configured"])
+        self.assertEqual(rows["smsbower"]["origin"], phone_reuse.KEY_ORIGIN_ENV)
+
+    def test_the_key_value_never_appears_in_the_report(self):
+        """The report is meant to be pasteable into a ticket."""
+        secret = "Zq3Xk9Mv7Rt2Lp5Wb8Qq1Ww2Ee3Rr4T"
+        rows = self._rows({"source": "smsbower", "smsbower": {"api_key": secret}})
+        self.assertTrue(any(row["configured"] for row in rows))
+        self.assertNotIn(secret, repr(rows))
+
+    def test_the_endpoint_reports_the_override_and_falls_back_to_the_registry(self):
+        section = {
+            "source": "grizzly",
+            "grizzly": {"api_key": "k", "endpoint": "https://mirror.example/handler_api.php"},
+            "nexsms": {"api_key": "k2"},
+        }
+        rows = {row["provider"]: row for row in self._rows(section)}
+        self.assertEqual(rows["grizzly"]["endpoint"], "https://mirror.example/handler_api.php")
+        self.assertEqual(
+            rows["nexsms"]["endpoint"],
+            sms_providers.PROVIDERS["nexsms"].default_endpoint,
+        )
+
+    def test_resolve_secret_still_honours_every_indirection_form(self):
+        """`_resolve_secret` now derives from `_key_lookup`; behaviour is pinned."""
+        with patch.dict("os.environ", {"HEROSMS_API_KEY": "from-env"}, clear=True):
+            self.assertEqual(phone_reuse._resolve_secret("literal", "herosms"), "literal")
+            self.assertEqual(phone_reuse._resolve_secret("$HEROSMS_API_KEY", "herosms"), "from-env")
+            self.assertEqual(phone_reuse._resolve_secret("YOUR_HEROSMS_API_KEY", "herosms"), "from-env")
+            self.assertEqual(phone_reuse._resolve_secret("", "herosms"), "from-env")
+            # A `$` naming some other variable must not fall back to the provider's.
+            self.assertEqual(phone_reuse._resolve_secret("$SOME_OTHER_VAR", "herosms"), "")
+            # A lone `$` is a literal, not an indirection with an empty name.
+            self.assertEqual(phone_reuse._resolve_secret("$", "herosms"), "$")
+
+
+    def test_missing_key_hint_names_the_selected_providers_own_key(self):
+        """The hint follows `phone_reuse.source`, not a hardcoded vendor."""
+        with patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "nexsms"}}, clear=False):
+            hint = phone_reuse.missing_key_hint()
+        self.assertIn("phone_reuse.nexsms.api_key", hint)
+        self.assertIn("NEXSMS_API_KEY", hint)
+        self.assertNotIn("smsbower", hint)
+
+    def test_missing_key_hint_accepts_an_explicit_provider(self):
+        hint = phone_reuse.missing_key_hint("grizzly")
+        self.assertIn("phone_reuse.grizzly.api_key", hint)
+        self.assertIn("GRIZZLY_API_KEY", hint)
+
+
 if __name__ == "__main__":
     unittest.main()

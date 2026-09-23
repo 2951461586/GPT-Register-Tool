@@ -26,6 +26,7 @@ from pathlib import Path
 from unittest import mock
 
 from sms_tool import codex_phone
+from sms_tool import phone_reuse
 
 POOL_SUCCESS_KEYS = {
     "ok", "next_url", "phone", "provider", "activation_id",
@@ -118,14 +119,32 @@ class DispatchTest(CodexPhoneTestBase):
 
         以前"要求接码但没给池子"会退回读 ``paypal_auto`` 的固定号码 —— 那条路已经
         没有了。**不能**退回默认供应商（会拿操作员没写过的配置去花钱租号），
-        所以必须响亮失败，并且把该改哪个键写进 message。"""
-        result = codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur", enabled=True)
+        所以必须响亮失败，并且把该改哪个键写进 message。
+
+        ``source`` 被显式钉住：message 现在跟着选中的供应商走，不钉住就等于
+        让这条断言依赖跑测试那台机器的 ``proxy.json``。
+        """
+        with mock.patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "smsbower"}}, clear=False):
+            result = codex_phone.complete_phone_verification(
+                _FakeSession(), "did", "https://cur", enabled=True)
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "phone_pool_unavailable")
         self.assertIn("phone_reuse.source", result["message"])
         self.assertIn("phone_reuse.smsbower.api_key", result["message"])
         self.assertEqual(self.pool_calls, [], "没有池子就不该走到池子入口")
+
+    def test_the_missing_key_hint_follows_the_selected_provider(self):
+        """message 里的键名必须跟着 ``phone_reuse.source`` 走。
+
+        旧实现把它写死成 ``smsbower`` ⇒ 选了 ``herosms`` 的人被指到
+        ``phone_reuse.smsbower.api_key`` 这个错的键上，照做也不会生效。
+        """
+        with mock.patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "herosms"}}, clear=False):
+            result = codex_phone.complete_phone_verification(
+                _FakeSession(), "did", "https://cur", enabled=True)
+        self.assertIn("phone_reuse.herosms.api_key", result["message"])
+        self.assertIn("HEROSMS_API_KEY", result["message"])
+        self.assertNotIn("smsbower", result["message"])
 
     def test_the_unavailable_result_has_exactly_three_keys(self):
         result = codex_phone.complete_phone_verification(

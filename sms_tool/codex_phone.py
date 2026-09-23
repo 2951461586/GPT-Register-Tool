@@ -29,13 +29,19 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
             "message": "OpenAI requested phone verification; automatic phone handling is disabled.",
         }
 
+    # The hint is built by `phone_reuse` so it names the key for whichever
+    # provider `phone_reuse.source` selects. It used to hardcode `smsbower`,
+    # which pointed anyone who had selected another vendor at the wrong key --
+    # and contradicted the desktop settings comment that promises this message
+    # names the key to set.
+    from .phone_reuse import missing_key_hint
+
     return {
         "ok": False,
         "error": "phone_pool_unavailable",
         "message": (
             "Phone verification is enabled but no provider pool was built. "
-            "Set phone_reuse.source and that provider's api_key, e.g. "
-            "phone_reuse.smsbower.api_key or SMSBOWER_API_KEY."
+            f"Set phone_reuse.source, then {missing_key_hint()}."
         ),
     }
 

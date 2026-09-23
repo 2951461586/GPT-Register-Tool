@@ -121,6 +121,77 @@ def _probe_requests() -> dict[str, str]:
     return _probe_import("requests", "requests", "", required=True)
 
 
+def _phone_provider_rows(config: Mapping[str, Any]) -> list[dict[str, object]]:
+    """Per-provider SMS key readiness, or ``[]`` when it cannot be determined.
+
+    Imported lazily on purpose: ``doctor`` has to stay runnable on a machine
+    where the registration dependencies are not installed yet -- that is
+    precisely the machine it exists to diagnose.
+    """
+    try:
+        from .phone_reuse import provider_key_status
+    except Exception:  # pragma: no cover - advisory only
+        return []
+    section = config.get("phone_reuse")
+    try:
+        return provider_key_status(dict(section) if isinstance(section, Mapping) else {})
+    except Exception:  # pragma: no cover - advisory only
+        return []
+
+
+def _missing_key_hint(provider: str) -> str:
+    """The shared "set this key" instruction, with a fallback.
+
+    Guarded on purpose: ``doctor`` has to be able to *say* what is missing on a
+    machine where the package will not import -- that is exactly the machine the
+    hint is written for, so a failed import must not cost the message.
+    """
+    try:
+        from .phone_reuse import missing_key_hint
+
+        return missing_key_hint(provider)
+    except Exception:  # pragma: no cover - advisory only
+        return f"set phone_reuse.{provider}.api_key in proxy.json, or its provider env var"
+
+
+def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
+    """Warn when the provider ``phone_reuse.source`` selects has no usable key.
+
+    Only the selected provider can block a run, so the other three being
+    unconfigured is normal and must not become three separate warnings -- that
+    is how a report trains people to ignore it. All four are still named in the
+    detail, because "which providers do I have keys for at all" is the question
+    asked immediately after this check fails.
+
+    No key value is ever printed. ``origin`` distinguishes a literal in the
+    config from a value that came out of the environment -- invisible in a
+    successful run, which is exactly why "it works on one machine and not the
+    other" has no answer without it.
+    """
+    rows = _phone_provider_rows(config)
+    if not rows:
+        return _check(
+            "phone_providers", "warn", "could not determine provider key status",
+            "run `python -m sms_tool --doctor --json` from the project root",
+        )
+    selected = next((row for row in rows if row.get("selected")), rows[0])
+    summary = ", ".join(
+        "%s=%s" % (row["provider"], row["origin"] if row["configured"] else "missing")
+        for row in rows
+    )
+    if selected["configured"]:
+        return _check(
+            "phone_providers", "ok",
+            "selected=%s (origin=%s, endpoint=%s); %s"
+            % (selected["provider"], selected["origin"], selected["endpoint"], summary),
+        )
+    return _check(
+        "phone_providers", "warn",
+        "selected=%s has no key; %s" % (selected["provider"], summary),
+        _missing_key_hint(selected["provider"]),
+    )
+
+
 def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[str, str]]:
     checks: list[dict[str, str]] = []
     package_dir = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +234,7 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
             "config_mailbox", "warn", "no usable mailbox source",
             "configure email_registration.token_file, remail, smailr or cfworker",
         ))
+    checks.append(_check_phone_providers(config))
     return checks
 
 
@@ -247,6 +319,10 @@ def run_doctor(
             if unread_detail and unread_detail["status"] == "warn"
             else []
         ),
+        # Structured twin of the `phone_providers` check. The console line is a
+        # summary; the desktop first-launch probe wants the per-provider rows
+        # (endpoint included) rather than a string it would have to re-parse.
+        "phone_providers": _phone_provider_rows(config or {}),
     }
 
 
