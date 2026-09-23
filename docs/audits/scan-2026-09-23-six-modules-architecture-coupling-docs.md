@@ -155,6 +155,9 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 ⇒ **不建议新建文档**，改为在该文件顶部加一句「本文件同时是查优惠（promotion）的契约文档」，
 把「契约在哪」这个信息补上，避免后人去 `docs/audits/` 里翻历史快照当现行契约。
 
+✅ **已落地 09-23**：`docs/current/account-health.md` 顶部已加该 blockquote，并额外写明
+「**不要**去 `docs/audits/` 找现行契约 —— 那是历史证据快照」。
+
 ### 3.3 ③ 账号测活 —— 代码健康，目录归属缺失（并入 N4）
 
 **结构三分清晰且与文档一致**：
@@ -227,6 +230,16 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 - **影响面小**（1/61），修法二选一：① 把该键从 `EXPECTED_UNREAD` 移到「C#-only」白名单并改措辞为「Python 侧不读」；
   ② 把 `SmsWorkbench/**/*.cs` 纳入 `source_string_literals` 的扫描根。
 
+✅ **已落地 09-23，走的是「①的加强版」**：新增 `CSHARP_CONSUMED_KEYS` 例外表，带**引用校验**
+（每条声明必须指向真实存在的 `.cs` 文件、且该文件确实含这个键），由 `tests/test_config_usage.py`
+新增的 7 项 `CSharpConsumerTests` 钉住；措辞改为「never read by **Python source**」，
+并在报告里**点名列出被排除的键**。未读键 **61 → 60**，`runtime.python_path` 不再被报，`doctor.py` 措辞同步。
+
+🔴 **为什么没走「②把 C# 纳入扫描根」**：实测 C# 侧有 **2 个只写不读**的键
+（`phone_reuse.smsbower.service_name` / `country_name_zh`，写在 `MainWindow.SmsProvider.cs`）——
+纳入扫描根会把它们从「未读」洗成「已读」⇒ **1 个假阳性换成 2 个假阴性**。
+「例外表 + 反例守卫」（`test_write_only_keys_are_still_reported`）才是正确形状。
+
 **附带观察（不是缺陷，但值得记录）**：61 个未读键里 **55 个（90%）集中在支付段**
 （`paypal` 24 · `omakse` 13 · `paypal_nocard` 8 · `protocol_payments` 5 · `upi` 5），
 而 `config_key_ratchet` 只冻结了 `registration`（1 个未读）与 `email_registration`（1 个未读）。
@@ -280,7 +293,10 @@ CI 第一步就红，且任何新 clone 都无法启动。而 `git add -A` 是�
 ② 给 `docs_consistency_scan.py` 加一条**弱检查**：文档里形如 `` `Xxx.cs` `` 的引用，必须能在
 `SmsWorkbench/` / `SmsWorkbench.Contracts/` / `tests/SmsWorkbench.Tests/` 里找到同名文件。
 这正好复用该脚本已有的「弱层只查存在性、不查语义」的设计（它的 docstring 明说弱层「必须永不因看不懂的指针而失败」）。
-⬜ **② 未落地**（新增门禁需要自测「不会因看不懂的引用而红」，成本高于①，留待拍板）。
+✅ **② 已落地 09-23**：新增 `check_csharp_file_refs`（三层设计里的第三层，理由见该函数 docstring）。
+**自证会红**：注入两个不存在的 `.cs` 引用 ⇒ 抓到 2 条；真实文档上仍 `passed`。
+⚠️ **加之前它就先抓到一个真实缺陷** —— `docs/directory-map.md:179` 列着 `AccountScanResultInterpreter.cs`，
+而该文件三周前已作为零引用死代码删除（职责被 `BackendResultInterpreter.cs` 吸收）。
 
 ### 4.2 N3：支付域的扁平命名空间 —— 一个域铺了 40 个模块、5 种命名形态
 
@@ -344,6 +360,11 @@ sms_tool/ 子包内模块         107 个
 **注意**：这 4 行要写成**具名清单**而不是新 glob —— 本轮的实测证明 glob 语义（git pathspec vs shell vs `pathlib`）
 会让同一个模式算出三个不同的数（113 / 127 / 180，见 §6）。
 
+✅ **已落地 09-23**：4 行已补（`Mailbox facades and polling primitives` 10 · `Account domain core` 7 ·
+`Payment contracts, catalog and stage gates` 10 · `Proxy authority, lanes, health and bridge` 4，共 31 文件，
+全部具名清单）。命名覆盖 **180 → 211（88%）**，未归属 **60 → 29**，且**零新增跨行重复**（仍是 5 个）。
+⚠️ 提交后 `sms_providers.py` 进跟踪面，分母会 +1 ⇒ 未归属实际是 30（已在 §3.4 ② 记明）。
+
 ---
 
 ## 5. 建议落地顺序
@@ -353,15 +374,23 @@ sms_tool/ 子包内模块         107 个
 | 1 | **提交时用 `git add -A`**（N1）。本仓有并行提交者 ⇒ 提交前重拉 `git status` | 零 | 零 | 是（git 写操作） |
 | 2 | ✅ **已落地 09-23**：改 `docs/directory-map.md:11` 的 "SMSBower catalog adapter"（N2） | 极小 | 零 | 否 |
 | 3 | ✅ **已落地 09-23**：目录表给 `pay_link/` / `paypal_link/` / `sms_provider_adapter.py` / `sms_providers.py` 加交叉引用（N3-1） | 极小 | 零 | 否 |
-| 4 | ⬜ `account-health.md` 顶部注明「本文件同时是 promotion 的契约文档」（§3.2） | 极小 | 零 | 否 |
-| 5 | ⬜ 修 `runtime.python_path` 的假阳性措辞（N5） | 极小 | 零 | 否 |
-| 6 | ⬜ 目录表补 4 个族行（具名清单），60 → 约 30（N4） | 低 | 零 | 否 |
-| 7 | ⬜ `docs_consistency_scan.py` 加「文档提到的 `Xxx.cs` 必须存在」弱检查（N2-②） | 低 | 低（需自测「不会因看不懂的引用而红」） | 否 |
+| 4 | ✅ **已落地 09-23**：`account-health.md` 顶部注明「本文件同时是 promotion 的契约文档」（§3.2） | 极小 | 零 | 否 |
+| 5 | ✅ **已落地 09-23**：修 `runtime.python_path` 的假阳性措辞（N5）—— 未读键 **61 → 60** | 极小 | 零 | 否 |
+| 6 | ✅ **已落地 09-23**：目录表补 4 个族行（具名清单），未归属 **60 → 29**、命名覆盖 **180 → 211（88%）**（N4） | 低 | 零 | 否 |
+| 7 | ✅ **已落地 09-23**：`docs_consistency_scan.py` 加「文档提到的 `Xxx.cs` 必须存在」弱检查（N2-②），已自证会红 | 低 | 低（**已自测**：不因看不懂的引用而红） | 否 |
 | 8 | ✅ **已落地 09-23**：`sms_provider.py` → `sms_provider_adapter.py`（含测试改名） | 中 | 零（实测全绿，见 §5.1） | 是（已拍板） |
 
 **落地后的门禁复核**（本轮实测，全绿）：`line_ending_guard --all` = `no mixed line endings among 875 tracked file(s)` ·
 `docs_consistency_scan` = `passed` · `tests/test_audits_readme_index.py` = `2 passed`（新增报告已入 `docs/audits/README.md` 索引，计数 41 → 42）。
 三个改动文件实测**纯 LF**（CRLF=0）。
+
+**七项全部落地后的总复核（09-23）**：`pytest -q` → `4942 passed / 6 skipped / 1054 subtests`（0 failed）·
+十道门禁全绿（含 `unused_import_ratchet` 锁紧为 `455 <= 455`）·
+`scan_hardcoded_secrets` → `total findings 0` · 新增/修改文件纯 LF。
+**提交**：`083e1d5`（68 files changed，+7014 / −1217），四道 pre-commit 钩子全绿。
+⚠️ **提交前另抓到并修复一个泄漏**：本报告 §4.2 举例时抄进了对标项目的**真实明文密码**，
+连带扩散到扫描器 docstring 与测试 fixture 共 **16 处** ⇒ 已全部脱敏为等价人造值
+（判据：`git grep -l <值> HEAD` 为空 ⇒ 属新暴露）。详见 memory `2026-09-23.md`。
 
 ### 5.1 第 8 项落地记录：`sms_provider.py` → `sms_provider_adapter.py`（09-23）
 
