@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
+
 _DEBUG_DIR = "runtime/nd_pay_debug"
 
 
@@ -425,12 +427,18 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
     """Handle SMS verification: click send code, poll for code, fill it in."""
     import requests as _requests
 
-    api_url = sms_cfg.get("api_url", "")
+    api_url = _number_source_or_none(sms_cfg.get("api_url", ""))
     poll_interval = sms_cfg.get("poll_interval", 5)
     sms_timeout = sms_cfg.get("timeout", 120)
 
     if not api_url:
-        print("[nd-pay] No SMS API URL configured")
+        # ⚠️ Deliberately *not* an exception. This function never probes the
+        # page for an SMS field -- it clicks "Send Code" blind -- so it cannot
+        # tell "no gate" from "gate I cannot satisfy". Raising here would fail
+        # every payment, including the majority that never ask for SMS.
+        # Instead name the cause and carry on; if a gate *is* present, the
+        # payment fails at submit and this line is the explanation.
+        print(f"[nd-pay] skipping SMS gate: {NO_NUMBER_SOURCE_MESSAGE}")
         return None
 
     # Take baseline

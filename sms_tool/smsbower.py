@@ -7,14 +7,22 @@ acquire a number, poll its activation status, then complete/cancel it.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 import requests as _requests
 
+from .sms_providers import PROVIDERS as _PROVIDERS
 
-DEFAULT_ENDPOINT = "https://smsbower.page/stubs/handler_api.php"
+
+_LOGGER = logging.getLogger(__name__)
+
+# The host lives in the provider registry so every vendor speaking this protocol
+# shares one declaration. This client is protocol-level; which host it points at
+# is decided per instance via ``endpoint``.
+DEFAULT_ENDPOINT = _PROVIDERS["smsbower"].default_endpoint
 OPENAI_SERVICE_CODE = "dr"
 GHANA_COUNTRY_CODE = "38"
 
@@ -210,10 +218,43 @@ class SmsBowerClient:
             return False
 
     def cancel(self, activation_id: str) -> bool:
+        """Release an activation; True only on the vendor's ``ACCESS_CANCEL``.
+
+        🔴 The vendor's actual answer is now logged when it is *not*
+        ``ACCESS_CANCEL``.  Until 2026-09-22 that answer was destroyed twice over:
+        the exception was swallowed into ``False``, and
+        ``phone_reuse._cancel_smsbower_activation`` then **ignored the return
+        value entirely**.  This handler family (sms-activate protocol) refuses to
+        cancel an activation younger than a minimum lifetime, answering something
+        like ``EARLY_CANCEL_DENIED`` -- so "refused because too early" and "the
+        network died" were indistinguishable in every log.
+
+        That is what made the deferred-cancel question (does this vendor have an
+        early-cancel window at all?) unanswerable: answering it would have needed
+        a paid dedicated probe.  Logging the reply costs nothing, changes no
+        behaviour, and lets the next real run answer it for free.
+        """
         try:
-            return self.set_status(activation_id, "8") == "ACCESS_CANCEL"
-        except Exception:
+            status = self.set_status(activation_id, "8")
+        except Exception as error:
+            _LOGGER.warning(
+                "smsbower cancel errored for activation %s: %s",
+                activation_id, error,
+                extra={"event": "smsbower_cancel_failed", "activation_id": activation_id},
+            )
             return False
+        if status == "ACCESS_CANCEL":
+            return True
+        _LOGGER.warning(
+            "smsbower refused to cancel activation %s: %s",
+            activation_id, status,
+            extra={
+                "event": "smsbower_cancel_refused",
+                "activation_id": activation_id,
+                "vendor_status": status,
+            },
+        )
+        return False
 
     def request_additional(self, activation_id: str) -> bool:
         try:

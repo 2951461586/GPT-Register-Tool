@@ -107,6 +107,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
+- [Troubleshooting](./docs/TROUBLESHOOTING.md) (Chinese; numbered checklists, one per failure mode, each pointing at the owning `file.py:line`)
 - [v2026.09.14 release notes](./docs/releases/release-v2026.09.14.md)
 - [Documentation index](./docs/README.md) (Chinese; release notes and audits archived under `docs/releases/` and `docs/audits/`)
 - [Directory map](./docs/directory-map.md)

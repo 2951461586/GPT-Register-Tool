@@ -52,6 +52,39 @@ What this means in practice:
   `paypal_browser`; the latter only appears in the shard-ownership manifest,
   `ConfigStore.cs` and the unread-key allowlist in `tests/test_config_usage.py`.
   Editing it is a no-op for the runtime.
+* `paypal_auto` itself is **not in `config.py`'s shard map** (only
+  `paypal_browser`, `paypal` and `paypal_nocard` are), so `CFG.get("paypal_auto")`
+  resolves to nothing and `auto_pay` returns `paypal_auto not configured`
+  before it picks a card. The whole PayPal payment lane is therefore dormant,
+  which is why the 2026-09-22 removal below has no runtime effect today.
+
+## PayPal checkout SMS has no number source (decision 2026-09-22)
+
+The static phone-pool mode was removed across all three lanes it existed in:
+
+| Lane | What it fed | Where the reader was |
+| --- | --- | --- |
+| Registration SMS | `phone_reuse.phone_pool` | `sms_tool/phone_reuse.py` |
+| Registration SMS fallback | `paypal_auto.phone_number` + `sms_api_url` | `sms_tool/codex_phone.py` |
+| PayPal checkout SMS | `paypal_auto.phone_numbers` / `phone_number` | `sms_tool/paypal/config_picker.py` |
+
+All three handed out numbers pointing at activations this codebase never
+created, so nothing ever completed or cancelled them — the number kept billing
+after the flow had moved on. Numbers now come only from a rental pool built by
+`phone_reuse.create_phone_pool`, which owns the full lifecycle.
+
+**PayPal checkout SMS has no rental replacement.** This was measured, not
+assumed: a repo-wide search for the rental client in the PayPal package returns
+nothing. The plumbing still carries a `phone` / `sms_api_url` pair, so wiring a
+source in is a change to `sms_tool/paypal/orchestrator.py` alone, but until then
+an SMS gate there fails with `no_number_source` rather than polling an empty URL
+for the full 120s timeout. See `docs/TROUBLESHOOTING.md` §12.
+
+The failure is deliberately asymmetric: `flow_steps` and `paypal_reverse` detect
+the gate on the page before deciding, so they raise; `nodriver_paypal` clicks
+"Send Code" blind and cannot tell "no gate" from "gate I cannot satisfy", so it
+warns and continues instead of failing every payment. Both behaviours are pinned
+in `tests/test_paypal_sms_lane_removed.py`.
 
 ### Known self-inconsistency on the phone line (accepted, not a regression)
 

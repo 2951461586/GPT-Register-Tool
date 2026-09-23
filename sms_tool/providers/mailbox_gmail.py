@@ -16,6 +16,7 @@ from email.utils import formataddr
 from curl_cffi import requests as curl_requests
 
 from .outlook_imap_client import discover_imap_folders, imap_message_to_graph_shape
+from ..mailbox_pool_writer import apply_rotation
 
 
 GMAIL_DOMAINS = {"gmail.com", "googlemail.com"}
@@ -97,7 +98,13 @@ def refresh_gmail_access_token(mailbox, cfg, proxy=None, scope_override=None):
         raise RuntimeError("gmail token refresh returned empty access token")
     mailbox.access_token = access_token
     if body.get("refresh_token"):
-        mailbox.refresh_token = str(body["refresh_token"]).strip()
+        # Same contract as the Graph path: a rotated token that is not persisted
+        # turns the next run into a spurious "mailbox dead" verdict.
+        apply_rotation(
+            mailbox,
+            previous=refresh_token,
+            current=str(body["refresh_token"]).strip(),
+        )
     return access_token
 
 

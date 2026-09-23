@@ -659,6 +659,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1 -Version 
 ## 文档索引
 
 - [文档总索引](docs/README.md)
+- [故障排查（按编号清单）](docs/TROUBLESHOOTING.md)
 - [架构说明](docs/architecture.md)
 - [目录职责](docs/directory-map.md)
 - [架构决策记录（ADR）](docs/adr/README.md)

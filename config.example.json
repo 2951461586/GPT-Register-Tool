@@ -609,14 +609,7 @@
     "country": "US",
     "headless": false,
     "manual_human_verification": true,
-    "human_verification_timeout": 300,
-    "phone_pool": [
-      {
-        "phone": "+10000000000",
-        "sms_api_url": "https://sms.example.com/poll"
-      }
-    ],
-    "phone_index_file": "runtime/paypal_browser_phone_index.txt"
+    "human_verification_timeout": 300
   },
   "upi": {
     "billing_regions": [

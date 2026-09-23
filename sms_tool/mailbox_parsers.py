@@ -1,8 +1,13 @@
+import logging
 import re
 from pathlib import Path
 
 from .mailbox_types import MailboxAccount
+from .operator_output import emit
 from .providers import mailbox_icloud_url
+
+
+_LOGGER = logging.getLogger(__name__)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MS_CLIENT_ID_RE = re.compile(
@@ -21,6 +26,95 @@ KNOWN_EMAIL_DOMAINS = (
 
 def _looks_ms_client_id(value):
     return bool(MS_CLIENT_ID_RE.fullmatch(str(value or "").strip()))
+
+
+#: Refresh-token floors, per identity provider.  Real Microsoft refresh tokens are
+#: long opaque blobs (measured: 800+ characters) and Google's start with ``1//``
+#: and run 100+.  The floors sit far below those sizes on purpose -- the check
+#: exists to catch a truncated paste off a supplier card, not to re-derive either
+#: vendor's format, and a floor set at the real size would reject every token the
+#: day a vendor shortens one.
+REFRESH_TOKEN_MIN_LENGTH = {"microsoft": 100, "google": 40}
+REFRESH_TOKEN_MIN_LENGTH_DEFAULT = 20
+
+#: Substrings that only ever appear in a template or a hand-filled placeholder.
+#: Matched case-insensitively against the whole value.
+_PLACEHOLDER_MARKERS = (
+    "your_refresh", "your-refresh", "your_token", "your-token",
+    "refresh_token_here", "refresh-token-here",
+    "changeme", "change_me", "replace_me", "replaceme",
+    "placeholder", "fill_me", "fillme", "dummy_token", "dummy-token",
+)
+_TEMPLATE_SHAPE_RE = re.compile(r"^[<\[{].*[>\]}]$")
+
+
+def refresh_token_finding(value, *, provider=""):
+    """Classify a refresh token off a pool line.
+
+    Returns ``(severity, reason)`` where severity is:
+
+    * ``"reject"`` -- unambiguously a template or filler.  No working mailbox
+      carries these, so the row is dropped rather than imported and left to fail
+      later as an indistinguishable ``invalid_grant``.
+    * ``"warn"`` -- too short to be a real token for this provider.  Reported
+      with the measured length but **kept**: a false positive here silently
+      deletes a working mailbox, which costs more than the placeholder it might
+      catch, and this repo has never actually observed the short-token case.
+    * ``""`` -- nothing to report.
+    """
+    token = str(value or "").strip()
+    if not token:
+        return "", ""
+    lowered = token.lower()
+    if _TEMPLATE_SHAPE_RE.match(token):
+        return "reject", "wrapped in template brackets"
+    for marker in _PLACEHOLDER_MARKERS:
+        if marker in lowered:
+            return "reject", f"contains placeholder marker {marker!r}"
+    if len(set(token)) <= 2:
+        return "reject", "repeated-character filler"
+    floor = REFRESH_TOKEN_MIN_LENGTH.get(str(provider or "").strip().lower(), REFRESH_TOKEN_MIN_LENGTH_DEFAULT)
+    if len(token) < floor:
+        return "warn", f"length {len(token)} is below the {provider or 'known'} floor of {floor}"
+    return "", ""
+
+
+def _screen_refresh_token(value, *, provider, source_path, line_no, label):
+    """Screen a refresh token off a pool line; return it, or None to drop the row.
+
+    Rejection is reserved for values that cannot belong to a working mailbox (see
+    ``refresh_token_finding``).  A short-but-plausible token is reported with its
+    measured length and kept: silently dropping a working mailbox costs more than
+    the placeholder this might catch.
+    """
+    severity, reason = refresh_token_finding(value, provider=provider)
+    if severity == "reject":
+        measured = len(str(value or "").strip())
+        emit(
+            _LOGGER,
+            "[!] Skip %s %s:%s: refresh_token %s (len=%d)",
+            label, source_path, line_no, reason, measured,
+            extra={
+                "event": "mailbox_refresh_token_rejected",
+                "provider": provider,
+                "line": line_no,
+                "reason": reason,
+            },
+        )
+        return None
+    if severity == "warn":
+        emit(
+            _LOGGER,
+            "[!] Suspicious %s %s:%s: refresh_token %s",
+            label, source_path, line_no, reason,
+            extra={
+                "event": "mailbox_refresh_token_suspicious",
+                "provider": provider,
+                "line": line_no,
+                "reason": reason,
+            },
+        )
+    return value
 
 
 def _split_chatai_client_refresh(p2, p3):
@@ -152,6 +246,12 @@ def _parse_gmail_line(line, source_path, line_no):
             if not client_id or not client_secret or not refresh_token:
                 print(f"[!] Skip malformed Gmail OAuth mailbox line {source_path}:{line_no}")
                 return None
+            refresh_token = _screen_refresh_token(
+                refresh_token, provider="google", source_path=source_path,
+                line_no=line_no, label="Gmail OAuth mailbox line",
+            )
+            if refresh_token is None:
+                return None
             return MailboxAccount(
                 email=email.lower(),
                 refresh_token=refresh_token,
@@ -244,6 +344,12 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
             if not email:
                 print(f"[!] Skip malformed chatai email {source_path}:{line_no}")
             return None
+        refresh_token = _screen_refresh_token(
+            refresh_token, provider="microsoft", source_path=source_path,
+            line_no=line_no, label="chatai line",
+        )
+        if refresh_token is None:
+            return None
         return MailboxAccount(
             email=email.lower(), password=password, refresh_token=refresh_token,
             source=str(source_path), provider="chatai", token=client_id,
@@ -258,6 +364,12 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
     if not email or not refresh_token:
         if not email:
             print(f"[!] Skip malformed mailbox email {source_path}:{line_no}")
+        return None
+    refresh_token = _screen_refresh_token(
+        refresh_token, provider="microsoft", source_path=source_path,
+        line_no=line_no, label="mailbox line",
+    )
+    if refresh_token is None:
         return None
     return MailboxAccount(
         email=email.lower(), password=password, refresh_token=refresh_token,

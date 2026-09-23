@@ -43,6 +43,41 @@ def _extract_sms_code(text: str) -> str | None:
     return None
 
 
+# ─── Removed number source ────────────────────────────────────────────────────
+#
+# Until 2026-09-22 every PayPal SMS gate was fed a *static* number: a fixed
+# ``phone`` plus a fixed ``sms_api_url`` pointing at an activation that already
+# existed. That source was removed with the rest of the static phone-pool mode
+# (it bypassed the rental lifecycle -- nothing ever completed or cancelled an
+# activation), and PayPal checkout has no rental replacement yet.
+#
+# The danger is not that SMS stops working; it is *how* it stops. An empty
+# ``api_url`` used to fall through to the poll loop: ``requests.get("")``
+# raises, the baseline stays empty, and the loop spins for the full ``timeout``
+# -- 120s by default -- before reporting ``sms_code_timeout``. That names the
+# wrong cause: the code was never going to arrive, because nobody configured
+# where to get a number. So each gate now checks *before* polling.
+
+NO_NUMBER_SOURCE = "no_number_source"
+
+NO_NUMBER_SOURCE_MESSAGE = (
+    "PayPal checkout hit an SMS verification gate but no phone number source "
+    "is configured. The static phone pool was removed on 2026-09-22 "
+    "(paypal_auto.phone_numbers / paypal_auto.phone_number / sms_api_url are "
+    "no longer read) and this lane has no rental replacement yet. Wire a "
+    "source into sms_tool/paypal/orchestrator.py before enabling PayPal SMS."
+)
+
+
+def _number_source_or_none(api_url: str) -> str:
+    """Return the configured ``api_url``, or ``""`` when there is none.
+
+    Callers that only need to *warn* can branch on the empty string; callers
+    that must fail use :data:`NO_NUMBER_SOURCE` as the reason code.
+    """
+    return str(api_url or "").strip()
+
+
 # ─── SMS API polling ──────────────────────────────────────────────────────────
 
 

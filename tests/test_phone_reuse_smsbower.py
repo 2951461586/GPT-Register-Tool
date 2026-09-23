@@ -1,11 +1,16 @@
+import ast
+import contextlib
+import io
+import logging
 import unittest
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from sms_tool import registration
 from sms_tool import phone_reuse
+from sms_tool import sms_providers
 from sms_tool.phone_reuse import PhonePool, PhoneSlot, _complete_smsbower_activation, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
-from sms_tool.sms_provider import SmsProviderAdapter
+from sms_tool.sms_provider_adapter import SmsProviderAdapter
 from sms_tool.smsbower import SmsBowerActivation, SmsBowerClient, normalize_country, normalize_phone, normalize_service
 
 
@@ -142,7 +147,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
             first = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
             second = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
             third = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
-            reset_count = pool.reset_exhausted_smsbower_slots()
+            reset_count = pool.reset_exhausted_slots()
 
         self.assertTrue(first["ok"])
         self.assertEqual(first["reuse_count"], 1)
@@ -601,89 +606,41 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].send_retry_attempts, 3)
         self.assertEqual(pool.phones[0].send_retry_delay_seconds, 45)
 
-    def test_static_phone_pool_config_change_ignores_stale_state(self):
+    def test_a_removed_static_source_is_rejected_with_a_reason(self):
+        """``phone_pool``/``static``/``legacy`` used to select a static list.
+        They must fail loudly now: silently coercing to a provider would start
+        renting numbers against a config the operator never wrote."""
+        for value in sorted(sms_providers.REMOVED_SOURCE_VALUES):
+            with self.subTest(source=value):
+                cfg = {"phone_reuse": {"source": value, "smsbower": {"api_key": "test-key"}}}
+                with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                    with self.assertRaises(ValueError) as ctx:
+                        create_phone_pool()
+                self.assertIn("static phone pool was removed", str(ctx.exception))
+
+    def test_an_unknown_source_is_rejected_and_lists_the_choices(self):
+        cfg = {"phone_reuse": {"source": "sms_pool", "smsbower": {"api_key": "test-key"}}}
+        with patch.dict(phone_reuse.CFG, cfg, clear=False):
+            with self.assertRaises(ValueError) as ctx:
+                create_phone_pool()
+        message = str(ctx.exception)
+        self.assertIn("sms_pool", message)
+        for key in sms_providers.available_provider_keys():
+            self.assertIn(key, message)
+
+    def test_the_source_error_helper_is_empty_for_usable_values(self):
+        for value in ("", None, "smsbower", "Hero-SMS"):
+            with self.subTest(source=value):
+                self.assertEqual("", phone_reuse.phone_reuse_source_error(value))
+
+    def test_a_stale_static_pool_key_does_not_add_slots(self):
+        """The key is simply ignored now -- the selected provider is the only
+        source of slots."""
         with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
-            with open(state_path, "w", encoding="utf-8") as handle:
-                handle.write(
-                    '{"current_index":0,"phones":[{"slot_id":"phone_pool:0","provider":"legacy",'
-                    '"phone":"+15485091782","sms_api_url":"https://old.example/sms",'
-                    '"reuse_count":1,"max_reuse_count":3}]}'
-                )
-            cfg = {
-                "phone_reuse": {
-                    "source": "phone_pool",
-                    "max_reuse_count": 3,
-                    "state_file": state_path,
-                    "phone_pool": [
-                        {"phone": "+817093203174", "sms_api_url": "https://new.example/sms"}
-                    ],
-                }
-            }
-            with patch.dict(phone_reuse.CFG, cfg, clear=False):
-                pool = create_phone_pool()
-
-        self.assertEqual(len(pool.phones), 1)
-        self.assertEqual(pool.phones[0].phone, "+817093203174")
-        self.assertEqual(pool.phones[0].sms_api_url, "https://new.example/sms")
-        self.assertEqual(pool.phones[0].reuse_count, 0)
-
-    def test_static_phone_pool_keeps_state_when_config_entry_matches(self):
-        with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
-            with open(state_path, "w", encoding="utf-8") as handle:
-                handle.write(
-                    '{"current_index":0,"phones":[{"slot_id":"phone_pool:0","provider":"legacy",'
-                    '"phone":"+817093203174","sms_api_url":"https://new.example/sms",'
-                    '"reuse_count":2,"max_reuse_count":3}]}'
-                )
-            cfg = {
-                "phone_reuse": {
-                    "source": "phone_pool",
-                    "max_reuse_count": 3,
-                    "state_file": state_path,
-                    "phone_pool": [
-                        {"phone": "+817093203174", "sms_api_url": "https://new.example/sms"}
-                    ],
-                }
-            }
-            with patch.dict(phone_reuse.CFG, cfg, clear=False):
-                pool = create_phone_pool()
-
-        self.assertEqual(pool.phones[0].phone, "+817093203174")
-        self.assertEqual(pool.phones[0].sms_api_url, "https://new.example/sms")
-        self.assertEqual(pool.phones[0].reuse_count, 2)
-
-    def test_phone_source_phone_pool_uses_static_links_even_when_smsbower_configured(self):
-        with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
-            cfg = {
-                "phone_reuse": {
-                    "source": "phone_pool",
-                    "max_reuse_count": 2,
-                    "state_file": state_path,
-                    "smsbower": {"api_key": "test-key", "pool_size": 1},
-                    "phone_pool": [
-                        {"phone": "+15485091782", "sms_api_url": "https://sms789.com/sms/by_key?key=test"}
-                    ],
-                }
-            }
-            with patch.dict(phone_reuse.CFG, cfg, clear=False):
-                pool = create_phone_pool()
-
-        self.assertEqual(len(pool.phones), 1)
-        self.assertEqual(pool.phones[0].provider, "legacy")
-        self.assertEqual(pool.phones[0].phone, "+15485091782")
-        self.assertEqual(pool.phones[0].sms_api_url, "https://sms789.com/sms/by_key?key=test")
-        self.assertEqual(pool.phones[0].max_reuse_count, 2)
-
-    def test_phone_source_smsbower_ignores_static_links(self):
-        with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
             cfg = {
                 "phone_reuse": {
                     "source": "smsbower",
-                    "state_file": state_path,
+                    "state_file": f"{tmp}/phone_state.json",
                     "smsbower": {"api_key": "test-key", "pool_size": 1},
                     "phone_pool": [
                         {"phone": "+15485091782", "sms_api_url": "https://sms789.com/sms/by_key?key=test"}
@@ -695,7 +652,94 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
 
         self.assertEqual(len(pool.phones), 1)
         self.assertEqual(pool.phones[0].provider, "smsbower")
+        self.assertEqual(pool.phones[0].phone, "")
         self.assertEqual(pool.phones[0].max_reuse_count, 1)
+
+    def test_a_saved_static_slot_is_retired_without_a_migration(self):
+        """State written by the removed mode carries ``provider="legacy"``. It
+        must not match any slot, so old state files age out instead of needing a
+        migration step."""
+        with TemporaryDirectory() as tmp:
+            state_path = f"{tmp}/phone_state.json"
+            with open(state_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    '{"current_index":0,"phones":[{"slot_id":"smsbower:0","provider":"legacy",'
+                    '"phone":"+15485091782","reuse_count":2,"max_reuse_count":3}]}'
+                )
+            cfg = {
+                "phone_reuse": {
+                    "source": "smsbower",
+                    "state_file": state_path,
+                    "smsbower": {"api_key": "test-key", "pool_size": 1},
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual(pool.phones[0].provider, "smsbower")
+        self.assertEqual(pool.phones[0].phone, "")
+        self.assertEqual(pool.phones[0].reuse_count, 0)
+
+    def test_the_selected_provider_supplies_slot_identity_and_endpoint(self):
+        with TemporaryDirectory() as tmp:
+            cfg = {
+                "phone_reuse": {
+                    "source": "herosms",
+                    "state_file": f"{tmp}/phone_state.json",
+                    "smsbower": {"api_key": "smsbower-key", "pool_size": 1},
+                    "herosms": {"api_key": "hero-key", "pool_size": 2},
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual(["herosms:0", "herosms:1"], [slot.slot_id for slot in pool.phones])
+        for slot in pool.phones:
+            self.assertEqual("herosms", slot.provider)
+            self.assertEqual("hero-key", slot.api_key)
+            self.assertEqual(
+                sms_providers.PROVIDERS["herosms"].default_endpoint, slot.endpoint)
+
+    def test_an_explicit_endpoint_overrides_the_registry_default(self):
+        with TemporaryDirectory() as tmp:
+            cfg = {
+                "phone_reuse": {
+                    "source": "grizzly",
+                    "state_file": f"{tmp}/phone_state.json",
+                    "grizzly": {"api_key": "g-key", "endpoint": "https://mirror.example/handler_api.php"},
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual("grizzly", pool.phones[0].provider)
+        self.assertEqual("https://mirror.example/handler_api.php", pool.phones[0].endpoint)
+
+    def test_the_provider_key_is_read_from_its_own_env_var(self):
+        """Each provider has its own env var, so configuring one cannot leak a
+        key into another."""
+        with TemporaryDirectory() as tmp:
+            cfg = {
+                "phone_reuse": {
+                    "source": "herosms",
+                    "state_file": f"{tmp}/phone_state.json",
+                    "herosms": {"api_key": "$HEROSMS_API_KEY"},
+                }
+            }
+            with patch.dict(phone_reuse.CFG, cfg, clear=False), \
+                 patch.dict("os.environ", {"HEROSMS_API_KEY": "env-hero"}, clear=False):
+                pool = create_phone_pool()
+
+        self.assertEqual("env-hero", pool.phones[0].api_key)
+
+    def test_has_phone_reuse_config_tracks_the_selected_provider(self):
+        with patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "smsbower", "smsbower": {"api_key": "k"}}}, clear=False):
+            self.assertTrue(phone_reuse.has_phone_reuse_config())
+        with patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "herosms", "smsbower": {"api_key": "k"}}}, clear=False):
+            self.assertFalse(phone_reuse.has_phone_reuse_config())
+        with patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "herosms", "herosms": {"api_key": "k"}}}, clear=False):
+            self.assertTrue(phone_reuse.has_phone_reuse_config())
+
 
     def test_smsbower_pool_uses_last_selected_country_and_exact_tier(self):
         with TemporaryDirectory() as tmp:
@@ -752,25 +796,31 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].phone, "")
         self.assertEqual(pool.phones[0].activation_id, "")
 
-    def test_source_override_can_force_smsbower_for_registration(self):
+    def test_source_override_selects_another_provider(self):
+        """``--phone-source`` picks a provider for one run without editing the
+        config. The override is what gets validated, so a stale config value
+        cannot block a provider that was requested explicitly."""
         with TemporaryDirectory() as tmp:
-            state_path = f"{tmp}/phone_state.json"
             cfg = {
                 "phone_reuse": {
                     "source": "phone_pool",
-                    "state_file": state_path,
+                    "state_file": f"{tmp}/phone_state.json",
                     "smsbower": {"api_key": "smsbower-key", "pool_size": 1},
-                    "phone_pool": [
-                        {"phone": "+15485091782", "sms_api_url": "https://sms789.com/sms/by_key?key=test"}
-                    ],
+                    "herosms": {"api_key": "hero-key", "pool_size": 1},
                 }
             }
             with patch.dict(phone_reuse.CFG, cfg, clear=False):
-                pool = create_phone_pool(source_override="smsbower")
+                pool = create_phone_pool(source_override="herosms")
 
         self.assertEqual(len(pool.phones), 1)
-        self.assertEqual(pool.phones[0].provider, "smsbower")
-        self.assertEqual(pool.phones[0].api_key, "smsbower-key")
+        self.assertEqual(pool.phones[0].provider, "herosms")
+        self.assertEqual(pool.phones[0].api_key, "hero-key")
+
+    def test_source_override_still_rejects_a_removed_value(self):
+        cfg = {"phone_reuse": {"smsbower": {"api_key": "k"}}}
+        with patch.dict(phone_reuse.CFG, cfg, clear=False):
+            with self.assertRaises(ValueError):
+                create_phone_pool(source_override="phone_pool")
 
     def test_saved_state_does_not_override_configured_max_reuse(self):
         with TemporaryDirectory() as tmp:
@@ -800,6 +850,303 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         with patch.dict(registration.CFG, {"codex_oauth": {}}, clear=False):
             self.assertFalse(registration._registration_requires_phone_verification(None))
             self.assertTrue(registration._registration_requires_phone_verification(object()))
+
+
+class _Capture(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
+
+
+class SmsBowerCancelObservationTests(unittest.TestCase):
+    """``cancel`` 必须把供应商的**原始答复**记下来。
+
+    这条链路的失败模式是静默的：``cancel`` 把异常吞成 ``False``，
+    ``_cancel_smsbower_activation`` 又把返回值整个丢掉。于是
+    「因激活太新被拒」（sms-activate 协议族会回 ``EARLY_CANCEL_DENIED``）
+    与「网络挂了」在日志里长得一模一样。
+
+    后果不是日志难看，而是**问题不可判**：想回答「本仓供应商到底有没有早期
+    取消窗口」就得花钱做专门的探测。加一行日志之后，下一次真实跑批免费给出答案。
+    """
+
+    def setUp(self):
+        self.capture = _Capture()
+        logger = logging.getLogger("sms_tool.smsbower")
+        logger.addHandler(self.capture)
+        logger.setLevel(logging.DEBUG)
+        self.addCleanup(logger.removeHandler, self.capture)
+
+    def _client(self, *, status=None, error=None):
+        client = SmsBowerClient(api_key="test-key")
+        if error is not None:
+            patcher = patch.object(client, "set_status", side_effect=error)
+        else:
+            patcher = patch.object(client, "set_status", return_value=status)
+        mocked = patcher.start()
+        self.addCleanup(patcher.stop)
+        return client, mocked
+
+    def _events(self):
+        return [getattr(record, "event", "") for record in self.capture.records]
+
+    def test_access_cancel_returns_true_and_stays_quiet(self):
+        client, mocked = self._client(status="ACCESS_CANCEL")
+        self.assertTrue(client.cancel("act-1"))
+        self.assertEqual(self.capture.records, [])
+        self.assertEqual(mocked.call_args.args, ("act-1", "8"))
+
+    def test_an_early_refusal_is_reported_with_the_vendor_status(self):
+        """核心回归：``EARLY_CANCEL_DENIED`` 必须可见，且原样带出来。"""
+        client, _ = self._client(status="EARLY_CANCEL_DENIED")
+        self.assertFalse(client.cancel("act-1"))
+        self.assertIn("smsbower_cancel_refused", self._events())
+        refused = [r for r in self.capture.records if r.event == "smsbower_cancel_refused"]
+        self.assertEqual(refused[0].vendor_status, "EARLY_CANCEL_DENIED")
+        self.assertEqual(refused[0].activation_id, "act-1")
+
+    def test_an_unexpected_status_is_reported_too(self):
+        """只认 ``ACCESS_CANCEL`` —— 任何其它答复都值得留痕。"""
+        for status in ("WRONG_STATUS", "NO_ACTIVATION", "BAD_ACTION", ""):
+            with self.subTest(status=status):
+                self.capture.records.clear()
+                client, _ = self._client(status=status)
+                self.assertFalse(client.cancel("act-1"))
+                self.assertIn("smsbower_cancel_refused", self._events())
+
+    def test_a_transport_failure_is_distinguishable_from_a_refusal(self):
+        """两类失败必须能分开 —— 否则「被拒」仍然藏在「网络错」里。"""
+        client, _ = self._client(error=RuntimeError("connection reset"))
+        self.assertFalse(client.cancel("act-1"))
+        self.assertIn("smsbower_cancel_failed", self._events())
+        self.assertNotIn("smsbower_cancel_refused", self._events())
+
+    def test_cancel_still_never_raises(self):
+        """加了日志也不能改契约：调用方依赖它不抛。"""
+        for error in (RuntimeError("boom"), ValueError("bad"), OSError("net")):
+            with self.subTest(error=error):
+                client, _ = self._client(error=error)
+                self.assertFalse(client.cancel("act-1"))
+
+    def test_the_record_is_aggregatable(self):
+        """``extra`` 字段是给工具用的，不是给人读的散文。"""
+        client, _ = self._client(status="EARLY_CANCEL_DENIED")
+        client.cancel("act-42")
+        record = self.capture.records[0]
+        self.assertEqual(record.event, "smsbower_cancel_refused")
+        self.assertEqual(record.activation_id, "act-42")
+        self.assertEqual(record.vendor_status, "EARLY_CANCEL_DENIED")
+
+
+class RentalProviderLifecycleTests(unittest.TestCase):
+    """The rental lifecycle must key off the *protocol*, not the vendor name.
+
+    Every guard exercised here used to read ``provider == "smsbower"``, written
+    when SMSBower was the only rentable vendor -- so the comparison effectively
+    meant "is this a rental slot". With ``source=herosms`` all of them evaluated
+    False: the number was rented and then never cancelled, never reset, and the
+    retry paths skipped the provider branch entirely, leaving the activation
+    open and billing while the registration moved on. Nothing failed loudly,
+    which is why these tests drive a non-SMSBower slot through the same paths.
+    """
+
+    def _slot(self, provider, **overrides):
+        values = {
+            "phone": "+233555123456",
+            "provider": provider,
+            "api_key": "test-key",
+            "endpoint": sms_providers.default_endpoint(provider),
+            "activation_id": "act-1",
+            "slot_id": f"{provider}:0",
+        }
+        values.update(overrides)
+        return PhoneSlot(**values)
+
+    def test_no_executed_string_in_the_module_names_a_vendor(self):
+        """A source guard, because this regression is silent at runtime.
+
+        The vendor vocabulary belongs to ``sms_providers``; ``phone_reuse`` asks
+        ``_is_rental_slot``. Docstrings may name vendors (they explain history),
+        but an *executed* constant may not.
+
+        This is deliberately a source guard rather than a behaviour test. The
+        two spellings it catches are ``"smsbower"`` used as a comparison and
+        ``"smsbower_prepare_failed"`` used inside an error set -- and the second
+        one **changes no behaviour** (the non-matching spelling reached the same
+        ``return False`` through the fallthrough), so no assertion on the
+        return value could ever detect it. Verified by mutation: restoring the
+        literal set reddens this test and nothing else.
+        """
+        with open(phone_reuse.__file__, encoding="utf-8") as handle:
+            tree = ast.parse(handle.read())
+
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None)
+                if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                        and isinstance(body[0].value.value, str):
+                    docstrings.add(id(body[0].value))
+
+        offenders = [
+            (node.lineno, node.value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+            and "smsbower" in node.value.lower()
+        ]
+        self.assertEqual([], offenders, f"vendor name baked into executed code: {offenders}")
+
+    def test_every_available_provider_is_a_rental_slot(self):
+        for key in sms_providers.available_provider_keys():
+            with self.subTest(provider=key):
+                self.assertTrue(phone_reuse._is_rental_slot(self._slot(key)))
+
+    def test_a_provider_without_a_client_is_not_a_rental_slot(self):
+        """``nexsms`` is declared but unverified, so it must fail loudly rather
+        than be routed to a rental adapter that would rent nothing."""
+        slot = self._slot("nexsms")
+        self.assertFalse(phone_reuse._is_rental_slot(slot))
+        with self.assertRaises(ValueError) as caught:
+            phone_reuse._sms_provider_adapter(slot)
+        self.assertIn("nexsms", str(caught.exception))
+
+    def test_the_rental_client_uses_the_slots_own_endpoint(self):
+        for key in sms_providers.available_provider_keys():
+            with self.subTest(provider=key):
+                slot = self._slot(key)
+                with patch("sms_tool.phone_reuse.SmsBowerClient") as factory:
+                    phone_reuse._smsbower_client(slot)
+                factory.assert_called_once_with(
+                    api_key="test-key",
+                    endpoint=sms_providers.PROVIDERS[key].default_endpoint,
+                )
+
+    def test_a_non_smsbower_activation_completes_through_the_rental_adapter(self):
+        slot = self._slot("herosms")
+        client = Mock()
+        client.complete.return_value = True
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            phone_reuse._complete_provider_activation(slot)
+
+        client.complete.assert_called_once_with("act-1")
+        client.cancel.assert_not_called()
+        self.assertEqual("", slot.activation_id)
+        self.assertEqual("", slot.phone)
+
+    def test_a_non_smsbower_activation_cancels_through_the_rental_adapter(self):
+        slot = self._slot("grizzly")
+        client = Mock()
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+            phone_reuse._cancel_provider_activation(slot)
+
+        client.cancel.assert_called_once_with("act-1")
+        self.assertEqual("", slot.activation_id)
+        self.assertEqual("", slot.phone)
+
+    def test_reset_exhausted_slots_completes_a_non_smsbower_activation(self):
+        """The costly half of the bug: an uncompleted activation keeps billing."""
+        slot = self._slot("herosms", reuse_count=1, max_reuse_count=1)
+        pool = PhonePool(phones=[slot])
+        with patch("sms_tool.phone_reuse._complete_provider_activation") as complete:
+            reset_count = pool.reset_exhausted_slots()
+
+        complete.assert_called_once_with(slot)
+        self.assertEqual(1, reset_count)
+
+    def test_retiring_a_non_smsbower_slot_cancels_its_activation(self):
+        slot = self._slot("grizzly", reuse_count=1, max_reuse_count=1)
+        pool = PhonePool(phones=[slot])
+        with patch("sms_tool.phone_reuse._cancel_provider_activation") as cancel:
+            phone_reuse._retire_phone_slot_for_batch(pool, slot, "fraud_guard")
+
+        cancel.assert_called_once_with(slot)
+        self.assertTrue(slot.is_exhausted)
+
+    def test_the_retry_predicate_treats_a_non_smsbower_pool_as_rental(self):
+        pool = PhonePool(phones=[self._slot("herosms")])
+        self.assertTrue(
+            phone_reuse._should_retry_with_new_provider_number(
+                pool, {"error": "phone_sms_timeout"}))
+
+    def test_a_pool_without_a_rental_slot_is_never_retried_as_rental(self):
+        pool = PhonePool(phones=[self._slot("legacy")])
+        self.assertFalse(
+            phone_reuse._should_retry_with_new_provider_number(
+                pool, {"error": "phone_sms_timeout"}))
+
+    def test_operator_output_names_the_actual_provider(self):
+        """``[smsbower]`` on a HeroSMS slot sends the operator to the wrong
+        dashboard while debugging a live batch."""
+        slot = self._slot("herosms")
+        client = Mock()
+        client.complete.return_value = True
+        buffer = io.StringIO()
+        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
+             contextlib.redirect_stdout(buffer):
+            phone_reuse._complete_provider_activation(slot)
+
+        output = buffer.getvalue()
+        self.assertIn("[herosms]", output)
+        self.assertNotIn("[smsbower]", output)
+
+    def test_pool_status_shows_service_and_country_for_a_non_smsbower_slot(self):
+        slot = self._slot("grizzly", service="dr", country="33")
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            phone_reuse.print_phone_pool_status(PhonePool(phones=[slot]))
+
+        output = buffer.getvalue()
+        self.assertIn("[grizzly]", output)
+        self.assertIn("service=dr", output)
+        self.assertIn("country=33", output)
+
+
+    def test_phone_registration_follows_the_configured_source(self):
+        """The standalone phone-registration entrypoint used to read
+        ``phone_reuse.smsbower`` unconditionally, so a config switched to
+        HeroSMS or Grizzly still rented an SMSBower number with the SMSBower
+        key -- the wrong vendor, silently."""
+        from sms_tool import phone_registration
+
+        cfg = {
+            "source": "herosms",
+            "smsbower": {"api_key": "smsbower-key", "country": "38"},
+            "herosms": {"api_key": "hero-key", "country": "33"},
+        }
+        provider, section, api_key, endpoint = phone_registration._provider_selection(cfg)
+
+        self.assertEqual("herosms", provider)
+        self.assertEqual("hero-key", api_key)
+        self.assertEqual("33", section.get("country"))
+        self.assertEqual(sms_providers.PROVIDERS["herosms"].default_endpoint, endpoint)
+
+    def test_phone_registration_honours_an_explicit_endpoint_and_key(self):
+        from sms_tool import phone_registration
+
+        cfg = {
+            "source": "grizzly",
+            "grizzly": {"endpoint": "https://mirror.example/handler_api.php"},
+        }
+        provider, _, api_key, endpoint = phone_registration._provider_selection(cfg, "explicit-key")
+
+        self.assertEqual("grizzly", provider)
+        self.assertEqual("explicit-key", api_key)
+        self.assertEqual("https://mirror.example/handler_api.php", endpoint)
+
+    def test_phone_registration_defaults_to_the_registry_provider(self):
+        from sms_tool import phone_registration
+
+        provider, section, _, endpoint = phone_registration._provider_selection({})
+
+        self.assertEqual(sms_providers.DEFAULT_PROVIDER, provider)
+        self.assertEqual({}, section)
+        self.assertEqual(
+            sms_providers.default_endpoint(sms_providers.DEFAULT_PROVIDER), endpoint)
 
 
 if __name__ == "__main__":

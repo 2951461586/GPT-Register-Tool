@@ -9,6 +9,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from ..page_truth import write_page_truth
+
 def _safe_import_cookie_header(ctx, cookie_header):
     """Safely import cookies into browser context."""
     if not cookie_header:
@@ -79,11 +81,18 @@ def _wait_for_paypal_load(page, timeout: int = 30000):
     time.sleep(2)
 
 def _screenshot(page, debug_dir: str, name: str, enabled: bool = True):
+    """Write a debug screenshot plus the page truth that goes with it.
+
+    The PNG is for a human; the ``<name>.json`` sidecar is the part tooling can
+    grep and diff.  Truth is collected *before* the image is captured and says so,
+    so a reader can tell which of the two is the stale one.
+    """
     if not enabled:
         return
     try:
         p = Path(debug_dir)
         p.mkdir(parents=True, exist_ok=True)
+        write_page_truth(page, p, name)
         page.screenshot(path=str(p / f"{name}.png"), full_page=True)
     except Exception:
         pass

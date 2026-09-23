@@ -107,7 +107,9 @@ namespace SmsWorkbench
             AppendNo2fa(args, disable2fa);
             AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
-            return new BackendCommandPlan("手机号注册 (SMSBower)", args);
+            // No vendor in the label: the provider is whatever
+            // `phone_reuse.source` selects, and this plan does not override it.
+            return new BackendCommandPlan("手机号注册", args);
         }
 
         public static BackendCommandPlan CreateCfWorkerRegistration(
@@ -186,6 +188,7 @@ namespace SmsWorkbench
             IReadOnlyList<string> emails,
             string sessionFile,
             IReadOnlyList<string> proxyPool,
+            string? phoneSource = null,
             string? tempDirectory = null)
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
@@ -194,11 +197,16 @@ namespace SmsWorkbench
             var args = new List<string>
             {
                 "--one-click-sms",
-                "--phone-source", "smsbower",
                 "--workers", "1",
                 "--refresh-timeout", "60",
                 mailboxArgument, mailboxFile,
             };
+            // This used to be the literal "smsbower", which meant the dialog's
+            // provider selection never reached the backend: the run always
+            // rented an SMSBower number. The key is not validated here -- this
+            // project cannot see SmsProviderCatalog, and the backend's argparse
+            // `choices` already rejects an unknown provider loudly.
+            AppendPhoneSource(args, phoneSource);
             var tempFiles = new List<string>();
             if (targets.Count > 1)
             {
@@ -610,6 +618,21 @@ namespace SmsWorkbench
         private static void AppendNoPhoneReuse(List<string> args)
         {
             args.Add("--no-phone-reuse");
+        }
+
+        /// <summary>
+        /// Emit the provider override when the caller resolved one.
+        ///
+        /// Omitted entirely when blank so the backend falls back to
+        /// `phone_reuse.source` -- the same key the settings page writes. That
+        /// fallback is the contract; a blank value must not become
+        /// `--phone-source ""`, which argparse would reject.
+        /// </summary>
+        private static void AppendPhoneSource(List<string> args, string? phoneSource)
+        {
+            string key = (phoneSource ?? "").Trim();
+            if (key.Length == 0) return;
+            args.AddRange(new[] { "--phone-source", key });
         }
 
         private static void AppendNo2fa(List<string> args, bool disable2fa)

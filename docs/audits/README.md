@@ -39,7 +39,7 @@ from `docs/README.md`.
 
 ## Contents
 
-40 files. Grouped by kind; newest first within each group.
+42 files. Grouped by kind; newest first within each group.
 
 > Recount: `ls docs/audits/*.md docs/audits/*.txt | wc -l` — this number is
 > pinned by `tests/test_audits_readme_index.py`, which fails when it and the
@@ -51,7 +51,9 @@ from `docs/README.md`.
 
 | File | Date | Subject |
 |---|---|---|
+| `scan-2026-09-23-six-modules-architecture-coupling-docs.md` | 09-23 | 六个功能模块（协议注册 / 查优惠 / 账号测活 / 一键接码 / `config.json` / 协议支付面板）逐模块体检：门禁 10 项全绿。**头条是交付风险而非代码缺陷** —— 工作区领先 HEAD 43 改 / 2 删 / 19 新增，其中 4 个生产模块（`sms_providers.py` / `mailbox_pool_writer.py` / `page_truth.py` / `browser_profile_reclaim.py`）**在 HEAD 里不存在**，而 **10 个已跟踪文件已在 import 它们** ⇒ `git add -u` 产出 `ModuleNotFoundError` 的破损提交，且 4 个守卫测试本身也未跟踪（守卫与被守代码被拆散）。另四条：`docs/directory-map.md` **内部自相矛盾**（`:11` 用旧名 SMSBower / `:179` 用新名，C# 类名在文档里**零门禁**）；支付域用 5 种命名形态铺了 40 个模块且 `sms_provider.py` vs `sms_providers.py`（**该对已按本轮结论改名消除：`sms_provider.py` → `sms_provider_adapter.py`，见报告 §5.1**）、`pay_link/` vs `paypal_link/` 只差一字母；把目录表自述的「60 个未归属模块」**首次按族拆开**（mailbox 9 · accounts 7 · payment 6 · paypal 4 · proxy 4 · sentinel 4 · paypal_link 3 · registration 2，含 Rule 13 的 `proxy_entry.py` 与账号测活两个模块）；未读配置键判定**只扫 Python** ⇒ `runtime.python_path` 被 C# 读 3 处却报「设了没用」（1/61 假阳性）。**结论：协议注册 / 查优惠 / 账号测活三模块无新增结构性问题**；参考仓库 `gpt-register-pro` **无新提交**（HEAD 仍 `7b2304f` / 09-19），昨日对标结论继续有效 |
 | `scan-2026-09-22-architecture-coupling-dirs-docs.md` | 09-22 | 四轴只读扫描（耦合 / 架构 / 目录 / 文档）：门禁 9 项全绿、**0 个 import-time 环**（8 组静态互指边全由懒加载或门面断开）；A1 `account_recovery` 兼容壳只被 6 文件消费却逼出 `recovery_batch` 31 处函数体内导入（删壳即消 SCC-8）；A2 `docs/audits/README.md` 自述「31 files」实际 40；A3 13 个库模块从未入文档（`cli_parsers/`、`geo/`、`pay_link/` 三整包）；A4 `upi_link.py` 2914 行不在任何拆分计划内；A6 初判「C# 第 6 轮死成员 10/16 项仍在」**在落地阶段被自己推翻**（第 6 轮当天已全删，只剩墓碑注释 —— 数命中次数不读命中行的误报）。**含对第 6 轮两处结论的纠正**（`store/connection` 反向依赖属有意设计；`account_deatived` 有跨语言契约测试钉住，非死分支）与 8 条探针误报坑清单 |
+| `scan-2026-09-22-gpt-register-pro-benchmark.md` | 09-22 | 对标 `cxqc168-wq/gpt-register-pro`（Node/Electron 浏览器路线，**AGPL-3.0** ⇒ 只借机制不搬代码）：§2 对方公开仓库**正在泄露**三家接码平台真实 API Key 与账号明文密码（`.gitignore` 配了也挡不住，密钥在源码里）；§3 十项可借鉴清单；§4 四个不要抄（`writeLock` 纯进程内不可重入 / `licenseGuard` 整套失效 / 零测试 / 仓库卫生）。**§7 为落地记录**：① 邮箱池 OAuth RT 轮换回写（本仓确认缺失，`mailbox_pool_writer.py`）· ② 卡密占位符预校验 · ③ **新建** `docs/TROUBLESHOOTING.md`（本仓原本没有任何排错文档）· ④ 截图配 DOM 真值 · ⑤ 未捕获异常原本**不进**运行日志（已补两级钩子）· ⑥ 浏览器 profile 占用原本只能拿到不含持有者的报错 · ⑦ **前置条件实测为「不可判」**（供应商答复被三重销毁）⇒ 只补观测不实现 · ⑧ Python 侧达标、C# 驱动枚举是未受守卫漂移面（已补平价测试）· ⑨ **建议不做**（legacy 分支是 C# 侧承重墙：C# 测试 30 处只写 `config.json`，Python 测试 32 处写分片）· ⑩ 发布前扫描原实现**三类整类漏检**（含名字恰好等于凭据词的变量三模式全漏） |
 | `scan-2026-09-16-icloud2-api798-false-negative.md` | 09-16 | `api798.com` 的「0/33」是**测量假象**而非渠道故障：4 段格式的尾巴被拼进 `auth_code` ⇒ 403「授权码无效」；同日同出口实测干净 URL 回 200、带尾巴回 403、`GARBAGE` 对照回同样的 403 ⇒ 渠道活着，33 个邮箱曾被 `icloud2_remove403.py` 误删。含 50 条按 2 段形态导入的处置、残留风险与回收路径 |
 | `scan-2026-09-09-round3-architecture-coupling-docs.md` | 09-09 | 注册 / 支付 / 测活 / 日志四个方向：架构、耦合、文档规范。P0 三条 + P1 七条已落地，P2 部分落地（§17–§20 为落地记录） |
 | `scan-2026-09-08-round2-protocol-browser-registration.md` | 09-08 | 第二轮：注册链路本体（协议注册 + 无头浏览器），对照 `Regert888/gpt-auto-register`。四个 P0 |

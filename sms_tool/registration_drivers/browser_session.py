@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Mapping
 from urllib.parse import unquote, urlsplit
 
+from ..browser_profile_reclaim import describe_contention
 from ..phone_proxy import normalize_proxy_url
 from .browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from .stealth import apply_playwright_stealth
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _playwright_proxy(proxy: str | None) -> dict[str, str] | None:
@@ -112,6 +116,20 @@ class PlaywrightBrowserSession:
             return self
         except Exception:
             self.close()
+            # A persistent profile still held by a surviving browser fails here
+            # with a message that never names the holder, and ``parent.lock``
+            # cannot be used as evidence (Camoufox leaves it behind on every
+            # clean exit too).  Look up the live processes and say who it is.
+            if self.user_data_dir:
+                try:
+                    contention = describe_contention(self.user_data_dir)
+                except Exception:  # pragma: no cover - diagnosis must never mask the real error
+                    contention = ""
+                if contention:
+                    _LOGGER.error(
+                        "browser launch failed and %s", contention,
+                        extra={"event": "browser_profile_contention", "profile": self.user_data_dir},
+                    )
             raise
 
     def __exit__(self, exc_type, exc, tb) -> None:

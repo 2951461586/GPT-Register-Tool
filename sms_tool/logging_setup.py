@@ -21,11 +21,16 @@ import logging
 import json
 import os
 import re
+import sys
+import threading
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _CONFIGURED = False
+#: Mutable one-element flag so :func:`_install_exception_hooks` can be idempotent
+#: without a module-level ``global`` on every call site.
+_HOOKS_INSTALLED = [False]
 _DEFAULT_MAX_BYTES = 5 * 1024 * 1024  # 5 MiB
 _DEFAULT_BACKUPS = 5
 _ROOT_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -305,6 +310,58 @@ def process_log_dir() -> Path:
     return directory
 
 
+def _install_exception_hooks() -> None:
+    """Route uncaught exceptions into the log file, exactly once.
+
+    Without this a crash reaches only stderr: the rotating ``sms_tool.log`` and
+    the correlated ``sms_tool.jsonl`` stop at the last *deliberate* log line, so
+    an uncaught exception reads as "the run just ended" -- and the WPF host,
+    which captures stdout, shows a traceback with no surrounding context and no
+    ``.jsonl`` record for tooling to correlate.
+
+    Both hooks call the previous handler afterwards, so the stderr traceback an
+    operator is used to seeing is unchanged; this only *adds* a log record.
+    ``KeyboardInterrupt`` is deliberately not logged as a crash -- Ctrl-C is a
+    normal stop, and logging it would make every cancelled run look like a fault.
+    """
+    if _HOOKS_INSTALLED[0]:
+        return
+    _HOOKS_INSTALLED[0] = True
+    crash_logger = logging.getLogger("sms_tool.crash")
+
+    previous_excepthook = sys.excepthook
+
+    def _handle_uncaught(exc_type, exc_value, exc_tb):
+        if not issubclass(exc_type, KeyboardInterrupt):
+            try:
+                crash_logger.critical(
+                    "uncaught exception: %s", exc_value,
+                    exc_info=(exc_type, exc_value, exc_tb),
+                    extra={"event": "uncaught_exception"},
+                )
+            except Exception:  # pragma: no cover - a broken handler must not hide the crash
+                pass
+        previous_excepthook(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _handle_uncaught
+
+    previous_thread_hook = threading.excepthook
+
+    def _handle_uncaught_thread(args):
+        try:
+            crash_logger.critical(
+                "uncaught exception in thread %s: %s",
+                getattr(args.thread, "name", "?"), args.exc_value,
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+                extra={"event": "uncaught_thread_exception"},
+            )
+        except Exception:  # pragma: no cover
+            pass
+        previous_thread_hook(args)
+
+    threading.excepthook = _handle_uncaught_thread
+
+
 def configure_logging(
     *,
     level: int = logging.INFO,
@@ -323,6 +380,10 @@ def configure_logging(
         to_console: also attach a StreamHandler (the WPF host captures stdout).
     """
     global _CONFIGURED
+    # Installed before the idempotence guard: a process that configured logging
+    # through another path still needs the crash hooks, and a second call must
+    # not re-wrap the hooks that are already in place.
+    _install_exception_hooks()
     if _CONFIGURED:
         return
 

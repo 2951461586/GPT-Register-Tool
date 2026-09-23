@@ -19,7 +19,6 @@ from ..utils import _generate_password, _random_name
 from .config_picker import (
     _generate_alias_email,
     _pick_card_and_address,
-    _pick_phone_and_sms,
     _save_paypal_result,
 )
 from .errors import _PayPalStepError
@@ -80,12 +79,19 @@ def auto_pay(
 
     # 3. Pick card + address + phone
     card, address = _pick_card_and_address(cfg)
-    phone, sms_api_url = _pick_phone_and_sms(cfg)
+    # No number source any more: the static phone pool that fed these two was
+    # removed on 2026-09-22 (see sms_utils.NO_NUMBER_SOURCE_MESSAGE), and this
+    # lane has no rental replacement yet. They stay empty rather than being
+    # dropped from the signature, because every layer below still accepts a
+    # source -- wiring one in is a change to this function alone. The SMS gates
+    # report the absence explicitly instead of polling an empty URL.
+    phone = ""
+    sms_api_url = ""
     first_name, last_name = _random_name()
     password = _generate_password()
     alias_email = _generate_alias_email(target_email)
 
-    print(f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone}")
+    print(f"[*] Card: [REDACTED]  Name: {first_name} {last_name}  Email: {alias_email}  Phone: {phone or '(none)'}")
 
     # 4. Try reverse protocol first
     use_reverse = cfg.get("reverse_engineering", True)

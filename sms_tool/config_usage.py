@@ -25,6 +25,28 @@ config keys. Both are genuinely dead.
 
 A key is also treated as read when its full dotted path appears literally,
 which covers table-driven lookups such as ``get("paypal.link_mode")``.
+
+Scope: Python production source only
+------------------------------------
+``SOURCE_DIRS`` is ``sms_tool/`` + ``services/``. The desktop half
+(``SmsWorkbench/``, C#) is **deliberately not scanned**, and the reason is a
+measured one rather than an oversight:
+
+* The criterion is coarse on purpose -- *any* string literal counts, so a key
+  the code only **writes** counts as read. Adding C# to the roots would move
+  ``phone_reuse.smsbower.service_name`` and ``...country_name_zh`` out of the
+  dead set, because ``MainWindow.SmsProvider.cs`` **writes** both
+  (``providerSection["service_name"] = ...``). Nothing reads them back, in
+  either language. Extending the scan would therefore trade **1 fixed false
+  positive for 2 new false negatives**.
+* What C# *does* read is handled explicitly instead, by
+  :data:`CSHARP_CONSUMED_KEYS`: a cited, test-verified exception list. A key
+  belongs there only if a named C# file reads it, and
+  ``tests/test_config_usage.py`` fails when a citation stops resolving or stops
+  containing the key -- so the list cannot rot into an excuse.
+
+⇒ Read the report as "no **Python** code path reads this". For the desktop
+half, :data:`CSHARP_CONSUMED_KEYS` is the complete accounting.
 """
 from __future__ import annotations
 
@@ -45,6 +67,30 @@ SHARD_NAMES = ("config.json", "proxy.json", "runtime.json", "payment.json")
 #: source *copies* and must stay excluded or every count comes out wrong.
 SOURCE_DIRS = ("sms_tool", "services")
 SKIP_DIRS = frozenset({"__pycache__", ".venv", "dist", "runtime", ".git", "logs", "sessions"})
+
+#: Keys the Python-only scan would report as dead, but which a **named C# file
+#: actually reads**. Value = repo-relative files that read the key.
+#:
+#: Two rules keep this from becoming a dumping ground:
+#:
+#: * the cited file must exist and must contain the key as a literal --
+#:   ``tests/test_config_usage.py::CSharpConsumerTests`` fails otherwise, so a
+#:   citation that stops being true turns the suite red instead of silently
+#:   suppressing a real finding;
+#: * the key must be **read** there, not written. A write is not a consumer --
+#:   that distinction is exactly why C# is not scanned wholesale (see the module
+#:   docstring, and ``phone_reuse.smsbower.service_name`` as the counter-example).
+#:
+#: 2026-09-23: ``runtime.python_path`` added. ``SmsWorkbench/PythonBackendClient.cs``
+#: resolves the interpreter from it (``_settings.GetString("runtime.python_path", "python")``)
+#: and ``DesktopReadClient.cs`` does the same for the resident read transport, so
+#: ``doctor`` was telling the operator that a working setting had no effect.
+CSHARP_CONSUMED_KEYS: dict[str, tuple[str, ...]] = {
+    "runtime.python_path": (
+        "SmsWorkbench/PythonBackendClient.cs",
+        "SmsWorkbench/DesktopReadClient.cs",
+    ),
+}
 
 
 class UnreadKey(NamedTuple):
@@ -152,6 +198,10 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
 
     Both are returned with ``shards`` telling them apart (empty for the
     example-only ones).
+
+    Keys in :data:`CSHARP_CONSUMED_KEYS` are removed from the live-shard
+    population: the scan sees Python only, and those keys have a cited C#
+    reader, so reporting them would be a false positive.
     """
     root = Path(root) if root else PROJECT_ROOT
     literals = source_string_literals(str(root))
@@ -164,7 +214,7 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
     unread: list[UnreadKey] = [
         UnreadKey(path, tuple(shards), path in example)
         for path, shards in sorted(shard_paths.items())
-        if not is_read(path)
+        if not is_read(path) and path not in CSHARP_CONSUMED_KEYS
     ]
     documented_only = [
         UnreadKey(path, (), True)
@@ -176,14 +226,19 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
 
 def format_unread_report(keys: list[UnreadKey]) -> str:
     """Human-readable block for ``--doctor``. ASCII only: the CI runner's
-    stdout is cp1252 and a non-Latin-1 print aborts the step."""
+    stdout is cp1252 and a non-Latin-1 print aborts the step.
+
+    The wording says **Python** on purpose. The detector scans ``sms_tool/`` and
+    ``services/``, so "no code reads this" would be an overclaim -- see the
+    module docstring and :data:`CSHARP_CONSUMED_KEYS`.
+    """
     if not keys:
-        return "  (none - every configured key is read somewhere)"
+        return "  (none - every configured key is read by Python source or a cited C# consumer)"
     live = [k for k in keys if k.shards]
     documented = [k for k in keys if not k.shards]
     lines = []
     if live:
-        lines.append(f"  {len(live)} live-shard key(s) set but never read:")
+        lines.append(f"  {len(live)} live-shard key(s) set but never read by Python source:")
         for key in live:
             marker = "  <- also in config.example.json" if key.in_example else ""
             lines.append(f"    - {key.path}  [{', '.join(key.shards)}]{marker}")
@@ -192,4 +247,10 @@ def format_unread_report(keys: list[UnreadKey]) -> str:
         for key in documented:
             lines.append(f"    - {key.path}")
     lines.append("  These values have no effect. Remove them or wire them up.")
+    if CSHARP_CONSUMED_KEYS:
+        lines.append(
+            f"  (excluded: {len(CSHARP_CONSUMED_KEYS)} key(s) read by the desktop -- "
+            + ", ".join(sorted(CSHARP_CONSUMED_KEYS))
+            + ")"
+        )
     return "\n".join(lines)

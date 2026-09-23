@@ -1,5 +1,18 @@
 # Account Health Contract
 
+> **This file is also the current contract for the promotion (优惠) check.**
+> There is no separate `docs/current/promotion.md`, on purpose: the promotion
+> probe shares this document's subject matter — the same account, the same
+> liveness vocabulary, and a result that lands in the same grid row. The
+> promotion-specific parts are the `plan` check in
+> [Modes](#modes), the `优惠状态` column rules below, and the badge/stale rules
+> under [Result semantics](#result-semantics).
+>
+> Do not go looking for the promotion contract in `docs/audits/`: those are
+> frozen evidence snapshots. The most recent one that discusses promotion
+> (`scan-2026-09-21-payment-eligibility-in-promotion-column.md`) records how the
+> eligibility suffix was added, not how the module works today.
+
 ## Modes
 
 `--one-click-scan` is probe-only by default. It loads the saved account and

@@ -1,6 +1,6 @@
 """Check live documentation pointers and current module layout.
 
-Two tiers, because the docs mix two very different kinds of pointer:
+Three tiers, because the docs mix very different kinds of pointer:
 
 * **Weak (all docs).** A `` `path.py:NNN` `` pointer must name a file that exists
   and a line that is in range. This catches the catastrophic case -- a module
@@ -11,10 +11,14 @@ Two tiers, because the docs mix two very different kinds of pointer:
   ``| `Symbol` | `path.py:NNN` | ... |`` is resolved with ``ast`` and the symbol
   must actually be defined on that line. Symbol names and table layout survive
   refactors, so this catches the silent off-by-N drift the weak tier misses.
+* **Weak (C# names, all docs).** A backticked ``Foo.cs`` must exist under a
+  desktop project. Neither tier above looks at C# at all, so a renamed or deleted
+  desktop file left prose no gate could see; see
+  :func:`check_csharp_file_refs` for the measured instance that added this tier.
 
-Anything the strong tier cannot resolve (env-var names, prose-anchored pointers
-into a function body) is skipped rather than failed -- the gate must never fire
-on a pointer it does not understand.
+Anything a tier cannot resolve (env-var names, prose-anchored pointers into a
+function body) is skipped rather than failed -- the gate must never fire on a
+pointer it does not understand.
 """
 from __future__ import annotations
 
@@ -57,6 +61,11 @@ DOCS = (
     "docs/adr/0007-email-verification-stuck.md",
     "docs/adr/0008-registration-result-contract.md",
     "docs/adr/0009-registration-hardening.md",
+    # The troubleshooting checklists quote concrete file:line anchors
+    # (``mailbox_pool_writer.py:209`` and friends) so operators can jump
+    # straight to the owner. Those anchors rot exactly like the contract
+    # docs' do, so this file is canonical too -- not an audit snapshot.
+    "docs/TROUBLESHOOTING.md",
 )
 
 # ```mod.py:12``` or the shorthand ```:12``` (repeats the previous file on the line).
@@ -67,6 +76,14 @@ REF = re.compile(r"`((?:[A-Za-z0-9_./]+/)?[A-Za-z0-9_]+\.(?:py|json)):(\d+)`|`:(
 SYMBOL = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
 # `| col1 | col2 | ...` -- only the first two cells matter for symbol pointers.
 TABLE_ROW = re.compile(r"^\|(.+?)\|(.+?)\|")
+
+# ```Foo.cs``` or ```SmsWorkbench/Foo.cs``` -- a canonical doc naming a desktop
+# source file. The third tier below; see check_csharp_file_refs for why it exists.
+CSHARP_REF = re.compile(r"`((?:[A-Za-z0-9_./]+/)?[A-Za-z0-9_]+\.cs)`")
+#: Projects that may own a `.cs` a doc is allowed to name. ``bin``/``obj`` are
+#: skipped when indexing: generated copies of a renamed file would otherwise keep
+#: a deleted name alive for one build.
+CSHARP_ROOTS = ("SmsWorkbench", "SmsWorkbench.Contracts", "tests/SmsWorkbench.Tests")
 
 
 def _resolve_source(name: str) -> Path | None:
@@ -177,6 +194,72 @@ def check_symbol_tables(failures: list[str]) -> None:
                     )
 
 
+def check_csharp_file_refs(failures: list[str]) -> None:
+    """A canonical doc that names a desktop source file must name one that exists.
+
+    **Weak tier, deliberately.** Only existence is checked, never content -- a
+    ``.cs`` file has no ``ast`` module to introspect, and parsing C# is not this
+    script's job.
+
+    Why it is needed at all: the two stronger tiers are blind to C#.
+    ``check_line_refs`` only resolves ``.py``/``.json`` pointers and
+    ``check_symbol_tables`` only reads Python symbol tables, so a renamed or
+    deleted desktop file left prose that **no gate could see**. Measured
+    2026-09-23: adding this check immediately found ``AccountScanResultInterpreter.cs``
+    still listed as a live row in ``directory-map.md`` three weeks after the file
+    was deleted as zero-reference dead code -- the same defect class as the
+    ``SmsBowerCatalogClient.cs`` -> ``SmsProviderCatalogClient.cs`` rename that
+    prompted it.
+
+    Three deliberate silences, so it never fires on something it cannot judge:
+
+    * a reference containing ``*`` or ``?`` is skipped -- glob expansion is
+      tool-dependent (git pathspec ``*`` crosses ``/``; shell and ``pathlib``
+      do not), and guessing would make the gate lie in either direction;
+    * a bare name passes if **any** root has it, even when the doc's prose sits
+      next to a different project's table -- a filename is not a path claim;
+    * ``bin``/``obj`` are excluded from the index, so a generated copy cannot
+      keep a deleted name alive.
+
+    Consequence worth knowing: a backticked ``Foo.cs`` is a **claim that the file
+    exists**. To write about a file that was deleted, name the type without the
+    extension (``AccountScanResultInterpreter``) -- that keeps the history legible
+    without turning prose into a false pointer.
+    """
+    index = _csharp_index()
+    for rel in DOCS:
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        for lineno, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for ref in CSHARP_REF.findall(text):
+                if "*" in ref or "?" in ref:
+                    continue
+                if "/" in ref:
+                    resolved = (ROOT / ref).is_file()
+                else:
+                    resolved = ref in index
+                if not resolved:
+                    failures.append(
+                        f"{rel}:{lineno} documented C# file does not exist: {ref}"
+                    )
+
+
+def _csharp_index() -> set[str]:
+    """Every ``.cs`` basename under :data:`CSHARP_ROOTS`, build output excluded."""
+    names: set[str] = set()
+    for root in CSHARP_ROOTS:
+        base = ROOT / root
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*.cs"):
+            parts = path.relative_to(ROOT).parts
+            if "obj" in parts or "bin" in parts:
+                continue
+            names.add(path.name)
+    return names
+
+
 def main() -> int:
     def release_key(path: Path) -> tuple[int, ...]:
         match = re.search(r"release-v(\d+(?:\.\d+)+)\.md$", path.name)
@@ -203,6 +286,7 @@ def main() -> int:
 
     check_line_refs(failures)
     check_symbol_tables(failures)
+    check_csharp_file_refs(failures)
 
     if failures:
         print("Documentation consistency check failed")

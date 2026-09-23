@@ -41,7 +41,12 @@ class OneClickSmsCliTests(unittest.TestCase):
             phones = [object()]
             total_capacity = 1
 
-            def reset_exhausted_smsbower_slots(self):
+            # Must match ``phone_reuse.PhonePool.reset_exhausted_slots``.
+            # Deliberately an explicit stub rather than a MagicMock: a mock
+            # accepts any attribute name, so it would have silently swallowed
+            # the 2026-09-22 rename from ``reset_exhausted_smsbower_slots``
+            # (the pool stopped being SMSBower-only) instead of failing here.
+            def reset_exhausted_slots(self):
                 return None
 
         with TemporaryDirectory() as tmp:
