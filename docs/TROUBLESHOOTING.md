@@ -363,42 +363,76 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 **为什么只有桌面端中招**：`CreateOneClickSms` 那条路只把供应商 key 当**命令行参数**传给
 Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
 
-**现在的行为**（2026-09-23 起）：弹窗按 `SmsProviderCatalog.SmsProvider.CatalogIsSmsActivate`
-分派。非 sms-activate 的供应商**不读在线目录**，直接取配置里已存的 `<section>.country`
-与 `.target_price`（缺失时明确报出该填哪两个键），并在弹窗里写明「国家与档位取自配置」。
-**并且不回写** —— 回退分支的两个选择项本来就是从配置读出来的，回写只会把
-`service_name` / `country_name_zh` 两个只写不读的叶子塞进该 section，反而会踩 §13。
+**现在的行为**（2026-09-23 第二次修订）：弹窗按 `SmsProviderCatalog.SmsProvider.Protocol`
+分派到**两个在线读取器**，两者都在 `SmsWorkbench/SmsProviderCatalogClient.cs` 里：
 
-**为什么不去 C# 里实现 nexsms 的目录接口**：那是同一份协议的**第二份实现**，而
-`sms_tool/nexsms.py` 已经有了；镜像会漂移（`SmsProviderCatalog.cs` 的 docstring 与
-`tests/test_settings_catalog_provider_parity.py` 存在的全部理由就是这个）。真要在弹窗里
-选国家，正确做法是让 C# 调 Python 后端拿目录，不是重写协议。
+| 协议族 | 目录 | 余额 | 供应商 |
+| --- | --- | --- | --- |
+| `sms_activate_handler` | `?action=getCountries` + `getPricesV3`（404 时退 `getPrices`） | `ACCESS_BALANCE:` | smsbower / herosms / grizzly |
+| `nexsms_json` | `/api/countries` + `/api/getCountryByService?serviceCode=dr` | `/api/balance` | nexsms |
+
+🔴 **neXSMS 现在也读在线目录**。本文档此前那句「非 sms-activate 的供应商不读在线目录，
+直接取配置里的 `country` / `target_price`」已经作废 —— 它是上一版（只读配置）的行为。
+当时不做 C# 侧实现的理由是「同一份协议的第二份实现会漂移」，那个判断对**协议**成立，
+但对**规模**不成立：读它只需要一次 GET 加一次 `priceMap` 遍历，而配置路径的代价是让操作员
+失去这个弹窗的全部意义 —— 真实余额、供应商实际服务的每个国家、每个档位的真实库存，
+全都退化成配置里那一对硬编码值。实测（2026-09-23，同一把 key）：
+
+| 指标 | 只读配置（旧） | 在线读取（新） |
+| --- | --- | --- |
+| 余额 | `--` | `0.2000` |
+| 国家数 | 1 | **183** |
+| 价格档位数 | 1 | **923** |
+| 库存合计 | 未查询 | **125,257,831** |
+| 中文名覆盖 | 无 | 183/183 |
+
+**两个端点都必须读**：`/api/countries` 带中文名但**完全没有英文名字段**（按 id 键控），
+`/api/getCountryByService` 带 `countryName`（英文）与整个 `priceMap`。实测两者各有 195 与 183 行，
+**交集**才是真正有货的国家；有报价但没中文名的国家**保留**（可租），有名字但 `priceMap`
+为空的**丢弃**（做成下拉项也只是个租不到的空条目）。
+
+**配置回退仍然保留，且仍不是协议专属**：任何「在线目录读不到」都走到那里，不只是协议不匹配
+（见 §15）。回退分支**不回写** —— 两个选择项本来就是从配置读出来的，回写只会把它们重新格式化，
+顺便把 `service_name` / `country_name_zh` 两个只写不读的叶子塞进该 section，反而会踩 §13。
 
 **回归守卫**（`tests/test_settings_catalog_provider_parity.py`）：
 
 - `test_the_protocols_match_python` —— 每行的协议族与 `sms_providers.PROVIDERS[k].protocol` 逐项相等；
 - `test_the_protocol_constants_match_python` —— 常量值也钉住（表里用标识符、比较逻辑用常量，两处都要钉）；
-- `test_the_dialog_gates_the_online_catalog_on_the_protocol` —— 按花括号配平切出协议判断的**整块**，
-  要求目录调用在**块内**、且块外不再出现。只断言「文件里出现过 `CatalogIsSmsActivate`」是没用的：
-  判断可以写在那里却**包不住**那次调用；
+- `test_the_dialog_gates_the_online_catalog_on_the_protocol` —— 钉**三元分派**的形状：
+  `provider.CatalogIsSmsActivate ? 读取器A : 读取器B`，且两个读取器**各自只被调用一次**。
+  只断言「文件里出现过 `CatalogIsSmsActivate`」是没用的：判断可以写在那里却**包不住**那次调用，
+  或者两个协议族**对调**（把 nexsms 交给 sms-activate 读取器）—— 症状与本次原始缺陷一模一样（一次 403）；
 - `test_the_config_derived_path_does_not_write_the_dead_leaves` —— 配置派生分支必须在回写之前 return。
-  闸门是**来源**（`fromCatalog`）不是协议，因为在线目录**读失败**的 sms-activate 供应商也走配置回退
-  （见 §15）；
+  闸门是**来源**（`fromCatalog`）不是协议，因为在线目录**读失败**的供应商也走配置回退（见 §15）；
 - `test_only_a_successful_online_lookup_marks_the_choice_as_catalog_sourced` —— 上面那个闸门自己也要钉：
-  `fromCatalog` 必须默认为假、且只在在线目录成功那一支被置真。否则把 `fromCatalog = true` 无条件写在
-  方法开头，闸门就永久失效而它自己仍然绿；
+  `fromCatalog` 必须由在线结果**直接派生**（`= online is not null`），且之后不得再被赋值。
+  否则「忘了在成功分支里赋值」和「无条件置真」两种失效都会让闸门失效而它自己仍然绿；
 - `test_a_failed_online_lookup_reports_why_before_falling_back` / `test_a_failed_online_lookup_does_not_end_the_flow`
-  —— 见 §15。
+  —— 见 §15。前者现在钉**两处**：无路可退时原因插值进弹窗、有路可退时原因进日志。
+
+**NeXSMS 解析器的形状测试**：`tests/SmsWorkbench.Tests/SmsProviderNexsmsCatalogTests.cs`
+（12 条），覆盖 `{code,message,data}` 信封、`code` 为字符串 `"0"` 仍算成功、`priceMap` 的价格
+**字符串原样保留**（`0.12070` 不能变成 `0.1207` 之外的东西 —— 回写进配置后后端要拿它比价）、
+档位升序由**本地排序**保证而不是相信载荷顺序、`/api/countries` 与 `/api/getCountryByService`
+两个载荷的合并与取舍规则、以及余额缺字段时**报错而不是显示成 `$0.00`**。
 
 **变异验证**（守卫必须实测会红，否则是同义反复）：`runtime/tmp/mutate_protocol_guards.py`
-破坏 11 处行为（表里换协议标识符 / 常量值写错 / 去掉协议分派 / 回退不读配置 /
-闸门条件改成 `if (false)` / 把提前返回注释掉 / 来源开关默认值翻真 / 来源开关挪出成功分支 /
-失败时不再回退 / 失败原因不进提示 / 失败原因不从异常捕获），要求对应测试**全部变红**，
-并核对还原后字节一致。
+破坏 12 处行为（表里换协议标识符 / 常量值写错 / **两个协议族对调** / **目录调用脱离协议判断** /
+回退不读配置 / 闸门条件改成 `if (false)` / 把提前返回注释掉 / 来源开关改成恒真 /
+来源开关在派生之后被重新赋值 / **回退分支条件改成 `else if (false)`** / 失败原因不进提示 /
+失败原因不从异常捕获），要求对应测试**全部变红**，并核对还原后字节一致。实测 12/12 全部捕获。
 
 ⚠️ 其中「把提前返回注释掉」这一处**第一次漏过了**：`assertIn("return true;", block)`
 会被**注释里**的同名子串满足。所以断言前必须用 `strip_csharp_comments()` 剥注释 ——
 这与 `test_config_usage` 的 `test_the_extractor_ignores_commented_out_literals` 是同一类缺陷。
+
+⚠️ **产物验证只认字符串字面量，不认方法名**。`SmsWorkbench.dll` 在 Release 下
+**`internal` 成员名一律不进元数据**（实测连改动前就有的 `LoadOpenAiCatalogAsync` /
+`ParseCatalog` / `SmsProviderCountryChoice` 都搜不到，只有 WPF 绑定用到的属性名如
+`DisplayName` 在）。所以「用方法名扫产物」会得到假阴性；且 `$"价格 ${tier.Price} / 个"`
+这种插值字符串编译后**字面量被拆开**，也要按片段扫。判据仍是**成组**：本次删的（须 absent）
++ 本次加的（须 present）+ 没动过的对照（须 present，否则是扫描器坏了）。
 
 ## 15. 换了接码供应商之后，桌面端「一键接码」报「暂无号码」或 `getPricesV3` 404
 
@@ -433,10 +467,13 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
   `TryReadPrice` 依次试 `price` / `cost`。**不按供应商分表**：表会静默过期，而它过期时的
   表现恰恰就是「看着正常、报告没有号码」。
 - 🔴 **在线目录降级为「增强项」，不再是前置条件。** 任何读取失败（403 / 404 / 形态不符 /
-  返回零个国家）都回退到配置里已存的 `<section>.country` 与 `.target_price`，并把**失败原因**
-  显示在弹窗的提示行里。理由：目录读不到说明不了这家厂商能不能租，而 Python 后端读的
-  **就是这两个配置键**，所以配置值正是真正会被用来下单的值。
-  **失败原因必须显示** —— 静默回退会让一份陈旧配置看起来像刚刚核验过。
+  返回零个国家）都回退到配置里已存的 `<section>.country` 与 `.target_price`。理由：目录读不到
+  说明不了这家厂商能不能租，而 Python 后端读的**就是这两个配置键**，所以配置值正是真正会被
+  用来下单的值。
+  **失败原因必须说出来** —— 静默回退会让一份陈旧配置看起来像刚刚核验过。2026-09-23 起分成两处，
+  各自面向正确的读者：**配置里也没有国家/档位**（无路可退）⇒ 弹窗正文，原因**插值进去**；
+  **有配置可回退**（正常情形）⇒ 日志（`logger?.Warning("... catalog unavailable ({Error}) ...")`），
+  因为这不是需要操作者处理的错误，不该拦着弹窗让人先点掉一个提示。
 
 **为什么在线目录失败不该致命**：它失败的原因与「能否租号」无关 —— `herosms` 是 404、
 厂商可能短暂宕机、代理可能在做过滤。把它当前置条件，等于让任何一个偶发故障都升级成
@@ -452,3 +489,135 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 - ⚠️ 假 handler **按 `action=` 解析**而不是 `Contains`：`action=getPrices` 是
   `action=getPricesV3` 的**前缀**，用子串匹配的话无论回退有没有发生都会通过。
 
+
+## 16. 切过接码供应商之后，另外几家报 `401 (Unauthorized)` / `NOKEY`
+
+**症状**（一次会话里出现其中几条，`smsbower` 却是好的）：
+
+| 供应商 | 桌面端弹窗原文 |
+|---|---|
+| `herosms` | `无法读取 OpenAI 号码地区和价格档位：Responsestatus code does not indicate success: 401 (Unauthorized).` |
+| `grizzly` | `无法读取 OpenAI 号码地区和价格档位：NOKEY` |
+| `nexsms` | `… 403 (Forbidden).`（这是另一回事，见 §14） |
+
+三种消息都**没有指出是哪一家、哪个配置键**，所以看起来像「这三家厂商都坏了」，
+实际是**同一份密钥被写进了四个 section**。
+
+**根因**：桌面端「设置 → 接码供应商」的**下拉框与输入框是两个独立控件**。
+`SettingsService.Load()` 只在打开弹窗时解析一次 provider 作用域路径
+（`phone_reuse.{provider}.api_key` 等），而下拉框改选之后**没有任何东西去重新解析**。
+于是：输入框里仍是**打开时那家**（`source` 指向的那家）的 key，操作者选另一家后保存，
+`Save()` 就把它写进了**新选中的** section。
+
+> 🔴 注意 `SettingsService.Save()` 里的 `ResolveProviderPath` 修的是**写入目标**，
+> 不是**显示值**。只修前者反而更糟：密钥从「写到自己家（无害）」变成
+> 「写到别人家、且顶着别人家的名字（静默错配）」。
+
+**取证**（2026-09-23，`proxy.json` 3949 B 的那一份）：把「最后一次已知良好」的备份
+（`runtime/proxy-backups/proxy.json.before-herosms-grizzly-geo-20260923-150155`）
+按 geo 脚本改写后与当前文件逐叶子比对，**差异 100% 落在设置界面拥有的字段上**，
+且每个值都等于 `smsbower` 的值：
+
+| 叶子 | 良好状态 | 被覆盖后 | 来源 |
+|---|---|---|---|
+| `herosms` / `grizzly` / `nexsms`.api_key | 各自的 32/32/16 位 | 全部 = smsbower 的 32 位 | 输入框没刷新 |
+| 同三家 `.endpoint` | 各自的完整 URL | `""`（smsbower 没配 endpoint） | 同上 |
+| 同三家 `.sms_timeout` | `120` | `60`（smsbower 的值） | 同上 |
+| `phone_reuse.source` | `smsbower` | `nexsms`（最后一次下拉选择） | 同上 |
+
+**零成本确认**（不租号、只查余额）：
+
+```
+.venv/Scripts/python.exe runtime/tmp/probe_sms_keys.py
+```
+
+修复前 `herosms` / `grizzly` / `nexsms` 分别回 `401 BAD_KEY` / `NO_KEY` / `401 API密钥无效`；
+四家的 key 换成各自的真值后全部 `HTTP 200 ACCESS_BALANCE:…`。
+
+**现在的行为**（2026-09-23 起）：
+
+- `SettingsViewModel` 订阅了 `phone_provider` 字段的 `PropertyChanged`，**下拉框一变就重新
+  解析**所有带 `{provider}` 的字段（`SettingsService.ReloadProviderScopedFields`），
+  于是输入框里显示的**永远是这次保存真正会写进去的值**。
+- `--doctor` 的 `phone_providers` 增加一条**离线**判据：**两家以上解析后的 api_key 逐字相同**
+  就告警，并点名要改哪些 section（`phone_reuse.provider_key_collisions`）。
+  不打印密钥、不发请求，所以没网的机器也能跑。四家是四家独立生意，
+  共用一个 key 永远不是合法配置。
+  它同时仍会报告「选中那家没有 key」——**撞车分支不能把这条盖掉**，
+  因为挡住跑批的是它，撞车只是更意外。
+
+**回归守卫**：
+
+- `tests/SmsWorkbench.Tests/SettingsServiceTests.cs`：
+  `SwitchingProviderReloadsProviderScopedBoxesSoSaveCannotStampAnotherProvidersKey`
+  —— 走**真的 `SettingsViewModel`**（直接调 `ReloadProviderScopedFields` 会对着未修的
+  视图模型也通过，那样等于没测到缺失的那条订阅）。变异验证：注掉 `WatchProviderSelector()`
+  后它以 `Expected: "hero-key" Actual: "bower-key"` 变红，正是事故本身的签名。
+  同文件 `ProviderSelectorFieldIsAnOptionsFieldOnPhoneReuseSource` 钉住订阅所依赖的字段键
+  与 `{provider}` 令牌，防止改名后订阅静默失效。
+- `tests/test_doctor.py`：撞车告警、不撞车不告警、未配置不算撞车、撞车不掩盖缺 key。
+
+## 17. 配置分片：三片 mtime 一起变 / 清空设置后旧值复活 / 中文被转义
+
+**症状**（这几条是同一个子系统的不同面）：
+
+| 症状 | 真实含义 |
+|---|---|
+| 保存一次设置，`proxy.json` / `runtime.json` / `payment.json` 的 mtime **同时**变化 | 写入器**无条件重写三片** |
+| 清空全部设置后，之前删掉的旧配置**又回来了** | 空片被**删文件** ⇒ `AnyShardExists()` 为假 ⇒ 回落到 legacy 单文件分支 |
+| 桌面端保存过的分片里中文是 `"\u667A\u5229"`、`+` 是 `"\u002B"` | C# 默认 `JavaScriptEncoder` 转义非 ASCII 与 `+`，Python 的 `ensure_ascii=False` 不转 |
+| `--doctor` 报 `config_source: …\sms_tool` | 取的是 `default_config_path().parent`，根 `config.json` 归档后它回落到**包内**副本 |
+| 分片旁边出现 `.bak` | 正常，是原子写留下的上一份内容 |
+
+**根因**（四条彼此独立，2026-09-23 一并修）：
+
+1. **写入粒度**：`ConfigStore.WriteShards` / `config._write_shards` 遍历三个 bucket
+   无条件写。代价不只是 IO：分片 mtime 本来是「哪块配置被动过」的审计信号 ——
+   §16 那次密钥写串就是靠它分工作流的。三片一起刷新之后，这个判据**直接失效**。
+2. **空片语义两侧不一致**：Python 写 `{}`，C# **删文件**。两侧都用
+   「至少存在一个分片文件」判断「是不是分片布局」，所以把三片删光会把应用**交回
+   legacy 单文件分支** —— 那份没人维护的旧 `config.json` 于是被重新读进来，
+   复活刚被删掉的键。空对象 merge 之后不产生任何键，所以写 `{}` **同样**能防止复活，
+   却不会翻转布局判定。
+3. **序列化不一致**：C# 默认编码器把 `+` 写成 `\u002B`、`智利` 写成 `\u667A\u5229`，
+   Python 写原文。后果是两侧**互判对方写的文件为「已变更」**，内容裁剪永远命中不了，
+   而且每次桌面端保存都重写整文件的非 ASCII 字节。取证：修复前 `proxy.json` 里
+   逐字就是 `"country_name_zh": "\u667A\u5229"`。
+4. **原子写不一致**：Python 有 `<name>.bak` + `fsync`，C# 两样都没有 ——
+   「桌面端写、Python 备份」这条链**从未真正生效过**，而崩溃时被截断的那个文件
+   **就是全部应用配置**。
+
+**为什么删掉了根目录的 `config.json`**：
+
+它是被 gitignore 的**死文件**（`.gitignore:1`，无 git 历史）。2026-09-23 实测：
+386 个叶子、**独有叶子 0**（每个键都能在分片里找到）、88 个值不同且样本里分片一律是真值。
+留着它只会让陈旧数字继续流通，并让 `default_config_path()` 优先返回它。
+归档在 `runtime/config-backups/config.json.before-archive-20260923-195004`
+（sha256 与原件逐字节核对通过之后才删）。回滚：把归档件拷回项目根即可。
+
+> ⚠️ **不要**因此去删 legacy 迁移分支。`config.example.json` 是**单文件**模板，
+> 首装与 CI 都靠它落地成分片 —— 分支是承重墙，删的只是那份数据文件。
+
+**现在的行为**（2026-09-23 起）：
+
+- 两侧都**只写内容真正变化的分片**，并返回「实际写了哪些文件」；
+  未变的分片 mtime 不动、也不生成新 `.bak`（旧 `.bak` 因此不会被无意义保存冲掉）。
+- 两侧空片都写 `{}`，**不再删文件**。
+- C# 改用 `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` 并补尾随 `\n`，与 Python 的
+  `json.dumps(..., ensure_ascii=False) + "\n"` 逐字节对齐。
+- C# 补上 `.bak`（`File.Copy`）与 fsync（`Flush(flushToDisk: true)`）。
+- 新增 `default_config_dir()`，取代 `default_config_path().parent` 作为「配置目录」的答案。
+
+**回归守卫**：
+
+- `tests/test_config_sharded_atomic_write.py`：裁剪、返回值、`.bak` 归属、尾随换行、
+  `default_config_dir()` 不被 legacy 回落带偏。
+- `tests/SmsWorkbench.Tests/ConfigStoreTests.cs`：空片写 `{}`、
+  `ClearingEverySettingDoesNotHandTheAppBackToTheLegacyFile`（清空设置 + 磁盘上放一份
+  旧 `config.json`，断言它**不被读回来**）、裁剪不动未变分片、非 ASCII / `+` 不转义。
+- **变异验证**（每处修复注掉都必须变红，否则测试是同义反复）：Python 裁剪 → 2 条红；
+  `default_config_dir` 退回 legacy 语义 → 1 条红；C# 裁剪 → 1 条；C# 恢复删空片 → **3 条**；
+  C# 去掉 `Encoder` → 1 条；C# 去掉尾随换行 → 1 条。
+- 🔴 `test_write_shards_keeps_old_file_when_replace_fails` 原本**第二次写相同内容**，
+  加上裁剪之后 `os.replace` 根本不会被调用 ⇒ 该测试会**永远通过**（同义反复）。
+  已改成第二次写**不同**内容。任何「写两次」的测试在引入裁剪后都要重查这一点。
