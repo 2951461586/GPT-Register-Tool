@@ -191,6 +191,29 @@
    `phone_reuse.source`（供应商 key，默认 `smsbower`）与**该供应商自己的** `api_key`，
    例如 `phone_reuse.smsbower.api_key`，或环境变量 `SMSBOWER_API_KEY`。
    供应商清单见 `sms_tool/sms_providers.py`（唯一真源）。
+
+   四家供应商的配置骨架已在 `proxy.json` 和 `config.example.json` 里给出，
+   `api_key` 一律是**占位符**形式（默认走环境变量），把值填成自己的 key 即可：
+
+   | 供应商 | 配置路径 | 环境变量 |
+   |---|---|---|
+   | `smsbower` | `phone_reuse.smsbower.api_key` | `SMSBOWER_API_KEY` |
+   | `herosms` | `phone_reuse.herosms.api_key` | `HEROSMS_API_KEY` |
+   | `grizzly` | `phone_reuse.grizzly.api_key` | `GRIZZLY_API_KEY` |
+   | `nexsms` | `phone_reuse.nexsms.api_key` | `NEXSMS_API_KEY` |
+
+   🔴 **占位符不等于「已配置」**：`$HEROSMS_API_KEY` 只是个指向，变量没设就是没密钥。
+   想知道哪家真配上了，跑 `python -m sms_tool --doctor` 看 `phone_providers` 一行：
+
+   ```
+   [ OK ] phone_providers: selected=smsbower (origin=config, endpoint=https://smsbower.page/stubs/handler_api.php);
+                           smsbower=config, herosms=missing, grizzly=missing, nexsms=missing
+   ```
+
+   `origin` 只有三种取值：`config`（配置里写了字面量）、`env`（从环境变量解析出来）、
+   `missing`（没解析到）。只有 `source` 选中的那家没密钥才告警，其余三家未配置属正常。
+   报告**从不打印密钥本身**，只报来源，所以可以直接贴进工单。
+   `--doctor --json` 的 `phone_providers` 字段是同一份数据的结构化版本（额外带 `endpoint`）。
 2. 看到 `no_number_source`（PayPal 结账链路）⇒ **不是配置错误，是这条泳道没有替代品**。
    静态号池是它唯一的号码来源，租号池没有接进来。要么按第 1 条接一个源并接到
    `sms_tool/paypal/orchestrator.py`，要么关掉 PayPal 结账短信（见第 4 条）。
@@ -208,3 +231,42 @@
    `phone_index_file` 都是**死键**，没有任何读取方。示例模板里的已删；
    本机未跟踪的分片（`config.json` / `payment.json` / `proxy.json`）里可能还在，
    删不删由操作者决定 —— 那几个块里挨着真实的接码中继密钥。
+
+## 13. 桌面端点过「开始接码」之后，本地 `test_config_usage` 变红
+
+**症状**：`tests/test_config_usage.py::test_detector_produces_the_pinned_set` 报
+`phone_reuse.<供应商>.service_name` 或 `phone_reuse.<供应商>.country_name_zh`
+出现在 unread 集合里，但不在 `EXPECTED_UNREAD` 中（`<供应商>` 通常不是 `smsbower`）。
+CI 上**看不见**这个问题。
+
+**触发条件**：在桌面端选一个**非 `smsbower`** 的供应商，走一次「开始接码」弹窗。
+
+**根因**（三个事实叠在一起）：
+
+1. `SmsWorkbench/MainWindow.SmsProvider.cs:235/238` 会往**当前供应商**的 section 里写
+   `service_name` 与 `country_name_zh`（纯展示用，两语言下都没有读取方）。
+2. `sms_tool/config_usage.py` 的判定是「**leaf 名是否作为独立字符串字面量**出现在
+   `sms_tool/` + `services/`」——`service_name` / `country_name_zh` 两个 leaf 都不出现，
+   所以被判为死键；而 `country_name` / `service` / `endpoint` 是活叶子，可以随便写。
+3. `config_usage.SHARD_NAMES` **包含 `proxy.json`**，而 `phone_reuse.*` 正是落在
+   `proxy.json` 里 ⇒ 桌面端写进去的键会被扫描器看到。
+
+`smsbower` 之所以不炸，只是因为 `EXPECTED_UNREAD` 里**恰好只钉了 `phone_reuse.smsbower.*`
+这两条路径**。
+
+**为什么不能顺手修**：`tests/test_config_usage.py::test_write_only_keys_are_still_reported`
+里有一行
+
+```python
+self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
+```
+
+它把「**C# 写这两个键**」钉成了「扫描范围只看 Python、不看 C#」这个决策的**前提**
+（`config_usage.py:29-49` 的 docstring 整段论证都建在这个反例上）。删掉 C# 那两行写入，
+这条守卫会以 `counter-example moved` 失败，得连带重写模块 docstring 与测试 ——
+**属设计变更，不是修 typo。**
+
+**临时处置**（只想恢复绿）：把这两个键从**出问题的那个非 `smsbower` section** 里删掉即可
+（它们是死键，删了没有任何行为变化）。
+⚠️ 别去删 `phone_reuse.smsbower.*` 下的同名键 —— 那两条**被 `EXPECTED_UNREAD` 钉着**，
+删了会让同一个测试往**反方向**红。

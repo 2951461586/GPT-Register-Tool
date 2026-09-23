@@ -337,6 +337,37 @@ def _number_attempts(cfg: dict | None = None, provider: str | None = None) -> in
     return max(1, _int_value(provider_cfg.get("number_attempts") or cfg.get("number_attempts"), 3))
 
 
+#: Where a resolved provider key came from, as reported by
+#: :func:`provider_key_status`. ``KEY_ORIGIN_ENV`` covers all three indirection
+#: spellings (blank, ``$NAME`` and ``YOUR_NAME``), because they all end up as an
+#: environment lookup -- the distinction that matters to an operator is
+#: "I wrote this into the config" vs "it came from the environment".
+KEY_ORIGIN_CONFIG = "config"
+KEY_ORIGIN_ENV = "env"
+KEY_ORIGIN_MISSING = "missing"
+
+
+def _key_lookup(value: str, provider: str) -> tuple[str, str]:
+    """Split a configured ``api_key`` into ``(env_name, literal)``.
+
+    Exactly one side is non-empty: either the value names an environment
+    variable -- directly as ``$ENV_NAME``, by being the vendor placeholder
+    ``YOUR_ENV_NAME``, or by being blank, which means the provider's own
+    variable -- or it is a literal key.
+
+    This is the **single** place that decision is made. :func:`_resolve_secret`
+    takes the value from it and :func:`provider_key_status` reads the *origin*
+    from it, so the two can never disagree about where a key came from.
+    """
+    raw = str(value or "").strip()
+    env_name = sms_providers.api_key_env(provider)
+    if raw.startswith("$") and len(raw) > 1:
+        return raw[1:], ""
+    if not raw or raw == f"YOUR_{env_name}":
+        return env_name, ""
+    return "", raw
+
+
 def _resolve_secret(value: str, provider: str) -> str:
     """Resolve a configured provider key, honouring indirection.
 
@@ -344,13 +375,10 @@ def _resolve_secret(value: str, provider: str) -> str:
     ``YOUR_SMSBOWER_API_KEY``. The latter two read the provider's environment
     variable, so a committed config never has to carry a real key.
     """
-    env_name = sms_providers.api_key_env(provider)
-    raw = str(value or "").strip()
-    if raw.startswith("$") and len(raw) > 1:
-        return os.environ.get(raw[1:], "").strip()
-    if not raw or raw == f"YOUR_{env_name}":
-        return os.environ.get(env_name, "").strip()
-    return raw
+    env_name, literal = _key_lookup(value, provider)
+    if literal:
+        return literal
+    return os.environ.get(env_name, "").strip()
 
 
 def _int_value(value, default: int) -> int:
@@ -391,6 +419,81 @@ def has_phone_reuse_config() -> bool:
     """True when the selected provider has a usable key configured."""
     cfg = _phone_reuse_cfg()
     return bool(_provider_api_key(cfg, _phone_source(cfg)))
+
+
+def _key_origin(value: str, provider: str) -> str:
+    """Where :func:`_resolve_secret` would take this provider's key from."""
+    _env_name, literal = _key_lookup(value, provider)
+    return KEY_ORIGIN_CONFIG if literal else KEY_ORIGIN_ENV
+
+
+def missing_key_hint(provider: str | None = None) -> str:
+    """What an operator should set so ``provider`` gets a key.
+
+    ``provider`` defaults to whatever ``phone_reuse.source`` selects. Shared by
+    the runtime ``phone_pool_unavailable`` message and ``--doctor`` so the two
+    cannot tell an operator different things about the same missing key -- the
+    desktop's settings comment promises this message names the key to set, and
+    a hardcoded ``smsbower`` made that true only for the default provider.
+    """
+    key = sms_providers.resolve_provider(provider) if provider else _phone_source()
+    env_name = sms_providers.api_key_env(key)
+    section = sms_providers.config_section(key)
+    return f"set {section}.api_key in proxy.json, or export {env_name}"
+
+
+def provider_key_status(cfg: dict | None = None) -> list[dict[str, object]]:
+    """Per-provider key readiness, for diagnostics that must not leak the key.
+
+    One row per provider this repository ships a client for, in registry order:
+
+    ``provider`` / ``label``
+        Registry key and display name.
+    ``selected``
+        True for the one provider ``phone_reuse.source`` currently picks. Exactly
+        one row carries it, so a caller never has to re-derive the selection --
+        which is how the two ends would drift apart.
+    ``configured``
+        Whether a usable key resolved -- **not** whether the config mentions one.
+        A ``$ENV_NAME`` placeholder whose variable is unset is not configured.
+    ``origin``
+        ``config`` (a literal in the config), ``env`` (resolved from the
+        provider's environment variable, including the placeholder spellings),
+        or ``missing``. This is the distinction that is otherwise invisible:
+        both a literal and a working env var produce a successful run, so
+        "why does this machine work and that one not" has no answer without it.
+    ``env`` / ``endpoint``
+        The variable to set, and the endpoint that will actually be used
+        (config override, else the registry default).
+
+    The key value itself is never returned or logged: the whole point is that
+    the report can be pasted into a ticket. ``cfg`` is the ``phone_reuse``
+    section; it defaults to the live config, so ``--doctor`` and the desktop
+    probe share one implementation.
+    """
+    cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
+    selected_key = _phone_source(cfg)
+    rows: list[dict[str, object]] = []
+    for key in sms_providers.available_provider_keys():
+        spec = sms_providers.provider_spec(key)
+        provider_cfg = _provider_cfg(cfg, key)
+        resolved = _provider_api_key(cfg, key)
+        rows.append({
+            "provider": key,
+            "label": spec.label if spec else key,
+            "selected": key == selected_key,
+            "configured": bool(resolved),
+            "origin": (
+                _key_origin(str(provider_cfg.get("api_key") or ""), key)
+                if resolved else KEY_ORIGIN_MISSING
+            ),
+            "env": sms_providers.api_key_env(key),
+            "endpoint": (
+                str(provider_cfg.get("endpoint") or "").strip()
+                or sms_providers.default_endpoint(key)
+            ),
+        })
+    return rows
 
 
 def _phone_source(cfg: dict | None = None) -> str:

@@ -571,6 +571,42 @@
       "send_cooldown_seconds": 45,
       "send_retry_attempts": 3,
       "send_retry_delay_seconds": 45
+    },
+    "herosms": {
+      "api_key": "$HEROSMS_API_KEY",
+      "endpoint": "https://hero-sms.com/stubs/handler_api.php",
+      "service": "dr",
+      "country": "38",
+      "min_price": "",
+      "max_price": "0.06",
+      "target_price": "0.054",
+      "sms_timeout": 120,
+      "sms_poll_interval": 5,
+      "number_attempts": 3
+    },
+    "grizzly": {
+      "api_key": "$GRIZZLY_API_KEY",
+      "endpoint": "https://api.grizzlysms.com/stubs/handler_api.php",
+      "service": "dr",
+      "country": "38",
+      "min_price": "",
+      "max_price": "0.06",
+      "target_price": "0.054",
+      "sms_timeout": 120,
+      "sms_poll_interval": 5,
+      "number_attempts": 3
+    },
+    "nexsms": {
+      "api_key": "$NEXSMS_API_KEY",
+      "endpoint": "https://api.nexsms.net",
+      "service": "dr",
+      "country": "38",
+      "min_price": "",
+      "max_price": "0.06",
+      "target_price": "0.054",
+      "sms_timeout": 120,
+      "sms_poll_interval": 5,
+      "number_attempts": 3
     }
   },
   "output": {
