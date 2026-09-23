@@ -231,6 +231,42 @@
    `phone_index_file` 都是**死键**，没有任何读取方。示例模板里的已删；
    本机未跟踪的分片（`config.json` / `payment.json` / `proxy.json`）里可能还在，
    删不删由操作者决定 —— 那几个块里挨着真实的接码中继密钥。
+7. 🔴 **配置写对了、`--doctor` 也是绿的，但一个号都买不到** ⇒ 先查**价格窗口**。
+
+   `phone_reuse` 会把 `max_price` **全局兜底成 `0.06`**（`phone_reuse.py:555` 的 `or "0.06"`），
+   而 `_price_window_refusal()`（`sms_tool/nexsms.py:499`）会拒掉任何高于它的报价。
+   **「空值不是边界」** —— 空 `min_price` 确实无下界，但 `max_price` 有默认上界。
+
+   ⇒ **换一家供应商时必须重估价格窗口，不能沿用 0.06。** 各家的价差极大，实测 nexsms
+   上 `dr` 的最低价（按国）：
+
+   | 国家 | id | 最低价 |
+   |---|---|---|
+   | Indonesia | 6 | **0.1207** |
+   | Kazakhstan | 2 | 0.216 |
+   | Chile | 151 | 0.2586 |
+   | Ghana（代码默认国） | 38 | 0.861 |
+   | USA | 187 | 1.5551 |
+
+   `0.06` 的上限在 nexsms 上**低于所有国家的最低价** ⇒ 结构性买不到，不是抖动。
+
+   查价（零成本，只报价、不租号）：
+   ```bash
+   PYTHONPATH=. python -c "
+   from sms_tool import phone_reuse as pr, sms_providers as sp
+   from sms_tool.nexsms import NexSmsClient
+   cfg = pr._phone_reuse_cfg()
+   c = NexSmsClient(api_key=pr._provider_api_key(cfg,'nexsms'), endpoint=sp.default_endpoint('nexsms'))
+   print(c.get_country_quote(service='dr', country='6'))"
+   ```
+   ⚠️ **`get_country_quote(service=...)` 不带国家参数时只返回第一条**（本项目里是加纳），
+   别据此判断「只有这一个国家有号」—— 直接打 `/api/getCountryByService?serviceCode=dr`
+   才拿到**全量国家数组**。
+
+   修法：在该供应商 section 里**显式钉价格**（`min_price` / `max_price` / `target_price`
+   全钉到你要的那一档，与 `smsbower` 的 `min=max=target=0.07` 同写法）。
+   `country_name` **不用写**：数字国家 id 由 `phone_proxy.COUNTRY_ID_TO_ISO` 直接解析成 ISO
+   （如 `"6" -> "ID"`），只有查不到 id 时才回退到 `country_name`。
 
 ## 13. 桌面端点过「开始接码」之后，本地 `test_config_usage` 变红
 
