@@ -187,13 +187,44 @@ namespace SmsWorkbench
         public string EnglishName { get; }
         public string ChineseName { get; }
         public IReadOnlyList<SmsProviderPriceTier> Tiers { get; }
-        public string DisplayName => string.IsNullOrWhiteSpace(ChineseName)
-            ? $"{EnglishName} ({Id})"
-            : $"{ChineseName} / {EnglishName} ({Id})";
+        public string DisplayName
+        {
+            get
+            {
+                // The non-sms-activate fallback in `MainWindow.SmsProvider.cs`
+                // builds a choice whose English name *is* the raw id, because
+                // `country_name` is optional in the config -- the backend
+                // resolves a numeric country id through
+                // `phone_proxy.COUNTRY_ID_TO_ISO` and never needs the label.
+                // Rendering that as "6 (6)" reads like a bug, so collapse the
+                // duplicate. The sms-activate path can't hit this: there the
+                // English name comes from the vendor's own `eng` field.
+                if (string.Equals(EnglishName, Id, StringComparison.Ordinal))
+                {
+                    return string.IsNullOrWhiteSpace(ChineseName) ? $"国家 {Id}" : $"{ChineseName} ({Id})";
+                }
+                return string.IsNullOrWhiteSpace(ChineseName)
+                    ? $"{EnglishName} ({Id})"
+                    : $"{ChineseName} / {EnglishName} ({Id})";
+            }
+        }
     }
 
     internal sealed class SmsProviderPriceTier
     {
+        /// <summary>
+        /// `Count` for a tier that came from the config rather than from a
+        /// vendor price list, i.e. one whose inventory was never queried.
+        ///
+        /// It is a sentinel instead of `0` because `0` is a real answer -- an
+        /// out-of-stock tier -- and the dialog renders the two differently. Only
+        /// the sms-activate catalog produces real counts
+        /// (<see cref="SmsProviderCatalogClient.ParsePriceTiers"/>); the
+        /// non-sms-activate fallback path in `MainWindow.SmsProvider.cs` does
+        /// not know the inventory and must not claim it does.
+        /// </summary>
+        internal const int UnknownCount = -1;
+
         internal SmsProviderPriceTier(string price, int count, string providerIds = "")
         {
             Price = price;
@@ -207,6 +238,8 @@ namespace SmsWorkbench
         public int Count { get; }
         public string ProviderIds { get; }
         public decimal NumericPrice { get; }
-        public string DisplayName => $"${Price} / 个 · 库存 {Count}";
+        public string DisplayName => Count < 0
+            ? $"${Price} / 个 · 库存未查询"
+            : $"${Price} / 个 · 库存 {Count}";
     }
 }

@@ -15,10 +15,11 @@ namespace SmsWorkbench
     /// source of truth. Mirrors drift, so the two are pinned together by
     /// `tests/test_settings_catalog_provider_parity.py`: it extracts the table
     /// below from this file and fails on any difference in provider keys, the
-    /// default endpoint or the API-key environment variable name. Add a provider
-    /// on one side without the other and that test goes red -- which is the only
-    /// thing keeping a C#-only edit from silently pointing the one-click dialog
-    /// at the wrong host.
+    /// default endpoint, the API-key environment variable name **or the
+    /// protocol family**. Add a provider on one side without the other and that
+    /// test goes red -- which is the only thing keeping a C#-only edit from
+    /// silently pointing the one-click dialog at the wrong host, or at a host
+    /// that does not speak the API it is about to call.
     /// </para>
     ///
     /// <para>
@@ -30,31 +31,71 @@ namespace SmsWorkbench
     /// `client_available = false`, and offering it would have put a
     /// selectable-but-broken choice in front of the operator.
     /// </para>
+    ///
+    /// <para>
+    /// 🔴 <b>That protocol difference is carried in the table below</b> and must
+    /// be, because the one-click dialog is *not* provider-agnostic: it reads the
+    /// online country/price catalog over the sms-activate handler API
+    /// (`?action=getCountries` / `getPricesV3`, and a balance reply that starts
+    /// with `ACCESS_BALANCE:`). nexsms answers all three of those with
+    /// `403 Forbidden`, so a dialog that assumed one protocol would fail on it
+    /// with an opaque HTTP error. `CatalogIsSmsActivate` is what the dialog
+    /// gates on, and `tests/test_settings_catalog_provider_parity.py` pins every
+    /// row's `Protocol` against `sms_tool/sms_providers.py` -- the same
+    /// no-compiler-between-the-two-languages argument as the endpoint and
+    /// API-key-env columns.
+    /// </para>
     /// </summary>
     internal static class SmsProviderCatalog
     {
-        internal sealed record SmsProvider(string Key, string Label, string DefaultEndpoint, string ApiKeyEnv);
+        internal sealed record SmsProvider(
+            string Key, string Label, string DefaultEndpoint, string ApiKeyEnv, string Protocol)
+        {
+            /// <summary>
+            /// Whether the one-click dialog can read this provider's catalog over
+            /// the sms-activate handler API.
+            ///
+            /// <para>
+            /// `false` is not "unsupported" -- the backend still rents from this
+            /// provider, and the dialog still runs. It only means the dialog must
+            /// take the country and price tier from the config instead of asking
+            /// the vendor, because reading them here would mean a second,
+            /// C#-side implementation of a protocol that `sms_tool` already
+            /// implements (`sms_tool/nexsms.py`).
+            /// </para>
+            /// </summary>
+            internal bool CatalogIsSmsActivate => Protocol == SmsActivateProtocol;
+        }
 
         internal const string DefaultKey = "smsbower";
+
+        //: Protocol family keys. Byte-identical to `sms_providers.PROTOCOL_*`;
+        //: the parity test asserts both the table column and these constants.
+        internal const string SmsActivateProtocol = "sms_activate_handler";
+        internal const string NexsmsProtocol = "nexsms_json";
 
         internal static readonly IReadOnlyList<SmsProvider> Providers = new[]
         {
             new SmsProvider(
                 "smsbower", "SMSBower",
-                "https://smsbower.page/stubs/handler_api.php", "SMSBOWER_API_KEY"),
+                "https://smsbower.page/stubs/handler_api.php", "SMSBOWER_API_KEY",
+                SmsActivateProtocol),
             new SmsProvider(
                 "herosms", "HeroSMS",
-                "https://hero-sms.com/stubs/handler_api.php", "HEROSMS_API_KEY"),
+                "https://hero-sms.com/stubs/handler_api.php", "HEROSMS_API_KEY",
+                SmsActivateProtocol),
             new SmsProvider(
                 "grizzly", "Grizzly SMS",
-                "https://api.grizzlysms.com/stubs/handler_api.php", "GRIZZLY_API_KEY"),
+                "https://api.grizzlysms.com/stubs/handler_api.php", "GRIZZLY_API_KEY",
+                SmsActivateProtocol),
             // Base host only, no handler path: this vendor's client appends its
             // own `/api/...` per call. A path copied from the rows above would
             // still pass the parity test's string comparison but every request
             // would 404.
             new SmsProvider(
                 "nexsms", "NexSMS",
-                "https://api.nexsms.net", "NEXSMS_API_KEY"),
+                "https://api.nexsms.net", "NEXSMS_API_KEY",
+                NexsmsProtocol),
         };
 
         /// <summary>

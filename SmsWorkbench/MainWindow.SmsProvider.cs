@@ -11,13 +11,32 @@ namespace SmsWorkbench
         /// <summary>
         /// One-click SMS rental dialog.
         ///
-        /// Every supported provider speaks the same sms-activate handler
-        /// protocol, so the dialog is provider-agnostic: it reads whatever
-        /// `phone_reuse.source` selects. Exactly three things are
-        /// provider-specific, and all three come from
+        /// Four things are provider-specific and all four come from
         /// <see cref="SmsProviderCatalog"/> -- the config section
-        /// (`phone_reuse.&lt;provider&gt;`), the default endpoint, and the API-key
-        /// environment variable.
+        /// (`phone_reuse.&lt;provider&gt;`), the default endpoint, the API-key
+        /// environment variable, and the **protocol family**.
+        ///
+        /// <para>
+        /// 🔴 The dialog is *not* provider-agnostic. It used to claim it was, on
+        /// the grounds that every provider speaks the sms-activate handler
+        /// protocol; that stopped being true when `nexsms` was wired up, and the
+        /// claim was load-bearing -- the online country/price lookup below
+        /// (`?action=getCountries` / `getPricesV3` / an `ACCESS_BALANCE:` reply)
+        /// is sms-activate-only. nexsms answers all three with `403 Forbidden`,
+        /// so selecting it and clicking 一键接码 used to dead-end in
+        /// "加载失败 … 403 (Forbidden)" with no way forward.
+        /// </para>
+        ///
+        /// <para>
+        /// When the provider is not sms-activate the dialog therefore skips the
+        /// network entirely and takes the country and price tier **from the
+        /// config**, which is what the backend reads anyway. It does not write
+        /// them back: the values it shows *are* the config values, so a write
+        /// could only reformat them -- and it would add `service_name` /
+        /// `country_name_zh`, two write-only leaves whose appearance in a
+        /// non-`smsbower` section turns `tests/test_config_usage.py` red
+        /// (see `docs/TROUBLESHOOTING.md` §13).
+        /// </para>
         /// </summary>
         private async Task<bool> ShowSmsProviderOneClickDialogAsync(CancellationToken ct = default)
         {
@@ -34,37 +53,62 @@ namespace SmsWorkbench
                 return false;
             }
 
-            string endpoint = FirstNonEmpty(settingsService.GetString(section + ".endpoint"), provider.DefaultEndpoint);
             IReadOnlyList<SmsProviderCountryChoice> countries;
             string balance = "--";
-            try
+            string notice = "";
+            if (provider.CatalogIsSmsActivate)
             {
-                System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
-                countries = await SmsProviderCatalogClient.LoadOpenAiCatalogAsync(httpClient, apiKey, endpoint);
+                string endpoint = FirstNonEmpty(settingsService.GetString(section + ".endpoint"), provider.DefaultEndpoint);
                 try
                 {
-                    balance = await SmsProviderCatalogClient.LoadBalanceAsync(httpClient, apiKey, endpoint);
+                    System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+                    countries = await SmsProviderCatalogClient.LoadOpenAiCatalogAsync(httpClient, apiKey, endpoint);
+                    try
+                    {
+                        balance = await SmsProviderCatalogClient.LoadBalanceAsync(httpClient, apiKey, endpoint);
+                    }
+                    catch (Exception balanceError)
+                    {
+                        logger?.Warning(balanceError, "Failed to load {Provider} balance", provider.Label);
+                    }
                 }
-                catch (Exception balanceError)
+                catch (Exception exc)
                 {
-                    logger?.Warning(balanceError, "Failed to load {Provider} balance", provider.Label);
+                    logger?.Error(exc, "Failed to load {Provider} OpenAI catalog", provider.Label);
+                    ShowThemedInfoDialog(provider.Label + " 加载失败", "无法读取 OpenAI 号码地区和价格档位：" + exc.Message);
+                    return false;
+                }
+                finally
+                {
+                    System.Windows.Input.Mouse.OverrideCursor = null;
+                }
+
+                if (countries.Count == 0)
+                {
+                    ShowThemedInfoDialog("暂无号码", provider.Label + " 当前没有可用的 OpenAI 号码。");
+                    return false;
                 }
             }
-            catch (Exception exc)
+            else
             {
-                logger?.Error(exc, "Failed to load {Provider} OpenAI catalog", provider.Label);
-                ShowThemedInfoDialog(provider.Label + " 加载失败", "无法读取 OpenAI 号码地区和价格档位：" + exc.Message);
-                return false;
-            }
-            finally
-            {
-                System.Windows.Input.Mouse.OverrideCursor = null;
-            }
+                // Not sms-activate: read the country and tier from the config
+                // instead of the wire. Reimplementing this vendor's REST catalog
+                // here would be a second copy of a protocol `sms_tool` already
+                // implements, and the copy is the one that would rot.
+                SmsProviderCountryChoice? saved = ReadSavedSmsProviderChoice(section);
+                if (saved is null)
+                {
+                    ShowThemedInfoDialog(
+                        provider.Label + " 缺少国家或档位",
+                        $"请先在 {section} 里配置 country 与 target_price（或 max_price / min_price），"
+                        + $"或改用命令行查询 {provider.Label} 的可用国家与价格。");
+                    return false;
+                }
 
-            if (countries.Count == 0)
-            {
-                ShowThemedInfoDialog("暂无号码", provider.Label + " 当前没有可用的 OpenAI 号码。");
-                return false;
+                countries = new[] { saved };
+                notice = $"{provider.Label} 不使用 sms-activate 协议，桌面端不读取在线目录 —— "
+                       + $"下方国家与档位取自配置 {section}.country / .target_price。"
+                       + "如需更换，请在命令行查询该供应商的可用国家与价格档位。";
             }
 
             string savedCountry = FirstNonEmpty(settingsService.GetString(section + ".country"), "38");
@@ -117,6 +161,17 @@ namespace SmsWorkbench
             };
             headingPanel.Children.Add(heading);
             headingPanel.Children.Add(balanceText);
+            if (!string.IsNullOrWhiteSpace(notice))
+            {
+                headingPanel.Children.Add(new TextBlock
+                {
+                    Text = notice,
+                    FontSize = 12,
+                    Foreground = (Brush)FindResource("TextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 8, 0, 0)
+                });
+            }
             Grid.SetRow(headingPanel, 0);
             root.Children.Add(headingPanel);
 
@@ -175,7 +230,9 @@ namespace SmsWorkbench
             {
                 if (tierBox.SelectedItem is SmsProviderPriceTier tier)
                 {
-                    inventory.Text = $"当前库存 {tier.Count} 个，价格 ${tier.Price} / 个";
+                    inventory.Text = tier.Count < 0
+                        ? $"价格 ${tier.Price} / 个（取自配置，未查询库存）"
+                        : $"当前库存 {tier.Count} 个，价格 ${tier.Price} / 个";
                 }
                 else
                 {
@@ -228,6 +285,16 @@ namespace SmsWorkbench
                 return false;
             }
 
+            if (!provider.CatalogIsSmsActivate)
+            {
+                // The two choices above were read *from* the config, so writing
+                // them back could only reformat them. Skipping the write also
+                // keeps `service_name` / `country_name_zh` -- two write-only
+                // leaves -- out of this provider's section, which is what keeps
+                // `tests/test_config_usage.py` green after this dialog runs.
+                return true;
+            }
+
             settingsService.UpdateConfig(root =>
             {
                 JsonObject providerSection = GetOrCreateSection(GetOrCreateSection(root, "phone_reuse"), provider.Key);
@@ -250,6 +317,40 @@ namespace SmsWorkbench
                 }
             });
             return true;
+        }
+
+        /// <summary>
+        /// Build a one-entry country/tier pair from the config, for providers
+        /// whose catalog this dialog cannot read (see
+        /// <see cref="SmsProviderCatalog.SmsProvider.CatalogIsSmsActivate"/>).
+        ///
+        /// Returns <c>null</c> when the config has no usable country or price --
+        /// the caller turns that into a message naming the keys to fill in,
+        /// rather than silently renting whatever the vendor defaults to.
+        /// </summary>
+        private SmsProviderCountryChoice? ReadSavedSmsProviderChoice(string section)
+        {
+            string country = settingsService.GetString(section + ".country")?.Trim() ?? "";
+            string price = FirstNonEmpty(
+                settingsService.GetString(section + ".target_price"),
+                settingsService.GetString(section + ".max_price"),
+                settingsService.GetString(section + ".min_price"));
+            if (string.IsNullOrWhiteSpace(country) || string.IsNullOrWhiteSpace(price))
+            {
+                return null;
+            }
+
+            // `country_name` is optional: the backend resolves a numeric country
+            // id through `phone_proxy.COUNTRY_ID_TO_ISO`, so a section that omits
+            // the display name is correct, not incomplete. Fall back to the id
+            // for display only -- and note we never write either name back.
+            string englishName = FirstNonEmpty(settingsService.GetString(section + ".country_name"), country);
+            string chineseName = settingsService.GetString(section + ".country_name_zh") ?? "";
+            return new SmsProviderCountryChoice(
+                country,
+                englishName,
+                chineseName,
+                new[] { new SmsProviderPriceTier(price, SmsProviderPriceTier.UnknownCount) });
         }
 
         private static JsonObject GetOrCreateSection(JsonObject parent, string key)
