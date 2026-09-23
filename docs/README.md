@@ -7,7 +7,9 @@ Directory layout (since 2026-09-06):
 
 - `docs/*.md` — living documents only (architecture, directory map, CONTEXT,
   current feature guides). Dated snapshots are archived.
-- `docs/releases/` — one immutable release note per published tag.
+- `docs/releases/` — one release note per published tag；**格式规范见
+  [`releases/README.md`](releases/README.md)**（只列新增功能与修复问题，覆盖上一版以来的
+  全部提交）。历史说明不回写。
 - `docs/audits/` — historical audit rounds, scans, and assessments.
 - `docs/adr/` — accepted architecture decisions.
 - `docs/current/` — current-state entry points.
@@ -38,9 +40,8 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
-- [v2026.09.23 发布说明](releases/release-v2026.09.23.md) - 桌面端「一键接码」按协议族
-  分派并接通 NeXSMS 在线目录（余额 / 183 国 / 923 档 / 真实库存）、接码供应商密钥跨
-  section 写串事故修复与离线撞车守卫、配置分片写入器两侧对齐（含死 `config.json` 归档）。
+- [v2026.09.23 发布说明](releases/release-v2026.09.23.md) - 自 v2026.09.14 以来的收口：
+  第二接码协议族 NexSMS、带 TTL 的环境账本、供应商中立化、一键接码接通在线目录及一批缺陷修复。
 - [v2026.09.14 发布说明](releases/release-v2026.09.14.md) - 协议注册日志四个输出
   缺陷收口（假成功信号、机器通道静默停写、失败分类失真、人读通道无法归因），
   外加 HTTP 重试覆盖补齐、代理池支持 HTTP 上游、文档指针漂移的检测与修复两半。
