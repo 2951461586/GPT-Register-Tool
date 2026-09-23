@@ -149,6 +149,68 @@ class PhoneProviderCheckTests(unittest.TestCase):
         check = next(item for item in report["checks"] if item["name"] == "phone_providers")
         self.assertEqual(check["status"], "ok")
 
+    def test_providers_sharing_one_key_warn_and_name_every_section(self):
+        """The 2026-09-23 shape: one key stamped into all four sections.
+
+        Offline by construction -- this is the check that would have caught the
+        corruption without opening the desktop app, so it must not need a
+        request. The key value itself must never reach the report.
+        """
+        secret = "shared-secret-value"
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers({
+                "phone_reuse": {
+                    "source": "nexsms",
+                    "smsbower": {"api_key": secret},
+                    "herosms": {"api_key": secret},
+                    "grizzly": {"api_key": secret},
+                    "nexsms": {"api_key": secret},
+                }
+            })
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("sharing one api_key", check["detail"])
+        for provider in ("smsbower", "herosms", "grizzly", "nexsms"):
+            self.assertIn("phone_reuse.%s.api_key" % provider, check["hint"])
+        self.assertNotIn(secret, check["detail"] + check["hint"])
+
+    def test_distinct_keys_are_not_a_collision(self):
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers({
+                "phone_reuse": {
+                    "source": "herosms",
+                    "smsbower": {"api_key": "bower-key"},
+                    "herosms": {"api_key": "hero-key"},
+                }
+            })
+        self.assertEqual(check["status"], "ok")
+        self.assertNotIn("sharing one api_key", check["detail"])
+
+    def test_unconfigured_providers_are_not_a_collision(self):
+        """Two empty keys are "both missing", not "both the same"."""
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers(
+                {"phone_reuse": {"source": "herosms", "herosms": {"api_key": "hero-key"}}}
+            )
+        self.assertEqual(check["status"], "ok")
+        self.assertNotIn("sharing one api_key", check["detail"])
+
+    def test_a_collision_does_not_hide_a_missing_key_for_the_selected_provider(self):
+        """The collision is the more surprising fact; the missing key is the
+        one that blocks the run. Report both."""
+        shared = "shared-secret-value"
+        with patch.dict("os.environ", {}, clear=True):
+            check = doctor._check_phone_providers({
+                "phone_reuse": {
+                    "source": "nexsms",
+                    "smsbower": {"api_key": shared},
+                    "herosms": {"api_key": shared},
+                }
+            })
+        self.assertEqual(check["status"], "warn")
+        self.assertIn("selected=nexsms has no key", check["detail"])
+        self.assertIn("sharing one api_key", check["detail"])
+        self.assertIn("NEXSMS_API_KEY", check["hint"])
+
 
 if __name__ == "__main__":
     unittest.main()

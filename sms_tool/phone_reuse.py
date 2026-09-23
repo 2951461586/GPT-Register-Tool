@@ -496,6 +496,41 @@ def provider_key_status(cfg: dict | None = None) -> list[dict[str, object]]:
     return rows
 
 
+def provider_key_collisions(cfg: dict | None = None) -> list[str]:
+    """Providers whose *resolved* API key is byte-identical to another's.
+
+    Returns the colliding provider keys, sorted, or ``[]`` when every configured
+    key is distinct. Unconfigured providers are ignored -- two empty keys are
+    "both missing", not a collision. The key values themselves are never
+    returned, logged or hashed into the result: the caller gets names only.
+
+    Why this exists
+    ---------------
+    ``proxy.json`` is written by more than one surface, and on the desktop the
+    供应商 dropdown and the API Key box are separate controls. Measured
+    2026-09-23: one pass through that dropdown stamped SMSBower's key into
+    ``phone_reuse.herosms``, ``.grizzly`` and ``.nexsms``. Each vendor then
+    answered with its own credential error (herosms ``401 BAD_KEY``, grizzly
+    ``NO_KEY``, nexsms ``401``) and the desktop surfaced
+    "无法读取 OpenAI 号码地区和价格档位" -- a message that names neither the key nor
+    the section, so a stale credential read as a broken vendor.
+
+    No single vendor account legitimately serves two of these registries (they
+    are separate businesses with separate balance endpoints), so a shared key is
+    always worth saying out loud. This is offline: no request is made, which is
+    what lets ``--doctor`` report it on a machine with no network.
+    """
+    cfg = cfg if isinstance(cfg, dict) else _phone_reuse_cfg()
+    by_key: dict[str, list[str]] = {}
+    for key in sms_providers.available_provider_keys():
+        resolved = _provider_api_key(cfg, key)
+        if not resolved:
+            continue
+        by_key.setdefault(resolved, []).append(key)
+    collided = {provider for providers in by_key.values() if len(providers) > 1 for provider in providers}
+    return sorted(collided)
+
+
 def _phone_source(cfg: dict | None = None) -> str:
     """Canonical provider key selected by ``phone_reuse.source``.
 
