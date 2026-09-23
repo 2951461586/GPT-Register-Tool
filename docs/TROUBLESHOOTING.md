@@ -306,3 +306,57 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 （它们是死键，删了没有任何行为变化）。
 ⚠️ 别去删 `phone_reuse.smsbower.*` 下的同名键 —— 那两条**被 `EXPECTED_UNREAD` 钉着**，
 删了会让同一个测试往**反方向**红。
+
+## 14. 切了接码供应商之后，桌面端「一键接码」报「加载失败 … 403 (Forbidden)」
+
+**症状**：设置里把「接码供应商」换成 `nexsms` 之后，点「一键接码」弹出
+
+> NexSMS 加载失败 / 无法读取 OpenAI 号码地区和价格档位：Response status code does not indicate success: 403 (Forbidden).
+
+命令行跑批**不受影响**，只有桌面端这个弹窗走不下去。
+
+**触发条件**：`phone_reuse.source` 指向一个**协议族不是 `sms_activate_handler`** 的供应商。
+
+**根因**（四个事实叠在一起）：
+
+1. 弹窗要先用**在线目录**（国家 + 价格档位）让操作员选，再把选择回写进配置；
+2. 它读目录用的是 sms-activate handler 协议 —— `{endpoint}?api_key=…&action=getCountries`、
+   `…&action=getPricesV3&service=dr`，余额还要求响应以 `ACCESS_BALANCE:` 开头
+   （`SmsWorkbench/SmsProviderCatalogClient.cs`）；
+3. `nexsms` 是 REST（`/api/` 路径 + `{code,message,data}` 信封），**上面三个 URL 全部 403**。
+   实测：`openresty` 的 403 页；同机打它的合法路由 `/api/getCountryByService` 正常返回
+   ⇒ 这是**路由级**拒绝，不是网络 / 主机 / 凭据问题，换代理也没用；
+4. `GetTextAsync` 里的 `response.EnsureSuccessStatusCode()` 于是抛 `HttpRequestException`，
+   弹窗把它显示成「加载失败」并 `return false`，调用方 `OneClickSmsAsync` 早退
+   ⇒ 整个「一键接码」不可用。
+
+**为什么只有桌面端中招**：`CreateOneClickSms` 那条路只把供应商 key 当**命令行参数**传给
+Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
+
+**现在的行为**（2026-09-23 起）：弹窗按 `SmsProviderCatalog.SmsProvider.CatalogIsSmsActivate`
+分派。非 sms-activate 的供应商**不读在线目录**，直接取配置里已存的 `<section>.country`
+与 `.target_price`（缺失时明确报出该填哪两个键），并在弹窗里写明「国家与档位取自配置」。
+**并且不回写** —— 回退分支的两个选择项本来就是从配置读出来的，回写只会把
+`service_name` / `country_name_zh` 两个只写不读的叶子塞进该 section，反而会踩 §13。
+
+**为什么不去 C# 里实现 nexsms 的目录接口**：那是同一份协议的**第二份实现**，而
+`sms_tool/nexsms.py` 已经有了；镜像会漂移（`SmsProviderCatalog.cs` 的 docstring 与
+`tests/test_settings_catalog_provider_parity.py` 存在的全部理由就是这个）。真要在弹窗里
+选国家，正确做法是让 C# 调 Python 后端拿目录，不是重写协议。
+
+**回归守卫**（`tests/test_settings_catalog_provider_parity.py`）：
+
+- `test_the_protocols_match_python` —— 每行的协议族与 `sms_providers.PROVIDERS[k].protocol` 逐项相等；
+- `test_the_protocol_constants_match_python` —— 常量值也钉住（表里用标识符、比较逻辑用常量，两处都要钉）；
+- `test_the_dialog_gates_the_online_catalog_on_the_protocol` —— 按花括号配平切出协议判断的**整块**，
+  要求目录调用在**块内**、且块外不再出现。只断言「文件里出现过 `CatalogIsSmsActivate`」是没用的：
+  判断可以写在那里却**包不住**那次调用；
+- `test_the_fallback_path_does_not_write_the_dead_leaves` —— 回退分支必须在回写之前 return。
+
+**变异验证**（守卫必须实测会红，否则是同义反复）：`runtime/tmp/mutate_protocol_guards.py`
+破坏 6 处行为（表里换协议标识符 / 常量值写错 / 去掉协议分派 / 回退不读配置 /
+条件改成 `if (false)` / 把提前返回注释掉），要求对应测试**全部变红**，并核对还原后字节一致。
+
+⚠️ 其中「把提前返回注释掉」这一处**第一次漏过了**：`assertIn("return true;", block)`
+会被**注释里**的同名子串满足。所以断言前必须用 `strip_csharp_comments()` 剥注释 ——
+这与 `test_config_usage` 的 `test_the_extractor_ignores_commented_out_literals` 是同一类缺陷。

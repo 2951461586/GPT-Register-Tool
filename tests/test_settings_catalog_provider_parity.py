@@ -34,8 +34,15 @@ SETTINGS_CATALOG = REPO_ROOT / "SmsWorkbench" / "SettingsCatalog.cs"
 DIALOG = REPO_ROOT / "SmsWorkbench" / "MainWindow.SmsProvider.cs"
 
 #: C# 供应商表的行锚点。用 ``new SmsProvider(`` 而不是裸字符串。
+#: 第五个实参是**协议族**（`SmsActivateProtocol` / `NexsmsProtocol` 标识符，不是字面量），
+#: 所以它按原样捕获，再由 ``protocol_constant`` 解析成值。
 ROW_PATTERN = re.compile(
-    r'new SmsProvider\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)')
+    r'new SmsProvider\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,'
+    r'\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)')
+
+#: ``internal const string SmsActivateProtocol = "sms_activate_handler";``
+PROTOCOL_CONST_PATTERN = re.compile(
+    r'internal\s+const\s+string\s+(SmsActivateProtocol|NexsmsProtocol)\s*=\s*"([^"]+)"')
 
 #: 下拉框那一行。
 DROPDOWN_ANCHOR = 'Options("phone_provider"'
@@ -44,12 +51,69 @@ CONST_PATTERN = re.compile(r'DefaultPhoneProvider\s*=\s*"([^"]+)"')
 #: 密钥形态：>=24 位连续 token 字符。与 ``sms_providers`` 自己的凭据守卫同一判据。
 _CREDENTIAL = re.compile(r"[A-Za-z0-9_\-]{24,}")
 
+#: C# 注释。
+_LINE_COMMENT = re.compile(r"//[^\n]*")
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+
+
+def strip_csharp_comments(text):
+    """剥掉 ``//`` 行注释与 ``/* */`` 块注释。
+
+    🔴 对**切出来的代码块**做 ``assertIn`` 之前必须先剥注释：变异验证实测到过
+    「把 ``return true;`` 注释掉，守卫仍然绿」—— 因为 ``assertIn`` 被注释里的
+    同名子串满足了。这与 ``test_config_usage`` 那条
+    ``test_the_extractor_ignores_commented_out_literals`` 是同一类缺陷。
+
+    只用于断言，**不**用于花括号配平（配平始终在原文上做，保证切块稳定）。
+    弹窗文件里没有字符串内含 ``//`` 的字面量（``grep -n '://'`` 为空），
+    所以按行剥是安全的。
+    """
+    return _LINE_COMMENT.sub("", _BLOCK_COMMENT.sub("", text))
+
 
 def csharp_providers(text=None):
-    """``SmsProviderCatalog.cs`` 里的 ``(key, label, endpoint, env)`` 四元组。"""
+    """``SmsProviderCatalog.cs`` 里的 ``(key, label, endpoint, env, protocol)`` 五元组。
+
+    第五项是**标识符原文**（如 ``SmsActivateProtocol``），用 :func:`protocol_constant`
+    解析成它声明的值。
+    """
     if text is None:
         text = PROVIDER_CATALOG.read_text(encoding="utf-8")
     return ROW_PATTERN.findall(text)
+
+
+def protocol_constant(name, text=None):
+    """``SmsProviderCatalog.cs`` 里 ``const string <name> = "..."`` 的值。"""
+    if text is None:
+        text = PROVIDER_CATALOG.read_text(encoding="utf-8")
+    table = dict(PROTOCOL_CONST_PATTERN.findall(text))
+    if name not in table:
+        raise AssertionError("protocol constant %r not declared in SmsProviderCatalog.cs" % name)
+    return table[name]
+
+
+def resolved_protocols(text=None):
+    """``{key: 协议值}``，把表里的标识符解析成常量值。"""
+    return {row[0]: protocol_constant(row[4], text) for row in csharp_providers(text)}
+
+
+def brace_block(text, anchor):
+    """``anchor`` 之后第一个 ``{`` 起、按花括号配平切出的**原文**块（含两端花括号）。
+
+    配平在原文上做（不剥注释），这样切块位置不受注释里花括号的影响。
+    """
+    if anchor not in text:
+        raise AssertionError("anchor not found: %r" % anchor)
+    start = text.index("{", text.index(anchor))
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+    raise AssertionError("unbalanced braces after %r" % anchor)
 
 
 def dropdown_options(text=None):
@@ -99,14 +163,27 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(len(rows), 4, rows)
 
     def test_a_reformatted_row_still_parses(self):
-        text = 'new SmsProvider(\n    "k",\n    "L",\n    "https://h/x",\n    "K_ENV")\n'
-        self.assertEqual(csharp_providers(text), [("k", "L", "https://h/x", "K_ENV")])
+        text = ('new SmsProvider(\n    "k",\n    "L",\n    "https://h/x",\n    "K_ENV",\n'
+                '    SmsActivateProtocol)\n')
+        self.assertEqual(csharp_providers(text), [("k", "L", "https://h/x", "K_ENV", "SmsActivateProtocol")])
 
     def test_a_row_with_a_missing_field_is_not_silently_skipped(self):
         """少一个字段时正则不匹配 ⇒ 行数变少 ⇒ 上面的 ``len == 4`` 会红。
         这条钉住「不匹配就是缺陷」，而不是「匹配到几个算几个」。"""
         text = 'new SmsProvider("k", "L", "https://h/x")\n'
         self.assertEqual(csharp_providers(text), [])
+
+    def test_a_row_missing_only_the_protocol_is_not_silently_skipped(self):
+        """第五个实参是**标识符**，正则一旦放宽成「可选的字符串字面量」，
+        漏写协议的那一行就会被静默降级成 4 元组。这条钉住「必须写全 5 项」。"""
+        text = 'new SmsProvider("k", "L", "https://h/x", "K_ENV")\n'
+        self.assertEqual(csharp_providers(text), [])
+
+    def test_the_protocol_resolver_rejects_an_undeclared_constant(self):
+        """标识符拼错（或常量被删）时必须报错，不能静默当空。"""
+        text = 'new SmsProvider("k", "L", "https://h/x", "K_ENV", BogusProtocol)\n'
+        with self.assertRaises(AssertionError):
+            resolved_protocols(text)
 
     def test_the_dropdown_extractor_rejects_an_unexpected_shape(self):
         with self.assertRaises(AssertionError):
@@ -126,15 +203,80 @@ class ProviderParityTests(unittest.TestCase):
     def test_the_default_endpoints_match(self):
         """🔴 这条是最隐蔽的漂移面：端点写错时下拉框照常工作、余额也读得到，
         只是请求打到了别家主机。"""
-        for key, _label, endpoint, _env in csharp_providers():
+        for key, _label, endpoint, _env, _protocol in csharp_providers():
             with self.subTest(key=key):
                 self.assertEqual(endpoint, sms_providers.default_endpoint(key))
 
     def test_the_api_key_env_names_match(self):
         """C# 用环境变量名做 key 回退，名字写错 ⇒ 回退静默失效。"""
-        for key, _label, _endpoint, env in csharp_providers():
+        for key, _label, _endpoint, env, _protocol in csharp_providers():
             with self.subTest(key=key):
                 self.assertEqual(env, sms_providers.api_key_env(key))
+
+    def test_the_protocols_match_python(self):
+        """🔴 这一维漏掉过一次，代价是桌面端一键接码对 nexsms 直接 403。
+
+        协议写错时**没有任何可见症状**：下拉框照常、provider 解析照常、section
+        也照常拼对，只有真正去读在线目录的那一步才炸，而且报的是 HTTP 错误，
+        看不出是「协议不匹配」。所以它必须像端点一样被逐项钉住。
+        """
+        for key, protocol in resolved_protocols().items():
+            with self.subTest(key=key):
+                self.assertEqual(protocol, sms_providers.PROVIDERS[key].protocol)
+
+    def test_the_protocol_constants_match_python(self):
+        """表里的值是**标识符**，比较逻辑用的是常量 —— 两处都要钉，
+        否则常量改了、表里没改（或反过来）会留下一个能通过上面那条的缺口。"""
+        self.assertEqual(protocol_constant("SmsActivateProtocol"), sms_providers.PROTOCOL_SMS_ACTIVATE)
+        self.assertEqual(protocol_constant("NexsmsProtocol"), sms_providers.PROTOCOL_NEXSMS)
+
+    def test_the_dialog_gates_the_online_catalog_on_the_protocol(self):
+        """🔴 这条是本次缺口的**回归守卫**：它把「读在线目录」这一步钉在协议判断**之内**。
+
+        只断言 ``assertIn("CatalogIsSmsActivate", text)`` 是没用的 —— 判断可以写
+        在文件里却包不住那次调用。所以这里按花括号配平切出 ``if`` 的**整个块**，
+        再要求目录调用落在块内、且块外不再出现（否则说明还有一条未受保护的调用）。
+        """
+        text = DIALOG.read_text(encoding="utf-8")
+        gate = "if (provider.CatalogIsSmsActivate)"
+        self.assertIn(gate, text, "the dialog no longer gates on the protocol")
+
+        block = brace_block(text, gate)
+        guarded = strip_csharp_comments(block)
+        self.assertIn("LoadOpenAiCatalogAsync", guarded,
+                      "the catalog call is not inside the protocol gate")
+        after = text[text.index(block) + len(block):]
+        self.assertNotIn("LoadOpenAiCatalogAsync", after,
+                         "a second, ungated catalog call exists after the gate")
+
+    def test_the_fallback_path_reads_the_saved_choice(self):
+        """回退路径必须真的从配置读国家与档位 —— 写死一个默认国会让「切到
+        nexsms 之后一键接码用错国家」这种错误重新出现，而且没有任何提示。"""
+        text = DIALOG.read_text(encoding="utf-8")
+        self.assertIn("ReadSavedSmsProviderChoice(section)", text)
+        self.assertIn('section + ".country"', text)
+
+    def test_the_fallback_path_does_not_write_the_dead_leaves(self):
+        """回退路径的选择项本来就是从配置读出来的，回写只会把
+        ``service_name`` / ``country_name_zh`` 这两个**只写不读**的叶子塞进
+        当前供应商的 section —— 那会让 ``tests/test_config_usage.py`` 变红
+        （见 `docs/TROUBLESHOOTING.md` §13）。
+
+        注意这两行**必须留在 sms-activate 分支里**：``test_config_usage`` 的
+        `counter-example moved` 断言要求它们仍出现在本文件中。所以这条只钉
+        「回退分支在回写之前就 return」，不钉「文件里没有这两个字面量」。
+        """
+        text = DIALOG.read_text(encoding="utf-8")
+        gate = "if (!provider.CatalogIsSmsActivate)"
+        # 先钉条件本身：只检查块内文本的话，把条件改成 `if (false)` 能让块内
+        # 一个字都不变，而回写就会真的执行。
+        self.assertIn(gate, text, "the fallback path no longer gates the write-back")
+
+        block = strip_csharp_comments(brace_block(text, gate))
+        self.assertIn("return true;", block,
+                      "the fallback path must return before the write-back")
+        self.assertNotIn("UpdateConfig", block,
+                         "the fallback path must not write the provider section")
 
     def test_the_labels_are_not_empty_and_unique(self):
         labels = [row[1] for row in csharp_providers()]
@@ -180,7 +322,7 @@ class ProviderParityTests(unittest.TestCase):
         形状：其余三家都带 handler 路径，唯独这家不能带。
         """
         endpoint = dict(
-            (key, url) for key, _label, url, _env in csharp_providers()
+            (key, url) for key, _label, url, _env, _protocol in csharp_providers()
         )["nexsms"]
         self.assertNotIn("/stubs/", endpoint)
         self.assertFalse(endpoint.rstrip("/").endswith(".php"), endpoint)
