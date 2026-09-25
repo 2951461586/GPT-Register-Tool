@@ -55,6 +55,26 @@ candidates and their non-sensitive source labels come from
 order. Shared proxy-health writes use an OS file lock, while the async SOCKS
 pool moves persistence off its event loop.
 
+### Known function-level lazy cycles
+
+Four module pairs import each other **inside function bodies only**. They are
+not import-time cycles, but they are real coupling. They are listed here so a
+future reader neither re-discovers them as a surprise nor "fixes" them by
+lifting the import to module scope (which would create a genuine cycle).
+`scripts/delayed_import_ratchet.py` counts every delayed import in the package
+and fails on growth; this table is the *reason* behind the four that form pairs.
+
+| Pair | Edge(s) | Why it stays lazy |
+| --- | --- | --- |
+| `checkout_contract` ↔ `payment_catalog` | `checkout_contract` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `checkout_contract.PAYMENT_METHOD_PROFILES` | The catalog is the method vocabulary; the profile comparison is an on-demand assertion. Lifting it would make the catalog import the contract it validates. |
+| `payment_catalog` ↔ `payment_flow` | `payment_flow` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `payment_flow.FLOW_PROFILES` | Same reason as above, for the flow vocabulary. |
+| `payment_routing` ↔ `paypal_proxy` | `payment_routing` reads `paypal_proxy.{redact_proxy_url, proxy_state_from_config, select_proxy_from_pool, rotate_proxy_session}`; `paypal_proxy` reads `payment_routing.method_payment_config` | `paypal_proxy` is the legacy stage-proxy owner and `payment_routing` the newer planner. The proxy helpers are consumed only while building route options, so both edges are function-local. |
+| `sentinel_tokens` ↔ `sentinel.client` | `sentinel_tokens` reads `sentinel.client.issue_sentinel_bundle`; `sentinel.client` reads `sentinel_tokens._extract_sentinel` for its legacy fallback | `sentinel_tokens` deliberately imports the **submodule**, not the `sentinel` package entry, because the package `__init__` re-exports from `client` and would close the cycle through the package. |
+
+A fifth pair must be added here with the same evidence, or refactored so the
+lazy edge disappears. `tests/test_delayed_import_ratchet.py` keeps the count
+from growing while that decision is pending.
+
 ## Registration Modules
 
 See [registration architecture](current/registration-architecture.md) for the

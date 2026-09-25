@@ -33,6 +33,19 @@ class OneClickScanCliTests(unittest.TestCase):
         self.assertTrue(kwargs["quota_relogin_on_401"])
         self.assertEqual(kwargs["relogin_mode"], "web_session")
 
+    def test_one_click_scan_exits_nonzero_on_partial_persistence(self):
+        args = types.SimpleNamespace(
+            email="user@example.test", email_file="", session_file="", workers=1,
+            proxy=None, refresh_timeout=20, quota_auto_relogin=False,
+            scan_relogin_mode="auto", scan_deep_probe=False,
+        )
+        with patch(
+            "sms_tool.accounts.account_scan.scan_accounts",
+            return_value={"failed": 0, "persist_failed": 1, "alive": 1},
+        ), self.assertRaises(SystemExit) as exit_code:
+            cli._one_click_scan(args)
+        self.assertEqual(exit_code.exception.code, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,15 +31,19 @@ may use refresh tokens, browser sessions, or email authentication according to
 - A persistence failure must not turn a healthy remote probe into an unhealthy
   account result.
 
-Promotion checks are a separate `plan` check. They may inspect trial payment
-methods, but the capability probe must stop before payment-method creation,
-confirmation, or charge.
+Promotion checks (`--check-promotion`) inspect the account plan and trial offer
+only by default. They never create Checkout unless the operator explicitly
+adds `--payment-eligibility`. The separate `--check-payment-eligibility`
+command probes selected saved accounts without changing promotion markers.
+The desktop “查支付资格” entry is separate and starts directly for the selected
+or currently filtered accounts, without a warning dialog. It creates a
+disposable Checkout session and may be refused or rate-limited by the
+platform, but stops before payment-method creation, confirmation, approval or
+charge. Normal liveness scans do not enter this path.
 
-A second and independent probe enumerates the account's offered Stripe
-`payment_method_types` right after the promotion check and appends a compact
-token list to the 优惠状态 column (for example `可试用Plus · card/upi/momo`).
-The eligibility suffix is the whole method list the Checkout + Stripe-init
-handshake offers for the account's billing country.
+The independent probe appends a compact explicit method list to the 优惠状态
+column (for example `可试用Plus · card/upi/momo`). This is Checkout evidence
+for the billing country, not a guarantee that a purchase can complete.
 
 The suffix has three states and they are deliberately distinguishable
 (`promotion_states.payment_eligibility_label`):
@@ -47,14 +51,12 @@ The suffix has three states and they are deliberately distinguishable
 | State | Suffix | Meaning |
 |---|---|---|
 | never probed | *(empty)* | no `payment_capability` record; `safe_snapshot()` writes `{}` for these |
-| probed, rails found | `card/upi/momo` | Stripe's own display order, capped at 8 tokens with `+N` |
-| probed, nothing found | `支付资格未知` | the probe ran and enumerated no method — currently every probed account |
+| probed, rails found | `card/upi/momo` | Checkout's explicit order, capped at 8 tokens with `+N` |
+| probed, inconclusive | `支付资格未知` | the probe failed or had no explicit method evidence |
 
 The marker exists because a blank suffix is indistinguishable from "never
-probed", and the live cause of the empty list is a platform-side refusal (next
-section), i.e. the opposite of an account attribute. Never render the empty
-mapping as `支付资格未知`: that shape is what every untouched account carries, so
-it would relabel the whole pool on the next relogin pass.
+probed". Never render the empty mapping as `支付资格未知`: that shape is what every
+untouched account carries. Never display stale methods from a failed result.
 
 **The rail list can only come from a Checkout session.** `GET accounts/check` —
 the endpoint the promotion check itself uses — returns no payment field at all
@@ -63,7 +65,7 @@ the endpoint the promotion check itself uses — returns no payment field at all
 Any claim that the promotion endpoint already carries `payment_method_types` is
 wrong.
 
-**Checkout creation is currently refused platform-side.** `POST
+**Historical evidence, not a current diagnosis:** `POST
 /backend-api/payments/checkout` answers `HTTP 400 {"detail":"Our systems have
 detected unusual activity. Please try again later."}` — a risk-engine block, not
 a validation error. This is not specific to the eligibility probe:
@@ -72,10 +74,9 @@ identical `_checkout_post`, so the PayPal link lane is subject to the same
 refusal. A previous implementation of this feature existed from 09-08 to 09-18
 (`account_promotion.probe_trial_payment_methods`, removed in `20ab44e`) and left
 `payment_methods: []` for **all 28** accounts it ran against (VN/JP/US,
-09-07 → 09-17), 25 of them recording this exact 400. Until Checkout creation
-succeeds again, every account the probe reaches shows the `支付资格未知` marker:
-never read a missing rail list as "no rails available", and never read the
-marker as an account attribute — it is the platform refusing the request.
+09-07 → 09-17), 25 of them recording this exact 400. Those measurements do not
+establish the cause of today's unknown results. A failed Checkout is unknown,
+not evidence that the account has no payment methods.
 
 Ruled out by experiment, each measured on a fresh account: the promo campaign id
 (explicitly emptied, payload verified clean), the `impersonate` target
@@ -89,11 +90,11 @@ and a datacenter US exit all answer the same 400). `direct_card` / `paypal` /
 `upi` produce byte-identical `checkout_payload()` output, so the carrier method
 never reaches the create request.
 
-`payment_capability._response_json` discards the response body for any status
-`>= 400`, so the probe's own diagnostics cannot separate this refusal from a rate
-limit (`429 checkout_creation_rate_limited`, a different and separately triggered
-condition) or from a genuine ineligibility. Reading the raw body is what
-identified the block.
+The probe classifies only known, non-sensitive response signals: HTTP 400
+`checkout_risk_blocked`, HTTP 429 `checkout_creation_rate_limited`, or a generic
+HTTP failure with `http_status`. It never persists the raw response body or an
+unrecognized upstream error code. A refused Checkout is unknown, not evidence
+that the account has no payment methods.
 
 On `payment_methods_label` and a 支付方式 column: **the account grid has no
 支付方式 column** (its columns are 选中 / 创建时间 / 更新时间 / 邮箱 / 账号类型 /
@@ -134,34 +135,61 @@ behind.
 ### Payment eligibility suffix
 
 `sms_tool/accounts/account_payment_eligibility.py` owns the suffix. It is a thin
-wrapper over `payment_capability.payment_method_capability_probe` so
-`account_promotion.py` never imports the five provider modules directly, and it
-carries no side effects: the handshake stops at Stripe init and creates,
-confirms and charges nothing. Callers reach the probe through module-qualified
+wrapper over `payment_capability.payment_method_capability_probe` so the
+promotion probe (`account_promotion.py`) and its multi-account runner
+(`accounts/promotion_batch.py`) never import the five provider modules directly. The
+handshake creates Checkout. `cs_*` sessions read Stripe init and optionally
+Elements specs; `oaics_*` sessions read explicit custom Checkout fields. An
+opaque `cpmt_*` ID does not imply `card`. `checkout_kind` and
+`evidence_sources` identify the evidence used; failed or missing evidence
+stays unknown. The safe `pay_link.probe_payment_method` path uses the same
+capability implementation, while link extraction may continue into payment
+side effects. Callers reach the probe through module-qualified
 access (`from .. import payment_capability`), because a `from X import f`
 binding makes `patch("sms_tool.payment_capability.f")` silently ineffective —
 the project patches source modules.
 
 Billing context is set explicitly from the account's recorded registration
 country (`billing_country`, `billing_currency`, `locale`). `payment_method_types`
-varies with billing country, and a mismatched exit returns that exit's method
-list rather than failing, so an `ineligible` verdict taken through the wrong
-egress is a **silent error**, not evidence.
+varies with billing country. The payment egress gate verifies the proxy's
+observed exit country before Checkout; a missing, unverified or mismatched exit
+returns a failed observation with the `支付资格未知` badge, not a method list.
+Before that check, known proxy credential templates (`region-XX`, `geo-XX`,
+`country-XX`, IPWO custom zones and supported password-based countries) are
+retargeted to the account's billing country without rotating the sticky
+session. Unknown formats are not rewritten. The rewritten country is a request
+to the provider, not proof of its actual exit; the observed-exit gate still
+rejects a mismatched or unreachable proxy before Checkout. No full proxy URL
+is persisted in the capability result.
+Checkout creation and the `oaics_*` session read use the same supported
+Chrome 124 browser profile, saved device ID, account Cookie and verified
+checkout proxy for one probe. A conflicting `oai-did` Cookie and saved device
+ID stop the probe before Checkout with `checkout_identity_mismatch`; no
+replacement device ID or proxy session is generated during the probe.
+When bundled explicitly with a promotion check, a failed plan probe does not
+create Checkout, and a 401 clears eligibility because its token is invalid.
+The standalone command only writes `payment_capability`, never
+`promotion_status`, `promotion_state` or `promotion_updated_at`. It requires
+an explicit account selection and runs serially without automatic retries.
 
-The raw observation is persisted under the `payment_capability` key of
+The sanitized observation is persisted under the `payment_capability` key of
 `raw_json`. `account_models.AccountSessionModel.safe_snapshot()` is the only
 key-level gate for that payload: a key absent from that whitelist is silently
 dropped the next time `upsert_account` rebuilds the row. The write side is
 three-state — `None` leaves the stored value untouched, `{}` clears it because
 the access token died, and a dict replaces it. Credential-shaped keys are
-stripped before storage.
+stripped before storage. The batch summary groups only known `error_stage`,
+`error_code`, HTTP status and billing country, not raw upstream errors or
+proxy URLs.
 
-Checkout creation is rate limited per account: roughly five attempts in a short
-window return `429 checkout_creation_rate_limited`. The probe records that as a
-non-retryable `checkout_failed`, so a batch-wide sweep must pace itself instead
-of relying on retries. `payment_capability._response_json` currently discards
-the response body for any status >= 400, which means a rate-limit response and a
-genuine ineligibility are not distinguishable from the probe's own diagnostics.
+Checkout creation can be rate limited (`429
+checkout_creation_rate_limited`). The probe classifies this as retryable but
+does not immediately retry within an account attempt.
+
+Scan results report remote `ok` independently of local `persistence`
+(`session_saved`, `account_saved`, `persisted`, and a generic `error_code`).
+The batch counts `persist_failed` separately from remote `failed`; a partial
+save makes the batch `ok` false and the desktop command exit nonzero.
 
 ## Proxy precedence
 

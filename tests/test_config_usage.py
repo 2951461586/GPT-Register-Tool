@@ -40,7 +40,6 @@ EXPECTED_UNREAD = {
     "omakse.us_payment.preconfirm_phone",
     "omakse.us_payment.proxy_region",
     "omakse.us_payment.randomize_device",
-    "omakse.us_payment.send_phone_otp",
     "paypal.allow_chatgpt_checkout_fallback",
     "paypal.approve_missing_redirect",
     "paypal.auto_generate",

@@ -9,15 +9,13 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from .helpers import public_oauth_result, read_email_file, unique_emails
+from .helpers import read_email_file, unique_emails
 from ..sanitizer import account_reference
 
 logger = logging.getLogger(__name__)
@@ -68,8 +66,7 @@ class OneClickCommandContext:
     load_mailbox_pool: Callable[[Any], list[Any]]
     max_reuse: Callable[[Any], int]
     mailbox_snapshot: Callable[[Any], dict[str, Any]]
-    persist_failure: Callable[..., None]
-    upsert_account: Callable[..., Any]
+    persist_failure: Callable[..., dict[str, Any]]
 
 
 def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
@@ -176,7 +173,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         else:
             print(f"[FAIL] {email}: {result.get('error', 'unknown')}")
             logger.warning("one-click SMS %s failed: %s", email, result.get("error", "unknown"))
-            ctx.persist_failure(data, json_path, email, result)
+            result["persistence"] = ctx.persist_failure(data, json_path, email, result)
             _emit_one_click_event(
                 run_id=account_run_id,
                 batch_id=batch_id,
@@ -260,28 +257,5 @@ def one_click_scan(args: Any) -> None:
         relogin_mode=args.scan_relogin_mode,
         deep_probe=bool(getattr(args, "scan_deep_probe", False)),
     )
-    if summary.get("failed", 0):
+    if summary.get("failed", 0) or summary.get("persist_failed", 0):
         raise SystemExit(3)
-
-
-def persist_one_click_sms_failure(data, json_path, email, result, ctx: OneClickCommandContext) -> None:
-    now = int(time.time())
-    refreshed = dict(data or {})
-    refreshed["email"] = email
-    refreshed["success"] = bool(refreshed.get("access_token"))
-    refreshed["error"] = str(result.get("error") or "one_click_sms_failed")
-    refreshed["refresh_token_status"] = str(refreshed.get("refresh_token_status") or "no_rt")
-    refreshed["refresh_token_updated_at"] = now
-    response = refreshed.get("response") if isinstance(refreshed.get("response"), dict) else {}
-    response["codex_oauth"] = public_oauth_result(result)
-    refreshed["response"] = response
-    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
-    if phone_attempt:
-        refreshed["phone"] = phone_attempt.get("phone", refreshed.get("phone", ""))
-        response["phone_verification"] = phone_attempt
-    if json_path:
-        try:
-            Path(json_path).write_text(json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception as exc:
-            print(f"[!] Failed to update session JSON {json_path}: {exc}")
-    ctx.upsert_account(refreshed, json_path=json_path)

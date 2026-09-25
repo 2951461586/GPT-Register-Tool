@@ -76,6 +76,10 @@ def payment_method_tokens(result: object) -> tuple[str, ...]:
     """Normalized method tokens in Stripe's own display order."""
     if not isinstance(result, dict):
         return ()
+    # A failed observation cannot certify stale or partially extracted rails.
+    # Older stored records may omit "ok", so keep their legacy display.
+    if result.get("ok") is False:
+        return ()
     methods = result.get("methods")
     if not isinstance(methods, (list, tuple)):
         methods = (

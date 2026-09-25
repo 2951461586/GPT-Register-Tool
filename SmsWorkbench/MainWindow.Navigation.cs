@@ -19,6 +19,7 @@ namespace SmsWorkbench
                 case "sms": OneClickSms_Click(this, new RoutedEventArgs()); break;
                 case "scan": OneClickScan_Click(this, new RoutedEventArgs()); break;
                 case "promotion": CheckPromotion_Click(this, new RoutedEventArgs()); break;
+                case "payment_eligibility": CheckPaymentEligibility_Click(this, new RoutedEventArgs()); break;
                 case "paylink": OpenPayPalLink_Click(this, new RoutedEventArgs()); break;
                 case "batchpay": BatchProtocolPayment_Click(this, new RoutedEventArgs()); break;
                 case "importmail": ImportChataiMailbox_Click(this, new RoutedEventArgs()); break;

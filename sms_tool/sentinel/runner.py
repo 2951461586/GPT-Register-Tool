@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
-from .bundle import sentinel_version, validate_runtime_bundle
+from .bundle import SentinelBundleError, sentinel_version, validate_runtime_bundle
 
 
 class SentinelRunnerError(RuntimeError):
@@ -43,6 +44,34 @@ def _node_binary() -> str:
         or str(os.getenv("NODE_EXECUTABLE") or "").strip()
     )
     return configured or ("node.exe" if os.name == "nt" else "node")
+
+
+def check_node_runner_readiness() -> None:
+    """Validate local runner prerequisites without executing Node or using an account.
+
+    Only fixed reason codes cross this boundary: filesystem and configured
+    executable errors may otherwise contain sensitive local paths.
+    """
+    try:
+        validate_runtime_bundle()
+    except (SentinelBundleError, OSError) as exc:
+        if isinstance(exc, OSError):
+            reason = "sentinel_runtime_unavailable"
+        else:
+            message = str(exc)
+            if message.startswith("sentinel_runtime_missing:"):
+                reason = "sentinel_runtime_missing"
+            elif message.startswith("sentinel_runtime_hash_mismatch:"):
+                reason = "sentinel_runtime_hash_mismatch"
+            else:
+                reason = "sentinel_runtime_invalid"
+        raise SentinelRunnerError(reason) from None
+    try:
+        available = shutil.which(_node_binary())
+    except (OSError, ValueError):
+        available = None
+    if not available:
+        raise SentinelRunnerError("sentinel_runner_node_missing")
 
 
 def _safe_error(value: Any) -> str:
@@ -191,4 +220,4 @@ def run_sentinel_sdk(
     return json.dumps(parsed, separators=(",", ":"), ensure_ascii=False)
 
 
-__all__ = ["SentinelRunnerError", "run_sentinel_sdk"]
+__all__ = ["SentinelRunnerError", "check_node_runner_readiness", "run_sentinel_sdk"]

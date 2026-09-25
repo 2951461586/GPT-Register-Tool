@@ -6,14 +6,16 @@ from unittest.mock import Mock, patch
 import pytest
 
 from sms_tool import registration
-from sms_tool.registration_operations import OPERATION_GROUPS, RegistrationOperations
+from sms_tool.registration_operations import (
+    OPERATION_GROUPS, RegistrationOperations, RegistrationOtpPollingOperations,
+)
 from sms_tool.registration_handlers import StorageRegistrationPersistence
 
 
 def test_operation_binding_respects_callers_patch_scope_and_is_immutable():
     fake = Mock()
     with patch.object(registration, "_fetch_auth_session", fake):
-        operations = RegistrationOperations.bind(vars(registration))
+        operations = registration._email_registration_operations()
     assert operations._fetch_auth_session is fake
     assert not hasattr(operations, "sys")
     with pytest.raises(FrozenInstanceError):
@@ -89,6 +91,20 @@ def test_email_workflow_wiring_reads_globals_at_call_time():
     with patch.object(registration, "_fetch_auth_session", fake):
         operations = registration._email_registration_operations()
     assert operations._fetch_auth_session is fake
+
+
+def test_otp_polling_group_binds_facade_patches_once_and_is_immutable():
+    fake_poll, fake_resend = Mock(), Mock()
+    with patch.object(registration, "_poll_registration_email_otp", fake_poll), \
+         patch.object(registration, "_send_registration_email_otp", fake_resend), \
+         patch.object(registration, "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS", "test otp"):
+        operations = registration._email_registration_operations()
+    assert isinstance(operations.otp_poll, RegistrationOtpPollingOperations)
+    assert operations.otp_poll.poll is fake_poll
+    assert operations.otp_poll.resend is fake_resend
+    assert operations.otp_poll.subject_keywords == "test otp"
+    with pytest.raises(FrozenInstanceError):
+        operations.otp_poll.poll = Mock()
 
 
 def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():

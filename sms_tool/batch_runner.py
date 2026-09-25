@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Mapping
 import time
 import uuid
 import threading
@@ -19,6 +20,7 @@ from .proxy_health import ProxyHealthTracker
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .registration_policy import registration_retry_decision
 from .registration_result import safe_proxy_audit
+from .sentinel.runner import SentinelRunnerError, check_node_runner_readiness
 from .storage import (
     acquire_environment_lease,
     get_account_records,
@@ -422,6 +424,40 @@ def filter_registered_mailboxes(mailboxes):
     return kept
 
 
+def ensure_batch_sentinel_readiness(config, registration_driver: str) -> str:
+    """Fail locally before a protocol batch makes network requests."""
+    email_cfg = config.get("email_registration") if isinstance(config, Mapping) else {}
+    email_cfg = email_cfg if isinstance(email_cfg, Mapping) else {}
+    from .sentinel import sentinel_backend
+
+    backend = sentinel_backend({"email_registration": email_cfg})
+    if registration_driver != "protocol" or backend != "node_runner":
+        return backend
+    from .sentinel.client import _legacy_fallback_enabled
+
+    try:
+        check_node_runner_readiness()
+    except Exception as exc:
+        # The helper emits fixed codes. Never interpolate a configured binary
+        # path or arbitrary exception into console/desktop output.
+        allowed = {
+            "sentinel_runtime_unavailable",
+            "sentinel_runtime_missing",
+            "sentinel_runtime_hash_mismatch",
+            "sentinel_runtime_invalid",
+            "sentinel_runner_node_missing",
+        }
+        reason = (
+            str(exc)
+            if isinstance(exc, SentinelRunnerError) and str(exc) in allowed
+            else "sentinel_runner_readiness_failed"
+        )
+        if not _legacy_fallback_enabled({"email_registration": email_cfg}):
+            raise SentinelRunnerError(reason) from None
+        safe_print(f"[!] Sentinel startup readiness failed ({reason}); configured legacy fallback remains available.")
+    return backend
+
+
 def run_batch_impl(
     count=1,
     proxy=None,
@@ -445,6 +481,10 @@ def run_batch_impl(
     from .registration_drivers.base import normalize_registration_driver
     explicit_registration_driver = registration_driver is not None
     registration_driver = normalize_registration_driver(registration_driver, CFG)
+    # Direct callers use the same gate as the CLI preflight. It must precede
+    # mailbox/account lookups and this batch's proxy checks.
+    email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    backend = ensure_batch_sentinel_readiness(CFG, registration_driver)
     mailboxes = _unique_mailboxes(mailboxes)
     mailboxes, skipped_registered, skipped_dead = _drop_already_registered(mailboxes)
     if skipped_registered or skipped_dead:
@@ -522,14 +562,11 @@ def run_batch_impl(
     max_attempts = max(1, min(int(max_attempts or 1), 3))
     retry_delay_seconds = max(0.0, float(retry_delay_seconds or 0.0))
 
-    email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
     try:
         prewarm_window = max(0, min(int(email_cfg.get("sentinel_prewarm_window") or 0), workers, count))
     except (TypeError, ValueError):
         prewarm_window = 0
-    from .sentinel import sentinel_backend
-
-    if sentinel_backend({"email_registration": email_cfg}) != "legacy":
+    if backend != "legacy":
         prewarm_window = 0
     prewarm_executor = None
     prewarmed = {}

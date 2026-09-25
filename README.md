@@ -159,7 +159,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 ### 一键注册
 
-- 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱和 SMSBower 手机号注册。
+- 支持邮箱池、ReMail 短效接码、CFWorker 域名邮箱及多供应商手机号接码（含 SMSBower、NexSMS）。
 - 支持单账号与并发批量注册。
 - 每个注册账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；`_extract_sentinel` 默认允许 2 路并发提取（`sentinel_max_concurrency`，上限 4），兼顾批次速度与 Sentinel 限流风险。
 - 注册流程只负责账号认证并保存 AT/Session，不再生成支付链接。
@@ -258,7 +258,7 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 左侧栏“账号测活”负责 AT/额度健康检查；HTTP 401 会在显式恢复或支付 JIT 流程中依次尝试 RT、Cookie、隔离浏览器邮箱 OTP 和 Codex OAuth。
 - 支持复制 AT、查看邮箱和重新注册；协议支付链接统一从协议提链入口生成。
 - 支持 Codex JSON、CPA、SUB2API 等导入导出流程。
-- 账号列表展示优惠状态；“可试用 Plus”使用绿色成功状态，并支持在筛选后的完整账号集合上排序后再分页。查优惠时会同时枚举该账号可用的支付方式（`card`/`upi`/`momo` 等，一次 Checkout + Stripe init，零副作用），以 ` · ` 拼接在优惠状态之后（如 `可试用Plus · card/upi/momo`）；可用 `--no-payment-eligibility` 关闭这一步。
+- 账号列表展示优惠状态；“可试用 Plus”使用绿色成功状态，并支持在筛选后的完整账号集合上排序后再分页。查优惠默认只查套餐和试用，不创建 Checkout。独立“查支付资格”入口（CLI `--check-payment-eligibility --email <邮箱>`，批量用 `--email-file <文件>`）或在 CLI 查优惠时显式加 `--payment-eligibility` 并指定账号，才会创建一次性 Checkout 并读取明确支付方式证据（`cs_*` 的 Stripe init/可选 Elements，`oaics_*` 的自定义 Checkout 字段）。出口须匹配账单国家，未验证或失败时显示“支付资格未知”；不会默认猜 `card`，也不会创建支付方式、确认或扣款，但可能触发风控或限流。探测结果以 ` · ` 拼接在优惠状态之后。
 - 本地数据默认保存在 `sessions/` 和 `runtime/`，两者均被 Git 忽略。
 
 ### 桌面端批量支付操作
@@ -273,10 +273,11 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 
 ### 手机接码
 
-- 支持 SMSBower 国家与价格档位查询。
+- 支持 SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择及在线目录查询（可用性依供应商协议而定）。
 - 支持发送重试、等待超时和轮询间隔配置。
 - 支持 Codex OAuth 手机验证和账号刷新流程。
 - 批量操作保持邮箱与手机号结果映射，便于排查单账号失败。
+- 一键接码的配置、失败结果与持久化说明见 [当前接码契约](docs/current/one-click-sms.md)。
 
 ## 项目架构
 
@@ -297,8 +298,8 @@ sms_tool/cli.py
   -> 参数解析、批量任务、进程退出状态
 
 sms_tool/registration.py
-  注册主流程
-  -> 邮箱 OTP、账号创建、AT-only Session、AT HTTP 200 验证
+  注册兼容入口
+  -> 实际阶段顺序由 registration_handlers.py 负责，AT 探测由 registration_outcome.py 负责
 
 sms_tool/registration_concurrency.py
   注册阶段资源门控
@@ -356,11 +357,11 @@ services/
 | `SmsWorkbench/` | WPF 桌面界面、设置页、任务入口和本地状态展示 |
 | `SmsWorkbench/AccountGridPresentation.cs` | 账号列表优惠状态颜色、全量排序和分页前排序规则 |
 | `sms_tool/cli.py` | CLI 参数与高层任务编排 |
-| `sms_tool/registration.py` | ChatGPT 注册、OTP、Session 和后续验证 |
+| `sms_tool/registration.py` | 注册兼容入口；协议阶段实现在 `registration_handlers.py` |
 | `sms_tool/registration_concurrency.py` | 注册阶段资源组、并发门控与等待指标 |
 | `sms_tool/accounts/account_liveness.py` | `/backend-api/wham/usage` 存活探测、响应分类与额度解析 |
-| `sms_tool/accounts/account_recovery.py` | 本地额度刷新、401 分层恢复、候选 AT 验证与停用账号持久化 |
-| `sms_tool/accounts/account_payment_eligibility.py` | 查优惠后的支付资格探测薄封装：显式账单国家/货币/语言，一次 Checkout + Stripe init 枚举 `payment_method_types`，零副作用 |
+| `sms_tool/accounts/account_recovery.py` / `accounts/recovery_batch.py` | 显式 401 恢复与本地额度批次刷新；测活由 `account_liveness.py` 负责 |
+| `sms_tool/accounts/account_payment_eligibility.py` | 显式支付资格探测：核验出口与账单国家，再创建 Checkout 并按会话类型读取证据；不创建支付方式或扣款 |
 | `sms_tool/mailbox.py` | 邮箱 provider 路由与统一 OTP 轮询 |
 | `sms_tool/providers/mailbox_remail.py` | ReMail 下单、收件、详情读取和 OTP 提取 |
 | `sms_tool/providers/mailbox_cfworker.py` | CFWorker 邮箱创建与收件 |

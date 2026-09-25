@@ -21,9 +21,11 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import unique_emails
-from ..batch_runner import filter_registered_mailboxes
+from ..batch_runner import ensure_batch_sentinel_readiness, filter_registered_mailboxes
+from ..config import validate_registration_driver_config
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
 from ..proxy_entry import parse_proxy
+from ..registration_funnel import combine_registration_funnels, summarize_registration_funnel
 from ..sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
 
@@ -97,8 +99,6 @@ def _preflight_limits(config: Mapping[str, Any] | None) -> tuple[int, float]:
 
 def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandContext) -> dict:
     """Select a healthy auth route before a paid/disposable mailbox is claimed."""
-    from ..config import validate_registration_driver_config
-
     candidates = ctx.proxy_pool_values(args) or [None]
     selected_proxy = next(
         (str(candidate).strip() for candidate in candidates if str(candidate or "").strip()),
@@ -112,6 +112,7 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
         getattr(args, "registration_driver", None),
         proxy=selected_proxy,
     )
+    ensure_batch_sentinel_readiness(ctx.runtime_config, selected_driver)
     # Every remaining driver launches its browser locally, so a Sentinel/
     # ChatGPT probe from this process measures the real registration egress.
     from ..registration import registration_network_preflight
@@ -267,7 +268,7 @@ def registration_phone_pool(args: Any):
     return phone_pool
 
 
-def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=True):
+def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=False):
     """Probe plan/promotion for saved accounts.
 
     ``proxy_pool`` is threaded through so this entry point accepts the same
@@ -275,11 +276,11 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     previously had no such parameter, so a pool supplied by the caller was
     silently dropped on this path.
 
-    ``payment_eligibility`` (default on) additionally enumerates each account's
+    ``payment_eligibility`` (opt in) additionally enumerates each account's
     available payment methods into ``raw_json.payment_capability``; see
     ``accounts/account_payment_eligibility.py``.
     """
-    from ..accounts.account_promotion import refresh_promotion_statuses
+    from ..accounts.promotion_batch import refresh_promotion_statuses
     from ..sanitizer import sanitize
 
     targets = unique_emails(emails)
@@ -755,6 +756,9 @@ def save_registration_results(
         "db_saved": db_saved_count,
         "quality": quality,
         "promotion": promotion_report,
+        "funnel": summarize_registration_funnel(
+            results, attempted=effective_count, promotion=promotion_report,
+        ),
         "health": {
             "queued": len(dict.fromkeys(health_job_ids)),
             "promotion_completed": promotion_report is not None,
@@ -786,6 +790,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
     promotion_total = 0
     promotion_success = 0
     trial_eligible = 0
+    round_funnels = []
     started = time.time()
     phone_pool = ctx.registration_phone_pool(args)
     try:
@@ -858,6 +863,13 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
             active += gained
             quality = saved.get("quality") if isinstance(saved.get("quality"), dict) else {}
             promotion = saved.get("promotion") if isinstance(saved.get("promotion"), dict) else {}
+            round_funnels.append(
+                summarize_registration_funnel(
+                    results,
+                    attempted=len(mailboxes),
+                    promotion=promotion if promotion else None,
+                )
+            )
             promotion_total += int(promotion.get("total") or 0)
             promotion_success += int(promotion.get("success") or 0)
             trial_eligible += int(promotion.get("trial_eligible") or 0)
@@ -870,6 +882,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
                 "promotion_total": int(promotion.get("total") or 0),
                 "promotion_success": int(promotion.get("success") or 0),
                 "trial_eligible": int(promotion.get("trial_eligible") or 0),
+                "funnel": round_funnels[-1],
                 "halted": halted,
             })
     finally:
@@ -890,6 +903,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
         "promotion_total": promotion_total,
         "promotion_success": promotion_success,
         "trial_eligible": trial_eligible,
+        "funnel": combine_registration_funnels(round_funnels),
         "elapsed_seconds": round(time.time() - started, 2),
         "rounds": rounds,
     }

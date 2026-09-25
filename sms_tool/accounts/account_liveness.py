@@ -7,14 +7,19 @@ this seam instead of defining their own endpoint, headers, or classification.
 
 from __future__ import annotations
 
-import base64
 import json
 import re
 from contextlib import contextmanager
 from typing import Any, Generator
 from curl_cffi import requests as curl_requests
 
-from .account_identity import account_identity, bind_account_identity
+from .account_identity import (
+    account_chatgpt_id,
+    account_identity,
+    bind_account_identity,
+    chatgpt_account_id_from_token,
+)
+from .wham_usage import format_wham_usage_label, parse_wham_usage
 from ..auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
@@ -310,143 +315,10 @@ def quota_result_from_payload(
     return result
 
 
-def parse_wham_usage(body: Any) -> dict[str, Any] | None:
-    """Parse structured five-hour and seven-day usage windows."""
-    if isinstance(body, str):
-        try:
-            body = json.loads(body)
-        except Exception:
-            return None
-    if not isinstance(body, dict):
-        return None
-
-    result: dict[str, Any] = {}
-    for window_key in ("5h", "7d"):
-        parsed = _parse_usage_window(body, window_key)
-        if parsed:
-            result[window_key] = parsed
-
-    for window_key in ("5h", "7d"):
-        if window_key not in result:
-            continue
-        for container_key in ("usage", "rate_limits", "limits"):
-            container = body.get(container_key) if isinstance(body.get(container_key), dict) else body
-            if not isinstance(container, dict):
-                continue
-            window = container.get(window_key)
-            if not isinstance(window, dict):
-                continue
-            for reset_key in ("resets_at", "reset_at", "reset_time", "expires_at"):
-                reset_value = window.get(reset_key)
-                if reset_value is not None:
-                    result[window_key]["reset_at"] = str(reset_value)
-                    break
-    return result or None
-
-
-def format_wham_usage_label(usage: dict[str, Any] | None) -> str:
-    """Format parsed quota data for CLI and desktop display."""
-    if not usage:
-        return ""
-    parts = []
-    for window_key in ("5h", "7d"):
-        window = usage.get(window_key)
-        if not isinstance(window, dict):
-            continue
-        used = window.get("used", 0)
-        limit = window.get("limit", 0)
-        percent = float(window.get("percent", 0) or 0)
-        parts.append(f"{window_key}: {_format_token_count(used)}/{_format_token_count(limit)} ({percent:.0f}%)")
-    return " | ".join(parts)
-
-
-def account_chatgpt_id(account: dict[str, Any]) -> str:
-    candidates = [
-        account.get("chatgpt_account_id"),
-        account.get("account_id"),
-        account.get("workspace_id"),
-        account.get("k12_workspace_id"),
-        _nested_value(account, "account", "id"),
-        _nested_value(account, "auth_session", "account", "id"),
-    ]
-    for token_key in ("id_token", "access_token"):
-        token_account = chatgpt_id_from_token(account.get(token_key))
-        if token_account:
-            candidates.append(token_account)
-    for value in candidates:
-        text = str(value or "").strip()
-        if text:
-            return text
-    return ""
-
-
-def chatgpt_id_from_token(value: Any) -> str:
-    if isinstance(value, dict):
-        return str(value.get("chatgpt_account_id") or value.get("chatgptAccountId") or "").strip()
-    token = str(value or "").strip()
-    parts = token.split(".")
-    if len(parts) < 2:
-        return ""
-    payload = parts[1] + "=" * (-len(parts[1]) % 4)
-    try:
-        decoded = base64.urlsafe_b64decode(payload.encode("ascii"))
-        data = json.loads(decoded.decode("utf-8"))
-    except Exception:
-        return ""
-    if not isinstance(data, dict):
-        return ""
-    auth = data.get("https://api.openai.com/auth")
-    if isinstance(auth, dict):
-        account_id = str(auth.get("chatgpt_account_id") or auth.get("chatgptAccountId") or "").strip()
-        if account_id:
-            return account_id
-    return str(data.get("chatgpt_account_id") or data.get("chatgptAccountId") or "").strip()
-
-
-def _parse_usage_window(body: dict[str, Any], window_key: str) -> dict[str, Any] | None:
-    containers = [
-        section
-        for key in ("usage", "rate_limits", "limits", "rate_limits_info")
-        if isinstance((section := body.get(key)), dict)
-    ]
-    containers.append(body)
-    alternatives = {
-        "5h": ("5h", "300min", "five_hours", "short"),
-        "7d": ("7d", "10080min", "seven_days", "weekly", "long"),
-    }
-    for container in containers:
-        window = next(
-            (container.get(key) for key in alternatives.get(window_key, (window_key,)) if isinstance(container.get(key), dict)),
-            None,
-        )
-        if not isinstance(window, dict):
-            continue
-
-        def pick(keys: tuple[str, ...]) -> int | None:
-            for key in keys:
-                value = window.get(key)
-                if value is not None:
-                    try:
-                        return int(value)
-                    except (TypeError, ValueError):
-                        pass
-            return None
-
-        used = pick(("used", "num_tokens_used", "tokens_used", "consumed"))
-        limit = pick(("limit", "num_tokens_limit", "tokens_limit", "max", "cap"))
-        remaining = pick(("remaining", "num_tokens_remaining", "tokens_remaining", "available"))
-        if remaining is None and used is not None and limit is not None:
-            remaining = max(0, limit - used)
-        if used is None and remaining is not None and limit is not None:
-            used = max(0, limit - remaining)
-        if used is not None or limit is not None or remaining is not None:
-            return {
-                "used": used or 0,
-                "limit": limit or 0,
-                "remaining": remaining or 0,
-                "percent": round((used or 0) * 100.0 / limit, 1) if limit else 0.0,
-            }
-    return None
+#: Back-compat alias: ``cpa_import`` and existing callers import the JWT
+#: parser under this name from this module. The canonical body lives in
+#: :mod:`sms_tool.accounts.account_identity`.
+chatgpt_id_from_token = chatgpt_account_id_from_token
 
 
 def _extract_status_code(payload: dict[str, Any]) -> int:
@@ -508,27 +380,6 @@ def _is_token_invalid(status_code: int, error_text: str) -> bool:
         r"\b401\b|unauthorized|authentication token has been invalidated|token has been invalidated|invalid_grant|refresh_token",
         str(error_text or "").lower(),
     ) is not None
-
-
-def _nested_value(data: dict[str, Any], *keys: str) -> Any:
-    node: Any = data
-    for key in keys:
-        if not isinstance(node, dict):
-            return ""
-        node = node.get(key)
-    return node
-
-
-def _format_token_count(value: Any) -> str:
-    try:
-        count = int(value)
-    except (TypeError, ValueError):
-        return str(value)
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}K"
-    return str(count)
 
 
 def _as_int(value: Any) -> int:

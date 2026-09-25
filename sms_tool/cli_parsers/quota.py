@@ -8,18 +8,18 @@ def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--refresh-local-quota", action="store_true", help="Refresh quota status locally with saved access_token and update SQLite")
     parser.add_argument("--quota-usage", action="store_true", help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)")
     parser.add_argument("--check-promotion", action="store_true", help="Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status")
+    parser.add_argument("--check-payment-eligibility", action="store_true", help="Explicitly enumerate payment methods via disposable Checkout and Stripe init; can trigger risk controls")
     parser.add_argument("--check-promotion-after-registration", action="store_true", help="After registration, probe saved successful accounts for Plus trial/discount eligibility")
+    parser.add_argument("--payment-eligibility", dest="payment_eligibility", action="store_true", default=False,
+                        help="Also run the Checkout payment-method probe after a successful promotion check")
     parser.add_argument(
         "--no-payment-eligibility",
         dest="payment_eligibility",
         action="store_false",
-        default=True,
+        default=False,
         help=(
-            "Skip the payment-method enumeration that normally rides along with "
-            "--check-promotion (one side-effect-free Checkout + Stripe init per "
-            "account, persisted as raw_json.payment_capability and shown next to "
-            "the 优惠状态 badge). Pass this to halve the request count per account "
-            "when the method list is not needed."
+            "Legacy opt-out of --payment-eligibility; promotion-only is now the default. "
+            "The Checkout probe creates a disposable session and may trigger risk controls."
         ),
     )
     parser.add_argument("--quota-mode", choices=["local", "cpa", "auto"], default="local", help="Quota refresh mode: local direct probe, cpa management API, or local with CPA fallback")

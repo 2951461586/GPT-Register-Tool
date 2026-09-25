@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool import cli
-from sms_tool.accounts import account_promotion
+from sms_tool.accounts import account_promotion, promotion_batch
 from sms_tool.accounts.account_promotion import parse_accounts_check, promotion_status_label
 from sms_tool.accounts.account_identity import create_registration_identity
 from sms_tool.desktop_read import read_account
@@ -120,12 +120,12 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
     monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
-    monkeypatch.setattr(account_promotion, "check_account_promotion", lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"})
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"})
 
     # Promotion-only subject: the payment-eligibility probe is a separate
     # network boundary (Checkout + Stripe init) and would otherwise fire real
     # requests from this test.
-    result = account_promotion.refresh_promotion_statuses(
+    result = promotion_batch.refresh_promotion_statuses(
         ["a@example.com", "b@example.com"], workers=2, payment_eligibility=False
     )
 
@@ -155,8 +155,8 @@ def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkey
             }
         return {"ok": True, "promotion_status": "Free·无优惠"}
 
-    monkeypatch.setattr(account_promotion, "check_account_promotion", probe)
-    result = account_promotion.refresh_promotion_statuses(
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", probe)
+    result = promotion_batch.refresh_promotion_statuses(
         ["rotate@example.com"],
         workers=1,
         proxy="http://dead.example:8080",
@@ -205,7 +205,7 @@ def test_post_registration_promotion_stage_deduplicates_and_counts_trials():
             {"email": "two@example.com", "promotion_status": "Free·无优惠", "probe": {"plus_trial_eligible": False}},
         ],
     }
-    with patch("sms_tool.accounts.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
+    with patch("sms_tool.accounts.promotion_batch.refresh_promotion_statuses", return_value=result) as refresh:
         report = cli._check_registered_promotions(
             ["ONE@example.com", "one@example.com", "two@example.com"],
             workers=3,
@@ -221,7 +221,7 @@ def test_post_registration_promotion_stage_deduplicates_and_counts_trials():
 
 def test_post_registration_promotion_stage_forwards_proxy_pool():
     result = {"ok": True, "total": 0, "success": 0, "failed": 0, "trial_eligible": 0, "results": []}
-    with patch("sms_tool.accounts.account_promotion.refresh_promotion_statuses", return_value=result) as refresh:
+    with patch("sms_tool.accounts.promotion_batch.refresh_promotion_statuses", return_value=result) as refresh:
         cli._check_registered_promotions(
             ["one@example.com"],
             proxy=None,
@@ -235,14 +235,35 @@ def test_refresh_reports_trial_eligible_for_trial_accounts(monkeypatch):
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     monkeypatch.setattr(
-        account_promotion, "check_account_promotion",
+        promotion_batch, "check_account_promotion",
         lambda account, **kwargs: _trial_probe(),
     )
-    result = account_promotion.refresh_promotion_statuses(
+    result = promotion_batch.refresh_promotion_statuses(
         ["trial@example.com"], workers=1, payment_eligibility=False
     )
 
     assert result["trial_eligible"] == 1
+
+
+def test_payment_eligibility_diagnostics_only_groups_safe_failure_facts():
+    from sms_tool.accounts.account_payment_eligibility import payment_eligibility_diagnostics
+
+    observations = [
+        {"ok": False, "error_stage": "preparing_proxy", "error_code": "egress_country_mismatch",
+         "billing_country": "IN", "expected_country": "IN", "observed_country": "US"},
+        {"ok": False, "error_stage": "checkout_create", "error_code": "checkout_risk_blocked",
+         "http_status": 400, "error": "Bearer private-access-token"},
+        {"ok": False, "error_stage": "checkout_create", "error_code": "Bearer private-access-token",
+         "http_status": 400},
+        {"ok": True, "methods": ["card"]},
+    ]
+    diagnostics = payment_eligibility_diagnostics(observations)
+    assert diagnostics["by_stage"] == {"checkout_create": 2, "preparing_proxy": 1}
+    assert diagnostics["by_error_code"] == {
+        "checkout_risk_blocked": 1, "egress_country_mismatch": 1, "other": 1,
+    }
+    assert diagnostics["by_http_status"] == {"400": 2}
+    assert "private-access-token" not in json.dumps(diagnostics)
 
 
 def test_registration_save_invokes_optional_promotion_stage(tmp_path):
@@ -456,8 +477,8 @@ def test_promotion_explicit_proxy_wins_over_pool():
             "proxies": {"promotion": ["http://pool:1"]},
         },
     }
-    with patch.object(account_promotion, "CFG", config):
-        assert account_promotion._promotion_proxy_candidates(
+    with patch.object(promotion_batch, "CFG", config):
+        assert promotion_batch._promotion_proxy_candidates(
             {"email": "a@example.com"}, "http://explicit:3", None
         ) == ["http://explicit:3", "http://pool:1"]
 

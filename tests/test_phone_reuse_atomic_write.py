@@ -70,11 +70,11 @@ class PhoneReuseAtomicWriteTests(unittest.TestCase):
 
 
 def phone_reuse_os():
-    # _atomic_write_text calls os.replace on the os module imported by phone_reuse,
-    # so patching that module's replace attribute is enough.
-    import sms_tool.phone_reuse as pr
+    # _atomic_write_text calls os.replace on the os module imported by phone_pool
+    # (the pool persistence module), so patching that module's replace is enough.
+    import sms_tool.phone_pool as pp
 
-    return pr.os
+    return pp.os
 
 
 if __name__ == "__main__":

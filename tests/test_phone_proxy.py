@@ -122,7 +122,7 @@ class PhoneReuseProxyGateTests(unittest.TestCase):
     def test_provider_proxy_failure_stops_before_buying_number(self):
         pool = PhonePool(phones=[PhoneSlot(provider='smsbower', api_key='k', country='16', phone='', activation_id='')])
         session = Mock()
-        with patch('sms_tool.phone_reuse._acquire_smsbower_number') as acquire, \
+        with patch('sms_tool.phone_provider_lifecycle._acquire_smsbower_number') as acquire, \
              patch('sms_tool.phone_proxy.select_phone_proxy', return_value={'ok': False, 'error': 'forbidden ip'}):
             result = complete_phone_verification_with_reuse(session, 'did', 'https://auth.openai.com/add-phone', pool, proxy='http://bad.proxy:8080')
         self.assertFalse(result['ok'])

@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from sms_tool.accounts import account_promotion
+from sms_tool.accounts import promotion_batch
 from sms_tool.accounts.account_recovery import _promotion_auth_failure
 
 
@@ -28,13 +28,13 @@ from sms_tool.accounts.account_recovery import _promotion_auth_failure
 def no_sleep(monkeypatch):
     """Replace ``time.sleep`` with a recorder; yields the list of requested delays."""
     delays: list[float] = []
-    monkeypatch.setattr(account_promotion.time, "sleep", delays.append)
+    monkeypatch.setattr(promotion_batch.time, "sleep", delays.append)
     return delays
 
 
 @pytest.fixture
 def one_account(monkeypatch):
-    monkeypatch.setattr(account_promotion, "CFG", {})
+    monkeypatch.setattr(promotion_batch, "CFG", {})
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
         "email": email,
         "access_token": "at",
@@ -50,11 +50,11 @@ def _refresh(monkeypatch, probe, **kwargs):
         calls.append(kw["proxy"])
         return probe(account, calls)
 
-    monkeypatch.setattr(account_promotion, "check_account_promotion", fake)
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", fake)
     # Throttle/status-coding subject: skip the payment-eligibility probe, which
     # is a separate network boundary (Checkout + Stripe init) and would fire
     # real requests from here.
-    result = account_promotion.refresh_promotion_statuses(
+    result = promotion_batch.refresh_promotion_statuses(
         ["a@example.com"], workers=1, timeout=5, payment_eligibility=False, **kwargs
     )
     return result, calls
@@ -83,7 +83,7 @@ def test_429_rotates_to_the_next_proxy_after_a_backoff(monkeypatch, no_sleep, on
 
     assert result["success"] == 1
     assert calls == ["http://throttled.example:8080", "http://fresh.example:8080"]
-    assert no_sleep == [account_promotion.PROMOTION_THROTTLE_DEFAULT_BACKOFF]
+    assert no_sleep == [promotion_batch.PROMOTION_THROTTLE_DEFAULT_BACKOFF]
 
 
 def test_429_retries_the_same_exit_when_the_pool_is_exhausted(monkeypatch, no_sleep, one_account):
@@ -193,7 +193,7 @@ def test_oversized_retry_after_is_clamped(monkeypatch, no_sleep, one_account):
         ),
         proxy="http://only.example:8080",
     )
-    assert no_sleep == [account_promotion.PROMOTION_THROTTLE_MAX_BACKOFF]
+    assert no_sleep == [promotion_batch.PROMOTION_THROTTLE_MAX_BACKOFF]
 
 
 def test_garbage_retry_after_falls_back_to_the_default(monkeypatch, no_sleep, one_account):
@@ -206,7 +206,7 @@ def test_garbage_retry_after_falls_back_to_the_default(monkeypatch, no_sleep, on
         ),
         proxy="http://only.example:8080",
     )
-    assert no_sleep == [account_promotion.PROMOTION_THROTTLE_DEFAULT_BACKOFF]
+    assert no_sleep == [promotion_batch.PROMOTION_THROTTLE_DEFAULT_BACKOFF]
 
 
 # --------------------------------------------------------------------------

@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
-from ..operator_output import emit
+from ..desktop_ipc import emit_result
+from ..operator_output import emit, safe_print
 
 logger = logging.getLogger(__name__)
 
@@ -212,12 +213,14 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
 
 
 def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
-    from ..accounts.account_promotion import refresh_promotion_statuses
+    from ..accounts.promotion_batch import refresh_promotion_statuses
 
     emails = read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
     emails = unique_emails(emails)
+    if not emails and bool(getattr(args, "payment_eligibility", False)):
+        raise SystemExit("支付资格探测必须用 --email 或 --email-file 明确指定账号")
     if not emails:
         emails = [str(row.get("email") or "").strip() for row in ctx.list_paypal_accounts()]
     result = refresh_promotion_statuses(
@@ -226,10 +229,8 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
         proxy=args.proxy,
         proxy_pool=getattr(args, "proxy_pool", None),
         timeout=max(5, int(args.refresh_timeout or 20)),
-        payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
+        payment_eligibility=bool(getattr(args, "payment_eligibility", False)),
     )
-    from ..desktop_ipc import emit_result
-
     _print_promotion_summary(result)
     if bool(getattr(args, "desktop_ipc", False)):
         emit_result(result, enabled=True)
@@ -240,6 +241,29 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
         bool(result.get("ok")), int(result.get("success") or 0), int(result.get("total") or 0),
     )
     if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def check_payment_eligibility(args: Any, ctx: AccountCommandContext) -> None:
+    from ..accounts.account_payment_eligibility import probe_payment_eligibility_statuses
+    emails = read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    emails = unique_emails(emails)
+    if not emails:
+        raise SystemExit("支付资格探测必须用 --email 或 --email-file 明确指定账号")
+    result = probe_payment_eligibility_statuses(
+        emails,
+        proxy=args.proxy,
+        proxy_pool=getattr(args, "proxy_pool", None),
+        timeout=max(5, int(args.refresh_timeout or 45)),
+    )
+    emit(logger, f"[*] 支付资格探测：{result['success']}/{result['total']} 个账号取得明确方式")
+    if bool(getattr(args, "desktop_ipc", False)):
+        emit_result(result, enabled=True)
+    else:
+        safe_print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["ok"]:
         raise SystemExit(3)
 
 
@@ -310,7 +334,6 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             )
             result["fallback_cpa"] = fallback
             result["ok"] = bool(fallback.get("ok"))
-    from ..desktop_ipc import emit_result
 
     emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))
     _print_quota_summary(result)
@@ -342,6 +365,13 @@ def _print_promotion_summary(result):
             f"[*] 支付资格：{eligibility_ok}/{len(eligibility_rows)} 个账号枚举成功；"
             f"本批出现过的方式：{seen}",
         )
+        diagnostics = result.get("payment_eligibility_diagnostics") or {}
+        for field, label in (("by_stage", "失败阶段"), ("by_error_code", "失败原因"), ("by_http_status", "HTTP")):
+            counts = diagnostics.get(field) if isinstance(diagnostics, dict) else None
+            if isinstance(counts, dict) and counts:
+                emit(logger, f"[*] 支付资格{label}：" + "、".join(
+                    f"{name}={count}" for name, count in sorted(counts.items())[:12]
+                ))
     for item in rows:
         if item.get("ok"):
             continue
@@ -496,7 +526,6 @@ def quota_usage(args: Any) -> None:
         "status_code": probe.get("status_code"),
         "error": probe.get("error", ""),
     }
-    from ..desktop_ipc import emit_result
 
     emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))
     if not result["ok"]:

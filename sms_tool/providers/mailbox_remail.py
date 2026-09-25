@@ -6,6 +6,7 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime
@@ -107,7 +108,7 @@ def _email_cfg():
 def _remail_cfg():
     email_cfg = _email_cfg()
     nested = email_cfg.get("remail")
-    return nested if isinstance(nested, dict) else {}
+    return nested if isinstance(nested, Mapping) else {}
 
 
 def _remail_proxy_health_path():

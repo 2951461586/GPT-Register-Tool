@@ -174,6 +174,8 @@ def test_hot_persistence_is_visible_in_sqlite_and_finalization_is_idempotent(tmp
     assert report["session_saved"] == 2
     assert report["db_saved"] == 2
     assert report["health"]["promotion_completed"] is False
+    assert report["funnel"]["registered_per_attempted"] == 1
+    assert report["funnel"]["promotion"]["trial_eligible"] is None
     assert sorted(upsert_calls) == ["quick@example.com", "slow@example.com"]
     assert len(list(tmp_path.glob("session_*.json"))) == 2
 

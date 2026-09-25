@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from sms_tool.accounts import account_2fa
 from sms_tool.mailbox_types import MailboxAccount
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
@@ -89,7 +91,7 @@ def test_icloud_registration_reuses_mailbox_for_reauth_otp(monkeypatch):
             return "654321"
 
     class Operations:
-        REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = "OpenAI"
+        otp_poll = SimpleNamespace(subject_keywords="OpenAI")
 
         @staticmethod
         def _sanitize_text(value):

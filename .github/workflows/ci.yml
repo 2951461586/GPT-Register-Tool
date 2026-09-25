@@ -71,5 +71,6 @@ jobs:
       - run: python scripts/config_schema_check.py
       - run: python scripts/ipc_schema_check.py
       - run: python scripts/docs_consistency_scan.py
+      - run: python scripts/module_coverage_check.py
       - shell: powershell
         run: powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1

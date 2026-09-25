@@ -14,7 +14,7 @@ from sms_tool.sentinel.bundle import (
     _digest,
     validate_runtime_bundle,
 )
-from sms_tool.sentinel.runner import run_sentinel_sdk
+from sms_tool.sentinel.runner import SentinelRunnerError, check_node_runner_readiness, run_sentinel_sdk
 
 
 DEVICE_ID = "22222222-2222-4222-8222-222222222222"
@@ -102,6 +102,39 @@ def test_runtime_bundle_rejects_altered_asset(tmp_path):
     tampered = tmp_path / "tampered.js"
     tampered.write_bytes(b"a\nb\nc\n// injected\n")
     assert _digest(tampered) != _digest(RUNNER_PATH)
+
+
+def test_readiness_checks_pinned_bundle_and_executable_without_running_node():
+    with patch("sms_tool.sentinel.runner.validate_runtime_bundle") as bundle, patch(
+        "sms_tool.sentinel.runner.shutil.which", return_value="/fake/node"
+    ) as which, patch("sms_tool.sentinel.runner.subprocess.run") as run:
+        check_node_runner_readiness()
+    bundle.assert_called_once_with()
+    which.assert_called_once()
+    run.assert_not_called()
+
+
+def test_readiness_reports_missing_node_without_configured_path(monkeypatch):
+    secret_path = "/private/session-secret/node"
+    monkeypatch.setenv("OPENAI_SENTINEL_NODE_PATH", secret_path)
+    with patch("sms_tool.sentinel.runner.validate_runtime_bundle"), patch(
+        "sms_tool.sentinel.runner.shutil.which", return_value=None
+    ) as which:
+        with pytest.raises(SentinelRunnerError, match="^sentinel_runner_node_missing$") as caught:
+            check_node_runner_readiness()
+    which.assert_called_once_with(secret_path)
+    assert secret_path not in str(caught.value)
+
+
+def test_readiness_reports_invalid_bundle_without_sensitive_details():
+    with patch(
+        "sms_tool.sentinel.runner.validate_runtime_bundle",
+        side_effect=SentinelBundleError("sentinel_runtime_hash_mismatch:private-secret.js"),
+    ), patch("sms_tool.sentinel.runner.shutil.which") as which:
+        with pytest.raises(SentinelRunnerError, match="^sentinel_runtime_hash_mismatch$") as caught:
+            check_node_runner_readiness()
+    which.assert_not_called()
+    assert "private-secret" not in str(caught.value)
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="Node.js is required by the Sentinel runner")

@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from sms_tool.accounts import account_scan
@@ -6,6 +8,58 @@ from sms_tool.error_classification import classify_error
 
 
 class AccountScanTests(unittest.TestCase):
+    def test_session_write_failure_preserves_remote_liveness_and_reports_partial_save(self):
+        with TemporaryDirectory() as tmp:
+            session = Path(tmp) / "session.json"
+            session.write_text('{"email":"a@example.com","access_token":"old"}', encoding="utf-8")
+            result = {"email": "a@example.com", "ok": True, "scan_status": "alive"}
+            with patch("sms_tool.accounts.account_scan.atomic_write_text", side_effect=OSError("denied")), \
+                 patch("sms_tool.accounts.account_scan.upsert_account", return_value=True) as upsert:
+                outcome = account_scan._persist_scan({"email": "a@example.com"}, str(session), result)
+            self.assertEqual(
+                outcome,
+                {"session_saved": False, "account_saved": True, "persisted": False, "error_code": "session_write_failed"},
+            )
+            self.assertEqual(result["persistence"], outcome)
+            self.assertTrue(result["ok"])
+            self.assertIn('"access_token":"old"', session.read_text(encoding="utf-8"))
+            upsert.assert_called_once()
+
+    def test_db_write_failure_is_reported_without_downgrading_remote_probe(self):
+        result = {"email": "a@example.com", "ok": True, "scan_status": "alive"}
+        with patch("sms_tool.accounts.account_scan.upsert_account", return_value=False):
+            outcome = account_scan._persist_scan({"email": "a@example.com"}, "", result)
+        self.assertEqual(outcome["error_code"], "account_write_failed")
+        self.assertTrue(outcome["session_saved"])
+        self.assertFalse(outcome["persisted"])
+        self.assertTrue(result["ok"])
+
+    def test_scan_summary_counts_persistence_failure_separately(self):
+        remote = {
+            "index": 0, "email": "a@example.com", "ok": True, "scan_status": "alive",
+            "persistence": {"session_saved": False, "account_saved": True, "persisted": False,
+                            "error_code": "session_write_failed"},
+        }
+        with patch("sms_tool.accounts.account_scan._scan_one_with_lane", return_value=remote), \
+             patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None):
+            summary = account_scan.scan_accounts(["a@example.com"], workers=1)
+        self.assertEqual(summary["alive"], 1)
+        self.assertEqual(summary["failed"], 0)
+        self.assertEqual(summary["persist_failed"], 1)
+        self.assertFalse(summary["ok"])
+        self.assertEqual(summary["results"][0]["persistence"]["error_code"], "session_write_failed")
+
+    def test_scan_accounts_returns_summary_with_parallel_result_lists(self):
+        with patch("sms_tool.accounts.account_scan._scan_one_with_lane", return_value={
+            "index": 0, "email": "a@example.com", "ok": True, "scan_status": "alive",
+        }), patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None):
+            summary = account_scan.scan_accounts(["a@example.com"], workers=1)
+        self.assertIsInstance(summary, dict)
+        self.assertEqual(summary["total"], 1)
+        self.assertEqual(len(summary["results"]), 1)
+        self.assertEqual(len(summary["overview"]), 1)
+        self.assertEqual(summary["results"][0]["email"], "a@example.com")
+
     def test_detects_account_deactivated_typo_and_canonical(self):
         self.assertTrue(account_scan._looks_account_deactivated({"error": "account_deactivated"}))
         self.assertTrue(account_scan._looks_account_deactivated({"error": "account_deatived"}))
@@ -175,12 +229,14 @@ class AccountScanTests(unittest.TestCase):
              patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
              patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
              patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
+             patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout, \
              patch("sms_tool.accounts.account_scan._persist_scan"):
             result = account_scan._scan_one(0, 1, "a@example.com")
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["scan_status"], "alive")
         collect.assert_not_called()
+        checkout.assert_not_called()
 
     def test_scan_one_marks_relogin_failed_instead_of_generic_scan_failed(self):
         with patch(

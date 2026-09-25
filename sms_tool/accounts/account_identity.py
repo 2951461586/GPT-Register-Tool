@@ -7,6 +7,8 @@ thread-local fingerprint state at every worker entry.
 
 from __future__ import annotations
 
+import base64
+import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -281,9 +283,91 @@ def _as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def access_token_of(account: Any) -> str:
+    """Return the access token carried by an account row or bare token string.
+
+    The single reader for ``access_token``. Callers that also accept a raw
+    token string pass it straight through; anything else yields ``""`` so a
+    probe reports a missing-AT failure instead of an ``AttributeError``.
+    """
+    if isinstance(account, str):
+        return account.strip()
+    if isinstance(account, Mapping):
+        return str(account.get("access_token") or "").strip()
+    return ""
+
+
+def chatgpt_account_id_from_token(value: Any) -> str:
+    """Extract ``chatgpt_account_id`` from a JWT access/id token or mapping.
+
+    Canonical parser for the ``https://api.openai.com/auth`` claim. The former
+    copies in ``account_promotion`` and ``account_liveness`` are thin shims over
+    this function so the claim path cannot drift between probes.
+    """
+    if isinstance(value, Mapping):
+        return str(value.get("chatgpt_account_id") or value.get("chatgptAccountId") or "").strip()
+    token = str(value or "").strip()
+    parts = token.split(".")
+    if len(parts) < 2:
+        return ""
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(payload.encode("ascii"))
+        data = json.loads(decoded.decode("utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(data, Mapping):
+        return ""
+    auth = data.get("https://api.openai.com/auth")
+    if isinstance(auth, Mapping):
+        account_id = str(auth.get("chatgpt_account_id") or auth.get("chatgptAccountId") or "").strip()
+        if account_id:
+            return account_id
+    return str(data.get("chatgpt_account_id") or data.get("chatgptAccountId") or "").strip()
+
+
+def account_chatgpt_id(account: Mapping[str, Any] | None) -> str:
+    """Best-effort ChatGPT account id from a saved account row.
+
+    Lives with the other identity parsers rather than in ``account_liveness``:
+    it is identity extraction, not liveness probing. Explicit fields win over
+    token claims so an account that carries both resolves deterministically.
+    """
+    value = account if isinstance(account, Mapping) else {}
+    candidates: list[Any] = [
+        value.get("chatgpt_account_id"),
+        value.get("account_id"),
+        value.get("workspace_id"),
+        value.get("k12_workspace_id"),
+        _nested_value(value, "account", "id"),
+        _nested_value(value, "auth_session", "account", "id"),
+    ]
+    for token_key in ("id_token", "access_token"):
+        token_account = chatgpt_account_id_from_token(value.get(token_key))
+        if token_account:
+            candidates.append(token_account)
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _nested_value(data: Mapping[str, Any], *keys: str) -> Any:
+    node: Any = data
+    for key in keys:
+        if not isinstance(node, Mapping):
+            return ""
+        node = node.get(key)
+    return node
+
+
 __all__ = [
+    "account_chatgpt_id",
     "account_identity",
+    "access_token_of",
     "bind_account_identity",
+    "chatgpt_account_id_from_token",
     "complete_registration_identity",
     "create_registration_identity",
     "proxy_egress_key",

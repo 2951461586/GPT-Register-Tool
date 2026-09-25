@@ -28,6 +28,11 @@ from urllib.parse import quote, urlsplit
 import requests
 
 try:
+    from .auth_headers import AUTH_FINGERPRINT_PROFILES
+except ImportError:  # pragma: no cover - direct script execution
+    from auth_headers import AUTH_FINGERPRINT_PROFILES  # type: ignore
+
+try:
     from .phone_proxy import normalize_proxy_url
     from .pp_link_helpers import (
         DEFAULT_STRIPE_PK,
@@ -236,6 +241,25 @@ def _new_session(proxy: str = ""):
     return s
 
 
+_CHECKOUT_FINGERPRINT = AUTH_FINGERPRINT_PROFILES["chrome124"]
+
+
+def _checkout_headers(access_token, cookie_header="", extra_headers=None):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Referer": "https://chatgpt.com/",
+        "User-Agent": _CHECKOUT_FINGERPRINT["user_agent"],
+    }
+    if cookie_header:
+        headers["Cookie"] = cookie_header
+    if extra_headers:
+        headers.update(extra_headers)
+    # Endpoint-specific headers must not change the TLS/browser pairing.
+    headers["User-Agent"] = _CHECKOUT_FINGERPRINT["user_agent"]
+    return headers
+
+
 def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
     """Execute a ChatGPT checkout POST using the functional curl_cffi API.
 
@@ -247,21 +271,27 @@ def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", tim
     ``x-openai-target-path``/``x-openai-target-route`` for /checkout/update
     and /checkout/taxes, plus a per-session Referer.
     """
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Referer": "https://chatgpt.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    }
-    if cookie_header:
-        headers["Cookie"] = cookie_header
-    if extra_headers:
-        headers.update(extra_headers)
+    headers = _checkout_headers(access_token, cookie_header, extra_headers)
+    headers["Content-Type"] = "application/json"
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    if curl_requests is not None:
-        return curl_requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout, impersonate="chrome124")
-    return requests.post(url, json=json_body, headers=headers, proxies=proxies, timeout=timeout)
+    if curl_requests is None:
+        raise RuntimeError("curl_cffi is required for Checkout browser impersonation")
+    return curl_requests.post(
+        url, json=json_body, headers=headers, proxies=proxies, timeout=timeout,
+        impersonate=_CHECKOUT_FINGERPRINT["impersonate"],
+    )
+
+
+def _checkout_get(url, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
+    """Read a custom Checkout session without accumulating unrelated cookies."""
+    if curl_requests is None:
+        raise RuntimeError("curl_cffi is required for Checkout browser impersonation")
+    headers = _checkout_headers(access_token, cookie_header, extra_headers)
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    return curl_requests.get(
+        url, headers=headers, proxies=proxies, timeout=timeout,
+        impersonate=_CHECKOUT_FINGERPRINT["impersonate"],
+    )
 
 
 

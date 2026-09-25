@@ -33,6 +33,7 @@ Dynamic and static IP resources are available with free testing through the [IPW
 - Extract supported payment links and export account data for Codex, CPA, and SUB2API workflows.
 - Start fresh payment batches by default, or explicitly resume a matching persisted checkpoint with account-level stage progress.
 - Probe PayPal capability and zero-due eligibility before the full flow; rebuild Checkout after an explicit blocked approval instead of re-approving the same submission.
+- Promotion checks are plan-only by default. Explicitly select accounts and use `--check-payment-eligibility --email <address>` (or `--email-file <path>`) to observe Checkout methods without confirming a payment; this can trigger rate limits.
 
 ## Requirements
 
@@ -108,6 +109,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 - [Complete Chinese documentation](./README.md)
 - [Architecture](./docs/architecture.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md) (Chinese; numbered checklists, one per failure mode, each pointing at the owning `file.py:line`)
+- [One-click SMS contract](./docs/current/one-click-sms.md) (Chinese; provider families and persistence outcomes)
 - [v2026.09.23 release notes](./docs/releases/release-v2026.09.23.md)
 - [Documentation index](./docs/README.md) (Chinese; release notes and audits archived under `docs/releases/` and `docs/audits/`)
 - [Directory map](./docs/directory-map.md)

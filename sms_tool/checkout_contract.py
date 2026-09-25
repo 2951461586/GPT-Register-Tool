@@ -268,9 +268,13 @@ class StripeCapabilityEvidence:
                 error_stage="stripe_init",
                 retryable=True,
             )
-        standard = _collect_method_group(payload, "payment_method_types")
+        standard = _dedupe((
+            *_collect_method_group(payload, "payment_method_types"),
+            *_collect_method_group(payload, "payment_method_specs"),
+        ))
         ordered = _collect_method_group(payload, "ordered_payment_method_types")
         custom = _collect_method_group(payload, "custom_payment_methods")
+        custom = _dedupe((*custom, *_collect_method_group(payload, "customPaymentMethods")))
         methods = tuple(_dedupe((*standard, *ordered, *custom)))
         amount = _extract_amount_minor(payload)
         raw_currency = _extract_currency(payload)
@@ -307,13 +311,13 @@ def _collect_method_group(payload: Any, key: str) -> list[str]:
         for item in group:
             if isinstance(item, str):
                 token = normalize_payment_method_token(item)
-                if token:
+                if re.fullmatch(r"[a-z][a-z0-9_]{0,31}", token) and not token.startswith("cpmt_"):
                     values.append(token)
             elif isinstance(item, dict):
                 for candidate_key in ("type", "payment_method_type", "name", "id"):
                     candidate = item.get(candidate_key)
                     token = normalize_payment_method_token(candidate)
-                    if token:
+                    if re.fullmatch(r"[a-z][a-z0-9_]{0,31}", token) and not token.startswith("cpmt_"):
                         values.append(token)
                         break
     return _dedupe(values)

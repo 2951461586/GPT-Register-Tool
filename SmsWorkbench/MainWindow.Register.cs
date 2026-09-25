@@ -252,7 +252,7 @@ namespace SmsWorkbench
                 options.Workers,
                 options.AutoRelogin,
                 GetLivenessProxyPool());
-            RunAccountBatchBackend(plan.TaskName, plan.Arguments.ToList(), "account_scan", rows.Count, plan.TimeoutMilliseconds);
+            RunAccountBatchBackend(plan, "account_scan", rows.Count);
         }
 
         private void CheckPromotion_Click(object sender, RoutedEventArgs e)
@@ -272,7 +272,25 @@ namespace SmsWorkbench
                 rows.Select(r => r.Identifier.Trim()).ToList(),
                 DefaultWorkerCount(),
                 GetLivenessProxyPool());
-            RunAccountBatchBackend(plan.TaskName, plan.Arguments.ToList(), "account_promotion", rows.Count);
+            RunAccountBatchBackend(plan, "account_promotion", rows.Count);
+        }
+
+        private void CheckPaymentEligibility_Click(object sender, RoutedEventArgs e)
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                ShowThemedInfoDialog("支付资格探测", "没有找到可检测的账号。请先勾选账号或筛选账号。");
+                return;
+            }
+            var plan = BackendCommandPlanner.CreatePaymentEligibilityCheck(
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                Array.Empty<string>());
+            RunAccountBatchBackend(plan, "payment_eligibility", rows.Count);
         }
 
         // Returns null when the operator cancels the dialog.

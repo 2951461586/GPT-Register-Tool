@@ -5,6 +5,19 @@ namespace SmsWorkbench.Tests;
 
 public sealed class BackendResultInterpreterTests
 {
+    [Fact]
+    public void PaymentEligibilityResult_UsesSafeErrorReason()
+    {
+        Assert.True(BackendResultInterpreter.HasAccountResults(BackendAccountResultKind.PaymentEligibility));
+        Assert.Equal("支付资格探测", BackendResultInterpreter.AccountResultTitle(BackendAccountResultKind.PaymentEligibility));
+        var row = BackendJson.TextToObject(
+            """{"payment_capability":{"ok":false,"error_stage":"checkout_create","error_code":"checkout_risk_blocked","error":"Bearer secret"},"payment_eligibility":"支付资格未知"}""");
+        Assert.Equal("支付资格未知", BackendResultInterpreter.ResultRowStatus(row));
+        Assert.Equal("Checkout 风控拒绝",
+            BackendResultInterpreter.PaymentEligibilityReason(
+                (Dictionary<string, object>)row["payment_capability"]));
+    }
+
     // ── Scan summary extraction ─────────────────────────────────────────
 
     [Fact]
@@ -220,31 +233,29 @@ public sealed class BackendResultInterpreterTests
     // ── Result-dialog gate ──────────────────────────────────────────────
 
     [Theory]
-    [InlineData("账号测活(3)", true)]
-    [InlineData("账号测活", true)]
-    [InlineData("账号优惠检测(12)", true)]
-    [InlineData("账号优惠检测", true)]
-    [InlineData("批量邮箱换绑(4)", false)]
-    [InlineData("协议注册(2)", false)]
-    [InlineData("", false)]
-    public void IsAccountScanResultTask_CoversLivenessAndPromotion(string taskName, bool expected)
+    [InlineData(BackendAccountResultKind.Liveness, true)]
+    [InlineData(BackendAccountResultKind.Promotion, true)]
+    [InlineData(BackendAccountResultKind.PaymentEligibility, true)]
+    [InlineData(BackendAccountResultKind.None, false)]
+    public void HasAccountResults_UsesStableKind(BackendAccountResultKind kind, bool expected)
     {
-        Assert.Equal(expected, BackendResultInterpreter.IsAccountScanResultTask(taskName));
+        Assert.Equal(expected, BackendResultInterpreter.HasAccountResults(kind));
     }
 
     [Theory]
-    [InlineData("账号测活(3)", "账号测活")]
-    [InlineData("账号优惠检测(12)", "账号优惠检测")]
-    [InlineData("协议注册(2)", "账号测活")]
-    public void AccountScanResultTitle_MatchesTaskFamily(string taskName, string expected)
+    [InlineData(BackendAccountResultKind.Liveness, "账号测活")]
+    [InlineData(BackendAccountResultKind.Promotion, "账号优惠检测")]
+    [InlineData(BackendAccountResultKind.PaymentEligibility, "支付资格探测")]
+    public void AccountResultTitle_IsIndependentOfTaskLabel(BackendAccountResultKind kind, string expected)
     {
-        Assert.Equal(expected, BackendResultInterpreter.AccountScanResultTitle(taskName));
+        Assert.Equal(expected, BackendResultInterpreter.AccountResultTitle(kind));
     }
 
     [Fact]
-    public void IsAccountScanResultTask_AcceptsNullTaskName()
+    public void AccountResultTitle_RejectsNonResultKinds()
     {
-        Assert.False(BackendResultInterpreter.IsAccountScanResultTask(null!));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => BackendResultInterpreter.AccountResultTitle(BackendAccountResultKind.None));
     }
 
     // ── Deactivation detection ──────────────────────────────────────────

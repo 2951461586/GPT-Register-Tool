@@ -484,6 +484,7 @@
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" Text="一键接码" Command="{Binding NavCommand}" CommandParameter="sms"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 3v18h18 M7 14l4-4 4 4 5-5" Text="账号测活" Command="{Binding NavCommand}" CommandParameter="scan"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3" Text="查优惠" Command="{Binding NavCommand}" CommandParameter="promotion"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3" Text="查支付资格" Command="{Binding NavCommand}" CommandParameter="payment_eligibility"/>
 
                 <TextBlock Text="支付管理" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" Text="打开支付链接" Command="{Binding NavCommand}" CommandParameter="paylink"/>
