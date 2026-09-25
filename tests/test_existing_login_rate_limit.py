@@ -123,8 +123,8 @@ def _drive(*, otp_status, otp_headers=None, otp_body=None):
         raise AssertionError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
-    with patch.object(auth_flow, "request_with_retry", recorder), patch.object(
-        auth_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
+    with patch.object(auth_flow.deps, "request_with_retry", recorder), patch.object(
+        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
     ):
         result = auth_flow._login_existing_account_with_email_otp(
             session=object(),

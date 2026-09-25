@@ -172,7 +172,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             "url": "https://auth.openai.com/email-verification",
         }
 
-        with patch.object(auth_flow, "_continue_signup_username", return_value=advanced) as continue_signup:
+        with patch.object(auth_flow.signup, "_continue_signup_username", return_value=advanced) as continue_signup:
             state = auth_flow._prepare_signup_auth_state(
                 session,
                 "user@example.com",
@@ -239,7 +239,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         session.get.return_value = authorize_response
         advanced = {"ok": True, "status": 200, "url": "https://auth.openai.com/create-account/password"}
 
-        with patch.object(auth_flow, "_continue_signup_username", return_value=advanced) as continue_signup:
+        with patch.object(auth_flow.signup, "_continue_signup_username", return_value=advanced) as continue_signup:
             state = auth_flow._prepare_signup_auth_state(
                 session, "user@example.com", "did-1", "logging-1",
                 "https://auth.openai.com", "https://chatgpt.com", {}, "csrf",

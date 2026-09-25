@@ -32,8 +32,8 @@ def test_existing_login_totp_issues_and_verifies_challenge():
     verify = Mock(status_code=200)
     with (
         patch("pyotp.TOTP") as totp,
-        patch.object(auth_flow, "request_with_retry", side_effect=[issue, verify]) as request,
-        patch.object(auth_flow, "_json_or_raw", return_value={"continue_url": "https://chatgpt.com/"}),
+        patch.object(auth_flow.deps, "request_with_retry", side_effect=[issue, verify]) as request,
+        patch.object(auth_flow.deps, "_json_or_raw", return_value={"continue_url": "https://chatgpt.com/"}),
     ):
         totp.return_value.now.return_value = "123456"
         result = registration._complete_existing_login_totp(
@@ -75,17 +75,17 @@ def test_existing_login_uses_fresh_authorize_sentinel_for_otp_steps():
     mailbox = Mock(provider="remail")
 
     with (
-        patch.object(auth_flow, "request_with_retry", side_effect=[prime, csrf, signin, authorize, continued]),
-        patch.object(auth_flow, "_json_or_raw", return_value={"url": authorize.url}),
-        patch.object(auth_flow, "_authorize_continue_sentinel", return_value=({}, "fresh-token", "fresh-so")),
-        patch.object(auth_flow, "_response_next_url", return_value=authorize.url),
-        patch.object(auth_flow, "_follow_continue_url", return_value=follow),
-        patch.object(auth_flow, "_print_protocol_diagnostic"),
-        patch.object(auth_flow, "_send_existing_login_otp", return_value=(True, Mock(status_code=200))) as send,
-        patch.object(auth_flow, "_poll_email_otp", return_value="123456"),
-        patch.object(auth_flow, "_validate_email_otp", return_value=(True, {"continue_url": authorize.url})) as validate,
-        patch.object(auth_flow, "_complete_existing_login_totp", return_value={"ok": True, "data": {}}) as totp,
-        patch.object(auth_flow, "current_config_data", return_value={"email_registration": {"otp_timeout": 1}}),
+        patch.object(auth_flow.deps, "request_with_retry", side_effect=[prime, csrf, signin, authorize, continued]),
+        patch.object(auth_flow.deps, "_json_or_raw", return_value={"url": authorize.url}),
+        patch.object(auth_flow.sentinel_flow, "_authorize_continue_sentinel", return_value=({}, "fresh-token", "fresh-so")),
+        patch.object(auth_flow.steps, "_response_next_url", return_value=authorize.url),
+        patch.object(auth_flow.deps, "_follow_continue_url", return_value=follow),
+        patch.object(auth_flow.steps, "_print_protocol_diagnostic"),
+        patch.object(auth_flow.otp, "_send_existing_login_otp", return_value=(True, Mock(status_code=200))) as send,
+        patch.object(auth_flow.deps, "_poll_email_otp", return_value="123456"),
+        patch.object(auth_flow.deps, "_validate_email_otp", return_value=(True, {"continue_url": authorize.url})) as validate,
+        patch.object(auth_flow.totp, "_complete_existing_login_totp", return_value={"ok": True, "data": {}}) as totp,
+        patch.object(auth_flow.deps, "current_config_data", return_value={"email_registration": {"otp_timeout": 1}}),
     ):
         result = auth_flow._login_existing_account_with_email_otp(
             session=Mock(),
@@ -139,7 +139,7 @@ def test_existing_login_otp_posts_the_dispatcher_endpoint_first():
         }
     )
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[challenge]
+        auth_flow.deps, "request_with_retry", side_effect=[challenge]
     ) as request:
         ok, returned = auth_flow._send_existing_login_otp(
             Mock(),
@@ -165,7 +165,7 @@ def test_existing_login_otp_never_posts_a_second_endpoint_after_a_bare_ack():
     """
     acknowledgement = _otp_response({"success": True})
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[acknowledgement]
+        auth_flow.deps, "request_with_retry", side_effect=[acknowledgement]
     ) as request:
         ok, returned = auth_flow._send_existing_login_otp(
             Mock(),
@@ -191,7 +191,7 @@ def test_existing_login_otp_falls_back_to_resend_on_an_endpoint_rejection():
         {"continue_url": "https://auth.openai.com/email-verification"}
     )
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[rejected, challenge]
+        auth_flow.deps, "request_with_retry", side_effect=[rejected, challenge]
     ) as request:
         ok, returned = auth_flow._send_existing_login_otp(
             Mock(),
@@ -245,7 +245,7 @@ def test_existing_login_otp_send_dispatches_with_get_not_post():
         }
     )
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[challenge]
+        auth_flow.deps, "request_with_retry", side_effect=[challenge]
     ) as request:
         ok, _ = auth_flow._send_existing_login_otp(
             Mock(),
@@ -269,7 +269,7 @@ def test_existing_login_otp_resend_fallback_stays_a_post():
         {"continue_url": "https://auth.openai.com/email-verification"}
     )
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[rejected, challenge]
+        auth_flow.deps, "request_with_retry", side_effect=[rejected, challenge]
     ) as request:
         ok, _ = auth_flow._send_existing_login_otp(
             Mock(),
@@ -293,7 +293,7 @@ def test_existing_login_otp_does_not_spend_a_second_request_on_a_rate_limit():
         status_code=429,
     )
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[throttled]
+        auth_flow.deps, "request_with_retry", side_effect=[throttled]
     ) as request:
         ok, returned = auth_flow._send_existing_login_otp(
             Mock(),
@@ -313,7 +313,7 @@ def test_existing_login_otp_reports_failure_when_no_endpoint_applies():
     rejected = _otp_response({"error": {"code": "invalid_state"}}, status_code=400)
     missing = _otp_response({"error": {"code": "not_found"}}, status_code=404)
     with patch.object(
-        auth_flow, "request_with_retry", side_effect=[rejected, missing]
+        auth_flow.deps, "request_with_retry", side_effect=[rejected, missing]
     ) as request:
         ok, returned = auth_flow._send_existing_login_otp(
             Mock(),

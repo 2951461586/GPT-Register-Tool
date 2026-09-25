@@ -26,6 +26,8 @@ Directory layout (since 2026-09-06):
 - [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 - [Registration Recovery & Cancellation](current/registration-recovery.md) -
   注册恢复、邮箱验证卡死重试与协作取消的当前行为。
+- [Protocol Registration](current/protocol-registration.md) - 协议注册的端点、
+  两条泳道、Sentinel 与落地页词汇契约。
 - [Registration & Proxy Architecture](registration-and-proxy-architecture.md) -
   注册与代理链路的设计与风险控制说明。
 - [Mailbox Architecture](current/mailbox.md) - provider 能力解析、配置与
@@ -143,4 +145,5 @@ Directory layout (since 2026-09-06):
   `sub2api_import.py`、`session_converter.py` 中落实现，不侵入注册或支付模块。
 
 当前专题：[注册架构](current/registration-architecture.md)、
+[协议注册契约](current/protocol-registration.md)、
 [配置分片](current/configuration.md)、[日志与运行数据](current/telemetry-and-runtime.md)。

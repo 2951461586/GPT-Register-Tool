@@ -1,0 +1,148 @@
+"""Protocol-lane auth flow, split from the 1664-line ``auth_flow.py``.
+
+Every submodule is reached module-qualified (``from . import steps`` then
+``steps._is_about_you_step(...)``) so ``patch`` on the defining submodule is
+seen by all callers; this package re-exports the same names for external
+consumers (``registration.py`` and friends) that import from ``.auth_flow``.
+"""
+from __future__ import annotations
+
+from .steps import (
+    LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
+    _CC_CAPS,
+    _PASSKEY_CLIENT_CAPABILITIES,
+    _auth_request_headers,
+    _ensure_authorize_context,
+    _existing_login_continue_enabled,
+    _invalid_state_auth_response,
+    _is_about_you_step,
+    _is_chatgpt_auth_login_landing,
+    _is_email_verification_step,
+    _is_existing_login_redirect,
+    _is_signup_password_step,
+    _openai_signin_url,
+    _passwordless_signin_attempts,
+    _print_protocol_diagnostic,
+    _protocol_diagnostic,
+    _response_next_url,
+    _signup_signin_attempts,
+    _with_query_param,
+)
+from .password_step import (
+    LOGIN_PASSWORD_STEP_TYPES,
+    SOURCE_SIBLING_FORM,
+    SOURCE_TRANSACTION_STEP,
+    _FORM_TAG_RE,
+    _PASSWORD_INPUT_RE,
+    _has_password_form,
+    _is_login_password_step,
+    _login_password_page_type,
+    _password_login_existing_account,
+    _probe_login_password_step,
+)
+from .sentinel_flow import (
+    _authorize_continue_sentinel,
+)
+from .signup import (
+    _continue_signup_username,
+    _prepare_signup_auth_state,
+    _prime_email_verification_page,
+)
+from .login import (
+    _existing_login_continue,
+    _existing_login_probe,
+    _existing_login_signin,
+    _fetch_session_csrf_token,
+    _login_existing_account_with_email_otp,
+)
+from .otp import (
+    _existing_login_otp,
+    _otp_challenge_established,
+    _send_existing_login_otp,
+)
+from .totp import (
+    _complete_existing_login_totp,
+    _is_mfa_challenge_payload,
+    _response_next_url_from_data,
+    _totp_factor_id,
+)
+from .deps import (
+    _absolute_url,
+    _cookie_presence,
+    _fetch_client_auth_session_dump,
+    _follow_continue_url,
+    _json_or_raw,
+    _poll_email_otp,
+    _retry_after_seconds,
+    _validate_email_otp,
+    auth_impersonate,
+    current_config_data,
+    mark_registration_rate_limited,
+    nextauth_headers,
+    openai_auth_headers,
+    redact_proxy_url,
+    request_with_retry,
+)
+
+__all__ = [
+    "LOGIN_EMAIL_OTP_SUBJECT_KEYWORD",
+    "LOGIN_PASSWORD_STEP_TYPES",
+    "SOURCE_SIBLING_FORM",
+    "SOURCE_TRANSACTION_STEP",
+    "_CC_CAPS",
+    "_FORM_TAG_RE",
+    "_PASSKEY_CLIENT_CAPABILITIES",
+    "_PASSWORD_INPUT_RE",
+    "_absolute_url",
+    "_cookie_presence",
+    "_fetch_client_auth_session_dump",
+    "_follow_continue_url",
+    "_poll_email_otp",
+    "_retry_after_seconds",
+    "_validate_email_otp",
+    "auth_impersonate",
+    "current_config_data",
+    "mark_registration_rate_limited",
+    "nextauth_headers",
+    "openai_auth_headers",
+    "redact_proxy_url",
+    "request_with_retry",
+    "_auth_request_headers",
+    "_authorize_continue_sentinel",
+    "_complete_existing_login_totp",
+    "_continue_signup_username",
+    "_ensure_authorize_context",
+    "_existing_login_continue",
+    "_existing_login_continue_enabled",
+    "_existing_login_otp",
+    "_existing_login_probe",
+    "_existing_login_signin",
+    "_fetch_session_csrf_token",
+    "_has_password_form",
+    "_invalid_state_auth_response",
+    "_is_about_you_step",
+    "_is_chatgpt_auth_login_landing",
+    "_is_email_verification_step",
+    "_is_existing_login_redirect",
+    "_is_login_password_step",
+    "_is_mfa_challenge_payload",
+    "_is_signup_password_step",
+    "_json_or_raw",
+    "_login_existing_account_with_email_otp",
+    "_login_password_page_type",
+    "_openai_signin_url",
+    "_otp_challenge_established",
+    "_password_login_existing_account",
+    "_passwordless_signin_attempts",
+    "_prepare_signup_auth_state",
+    "_prime_email_verification_page",
+    "_print_protocol_diagnostic",
+    "_probe_login_password_step",
+    "_protocol_diagnostic",
+    "_response_next_url",
+    "_response_next_url_from_data",
+    "_send_existing_login_otp",
+    "_signup_signin_attempts",
+    "_totp_factor_id",
+    "_with_query_param",
+]

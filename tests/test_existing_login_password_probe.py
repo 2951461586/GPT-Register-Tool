@@ -21,11 +21,48 @@ Three things this file pins down:
    on ``login_method``, so the outcome reporter can name how a session was won.
 """
 
+import contextlib
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow
+
+
+#: Owner submodule for each seam patched in this file. The package was split
+#: into ``auth_flow/`` submodules, so ``patch.multiple(auth_flow, ...)`` would
+#: patch names no caller reads; group by owner instead.
+_SEAM_MODULE = {
+    "_fetch_session_csrf_token": "login",
+    "request_with_retry": "deps",
+    "_json_or_raw": "deps",
+    "_follow_continue_url": "deps",
+    "_poll_email_otp": "deps",
+    "_validate_email_otp": "deps",
+    "_fetch_client_auth_session_dump": "deps",
+    "current_config_data": "deps",
+    "_authorize_continue_sentinel": "sentinel_flow",
+    "_response_next_url": "steps",
+    "_print_protocol_diagnostic": "steps",
+    "_existing_login_continue_enabled": "steps",
+    "_probe_login_password_step": "password_step",
+    "_password_login_existing_account": "password_step",
+    "_send_existing_login_otp": "otp",
+    "_complete_existing_login_totp": "totp",
+    "_continue_signup_username": "signup",
+}
+
+
+@contextlib.contextmanager
+def patch_auth_flow_seams(**seams):
+    """Patch each auth_flow seam on its defining submodule."""
+    grouped: dict[str, dict] = {}
+    for name, value in seams.items():
+        grouped.setdefault(_SEAM_MODULE[name], {})[name] = value
+    with contextlib.ExitStack() as stack:
+        for module, values in grouped.items():
+            stack.enter_context(patch.multiple(getattr(auth_flow, module), **values))
+        yield
 
 
 def _source(relative_path):
@@ -119,7 +156,7 @@ class ProbeLoginPasswordStepTests(unittest.TestCase):
             transport = Mock(side_effect=error)
         else:
             transport = Mock(return_value=response)
-        with patch.object(auth_flow, "request_with_retry", transport):
+        with patch.object(auth_flow.deps, "request_with_retry", transport):
             result = auth_flow._probe_login_password_step(
                 Mock(),
                 "https://auth.openai.com",
@@ -216,7 +253,7 @@ class NoTransactionStateTests(unittest.TestCase):
 
     def _probe(self, payload=None, continue_url="", response=None):
         transport = Mock(return_value=response)
-        with patch.object(auth_flow, "request_with_retry", transport):
+        with patch.object(auth_flow.deps, "request_with_retry", transport):
             result = auth_flow._probe_login_password_step(
                 Mock(),
                 "https://auth.openai.com",
@@ -290,7 +327,7 @@ def _lane(*, probe, password="", allow_passwordless=True, transport=None, **over
         "_probe_login_password_step": Mock(return_value=probe),
     }
     seams.update(overrides)
-    with patch.multiple(auth_flow, **seams):
+    with patch_auth_flow_seams(**seams):
         result = auth_flow._login_existing_account_with_email_otp(
             session=Mock(),
             username="user@example.com",
@@ -429,7 +466,7 @@ class ExistingLoginContinueToggleTests(unittest.TestCase):
                 "existing_login_continue_on_verified_page": value
             }
             cfg = {"registration": registration}
-        with patch.object(auth_flow, "current_config_data", Mock(return_value=cfg)):
+        with patch.object(auth_flow.deps, "current_config_data", Mock(return_value=cfg)):
             return auth_flow._existing_login_continue_enabled()
 
     def test_a_missing_key_defaults_to_on(self):
@@ -446,7 +483,7 @@ class ExistingLoginContinueToggleTests(unittest.TestCase):
                 self.assertTrue(self._enabled(value))
 
     def test_an_unreadable_config_keeps_it_on(self):
-        with patch.object(auth_flow, "current_config_data", Mock(side_effect=RuntimeError("no config"))):
+        with patch.object(auth_flow.deps, "current_config_data", Mock(side_effect=RuntimeError("no config"))):
             self.assertTrue(auth_flow._existing_login_continue_enabled())
 
     def test_a_non_dict_registration_section_keeps_it_on(self):
@@ -587,7 +624,7 @@ class PasswordLoginTests(unittest.TestCase):
             "_complete_existing_login_totp": Mock(return_value=totp or {"ok": True, "data": {}}),
         }
         seams.update(overrides)
-        with patch.multiple(auth_flow, **seams):
+        with patch_auth_flow_seams(**seams):
             result = auth_flow._password_login_existing_account(
                 Mock(),
                 "https://auth.openai.com",
@@ -656,7 +693,10 @@ class ProbePositionGuardTests(unittest.TestCase):
         # pins -- continue *before* probe *before* OTP send -- now lives across
         # those phase bodies, so concatenate them in pipeline order rather than
         # slicing a single function.
-        src = _source("sms_tool/auth_flow.py")
+        # 2026-09-25: ``auth_flow.py`` became the ``auth_flow/`` package.  The
+        # four phase bodies now live in ``login.py`` (signin/continue/probe) and
+        # ``otp.py`` (the OTP phase); concatenate them in pipeline order.
+        src = _source("sms_tool/auth_flow/login.py") + "\n" + _source("sms_tool/auth_flow/otp.py")
         parts = []
         for name in (
             "_existing_login_signin",
@@ -665,8 +705,8 @@ class ProbePositionGuardTests(unittest.TestCase):
             "_existing_login_otp",
         ):
             start = src.index(f"def {name}(")
-            end = src.index("\ndef ", start)
-            parts.append(src[start:end])
+            end = src.find("\ndef ", start)
+            parts.append(src[start:] if end == -1 else src[start:end])
         return "\n".join(parts)
 
     def test_the_probe_runs_after_authorize_continue_and_before_the_otp_send(self):

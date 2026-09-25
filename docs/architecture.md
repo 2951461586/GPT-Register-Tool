@@ -79,6 +79,8 @@ from growing while that decision is pending.
 
 See [registration architecture](current/registration-architecture.md) for the
 state groups, session ownership, error policy and compatibility guarantees.
+See [protocol registration](current/protocol-registration.md) for the protocol
+lane's endpoints, step order, Sentinel flow and landing-page vocabulary.
 See [account health contract](current/account-health.md) for probe/recovery
 side effects, result semantics and proxy precedence.
 [ADR-0009](adr/0009-registration-hardening.md) records the decisions.
