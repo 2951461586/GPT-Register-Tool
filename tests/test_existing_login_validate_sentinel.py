@@ -118,12 +118,12 @@ def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None,
     def fake_dump(session, auth_base, base_headers, label):
         dumps.append(label)
 
-    with patch.object(auth_flow, "request_with_retry", side_effect=handler), patch.object(
-        auth_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
-    ), patch.object(auth_flow, "_poll_email_otp", lambda *a, **k: "123456"), patch.object(
-        auth_flow, "_validate_email_otp", side_effect=fake_validate
+    with patch.object(auth_flow.deps, "request_with_retry", side_effect=handler), patch.object(
+        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
+    ), patch.object(auth_flow.deps, "_poll_email_otp", lambda *a, **k: "123456"), patch.object(
+        auth_flow.deps, "_validate_email_otp", side_effect=fake_validate
     ), patch.object(
-        auth_flow, "_fetch_client_auth_session_dump", side_effect=fake_dump
+        auth_flow.deps, "_fetch_client_auth_session_dump", side_effect=fake_dump
     ):
         return auth_flow._login_existing_account_with_email_otp(
             session=Mock(),
@@ -181,7 +181,7 @@ def test_the_toggle_restores_the_2026_09_14_skip():
     how the previous behaviour comes back without editing code.
     """
     calls: list[tuple[str, str]] = []
-    with patch.object(auth_flow, "_existing_login_continue_enabled", lambda: False):
+    with patch.object(auth_flow.steps, "_existing_login_continue_enabled", lambda: False):
         _drive(validate_result=(True, {}), validate_calls=[], dumps=[], calls=calls)
 
     posted = [url for method, url in calls if url == CONTINUE_URL]
@@ -260,7 +260,7 @@ def test_a_profile_step_landing_is_reported_as_a_failure():
 
 def test_a_profile_step_landing_is_not_followed():
     followed: list = []
-    with patch.object(auth_flow, "_follow_continue_url", lambda *a, **k: followed.append(a)):
+    with patch.object(auth_flow.deps, "_follow_continue_url", lambda *a, **k: followed.append(a)):
         result = _drive(
             validate_result=(True, {"continue_url": f"{AUTH_BASE}/about-you"}),
             validate_calls=[],
@@ -289,7 +289,7 @@ def test_a_page_type_of_about_you_also_stops_the_lane():
 def test_a_real_login_landing_still_completes():
     """The inverse guard: a rule that always fires would break real logins."""
     followed: list = []
-    with patch.object(auth_flow, "_follow_continue_url", lambda *a, **k: followed.append(a)):
+    with patch.object(auth_flow.deps, "_follow_continue_url", lambda *a, **k: followed.append(a)):
         result = _drive(
             validate_result=(True, {"continue_url": f"{CHAT_BASE}/api/auth/callback/openai"}),
             validate_calls=[],

@@ -119,8 +119,8 @@ def _drive(*, mint_token, authorize_landing, caller_token=CALLER_TOKEN,
         raise AssertionError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
-    with patch.object(auth_flow, "request_with_retry", recorder), patch.object(
-        auth_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
+    with patch.object(auth_flow.deps, "request_with_retry", recorder), patch.object(
+        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
     ):
         result = auth_flow._login_existing_account_with_email_otp(
             session=session,
@@ -144,7 +144,7 @@ class CsrfMintingTests(unittest.TestCase):
         session = object()
         recorder = _Recorder(lambda record: _Response(body={"csrfToken": SESSION_TOKEN}))
 
-        with patch.object(auth_flow, "request_with_retry", recorder):
+        with patch.object(auth_flow.deps, "request_with_retry", recorder):
             token = auth_flow._fetch_session_csrf_token(
                 session, CHAT_BASE, {"accept": "application/json"}, "did-1", "slog-1"
             )
@@ -159,7 +159,7 @@ class CsrfMintingTests(unittest.TestCase):
         def handler(record):
             raise RuntimeError("connection reset")
 
-        with patch.object(auth_flow, "request_with_retry", _Recorder(handler)):
+        with patch.object(auth_flow.deps, "request_with_retry", _Recorder(handler)):
             token = auth_flow._fetch_session_csrf_token(
                 object(), CHAT_BASE, {}, "did-1", "slog-1"
             )
@@ -174,7 +174,7 @@ class CsrfMintingTests(unittest.TestCase):
             def json(self):
                 raise ValueError("not json")
 
-        with patch.object(auth_flow, "request_with_retry", _Recorder(lambda record: _NoJson())):
+        with patch.object(auth_flow.deps, "request_with_retry", _Recorder(lambda record: _NoJson())):
             token = auth_flow._fetch_session_csrf_token(
                 object(), CHAT_BASE, {}, "did-1", "slog-1"
             )

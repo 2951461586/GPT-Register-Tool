@@ -49,6 +49,7 @@ DOCS = (
     "docs/current/configuration.md",
     "docs/current/mailbox.md",
     "docs/current/registration-architecture.md",
+    "docs/current/protocol-registration.md",
     "docs/current/registration-recovery.md",
     "docs/current/telemetry-and-runtime.md",
     "docs/adr/README.md",
