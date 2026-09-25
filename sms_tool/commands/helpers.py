@@ -86,18 +86,6 @@ def public_mail_message(msg):
     }
 
 
-def public_oauth_result(result):
-    """Sanitize OAuth result for JSON output (strip raw tokens)."""
-    if not isinstance(result, dict):
-        return {}
-    output = {key: value for key, value in result.items() if key != "tokens"}
-    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
-    if tokens:
-        output["has_access_token"] = bool(tokens.get("access_token"))
-        output["has_refresh_token"] = bool(tokens.get("refresh_token"))
-    return output
-
-
 def mailbox_from_explicit_args(args):
     """Load a specific mailbox from explicit CLI args."""
     if not (getattr(args, "chatai_mailbox_file", None) or getattr(args, "mailbox_file", None)):

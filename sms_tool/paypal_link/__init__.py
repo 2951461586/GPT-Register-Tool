@@ -173,6 +173,7 @@ from .gen_link import (
     stripe_confirm_error_diagnostics,
     sys,
 )
+from ..paypal_extract import _checkout_get
 
 __all__ = [
     'Any', 'BILLING_DATA', 'CHATGPT_TIMEOUT', 'CURRENCY_MAP', 'CheckoutNotZeroDueError', 'CheckoutRequestContract',
@@ -186,7 +187,7 @@ __all__ = [
     '_CANCEL_MARKERS', '_CONTAINER_KEYS', '_CandidateHTMLParser', '_Evidence', '_FAILURE_MARKERS', '_INPUT_URL_KEYS',
     '_MAX_BODY_LENGTH', '_MAX_URL_LENGTH', '_PAYPAL_PROXY_STATE_CACHE', '_PROCESSING_MARKERS', '_REDIRECT_CODES', '_RETRYABLE_HTTP_CODES',
     '_SIDE_EFFECT_STAGES', '_SUCCESS_MARKERS', '_URL_VALUE_KEYS', '_body_candidates', '_canonical_checkout_long_url', '_chatgpt_checkout_url',
-    '_checkout_country_from_cfg', '_checkout_post', '_clean_candidate', '_collect_json_statuses', '_collect_json_urls', '_compact_diagnostic',
+    '_checkout_country_from_cfg', '_checkout_get', '_checkout_post', '_clean_candidate', '_collect_json_statuses', '_collect_json_urls', '_compact_diagnostic',
     '_default_qr_path', '_emit', '_extract_start_url', '_first', '_header', '_is_chatgpt_checkout_link_generation_type',
     '_is_hosted_generation_type', '_is_paypal_direct_generation_type', '_is_zero_due_generation_type', '_known_mappings', '_load_json', '_make_result',
     '_merge_status', '_method_cfg', '_nested_success_return_url', '_new_session', '_normalize_hosted_checkout_url', '_normalize_remote_status',

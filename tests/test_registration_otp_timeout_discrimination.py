@@ -144,7 +144,7 @@ def test_lane_verdict_refuses_to_guess_on_unusable_dumps(dump):
 
 def _workflow() -> RegistrationEmailWorkflow:
     ops = Mock()
-    ops._poll_registration_email_otp = Mock(return_value="")
+    ops.otp_poll.poll = Mock(return_value="")
     ops._sanitize_text = Mock(side_effect=lambda value: str(value))
     workflow = RegistrationEmailWorkflow(
         RegistrationStateMachine(lambda *_: None), operations=ops, config={},
@@ -176,7 +176,7 @@ def test_a_stuck_send_never_calls_the_poller():
     workflow.runtime.otp_send_dump = _STUCK
     with pytest.raises(RegistrationAbort):
         workflow.wait_email_otp()
-    workflow.r._poll_registration_email_otp.assert_not_called()
+    workflow.r.otp_poll.poll.assert_not_called()
 
 
 def test_a_stuck_send_is_classified_and_counted_as_a_dispatch_side_signal():

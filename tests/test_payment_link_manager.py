@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from sms_tool import payment_link_manager as manager
 from sms_tool.payment_catalog import PAYMENT_CATALOG
+from sms_tool.payment_routing import PaymentRoutePlan
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
@@ -21,6 +22,24 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(set(manager.PAYMENT_METHODS), set(PAYMENT_CATALOG.methods))
         self.assertEqual(manager.normalize_payment_method("go-pay"), "gopay")
         self.assertEqual(manager.PAYMENT_METHODS["momo"].country, "VN")
+
+    def test_probe_mode_reuses_checkout_observation_without_running_link_adapter(self):
+        from sms_tool.pay_link.core import probe_payment_method
+
+        observation = {
+            "ok": True, "payment_method_types": ["card", "upi"],
+            "checkout_kind": "stripe", "evidence_sources": ["stripe_init", "stripe_elements"],
+        }
+        with patch("sms_tool.payment_capability.payment_method_capability_probe", return_value=observation) as probe, \
+             patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as executor:
+            result = probe_payment_method(
+                "at", "direct_card",
+                payment_route_plan=PaymentRoutePlan.empty("direct_card"),
+                runtime_config={"chatgpt": {}, "protocol_payments": {}},
+            )
+        self.assertEqual(result, observation)
+        probe.assert_called_once()
+        executor.assert_not_called()
     def test_supported_methods_include_reference_adapters(self):
         methods = {item["key"]: item for item in manager.supported_payment_methods()}
         keys = set(methods)

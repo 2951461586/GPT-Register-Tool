@@ -75,27 +75,25 @@ public static class BackendResultInterpreter
     }
 
     /// <summary>
-    /// Backend commands whose terminal result is a per-account rows payload
-    /// ("results" + "total") that the operator reviews in the result dialog.
-    /// Both the liveness scan ("账号测活(N)") and the promotion check
-    /// ("账号优惠检测(N)") emit that shape, but only the liveness task name
-    /// used to be matched -- so the promotion check finished silently with its
-    /// rows never shown.
+    /// Account-result commands use a stable planner kind, not localized task text.
     /// </summary>
-    public static bool IsAccountScanResultTask(string taskName)
+    public static bool HasAccountResults(BackendAccountResultKind resultKind)
     {
-        string name = taskName ?? "";
-        return name.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase)
-            || name.StartsWith("账号优惠检测", StringComparison.OrdinalIgnoreCase);
+        return resultKind is BackendAccountResultKind.Liveness
+            or BackendAccountResultKind.Promotion
+            or BackendAccountResultKind.PaymentEligibility;
     }
 
     /// <summary>Dialog / heading title for the per-account result dialog.</summary>
-    public static string AccountScanResultTitle(string taskName)
+    public static string AccountResultTitle(BackendAccountResultKind resultKind)
     {
-        string name = taskName ?? "";
-        return name.StartsWith("账号优惠检测", StringComparison.OrdinalIgnoreCase)
-            ? "账号优惠检测"
-            : "账号测活";
+        return resultKind switch
+        {
+            BackendAccountResultKind.Promotion => "账号优惠检测",
+            BackendAccountResultKind.PaymentEligibility => "支付资格探测",
+            BackendAccountResultKind.Liveness => "账号测活",
+            _ => throw new ArgumentOutOfRangeException(nameof(resultKind), resultKind, "Not an account result"),
+        };
     }
 
     /// <summary>
@@ -193,11 +191,31 @@ public static class BackendResultInterpreter
         if (row == null) return "未知";
         string promotion = PromotionBadge(row);
         if (promotion.Length > 0) return promotion;
+        if (BackendJson.TryGetMap(row, "payment_capability", out _))
+        {
+            string methods = BackendJson.GetString(row, "payment_eligibility").Trim();
+            return methods.Length > 0 ? methods : "支付资格未知";
+        }
         if (BackendJson.TryGetMap(row, "probe", out var probe))
         {
             return IsProbeDeactivated(row) ? "账号停用" : ProbeStatusLabel(probe);
         }
         return ScanStatusLabel(BackendJson.GetString(row, "scan_status"));
+    }
+
+    /// <summary>Never echo vendor response text or arbitrary error codes in the desktop.</summary>
+    public static string PaymentEligibilityReason(Dictionary<string, object> capability)
+    {
+        string code = BackendJson.GetString(capability, "error_code");
+        string stage = BackendJson.GetString(capability, "error_stage");
+        if (code == "checkout_risk_blocked") return "Checkout 风控拒绝";
+        if (code == "checkout_creation_rate_limited") return "Checkout 限流";
+        if (code == "egress_country_mismatch") return "支付出口国家不符";
+        if (code == "egress_country_unverified" || code == "egress_probe_failed")
+            return "支付出口未验证";
+        if (stage == "checkout_create") return "Checkout 创建失败";
+        if (stage == "stripe_init" || stage == "stripe_elements") return "Stripe 读取失败";
+        return BackendJson.GetBool(capability, "ok") ? "" : "未取得明确支付方式";
     }
 
     /// <summary>

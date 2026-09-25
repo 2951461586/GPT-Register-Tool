@@ -1074,13 +1074,13 @@ class RegistrationEmailWorkflow:
         if otp_dispatch_verdict(s.otp_send_dump) == "stuck":
             print("  Email OTP send is still pending on the server; skipping the mailbox poll")
             self._abort("email_otp_send_stuck")
-        s.email_code = r._poll_registration_email_otp(
+        s.email_code = r.otp_poll.poll(
             s.mailbox,
-            subject_keyword=r.REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+            subject_keyword=r.otp_poll.subject_keywords,
             timeout=self._otp_poll_timeout(),
             issued_after_unix=s.otp_issued_after,
             proxy=s.proxy,
-            resend_callback=lambda: r._send_registration_email_otp(
+            resend_callback=lambda: r.otp_poll.resend(
                 s.session,
                 s.auth_base,
                 s.base_headers,
@@ -1154,7 +1154,7 @@ class RegistrationEmailWorkflow:
             print("  Email OTP was rejected; retrying latest mailbox code once...")
             retry_code = s.mailbox_service.poll_otp(
                 s.mailbox,
-                subject_keyword=r.REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+                subject_keyword=r.otp_poll.subject_keywords,
                 timeout=min(60, int(s.email_cfg.get("otp_timeout", 300))),
                 issued_after_unix=max(0, s.auth_flow_started - 5),
                 proxy=s.proxy,

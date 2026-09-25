@@ -416,8 +416,9 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private void ShowAccountScanResultDialog(string backendOutput, string title = "账号测活")
+        private void ShowAccountScanResultDialog(string backendOutput, BackendAccountResultKind resultKind)
         {
+            string title = BackendResultInterpreter.AccountResultTitle(resultKind);
             var summary = BackendResultInterpreter.TryExtractScanSummary(backendOutput);
             if (summary == null)
             {
@@ -441,6 +442,7 @@ namespace SmsWorkbench
             // Promotion rows carry their own badge; without this the panel would
             // show "AT有效 / HTTP 200" and hide the actual 优惠 answer.
             bool isPromotion = BackendResultInterpreter.IsPromotionRows(results);
+            bool isPaymentEligibility = resultKind == BackendAccountResultKind.PaymentEligibility;
             var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BackendJson.GetBool(r, "has_rt")).ToList();
             var noRtRows = directProbe ? results : results.Where(r => !BackendJson.GetBool(r, "has_rt")).ToList();
 
@@ -474,6 +476,11 @@ namespace SmsWorkbench
             {
                 Text = isPromotion
                     ? BackendResultInterpreter.PromotionSummary(results)
+                    : isPaymentEligibility
+                    ? "总数：" + BackendJson.GetString(summary, "total")
+                        + "    明确方式：" + BackendJson.GetString(summary, "success")
+                        + "    未知：" + BackendJson.GetString(summary, "failed")
+                        + "    保存失败：" + BackendJson.GetString(summary, "persist_failed")
                     : directProbe
                     ? FormatDirectProbeSummary(results, summary)
                     : "总数：" + BackendJson.GetString(summary, "total")
@@ -589,7 +596,13 @@ namespace SmsWorkbench
                 string email = BackendJson.GetString(row, "email");
                 string status;
                 string error;
-                if (BackendJson.TryGetMap(row, "probe", out var probe))
+                if (BackendJson.TryGetMap(row, "payment_capability", out var capability)
+                    && !BackendJson.TryGetMap(row, "probe", out _))
+                {
+                    status = BackendResultInterpreter.ResultRowStatus(row);
+                    error = BackendResultInterpreter.PaymentEligibilityReason(capability);
+                }
+                else if (BackendJson.TryGetMap(row, "probe", out var probe))
                 {
                     status = BackendResultInterpreter.ResultRowStatus(row);
                     if (BackendJson.TryGetMap(row, "relogin", out var relogin)
@@ -601,6 +614,11 @@ namespace SmsWorkbench
                     {
                         error = BackendJson.GetString(probe, "error");
                     }
+                }
+                else if (BackendJson.GetString(row, "error_code") == "account_not_found")
+                {
+                    status = "支付资格未知";
+                    error = "本地账号不存在";
                 }
                 else
                 {

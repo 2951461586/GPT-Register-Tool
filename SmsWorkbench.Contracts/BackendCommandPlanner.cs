@@ -1,7 +1,15 @@
 namespace SmsWorkbench
 {
+    public enum BackendAccountResultKind
+    {
+        None,
+        Liveness,
+        Promotion,
+        PaymentEligibility,
+    }
+
     /// <summary>
-    /// A fully resolved backend invocation: task label, CLI arguments, optional
+    /// A fully resolved backend invocation: task label, stable account-result kind, CLI arguments, optional
     /// per-command environment values, any temporary files the planner created,
     /// and an optional timeout override for the caller that executes the plan.
     /// </summary>
@@ -10,7 +18,8 @@ namespace SmsWorkbench
         IReadOnlyList<string> Arguments,
         IReadOnlyDictionary<string, string>? EnvironmentVariables = null,
         IReadOnlyList<string>? TemporaryFiles = null,
-        int? TimeoutMilliseconds = null)
+        int? TimeoutMilliseconds = null,
+        BackendAccountResultKind ResultKind = BackendAccountResultKind.None)
     {
         public IReadOnlyDictionary<string, string> Environment { get; } = EnvironmentVariables
             ?? new Dictionary<string, string>();
@@ -286,7 +295,8 @@ namespace SmsWorkbench
                 // snapshot after the Python batch deadline. Recovery runs a
                 // wider batch deadline (1680s) and needs the host to outlive
                 // it; a probe-only scan keeps the original 15 minutes.
-                TimeoutMilliseconds: (autoRelogin ? 30 : 15) * 60 * 1000);
+                TimeoutMilliseconds: (autoRelogin ? 30 : 15) * 60 * 1000,
+                ResultKind: BackendAccountResultKind.Liveness);
         }
 
         public static BackendCommandPlan CreateChangeEmail(
@@ -350,7 +360,39 @@ namespace SmsWorkbench
             return new BackendCommandPlan(
                 "账号优惠检测(" + Count(targets.Count) + ")",
                 args,
-                TemporaryFiles: tempFiles);
+                TemporaryFiles: tempFiles,
+                ResultKind: BackendAccountResultKind.Promotion);
+        }
+
+        public static BackendCommandPlan CreatePaymentEligibilityCheck(
+            IReadOnlyList<string> emails,
+            IReadOnlyList<string> proxyPool,
+            string? tempDirectory = null)
+        {
+            List<string> targets = RequireEmails(emails);
+            var args = new List<string>
+            {
+                "--check-payment-eligibility",
+                "--refresh-timeout", "45",
+                "--desktop-ipc",
+            };
+            var tempFiles = new List<string>();
+            if (targets.Count > 1)
+            {
+                string emailFile = WriteEmailFile(tempDirectory, "payment_eligibility_emails_", targets);
+                tempFiles.Add(emailFile);
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", targets[0] });
+            }
+            AppendProxyPool(args, proxyPool);
+            return new BackendCommandPlan(
+                "支付资格探测(" + Count(targets.Count) + ")",
+                args,
+                TemporaryFiles: tempFiles,
+                ResultKind: BackendAccountResultKind.PaymentEligibility);
         }
 
         public static BackendCommandPlan CreateQuotaUsageProbe(

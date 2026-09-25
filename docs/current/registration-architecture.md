@@ -6,6 +6,11 @@
 facade patches made before `run_email` are respected; changing a facade symbol
 mid-run no longer changes an already bound workflow. Isolated tests may inject
 a fake operations object.
+The OTP mailbox polling stage consumes a small immutable
+`RegistrationOtpPollingOperations` group (subject keywords, poll and resend),
+bound from the facade on each invocation. Other `RegistrationOperations`
+dependencies remain flat; this is an incremental interface change, not a new
+workflow or a change to persisted state.
 
 `registration_runtime.py` separates mutable state into resources, identity,
 auth, OTP, account and outcome groups. Flat field access is a transitional
@@ -16,6 +21,26 @@ needs. Full immutable stage input/output migration remains future work.
 `RegistrationStageRunner.run_stage` is the only stage execution Seam. Each stage
 mutates the same `RegistrationRuntimeState`; there is no test-only dict-delta
 stage framework or parallel cleanup lifecycle.
+
+Batch reports include a token-free `funnel` summary from
+`registration_funnel.py`. `registered_per_attempted` uses eligible attempted
+mailboxes, after the already-registered/dead-end filter. Promotion is a
+separate measurement: `successful_per_registered` reports promotion coverage,
+and `eligible_per_successful_probe` divides Plus-trial eligibility by
+successful `accounts/check` probes, **not** by registrations or Checkout
+requests. If promotion checks are disabled or all probes fail, the trial rate
+is `null`, not zero. Failures are grouped by allow-listed stage and
+failure class; identity checks count matches, mismatches and unknowns without
+persisting device IDs, proxy credentials, tokens or raw upstream errors. A
+target-AT200 report combines only these safe per-round counts. The report
+cannot infer why the server did or did not offer a trial.
+
+Before protocol batches touch the mailbox pool or proxy preflight, a local
+Sentinel readiness check verifies the pinned runner bundle and Node
+availability. It does not run Node, contact a vendor or consume a mailbox.
+Without a configured legacy fallback it fails with a path-free reason code;
+with fallback enabled it warns that fallback remains available, but does not
+claim the fallback has succeeded.
 
 The email-registration path is AT-only. Its impossible OAuth/phone readiness
 branches have been removed. The separate SMS entry point, account recovery,
@@ -121,3 +146,6 @@ provider-side account revocation.
 Do not use historical mixed test/live progress rows to claim a success-rate
 trend. A Gmail/ReMail comparison requires explicit sample and budget approval,
 valid owned mailbox credentials, matched conditions and separate run IDs.
+Changing passwordless/password registration, proxy affinity or fingerprint
+selection requires the same approval and controlled comparison; offline
+transaction tests alone do not establish a higher Plus-trial offer rate.

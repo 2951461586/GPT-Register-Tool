@@ -119,7 +119,7 @@ def enroll_totp(self) -> None:
     def poll_reauth_otp(email: str, issued_after_unix: int = 0, timeout: int = 120, **kwargs: Any) -> str:
         return s.mailbox_service.poll_otp(
             s.mailbox,
-            subject_keyword=r.REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+            subject_keyword=r.otp_poll.subject_keywords,
             timeout=int(timeout or 120),
             issued_after_unix=issued_after_unix,
             proxy=s.proxy,

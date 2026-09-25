@@ -333,7 +333,7 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
     proxy = transient.get("proxy")
 
     if job.get("kind") == HealthCheckKind.PLAN.value:
-        from .account_promotion import refresh_promotion_statuses
+        from .promotion_batch import refresh_promotion_statuses
 
         report = refresh_promotion_statuses(
             emails=[email],

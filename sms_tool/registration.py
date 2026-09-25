@@ -197,7 +197,7 @@ from .utils import (
     think_stage,
 )
 from .registration_drivers.base import normalize_registration_driver
-from .registration_operations import RegistrationOperations
+from .registration_operations import RegistrationOperations, RegistrationOtpPollingOperations
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = f"{REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD}|{LOGIN_EMAIL_OTP_SUBJECT_KEYWORD}"
@@ -229,7 +229,6 @@ def _email_registration_operations() -> RegistrationOperations:
     """
     return RegistrationOperations.bind(
         {
-            "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS": REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
             "current_config_data": current_config_data,
             "runtime_config_scope": runtime_config_scope,
             "validate_config": validate_config,
@@ -276,8 +275,11 @@ def _email_registration_operations() -> RegistrationOperations:
             "_ensure_mailbox_account": _ensure_mailbox_account,
             "_is_wrong_email_otp_code": _is_wrong_email_otp_code,
             "_mailbox_snapshot": _mailbox_snapshot,
-            "_poll_registration_email_otp": _poll_registration_email_otp,
-            "_send_registration_email_otp": _send_registration_email_otp,
+            "otp_poll": RegistrationOtpPollingOperations(
+                subject_keywords=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
+                poll=_poll_registration_email_otp,
+                resend=_send_registration_email_otp,
+            ),
             "_snapshot_mailbox_message": _snapshot_mailbox_message,
             "_validate_email_otp": _validate_email_otp,
             "_failure_result": _failure_result,

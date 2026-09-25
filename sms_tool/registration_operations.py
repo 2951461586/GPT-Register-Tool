@@ -3,12 +3,9 @@
 The facade binds this once per invocation, inside the caller's patch/config
 scope. A workflow never receives a live module or arbitrary module attributes.
 
-Attribute access stays flat (``r._tick``, not ``r.timing._tick``). The workflow
-in ``registration_handlers.py`` reads every dependency through a single ``r.``
-prefix, and ``tests/test_registration_operations.py`` asserts the field set is
-*exactly* the set of ``r.<name>`` reads -- so nested groups would break both.
-The grouping below is therefore ordering + documentation only; see
-``OPERATION_GROUPS`` for the machine-readable partition.
+Most dependencies remain flat for compatibility. OTP mailbox polling owns a
+small immutable group, bound alongside the flat dependencies on each call.
+``OPERATION_GROUPS`` partitions the top-level fields.
 """
 
 from __future__ import annotations
@@ -16,13 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Callable, Mapping
 
-# Machine-readable grouping. Documentation for humans and tooling -- it does not
-# change attribute access. Held to an exact partition of the dataclass fields by
+# Machine-readable grouping. Held to an exact partition of the dataclass fields by
 # tests/test_registration_operations.py::test_operation_groups_partition_fields,
 # so adding a field without filing it into a group fails the suite.
 OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
     "config": (
-        "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS",
         "current_config_data",
         "runtime_config_scope",
         "validate_config",
@@ -81,8 +76,7 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
         "_ensure_mailbox_account",
         "_is_wrong_email_otp_code",
         "_mailbox_snapshot",
-        "_poll_registration_email_otp",
-        "_send_registration_email_otp",
+        "otp_poll",
         "_snapshot_mailbox_message",
         "_validate_email_otp",
     ),
@@ -102,9 +96,15 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
 
 
 @dataclass(frozen=True)
+class RegistrationOtpPollingOperations:
+    subject_keywords: str
+    poll: Callable[..., Any]
+    resend: Callable[..., Any]
+
+
+@dataclass(frozen=True)
 class RegistrationOperations:
     # --- config & runtime scope -------------------------------------------
-    REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS: str
     current_config_data: Callable[..., Any]
     runtime_config_scope: Callable[..., Any]
     validate_config: Callable[..., Any]
@@ -163,8 +163,7 @@ class RegistrationOperations:
     _ensure_mailbox_account: Callable[..., Any]
     _is_wrong_email_otp_code: Callable[..., Any]
     _mailbox_snapshot: Callable[..., Any]
-    _poll_registration_email_otp: Callable[..., Any]
-    _send_registration_email_otp: Callable[..., Any]
+    otp_poll: RegistrationOtpPollingOperations
     _snapshot_mailbox_message: Callable[..., Any]
     _validate_email_otp: Callable[..., Any]
 

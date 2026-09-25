@@ -88,7 +88,7 @@ def scan_accounts(
     quota_relogin_on_401: bool = False,
     relogin_mode: str = "auto",
     deep_probe: bool = False,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     emails = _unique_emails(emails)
     workers = max(1, min(int(workers or 1), 8, len(emails) or 1))
     print(f"[*] One-click account scan: {len(emails)} account(s), workers={workers}")
@@ -154,9 +154,13 @@ def scan_accounts(
         1 for r in results if ((r.get("workspace") or {}).get("status") == "workspace_check_inconclusive")
     )
     failed_count = len(results) - ok_count - deactivated_count - phone_required_count
+    persist_failed = sum(
+        1 for r in results
+        if isinstance(r.get("persistence"), dict) and not r["persistence"].get("persisted")
+    )
     at_invalid_count = sum(1 for r in results if str(r.get("scan_status") or r.get("status") or "").lower() in {"at_invalid", "access_token_invalid", "token_invalidated"})
     summary = {
-        "ok": failed_count == 0,
+        "ok": failed_count == 0 and persist_failed == 0,
         "total": len(results),
         "alive": ok_count,
         "account_deactivated": deactivated_count,
@@ -168,6 +172,7 @@ def scan_accounts(
         "workspace_fallback_free": workspace_free_fallback_count,
         "workspace_inconclusive": workspace_inconclusive_count,
         "failed": max(0, failed_count),
+        "persist_failed": persist_failed,
         "results": [_public_scan_result(r) for r in results],
         "overview": [_scan_overview(r) for r in results],
     }
@@ -532,9 +537,26 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
     if json_path:
         try:
             atomic_write_text(json_path, json.dumps(updated, ensure_ascii=False, indent=2))
-        except Exception as exc:
-            print(f"[!] Failed to update session JSON {json_path}: {exc}")
-    upsert_account(updated, json_path=json_path)
+            session_saved = True
+        except (OSError, TypeError, ValueError):
+            session_saved = False
+    else:
+        session_saved = True
+    try:
+        account_saved = bool(upsert_account(updated, json_path=json_path))
+    except Exception:
+        account_saved = False
+    persistence = {
+        "session_saved": session_saved,
+        "account_saved": account_saved,
+        "persisted": session_saved and account_saved,
+    }
+    if not session_saved:
+        persistence["error_code"] = "session_write_failed"
+    elif not account_saved:
+        persistence["error_code"] = "account_write_failed"
+    result["persistence"] = persistence
+    return persistence
 
 
 def _result(

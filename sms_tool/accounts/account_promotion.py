@@ -5,24 +5,26 @@ extracts the account's current plan plus any Plus-trial / discount eligibility.
 Referenced from the turb-gpt-free-register plan-check flow, adapted to this
 project's curl_cffi + auth-header stack. The condensed ``promotion_status`` label
 is what the desktop 优惠状态 column shows; the full parse is persisted for detail.
+
+This module owns the **probe only**. Running it across many saved accounts --
+proxy rotation, 429 throttling, the optional payment-eligibility pass,
+persistence and progress events -- lives in
+:mod:`sms_tool.accounts.promotion_batch`. The split keeps the payment catalog off
+the desktop read path, which imports this module.
 """
 
 from __future__ import annotations
 
-import base64
-import json
-import logging
-import re
-import time
-import uuid
 from typing import Any
 
 from curl_cffi import requests as curl_requests
 
-logger = logging.getLogger(__name__)
-
-from .account_identity import account_identity, bind_account_identity
-from .account_liveness import account_chatgpt_id, browser_fetch_for_account
+from .account_identity import (
+    access_token_of,
+    account_chatgpt_id,
+    bind_account_identity,
+    chatgpt_account_id_from_token,
+)
 from ..auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
@@ -33,47 +35,16 @@ from ..promotion_states import (
     PROMOTION_STATE_SUBSCRIBED,
     PROMOTION_STATE_TRIAL_ELIGIBLE,
     PROMOTION_STATE_UNKNOWN,
-    promotion_status_with_eligibility,
 )
-from ..proxy_routing import (
-    operation_proxy_candidates,
-    parse_lane_proxy_pool,
-    proxy_pool_for,
-    select_operation_proxy,
-    select_operation_proxy_candidate,
-)
+from ..proxy_routing import select_operation_proxy_candidate
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
 
-# Rate-limit response: worth one delayed retry. Bounds exist so a hostile or
-# fat-fingered ``Retry-After`` cannot park a batch run.
-PROMOTION_THROTTLE_STATUS = 429
-PROMOTION_THROTTLE_DEFAULT_BACKOFF = 1.5
-PROMOTION_THROTTLE_MAX_BACKOFF = 5.0
-
 
 def _account_token(account: Any) -> str:
-    if isinstance(account, str):
-        return account.strip()
-    if isinstance(account, dict):
-        return str(account.get("access_token") or "").strip()
-    return ""
-
-
-def _jwt_account_id(token: str) -> str:
-    parts = str(token or "").split(".")
-    if len(parts) < 2:
-        return ""
-    payload = parts[1] + "=" * (-len(parts[1]) % 4)
-    try:
-        data = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")).decode("utf-8"))
-    except Exception:
-        return ""
-    auth = data.get("https://api.openai.com/auth") if isinstance(data, dict) else {}
-    if isinstance(auth, dict):
-        return str(auth.get("chatgpt_account_id") or "").strip()
-    return ""
+    """Back-compat shim; the canonical reader is ``account_identity.access_token_of``."""
+    return access_token_of(account)
 
 
 def parse_accounts_check(body: Any, *, account_id: str = "") -> dict[str, Any]:
@@ -207,7 +178,7 @@ def check_account_promotion(
     resolved_proxy = selected_proxy.proxy if selected_proxy else None
     proxy_source = selected_proxy.source if selected_proxy else "direct"
 
-    account_id = account_chatgpt_id(account) if isinstance(account, dict) else _jwt_account_id(token)
+    account_id = account_chatgpt_id(account) if isinstance(account, dict) else chatgpt_account_id_from_token(token)
     did = str(identity.get("device_id") or (account.get("device_id") if isinstance(account, dict) else "") or "")
     headers = chatgpt_headers(did, accept="*/*", referer="https://chatgpt.com/")
     headers["Authorization"] = f"Bearer {token}"
@@ -285,333 +256,11 @@ def check_account_promotion(
     return parsed
 
 
-def refresh_promotion_statuses(
-    emails: list[str] | None = None,
-    workers: int = 4,
-    proxy: str | None = None,
-    timeout: int = 20,
-    proxy_pool: str | list[str] | None = None,
-    payment_eligibility: bool = True,
-) -> dict[str, Any]:
-    """Probe plan/promotion for saved accounts and persist ``promotion_status``.
-
-    When ``payment_eligibility`` is set (the default), each account that kept a
-    live access token also gets one side-effect-free Checkout + Stripe init
-    probe that enumerates the payment methods Stripe offers it; the result is
-    persisted as ``raw_json.payment_capability`` and rendered next to the
-    promotion badge in the desktop 优惠状态 column.  See
-    :mod:`sms_tool.accounts.account_payment_eligibility` for why it is one probe
-    rather than one per method.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    from ..storage import get_account_record, list_paypal_accounts, mark_promotion_status
-
-    requested = [str(e or "").strip().lower() for e in (emails or []) if str(e or "").strip()]
-    if not requested:
-        requested = [str(row.get("email") or "").strip().lower() for row in list_paypal_accounts()]
-    requested = list(dict.fromkeys(e for e in requested if e))
-    accounts: list[dict[str, Any]] = []
-    for email in requested:
-        record = get_account_record(email)
-        data: dict[str, Any] = {"email": email}
-        if record:
-            try:
-                data.update(json.loads(record.get("raw_json") or "{}"))
-            except Exception:
-                pass
-            data.setdefault("access_token", record.get("access_token") or "")
-        accounts.append(data)
-
-    max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
-    results: list[dict[str, Any]] = []
-    run_id = uuid.uuid4().hex
-    _emit_account_batch_event(run_id, "batch_started", "running", total=len(accounts), detail="账号优惠检测开始")
-
-    def run(account: dict[str, Any]) -> dict[str, Any]:
-        email = str(account.get("email") or "").strip().lower()
-        used_proxy = proxy
-        try:
-            with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
-                browser_identity = account_identity(account).get("browser_identity") or {}
-                if browser_identity and browser_fetch is None:
-                    probe = {
-                        "ok": False,
-                        "promotion_status": "检测失败",
-                        "error": "browser_context_unavailable",
-                    }
-                else:
-                    # Stateless/imported accounts have no persisted identity
-                    # affinity. Rotate through the supplied health pool when a
-                    # proxy-only timeout occurs so one dead exit does not make
-                    # the same account fail on every run.
-                    candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
-                    probe = None
-                    for index, candidate in enumerate(candidates):
-                        probe = check_account_promotion(
-                            account,
-                            proxy=candidate,
-                            timeout=timeout,
-                            browser_fetch=browser_fetch,
-                        )
-                        used_proxy = candidate
-                        if probe.get("ok"):
-                            break
-                        # A 429 is per-exit *and* short-lived: sleep first, then
-                        # rotate to a fresh IP when the pool has one left, and
-                        # fall back to one delayed retry on the same exit once
-                        # the pool is exhausted. Total attempts are therefore
-                        # bounded at len(candidates) + 1, so a sustained 429
-                        # cannot multiply the batch duration.
-                        backoff = _promotion_throttle_backoff(probe)
-                        if backoff is not None:
-                            time.sleep(backoff)
-                            if index >= len(candidates) - 1:
-                                probe = check_account_promotion(
-                                    account,
-                                    proxy=candidate,
-                                    timeout=timeout,
-                                    browser_fetch=browser_fetch,
-                                )
-                                break
-                            continue
-                        if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
-                            break
-                    probe = probe or {
-                        "ok": False,
-                        "promotion_status": "检测失败",
-                        "error": "no_promotion_proxy_available",
-                    }
-            label = str(probe.get("promotion_status") or "")
-            if not str(probe.get("promotion_state") or "").strip():
-                probe["promotion_state"] = promotion_status_code(probe)
-            # A dead access token fails Checkout identically, so skip the extra
-            # two requests instead of burning a proxy slot on a known-bad AT.
-            eligibility: dict[str, Any] = {}
-            if payment_eligibility and not _promotion_probe_is_unauthorized(probe):
-                eligibility = _probe_payment_eligibility(account, proxy=used_proxy, timeout=timeout)
-            persisted = (
-                mark_promotion_status(
-                    email,
-                    label,
-                    promotion_result=probe,
-                    payment_capability=eligibility or None,
-                )
-                if email
-                else False
-            )
-            result = {
-                "email": email,
-                "ok": bool(probe.get("ok")),
-                "promotion_status": label,
-                "promotion_state": str(probe.get("promotion_state") or ""),
-                "persisted": bool(persisted),
-                "probe": probe,
-            }
-            eligibility_label = ""
-            if eligibility:
-                from .account_payment_eligibility import payment_eligibility_label
-
-                result["payment_capability"] = eligibility
-                eligibility_label = payment_eligibility_label(eligibility)
-                if eligibility_label:
-                    result["payment_eligibility"] = eligibility_label
-            # Pre-composed so every consumer (desktop grid, detail panel, task
-            # result list) renders the same string instead of each re-deriving
-            # the separator rule.
-            result["promotion_display"] = promotion_status_with_eligibility(label, eligibility_label)
-        except Exception as exc:
-            result = {"email": email, "ok": False, "promotion_status": "检测失败", "promotion_state": PROMOTION_STATE_PROBE_FAILED, "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
-        _emit_account_batch_event(
-            run_id,
-            "account_completed",
-            "completed" if result.get("ok") else "failed",
-            account_ref=email,
-            total=len(accounts),
-            detail=str(result.get("promotion_status") or "检测完成"),
-        )
-        return result
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(run, account) for account in accounts]
-        for future in as_completed(futures):
-            results.append(future.result())
-
-    success = sum(1 for item in results if item.get("ok"))
-    unauthorized = sum(1 for item in results if _promotion_status_code(item) == 401)
-    transport_failed = sum(1 for item in results if _promotion_failure_class(item) == "transport")
-    persist_failed = sum(1 for item in results if not item.get("persisted"))
-    # Owned here, not recounted by each caller. commands/registration.py used to
-    # derive this itself, which left the CLI promotion path with no such key at
-    # all -- two entry points, two different report shapes.
-    trial_eligible = sum(
-        1
-        for item in results
-        if isinstance(item.get("probe"), dict)
-        and bool(item["probe"].get("plus_trial_eligible"))
-    )
-    eligibility_results = [
-        item["payment_capability"]
-        for item in results
-        if isinstance(item.get("payment_capability"), dict)
-    ]
-    eligibility_ok = sum(1 for item in eligibility_results if item.get("ok"))
-    # Distinct method tokens across the batch: the batch-level answer to "which
-    # payment rails do these accounts actually have".
-    from .account_payment_eligibility import payment_method_tokens
-
-    methods_seen = sorted({token for item in eligibility_results for token in payment_method_tokens(item)})
-    _emit_account_batch_event(
-        run_id,
-        "batch_completed",
-        "completed" if success == len(results) else "failed",
-        total=len(results),
-        detail=(
-            f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
-            f"传输失败 {transport_failed}，支付资格 {eligibility_ok}/{len(eligibility_results)}"
-        ),
-    )
-    return {
-        "ok": success == len(results) if results else False,
-        "total": len(results),
-        "success": success,
-        "failed": len(results) - success,
-        "unauthorized": unauthorized,
-        "transport_failed": transport_failed,
-        "persist_failed": persist_failed,
-        "trial_eligible": trial_eligible,
-        "payment_eligibility_ok": eligibility_ok,
-        "payment_eligibility_failed": len(eligibility_results) - eligibility_ok,
-        "payment_methods_seen": methods_seen,
-        "results": results,
-    }
-
-
-def _promotion_proxy_candidates(account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None) -> list[str | None]:
-    """Return candidates from the canonical operation-proxy decision point."""
-    candidates = operation_proxy_candidates(
-        account,
-        operation="promotion",
-        explicit=proxy,
-        pool=proxy_pool if parse_lane_proxy_pool(proxy_pool) else None,
-        config=CFG,
-    )
-    return [item.proxy for item in candidates] or [None]
-
-
-def _retryable_promotion_transport(probe: dict[str, Any] | None) -> bool:
-    if not isinstance(probe, dict) or probe.get("ok"):
-        return False
-    if probe.get("status_code"):
-        return False
-    error = str(probe.get("error") or "").lower()
-    return any(marker in error for marker in ("curl: (5)", "curl: (7)", "curl: (28)", "timed out", "timeout"))
-
-
-def _promotion_throttle_backoff(probe: dict[str, Any] | None) -> float | None:
-    """Seconds to wait before retrying a throttled probe, else ``None``.
-
-    Only HTTP 429 is throttled. **401 is deliberately not retryable** -- the
-    access token is dead, so a second attempt just burns a proxy slot and adds
-    latency (``test_promotion_401_stays_in_promotion_namespace`` locks that in).
-    When the endpoint sends ``Retry-After`` we honour it, clamped so a hostile
-    or misconfigured value cannot stall a batch run.
-    """
-    if not isinstance(probe, dict) or probe.get("ok"):
-        return None
-    try:
-        code = int(probe.get("status_code") or 0)
-    except (TypeError, ValueError):
-        return None
-    if code != PROMOTION_THROTTLE_STATUS:
-        return None
-    try:
-        seconds = float(str(probe.get("retry_after") or "").strip())
-    except (TypeError, ValueError):
-        return PROMOTION_THROTTLE_DEFAULT_BACKOFF
-    if seconds < 0:
-        return PROMOTION_THROTTLE_DEFAULT_BACKOFF
-    return min(seconds, PROMOTION_THROTTLE_MAX_BACKOFF)
-
-
-def _promotion_status_code(item: dict[str, Any]) -> int:
-    try:
-        return int((item.get("probe") or {}).get("status_code") or 0)
-    except (TypeError, ValueError, AttributeError):
-        return 0
-
-
-def _promotion_probe_is_unauthorized(probe: Any) -> bool:
-    """True when the promotion probe proved the access token is dead."""
-    if not isinstance(probe, dict):
-        return False
-    if int(probe.get("status_code") or 0) == 401:
-        return True
-    return str(probe.get("promotion_state") or "").strip() == PROMOTION_STATE_AUTH_INVALID
-
-
-def _probe_payment_eligibility(
-    account: dict[str, Any],
-    *,
-    proxy: str | None,
-    timeout: int,
-) -> dict[str, Any]:
-    """Enumerate the account's payment methods, never raising into the batch.
-
-    Imported lazily: ``account_payment_eligibility`` pulls in the payment
-    catalog at import time, and this module is loaded by the desktop read path.
-    """
-    from .account_payment_eligibility import probe_account_payment_eligibility
-
-    try:
-        return probe_account_payment_eligibility(
-            account,
-            proxy=proxy,
-            timeout=max(5, int(timeout or 45)),
-        )
-    except Exception as exc:  # noqa: BLE001 - eligibility is best-effort
-        logger.debug("payment eligibility probe failed", exc_info=True)
-        return {
-            "ok": False,
-            "error": str(exc)[:200],
-            "error_code": "eligibility_probe_exception",
-            "error_stage": "payment_eligibility",
-            "retryable": True,
-        }
-
-
-def _promotion_failure_class(item: dict[str, Any]) -> str:
-    if item.get("ok"):
-        return "ok"
-    code = _promotion_status_code(item)
-    if code == 401:
-        return "unauthorized"
-    probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
-    if not code and _retryable_promotion_transport(probe):
-        return "transport"
-    return "probe"
-
-
-def _emit_account_batch_event(
-    run_id: str,
-    stage: str,
-    status: str,
-    *,
-    account_ref: str = "",
-    total: int = 0,
-    detail: str = "",
-) -> None:
-    try:
-        from ..desktop_ipc import emit_event
-
-        emit_event({
-            "domain": "account_promotion",
-            "run_id": run_id,
-            "account_ref": account_ref,
-            "stage": stage,
-            "status": status,
-            "total": int(total or 0),
-            "detail": detail,
-        })
-    except Exception:
-        pass
+__all__ = [
+    "ACCOUNTS_CHECK_PATH",
+    "ACCOUNTS_CHECK_URL",
+    "check_account_promotion",
+    "parse_accounts_check",
+    "promotion_status_code",
+    "promotion_status_label",
+]

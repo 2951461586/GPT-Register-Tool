@@ -6,7 +6,7 @@ import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_router
@@ -24,6 +24,15 @@ class FakeResponse:
 
     def json(self):
         return self._body
+
+
+class ReMailFrozenConfigTests(unittest.TestCase):
+    def test_provider_uses_frozen_runtime_configuration(self):
+        remail = MappingProxyType({"api_key": "test-key", "email_suffix": "icloud.com"})
+        config = MappingProxyType({"email_registration": MappingProxyType({"remail": remail})})
+        with patch.object(mailbox_remail, "current_config_data", return_value=config):
+            self.assertIs(mailbox_remail._remail_cfg(), remail)
+            self.assertEqual(mailbox_remail._order_options()[2]["emailSuffix"], "icloud.com")
 
 
 class RegistrationPhonePoolTests(unittest.TestCase):
@@ -79,9 +88,13 @@ class RegistrationPhonePoolTests(unittest.TestCase):
              patch.object(cli, "runtime_file", return_value=Path(tmp) / "report.json"), \
              redirect_stdout(io.StringIO()):
             cli._run_target_at200(args, Path(tmp))
+            report = json.loads((Path(tmp) / "report.json").read_text(encoding="utf-8"))
 
         self.assertIs(run_batch.call_args.kwargs["phone_pool"], phone_pool)
         self.assertFalse(run_batch.call_args.kwargs["codex_oauth"])
+        self.assertEqual(report["funnel"]["registered"], 1)
+        self.assertEqual(report["funnel"]["registered_per_attempted"], 1)
+        self.assertIsNone(report["funnel"]["promotion"]["trial_eligible"])
 
 
 def order_payload(index=1, mode="code"):

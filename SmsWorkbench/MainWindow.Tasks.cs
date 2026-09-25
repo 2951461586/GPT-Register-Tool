@@ -112,10 +112,12 @@ namespace SmsWorkbench
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
-        private void RunAccountBatchBackend(string taskName, List<string> args, string domain, int total, int? timeoutMs = null)
-            => RunUiTask(() => RunBackendAsync(taskName, args, domain, total, timeoutMs, ct: _lifetimeCts.Token));
+        private void RunAccountBatchBackend(BackendCommandPlan plan, string domain, int total)
+            => RunUiTask(() => RunBackendAsync(
+                plan.TaskName, plan.Arguments.ToList(), domain, total, plan.TimeoutMilliseconds,
+                ct: _lifetimeCts.Token, resultKind: plan.ResultKind));
 
-        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, int? timeoutMs = null, CancellationToken ct = default)
+        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, int? timeoutMs = null, CancellationToken ct = default, BackendAccountResultKind resultKind = BackendAccountResultKind.None)
         {
             if (backendTasks.IsRunning)
             {
@@ -226,7 +228,7 @@ namespace SmsWorkbench
                 // A killed Python process may not emit its terminal envelope.
                 // Recover the rows already persisted by the liveness workers so
                 // the operator still gets a useful partial result dialog.
-                if (result.TimedOut && taskName.StartsWith("账号测活", StringComparison.OrdinalIgnoreCase))
+                if (result.TimedOut && resultKind == BackendAccountResultKind.Liveness)
                 {
                     string snapshot = TryReadLatestLivenessSnapshot();
                     if (snapshot.Length > 0)
@@ -242,14 +244,14 @@ namespace SmsWorkbench
                 StatusText = taskName + " 已结束";
                 RefreshPools();
                 ScrollTaskGridToBottom();
-                if (BackendResultInterpreter.IsAccountScanResultTask(taskName))
+                if (BackendResultInterpreter.HasAccountResults(resultKind))
                 {
                     string output;
                     lock (backendOutputLock)
                     {
                         output = backendOutput.ToString();
                     }
-                    ShowAccountScanResultDialog(output, BackendResultInterpreter.AccountScanResultTitle(taskName));
+                    ShowAccountScanResultDialog(output, resultKind);
                 }
             }
             catch (OperationCanceledException)

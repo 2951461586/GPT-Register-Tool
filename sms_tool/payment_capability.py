@@ -47,12 +47,14 @@ class CapabilityProbeError(RuntimeError):
         error_stage: str,
         retryable: bool,
         status: str = "failed",
+        http_status: int = 0,
     ) -> None:
         super().__init__(message)
         self.error_code = error_code
         self.error_stage = error_stage
         self.retryable = retryable
         self.status = status
+        self.http_status = http_status
 
 
 class ChatGPTStripeCapabilityTransport:
@@ -70,6 +72,13 @@ class ChatGPTStripeCapabilityTransport:
         from . import gen_pp_link
 
         cookie_header = str((auth_context or {}).get("cookie_header") or "")
+        device_id = str((auth_context or {}).get("device_id") or (auth_context or {}).get("oai_did") or "").strip()
+        headers = {
+            "x-openai-target-path": CHECKOUT_PATH,
+            "x-openai-target-route": CHECKOUT_PATH,
+        }
+        if device_id:
+            headers["OAI-Device-Id"] = device_id
         try:
             response = gen_pp_link._checkout_post(
                 CHECKOUT_URL,
@@ -78,10 +87,7 @@ class ChatGPTStripeCapabilityTransport:
                 cookie_header,
                 proxy,
                 timeout,
-                extra_headers={
-                    "x-openai-target-path": CHECKOUT_PATH,
-                    "x-openai-target-route": CHECKOUT_PATH,
-                },
+                extra_headers=headers,
             )
         except Exception as exc:
             raise CapabilityProbeError(
@@ -152,6 +158,82 @@ class ChatGPTStripeCapabilityTransport:
             failure_code="stripe_init_failed",
         )
 
+    def custom_checkout_session(
+        self,
+        contract: CheckoutRequestContract,
+        checkout: CheckoutSessionContract,
+        *,
+        access_token: str,
+        auth_context: dict[str, Any],
+        proxy: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        from . import gen_pp_link
+
+        processor = checkout.processor_entity
+        if not processor or not processor.replace("_", "").isalpha():
+            raise CapabilityProbeError(
+                "custom checkout processor invalid",
+                error_code="checkout_session_invalid", error_stage="checkout_response", retryable=False,
+            )
+        try:
+            cookie_header = str(auth_context.get("cookie_header") or "")
+            device_id = str(auth_context.get("device_id") or auth_context.get("oai_did") or "").strip()
+            response = gen_pp_link._checkout_get(
+                f"https://chatgpt.com/backend-api/payments/checkout/{processor}/{checkout.checkout_session_id}",
+                access_token, cookie_header, proxy, timeout,
+                extra_headers={"OAI-Device-Id": device_id} if device_id else None,
+            )
+            return _response_json(
+                response, stage="custom_checkout",
+                unauthorized_code="custom_checkout_unauthorized", failure_code="custom_checkout_failed",
+            )
+        except CapabilityProbeError:
+            raise
+        except Exception:
+            raise CapabilityProbeError(
+                "custom checkout transport failed",
+                error_code="custom_checkout_transport_failed", error_stage="custom_checkout", retryable=True,
+                status="unknown",
+            ) from None
+
+    def stripe_elements(
+        self,
+        contract: CheckoutRequestContract,
+        checkout: CheckoutSessionContract,
+        init_payload: dict[str, Any],
+        *,
+        proxy: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        from . import gen_pp_link
+
+        evidence = StripeCapabilityEvidence.from_payload(init_payload)
+        if evidence.amount_minor is None or not evidence.currency_present:
+            return {}
+        session = gen_pp_link._new_session(proxy)
+        try:
+            params = {
+                "checkout_session_id": checkout.checkout_session_id,
+                "key": checkout.publishable_key,
+                "currency": evidence.currency.lower(),
+                "locale": contract.payment_locale,
+                "type": "deferred_intent",
+                "deferred_intent[mode]": "subscription",
+                "deferred_intent[amount]": str(evidence.amount_minor),
+                "deferred_intent[currency]": evidence.currency.lower(),
+                "_stripe_version": contract.stripe_init_payload(checkout.publishable_key)["_stripe_version"],
+            }
+            for index, method in enumerate(evidence.payment_method_types):
+                params[f"deferred_intent[payment_method_types][{index}]"] = method
+            response = session.get("https://api.stripe.com/v1/elements/sessions", params=params, timeout=timeout)
+            return _response_json(
+                response, stage="stripe_elements",
+                unauthorized_code="stripe_elements_unauthorized", failure_code="stripe_elements_failed",
+            )
+        finally:
+            session.close()
+
 
 def build_capability_probe_result(
     contract: CheckoutRequestContract,
@@ -167,7 +249,9 @@ def build_capability_probe_result(
     eligible: bool | None = available
     expected_currency = str(contract.currency or "").strip().upper()
     actual_currency = str(evidence.currency or "").strip().upper()
-    if available and not evidence.currency_present:
+    if evidence.payment_method_types and evidence.currency_present and expected_currency and actual_currency != expected_currency and not available:
+        classification, eligible, reason = "unknown", None, "checkout_currency_mismatch"
+    elif available and not evidence.currency_present:
         classification, eligible, reason = "unknown", None, "checkout_currency_unknown"
     elif available and expected_currency and actual_currency != expected_currency:
         classification, eligible, reason = "ineligible", False, "checkout_currency_mismatch"
@@ -304,6 +388,22 @@ def payment_method_capability_probe(
             require_zero=require_zero,
         )
     try:
+        context = dict(auth_context) if isinstance(auth_context, dict) else {}
+        device_id = str(context.get("device_id") or "").strip()
+        oai_did = str(context.get("oai_did") or "").strip()
+        cookie_did = next((
+            part.partition("=")[2].strip().strip('"')
+            for part in str(context.get("cookie_header") or "").split(";")
+            if part.partition("=")[0].strip().lower() == "oai-did"
+        ), "")
+        if len({value for value in (device_id, oai_did, cookie_did) if value}) > 1:
+            raise CapabilityProbeError(
+                "Checkout device identity conflicts with account cookie",
+                error_code="checkout_identity_mismatch",
+                error_stage="checkout_create", retryable=False,
+            )
+        if not device_id and (oai_did or cookie_did):
+            context["device_id"] = oai_did or cookie_did
         contract = CheckoutRequestContract.for_payment_method(
             method,
             billing_country=billing_country or checkout_country,
@@ -318,25 +418,62 @@ def payment_method_capability_probe(
         checkout = wire.create_checkout(
             contract,
             access_token=str(access_token).strip(),
-            auth_context=auth_context if isinstance(auth_context, dict) else {},
+            auth_context=context,
             proxy=_proxy_text(checkout_proxy or proxy),
             timeout=max(5, int(timeout or 45)),
         )
-        init_payload = wire.stripe_init(
-            contract,
-            checkout,
-            proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
-            timeout=max(5, int(timeout or 45)),
-        )
+        evidence_sources: list[str] = []
+        if checkout.checkout_session_id.startswith("oaics_"):
+            if not hasattr(wire, "custom_checkout_session"):
+                raise CapabilityProbeError(
+                    "custom checkout reader unavailable",
+                    error_code="custom_checkout_unavailable",
+                    error_stage="custom_checkout", retryable=False, status="unknown",
+                )
+            init_payload = wire.custom_checkout_session(
+                contract, checkout, access_token=str(access_token).strip(),
+                auth_context=context,
+                proxy=_proxy_text(checkout_proxy or proxy), timeout=max(5, int(timeout or 45)),
+            )
+            if StripeCapabilityEvidence.from_payload(init_payload).payment_method_types:
+                evidence_sources.append("custom_checkout")
+            checkout_kind = "oaics"
+        else:
+            init_payload = wire.stripe_init(
+                contract, checkout,
+                proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
+                timeout=max(5, int(timeout or 45)),
+            )
+            if StripeCapabilityEvidence.from_payload(init_payload).payment_method_types:
+                evidence_sources.append("stripe_init")
+            elements = {}
+            if hasattr(wire, "stripe_elements"):
+                try:
+                    elements = wire.stripe_elements(
+                        contract, checkout, init_payload,
+                        proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
+                        timeout=min(12, max(5, int(timeout or 45))),
+                    )
+                except Exception:
+                    # Elements is supplemental. An explicit init method remains
+                    # evidence even if the optional session read fails.
+                    elements = {}
+            if isinstance(elements, dict) and StripeCapabilityEvidence.from_payload(elements).payment_method_types:
+                evidence_sources.append("stripe_elements")
+                init_payload = {"init": init_payload, "elements": elements}
+            checkout_kind = "stripe"
         evidence = StripeCapabilityEvidence.from_payload(init_payload, fallback_currency=contract.currency)
-        return build_capability_probe_result(
+        result = build_capability_probe_result(
             contract,
             evidence,
             checkout_session_present=bool(checkout.checkout_session_id),
             require_zero=require_zero,
         )
+        result["checkout_kind"] = checkout_kind
+        result["evidence_sources"] = evidence_sources
+        return result
     except CapabilityProbeError as exc:
-        return {
+        result = {
             **base,
             "status": exc.status,
             "error": str(exc),
@@ -344,6 +481,9 @@ def payment_method_capability_probe(
             "error_stage": exc.error_stage,
             "retryable": exc.retryable,
         }
+        if exc.http_status:
+            result["http_status"] = exc.http_status
+        return result
     except CheckoutContractError as exc:
         return {
             **base,
@@ -375,12 +515,25 @@ def _response_json(
     if status_code >= 400:
         retryable = status_code in {403, 408, 409, 425, 429} or status_code >= 500
         code = unauthorized_code if status_code in {401, 403} else failure_code
+        # Only recognize fixed, non-sensitive vendor signals. Never echo the
+        # response body or arbitrary upstream codes into account records.
+        if stage == "checkout_create" and status_code in {400, 429}:
+            try:
+                body = response.json()
+            except Exception:
+                body = {}
+            detail = body.get("detail") if isinstance(body, dict) else None
+            if status_code == 429 and isinstance(detail, dict) and detail.get("code") == "checkout_creation_rate_limited":
+                code = "checkout_creation_rate_limited"
+            elif status_code == 400 and isinstance(detail, str) and "unusual activity" in detail.lower():
+                code = "checkout_risk_blocked"
         raise CapabilityProbeError(
             f"{stage} returned HTTP {status_code}",
             error_code=code,
             error_stage=stage,
             retryable=retryable,
             status="unknown" if retryable else "failed",
+            http_status=status_code,
         )
     try:
         payload = response.json()

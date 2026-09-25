@@ -18,6 +18,7 @@ from .http_client import request_with_retry
 from .http_utils import _absolute_url
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
 from .providers import mailbox_gmail
+from .sanitizer import sanitize_text
 from .storage import upsert_account
 # ``/about-you`` completion reuses the signup lane's own primitives instead of
 # re-deriving them: ``_create_account_continue_url`` already knows that an
@@ -27,6 +28,7 @@ from .storage import upsert_account
 # is bound to a different flow).
 from .accounts.account_creation import _create_account_continue_url, _is_user_already_exists
 from .sentinel.client import issue_sentinel_flow
+from .utils import atomic_write_text
 from .utils import _random_birthdate, _random_name
 
 
@@ -1098,6 +1100,65 @@ def _save_oauth_tokens(data, json_path, tokens, email, mode, result=None):
         output["phone"] = phone_attempt.get("phone", "")
         output["phone_attempt"] = phone_attempt
     return output
+
+
+def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upsert_account):
+    """Record a failed OAuth/SMS attempt without changing its remote outcome.
+
+    JSON and SQLite are distinct stores, so partial writes are reported rather
+    than disguising a file failure as a fully persisted result.
+    """
+    refreshed = dict(data or {})
+    refreshed["email"] = email
+    refreshed["success"] = bool(refreshed.get("access_token"))
+    refreshed["error"] = sanitize_text(result.get("error") or "one_click_sms_failed")[:200]
+    refreshed["refresh_token_status"] = str(refreshed.get("refresh_token_status") or "no_rt")
+    refreshed["refresh_token_updated_at"] = int(time.time())
+    response = refreshed.get("response") if isinstance(refreshed.get("response"), dict) else {}
+    public_result = {
+        key: value for key, value in result.items()
+        if key in {"ok", "mode", "status", "phone_verification_required"}
+    }
+    public_result["error"] = refreshed["error"]
+    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    if tokens:
+        public_result["has_access_token"] = bool(tokens.get("access_token"))
+        public_result["has_refresh_token"] = bool(tokens.get("refresh_token"))
+    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    if phone_attempt:
+        public_phone = {
+            key: value for key, value in phone_attempt.items()
+            if key in {"ok", "phone", "provider", "activation_id", "reuse_count", "max_reuse_count", "remaining"}
+        }
+        if phone_attempt.get("error"):
+            public_phone["error"] = sanitize_text(phone_attempt["error"])[:200]
+        public_result["phone_attempt"] = public_phone
+        refreshed["phone"] = public_phone.get("phone", refreshed.get("phone", ""))
+        response["phone_verification"] = public_phone
+    response["codex_oauth"] = public_result
+    refreshed["response"] = response
+
+    session_saved = not bool(json_path)
+    if json_path:
+        try:
+            atomic_write_text(json_path, json.dumps(refreshed, ensure_ascii=False, indent=2))
+            session_saved = True
+        except (OSError, TypeError, ValueError):
+            session_saved = False
+    try:
+        account_saved = bool(upsert(refreshed, json_path=json_path))
+    except Exception:
+        account_saved = False
+    outcome = {
+        "session_saved": session_saved,
+        "account_saved": account_saved,
+        "persisted": session_saved and account_saved,
+    }
+    if not session_saved:
+        outcome["error_code"] = "session_write_failed"
+    elif not account_saved:
+        outcome["error_code"] = "account_write_failed"
+    return outcome
 
 
 def _follow_redirects(session, start_url, proxy=None, max_redirects=18):

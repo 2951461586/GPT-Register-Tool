@@ -355,6 +355,9 @@ def main():
     if getattr(args, "check_promotion", False):
         _check_promotion(args)
         return
+    if getattr(args, "check_payment_eligibility", False):
+        account_commands.check_payment_eligibility(args, _account_command_context())
+        return
     if args.export_codex_json:
         _export_codex_json(args)
         return
@@ -743,7 +746,7 @@ def _emit_registration_error(args, error: str, *, exit_code: int) -> dict:
     return payload
 
 
-def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=True):
+def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=False):
     return registration_commands.check_registered_promotions(
         emails,
         workers=workers,
@@ -895,7 +898,6 @@ def _one_click_command_context():
         max_reuse=_one_click_sms_max_reuse,
         mailbox_snapshot=_mailbox_snapshot,
         persist_failure=_persist_one_click_sms_failure,
-        upsert_account=upsert_account,
     )
 
 
@@ -909,9 +911,9 @@ def _one_click_scan(args):
 
 
 def _persist_one_click_sms_failure(data, json_path, email, result):
-    return one_click_commands.persist_one_click_sms_failure(
-        data, json_path, email, result, _one_click_command_context()
-    )
+    from .codex_oauth import persist_one_click_sms_failure
+
+    return persist_one_click_sms_failure(data, json_path, email, result, upsert=upsert_account)
 
 
 # ─── Omakse handlers ──────────────────────────────────────────────────────────

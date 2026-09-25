@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import types
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -40,6 +40,19 @@ def _run(pool, probe, config=None, monkeypatch=None):
         "sms_tool.registration.registration_network_preflight", side_effect=probe
     ):
         return cli._preflight_registration_before_mailbox(_args())
+
+
+def test_local_sentinel_readiness_stops_cli_before_proxy_requests(monkeypatch):
+    from sms_tool.sentinel.runner import SentinelRunnerError
+
+    probe = Mock()
+    with patch(
+        "sms_tool.commands.registration.ensure_batch_sentinel_readiness",
+        side_effect=SentinelRunnerError("sentinel_runtime_hash_mismatch"),
+    ):
+        with pytest.raises(SentinelRunnerError, match="^sentinel_runtime_hash_mismatch$"):
+            _run(["http://proxy.example:8080"], probe, monkeypatch=monkeypatch)
+    probe.assert_not_called()
 
 
 def test_a_dead_host_is_skipped_after_the_cap(monkeypatch):

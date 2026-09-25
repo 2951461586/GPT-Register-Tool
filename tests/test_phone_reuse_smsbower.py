@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from sms_tool import registration
-from sms_tool import phone_reuse
+from sms_tool import phone_config, phone_pool, phone_provider_lifecycle, phone_reuse
 from sms_tool import sms_providers
 from sms_tool.phone_reuse import PhonePool, PhoneSlot, _complete_smsbower_activation, _prepare_smsbower_for_send, _wait_for_send_cooldown, complete_phone_verification_with_reuse, create_phone_pool, send_phone_otp
 from sms_tool.sms_provider_adapter import SmsProviderAdapter
@@ -71,7 +71,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         ]
         client.get_number.return_value = SmsBowerActivation("act-1", "+573001234567", "dr", "33", "0.026")
 
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             prepared = _prepare_smsbower_for_send(slot)
 
         self.assertTrue(prepared)
@@ -98,8 +98,8 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client.get_prices.return_value = []
         client.get_number.side_effect = RuntimeError("getNumber error: NO_NUMBERS")
 
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
-             patch("sms_tool.phone_reuse.time.sleep") as sleep:
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_provider_lifecycle.time.sleep") as sleep:
             prepared = _prepare_smsbower_for_send(slot)
 
         self.assertFalse(prepared)
@@ -117,7 +117,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client.complete.return_value = False
         client.cancel.return_value = True
 
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             _complete_smsbower_activation(slot)
 
         client.complete.assert_called_once_with("act-1")
@@ -135,11 +135,11 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
             slot_id="smsbower:0",
         )
         pool = PhonePool(phones=[slot])
-        with patch("sms_tool.phone_reuse._prepare_smsbower_for_send", return_value=True), \
+        with patch("sms_tool.phone_provider_lifecycle._prepare_smsbower_for_send", return_value=True), \
              patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", side_effect=["111111", "222222", "333333"]), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", side_effect=["111111", "222222", "333333"]), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._complete_smsbower_activation") as complete:
+             patch("sms_tool.phone_provider_lifecycle._complete_smsbower_activation") as complete:
             complete.side_effect = lambda item: (
                 setattr(item, "phone", ""),
                 setattr(item, "activation_id", ""),
@@ -211,14 +211,14 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         )
         pool = PhonePool(phones=[slot])
 
-        with patch("sms_tool.phone_reuse._prepare_smsbower_for_send", return_value=True), \
+        with patch("sms_tool.phone_provider_lifecycle._prepare_smsbower_for_send", return_value=True), \
              patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[
                  {"ok": False, "status_code": 429, "error_code": "rate_limit_exceeded"},
                  {"ok": True, "status_code": 200},
              ]) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="111111"), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="111111"), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._cancel_smsbower_activation") as cancel:
+             patch("sms_tool.phone_provider_lifecycle._cancel_smsbower_activation") as cancel:
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
         self.assertTrue(result["ok"])
@@ -247,13 +247,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
-             patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number), \
              patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[
                  {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
                  {"ok": True, "status_code": 200},
              ]) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="111111"), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="111111"), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
@@ -287,13 +287,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
-             patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number), \
              patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[
                  {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
                  {"ok": True, "status_code": 200},
              ]) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="111111"), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="111111"), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
@@ -330,15 +330,15 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
-             patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client), \
+             patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number), \
              patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[
                  {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
                  {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
                  {"ok": False, "status_code": 400, "error_code": "fraud_guard"},
                  {"ok": True, "status_code": 200},
              ]) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="111111"), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="111111"), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
@@ -369,9 +369,9 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
             item.last_sms_code = ""
             return True
 
-        with patch("sms_tool.phone_reuse._smsbower_client") as client_factory, \
-             patch("sms_tool.phone_reuse._cancel_smsbower_activation") as cancel, \
-             patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number) as acquire:
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client") as client_factory, \
+             patch("sms_tool.phone_provider_lifecycle._cancel_smsbower_activation") as cancel, \
+             patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number) as acquire:
             old_client = Mock()
             old_client.request_additional.return_value = False
             client_factory.return_value = old_client
@@ -405,11 +405,11 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+        with patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number), \
              patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", side_effect=[None, "111111"]), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", side_effect=[None, "111111"]), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+             patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
         self.assertTrue(result["ok"])
@@ -442,11 +442,11 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number), \
+        with patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number), \
              patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}) as send, \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", side_effect=[None, "111111"]), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", side_effect=[None, "111111"]), \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}), \
-             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+             patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
         self.assertTrue(result["ok"])
@@ -471,15 +471,15 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
 
             client = Mock()
             client.cancel.return_value = True
-            with patch("sms_tool.phone_reuse._prepare_smsbower_for_send", return_value=True), \
+            with patch("sms_tool.phone_provider_lifecycle._prepare_smsbower_for_send", return_value=True), \
                  patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
-                 patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="979739"), \
+                 patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="979739"), \
                  patch("sms_tool.phone_reuse.validate_phone_otp", return_value={
                      "ok": False,
                      "status_code": 429,
                      "body": '{"error":{"code":"phone_recently_used","message":"This phone number was recently used. Please try again later."}}',
                  }), \
-                 patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+                 patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
                 result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
             self.assertFalse(result["ok"])
@@ -527,13 +527,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
+        with patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
              patch("sms_tool.phone_reuse.send_phone_otp", return_value={"ok": True}), \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="123456"), \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="123456"), \
              patch("sms_tool.phone_reuse.validate_phone_otp", side_effect=[rejected] * 9 + [
                  {"ok": True, "continue_url": "http://localhost/callback?code=x&state=y"}
              ]), \
-             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+             patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
         self.assertTrue(result["ok"])
@@ -574,13 +574,13 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         client = Mock()
         client.cancel.return_value = True
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
+        with patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number", side_effect=acquire_new_number) as acquire, \
              patch("sms_tool.phone_reuse.send_phone_otp", side_effect=[rejected] * 9 + [{"ok": True}]), \
-             patch("sms_tool.phone_reuse._wait_smsbower_code", return_value="123456") as wait_code, \
+             patch("sms_tool.phone_provider_lifecycle._wait_smsbower_code", return_value="123456") as wait_code, \
              patch("sms_tool.phone_reuse.validate_phone_otp", return_value={
                  "ok": True, "continue_url": "http://localhost/callback?code=x&state=y"
              }), \
-             patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+             patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             result = complete_phone_verification_with_reuse(None, "did", "https://auth.openai.com/add-phone", pool)
 
         self.assertTrue(result["ok"])
@@ -1003,6 +1003,36 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         ]
         self.assertEqual([], offenders, f"vendor name baked into executed code: {offenders}")
 
+    def test_no_executed_string_in_the_split_modules_names_a_vendor(self):
+        """The same guard, extended to the modules the split created.
+
+        ``phone_reuse`` was the only module that could bake a vendor into an
+        executed constant until 2026-09-25; the lifecycle moved to
+        ``phone_provider_lifecycle`` (and the pool/config to ``phone_pool`` /
+        ``phone_config``), so the guard has to follow the code -- otherwise the
+        regression it exists to catch simply relocates out of its scan.
+        """
+        for module in (phone_provider_lifecycle, phone_pool, phone_config):
+            with self.subTest(module=module.__name__):
+                with open(module.__file__, encoding="utf-8") as handle:
+                    tree = ast.parse(handle.read())
+                docstrings = set()
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        body = getattr(node, "body", None)
+                        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                                and isinstance(body[0].value.value, str):
+                            docstrings.add(id(body[0].value))
+                offenders = [
+                    (node.lineno, node.value)
+                    for node in ast.walk(tree)
+                    if isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                    and "smsbower" in node.value.lower()
+                ]
+                self.assertEqual([], offenders, f"vendor name baked into executed code: {offenders}")
+
     def test_every_available_provider_is_a_rental_slot(self):
         for key in sms_providers.available_provider_keys():
             with self.subTest(provider=key):
@@ -1038,7 +1068,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
 
     def test_the_nexsms_client_uses_the_slots_own_endpoint(self):
         slot = self._slot("nexsms")
-        with patch("sms_tool.phone_reuse.NexSmsClient") as factory:
+        with patch("sms_tool.phone_provider_lifecycle.NexSmsClient") as factory:
             phone_reuse._nexsms_client(slot)
         factory.assert_called_once_with(
             api_key="test-key",
@@ -1051,7 +1081,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
                 continue
             with self.subTest(provider=key):
                 slot = self._slot(key)
-                with patch("sms_tool.phone_reuse.SmsBowerClient") as factory:
+                with patch("sms_tool.phone_provider_lifecycle.SmsBowerClient") as factory:
                     phone_reuse._smsbower_client(slot)
                 factory.assert_called_once_with(
                     api_key="test-key",
@@ -1062,7 +1092,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         slot = self._slot("herosms")
         client = Mock()
         client.complete.return_value = True
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             phone_reuse._complete_provider_activation(slot)
 
         client.complete.assert_called_once_with("act-1")
@@ -1073,7 +1103,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
     def test_a_non_smsbower_activation_cancels_through_the_rental_adapter(self):
         slot = self._slot("grizzly")
         client = Mock()
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client):
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client):
             phone_reuse._cancel_provider_activation(slot)
 
         client.cancel.assert_called_once_with("act-1")
@@ -1084,7 +1114,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         """The costly half of the bug: an uncompleted activation keeps billing."""
         slot = self._slot("herosms", reuse_count=1, max_reuse_count=1)
         pool = PhonePool(phones=[slot])
-        with patch("sms_tool.phone_reuse._complete_provider_activation") as complete:
+        with patch("sms_tool.phone_pool._complete_provider_activation") as complete:
             reset_count = pool.reset_exhausted_slots()
 
         complete.assert_called_once_with(slot)
@@ -1118,7 +1148,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         client = Mock()
         client.complete.return_value = True
         buffer = io.StringIO()
-        with patch("sms_tool.phone_reuse._smsbower_client", return_value=client), \
+        with patch("sms_tool.phone_provider_lifecycle._smsbower_client", return_value=client), \
              contextlib.redirect_stdout(buffer):
             phone_reuse._complete_provider_activation(slot)
 

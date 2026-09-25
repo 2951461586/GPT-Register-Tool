@@ -193,7 +193,11 @@ def probe_payment_method(
     runtime_config: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Run the real pre-side-effect path using one precomputed route plan."""
+    """Run the shared Checkout observation without any link-execution adapter.
+
+    ``payment_capability`` owns the cs_/oaics_ evidence contract. This route
+    never starts payment-method creation, confirmation, approval or polling.
+    """
     method = normalize_payment_method(payment_method)
     if not method:
         raise ValueError(f"unsupported payment method: {payment_method}")

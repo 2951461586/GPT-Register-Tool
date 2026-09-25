@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from pathlib import Path
 import json
+import re
 import time
 
 from ..config import ConfigInput
@@ -167,15 +168,12 @@ def mark_account_health_result(
 # Never persist these into raw_json even if a caller hands them over: the
 # eligibility probe is designed to return an enumerable, token-free dict, and
 # this is the backstop that keeps it that way.
-_PAYMENT_CAPABILITY_BLOCKED_KEYS = frozenset({
-    "access_token",
-    "authorization",
-    "cookie",
-    "cookie_header",
-    "proxy",
-    "auth_context",
-    "refresh_token",
-    "id_token",
+_PAYMENT_CAPABILITY_METHODS = frozenset({
+    "payment_method_types", "ordered_payment_method_types", "custom_payment_methods", "methods",
+})
+_PAYMENT_CAPABILITY_FACTS = frozenset({
+    "billing_country", "carrier_method", "currency", "offer_state",
+    "error_code", "error_stage", "checkout_kind",
 })
 
 
@@ -188,13 +186,75 @@ def _payment_capability_snapshot(value, *, updated_at: int):
     """
     if not isinstance(value, dict) or not value:
         return None
-    snapshot = {
-        str(key): item
-        for key, item in value.items()
-        if str(key).strip().lower() not in _PAYMENT_CAPABILITY_BLOCKED_KEYS
-    }
+    snapshot = {"ok": bool(value.get("ok")), "retryable": bool(value.get("retryable"))}
+    for key in _PAYMENT_CAPABILITY_METHODS | {"evidence_sources"}:
+        items = value.get(key)
+        if isinstance(items, (list, tuple)):
+            snapshot[key] = [
+                item for item in items[:16]
+                if isinstance(item, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", item)
+            ]
+    for key in _PAYMENT_CAPABILITY_FACTS:
+        item = value.get(key)
+        if isinstance(item, str) and re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{0,63}", item):
+            snapshot[key] = item
+    for key in ("amount", "http_status"):
+        item = value.get(key)
+        if isinstance(item, int) and not isinstance(item, bool):
+            snapshot[key] = item
     snapshot["updated_at"] = int(updated_at)
     return snapshot
+
+
+def mark_payment_capability(email, capability, *, runtime_config: ConfigInput = None):
+    """Persist a standalone capability observation without rewriting the plan marker."""
+    init_database(runtime_config=runtime_config)
+    now = int(time.time())
+    conn = _connect(runtime_config=runtime_config)
+    json_path = ""
+    data = {}
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json,json_path FROM accounts WHERE email=?",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            data = json.loads(row["raw_json"] or "{}")
+        except Exception:
+            data = {}
+        json_path = str(row["json_path"] or "").strip()
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        snapshot = _payment_capability_snapshot(capability, updated_at=now)
+        promotion = data.get("promotion")
+        if snapshot is None:
+            data.pop("payment_capability", None)
+            if isinstance(promotion, dict):
+                promotion.pop("payment_capability", None)
+        else:
+            data["payment_capability"] = snapshot
+            if isinstance(promotion, dict):
+                promotion["payment_capability"] = snapshot
+        conn.execute(
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE email=?",
+            (now, json.dumps(data, ensure_ascii=False, separators=(",", ":")), lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
 
 
 def mark_promotion_status(
