@@ -35,9 +35,7 @@ from common.protocol_core import ProtocolResultReporter
 _RESULT_REPORTER = ProtocolResultReporter("momo", "momo_protocol_qr")
 
 
-_DATA_URI_RE = re.compile(
-    r"^data:image/(?P<ext>png|jpe?g|gif|webp);base64,(?P<b64>[A-Za-z0-9+/=]+)$"
-)
+_DATA_URI_RE = re.compile(r"^data:image/(?P<ext>png|jpe?g|gif|webp);base64,(?P<b64>[A-Za-z0-9+/=]+)$")
 
 
 def _decode_qr_to_file(data_uri: str, out_dir: str) -> str:
@@ -62,17 +60,33 @@ def _decode_qr_to_file(data_uri: str, out_dir: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="MoMo scannable-QR extractor (standalone runner)")
-    parser.add_argument("--token", default=os.environ.get("MOMO_TOKEN", ""), help="ChatGPT access token or session JSON")
+    parser.add_argument(
+        "--token", default=os.environ.get("MOMO_TOKEN", ""), help="ChatGPT access token or session JSON"
+    )
     parser.add_argument("--token-file", default="", help="file containing access token or session JSON")
     parser.add_argument("--proxy", default=os.environ.get("MOMO_PROXY", ""), help="VN exit proxy seed (empty = direct)")
-    parser.add_argument("--checkout-proxy", default=os.environ.get("MOMO_CHECKOUT_PROXY", ""), help="ChatGPT checkout proxy")
-    parser.add_argument("--promotion-proxy", default=os.environ.get("MOMO_PROMOTION_PROXY", ""), help="ChatGPT checkout/update proxy")
-    parser.add_argument("--provider-proxy", default=os.environ.get("MOMO_PROVIDER_PROXY", ""), help="Stripe init/payment-method proxy")
-    parser.add_argument("--approve-proxy", default=os.environ.get("MOMO_APPROVE_PROXY", ""), help="ChatGPT approve proxy")
-    parser.add_argument("--redirect-proxy", default=os.environ.get("MOMO_REDIRECT_PROXY", ""), help="MoMo/Nicepay redirect proxy")
+    parser.add_argument(
+        "--checkout-proxy", default=os.environ.get("MOMO_CHECKOUT_PROXY", ""), help="ChatGPT checkout proxy"
+    )
+    parser.add_argument(
+        "--promotion-proxy", default=os.environ.get("MOMO_PROMOTION_PROXY", ""), help="ChatGPT checkout/update proxy"
+    )
+    parser.add_argument(
+        "--provider-proxy", default=os.environ.get("MOMO_PROVIDER_PROXY", ""), help="Stripe init/payment-method proxy"
+    )
+    parser.add_argument(
+        "--approve-proxy", default=os.environ.get("MOMO_APPROVE_PROXY", ""), help="ChatGPT approve proxy"
+    )
+    parser.add_argument(
+        "--redirect-proxy", default=os.environ.get("MOMO_REDIRECT_PROXY", ""), help="MoMo/Nicepay redirect proxy"
+    )
     parser.add_argument("--strategy", default="custom_promo", choices=["custom_promo", "hosted_promo", "custom_trial"])
-    parser.add_argument("--probe-only", action="store_true", help="Stop after checkout eligibility/payment-method probing")
-    parser.add_argument("--pre-proxy", default=os.environ.get("MOMO_PRE_PROXY", "off"), help="upstream SOCKS/HTTP proxy; off = disabled")
+    parser.add_argument(
+        "--probe-only", action="store_true", help="Stop after checkout eligibility/payment-method probing"
+    )
+    parser.add_argument(
+        "--pre-proxy", default=os.environ.get("MOMO_PRE_PROXY", "off"), help="upstream SOCKS/HTTP proxy; off = disabled"
+    )
     parser.add_argument("--timeout", type=int, default=25)
     parser.add_argument("--max-proxies", type=int, default=1)
     parser.add_argument("--trial-days", type=int, default=30)
@@ -155,7 +169,9 @@ def main() -> int:
         "link_type": "momo_protocol_qr",
     }
     if not summary["ok"]:
-        summary["error"] = result.get("qr_error") or result.get("decision_text") or decision or "momo QR extraction failed"
+        summary["error"] = (
+            result.get("qr_error") or result.get("decision_text") or decision or "momo QR extraction failed"
+        )
     artifacts = {key: value for key, value in summary.items() if key not in {"ok", "url", "link_type"}}
     if summary["ok"]:
         _RESULT_REPORTER.success(display_url or str(summary.get("qr_data") or ""), artifacts=artifacts)

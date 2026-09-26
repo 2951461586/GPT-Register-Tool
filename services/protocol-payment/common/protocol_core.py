@@ -11,6 +11,46 @@ from typing import Any, Callable, Mapping
 
 RESULT_SCHEMA = "protocol_payment.v1"
 
+
+def safe_int(value: Any, default: int = 0) -> int:
+    """``int(value)`` that never raises (missing/garbage -> ``default``).
+
+    Extractors parse provider payloads and CLI values that can be absent or
+    non-numeric; raising there loses the whole run to a ValueError.
+    """
+    if isinstance(value, bool):
+        return 1 if value else 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """``float(value)`` that never raises (missing/garbage -> ``default``)."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_load_json(text: Any, default: Any = None) -> Any:
+    """``json.loads(text)`` that never raises (malformed input -> ``default``)."""
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def is_false(value: Any) -> bool:
+    """True only when ``value`` is the bool ``False`` (not 0/None/"")."""
+    return isinstance(value, bool) and not value
+
+
+def is_true(value: Any) -> bool:
+    """True only when ``value`` is the bool ``True`` (not 1/"yes")."""
+    return isinstance(value, bool) and value
+
 # ──────────────────── policy-driven redaction ────────────────────
 # 规则来自仓库根的 ``sensitive_policy.json``（single source）——C# 的
 # ``SensitiveDataSanitizer`` 与 Python 的 ``sms_tool.sanitizer`` 都读它，
@@ -24,9 +64,7 @@ import re as _re
 from pathlib import Path as _Path
 
 _REDACTED = "[REDACTED]"
-_POLICY_CANDIDATES = (
-    _Path(__file__).resolve().parents[3] / "sensitive_policy.json",
-)
+_POLICY_CANDIDATES = (_Path(__file__).resolve().parents[3] / "sensitive_policy.json",)
 _POLICY_CACHE: dict[str, Any] | None = None
 _POLICY_LOADED = False
 
@@ -38,11 +76,22 @@ LEGACY_TEXT_PATTERNS = [
     ("proxy_credentials", r"(?i)\b((?:https?|socks5h?)://)[^\s/@]+@", r"\1://[REDACTED]@"),
     ("stripe_key", r"\b[sr]k_(?:live|test)_[A-Za-z0-9]+", "[REDACTED]"),
     ("refresh_token", r"\brt_[A-Za-z0-9._-]{8,}\b", "[REDACTED]"),
-    ("named_secret", r"(?is)(access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|oauth[_-]?refresh[_-]?token|service[_-]?token|client[_-]?secret|api[_-]?key|ba[_-]?token|totp(?:[_-]?secret)?|card(?:[_-]?(?:number|cvv|cvc|last4))?|blik[_-]?code|authorization|password|checkout[_-]?session[_-]?id|payment[_-]?intent[_-]?id)(\s*[=:]\s*)['\"]?[^\s,}\"']+", r"\1\2[REDACTED]"),
+    (
+        "named_secret",
+        r"(?is)(access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|oauth[_-]?refresh[_-]?token|service[_-]?token|client[_-]?secret|api[_-]?key|ba[_-]?token|totp(?:[_-]?secret)?|card(?:[_-]?(?:number|cvv|cvc|last4))?|blik[_-]?code|authorization|password|checkout[_-]?session[_-]?id|payment[_-]?intent[_-]?id)(\s*[=:]\s*)['\"]?[^\s,}\"']+",
+        r"\1\2[REDACTED]",
+    ),
 ]
 LEGACY_KEY_FRAGMENTS = (
-    "token", "secret", "password", "authorization",
-    "card_number", "cardnumber", "card_last4", "cvv", "blik_code",
+    "token",
+    "secret",
+    "password",
+    "authorization",
+    "card_number",
+    "cardnumber",
+    "card_last4",
+    "cvv",
+    "blik_code",
 )
 LEGACY_SAFE_KEY_SUFFIXES = ()
 
@@ -114,14 +163,15 @@ def sanitize_log_text(value: Any) -> str:
     entries = (policy or {}).get("log_text_patterns") or []
     try:
         for entry in entries:
-            text = _re.compile(entry["pattern"]).sub(
-                _python_replacement(str(entry["replacement"])), text)
+            text = _re.compile(entry["pattern"]).sub(_python_replacement(str(entry["replacement"])), text)
     except Exception:
         pass
     return text
 
 
-def _key_is_sensitive(key: str, path: str, exact: set[str], fragments: tuple[str, ...], safe_suffixes: tuple[str, ...]) -> bool:
+def _key_is_sensitive(
+    key: str, path: str, exact: set[str], fragments: tuple[str, ...], safe_suffixes: tuple[str, ...]
+) -> bool:
     lowered = str(key).lower()
     full_path = f"{path}.{lowered}" if path else lowered
     if any(full_path == safe or full_path.endswith("." + safe) for safe in _SAFE_KEY_PATHS):
@@ -145,7 +195,9 @@ def sanitize_payload(value: Any, *, _path: str = "") -> Any:
             if _key_is_sensitive(str(key), _path, exact, fragments, safe_suffixes):
                 cleaned[key] = _REDACTED
             else:
-                cleaned[key] = sanitize_payload(item, _path=f"{_path}.{str(key).lower()}" if _path else str(key).lower())
+                cleaned[key] = sanitize_payload(
+                    item, _path=f"{_path}.{str(key).lower()}" if _path else str(key).lower()
+                )
         return cleaned
     if isinstance(value, list):
         return [sanitize_payload(item, _path=_path) for item in value]
@@ -269,20 +321,22 @@ class ProtocolResultReporter:
     ) -> bool:
         method = self._resolve(self._payment_method)
         link_type = self._resolve(self._link_type) or f"{method}_protocol"
-        return self._emit(ProtocolResult(
-            payment_method=method,
-            ok=False,
-            status=status,
-            url="",
-            link_type=link_type,
-            error=str(error or "extraction failed")[:600],
-            error_code=error_code,
-            error_stage=error_stage,
-            retryable=bool(retryable),
-            side_effect_started=bool(side_effect_started),
-            requires_reconciliation=bool(requires_reconciliation),
-            artifacts=dict(artifacts or {}),
-        ))
+        return self._emit(
+            ProtocolResult(
+                payment_method=method,
+                ok=False,
+                status=status,
+                url="",
+                link_type=link_type,
+                error=str(error or "extraction failed")[:600],
+                error_code=error_code,
+                error_stage=error_stage,
+                retryable=bool(retryable),
+                side_effect_started=bool(side_effect_started),
+                requires_reconciliation=bool(requires_reconciliation),
+                artifacts=dict(artifacts or {}),
+            )
+        )
 
     def already_paid(self) -> bool:
         return self.failure(
@@ -306,9 +360,7 @@ def env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-def env_int(
-    name: str, default: int, minimum: int = 1, maximum: int | None = None
-) -> int:
+def env_int(name: str, default: int, minimum: int = 1, maximum: int | None = None) -> int:
     """Parse an int environment variable, clamped to ``[minimum, maximum]``.
 
     ``maximum`` defaults to ``None`` = unbounded, which is what blik / ideal /
@@ -351,26 +403,18 @@ def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
     return values
 
 
-def _as_int(value: Any) -> int:
-    """Best-effort ``int()`` for provider payloads (missing/garbage -> 0)."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
 def amount_from_payload(payload: Any) -> int:
     if isinstance(payload, dict):
         total_summary = payload.get("total_summary")
         if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-            return _as_int(total_summary.get("due"))
+            return safe_int(total_summary.get("due"))
         invoice = payload.get("invoice")
         if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-            return _as_int(invoice.get("amount_due"))
+            return safe_int(invoice.get("amount_due"))
         line_items = payload.get("line_items")
         if isinstance(line_items, list):
             amounts = [
-                _as_int(item.get("amount"))
+                safe_int(item.get("amount"))
                 for item in line_items
                 if isinstance(item, dict) and item.get("amount") is not None
             ]
@@ -385,7 +429,7 @@ def amount_from_payload(payload: Any) -> int:
     ):
         match = re.search(pattern, text)
         if match:
-            return _as_int(match.group(1))
+            return safe_int(match.group(1))
     return 0
 
 

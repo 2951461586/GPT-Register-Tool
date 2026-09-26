@@ -1,10 +1,10 @@
 """Contract tests for the protocol-payment extractor result shapes.
 
 These lock, per extractor, the import surface and the payment-method key the
-manager keys off, plus the success-result contract. blik/ideal/twint/pix/momo
-emit the shared ``protocol_payment.v1`` schema; kakao/direct_card still use
-their own local shapes (normalized at the adapter seam). No network is touched
--- only pure helpers and the shared reporter are exercised.
+manager keys off, plus the success-result contract. Every protocol extractor
+(blik/ideal/twint/pix/momo/kakao/direct_card) emits the shared
+``protocol_payment.v1`` schema; the manager parses that one shape. No network is
+touched -- only pure helpers and the shared reporter are exercised.
 """
 
 import importlib
@@ -113,9 +113,7 @@ class PixExtractorContractTests(unittest.TestCase):
         # pix_core.find_access_token is pix's real unit contract for pulling the
         # ChatGPT access token out of a nested session payload.
         self.assertEqual(self.mod.core.find_access_token({"access_token": "abc123"}), "abc123")
-        self.assertEqual(
-            self.mod.core.find_access_token({"data": {"token": "nested_tok"}}), "nested_tok"
-        )
+        self.assertEqual(self.mod.core.find_access_token({"data": {"token": "nested_tok"}}), "nested_tok")
 
     def test_runner_emits_the_shared_v1_contract(self):
         # run_pix.py wraps generate_opll_pix_long_link's summary in the shared
@@ -134,6 +132,66 @@ class MomoRunnerContractTests(unittest.TestCase):
         self.assertEqual(self.runner._RESULT_REPORTER._link_type, "momo_protocol_qr")
 
 
+class KakaoExtractorContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _import_extractor("kakao", "kakao_extract")
+
+    def test_result_contract_emits_schema_and_artifacts(self):
+        # print_kakao_result emits the shared terminal contract; the whole
+        # kakao contract (decision/stage/methods/...) rides as artifacts.
+        self.mod._KAKAO_RESULT_REPORTER._emitted = False
+        captured = []
+        original_writer = self.mod._KAKAO_RESULT_REPORTER._writer
+        self.mod._KAKAO_RESULT_REPORTER._writer = captured.append
+        try:
+            self.mod.print_kakao_result(
+                {
+                    "ok": True,
+                    "payment_method": "kakao",
+                    "url": "https://kakao.test/pay",
+                    "provider_redirect_url": "https://kakao.test/pay",
+                    "link_type": "kakao_protocol_redirect",
+                    "decision": "ready",
+                    "stage": "approve",
+                    "methods": ["kakao_pay"],
+                }
+            )
+        finally:
+            self.mod._KAKAO_RESULT_REPORTER._writer = original_writer
+        payload = json.loads(captured[0])
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertEqual(payload["payment_method"], "kakao")
+        self.assertEqual(payload["link_type"], "kakao_protocol_redirect")
+        self.assertEqual(payload["url"], "https://kakao.test/pay")
+        self.assertEqual(payload["methods"], ["kakao_pay"])
+
+    def test_result_contract_failure_carries_decision(self):
+        self.mod._KAKAO_RESULT_REPORTER._emitted = False
+        captured = []
+        original_writer = self.mod._KAKAO_RESULT_REPORTER._writer
+        self.mod._KAKAO_RESULT_REPORTER._writer = captured.append
+        try:
+            self.mod.print_kakao_result(
+                {
+                    "ok": False,
+                    "payment_method": "kakao",
+                    "url": "",
+                    "link_type": "kakao_protocol",
+                    "decision": "kakao_not_enabled",
+                    "stage": "stripe_init",
+                    "error": "kakao pay is not enabled for this account",
+                }
+            )
+        finally:
+            self.mod._KAKAO_RESULT_REPORTER._writer = original_writer
+        payload = json.loads(captured[0])
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "kakao_not_enabled")
+        self.assertEqual(payload["error_stage"], "stripe_init")
+
+
 class DirectCardExtractorContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -142,27 +200,50 @@ class DirectCardExtractorContractTests(unittest.TestCase):
     def test_imports_cleanly(self):
         self.assertTrue(hasattr(self.mod, "print_json"))
 
-    def test_print_json_emits_valid_result_shape(self):
+    def _capture(self, payload):
+        # ``_RESULT_REPORTER`` is an emitted-once singleton (the extractor must
+        # print exactly one terminal result); reset the guard so this test can
+        # exercise two independent emissions in one process.
+        self.mod._RESULT_REPORTER._emitted = False
         buffer = io.StringIO()
         with redirect_stdout(buffer):
-            self.mod.print_json({"ok": True, "error_type": "", "error": ""}, pretty=False)
-        payload = json.loads(buffer.getvalue())
-        self.assertIn("ok", payload)
-        self.assertIsInstance(payload["ok"], bool)
+            self.mod.print_json(payload, pretty=False)
+        return json.loads(buffer.getvalue())
 
-    def test_print_json_does_not_redact_known_gap(self):
-        # KNOWN GAP: direct_card's print_json emits the raw payload with no
-        # redaction (unlike protocol_core.sanitize_payload). This test locks the
-        # CURRENT behaviour so the missing-redaction cannot be "fixed" silently
-        # without also updating this contract test.
+    def test_print_json_emits_the_shared_v1_contract(self):
+        payload = self._capture(
+            {
+                "ok": True,
+                "long_url": "https://chatgpt.com/checkout/openai_llc/oaics_x",
+                "amount_minor": 0,
+                "error_type": "",
+                "error": "",
+            }
+        )
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertEqual(payload["payment_method"], "direct_card")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["url"], "https://chatgpt.com/checkout/openai_llc/oaics_x")
+        self.assertEqual(payload["link_type"], "direct_card_protocol")
+        # the whole payload travels as artifacts
+        self.assertEqual(payload["amount_minor"], 0)
+
+    def test_print_json_redacts_error_text(self):
+        # Formerly a KNOWN GAP: print_json emitted the raw payload, leaking a
+        # credential embedded in an error message. It now emits the shared
+        # contract, whose sanitizer redacts it.
+        self.mod._RESULT_REPORTER._emitted = False
         buffer = io.StringIO()
         with redirect_stdout(buffer):
             self.mod.print_json(
                 {"ok": False, "error_type": "Auth", "error": "access_token=at_plain_secret"},
                 pretty=False,
             )
-        emitted = buffer.getvalue()
-        self.assertIn("at_plain_secret", emitted)
+        payload = json.loads(buffer.getvalue())
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertFalse(payload["ok"])
+        self.assertIn("[REDACTED]", payload["error"])
+        self.assertNotIn("at_plain_secret", buffer.getvalue())
 
 
 if __name__ == "__main__":

@@ -6,10 +6,7 @@ import unittest
 from pathlib import Path
 
 
-CORE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "services" / "protocol-payment" / "common" / "protocol_core.py"
-)
+CORE_PATH = Path(__file__).resolve().parents[1] / "services" / "protocol-payment" / "common" / "protocol_core.py"
 SPEC = importlib.util.spec_from_file_location("protocol_payment_core", CORE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 CORE = importlib.util.module_from_spec(SPEC)
@@ -57,20 +54,20 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
 
     def test_sanitize_text_matches_shared_policy_rules(self):
         cases = (
-            ('Bearer abc123', '[REDACTED]'),
-            ('https://bank.test/pay', 'https://bank.test/pay'),  # plain URLs survive
+            ("Bearer abc123", "[REDACTED]"),
+            ("https://bank.test/pay", "https://bank.test/pay"),  # plain URLs survive
         )
         for raw, expected in cases:
             self.assertIn(expected, CORE.sanitize_text(raw))
         # credential-bearing URLs, stripe keys and rt_ refresh tokens collapse
         self.assertEqual(
-            CORE.sanitize_text('http://user:sekret-pw@gate.kookeey.info:1000'),
-            'http://[REDACTED]@gate.kookeey.info:1000',
+            CORE.sanitize_text("http://user:sekret-pw@gate.kookeey.info:1000"),
+            "http://[REDACTED]@gate.kookeey.info:1000",
         )
-        self.assertEqual(CORE.sanitize_text('key sk_live_ABCDEFGHIJ1234'), 'key [REDACTED]')
-        self.assertEqual(CORE.sanitize_text('token rt_abcdefgh12345678'), 'token [REDACTED]')
-        self.assertIn('password=[REDACTED]', CORE.sanitize_text('password=hunter2'))
-        self.assertIn('authorization: [REDACTED]', CORE.sanitize_text('authorization: Basic dXNlcg=='))
+        self.assertEqual(CORE.sanitize_text("key sk_live_ABCDEFGHIJ1234"), "key [REDACTED]")
+        self.assertEqual(CORE.sanitize_text("token rt_abcdefgh12345678"), "token [REDACTED]")
+        self.assertIn("password=[REDACTED]", CORE.sanitize_text("password=hunter2"))
+        self.assertIn("authorization: [REDACTED]", CORE.sanitize_text("authorization: Basic dXNlcg=="))
 
     def test_sanitize_payload_redacts_secret_keys_but_not_safe_suffixes(self):
         payload = {
@@ -167,7 +164,6 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         self.assertEqual(payload["operation"], "execute_payment")
         self.assertTrue(payload["side_effect_started"])
 
-
     def test_command_id_correlates_with_the_launching_cli_task(self):
         # 协议支付终端报告此前没有任何相关性字段，桌面侧只能靠进程级环境猜。
         # 子进程继承 SMS_TOOL_COMMAND_ID，报告应携带同一 ID。
@@ -204,14 +200,16 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         # policy sensitive_keys/sensitive_key_fragments 里的键必须打码——旧手搓
         # 片段表不含 api_key/license_key/session_id，它们此前会漏。证明读取的
         # 是 policy 而不是内置回退表。
-        cleaned = CORE.sanitize_payload({
-            "api_key": "secret-value",
-            "license_key": "lic-value",
-            "session_id": "sess-value",
-            "cs_id": "cs-value",
-            "error_count": 3,
-            "note": "safe text",
-        })
+        cleaned = CORE.sanitize_payload(
+            {
+                "api_key": "secret-value",
+                "license_key": "lic-value",
+                "session_id": "sess-value",
+                "cs_id": "cs-value",
+                "error_count": 3,
+                "note": "safe text",
+            }
+        )
         self.assertEqual(cleaned["api_key"], "[REDACTED]")
         self.assertEqual(cleaned["license_key"], "[REDACTED]")
         self.assertEqual(cleaned["session_id"], "[REDACTED]")
@@ -219,10 +217,12 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         self.assertEqual(cleaned["error_count"], 3)
 
     def test_safe_key_paths_keep_proxy_affinity_session_id(self):
-        cleaned = CORE.sanitize_payload({
-            "proxy_affinity": {"session_id": "sid-value", "country": "VN"},
-            "session_id": "top-level-must-die",
-        })
+        cleaned = CORE.sanitize_payload(
+            {
+                "proxy_affinity": {"session_id": "sid-value", "country": "VN"},
+                "session_id": "top-level-must-die",
+            }
+        )
         self.assertEqual(cleaned["proxy_affinity"]["session_id"], "sid-value")
         self.assertEqual(cleaned["session_id"], "[REDACTED]")
 
@@ -235,10 +235,10 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         # policy 缺失必须退回内置 LEGACY 规则：提取器绝不漏报密。
         import unittest.mock as mock
 
-        with mock.patch.object(CORE, "_POLICY_LOADED", True), \
-             mock.patch.object(CORE, "_POLICY_CACHE", None):
+        with mock.patch.object(CORE, "_POLICY_LOADED", True), mock.patch.object(CORE, "_POLICY_CACHE", None):
             self.assertIn("[REDACTED]", CORE.sanitize_text("password=hunter2"))
             self.assertEqual(CORE.sanitize_payload({"access_token": "x"})["access_token"], "[REDACTED]")
+
 
 if __name__ == "__main__":
     unittest.main()

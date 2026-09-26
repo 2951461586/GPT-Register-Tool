@@ -60,8 +60,12 @@ from common.proxy_url import (
     normalize_proxy_url as shared_normalize_proxy_url,
 )
 from common.protocol_core import (
+    ProtocolResultReporter,
     env_bool as common_env_bool,
     env_int as common_env_int,
+    is_false,
+    is_true,
+    safe_int,
 )
 from common.logging_setup import make_file_logger
 
@@ -103,9 +107,9 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # rotation-resilient mirror. Files only, never stdout.
 _durable_logger = make_file_logger("kakao", LOG_DIR, redact=lambda text: redact_log_text(text))
 
-TIMEOUT = max(5, min(120, int(os.environ.get("KAKAO_PAY_TIMEOUT", "30") or "30")))
-POLL_TIMEOUT = max(30, min(300, int(os.environ.get("KAKAO_POLL_TIMEOUT", "120") or "120")))
-APPROVE_RETRY_MAX = max(1, min(10, int(os.environ.get("KAKAO_APPROVE_RETRY_MAX", "1") or "1")))
+TIMEOUT = common_env_int("KAKAO_PAY_TIMEOUT", 30, minimum=5, maximum=120)
+POLL_TIMEOUT = common_env_int("KAKAO_POLL_TIMEOUT", 120, minimum=30, maximum=300)
+APPROVE_RETRY_MAX = common_env_int("KAKAO_APPROVE_RETRY_MAX", 1, minimum=1, maximum=10)
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 STRIPE_RUNTIME = "c00af4ce81"
 STRIPE_PAYMENT_UA = f"stripe.js/{STRIPE_RUNTIME}; stripe-js-v3/{STRIPE_RUNTIME}; checkout"
@@ -413,8 +417,8 @@ def seed_record(proxy_seed: str) -> dict[str, Any]:
 
 
 def record_in_cooldown(record: dict[str, Any], now: int) -> bool:
-    fail = int(record.get("fail") or 0)
-    last_fail = int(record.get("last_fail") or 0)
+    fail = safe_int(record.get("fail"))
+    last_fail = safe_int(record.get("last_fail"))
     cooldown = env_int("KAKAO_PROXY_FAIL_COOLDOWN", 180, minimum=0, maximum=86_400)
     return fail > 0 and (cooldown == 0 or not last_fail or now - last_fail <= cooldown)
 
@@ -440,7 +444,7 @@ def remove_seed(proxy_seed: str, reason: str) -> bool:
             handle.write(
                 json.dumps(
                     {
-                        "time": int(time.time()),
+                        "time": safe_int(time.time()),
                         "proxy": proxy_label(proxy_seed),
                         "reason": redact_log_text(str(reason or ""))[:300],
                     },
@@ -525,9 +529,9 @@ def record_seed_success(proxy_seed: str) -> None:
     if not proxy_chain_key(proxy_seed):
         return
     record = seed_record(proxy_seed)
-    record["success"] = int(record.get("success") or 0) + 1
+    record["success"] = safe_int(record.get("success")) + 1
     record["fail"] = 0
-    record["last_success"] = int(time.time())
+    record["last_success"] = safe_int(time.time())
     record["last_reason"] = "success"
     save_proxy_state()
 
@@ -537,15 +541,15 @@ def record_seed_failure(proxy_seed: str, reason: str) -> str:
     if not proxy_chain_key(proxy_seed) or is_account_error(reason) or is_checkout_shape_error(reason):
         return "kept"
     record = seed_record(proxy_seed)
-    record["fail"] = int(record.get("fail") or 0) + 1
-    record["last_fail"] = int(time.time())
+    record["fail"] = safe_int(record.get("fail")) + 1
+    record["last_fail"] = safe_int(time.time())
     record["last_reason"] = redact_log_text(str(reason or "failed"))[:240]
     if is_direct_proxy_error(reason) or "出口国家" in reason:
         record["removed"] = True
         save_proxy_state()
         return "removed" if remove_seed(proxy_seed, reason) else "kept"
     remove_after = env_int("KAKAO_PROXY_REMOVE_AFTER_FAILS", 3, minimum=1, maximum=100)
-    if is_proxy_health_error(reason) and int(record.get("fail") or 0) >= remove_after:
+    if is_proxy_health_error(reason) and safe_int(record.get("fail")) >= remove_after:
         record["removed"] = True
         save_proxy_state()
         return "removed" if remove_seed(proxy_seed, reason) else "kept"
@@ -569,7 +573,7 @@ def load_proxy_seeds() -> list[str]:
     if not unique:
         raise RuntimeError("代理 Seed 为空")
 
-    now = int(time.time())
+    now = safe_int(time.time())
     usable: list[str] = []
     skipped = 0
     for proxy in unique:
@@ -583,8 +587,8 @@ def load_proxy_seeds() -> list[str]:
     random.shuffle(usable)
     usable.sort(
         key=lambda proxy: (
-            int(seed_record(proxy).get("success") or 0),
-            int(seed_record(proxy).get("last_success") or 0),
+            safe_int(seed_record(proxy).get("success")),
+            safe_int(seed_record(proxy).get("last_success")),
         ),
         reverse=True,
     )
@@ -670,7 +674,7 @@ def extract_ip_country(source: str, payload: dict[str, Any]) -> tuple[str, str]:
             str(payload.get("country_code") or payload.get("country") or "").upper(),
         )
     if source == "ipwho":
-        if payload.get("success") is False:
+        if is_false(payload.get("success")):
             return str(payload.get("ip") or ""), ""
         return str(payload.get("ip") or ""), str(payload.get("country_code") or "").upper()
     if source == "myip":
@@ -688,7 +692,7 @@ def ip_info(proxy: str) -> dict[str, str]:
                 headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
                 timeout=PREFLIGHT_TIMEOUT,
             )
-            if int(getattr(response, "status_code", 599)) >= 400:
+            if safe_int(getattr(response, "status_code", 599)) >= 400:
                 failures.append(f"{source} HTTP {getattr(response, 'status_code', 599)}")
                 continue
             payload = response.json() or {}
@@ -721,7 +725,7 @@ def select_verified_seed(
 ) -> tuple[str, str, str, str] | None:
     """Select one Seed for the configured checkout -> promotion -> provider chain."""
     while True:
-        now = int(time.time())
+        now = safe_int(time.time())
         candidates = [
             seed
             for seed in proxy_seeds
@@ -733,8 +737,8 @@ def select_verified_seed(
             return None
         candidates.sort(
             key=lambda seed: (
-                int(seed_record(seed).get("success") or 0),
-                int(seed_record(seed).get("last_success") or 0),
+                safe_int(seed_record(seed).get("success")),
+                safe_int(seed_record(seed).get("last_success")),
             ),
             reverse=True,
         )
@@ -896,7 +900,7 @@ def update_checkout_promotion(session: Any, token: str, checkout_id: str, checko
         payload = response.json() or {}
     except (TypeError, ValueError):
         payload = {}
-    if isinstance(payload, dict) and payload.get("success") is False:
+    if isinstance(payload, dict) and is_false(payload.get("success")):
         raise RuntimeError(f"checkout/update rejected: {str(payload)[:500]}")
     log(f"{PROMOTION_COUNTRY} checkout/update 成功: promo={promo_id if 'promo_campaign' in body else 'off'}")
 
@@ -939,19 +943,19 @@ def update_kakao_checkout_taxes(
 def expected_amount(payload: dict[str, Any]) -> str:
     options = payload.get("elements_options") if isinstance(payload.get("elements_options"), dict) else {}
     if options.get("amount") is not None:
-        return str(int(options["amount"]))
+        return str(safe_int(options["amount"]))
     total_summary = payload.get("total_summary") if isinstance(payload.get("total_summary"), dict) else {}
     if total_summary.get("due") is not None:
-        return str(int(total_summary["due"]))
+        return str(safe_int(total_summary["due"]))
     invoice = payload.get("invoice") if isinstance(payload.get("invoice"), dict) else {}
     for name in ("amount_due", "total"):
         if invoice.get(name) is not None:
-            return str(int(invoice[name]))
+            return str(safe_int(invoice[name]))
     line_items = payload.get("line_items")
     if isinstance(line_items, list):
         amounts = [item.get("amount") for item in line_items if isinstance(item, dict) and item.get("amount") is not None]
         if amounts:
-            return str(sum(int(value) for value in amounts))
+            return str(sum(safe_int(value) for value in amounts))
     return "unknown"
 
 
@@ -1079,7 +1083,7 @@ def probe_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:
 
 def validate_kakao_access_token(token: str, proxy: str) -> dict[str, Any]:
     probe = probe_kakao_access_token(token, proxy)
-    probe_status = int(probe.get("status_code") or 0)
+    probe_status = safe_int(probe.get("status_code") or 0)
     detail = str(probe.get("error") or probe.get("quota_status") or "unknown")
     if probe_status == 401:
         raise RuntimeError(f"wham/usage failed 401: {detail}")
@@ -1351,7 +1355,7 @@ def kakao_result_contract(
     amount_match = re.search(r"amount=(\d+|none)", low)
     currency_match = re.search(r"currency=([a-z]{3}|none)", low)
     methods_match = re.search(r"methods=(\[[^\]]*\]|[^\s]+)", text, re.IGNORECASE)
-    amount = None if not amount_match or amount_match.group(1) == "none" else int(amount_match.group(1))
+    amount = None if not amount_match or amount_match.group(1) == "none" else safe_int(amount_match.group(1))
     currency = currency_match.group(1).upper() if currency_match else "KRW"
     methods_text = methods_match.group(1).lower() if methods_match else ""
     has_kakao = True if ok else (
@@ -1394,13 +1398,36 @@ def kakao_result_contract(
         "url": final_url,
         "provider_redirect_url": final_url,
         "link_type": "kakao_protocol_redirect" if ok else "kakao_protocol",
-        "attempts": max(0, int(attempts or 0)),
+        "attempts": max(0, safe_int(attempts or 0)),
         "error": "" if ok else text[:600],
     }
 
 
+_KAKAO_RESULT_REPORTER = ProtocolResultReporter("kakao")
+
+
 def print_kakao_result(contract: dict[str, Any]) -> None:
-    print(json.dumps(contract, ensure_ascii=False, separators=(",", ":")), flush=True)
+    """Emit the shared ``protocol_payment.v1`` terminal contract.
+
+    Replaces the extractor's private JSON shape: the manager keys off the
+    schema and reads the same fields every other extractor emits. The full
+    contract travels as ``artifacts`` (decision/stage/methods stays visible).
+    """
+    artifacts = {str(key): value for key, value in contract.items()}
+    link_type = str(contract.get("link_type") or "")
+    if is_true(contract.get("ok")):
+        _KAKAO_RESULT_REPORTER.success(
+            str(contract.get("url") or contract.get("provider_redirect_url") or ""),
+            link_type=link_type or "kakao_protocol_redirect",
+            artifacts=artifacts,
+        )
+        return
+    _KAKAO_RESULT_REPORTER.failure(
+        contract.get("error") or "kakao extraction failed",
+        error_code=str(contract.get("decision") or "kakao_failed"),
+        error_stage=str(contract.get("stage") or ""),
+        artifacts=artifacts,
+    )
 
 
 def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
