@@ -125,11 +125,7 @@ def _saved_registration_proxy(
     account: Mapping[str, Any] | None,
     config: Mapping[str, Any] | None,
 ) -> str:
-    if not (
-        _use_registration_affinity(config)
-        and isinstance(account, Mapping)
-        and account.get("identity_context")
-    ):
+    if not (_use_registration_affinity(config) and isinstance(account, Mapping) and account.get("identity_context")):
         return ""
     try:
         from .accounts.account_identity import resolve_account_proxy
@@ -256,6 +252,3 @@ __all__ = [
     "select_operation_proxy",
     "select_operation_proxy_candidate",
 ]
-
-
-__all__ = ["parse_lane_proxy_pool", "proxy_pool_for", "select_operation_proxy"]
