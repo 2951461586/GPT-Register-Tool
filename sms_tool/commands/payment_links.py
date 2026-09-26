@@ -36,21 +36,46 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
 
     paypal_cfg = ctx.runtime_config.get("paypal") if isinstance(ctx.runtime_config.get("paypal"), dict) else {}
     regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
-    generation_type = (getattr(args, "paypal_generation_type", None) or paypal_cfg.get("link_generation_type") or "").strip().lower().replace("-", "_")
-    hosted_types = {"long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout", "chatgpt_checkout_link", "checkout_link", "short_checkout", "chatgpt_short_link"}
+    generation_type = (
+        (getattr(args, "paypal_generation_type", None) or paypal_cfg.get("link_generation_type") or "")
+        .strip()
+        .lower()
+        .replace("-", "_")
+    )
+    hosted_types = {
+        "long",
+        "long_link",
+        "hosted",
+        "hosted_long",
+        "hosted_long_url",
+        "stripe_hosted",
+        "chatgpt_checkout",
+        "chatgpt_checkout_link",
+        "checkout_link",
+        "short_checkout",
+        "chatgpt_short_link",
+    }
     checkout_country = None
     if generation_type in hosted_types:
-        target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "US").strip().upper()
+        target_country = (
+            (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "US").strip().upper()
+        )
         checkout_country = (
-            getattr(args, "checkout_country", None)
-            or (regions[0] if regions else None)
-            or paypal_cfg.get("checkout_country")
-            or paypal_cfg.get("billing_country")
-            or target_country
-            or "US"
-        ).strip().upper()
+            (
+                getattr(args, "checkout_country", None)
+                or (regions[0] if regions else None)
+                or paypal_cfg.get("checkout_country")
+                or paypal_cfg.get("billing_country")
+                or target_country
+                or "US"
+            )
+            .strip()
+            .upper()
+        )
     else:
-        target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "GB").strip().upper()
+        target_country = (
+            (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "GB").strip().upper()
+        )
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "paypal")
     promotion_proxy = ctx.promotion_proxy_arg(args, "paypal")
     require_zero = not getattr(args, "no_require_zero", False)
@@ -88,21 +113,29 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     upi_cfg = ctx.runtime_config.get("upi") if isinstance(ctx.runtime_config.get("upi"), dict) else {}
     regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
     checkout_country = (
-        getattr(args, "checkout_country", None)
-        or getattr(args, "target_country", None)
-        or upi_cfg.get("checkout_country")
-        or upi_cfg.get("checkout_billing_country")
-        or upi_cfg.get("billing_country")
-        or upi_cfg.get("target_country")
-        or (regions[0] if regions else None)
-        or "IN"
-    ).strip().upper()
+        (
+            getattr(args, "checkout_country", None)
+            or getattr(args, "target_country", None)
+            or upi_cfg.get("checkout_country")
+            or upi_cfg.get("checkout_billing_country")
+            or upi_cfg.get("billing_country")
+            or upi_cfg.get("target_country")
+            or (regions[0] if regions else None)
+            or "IN"
+        )
+        .strip()
+        .upper()
+    )
     payment_country = (
-        getattr(args, "payment_country", None)
-        or upi_cfg.get("payment_country")
-        or upi_cfg.get("payment_method_country")
-        or "IN"
-    ).strip().upper()
+        (
+            getattr(args, "payment_country", None)
+            or upi_cfg.get("payment_country")
+            or upi_cfg.get("payment_method_country")
+            or "IN"
+        )
+        .strip()
+        .upper()
+    )
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "upi")
     require_zero = not getattr(args, "no_require_zero", False)
     result = generate_upi_qr_link(
@@ -116,6 +149,10 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
         payment_country=payment_country,
         require_zero=require_zero,
         qr_path=getattr(args, "qr_path", None),
+        runtime_config=ctx.runtime_config,
+        wait_paid=bool(getattr(args, "wait_paid", False)),
+        paid_timeout=getattr(args, "paid_timeout", 900.0) or 900.0,
+        require_server_upi_mandate=bool(getattr(args, "require_server_upi_mandate", False)),
     )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -133,7 +170,7 @@ def auto_pay(args: Any) -> None:
         print("[Error] --email or --session-file is required with --auto-pay")
         return
 
-    reverse_only = getattr(args, 'auto_pay_reverse_only', False)
+    reverse_only = getattr(args, "auto_pay_reverse_only", False)
     mode = "reverse-only" if reverse_only else "reverse+browser"
     print(f"[*] Starting auto-pay ({mode}) for: {email or session_file}")
     # Rule 6: the execution layer consumes links; generation stays in the
@@ -173,9 +210,9 @@ def batch_auto_pay(args: Any) -> None:
     # Get accounts with pending PayPal status
     all_accounts = list_paypal_accounts()
     pending = [
-        row for row in all_accounts
-        if row.get("paypal_status") in ("", "missing", "failed", "link_ready")
-        and row.get("access_token")
+        row
+        for row in all_accounts
+        if row.get("paypal_status") in ("", "missing", "failed", "link_ready") and row.get("access_token")
     ]
 
     if limit > 0:
@@ -236,9 +273,7 @@ def list_paypal_ba_queue(args: Any) -> None:
     from ..desktop_ipc import emit_result
     from ..paypal_authorization_queue import list_paypal_ba_authorizations
 
-    items = list_paypal_ba_authorizations(
-        limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0))
-    )
+    items = list_paypal_ba_authorizations(limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0)))
     emit_result(
         {"ok": True, "total": len(items), "results": items},
         enabled=bool(getattr(args, "desktop_ipc", False)),

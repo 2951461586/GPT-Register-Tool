@@ -61,7 +61,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urljoin, urlsplit
 
 try:
     from .paypal_extract import CURRENCY_MAP, _new_session
@@ -176,9 +176,7 @@ def _upi_redact_for_dump(text: Any) -> str:
     """
     value = str(text if text is not None else "")
     value = re.sub(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1***", value)
-    value = re.sub(
-        r"(?i)(__Secure-next-auth\.session-token=)[^;,\s\"']+", r"\1***", value
-    )
+    value = re.sub(r"(?i)(__Secure-next-auth\.session-token=)[^;,\s\"']+", r"\1***", value)
     value = re.sub(
         r"(?i)((?:access[_-]?token|session[_-]?token|api[_-]?key|token)"
         r"[\"']?\s*[:=]\s*[\"']?)[A-Za-z0-9._~+/=-]{6,}",
@@ -264,14 +262,16 @@ def _upi_dump_http(
             "",
         ]
         if response is not None:
-            lines.extend([
-                "status: %s" % status,
-                "url: %s" % url,
-                "",
-                "response:",
-                _upi_redact_for_dump(body_text)[:limit],
-                "",
-            ])
+            lines.extend(
+                [
+                    "status: %s" % status,
+                    "url: %s" % url,
+                    "",
+                    "response:",
+                    _upi_redact_for_dump(body_text)[:limit],
+                    "",
+                ]
+            )
         else:
             lines.extend(["response: <none>", ""])
 
@@ -307,6 +307,7 @@ def _load_json(path: str) -> dict:
     """Load a JSON object from disk, accepting UTF-8 files with or without BOM."""
     if os.path.abspath(path) == os.path.abspath(DEFAULT_CONFIG_PATH):
         from .config import load_merged_config
+
         return load_merged_config()
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
@@ -328,6 +329,35 @@ STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs
 STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
 STRIPE_PAYMENT_METHODS_URL = "https://api.stripe.com/v1/payment_methods"
 STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
+
+# Server-advertised UPI custom payment method (cpmt) rail. Aligned with the
+# reference implementation: this path is entirely ChatGPT-side and never
+# creates a Stripe SetupIntent -- the stage most likely to answer
+# ``generic_decline``.
+UPI_CPMT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
+UPI_CPMT_START_URL = "https://chatgpt.com/backend-api/payments/checkout/custom_payment_method/start"
+# Sentinel flow for the ChatGPT approval/confirm endpoints (page chatgpt.com).
+UPI_SENTINEL_APPROVAL_FLOW = "checkout_session_approval"
+# The Checkout *create* request needs its own Sentinel flow. Measured live
+# 2026-09-26: the approval flow is answered with HTTP 400 unusual activity,
+# while ``chatgpt_checkout`` is accepted (matches the reference ``_run_upi_attempt``).
+UPI_SENTINEL_CHECKOUT_FLOW = "chatgpt_checkout"
+# The protocol risk rail needs an egress-country-correct client identity. The
+# reference's git5 rail scrapes the live ChatGPT page for this; we keep the
+# same shape but reuse the already-supported chatgpt.com Sentinel flow.
+UPI_WARMUP_TIMEOUT = 25
+UPI_ATTESTATION_ENV_KEYS = (
+    "PAY153_UPI_ATTESTATION",
+    "MIN_UPI_ATTESTATION",
+    "MIN_OAICS_ATTESTATION",
+)
+_UPI_PAGE_BUILD_RE = re.compile(r'<html[^>]*\bdata-build="([^"]+)"', re.I)
+_UPI_PAGE_BUILD_ANY_RE = re.compile(r'\bdata-build="([^"]+)"', re.I)
+_UPI_PAGE_SEQ_RE = re.compile(r'<html[^>]*\bdata-seq="([^"]+)"', re.I)
+_UPI_PAGE_SEQ_ANY_RE = re.compile(r'\bdata-seq="(\d+)"', re.I)
+_UPI_PAGE_SEQ_JSON_RE = re.compile(r'"buildNumber"\s*:\s*"?(\d{5,})')
+_UPI_ATTESTATION_RE = re.compile(r'"webDeploymentAttestation"\s*:\s*"([^"]+)"')
+_UPI_ATTESTATION_ANY_RE = re.compile(r'[^A-Za-z0-9]webDeploymentAttestation[=:]\s*["\']?([A-Za-z0-9._-]+)')
 
 UPI_APPROVAL_MAX_ATTEMPTS = 60
 UPI_QR_POLL_MAX_ATTEMPTS = 30
@@ -383,9 +413,7 @@ UPI_FINGERPRINT_TEMPLATES: tuple[dict[str, str], ...] = (
         "name": "chrome-linux",
         "impersonate": "chrome136",
         "user_agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/136.0.7103.114 Safari/537.36"
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.114 Safari/537.36"
         ),
         "sec_ch_ua": '"Not.A/Brand";v="99", "Chromium";v="136", "Google Chrome";v="136"',
         "sec_ch_ua_mobile": "?0",
@@ -442,9 +470,7 @@ def _upi_billing_profile(cfg: Mapping[str, Any] | None = None) -> dict[str, str]
     """
     section = cfg if isinstance(cfg, Mapping) else {}
     first_name, last_name = UPI_BILLING_NAMES[secrets.randbelow(len(UPI_BILLING_NAMES))]
-    line1, city, postal_code, state = UPI_BILLING_ADDRESSES[
-        secrets.randbelow(len(UPI_BILLING_ADDRESSES))
-    ]
+    line1, city, postal_code, state = UPI_BILLING_ADDRESSES[secrets.randbelow(len(UPI_BILLING_ADDRESSES))]
     domain = UPI_EMAIL_DOMAINS[secrets.randbelow(len(UPI_EMAIL_DOMAINS))]
     profile = {
         "email": f"{first_name.lower()}.{last_name.lower()}{secrets.randbelow(9000) + 1000}@{domain}",
@@ -512,9 +538,7 @@ def _upi_fingerprint(index: int | None = None, country: str | None = None) -> di
         locale = str(getattr(profile, "browser_locale", "") or "")
         timezone_name = str(getattr(profile, "browser_timezone", "") or "")
         if not locale or not timezone_name:
-            raise RuntimeError(
-                "browser_profile_for_country(%r) 返回的 profile 缺字段: %r" % (country, profile)
-            )
+            raise RuntimeError("browser_profile_for_country(%r) 返回的 profile 缺字段: %r" % (country, profile))
         result["locale"] = locale
         result["accept_language"] = _upi_accept_language_for(locale)
         result["timezone"] = timezone_name
@@ -664,13 +688,956 @@ def _upi_new_chatgpt_session(
     if session_token:
         existing_cookie = str(session.headers.get("Cookie") or "")
         if existing_cookie:
-            session.headers["Cookie"] = (
-                f"{existing_cookie}; __Secure-next-auth.session-token={session_token}"
-            )
+            session.headers["Cookie"] = f"{existing_cookie}; __Secure-next-auth.session-token={session_token}"
         else:
             session.headers["Cookie"] = f"__Secure-next-auth.session-token={session_token}"
     return session
 
+
+def _upi_session_is_live(session: Any) -> bool:
+    """True only for a real transport session, never a test double.
+
+    The risk rail (page warmup, Sentinel issuance, sentinel ping) performs real
+    network calls. Tests patch ``_new_session`` with a fake, so gating on the
+    concrete curl_cffi type keeps the offline suite free of network side
+    effects while production always takes the live path.
+    """
+    if session is None:
+        return False
+    if _curl_requests is not None:
+        try:
+            return isinstance(session, _curl_requests.Session)
+        except Exception:
+            return False
+    return type(session).__module__.split(".", 1)[0] in {"requests", "curl_cffi"}
+
+
+def _upi_account_id_from_token(token: str) -> str:
+    """Read the ChatGPT account id from an access token without verifying it."""
+    try:
+        parts = str(token or "").split(".")
+        if len(parts) < 2:
+            return ""
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded))
+        auth = payload.get("https://api.openai.com/auth") or {}
+        return str(auth.get("chatgpt_account_id") or payload.get("chatgpt_account_id") or "")
+    except Exception:
+        return ""
+
+
+def _upi_promo_page_url(campaign: str = PLUS_TRIAL_CAMPAIGN_ID) -> str:
+    """The campaign entry page the browser checkout navigates through first."""
+    return "https://chatgpt.com/?promo_campaign=" + quote(str(campaign or PLUS_TRIAL_CAMPAIGN_ID), safe="")
+
+
+def _upi_attestation_deploy_id(attestation: str) -> str:
+    """Extract the deployment hash from a ``webDeploymentAttestation`` value."""
+    for part in str(attestation or "").strip().split("."):
+        if len(part) >= 16 and re.fullmatch(r"[A-Za-z0-9_-]+", part):
+            return part
+    return ""
+
+
+def _upi_scrape_page_identity(html: str) -> tuple[str, str, str]:
+    """Return ``(client_version, client_build, attestation)`` scraped from HTML.
+
+    Aligned with the reference ``_apply_upi_page_identity`` /
+    ``_fetch_web_attestation``: the live page carries ``data-build`` /
+    ``data-seq`` and the server-signed ``webDeploymentAttestation``. Pinning
+    these to constants makes the client look stale and self-contradictory.
+    """
+    text = str(html or "")
+    version = ""
+    build_match = _UPI_PAGE_BUILD_RE.search(text) or _UPI_PAGE_BUILD_ANY_RE.search(text)
+    if build_match:
+        raw = build_match.group(1).strip()
+        version = raw if raw.startswith("prod-") else f"prod-{raw}"
+    seq_match = _UPI_PAGE_SEQ_RE.search(text) or _UPI_PAGE_SEQ_ANY_RE.search(text) or _UPI_PAGE_SEQ_JSON_RE.search(text)
+    build = str(seq_match.group(1)).strip() if seq_match else ""
+    attestation = ""
+    match = _UPI_ATTESTATION_RE.search(text) or _UPI_ATTESTATION_ANY_RE.search(text)
+    if match and "." in match.group(1):
+        attestation = match.group(1).strip()
+    return version, build, attestation
+
+
+def _upi_env_attestation() -> str:
+    for key in UPI_ATTESTATION_ENV_KEYS:
+        value = str(os.environ.get(key) or "").strip()
+        if value and "." in value:
+            return value
+    return ""
+
+
+def _upi_find_attestation(text: Any) -> str:
+    """Find a two-part ``webDeploymentAttestation`` in a serialized page."""
+    value = str(text or "")
+    match = _UPI_ATTESTATION_RE.search(value) or _UPI_ATTESTATION_ANY_RE.search(value)
+    if match and "." in match.group(1):
+        return match.group(1).strip()
+    return ""
+
+
+def _upi_browser_available() -> bool:
+    """True when the headless browser rail can run in this interpreter."""
+    try:
+        import playwright.sync_api  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
+def _upi_browser_proxy(proxy: Any) -> dict[str, str] | None:
+    """Convert a proxy URL to Playwright's launch proxy dict.
+
+    Chromium rejects the ``socks5h`` scheme (remote DNS is implicit in
+    Chromium's ``socks5``), so it is normalised here; credentials are
+    percent-decoded for Playwright.
+    """
+    value = str(proxy or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value)
+    except Exception:
+        return None
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    scheme = "socks5" if parsed.scheme == "socks5h" else parsed.scheme
+    server = f"{scheme}://{parsed.hostname}"
+    if parsed.port:
+        server += f":{parsed.port}"
+    result: dict[str, str] = {"server": server}
+    if parsed.username:
+        result["username"] = unquote(parsed.username)
+    if parsed.password:
+        result["password"] = unquote(parsed.password)
+    return result
+
+
+def _upi_browser_capture(
+    *,
+    access_token: Any,
+    session_token: Any,
+    device_id: Any,
+    proxy: Any,
+    fingerprint: Any,
+    page_url: Any,
+    sentinel_flow: Any = "",
+    timeout_s: float = 30.0,
+) -> dict[str, Any]:
+    """Headless browser rail: capture the browser-issued risk context.
+
+    Mirrors the reference ``capture_browser_bootstrap``: launch a headless
+    Chromium through the same egress, seed the account cookies, inject the
+    access token onto ChatGPT backend requests, then read the headers the real
+    frontend attaches — ``oai-web-deployment-attestation`` and, crucially,
+    ``x-oai-is-client-observation``. The observation is a browser-signed value
+    that the protocol path cannot synthesise, and it is what the ChatGPT
+    ``checkout/approve`` risk gate validates.
+
+    Read-only and evidence-only: it never fabricates a signature, and every
+    failure degrades to an empty capture so the caller can fall back.
+    """
+    result: dict[str, Any] = {
+        "attestation": "",
+        "observation": "",
+        "client_version": "",
+        "client_build": "",
+        "cookies": {},
+        "stripe_ids": {},
+        "sentinel_token": "",
+        "sentinel_flow": "",
+        "error": "",
+    }
+    if not _upi_browser_available():
+        result["error"] = "playwright_unavailable"
+        return result
+    from playwright.sync_api import sync_playwright
+
+    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    locale = str(fp.get("locale") or "en-US")
+    timezone_id = str(fp.get("timezone") or "UTC")
+    user_agent = str(fp.get("user_agent") or "").strip()
+    target = str(page_url or "https://chatgpt.com/") or "https://chatgpt.com/"
+    capture_ms = _upi_int_value(min(max(10.0, _upi_int_value(timeout_s)[0] or 30) * 1000, 40000))[0] or 30000
+    cookies = {"oai-did": str(device_id or "")}
+    if str(session_token or "").strip():
+        cookies["__Secure-next-auth.session-token"] = str(session_token).strip()
+    try:
+        with sync_playwright() as playwright:
+            launch: dict[str, Any] = {
+                "headless": True,
+                "timeout": capture_ms,
+                "args": ["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"],
+            }
+            pw_proxy = _upi_browser_proxy(proxy)
+            if pw_proxy:
+                launch["proxy"] = pw_proxy
+            browser = playwright.chromium.launch(**launch)
+            context = browser.new_context(
+                user_agent=user_agent or None,
+                locale=locale,
+                timezone_id=timezone_id,
+            )
+            try:
+                context.add_cookies(
+                    [
+                        {"name": name, "value": value, "url": "https://chatgpt.com/"}
+                        for name, value in cookies.items()
+                        if value
+                    ]
+                )
+            except Exception:
+                pass
+
+            def observe(request: Any) -> None:
+                try:
+                    raw_headers = request.all_headers()
+                except Exception:
+                    raw_headers = getattr(request, "headers", None)
+                if not isinstance(raw_headers, Mapping):
+                    raw_headers = {}
+                headers = {str(key).lower(): str(value) for key, value in raw_headers.items()}
+                if headers.get("oai-web-deployment-attestation"):
+                    result["attestation"] = headers["oai-web-deployment-attestation"]
+                if headers.get("x-oai-is-client-observation"):
+                    result["observation"] = headers["x-oai-is-client-observation"]
+                if headers.get("oai-client-version"):
+                    result["client_version"] = headers["oai-client-version"]
+                if headers.get("oai-client-build-number"):
+                    result["client_build"] = headers["oai-client-build-number"]
+                request_url = str(getattr(request, "url", "") or "")
+                host = (urlsplit(request_url).hostname or "").lower()
+                if host.endswith("stripe.com"):
+                    encoded_values = [urlsplit(request_url).query]
+                    post_data = getattr(request, "post_data", "")
+                    if callable(post_data):
+                        post_data = post_data()
+                    if post_data:
+                        encoded_values.append(str(post_data))
+                    for encoded in encoded_values:
+                        for key, value in parse_qsl(encoded, keep_blank_values=False):
+                            if key in {"guid", "muid", "sid", "stripe_js_id"} and value:
+                                result["stripe_ids"].setdefault(key, value)
+
+            def route_handler(route: Any) -> None:
+                request = route.request
+                low = str(request.url or "").lower()
+                if "chatgpt.com/backend-api/" in low and "/backend-api/sentinel/" not in low:
+                    try:
+                        headers = dict(request.all_headers())
+                    except Exception:
+                        fallback = request.headers
+                        headers = dict(fallback) if isinstance(fallback, Mapping) else {}
+                    if str(access_token or "").strip():
+                        headers["authorization"] = f"Bearer {access_token}"
+                    if str(device_id or "").strip():
+                        headers["oai-device-id"] = str(device_id)
+                    route.continue_(headers=headers)
+                else:
+                    route.continue_()
+
+            page = context.new_page()
+            context.on("request", observe)
+            page.route("**/*", route_handler)
+            page.goto(target, wait_until="domcontentloaded", timeout=capture_ms)
+            page.wait_for_timeout(1200)
+            try:
+                page.evaluate(
+                    """() => fetch('/backend-api/models?history_and_training_disabled=false',
+                       {credentials: 'include', headers: {'accept': 'application/json'}})
+                       .then(r => r.text()).catch(() => '')"""
+                )
+            except Exception:
+                pass
+            deadline = time.monotonic() + max(5.0, float(timeout_s) - 5.0)
+            while time.monotonic() < deadline and not result["attestation"]:
+                page.wait_for_timeout(500)
+            if not result["attestation"]:
+                try:
+                    serialized = page.evaluate(
+                        """() => { const values = [document.documentElement.outerHTML];
+                           for (const key of ['__remixContext','__NEXT_DATA__','__reactRouterContext']) {
+                             try { if (window[key]) values.push(JSON.stringify(window[key])); } catch (_) {} }
+                           return values.join('\\n'); }"""
+                    )
+                    found = _upi_find_attestation(serialized)
+                    if found:
+                        result["attestation"] = found
+                except Exception:
+                    pass
+            for cookie in context.cookies("https://chatgpt.com/"):
+                name = str(cookie.get("name") or "")
+                value = str(cookie.get("value") or "")
+                if name and value:
+                    result["cookies"][name] = value
+            # A Sentinel minted inside the same page carries the browser's real
+            # fingerprint; an out-of-band token is not interchangeable when the
+            # risk engine correlates it with the observed browser session.
+            flow = str(sentinel_flow or "").strip()
+            if flow:
+                try:
+                    sdk_ms = _upi_int_value(min(max(5.0, _upi_int_value(timeout_s)[0] or 30) * 1000, 12000))[0] or 8000
+                    if not page.evaluate("() => typeof globalThis.SentinelSDK === 'object'"):
+                        page.add_script_tag(url="https://chatgpt.com/backend-api/sentinel/sdk.js")
+                    page.wait_for_function(
+                        "() => globalThis.SentinelSDK && typeof globalThis.SentinelSDK.token === 'function'",
+                        timeout=sdk_ms,
+                    )
+                    token = page.evaluate(
+                        """async ({flow, timeoutMs}) => {
+                          const sdk = globalThis.SentinelSDK;
+                          const value = await Promise.race([
+                            (async () => {
+                              if (typeof sdk.init === 'function') await sdk.init(flow);
+                              return sdk.token(flow);
+                            })(),
+                            new Promise((_, reject) => setTimeout(
+                              () => reject(new Error('Sentinel token timeout')), timeoutMs)),
+                          ]);
+                          return typeof value === 'string' ? value : JSON.stringify(value);
+                        }""",
+                        {"flow": flow, "timeoutMs": sdk_ms},
+                    )
+                    decoded = json.loads(str(token or ""))
+                    if (
+                        decoded.get("id") == str(device_id)
+                        and decoded.get("flow") == flow
+                        and decoded.get("c")
+                        and decoded.get("p")
+                    ):
+                        result["sentinel_token"] = str(token)
+                        result["sentinel_flow"] = flow
+                except Exception as exc:
+                    detail = f"browser_sentinel:{type(exc).__name__}"
+                    result["error"] = ((result["error"] + "; ") if result["error"] else "") + detail
+            try:
+                stripe_cookies = [
+                    cookie
+                    for cookie in context.cookies()
+                    if str(cookie.get("name") or "") in {"__stripe_mid", "__stripe_sid"}
+                ]
+            except Exception:
+                stripe_cookies = []
+            for cookie in stripe_cookies:
+                name = str(cookie.get("name") or "")
+                value = str(cookie.get("value") or "")
+                if name == "__stripe_mid" and value:
+                    result["stripe_ids"].setdefault("muid", value)
+                elif name == "__stripe_sid" and value:
+                    result["stripe_ids"].setdefault("sid", value)
+            browser.close()
+    except Exception as exc:
+        result["error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
+    return result
+
+
+def _upi_browser_approve(
+    *,
+    access_token: Any,
+    session_token: Any,
+    device_id: Any,
+    proxy: Any,
+    fingerprint: Any,
+    processor_entity: Any,
+    cs_id: Any,
+    timeout_s: float = 40.0,
+) -> dict[str, Any]:
+    """Perform the ChatGPT ``checkout/approve`` call inside a real browser.
+
+    Replaying a captured observation from curl_cffi is not always enough: the
+    risk engine also correlates the request with the browser session that
+    produced it. This launches a headless Chromium on the Checkout page, lets
+    the page emit its own signed observation, then issues the approve POST from
+    the page itself so the cookies, TLS and observation all belong to the same
+    real session.
+    """
+    result: dict[str, Any] = {
+        "ok": False,
+        "status": 0,
+        "result": "",
+        "observation": "",
+        "attestation": "",
+        "error": "",
+    }
+    if not _upi_browser_available():
+        result["error"] = "playwright_unavailable"
+        return result
+    from playwright.sync_api import sync_playwright
+
+    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    locale = str(fp.get("locale") or "en-US")
+    timezone_id = str(fp.get("timezone") or "UTC")
+    user_agent = str(fp.get("user_agent") or "").strip()
+    page_url = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    page_ms = _upi_int_value(min(max(10.0, _upi_int_value(timeout_s)[0] or 40) * 1000, 60000))[0] or 40000
+    seen: dict[str, str] = {}
+    try:
+        with sync_playwright() as playwright:
+            launch: dict[str, Any] = {
+                "headless": True,
+                "timeout": page_ms,
+                "args": ["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"],
+            }
+            pw_proxy = _upi_browser_proxy(proxy)
+            if pw_proxy:
+                launch["proxy"] = pw_proxy
+            browser = playwright.chromium.launch(**launch)
+            context = browser.new_context(user_agent=user_agent or None, locale=locale, timezone_id=timezone_id)
+            context.add_cookies(
+                [
+                    {"name": "oai-did", "value": str(device_id or ""), "url": "https://chatgpt.com/"},
+                    {
+                        "name": "__Secure-next-auth.session-token",
+                        "value": str(session_token or ""),
+                        "url": "https://chatgpt.com/",
+                    },
+                ]
+            )
+
+            def observe(request: Any) -> None:
+                try:
+                    raw_headers = request.all_headers()
+                except Exception:
+                    raw_headers = getattr(request, "headers", None)
+                headers = (
+                    {str(k).lower(): str(v) for k, v in raw_headers.items()} if isinstance(raw_headers, Mapping) else {}
+                )
+                if headers.get("x-oai-is-client-observation"):
+                    seen["observation"] = headers["x-oai-is-client-observation"]
+                if headers.get("oai-web-deployment-attestation"):
+                    seen["attestation"] = headers["oai-web-deployment-attestation"]
+
+            def route_handler(route: Any) -> None:
+                request = route.request
+                low = str(request.url or "").lower()
+                if "chatgpt.com/backend-api/" in low:
+                    try:
+                        headers = dict(request.all_headers())
+                    except Exception:
+                        fallback = request.headers
+                        headers = dict(fallback) if isinstance(fallback, Mapping) else {}
+                    headers["authorization"] = f"Bearer {access_token}"
+                    headers["oai-device-id"] = str(device_id)
+                    if seen.get("observation"):
+                        headers["x-oai-is-client-observation"] = seen["observation"]
+                    if seen.get("attestation"):
+                        headers["oai-web-deployment-attestation"] = seen["attestation"]
+                    route.continue_(headers=headers)
+                else:
+                    route.continue_()
+
+            page = context.new_page()
+            context.on("request", observe)
+            page.route("**/*", route_handler)
+            page.goto(page_url, wait_until="domcontentloaded", timeout=page_ms)
+            page.wait_for_timeout(2500)
+            if not seen.get("observation"):
+                try:
+                    page.evaluate(
+                        """() => fetch('/backend-api/models?history_and_training_disabled=false',
+                           {credentials: 'include'}).then(r => r.text()).catch(() => '')"""
+                    )
+                    page.wait_for_timeout(1500)
+                except Exception:
+                    pass
+            result["observation"] = seen.get("observation", "")
+            result["attestation"] = seen.get("attestation", "")
+            payload = page.evaluate(
+                """async ({csId, processor, device}) => {
+                  const r = await fetch('/backend-api/payments/checkout/approve', {
+                    method: 'POST', credentials: 'include',
+                    headers: {'content-type': 'application/json', 'accept': 'application/json', 'oai-device-id': device},
+                    body: JSON.stringify({checkout_session_id: csId, processor_entity: processor}),
+                  });
+                  const text = await r.text();
+                  return {status: r.status, body: text.slice(0, 4000)};
+                }""",
+                {"csId": str(cs_id), "processor": str(processor_entity), "device": str(device_id)},
+            )
+            result["status"] = int((payload or {}).get("status") or 0)
+            try:
+                data = json.loads(str((payload or {}).get("body") or "{}"))
+            except Exception:
+                data = {}
+            result["result"] = str((data or {}).get("result") or "").strip().lower()
+            result["ok"] = result["status"] < 400 and result["result"] == "approved"
+            if not result["ok"]:
+                result["error"] = f"status={result['status']} result={result['result'] or 'unknown'}"
+            browser.close()
+    except Exception as exc:
+        result["error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
+    return result
+
+
+class _UpiRiskContext:
+    """Protocol-only ChatGPT risk context (reference git5 rail).
+
+    Holds the live deployment attestation, the current client build and one
+    rotating signed-observation value plus a coherent ``oai-telemetry``
+    sequence for the whole attempt. It is deliberately browser-free: the
+    ChatGPT checkout rejection (HTTP 400 unusual activity) is answered with the
+    same server-issued attestation and observation headers a real frontend
+    sends, not with a headless browser.
+    """
+
+    def __init__(self) -> None:
+        self.attestation = ""
+        self.client_version = UPI_CHATGPT_CLIENT_VERSION
+        self.client_build = UPI_CHATGPT_CLIENT_BUILD_NUMBER
+        self.observation = ""
+        self.browser_observation = False
+        self.stripe_ids: dict[str, str] = {}
+        self.sentinel_tokens: dict[str, str] = {}
+        self._started_at = 0.0
+        self._seq = 0
+        self._counter_b = 0
+        self._counter_c = 0
+
+    def apply_capture(self, capture: Any) -> bool:
+        """Merge a browser capture; True when it supplied an observation.
+
+        A browser-issued observation is stage-specific and must be forwarded
+        verbatim, so ``browser_observation`` makes :meth:`headers` reuse it
+        instead of rotating a synthetic protocol value.
+        """
+        if not isinstance(capture, Mapping):
+            return False
+        attestation = str(capture.get("attestation") or "").strip()
+        if attestation and "." in attestation:
+            self.attestation = attestation
+            deploy = _upi_attestation_deploy_id(attestation)
+            if deploy:
+                self.client_version = f"prod-{deploy}"
+        observation = str(capture.get("observation") or "").strip()
+        used = False
+        if observation:
+            self.observation = observation
+            self.browser_observation = True
+            used = True
+        version = str(capture.get("client_version") or "").strip()
+        if version:
+            self.client_version = version
+        build = str(capture.get("client_build") or "").strip()
+        if build:
+            self.client_build = build
+        captured_ids = capture.get("stripe_ids")
+        if isinstance(captured_ids, Mapping):
+            for key in ("guid", "muid", "sid", "stripe_js_id"):
+                value = str(captured_ids.get(key) or "").strip()
+                if value:
+                    self.stripe_ids[key] = value
+        token = str(capture.get("sentinel_token") or "").strip()
+        token_flow = str(capture.get("sentinel_flow") or "").strip()
+        if token and token_flow:
+            self.sentinel_tokens[token_flow] = token
+        return used
+
+    def observation_header(self) -> str:
+        if self.browser_observation and self.observation:
+            return self.observation
+        return self.rotate_observation()
+
+    def rotate_observation(self) -> str:
+        self.observation = "v1.r.p." + secrets.token_urlsafe(12)[:16]
+        return self.observation
+
+    def telemetry(self) -> str:
+        now = time.monotonic()
+        if not self._started_at:
+            self._started_at = now
+        self._seq += 1
+        if not self._counter_b or not self._counter_c:
+            self._counter_b = secrets.randbelow(211) + 30
+            self._counter_c = secrets.randbelow(81) + 10
+        elapsed = round(max(120.0, (now - self._started_at) * 1000.0) + secrets.randbelow(41), 4)
+        total = round(elapsed + secrets.randbelow(9), 1)
+        return f"[1,{elapsed},{min(self._seq, 60)},{self._counter_b},{self._counter_c},2,0,{total}]"
+
+    def headers(self, *, account_id: str = "") -> dict[str, str]:
+        headers = {
+            "oai-client-version": self.client_version,
+            "oai-client-build-number": self.client_build,
+            "oai-telemetry": self.telemetry(),
+            "x-openai-web-frontend": "core_web",
+            "x-openai-codex-window-type": "not_applicable",
+            "x-oai-is-pending-updates": '{"v":3,"updates":[]}',
+            "x-oai-is-client-observation": self.observation_header(),
+        }
+        if self.attestation:
+            headers["oai-web-deployment-attestation"] = self.attestation
+        if account_id:
+            headers["Chatgpt-Account-Id"] = account_id
+        return headers
+
+
+def _upi_warmup_session(
+    session: Any,
+    *,
+    device_id: Any,
+    page_url: Any,
+    fingerprint: Any,
+) -> str:
+    """GET the campaign page on the same session so its cookies are absorbed."""
+    if not hasattr(session, "get"):
+        return ""
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": str(fingerprint.get("accept_language") or "en-IN,en;q=0.9"),
+        "Referer": page_url,
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "same-origin",
+        "upgrade-insecure-requests": "1",
+    }
+    try:
+        response = session.get(page_url, headers=headers, timeout=UPI_WARMUP_TIMEOUT)
+    except Exception as exc:
+        _emit("risk", f"warmup failed (non-fatal): {type(exc).__name__}")
+        return ""
+    return str(getattr(response, "text", "") or "")
+
+
+def _upi_capture_risk_context(
+    session: Any,
+    *,
+    access_token: Any,
+    device_id: Any,
+    page_url: Any,
+    fingerprint: Any,
+    proxy: Any = "",
+    session_token: Any = "",
+    use_browser: bool = False,
+    sentinel_flow: Any = "",
+) -> _UpiRiskContext:
+    """Warm the session and capture the risk context.
+
+    Prefers the headless browser rail when requested and available: only a
+    real browser emits the signed ``x-oai-is-client-observation`` value the
+    ChatGPT approval gate validates. Protocol scrapes remain the fallback so a
+    missing Playwright or a blocked page never aborts the attempt.
+    """
+    risk = _UpiRiskContext()
+    risk.attestation = _upi_env_attestation()
+    if not _upi_session_is_live(session):
+        return risk
+    if use_browser:
+        capture = _upi_browser_capture(
+            access_token=access_token,
+            session_token=session_token,
+            device_id=device_id,
+            proxy=proxy,
+            fingerprint=fingerprint,
+            page_url=page_url,
+            sentinel_flow=sentinel_flow,
+        )
+        used = risk.apply_capture(capture)
+        _emit(
+            "risk",
+            "browser rail: attestation=%s observation=%s error=%s"
+            % (
+                "yes" if risk.attestation else "no",
+                "yes" if used else "no",
+                str(capture.get("error") or "none")[:90],
+            ),
+        )
+        if risk.attestation or used:
+            return risk
+        _emit("risk", "browser rail unavailable; falling back to protocol scrapes")
+    html = _upi_warmup_session(session, device_id=device_id, page_url=page_url, fingerprint=fingerprint)
+    version, build, attestation = _upi_scrape_page_identity(html)
+    if version:
+        risk.client_version = version
+    if build:
+        risk.client_build = build
+    if attestation:
+        risk.attestation = attestation
+    deploy = _upi_attestation_deploy_id(risk.attestation)
+    if deploy:
+        risk.client_version = f"prod-{deploy}"
+    risk.rotate_observation()
+    _emit(
+        "risk",
+        "protocol risk context: attestation=%s build=%s" % ("yes" if risk.attestation else "no", risk.client_build),
+    )
+    return risk
+
+
+def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
+    """Best-effort Sentinel connectivity ping (failure is never fatal)."""
+    if not _upi_session_is_live(session) or not hasattr(session, "post"):
+        return
+    try:
+        session.post(
+            UPI_SENTINEL_PING_URL,
+            json={},
+            headers={
+                "Referer": referer,
+                "x-openai-target-path": "/backend-api/sentinel/ping",
+                "x-openai-target-route": "/backend-api/sentinel/ping",
+            },
+            timeout=UPI_WARMUP_TIMEOUT,
+        )
+    except Exception:
+        pass
+
+
+def _upi_ensure_checkout_flow() -> str:
+    """Register and return the create-time Sentinel flow.
+
+    The shared ``sentinel`` module ships the registration vocabulary; the UPI
+    checkout flow is registered lazily here so a payment-only concept does not
+    become part of that public map. ``issue_sentinel_token`` resolves the flow
+    through ``FLOW_PAGE_URLS`` at call time, so this is sufficient.
+    """
+    try:
+        from .sentinel import client as sentinel_client
+
+        flows = getattr(sentinel_client, "FLOW_PAGE_URLS", None)
+        if isinstance(flows, dict):
+            flows.setdefault(UPI_SENTINEL_CHECKOUT_FLOW, "https://chatgpt.com/")
+    except Exception:
+        pass
+    return UPI_SENTINEL_CHECKOUT_FLOW
+
+
+def _upi_sentinel_headers(
+    session: Any,
+    device_id: Any,
+    proxy: Any,
+    *,
+    flow: str = UPI_SENTINEL_APPROVAL_FLOW,
+    supplied_token: str = "",
+) -> dict[str, str]:
+    """Mint one Sentinel token bound to this flow and session.
+
+    Advisory only: a missing or malformed token must not abort an otherwise
+    valid Checkout session, so every failure degrades to an empty header set
+    and lets the upstream risk layer classify the response. Mirrors
+    ``paypal_extract._fresh_approval_sentinel`` so checkout/approval requests
+    carry the same risk attestation the browser flow does.
+    """
+    if not device_id or not _upi_session_is_live(session):
+        return {}
+    if str(supplied_token or "").strip():
+        # Browser-issued token: never substitute a Node-minted one, because the
+        # risk engine correlates it with the observed browser session.
+        return {"OpenAI-Sentinel-Token": str(supplied_token).strip()}
+    try:
+        from .sentinel import issue_sentinel_flow
+
+        issued = issue_sentinel_flow(flow=flow, device_id=device_id, session=session, proxy=proxy)
+    except Exception as exc:
+        _emit("sentinel", f"Sentinel unavailable (non-fatal): {type(exc).__name__}: {str(exc)[:120]}")
+        return {}
+    headers: dict[str, str] = {}
+    if issued.token:
+        headers["OpenAI-Sentinel-Token"] = issued.token
+    if issued.so_token:
+        headers["OpenAI-Sentinel-SO-Token"] = issued.so_token
+    if headers:
+        _emit("sentinel", f"{flow} Sentinel ready (len={len(issued.token)})")
+    return headers
+
+
+def _upi_fetch_oaics_state(
+    session: Any,
+    access_token: Any,
+    *,
+    cs_id: Any,
+    processor_entity: Any,
+    proxy: Any,
+) -> dict[str, Any]:
+    """Refresh an ``oaics_`` Checkout state before building Elements.
+
+    Aligned with the reference ``_fetch_upi_oaics_state``: an ``oaics_`` create
+    response may not yet carry its wallet method or the CustomerSession secret,
+    so read the authenticated Checkout state once through the same ChatGPT
+    session (same cookies, device id and India egress).
+    """
+    if not str(cs_id or "").startswith("oaics_"):
+        return {}
+    if not _upi_session_is_live(session) or not hasattr(session, "get"):
+        return {}
+    route = f"/backend-api/payments/checkout/{processor_entity}/{cs_id}"
+    try:
+        response = session.get(
+            "https://chatgpt.com" + route,
+            headers={
+                "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                "x-openai-target-path": route,
+                "x-openai-target-route": route,
+            },
+            timeout=CHATGPT_TIMEOUT,
+        )
+    except Exception as exc:
+        _emit("oaics", f"state refresh failed (non-fatal): {type(exc).__name__}")
+        return {}
+    if _upi_int_value(getattr(response, "status_code", 0))[0] >= 400:
+        return {}
+    try:
+        data = response.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _upi_elements_session(
+    stripe: Any,
+    *,
+    stripe_pk: Any,
+    amount: Any,
+    stripe_js_id: Any,
+    customer_session_secret: Any,
+    fingerprint: Any,
+) -> dict[str, Any]:
+    """Negotiate the deferred-intent Elements session for an ``oaics_`` Checkout.
+
+    Aligned with the reference ``_elements_session`` (non-custom branch): the
+    deferred-intent contract carries the CustomerSession secret and the
+    authoritative payment method list, and reuses the same `_stripe_version`
+    revision as the later confirm.
+    """
+    if not hasattr(stripe, "get"):
+        return {}
+    params: dict[str, str] = {
+        "deferred_intent[mode]": "subscription",
+        "deferred_intent[amount]": str(_upi_int_value(amount)[0] or 0),
+        "deferred_intent[currency]": "inr",
+        "deferred_intent[setup_future_usage]": "off_session",
+        "currency": "inr",
+        "key": stripe_pk,
+        "_stripe_version": STRIPE_VERSION,
+        "elements_init_source": "stripe.elements",
+        "referrer_host": "chatgpt.com",
+        "stripe_js_id": stripe_js_id,
+        "locale": str(fingerprint.get("elements_locale") or "en"),
+        "browser_timezone": str(fingerprint.get("timezone") or "Asia/Kolkata"),
+        "type": "deferred_intent",
+        "deferred_intent[payment_method_types][0]": "card",
+        "deferred_intent[payment_method_types][1]": "upi",
+        "customer_session_client_secret": str(customer_session_secret or ""),
+        "client_betas[0]": "custom_checkout_server_updates_1",
+        "client_betas[1]": "custom_checkout_manual_approval_1",
+    }
+    try:
+        response = stripe.get(
+            "https://api.stripe.com/v1/elements/sessions?" + urlencode(params),
+            timeout=DEFAULT_TIMEOUT,
+        )
+    except Exception as exc:
+        _emit("oaics", f"elements session failed: {type(exc).__name__}: {str(exc)[:120]}")
+        return {}
+    if _upi_int_value(getattr(response, "status_code", 0))[0] >= 400:
+        return {}
+    try:
+        data = response.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _upi_server_mandate(init: Any) -> dict[str, Any]:
+    """Return the server-issued UPI mandate_options, if any."""
+    options = init.get("payment_method_options") if isinstance(init, Mapping) else None
+    upi = options.get("upi") if isinstance(options, Mapping) else None
+    mandate = upi.get("mandate_options") if isinstance(upi, Mapping) else None
+    return dict(mandate) if isinstance(mandate, Mapping) else {}
+
+
+def _upi_wait_paid(
+    stripe: Any,
+    *,
+    cs_id: Any,
+    stripe_pk: Any,
+    ctx: Any,
+    timeout: Any,
+    poll_interval: float = 3.0,
+) -> dict[str, Any]:
+    """Keep polling the Checkout session until it is paid or the deadline passes.
+
+    Aligned with the reference ``_wait_upi_paid`` intent: the generated QR is
+    short-lived and the operator may scan it after the link is returned, so
+    ``--wait-paid`` holds the same session and reports the terminal status
+    instead of returning an unverified link.
+    """
+    if not hasattr(stripe, "get"):
+        return {"paid": False, "payment_status": "unsupported"}
+    deadline = time.monotonic() + max(30, _upi_int_value(timeout)[0] or 900)
+    params = {
+        key: value
+        for key, value in _upi_elements_session_params(ctx).items()
+        if key.startswith("elements_session_client")
+    }
+    params["key"] = stripe_pk
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            response = stripe.get(
+                STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                params=params,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            last = response.json() or {}
+        except Exception:
+            time.sleep(poll_interval)
+            continue
+        submission = _upi_find_submission_attempt(last)
+        state = str(submission.get("state") or "").strip().lower()
+        setup_intent = last.get("setup_intent") if isinstance(last, dict) else None
+        intent_status = (
+            str(setup_intent.get("status") or "").strip().lower() if isinstance(setup_intent, Mapping) else ""
+        )
+        if state == "succeeded" or intent_status == "succeeded":
+            return {"paid": True, "payment_status": state or intent_status}
+        time.sleep(poll_interval)
+    submission = _upi_find_submission_attempt(last)
+    return {"paid": False, "payment_status": str(submission.get("state") or "timeout")}
+
+
+def _upi_apply_approve_risk(
+    session: Any,
+    risk: Any,
+    access_token: Any,
+    device_id: Any,
+    proxy: Any,
+    fingerprint: Any,
+    payment_country: Any,
+) -> None:
+    """Refresh approval-stage risk headers and Sentinel on the session.
+
+    The ChatGPT ``checkout/approve`` endpoint answers ``result=blocked``
+    unless the request carries a fresh signed observation, the deployment
+    attestation and a newly minted ``checkout_session_approval`` Sentinel.
+    Replaying the same context (only swapping the UA) therefore keeps failing,
+    so every retry rotates the whole context instead.
+    """
+    if session is None:
+        return
+    try:
+        session.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
+    except Exception:
+        pass
+    try:
+        session.headers.update(
+            _upi_sentinel_headers(
+                session,
+                device_id,
+                proxy,
+                flow=UPI_SENTINEL_APPROVAL_FLOW,
+                supplied_token=risk.sentinel_tokens.get(UPI_SENTINEL_APPROVAL_FLOW, ""),
+            )
+        )
+    except Exception:
+        pass
+    if payment_country:
+        try:
+            _upi_apply_fingerprint(session, _upi_fingerprint(country=payment_country))
+        except Exception:
+            pass
 
 
 def _upi_runtime_version() -> str:
@@ -697,7 +1664,8 @@ def _normalize_hosted_checkout_url(url: str) -> str:
 def _default_qr_path(prefix: str = "upi") -> str:
     directory = Path(PROJECT_ROOT) / "runtime" / "upi_qr"
     directory.mkdir(parents=True, exist_ok=True)
-    return str(directory / f"{prefix}_{int(time.time())}_{uuid.uuid4().hex[:8]}.png")
+    stamp, _ = _upi_int_value(time.time())
+    return str(directory / f"{prefix}_{stamp}_{uuid.uuid4().hex[:8]}.png")
 
 
 def _write_qr_png(data: str, qr_path: str = "") -> str:
@@ -800,8 +1768,8 @@ def _upi_extract_payment_amount(init_data: Any) -> int:
     # 正则兜底: 参考实现同样在结构解析失败后扫 JSON 文本。
     try:
         text = json.dumps(init_data, ensure_ascii=False)
-    except (TypeError, ValueError):
-        text = str(init_data or "")
+    except Exception:
+        text = str(init_data) if init_data is not None else ""
     for pattern in (
         r'"total"\s*:\s*(\d+)',
         r'"amount_total"\s*:\s*(\d+)',
@@ -811,7 +1779,8 @@ def _upi_extract_payment_amount(init_data: Any) -> int:
     ):
         match = re.search(pattern, text)
         if match:
-            return int(match.group(1))
+            value, _ = _upi_int_value(match.group(1))
+            return value
     return 0
 
 
@@ -826,12 +1795,8 @@ def _upi_display_amounts(init_data: Any) -> dict[str, str]:
     invoice = init.get("invoice") if isinstance(init.get("invoice"), dict) else {}
     total_summary = init.get("total_summary") if isinstance(init.get("total_summary"), dict) else {}
 
-    due, _ = _upi_int_value(
-        _upi_first_non_empty(total_summary.get("due"), invoice.get("amount_due"), 0)
-    )
-    total, _ = _upi_int_value(
-        _upi_first_non_empty(total_summary.get("total"), invoice.get("amount_due"), due)
-    )
+    due, _ = _upi_int_value(_upi_first_non_empty(total_summary.get("due"), invoice.get("amount_due"), 0))
+    total, _ = _upi_int_value(_upi_first_non_empty(total_summary.get("total"), invoice.get("amount_due"), due))
     subtotal, _ = _upi_int_value(_upi_first_non_empty(total_summary.get("subtotal"), total))
 
     exclusive_tax = 0
@@ -842,14 +1807,9 @@ def _upi_display_amounts(init_data: Any) -> dict[str, str]:
             if not isinstance(item, dict):
                 continue
             reason = str(
-                item.get("taxability_reason")
-                or item.get("taxability")
-                or item.get("tax_behavior")
-                or ""
+                item.get("taxability_reason") or item.get("taxability") or item.get("tax_behavior") or ""
             ).lower()
-            amount, ok = _upi_int_value(
-                _upi_first_non_empty(item.get("amount"), item.get("tax_amount"), 0)
-            )
+            amount, ok = _upi_int_value(_upi_first_non_empty(item.get("amount"), item.get("tax_amount"), 0))
             if not ok:
                 continue
             if "inclusive" in reason:
@@ -973,10 +1933,15 @@ def _upi_get_free_trial_status(init_data: Any) -> dict:
     pm_types = _upi_get_payment_method_types(init_data)
     coupon = signals["coupon_name"].strip()
     coupon_lower = coupon.lower()
-    looks_like_trial = any(s in coupon_lower for s in ("free trial", "1 month free", "one month free", PLUS_TRIAL_CAMPAIGN_ID))
-    looks_like_full_discount = (signals["percent_off"] is not None and signals["percent_off"] >= 100) or looks_like_trial
+    looks_like_trial = any(
+        s in coupon_lower for s in ("free trial", "1 month free", "one month free", PLUS_TRIAL_CAMPAIGN_ID)
+    )
+    looks_like_full_discount = (
+        signals["percent_off"] is not None and signals["percent_off"] >= 100
+    ) or looks_like_trial
     return {
-        "has_free_trial": due == 0 or (looks_like_full_discount and signals["percent_off"] is not None and signals["percent_off"] >= 100),
+        "has_free_trial": due == 0
+        or (looks_like_full_discount and signals["percent_off"] is not None and signals["percent_off"] >= 100),
         "has_upi": "upi" in pm_types,
         "due": due,
         "coupon_name": coupon,
@@ -990,19 +1955,28 @@ def _upi_get_free_trial_status(init_data: Any) -> dict:
 
 #: 参考实现 ``is_known_static_host`` 的静态资源主机黑名单。这些主机的 URL 是
 #: 页面素材而不是支付指令, 混进 QR 候选会产生「看起来成功但扫不出钱」的链接。
-UPI_STATIC_HOSTS = frozenset({
-    "stripe-camo.global.ssl.fastly.net",
-    "files.stripe.com",
-    "js.stripe.com",
-    "m.stripe.network",
-    "q.stripe.com",
-})
+UPI_STATIC_HOSTS = frozenset(
+    {
+        "stripe-camo.global.ssl.fastly.net",
+        "files.stripe.com",
+        "js.stripe.com",
+        "m.stripe.network",
+        "q.stripe.com",
+    }
+)
 
 #: 🔴 代码类静态资源后缀。**只用于**判断「这是不是一段可执行的页面脚本/样式」,
 #: 绝不能拿去过滤 QR 候选 —— QR 图本身就是 ``.png`` / ``.svg``,
 #: 一旦把图片后缀并进 QR 过滤，整个 QR 通道会被清空（曾经踩过）。
 UPI_CODE_RESOURCE_SUFFIXES = (
-    ".js", ".css", ".map", ".woff", ".woff2", ".ttf", ".otf", ".ico",
+    ".js",
+    ".css",
+    ".map",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".ico",
 )
 
 _UPI_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
@@ -1071,6 +2045,51 @@ def _upi_is_instructions_url(url: str) -> bool:
     )
 
 
+def _upi_custom_payment_method_id(custom_payment_methods: Any) -> str:
+    """Return only a UPI-related ``cpmt_*`` id from a Checkout response.
+
+    Aligned with the reference ``_upi_custom_payment_method_id``: never
+    substitute a non-UPI custom method, and never invent an id. An empty
+    result means the Checkout does not advertise the cpmt rail and the
+    caller must fall through to the Stripe SetupIntent path.
+    """
+    if not isinstance(custom_payment_methods, list):
+        return ""
+    for item in custom_payment_methods:
+        if isinstance(item, Mapping):
+            cid = str(item.get("id") or "").strip()
+            ctype = str(item.get("type") or "").strip()
+        else:
+            cid = str(item or "").strip()
+            ctype = cid
+        if cid.startswith("cpmt_") and ("upi" in ctype.lower() or "upi" in cid.lower()):
+            return cid
+    return ""
+
+
+def _upi_copyable_link(payload: Any) -> str:
+    """Prefer Stripe's hosted UPI instructions page, then the ``upi://`` deep link.
+
+    Aligned with the reference ``_upi_copyable_link``: the hosted
+    ``payments.stripe.com/upi/instructions/...`` page is the copyable link a
+    browser can open, so it outranks a raw deep link when both exist. The
+    reverse (deep-link first) only helps a scanner that consumes ``upi://``
+    directly; a human operator needs the hosted page.
+    """
+    hosted = _upi_first_value_by_key(payload, "hosted_instructions_url")
+    if _upi_is_instructions_url(str(hosted or "")):
+        return str(hosted).strip()
+    for url in _upi_collect_urls(payload):
+        if _upi_is_instructions_url(url):
+            return url
+    deep = str(_upi_extract_next_action(payload).get("upi_uri") or "").strip()
+    if not deep:
+        deep = str(_upi_first_value_by_key(payload, "upi_deep_link") or "").strip()
+    if deep.startswith("upi://"):
+        return deep
+    return ""
+
+
 def _upi_is_qr_candidate(url: str) -> bool:
     """参考实现 ``is_qr_candidate``。
 
@@ -1111,7 +2130,9 @@ def _upi_merge_qr_key(result: dict, key: str, value: Any) -> None:
         if value.startswith("upi://") and not result.get("upi_uri"):
             result["upi_uri"] = value
             result["mobile_auth_url"] = value
-        elif value.startswith("https://payments.stripe.com/upi/instructions/") and not result.get("hosted_instructions_url"):
+        elif value.startswith("https://payments.stripe.com/upi/instructions/") and not result.get(
+            "hosted_instructions_url"
+        ):
             result["hosted_instructions_url"] = value
         elif value.startswith("https://qr.stripe.com/"):
             # 按路径扩展名分流。扩展名无法判定时**不默认成 svg**（旧实现的错误
@@ -1490,13 +2511,16 @@ def _upi_hydrate_qr_data(
     try:
         session = _new_session(proxy_url)
         _upi_apply_fingerprint(session, fingerprint or {})
-        resp = session.get(hosted_url, timeout=DEFAULT_TIMEOUT, headers={
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Referer": "https://js.stripe.com/",
-        })
+        resp = session.get(
+            hosted_url,
+            timeout=DEFAULT_TIMEOUT,
+            headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Referer": "https://js.stripe.com/",
+            },
+        )
         if resp.status_code < 400:
-            _upi_dump_http(resp, "hydrate_html", None, "GET", str(hosted_url),
-                           force=resp.status_code >= 400)
+            _upi_dump_http(resp, "hydrate_html", None, "GET", str(hosted_url), force=resp.status_code >= 400)
             extracted = _upi_extract_qr_from_html(resp.text)
             for k, v in extracted.items():
                 if v and (k == "upi_uri" or not result.get(k)):
@@ -1635,9 +2659,7 @@ def _upi_build_confirm_body(
     ``inline_pm=True`` 走 ``payment_method_data[*]`` 内联（``UPI_CONFIRM_INLINE_PM``
     默认口径）, 否则引用已创建的 ``pm_id``。
     """
-    expected_amount, expected_amount_on_bca = _upi_confirm_amounts(
-        init_payload, ctx.get("checkout_amount")
-    )
+    expected_amount, expected_amount_on_bca = _upi_confirm_amounts(init_payload, ctx.get("checkout_amount"))
     displayed = _upi_display_amounts(init_payload)
     body: dict[str, str] = {
         "eid": "NA",
@@ -1661,9 +2683,7 @@ def _upi_build_confirm_body(
         "client_attribution_metadata[payment_intent_creation_flow]": "deferred",
         "client_attribution_metadata[payment_method_selection_flow]": "automatic",
         "client_attribution_metadata[elements_session_id]": str(ctx.get("elements_session_id") or ""),
-        "client_attribution_metadata[elements_session_config_id]": str(
-            ctx.get("elements_session_config_id") or ""
-        ),
+        "client_attribution_metadata[elements_session_config_id]": str(ctx.get("elements_session_config_id") or ""),
         "client_attribution_metadata[merchant_integration_additional_elements][0]": "payment",
         "client_attribution_metadata[merchant_integration_additional_elements][1]": "address",
         "consent[terms_of_service]": "accepted",
@@ -1681,37 +2701,39 @@ def _upi_build_confirm_body(
     body.update(_upi_elements_session_params(ctx))
 
     if inline_pm:
-        body.update({
-            "payment_method_data[type]": "upi",
-            "payment_method_data[allow_redisplay]": "limited",
-            "payment_method_data[billing_details][name]": str(billing.get("name") or ""),
-            "payment_method_data[billing_details][email]": str(billing.get("email") or ""),
-            "payment_method_data[billing_details][address][country]": str(billing.get("country") or "IN"),
-            "payment_method_data[billing_details][address][line1]": str(billing.get("line1") or ""),
-            "payment_method_data[billing_details][address][city]": str(billing.get("city") or ""),
-            "payment_method_data[billing_details][address][postal_code]": str(billing.get("postal_code") or ""),
-            "payment_method_data[payment_user_agent]": (
-                f"stripe.js/{_upi_runtime_version()}; stripe-js-v3/{_upi_runtime_version()}; "
-                "payment-element; deferred-intent"
-            ),
-            "payment_method_data[referrer]": "https://chatgpt.com",
-            "payment_method_data[time_on_page]": str(secrets.randbelow(37000) + 18000),
-            "payment_method_data[client_attribution_metadata][checkout_session_id]": cs_id,
-            "payment_method_data[client_attribution_metadata][client_session_id]": str(
-                ctx.get("stripe_js_id") or ""
-            ),
-            "payment_method_data[client_attribution_metadata][elements_session_id]": str(
-                ctx.get("elements_session_id") or ""
-            ),
-            "payment_method_data[client_attribution_metadata][elements_session_config_id]": str(
-                ctx.get("elements_session_config_id") or ""
-            ),
-            "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
-            "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
-            "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
-            "payment_method_data[client_attribution_metadata][payment_intent_creation_flow]": "deferred",
-            "payment_method_data[client_attribution_metadata][payment_method_selection_flow]": "automatic",
-        })
+        body.update(
+            {
+                "payment_method_data[type]": "upi",
+                "payment_method_data[allow_redisplay]": "limited",
+                "payment_method_data[billing_details][name]": str(billing.get("name") or ""),
+                "payment_method_data[billing_details][email]": str(billing.get("email") or ""),
+                "payment_method_data[billing_details][address][country]": str(billing.get("country") or "IN"),
+                "payment_method_data[billing_details][address][line1]": str(billing.get("line1") or ""),
+                "payment_method_data[billing_details][address][city]": str(billing.get("city") or ""),
+                "payment_method_data[billing_details][address][postal_code]": str(billing.get("postal_code") or ""),
+                "payment_method_data[payment_user_agent]": (
+                    f"stripe.js/{_upi_runtime_version()}; stripe-js-v3/{_upi_runtime_version()}; "
+                    "payment-element; deferred-intent"
+                ),
+                "payment_method_data[referrer]": "https://chatgpt.com",
+                "payment_method_data[time_on_page]": str(secrets.randbelow(37000) + 18000),
+                "payment_method_data[client_attribution_metadata][checkout_session_id]": cs_id,
+                "payment_method_data[client_attribution_metadata][client_session_id]": str(
+                    ctx.get("stripe_js_id") or ""
+                ),
+                "payment_method_data[client_attribution_metadata][elements_session_id]": str(
+                    ctx.get("elements_session_id") or ""
+                ),
+                "payment_method_data[client_attribution_metadata][elements_session_config_id]": str(
+                    ctx.get("elements_session_config_id") or ""
+                ),
+                "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
+                "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
+                "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
+                "payment_method_data[client_attribution_metadata][payment_intent_creation_flow]": "deferred",
+                "payment_method_data[client_attribution_metadata][payment_method_selection_flow]": "automatic",
+            }
+        )
         if billing.get("state"):
             body["payment_method_data[billing_details][address][state]"] = str(billing["state"])
         if billing.get("line2"):
@@ -1719,10 +2741,10 @@ def _upi_build_confirm_body(
     else:
         body["payment_method"] = pm_id
 
-    body.update({
-        "browser_locale": str(fingerprint.get("locale") or "en-IN"),
-        "browser_timezone": str(fingerprint.get("timezone") or "Asia/Kolkata"),
-    })
+    # ``browser_locale`` / ``browser_timezone`` are valid only on the init and
+    # tax/customer update requests; Stripe's confirm rejects them with
+    # ``parameter_unknown`` (measured live 2026-09-26). The reference confirm
+    # body omits them, so they must not leak in through the shared params.
     return body
 
 
@@ -1807,8 +2829,7 @@ def _upi_post_with_degrade(
 
     current = dict(fingerprint or {})
     resp = session.post(url, **kwargs)
-    _upi_dump_http(resp, stage, data if data is not None else json_body, "POST", url,
-                   force=resp.status_code >= 400)
+    _upi_dump_http(resp, stage, data if data is not None else json_body, "POST", url, force=resp.status_code >= 400)
     if not _upi_is_403(resp):
         return resp, current
 
@@ -1821,8 +2842,14 @@ def _upi_post_with_degrade(
     _emit(stage, f"403 detected, retrying once with degraded fingerprint {degraded.get('name')}")
     _upi_apply_fingerprint(session, degraded)
     resp_retry = session.post(url, **kwargs)
-    _upi_dump_http(resp_retry, f"{stage}_degraded", data if data is not None else json_body,
-                   "POST", url, force=resp_retry.status_code >= 400)
+    _upi_dump_http(
+        resp_retry,
+        f"{stage}_degraded",
+        data if data is not None else json_body,
+        "POST",
+        url,
+        force=resp_retry.status_code >= 400,
+    )
     return resp_retry, degraded
 
 
@@ -1841,12 +2868,14 @@ def _upi_stripe_init(
     body = _upi_build_init_body(stripe_pk, fingerprint, stripe_js_id)
     init_url = STRIPE_PAYMENT_PAGE_INIT_URL_T.format(cs_id=cs_id)
     resp, used = _upi_post_with_degrade(
-        stripe, init_url, data=body, fingerprint=fingerprint, stage="stripe_init",
+        stripe,
+        init_url,
+        data=body,
+        fingerprint=fingerprint,
+        stage="stripe_init",
     )
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"stripe init failed: {resp.status_code} {str(getattr(resp, 'text', ''))[:300]}"
-        )
+        raise RuntimeError(f"stripe init failed: {resp.status_code} {str(getattr(resp, 'text', ''))[:300]}")
     payload = resp.json() or {}
     if not isinstance(payload, dict):
         payload = {}
@@ -1879,7 +2908,11 @@ def _upi_create_upi_pm(
         body["billing_details[address][line2]"] = str(billing["line2"])
     resp = stripe.post(STRIPE_PAYMENT_METHODS_URL, data=body, timeout=DEFAULT_TIMEOUT)
     _upi_dump_http(
-        resp, "stripe_create_pm", body, "POST", STRIPE_PAYMENT_METHODS_URL,
+        resp,
+        "stripe_create_pm",
+        body,
+        "POST",
+        STRIPE_PAYMENT_METHODS_URL,
         force=resp.status_code >= 400,
     )
     if resp.status_code >= 400:
@@ -1888,9 +2921,7 @@ def _upi_create_upi_pm(
         )
     pm_id = str((resp.json() or {}).get("id") or "")
     if not pm_id.startswith("pm_"):
-        raise RuntimeError(
-            f"create UPI payment method returned bad payload: {str(getattr(resp, 'text', ''))[:300]}"
-        )
+        raise RuntimeError(f"create UPI payment method returned bad payload: {str(getattr(resp, 'text', ''))[:300]}")
     return pm_id
 
 
@@ -1946,9 +2977,7 @@ def _upi_intent_redirect_url(
         return ""
     intent_object = str(intent_payload.get("object") or "").strip()
     intent_path = (
-        "setup_intents"
-        if intent_object == "setup_intent" or intent_id.startswith("seti_")
-        else "payment_intents"
+        "setup_intents" if intent_object == "setup_intent" or intent_id.startswith("seti_") else "payment_intents"
     )
     params = {"key": stripe_pk, "client_secret": client_secret}
     url = STRIPE_INTENT_URL_T.format(intent_path=intent_path, intent_id=intent_id)
@@ -1990,9 +3019,7 @@ def _upi_payload_intent_redirect_url(
         if isinstance(nested, dict) and all(nested is not item for item in candidates):
             candidates.append(nested)
         for intent_payload in candidates:
-            redirect_url = _upi_intent_redirect_url(
-                stripe, intent_payload, stripe_pk, current_pm_id=current_pm_id
-            )
+            redirect_url = _upi_intent_redirect_url(stripe, intent_payload, stripe_pk, current_pm_id=current_pm_id)
             if redirect_url:
                 return redirect_url
     return ""
@@ -2082,9 +3109,7 @@ def _upi_poll_payment_page(
             raise RuntimeError(f"Stripe submission failed: {submission}")
 
         _upi_raise_if_setup_intent_blocked(payload, "stripe payment_pages", current_pm_id=current_pm_id)
-        intent_redirect = _upi_payload_intent_redirect_url(
-            stripe, payload, stripe_pk, current_pm_id=current_pm_id
-        )
+        intent_redirect = _upi_payload_intent_redirect_url(stripe, payload, stripe_pk, current_pm_id=current_pm_id)
         if intent_redirect:
             return intent_redirect, qr_urls
         last_error = str(summary_text or "waiting")
@@ -2131,14 +3156,25 @@ def _upi_hosted_fallback_result(
         hosted_url = f"https://pay.openai.com/c/pay/{cs_id}"
     written_qr_path = _write_qr_png(hosted_url, qr_path or "")
     result: dict[str, Any] = {
-        "ok": True, "payment_method": "upi", "method": "upi",
-        "link_type": "upi_hosted_fallback", "url": hosted_url, "qr_data": hosted_url,
-        "qr_path": written_qr_path, "cs_id": cs_id, "processor_entity": processor_entity,
-        "amount": amount, "currency": payment_currency.upper(),
-        "target_country": target_country, "checkout_country": checkout_country,
-        "billing_country": checkout_country, "payment_country": payment_country,
-        "payment_method_types": pm_types, "checkout_proxy": checkout_proxy,
-        "provider_proxy": provider_proxy, "approve_proxy": approve_proxy,
+        "ok": True,
+        "payment_method": "upi",
+        "method": "upi",
+        "link_type": "upi_hosted_fallback",
+        "url": hosted_url,
+        "qr_data": hosted_url,
+        "qr_path": written_qr_path,
+        "cs_id": cs_id,
+        "processor_entity": processor_entity,
+        "amount": amount,
+        "currency": payment_currency.upper(),
+        "target_country": target_country,
+        "checkout_country": checkout_country,
+        "billing_country": checkout_country,
+        "payment_country": payment_country,
+        "payment_method_types": pm_types,
+        "checkout_proxy": checkout_proxy,
+        "provider_proxy": provider_proxy,
+        "approve_proxy": approve_proxy,
         "checkout_ui_mode": checkout_ui_mode,
     }
     if warning:
@@ -2190,6 +3226,182 @@ def _upi_classify_failure(error: Any) -> str:
     return "upi_qr_failed"
 
 
+def _upi_run_cpmt_flow(
+    cs: Any,
+    *,
+    access_token: Any,
+    cs_id: Any,
+    cpm_id: Any,
+    processor_entity: Any,
+    amount: Any,
+    payment_currency: Any,
+    target_country: Any,
+    checkout_country: Any,
+    payment_country: Any,
+    device_id: Any,
+    checkout_proxy: Any,
+    qr_path: Any = "",
+) -> dict[str, Any]:
+    """Run the server-advertised UPI custom payment method (cpmt) rail.
+
+    Aligned with the reference ``_run_upi_cpmt_flow``: when Checkout exposes a
+    UPI ``cpmt_*`` method, confirm it with ChatGPT and start the custom method.
+    This path never creates a Stripe SetupIntent, so it sidesteps the
+    ``setup_attempt_failed / generic_decline`` stage that the Stripe rail can
+    hit. Returns the same result contract as the Stripe path.
+    """
+    referer = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    risk_headers = _upi_sentinel_headers(cs, device_id, checkout_proxy)
+    base_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Referer": referer,
+        **risk_headers,
+    }
+
+    confirm_body = {"checkout_session_id": cs_id, "selected_payment_method_type": cpm_id}
+    confirm_resp = cs.post(
+        UPI_CPMT_CONFIRM_URL,
+        json=confirm_body,
+        headers={
+            **base_headers,
+            "x-openai-target-path": "/backend-api/payments/checkout/confirm",
+            "x-openai-target-route": "/backend-api/payments/checkout/confirm",
+        },
+        timeout=CHATGPT_TIMEOUT,
+    )
+    _upi_dump_http(
+        confirm_resp,
+        "chatgpt_cpmt_confirm",
+        confirm_body,
+        "POST",
+        UPI_CPMT_CONFIRM_URL,
+        force=confirm_resp.status_code >= 400,
+    )
+    if confirm_resp.status_code >= 400:
+        return {
+            "ok": False,
+            "error": f"cpmt confirm failed: {confirm_resp.status_code} {str(getattr(confirm_resp, 'text', ''))[:240]}",
+            "error_code": _upi_classify_failure(getattr(confirm_resp, "text", "")),
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    confirm_json = confirm_resp.json() or {}
+    confirm_status = str(confirm_json.get("status") or "").strip().lower()
+    if confirm_status == "blocked":
+        return {
+            "ok": False,
+            "error": "cpmt confirm blocked (provider risk control)",
+            "error_code": "upi_provider_declined",
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    if confirm_status not in {"success", "ok", ""}:
+        return {
+            "ok": False,
+            "error": f"cpmt confirm status={confirm_status or 'unknown'}",
+            "error_code": "upi_cpmt_confirm_failed",
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    _emit("cpmt", f"ChatGPT confirmed UPI custom method {cpm_id}")
+
+    start_body = {"checkout_session_id": cs_id, "custom_payment_method_type_id": cpm_id}
+    start_resp = cs.post(
+        UPI_CPMT_START_URL,
+        json=start_body,
+        headers={
+            **base_headers,
+            "x-openai-target-path": "/backend-api/payments/checkout/custom_payment_method/start",
+            "x-openai-target-route": "/backend-api/payments/checkout/custom_payment_method/start",
+        },
+        timeout=CHATGPT_TIMEOUT,
+    )
+    _upi_dump_http(
+        start_resp, "chatgpt_cpmt_start", start_body, "POST", UPI_CPMT_START_URL, force=start_resp.status_code >= 400
+    )
+    if start_resp.status_code >= 400:
+        return {
+            "ok": False,
+            "error": f"cpmt start failed: {start_resp.status_code} {str(getattr(start_resp, 'text', ''))[:240]}",
+            "error_code": _upi_classify_failure(getattr(start_resp, "text", "")),
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    start_json = start_resp.json() or {}
+    start_status = str(start_json.get("status") or "").strip().lower()
+    if start_status == "blocked":
+        return {
+            "ok": False,
+            "error": "cpmt start blocked (provider risk control)",
+            "error_code": "upi_provider_declined",
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    target = _upi_copyable_link(start_json)
+    if not target:
+        return {
+            "ok": False,
+            "error": f"cpmt start returned no link (status={start_status or 'unknown'})",
+            "error_code": "upi_cpmt_no_link",
+            "payment_method": "upi",
+            "cs_id": cs_id,
+            "cpmt_id": cpm_id,
+        }
+    written_qr_path = _write_qr_png(target, qr_path or "")
+    return {
+        "ok": True,
+        "payment_method": "upi",
+        "method": "upi",
+        "link_type": "upi_cpmt_link",
+        "url": target,
+        "upi_uri": target if target.startswith("upi://") else "",
+        "hosted_url": target,
+        "instructions_url": target if _upi_is_instructions_url(target) else "",
+        "qr_data": target,
+        "qr_path": written_qr_path,
+        "expires_at": (_upi_int_value(time.time())[0] or 0) + 300,
+        "cs_id": cs_id,
+        "processor_entity": processor_entity,
+        "amount": amount,
+        "currency": payment_currency.upper(),
+        "target_country": target_country,
+        "checkout_country": checkout_country,
+        "billing_country": checkout_country,
+        "payment_country": payment_country,
+        "payment_method_types": ["upi"],
+        "cpmt_id": cpm_id,
+        "approval_ok": True,
+        "approval_blocked": False,
+        "checkout_proxy": checkout_proxy,
+    }
+
+
+def _upi_retarget_region(proxy: Any, country: Any) -> str:
+    """Rewrite a known region-tagged proxy to ``country``; unknown stays as-is.
+
+    Kept as a thin wrapper so this module never imports ``proxy_entry`` at
+    module scope (the payment flow is import-lazy by design) and a provider
+    that does not use region tags is left untouched.
+    """
+    value = str(proxy or "").strip()
+    target = str(country or "").strip().upper()
+    if not value or not target or len(target) != 2:
+        return value
+    try:
+        from .proxy_entry import retarget_region
+
+        return str(retarget_region(value, target) or value)
+    except Exception:
+        return value
+
+
 def _resolve_upi_runtime(
     access_token,
     proxy,
@@ -2233,10 +3445,7 @@ def _resolve_upi_runtime(
         or "IN"
     ).upper()
     payment_country = str(
-        payment_country
-        or upi_cfg.get("payment_country")
-        or upi_cfg.get("payment_method_country")
-        or "IN"
+        payment_country or upi_cfg.get("payment_country") or upi_cfg.get("payment_method_country") or "IN"
     ).upper()
     target_country = checkout_country
     currency = CURRENCY_MAP.get(checkout_country, "INR")
@@ -2246,22 +3455,16 @@ def _resolve_upi_runtime(
         require_zero = bool(upi_cfg.get("require_zero_due", paypal_cfg.get("require_zero_due", True)))
 
     # 协议与策略开关（配置段优先, 环境变量兜底）
-    checkout_ui_mode = str(
-        upi_cfg.get("checkout_ui_mode")
-        or _env_str("UPI_CHECKOUT_UI_MODE", "custom")
-        or "custom"
-    ).strip().lower()
+    checkout_ui_mode = (
+        str(upi_cfg.get("checkout_ui_mode") or _env_str("UPI_CHECKOUT_UI_MODE", "custom") or "custom").strip().lower()
+    )
     if checkout_ui_mode not in {"custom", "hosted"}:
         checkout_ui_mode = "custom"
     inline_pm = bool(
-        upi_cfg.get("confirm_inline_pm")
-        if "confirm_inline_pm" in upi_cfg
-        else _env_bool("UPI_CONFIRM_INLINE_PM", True)
+        upi_cfg.get("confirm_inline_pm") if "confirm_inline_pm" in upi_cfg else _env_bool("UPI_CONFIRM_INLINE_PM", True)
     )
     update_tax_region = bool(
-        upi_cfg.get("update_tax_region")
-        if "update_tax_region" in upi_cfg
-        else _env_bool("UPI_UPDATE_TAX_REGION", True)
+        upi_cfg.get("update_tax_region") if "update_tax_region" in upi_cfg else _env_bool("UPI_UPDATE_TAX_REGION", True)
     )
     update_customer_data = bool(
         upi_cfg.get("update_customer_data")
@@ -2270,6 +3473,11 @@ def _resolve_upi_runtime(
     )
     max_approve_attempts = _env_int("UPI_APPROVAL_MAX_ATTEMPTS", UPI_APPROVAL_MAX_ATTEMPTS)
     poll_max_attempts = _env_int("UPI_QR_POLL_MAX_ATTEMPTS", UPI_QR_POLL_MAX_ATTEMPTS)
+    # 无头浏览器 rail：只有真实浏览器能签发 approve 阶段校验的
+    # x-oai-is-client-observation。默认开启，Playwright 不可用时自动回退协议 rail。
+    browser_rail = (
+        bool(upi_cfg.get("browser_rail")) if "browser_rail" in upi_cfg else _env_bool("UPI_BROWSER_RAIL", True)
+    )
     # approve 重试之间的退避上限（秒）。参考实现是 random.uniform(1, 2)，
     # 这里做成可调：默认 1.5s，测试里置 0 即可让 60 次重试瞬间跑完。
     approve_backoff_cap = _float_env("UPI_APPROVAL_BACKOFF", 1.5)
@@ -2289,6 +3497,11 @@ def _resolve_upi_runtime(
     # 设备身份：调用方可传账号真实 device_id（session 文件里有），
     # 不传则生成一个自洽的 UUID——风控看的是头的存在性与一致性。
     device_id = str(device_id or "").strip() or str(uuid.uuid4())
+    # UPI 建单/记账/审批都必须走账单国出口；已知 region/geo/country 模板重定向
+    # 到该国家，不动粘性会话。未知格式原样保留（真实出口门禁由上层负责）。
+    checkout_proxy = _upi_retarget_region(checkout_proxy, checkout_country)
+    provider_proxy = _upi_retarget_region(provider_proxy, checkout_country)
+    approve_proxy = _upi_retarget_region(approve_proxy, checkout_country)
     session_token = str(session_token or "").strip()
     return SimpleNamespace(
         cfg=cfg,
@@ -2311,6 +3524,7 @@ def _resolve_upi_runtime(
         max_approve_attempts=max_approve_attempts,
         poll_max_attempts=poll_max_attempts,
         approve_backoff_cap=approve_backoff_cap,
+        browser_rail=browser_rail,
         fingerprint_index=fingerprint_index,
         fingerprint=fingerprint,
         billing=billing,
@@ -2335,6 +3549,9 @@ def generate_upi_qr_link(
     proxy_state: Any = None,
     device_id: str | None = None,
     session_token: str | None = None,
+    wait_paid: bool = False,
+    paid_timeout: float = 900.0,
+    require_server_upi_mandate: bool = False,
 ) -> dict[str, Any]:
     """Generate a UPI payment link with full Stripe Confirm + Approve flow.
 
@@ -2360,10 +3577,17 @@ def generate_upi_qr_link(
     hosted instructions URL / hosted fallback if UPI data is not available.
     """
     _rc = _resolve_upi_runtime(
-        access_token=access_token, proxy=proxy,
-        checkout_proxy=checkout_proxy, provider_proxy=provider_proxy, approve_proxy=approve_proxy,
-        target_country=target_country, checkout_country=checkout_country, payment_country=payment_country,
-        require_zero=require_zero, runtime_config=runtime_config, device_id=device_id,
+        access_token=access_token,
+        proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        target_country=target_country,
+        checkout_country=checkout_country,
+        payment_country=payment_country,
+        require_zero=require_zero,
+        runtime_config=runtime_config,
+        device_id=device_id,
         session_token=session_token,
     )
     cfg = _rc.cfg
@@ -2386,6 +3610,7 @@ def generate_upi_qr_link(
     max_approve_attempts = _rc.max_approve_attempts
     poll_max_attempts = _rc.poll_max_attempts
     approve_backoff_cap = _rc.approve_backoff_cap
+    browser_rail = _rc.browser_rail
     fingerprint_index = _rc.fingerprint_index
     fingerprint = _rc.fingerprint
     billing = _rc.billing
@@ -2396,18 +3621,45 @@ def generate_upi_qr_link(
 
     try:
         # ── Stage 1: ChatGPT checkout ────────────────────────────────────
-        emit("checkout", f"Stage 1: using {checkout_proxy or 'DIRECT'} for UPI checkout (ui_mode={checkout_ui_mode})")
+        emit(
+            "checkout",
+            f"Stage 1: using {redact_proxy_text(checkout_proxy or 'DIRECT', checkout_proxy)} for UPI checkout (ui_mode={checkout_ui_mode})",
+        )
         cs = _upi_new_chatgpt_session(checkout_proxy, fingerprint, device_id, session_token)
-        cs.headers.update({
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Referer": "https://chatgpt.com/",
-            # 网关路由头（参考实现在请求级传；本 session 只打这一个
-            # 端点，放 session 头等价且不破坏 FakeSession.post 签名）
-            "x-openai-target-path": "/backend-api/payments/checkout",
-            "x-openai-target-route": "/backend-api/payments/checkout",
-        })
+        cs.headers.update(
+            {
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Referer": "https://chatgpt.com/",
+                # 网关路由头（参考实现在请求级传；本 session 只打这一个
+                # 端点，放 session 头等价且不破坏 FakeSession.post 签名）
+                "x-openai-target-path": "/backend-api/payments/checkout",
+                "x-openai-target-route": "/backend-api/payments/checkout",
+            }
+        )
+        risk = _upi_capture_risk_context(
+            cs,
+            access_token=access_token,
+            device_id=device_id,
+            page_url=_upi_promo_page_url(),
+            fingerprint=fingerprint,
+            proxy=checkout_proxy,
+            session_token=session_token,
+            use_browser=browser_rail,
+            sentinel_flow=_upi_ensure_checkout_flow(),
+        )
+        cs.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
+        cs.headers.update(
+            _upi_sentinel_headers(
+                cs,
+                device_id,
+                checkout_proxy,
+                flow=_upi_ensure_checkout_flow(),
+                supplied_token=risk.sentinel_tokens.get(_upi_ensure_checkout_flow(), ""),
+            )
+        )
+        _upi_sentinel_ping(cs, proxy=checkout_proxy, referer="https://chatgpt.com/")
         checkout_body: dict[str, Any] = {
             "entry_point": "all_plans_pricing_modal",
             "plan_name": "chatgptplusplan",
@@ -2416,49 +3668,179 @@ def generate_upi_qr_link(
             "checkout_ui_mode": checkout_ui_mode,
         }
         r = cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)
-        _upi_dump_http(r, "chatgpt_checkout", checkout_body, "POST", UPI_CHECKOUT_URL,
-                       force=r.status_code >= 400)
+        _upi_dump_http(r, "chatgpt_checkout", checkout_body, "POST", UPI_CHECKOUT_URL, force=r.status_code >= 400)
         if r.status_code == 401:
-            return {"ok": False, "error": "access_token invalid or expired (401)", "error_code": "checkout_unauthorized", "payment_method": "upi"}
+            return {
+                "ok": False,
+                "error": "access_token invalid or expired (401)",
+                "error_code": "checkout_unauthorized",
+                "payment_method": "upi",
+            }
         if r.status_code >= 400:
-            return {"ok": False, "error": f"checkout failed: {r.status_code} {r.text[:300]}", "error_code": "checkout_failed", "payment_method": "upi"}
+            return {
+                "ok": False,
+                "error": f"checkout failed: {r.status_code} {r.text[:300]}",
+                "error_code": "checkout_failed",
+                "payment_method": "upi",
+            }
         checkout_data = r.json() or {}
-        cs_id = checkout_data.get("checkout_session_id") or checkout_data.get("id", "")
-        if not str(cs_id).startswith("cs_"):
-            return {"ok": False, "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}", "error_code": "checkout_bad_response", "payment_method": "upi"}
+        cs_id = str(checkout_data.get("checkout_session_id") or checkout_data.get("id", "") or "")
+        # Accept both rails the backend can pick: ``cs_*`` (Stripe payment_pages,
+        # custom) and ``oaics_*`` (deferred-intent Elements). The prefix is the
+        # reliable signal; the response's checkout_ui_mode string can disagree.
+        if not cs_id.startswith(("cs_", "oaics_")):
+            return {
+                "ok": False,
+                "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}",
+                "error_code": "checkout_bad_response",
+                "payment_method": "upi",
+            }
         stripe_pk = checkout_data.get("publishable_key") or DEFAULT_STRIPE_PK
-        processor_entity = checkout_data.get("processor_entity") or ("openai_llc" if checkout_country == "US" else "openai_ie")
+        processor_entity = checkout_data.get("processor_entity") or (
+            "openai_llc" if checkout_country == "US" else "openai_ie"
+        )
         emit("checkout", f"checkout success: cs_id={cs_id}")
+        is_oaics = cs_id.startswith("oaics_")
+        _oaics_state: dict[str, Any] = {}
+        if is_oaics:
+            # oaics_ sessions carry a CustomerSession secret instead of a
+            # Checkout client secret; refresh the authenticated state once so
+            # the deferred-intent rail sees the authoritative method list.
+            checkout_ui_mode = "deferred"
+            _oaics_state = _upi_fetch_oaics_state(
+                cs, access_token, cs_id=cs_id, processor_entity=processor_entity, proxy=checkout_proxy
+            )
+            emit(
+                "oaics",
+                f"oaics_ session: state refreshed ({len(_oaics_state)} keys)"
+                if _oaics_state
+                else "oaics_ session: state unavailable",
+            )
 
         # ── Stage 2: Stripe init (custom mode) ───────────────────────────
-        emit("stripe_init", f"Stage 2: using {provider_proxy or 'DIRECT'} for Stripe init")
+        emit(
+            "stripe_init",
+            f"Stage 2: using {redact_proxy_text(provider_proxy or 'DIRECT', provider_proxy)} for Stripe init",
+        )
         stripe = _new_session(provider_proxy)
         _upi_apply_fingerprint(stripe, fingerprint)
         stripe_js_id = uuid.uuid4().hex
-        init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
+        if is_oaics:
+            customer_session_secret = str(
+                checkout_data.get("customer_session_client_secret")
+                or checkout_data.get("customer_session_secret")
+                or (_oaics_state.get("customer_session_client_secret") if isinstance(_oaics_state, Mapping) else "")
+                or (_oaics_state.get("customer_session_secret") if isinstance(_oaics_state, Mapping) else "")
+                or ""
+            )
+            if not customer_session_secret:
+                return {
+                    "ok": False,
+                    "error": "oaics_ checkout missing customer_session_client_secret",
+                    "error_code": "oaics_prerequisites_missing",
+                    "payment_method": "upi",
+                    "cs_id": cs_id,
+                }
+            init = _upi_elements_session(
+                stripe,
+                stripe_pk=stripe_pk,
+                amount=(_oaics_state.get("amount") if isinstance(_oaics_state, Mapping) else 0),
+                stripe_js_id=stripe_js_id,
+                customer_session_secret=customer_session_secret,
+                fingerprint=fingerprint,
+            )
+            if not init:
+                return {
+                    "ok": False,
+                    "error": "oaics_ elements session negotiation failed",
+                    "error_code": "oaics_elements_failed",
+                    "payment_method": "upi",
+                    "cs_id": cs_id,
+                }
+        else:
+            init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
         ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+        # Prefer the Stripe identifiers the live browser actually used so the
+        # confirm request stays consistent with the page that minted them.
+        for _key in ("guid", "muid", "sid"):
+            if risk.stripe_ids.get(_key) and not ctx.get(_key):
+                ctx[_key] = risk.stripe_ids[_key]
         emit("stripe_init", "init success, analyzing free trial...")
+        if require_server_upi_mandate:
+            mandate = _upi_server_mandate(init)
+            emit(
+                "mandate",
+                "server mandate_options="
+                + ("present" if mandate else "missing")
+                + (f" end_date={mandate.get('end_date')}" if mandate else ""),
+            )
 
         # ── Stage 3: Free trial detection ────────────────────────────────
         ft_status = _upi_get_free_trial_status(init)
         amount = ft_status["due"]
         pm_types = ft_status["payment_method_types"]
-        emit("stripe_init", f"free_trial={ft_status['has_free_trial']} due={amount} coupon={ft_status['coupon_name']} upi={ft_status['has_upi']}")
+        emit(
+            "stripe_init",
+            f"free_trial={ft_status['has_free_trial']} due={amount} coupon={ft_status['coupon_name']} upi={ft_status['has_upi']}",
+        )
         # 0 元缓存：本轮 checkout 代理有没有产出免费试用，记下来供后续批次调度。
         # 必须在 ``require_zero`` 的早退**之前**记——那次失败恰恰是最有价值的
         # 负样本（"这个代理出的是非零"），早退掉就永远学不到。
         _upi_record_zero_result(proxy_state, checkout_proxy, checkout_country, amount)
         if require_zero and not ft_status["has_free_trial"]:
             return {
-                "ok": False, "error": f"no_free_trial: due={amount} coupon={ft_status['coupon_name']} percent_off={ft_status['percent_off']}",
-                "error_code": "no_free_trial", "payment_method": "upi", "cs_id": cs_id,
-                "amount": amount, "currency": payment_currency.upper(),
-                "target_country": target_country, "checkout_country": checkout_country,
-                "billing_country": checkout_country, "payment_country": payment_country,
-                "coupon_name": ft_status["coupon_name"], "percent_off": ft_status["percent_off"],
+                "ok": False,
+                "error": f"no_free_trial: due={amount} coupon={ft_status['coupon_name']} percent_off={ft_status['percent_off']}",
+                "error_code": "no_free_trial",
+                "payment_method": "upi",
+                "cs_id": cs_id,
+                "amount": amount,
+                "currency": payment_currency.upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_country": payment_country,
+                "coupon_name": ft_status["coupon_name"],
+                "percent_off": ft_status["percent_off"],
             }
         if pm_types and not ft_status["has_upi"]:
-            return {"ok": False, "error": f"UPI not available for checkout; payment_method_types={pm_types}", "error_code": "upi_not_available", "payment_method": "upi", "cs_id": cs_id, "payment_method_types": pm_types, "amount": amount, "currency": payment_currency.upper(), "target_country": target_country, "checkout_country": checkout_country, "billing_country": checkout_country, "payment_country": payment_country}
+            return {
+                "ok": False,
+                "error": f"UPI not available for checkout; payment_method_types={pm_types}",
+                "error_code": "upi_not_available",
+                "payment_method": "upi",
+                "cs_id": cs_id,
+                "payment_method_types": pm_types,
+                "amount": amount,
+                "currency": payment_currency.upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_country": payment_country,
+            }
+
+        # ── Stage 3b: cpmt bypass ────────────────────────────────────────
+        # When Checkout advertises a UPI custom payment method, prefer the
+        # ChatGPT-side confirm+start rail. It avoids the Stripe SetupIntent
+        # stage entirely, which is the known source of generic_decline.
+        cpm_id = _upi_custom_payment_method_id(checkout_data.get("custom_payment_methods"))
+        if cpm_id:
+            emit("cpmt", f"Checkout advertises UPI custom method {cpm_id}; using the no-SetupIntent rail")
+            return _upi_run_cpmt_flow(
+                cs,
+                access_token=access_token,
+                cs_id=cs_id,
+                cpm_id=cpm_id,
+                processor_entity=processor_entity,
+                amount=amount,
+                payment_currency=payment_currency,
+                target_country=target_country,
+                checkout_country=checkout_country,
+                payment_country=payment_country,
+                device_id=device_id,
+                checkout_proxy=checkout_proxy,
+                qr_path=qr_path or "",
+            )
 
         # ── Stage 4: Tax region + customer data sync ─────────────────────
         if update_tax_region:
@@ -2478,19 +3860,26 @@ def generate_upi_qr_link(
             try:
                 tax_resp = stripe.post(
                     STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
-                    data=tax_body, timeout=DEFAULT_TIMEOUT,
+                    data=tax_body,
+                    timeout=DEFAULT_TIMEOUT,
                 )
             except Exception as exc:
                 emit("tax_region", f"tax region transport error (non-fatal): {type(exc).__name__}: {exc}")
                 tax_resp = None
             if tax_resp is not None:
                 _upi_dump_http(
-                    tax_resp, "stripe_tax_region", tax_body, "POST",
+                    tax_resp,
+                    "stripe_tax_region",
+                    tax_body,
+                    "POST",
                     STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
                     force=tax_resp.status_code >= 400,
                 )
                 if tax_resp.status_code >= 400:
-                    emit("tax_region", f"tax region update failed (non-fatal): {tax_resp.status_code} {tax_resp.text[:200]}")
+                    emit(
+                        "tax_region",
+                        f"tax region update failed (non-fatal): {tax_resp.status_code} {tax_resp.text[:200]}",
+                    )
                 else:
                     emit("tax_region", "tax region updated")
                     refreshed = tax_resp.json() or {}
@@ -2519,15 +3908,21 @@ def generate_upi_qr_link(
             try:
                 cd_resp = stripe.post(
                     STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
-                    data=customer_body, timeout=DEFAULT_TIMEOUT,
+                    data=customer_body,
+                    timeout=DEFAULT_TIMEOUT,
                 )
                 _upi_dump_http(
-                    cd_resp, "stripe_customer_data", customer_body, "POST",
+                    cd_resp,
+                    "stripe_customer_data",
+                    customer_body,
+                    "POST",
                     STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
                     force=cd_resp.status_code >= 400,
                 )
                 if cd_resp.status_code >= 400:
-                    emit("customer_data", f"customer_data failed (non-fatal): {cd_resp.status_code} {cd_resp.text[:200]}")
+                    emit(
+                        "customer_data", f"customer_data failed (non-fatal): {cd_resp.status_code} {cd_resp.text[:200]}"
+                    )
                 else:
                     emit("customer_data", "customer_data submitted")
             except Exception as exc:
@@ -2560,7 +3955,9 @@ def generate_upi_qr_link(
         confirm_resp, confirm_fingerprint = _upi_post_with_degrade(
             stripe,
             STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
-            data=confirm_body, fingerprint=fingerprint, stage="stripe_confirm",
+            data=confirm_body,
+            fingerprint=fingerprint,
+            stage="stripe_confirm",
         )
         if _upi_is_403(confirm_resp) and confirm_fingerprint:
             # 降级重试成功后，后续阶段（approve / 二次 confirm）必须沿用同一套
@@ -2572,12 +3969,20 @@ def generate_upi_qr_link(
         if confirm_resp.status_code >= 400:
             emit("stripe_confirm", f"confirm failed: {confirm_resp.status_code} {confirm_resp.text[:300]}")
             return _upi_hosted_fallback_result(
-                cs_id=cs_id, processor_entity=processor_entity, init=init, amount=amount,
-                payment_currency=payment_currency, target_country=target_country,
-                checkout_country=checkout_country, payment_country=payment_country,
-                pm_types=pm_types, checkout_proxy=checkout_proxy,
-                provider_proxy=provider_proxy, approve_proxy=approve_proxy,
-                checkout_ui_mode=checkout_ui_mode, qr_path=qr_path,
+                cs_id=cs_id,
+                processor_entity=processor_entity,
+                init=init,
+                amount=amount,
+                payment_currency=payment_currency,
+                target_country=target_country,
+                checkout_country=checkout_country,
+                payment_country=payment_country,
+                pm_types=pm_types,
+                checkout_proxy=checkout_proxy,
+                provider_proxy=provider_proxy,
+                approve_proxy=approve_proxy,
+                checkout_ui_mode=checkout_ui_mode,
+                qr_path=qr_path,
                 warning=f"stripe_confirm_failed: {confirm_resp.status_code}",
             )
         confirm_data = confirm_resp.json() or {}
@@ -2597,15 +4002,8 @@ def generate_upi_qr_link(
         confirm_qr_urls = _upi_extract_qr_candidates(confirm_data)
         submission = _upi_find_submission_attempt(confirm_data)
         submission_state = str(submission.get("state") or "")
-        needs_approval = (
-            not confirm_redirect
-            and submission_state == "requires_approval"
-        )
-        needs_final_poll = (
-            not confirm_redirect
-            and not confirm_qr_urls
-            and submission_state != "requires_approval"
-        )
+        needs_approval = not confirm_redirect and submission_state == "requires_approval"
+        needs_final_poll = not confirm_redirect and not confirm_qr_urls and submission_state != "requires_approval"
         if needs_final_poll:
             emit(
                 "approve",
@@ -2619,14 +4017,64 @@ def generate_upi_qr_link(
         approval_ok = False
         approval_data: dict[str, Any] = {}
         if needs_approval:
-            emit("approve", f"Stage 6: ChatGPT approve using {approve_proxy or 'DIRECT'}")
+            emit(
+                "approve",
+                f"Stage 6: ChatGPT approve using {redact_proxy_text(approve_proxy or 'DIRECT', approve_proxy)}",
+            )
+            if browser_rail and not approval_ok:
+                emit("approve", "Stage 6: headless browser approve (same-session observation)")
+                browser_approve = _upi_browser_approve(
+                    access_token=access_token,
+                    session_token=session_token,
+                    device_id=device_id,
+                    proxy=approve_proxy,
+                    fingerprint=fingerprint,
+                    processor_entity=processor_entity,
+                    cs_id=cs_id,
+                )
+                emit(
+                    "approve",
+                    "browser approve: ok=%s result=%s obs=%s error=%s"
+                    % (
+                        browser_approve["ok"],
+                        browser_approve["result"] or "unknown",
+                        "yes" if browser_approve["observation"] else "no",
+                        str(browser_approve["error"] or "none")[:120],
+                    ),
+                )
+                if browser_approve["ok"]:
+                    approval_ok = True
+                    approval_data = {"result": "approved", "via": "headless_browser"}
             approve_session = _upi_new_chatgpt_session(approve_proxy, fingerprint, device_id, session_token)
-            approve_session.headers.update({
-                "Authorization": f"Bearer {access_token}",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
-            })
+            approve_session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                }
+            )
+            # The approval endpoint is risk-gated: it needs the same deployment
+            # attestation, signed observation and frontend markers as Checkout,
+            # plus a fresh checkout_session_approval Sentinel. Attach the full
+            # The approval endpoint is risk-gated: re-capture the browser-issued
+            # observation on the Checkout page so approve does not replay the
+            # create-stage context (which the risk engine rejects).
+            if browser_rail and not approval_ok:
+                risk = _upi_capture_risk_context(
+                    approve_session,
+                    access_token=access_token,
+                    device_id=device_id,
+                    page_url=f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                    fingerprint=fingerprint,
+                    proxy=approve_proxy,
+                    session_token=session_token,
+                    use_browser=True,
+                    sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW,
+                )
+            _upi_apply_approve_risk(
+                approve_session, risk, access_token, device_id, approve_proxy, fingerprint, payment_country
+            )
             # Try confirm endpoint first
             try:
                 confirm_chatgpt = approve_session.post(
@@ -2634,15 +4082,13 @@ def generate_upi_qr_link(
                     json={"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
                     timeout=CHATGPT_TIMEOUT,
                 )
-                confirm_json = (
-                    confirm_chatgpt.json() or {}
-                    if confirm_chatgpt.status_code < 400
-                    else {}
-                )
+                confirm_json = confirm_chatgpt.json() or {} if confirm_chatgpt.status_code < 400 else {}
                 _upi_dump_http(
-                    confirm_chatgpt, "chatgpt_approve_confirm",
+                    confirm_chatgpt,
+                    "chatgpt_approve_confirm",
                     {"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
-                    "POST", UPI_CHECKOUT_CONFIRM_URL,
+                    "POST",
+                    UPI_CHECKOUT_CONFIRM_URL,
                     force=confirm_chatgpt.status_code >= 400,
                 )
                 if str(confirm_json.get("result", "")).lower() == "approved":
@@ -2668,9 +4114,11 @@ def generate_upi_qr_link(
                             timeout=CHATGPT_TIMEOUT,
                         )
                         _upi_dump_http(
-                            approve_resp, f"chatgpt_approve_{attempt:02d}",
+                            approve_resp,
+                            f"chatgpt_approve_{attempt:02d}",
                             {"checkout_session_id": cs_id, "processor_entity": processor_entity},
-                            "POST", UPI_CHECKOUT_APPROVE_URL,
+                            "POST",
+                            UPI_CHECKOUT_APPROVE_URL,
                             force=approve_resp.status_code >= 400,
                         )
                         if approve_resp.status_code < 400:
@@ -2682,21 +4130,29 @@ def generate_upi_qr_link(
                                 approval_data = approve_json
                                 break
                             if result == "blocked":
-                                # 参考实现: blocked 时保留当前线路刷新客户端标识重试,
-                                # 不把它记成代理失败。旧实现只会一路撞到 60 次上限。
+                                # 参考实现: blocked 时保留当前线路重领 SEN/SO 并轮换
+                                # 观察证明重试（文档 5.3）；只换 UA 而沿用同一份
+                                # 风控上下文等于原样重放，必然继续 blocked。
                                 blocked_count += 1
-                                emit("approve", f"attempt {attempt}: blocked, refreshing client ids")
-                                # blocked 时换一套身份重试：同样要跟契约层的
-                                # locale/timezone 对齐，否则新 UA 会带着旧语言。
-                                _upi_apply_fingerprint(
-                                    approve_session, _upi_fingerprint(country=payment_country)
+                                emit("approve", f"attempt {attempt}: blocked, rotating risk context")
+                                _upi_apply_approve_risk(
+                                    approve_session,
+                                    risk,
+                                    access_token,
+                                    device_id,
+                                    approve_proxy,
+                                    fingerprint,
+                                    payment_country,
                                 )
                                 if attempt < max_approve_attempts:
                                     time.sleep(_approve_backoff(attempt, approve_backoff_cap))
                                 continue
                             approval_data = approve_json
                         elif attempt % 10 == 0:
-                            emit("approve", f"attempt {attempt}/{max_approve_attempts}: status={approve_resp.status_code}")
+                            emit(
+                                "approve",
+                                f"attempt {attempt}/{max_approve_attempts}: status={approve_resp.status_code}",
+                            )
                     except Exception as ex:
                         if attempt % 10 == 0:
                             emit("approve", f"attempt {attempt} exception: {type(ex).__name__}: {ex}")
@@ -2747,9 +4203,7 @@ def generate_upi_qr_link(
                 if redirect_url or qr_data.get("upi_uri"):
                     break
                 try:
-                    poll_redirect, poll_qr = _upi_poll_payment_page(
-                        stripe, cs_id, stripe_pk, ctx, current_pm_id=pm_id
-                    )
+                    poll_redirect, poll_qr = _upi_poll_payment_page(stripe, cs_id, stripe_pk, ctx, current_pm_id=pm_id)
                 except Exception as exc:
                     if _upi_should_retry_second_confirm(exc):
                         emit("poll", f"extraction needs a second confirm: {str(exc)[:160]}")
@@ -2790,16 +4244,19 @@ def generate_upi_qr_link(
                             pm_id=pm_id,
                             inline_pm=inline_pm,
                             return_url=(
-                                _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
-                                or return_url
+                                _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or return_url
                             ),
                         )
                         second_resp = stripe.post(
                             STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
-                            data=second_body, timeout=DEFAULT_TIMEOUT,
+                            data=second_body,
+                            timeout=DEFAULT_TIMEOUT,
                         )
                         _upi_dump_http(
-                            second_resp, "stripe_second_confirm", second_body, "POST",
+                            second_resp,
+                            "stripe_second_confirm",
+                            second_body,
+                            "POST",
                             STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
                             force=second_resp.status_code >= 400,
                         )
@@ -2827,7 +4284,10 @@ def generate_upi_qr_link(
         if not upi_uri.startswith("upi://"):
             mobile_auth = str(qr_data.get("mobile_auth_url") or "")
             upi_uri = mobile_auth if mobile_auth.startswith("upi://") else ""
-        hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or f"https://pay.openai.com/c/pay/{cs_id}"
+        hosted_url = (
+            _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
+            or f"https://pay.openai.com/c/pay/{cs_id}"
+        )
         if not redirect_url:
             redirect_url = hosted_url
         expires_at = qr_data.get("expires_at") or int(time.time()) + 300
@@ -2846,6 +4306,11 @@ def generate_upi_qr_link(
             link_type = "upi_hosted_fallback"
 
         written_qr_path = _write_qr_png(qr_data_str, qr_path or "")
+        paid_state = {"paid": False, "payment_status": "not_requested"}
+        if wait_paid:
+            emit("paid", f"waiting up to {paid_timeout:g}s for payment on {cs_id[:20]}...")
+            paid_state = _upi_wait_paid(stripe, cs_id=cs_id, stripe_pk=stripe_pk, ctx=ctx, timeout=paid_timeout)
+            emit("paid", f"payment_status={paid_state.get('payment_status')} paid={paid_state.get('paid')}")
         return {
             "ok": True,
             "payment_method": "upi",
@@ -2872,6 +4337,8 @@ def generate_upi_qr_link(
             "coupon_name": ft_status["coupon_name"],
             "approval_ok": approval_ok,
             "approval_blocked": approval_blocked,
+            "paid": bool(paid_state.get("paid")),
+            "payment_status": str(paid_state.get("payment_status") or ""),
             "checkout_ui_mode": checkout_ui_mode,
             "checkout_proxy": checkout_proxy,
             "provider_proxy": provider_proxy,

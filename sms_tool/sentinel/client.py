@@ -56,12 +56,16 @@ def sentinel_backend(config: Mapping[str, Any] | None = None) -> str:
     root = _config_root(config)
     email = root.get("email_registration")
     email = email if isinstance(email, Mapping) else {}
-    value = str(
-        os.getenv("OPENAI_SENTINEL_BACKEND")
-        or email.get("sentinel_backend")
-        or root.get("sentinel_backend")
-        or "node_runner"
-    ).strip().lower()
+    value = (
+        str(
+            os.getenv("OPENAI_SENTINEL_BACKEND")
+            or email.get("sentinel_backend")
+            or root.get("sentinel_backend")
+            or "node_runner"
+        )
+        .strip()
+        .lower()
+    )
     if value in {"legacy", "quickjs", "browser", "old"}:
         return "legacy"
     return "node_runner"
@@ -177,10 +181,7 @@ def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
         int(profile.get("js_heap_size_limit") or 4_395_630_592),
         1,
         str(profile.get("user_agent") or "Mozilla/5.0"),
-        str(
-            profile.get("script_src")
-            or f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"
-        ),
+        str(profile.get("script_src") or f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"),
         None,
         str(profile.get("lang") or "en-US"),
         ",".join(
@@ -197,11 +198,17 @@ def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
         "",
         int(profile.get("hardware_concurrency") or 8),
         float(profile.get("time_origin") or (time.time() * 1000 - 12345.67)),
-        0, 0, 0, 0, 0, 0, 1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
     ]
-    encoded = base64.b64encode(
-        json.dumps(config, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    ).decode("ascii")
+    encoded = base64.b64encode(json.dumps(config, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode(
+        "ascii"
+    )
     return f"gAAAAAC{encoded}~S"
 
 
@@ -210,11 +217,7 @@ def _cookie_header(session: Any, device_id: str) -> str:
     cookies = getattr(session, "cookies", None)
     try:
         if hasattr(cookies, "get_dict"):
-            pairs.extend(
-                f"{name}={value}"
-                for name, value in cookies.get_dict().items()
-                if name and value
-            )
+            pairs.extend(f"{name}={value}" for name, value in cookies.get_dict().items() if name and value)
     except Exception:
         pass
     if not any(item.lower().startswith("oai-did=") for item in pairs):
@@ -232,7 +235,8 @@ def _challenge(
 ) -> dict[str, Any]:
     proof = _requirements_token(device_id, profile)
     response = request_with_retry(
-        session, "post",
+        session,
+        "post",
         SENTINEL_REQ_URL,
         label="sentinel challenge",
         data=json.dumps({"p": proof, "id": device_id, "flow": flow}, separators=(",", ":")),
@@ -240,10 +244,7 @@ def _challenge(
             "Content-Type": "text/plain;charset=UTF-8",
             "Accept": "*/*",
             "Origin": "https://sentinel.openai.com",
-            "Referer": (
-                "https://sentinel.openai.com/backend-api/sentinel/"
-                f"frame.html?sv={sentinel_version()}"
-            ),
+            "Referer": (f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={sentinel_version()}"),
             "User-Agent": str(profile.get("user_agent") or auth_user_agent()),
         },
         timeout=max(10, min(int(timeout_seconds or 60), 120)),
@@ -307,9 +308,7 @@ def issue_sentinel_token(
     except (SentinelRunnerError, SentinelIssueError):
         raise
     except Exception as exc:
-        raise SentinelIssueError(
-            f"sentinel_issue_failed:{_root_reason(exc, normalized_proxy)}"
-        ) from exc
+        raise SentinelIssueError(f"sentinel_issue_failed:{_root_reason(exc, normalized_proxy)}") from exc
     finally:
         if owned_session:
             try:
