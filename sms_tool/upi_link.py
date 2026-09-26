@@ -3619,9 +3619,7 @@ def _upi_run_oaics_flow(
     """
     referer = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
     methods = (
-        _upi_get_payment_method_types(elements)
-        or _upi_get_payment_method_types(oaics_state)
-        or ["card", "link", "upi"]
+        _upi_get_payment_method_types(elements) or _upi_get_payment_method_types(oaics_state) or ["card", "link", "upi"]
     )
     token_body = _upi_build_confirmation_token_body(
         cs_id=str(cs_id),
@@ -3633,13 +3631,16 @@ def _upi_run_oaics_flow(
     )
     token_resp = stripe.post(UPI_CONFIRMATION_TOKENS_URL, data=token_body, timeout=DEFAULT_TIMEOUT)
     _upi_dump_http(
-        token_resp, "stripe_confirmation_token", token_body, "POST", UPI_CONFIRMATION_TOKENS_URL,
+        token_resp,
+        "stripe_confirmation_token",
+        token_body,
+        "POST",
+        UPI_CONFIRMATION_TOKENS_URL,
         force=token_resp.status_code >= 400,
     )
     if token_resp.status_code >= 400:
         raise RuntimeError(
-            f"confirmation_tokens failed: {token_resp.status_code} "
-            f"{str(getattr(token_resp, 'text', ''))[:240]}"
+            f"confirmation_tokens failed: {token_resp.status_code} {str(getattr(token_resp, 'text', ''))[:240]}"
         )
     token_json = token_resp.json() or {}
     confirm_token = _upi_first_string(token_json, ["id"])
@@ -3668,7 +3669,11 @@ def _upi_run_oaics_flow(
         timeout=CHATGPT_TIMEOUT,
     )
     _upi_dump_http(
-        chat_resp, "chatgpt_oaics_confirm", chat_body, "POST", UPI_CPMT_CONFIRM_URL,
+        chat_resp,
+        "chatgpt_oaics_confirm",
+        chat_body,
+        "POST",
+        UPI_CPMT_CONFIRM_URL,
         force=chat_resp.status_code >= 400,
     )
     if chat_resp.status_code >= 400:
@@ -3683,9 +3688,7 @@ def _upi_run_oaics_flow(
         raise RuntimeError(f"chatgpt confirm status={chat_status or 'unknown'}")
 
     client_secret = _upi_first_string(chat_json, ["client_secret"])
-    payment_intent_id = _upi_payment_intent_id(
-        _upi_first_string(chat_json, ["payment_intent", "client_secret"])
-    )
+    payment_intent_id = _upi_payment_intent_id(_upi_first_string(chat_json, ["payment_intent", "client_secret"]))
     if not client_secret and isinstance(chat_json.get("payment_intent"), Mapping):
         client_secret = _upi_first_string(chat_json["payment_intent"], ["client_secret"])
         payment_intent_id = _upi_payment_intent_id(client_secret)
@@ -3709,7 +3712,10 @@ def _upi_run_oaics_flow(
         UPI_PAYMENT_INTENT_CONFIRM_URL_T.format(pi_id=payment_intent_id), data=pi_body, timeout=DEFAULT_TIMEOUT
     )
     _upi_dump_http(
-        pi_resp, "stripe_payment_intent_confirm", pi_body, "POST",
+        pi_resp,
+        "stripe_payment_intent_confirm",
+        pi_body,
+        "POST",
         UPI_PAYMENT_INTENT_CONFIRM_URL_T.format(pi_id=payment_intent_id),
         force=pi_resp.status_code >= 400,
     )
@@ -3736,13 +3742,17 @@ def _upi_run_oaics_flow(
         return redirect
 
     def _poll_payment_intent() -> dict[str, Any]:
-        poll_url = UPI_PAYMENT_INTENT_GET_URL_T.format(pi_id=payment_intent_id) + "?" + urlencode(
-            {
-                "is_stripe_sdk": "false",
-                "client_secret": client_secret,
-                "key": str(stripe_pk),
-                "_stripe_version": STRIPE_VERSION,
-            }
+        poll_url = (
+            UPI_PAYMENT_INTENT_GET_URL_T.format(pi_id=payment_intent_id)
+            + "?"
+            + urlencode(
+                {
+                    "is_stripe_sdk": "false",
+                    "client_secret": client_secret,
+                    "key": str(stripe_pk),
+                    "_stripe_version": STRIPE_VERSION,
+                }
+            )
         )
         poll_resp = stripe.get(poll_url, timeout=DEFAULT_TIMEOUT)
         if poll_resp.status_code >= 400:
