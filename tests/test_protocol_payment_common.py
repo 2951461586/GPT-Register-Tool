@@ -11,8 +11,8 @@ CORE_PATH = (
     / "services" / "protocol-payment" / "common" / "protocol_core.py"
 )
 SPEC = importlib.util.spec_from_file_location("protocol_payment_core", CORE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 CORE = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 sys.modules[SPEC.name] = CORE
 SPEC.loader.exec_module(CORE)
 
@@ -98,6 +98,39 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["payment_method"], "ideal")
         self.assertEqual(payload["link_type"], "ideal_protocol")
+
+    def test_artifacts_are_flattened_onto_the_contract(self):
+        """Method-specific extras travel on the same terminal object.
+
+        One parser serves every extractor: the manager keys off ``schema`` and
+        reads ``qr_data`` / ``pix_qr_code`` / ... as flat siblings of the
+        standard fields, so a new extractor needs no adapter branch.
+        """
+        lines = []
+        reporter = CORE.ProtocolResultReporter("pix", "pix_protocol", writer=lines.append)
+        reporter.success(
+            "https://pay.test/pix",
+            artifacts={"qr_data": "pix://x", "pix_qr_code": "pix://x", "stripe_amount": 0},
+        )
+        payload = json.loads(lines[0])
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertEqual(payload["pix_qr_code"], "pix://x")
+        self.assertEqual(payload["stripe_amount"], 0)
+        self.assertEqual(payload["url"], "https://pay.test/pix")
+
+    def test_artifacts_never_shadow_standard_fields_and_are_redacted(self):
+        lines = []
+        reporter = CORE.ProtocolResultReporter("pix", "pix_protocol", writer=lines.append)
+        reporter.success(
+            "https://pay.test/pix",
+            artifacts={"url": "https://evil.test/", "ok": False, "cs_id": "cs_live_secret"},
+        )
+        payload = json.loads(lines[0])
+        # standard fields win; artifacts only fill gaps
+        self.assertEqual(payload["url"], "https://pay.test/pix")
+        self.assertTrue(payload["ok"])
+        # artifacts pass through the shared policy redaction (cs_id is sensitive)
+        self.assertEqual(payload["cs_id"], "[REDACTED]")
 
     def test_result_reporter_handles_already_paid_and_terminal_fallback(self):
         already_paid_lines = []

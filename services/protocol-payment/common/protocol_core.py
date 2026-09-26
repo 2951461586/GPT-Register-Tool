@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import asdict, dataclass
-from typing import Any, Callable
+from dataclasses import asdict, dataclass, field
+from typing import Any, Callable, Mapping
 
 
 RESULT_SCHEMA = "protocol_payment.v1"
@@ -175,13 +175,21 @@ class ProtocolResult:
     # subprocesses inherit the environment, so the terminal report carries the
     # same correlation ID the manager's IPC envelopes use.
     command_id: str = ""  # dataclass default_factory below
+    # Method-specific extras (qr_data/cs_id/stripe_amount/...). Emitted flat on
+    # the same terminal object so one parser serves every extractor, but they
+    # never shadow a standard contract field.
+    artifacts: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.command_id:
             object.__setattr__(self, "command_id", os.environ.get("SMS_TOOL_COMMAND_ID", "").strip())
 
     def to_json(self) -> str:
-        return json.dumps(sanitize_payload(asdict(self)), ensure_ascii=False, separators=(",", ":"))
+        payload = asdict(self)
+        artifacts = payload.pop("artifacts", None) or {}
+        for key, value in artifacts.items():
+            payload.setdefault(str(key), value)
+        return json.dumps(sanitize_payload(payload), ensure_ascii=False, separators=(",", ":"))
 
 
 class ProtocolResultReporter:
@@ -228,6 +236,7 @@ class ProtocolResultReporter:
         message: str = "",
         side_effect_started: bool = False,
         prefix: str = "",
+        artifacts: Mapping[str, Any] | None = None,
     ) -> bool:
         method = self._resolve(self._payment_method)
         resolved_link_type = link_type or self._resolve(self._link_type) or f"{method}_protocol"
@@ -241,6 +250,7 @@ class ProtocolResultReporter:
                 link_type=resolved_link_type,
                 message=str(message or ""),
                 side_effect_started=bool(side_effect_started),
+                artifacts=dict(artifacts or {}),
             ),
             prefix=prefix,
         )
@@ -255,6 +265,7 @@ class ProtocolResultReporter:
         retryable: bool = False,
         side_effect_started: bool = False,
         requires_reconciliation: bool = False,
+        artifacts: Mapping[str, Any] | None = None,
     ) -> bool:
         method = self._resolve(self._payment_method)
         link_type = self._resolve(self._link_type) or f"{method}_protocol"
@@ -270,6 +281,7 @@ class ProtocolResultReporter:
             retryable=bool(retryable),
             side_effect_started=bool(side_effect_started),
             requires_reconciliation=bool(requires_reconciliation),
+            artifacts=dict(artifacts or {}),
         ))
 
     def already_paid(self) -> bool:
@@ -339,18 +351,26 @@ def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
     return values
 
 
+def _as_int(value: Any) -> int:
+    """Best-effort ``int()`` for provider payloads (missing/garbage -> 0)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def amount_from_payload(payload: Any) -> int:
     if isinstance(payload, dict):
         total_summary = payload.get("total_summary")
         if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-            return int(total_summary.get("due") or 0)
+            return _as_int(total_summary.get("due"))
         invoice = payload.get("invoice")
         if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-            return int(invoice.get("amount_due") or 0)
+            return _as_int(invoice.get("amount_due"))
         line_items = payload.get("line_items")
         if isinstance(line_items, list):
             amounts = [
-                int(item.get("amount") or 0)
+                _as_int(item.get("amount"))
                 for item in line_items
                 if isinstance(item, dict) and item.get("amount") is not None
             ]
@@ -365,7 +385,7 @@ def amount_from_payload(payload: Any) -> int:
     ):
         match = re.search(pattern, text)
         if match:
-            return int(match.group(1))
+            return _as_int(match.group(1))
     return 0
 
 
