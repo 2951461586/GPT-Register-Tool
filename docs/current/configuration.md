@@ -20,6 +20,14 @@ Python `config.py` and WPF `ConfigStore.cs` share this precedence. Editing
 Back up local files before migration or repair. This change does not rewrite
 any operator configuration.
 
+## Desktop theme preference
+
+The WPF theme button saves `Light` or `Dark` in
+`runtime/desktop_theme.txt` after applying the selected theme. On the next
+launch, WPF reads that preference before creating its main window. A missing,
+unreadable or invalid file falls back to the system theme. This desktop-only
+preference does not enter the shared Python configuration shards.
+
 ## Manifest versus validation
 
 `config_schema.json` is the cross-language **shard ownership manifest**, not

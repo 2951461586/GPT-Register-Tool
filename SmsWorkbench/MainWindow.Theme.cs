@@ -26,6 +26,16 @@ namespace SmsWorkbench
             catch (Exception ex)
             {
                 Log($"应用主题异常: {ex.Message}");
+                return;
+            }
+
+            try
+            {
+                DesktopThemePreference.Save(rootDir, _currentTheme);
+            }
+            catch (Exception ex)
+            {
+                Log($"保存主题偏好失败: {ex.Message}");
             }
         }
 

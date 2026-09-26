@@ -1085,21 +1085,45 @@ def _save_oauth_tokens(data, json_path, tokens, email, mode, result=None):
         refreshed["response"] = response
     if expires_in:
         refreshed["oauth_expires_at"] = _iso_utc(now + expires_in)
-    if json_path:
-        from pathlib import Path
-        Path(json_path).write_text(json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8")
-    upsert_account(refreshed, json_path=json_path)
+    persistence = _write_oauth_account_state(refreshed, json_path, upsert=upsert_account)
     output = {
         "ok": True,
         "mode": mode,
         "email": email,
         "json_path": json_path,
         "refresh_token_status": "oauth_present",
+        "persisted": persistence["persisted"],
+        "persistence": persistence,
     }
     if phone_attempt:
         output["phone"] = phone_attempt.get("phone", "")
         output["phone_attempt"] = phone_attempt
     return output
+
+
+def _write_oauth_account_state(data, json_path, *, upsert):
+    """Report both local writes independently; neither can roll back the other."""
+    session_saved = not bool(json_path)
+    if json_path:
+        try:
+            atomic_write_text(json_path, json.dumps(data, ensure_ascii=False, indent=2))
+            session_saved = True
+        except (OSError, TypeError, ValueError):
+            session_saved = False
+    try:
+        account_saved = bool(upsert(data, json_path=json_path))
+    except Exception:
+        account_saved = False
+    outcome = {
+        "session_saved": session_saved,
+        "account_saved": account_saved,
+        "persisted": session_saved and account_saved,
+    }
+    if not session_saved:
+        outcome["error_code"] = "session_write_failed"
+    elif not account_saved:
+        outcome["error_code"] = "account_write_failed"
+    return outcome
 
 
 def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upsert_account):
@@ -1138,27 +1162,7 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
     response["codex_oauth"] = public_result
     refreshed["response"] = response
 
-    session_saved = not bool(json_path)
-    if json_path:
-        try:
-            atomic_write_text(json_path, json.dumps(refreshed, ensure_ascii=False, indent=2))
-            session_saved = True
-        except (OSError, TypeError, ValueError):
-            session_saved = False
-    try:
-        account_saved = bool(upsert(refreshed, json_path=json_path))
-    except Exception:
-        account_saved = False
-    outcome = {
-        "session_saved": session_saved,
-        "account_saved": account_saved,
-        "persisted": session_saved and account_saved,
-    }
-    if not session_saved:
-        outcome["error_code"] = "session_write_failed"
-    elif not account_saved:
-        outcome["error_code"] = "account_write_failed"
-    return outcome
+    return _write_oauth_account_state(refreshed, json_path, upsert=upsert)
 
 
 def _follow_redirects(session, start_url, proxy=None, max_redirects=18):

@@ -14,13 +14,16 @@ workflow or a change to persisted state.
 
 `registration_runtime.py` separates mutable state into resources, identity,
 auth, OTP, account and outcome groups. Flat field access is a transitional
-compatibility view of the same storage, not a second copy. Checkpoint and result
-schemas remain unchanged. New stage code should consume the smallest group it
+compatibility view of the same storage, not a second copy. Checkpoint schemas
+remain unchanged. New stage code should consume the smallest group it
 needs. Full immutable stage input/output migration remains future work.
 
 `RegistrationStageRunner.run_stage` is the only stage execution Seam. Each stage
 mutates the same `RegistrationRuntimeState`; there is no test-only dict-delta
 stage framework or parallel cleanup lifecycle.
+The auth-session/AT-probe stage stays behind the per-invocation bound
+`RegistrationOperations` Interface. An offline test exercises that real facade
+binding and the resumable non-200 checkpoint, without changing stage order.
 
 Batch reports include a token-free `funnel` summary from
 `registration_funnel.py`. `registered_per_attempted` uses eligible attempted
@@ -63,6 +66,25 @@ configuration.
 Browser hardware fingerprints come from the built-in
 `BROWSER_PROFILE_POOL`. `registration.browser_profile_pool` is rejected rather
 than accepted as a configuration value that has no runtime effect.
+
+Both registration paths now expose a token-free `fingerprint_geo_audit` result:
+`status` (`matched` / `mismatch` / `unknown`), `fingerprint_country`,
+`exit_country`, `source` (`preflight` / `geo_probe` / `browser_probe` /
+`unknown`), and `allowed_status` (`matched` / `mismatch` /
+`not_configured` / `unknown`). Countries must be two-letter codes; no proxy
+URL, IP, token or provider response enters this result. A mismatch adds
+`fingerprint_geo_mismatch` or `fingerprint_allowed_country_mismatch` to
+`registration_warning` and logs only safe codes/countries. Progress rows carry
+the safe result; SQLite registration audits keep only its verdict.
+Protocol fingerprint selection still **continues** after an allowed-country
+mismatch. Browser provider drivers retain their existing blocking proxy-country
+check; local drivers retain their diagnostic check. Provider-managed browser
+fingerprints report `unknown` rather than claiming to know the provider's
+locale. Local drivers report the requested locale, not a measurement of the
+browser's emitted fingerprint. A preflight observation is a sample of the
+pool slot, not proof of this attempt's rotated exit. A missing fingerprint
+on a resumed post-create checkpoint also remains `unknown`. A country match
+does not establish that timezone or language matches.
 
 Camoufox removes only a profile created by its own `mkdtemp`. User-supplied
 profile directories are never removed. A successful `keep_browser_open` run
@@ -122,6 +144,10 @@ cools down, and keeps the next wave as a canary. With only one pool slot the log
 reports cooldown only. Protocol and browser results both carry the same
 allow-listed `proxy_audit` fields: pool index, countries, scheme, and rotation
 generation. No proxy URL, host, credential, or session ID is included.
+Sentinel prewarm for a future account is reused only if its prepared base
+proxy still equals that account's selected slot. A blocked canary can rotate
+the cursor before that account starts; it then gets a fresh proxy session and
+discards the prewarm result instead of mixing an old exit with a new pool index.
 
 Session-level HTTP circuits, stage admission, persistent mailbox cooldown and
 stage time budgets keep distinct state owners. HTTP backoff and admission

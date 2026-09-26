@@ -11,12 +11,12 @@ import json
 import logging
 import uuid
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
-from ..sanitizer import account_reference
+from ..sanitizer import account_reference, sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -126,100 +126,201 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
     def _run_one(index, email):
         print(f"\n[{index + 1}/{len(emails)}] One-click SMS: {email}")
         account_run_id = f"{batch_id}:{account_reference(email)}"
-        _emit_one_click_event(
-            run_id=account_run_id,
-            batch_id=batch_id,
-            stage="session_load",
-            email=email,
-            detail="读取账号会话",
-        )
-        data, json_path = _load_seed_session(
-            email=email,
-            session_file=args.session_file if len(emails) == 1 else "",
-        )
-        data.setdefault("email", email)
-        mailbox = explicit_mailboxes.get(email.strip().lower())
-        if mailbox is not None:
-            data["mailbox"] = ctx.mailbox_snapshot(mailbox)
-        _emit_one_click_event(
-            run_id=account_run_id,
-            batch_id=batch_id,
-            stage="oauth_refresh",
-            email=email,
-            detail="执行 OAuth 与邮箱验证码流程",
-        )
-        result = refresh_codex_oauth_session(
-            data,
-            json_path=json_path,
-            proxy=args.proxy,
-            timeout=args.refresh_timeout,
-            force_email_otp_login=True,
-            phone_pool=phone_pool,
-        )
-        if result.get("ok"):
-            phone = str(result.get("phone") or "").strip()
-            phone_suffix = f" phone={phone}" if phone else ""
-            print(f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}{phone_suffix}")
-            logger.info("one-click SMS %s: RT stored (%s)", email, result.get("refresh_token_status", ""))
+        stage = "session_load"
+        try:
             _emit_one_click_event(
                 run_id=account_run_id,
                 batch_id=batch_id,
-                stage="completed",
-                status="success",
+                stage=stage,
                 email=email,
-                detail="RT 已保存",
+                detail="读取账号会话",
+            )
+            data, json_path = _load_seed_session(
+                email=email,
+                session_file=args.session_file if len(emails) == 1 else "",
+            )
+            data.setdefault("email", email)
+            mailbox = explicit_mailboxes.get(email.strip().lower())
+            if mailbox is not None:
+                data["mailbox"] = ctx.mailbox_snapshot(mailbox)
+            stage = "oauth_refresh"
+            _emit_one_click_event(
+                run_id=account_run_id,
+                batch_id=batch_id,
+                stage=stage,
+                email=email,
+                detail="执行 OAuth 与邮箱验证码流程",
+            )
+            result = refresh_codex_oauth_session(
+                data,
+                json_path=json_path,
+                proxy=args.proxy,
+                timeout=args.refresh_timeout,
+                force_email_otp_login=True,
+                phone_pool=phone_pool,
+            )
+            if not isinstance(result, dict):
+                raise TypeError("unexpected OAuth result")
+        except Exception:
+            # The remote outcome can be ambiguous after a worker exception.
+            # Never expose the exception text or automatically retry this account.
+            logger.warning("one-click SMS worker failed: account=%s stage=%s", account_reference(email), stage)
+            result = {
+                "email": email, "ok": False, "batch_status": "unknown",
+                "error_code": "one_click_worker_exception", "error_stage": stage,
+            }
+            _emit_one_click_event(
+                run_id=account_run_id,
+                batch_id=batch_id,
+                stage="unknown",
+                status="unknown",
+                email=email,
+                detail="接码结果未知，已停止派发新账号",
                 account_terminal=True,
+                failure_class="internal",
+            )
+            return index, result, True
+
+        persisted = bool(
+            result.get("persistence", {}).get("persisted", result.get("persisted", True))
+            if isinstance(result.get("persistence"), dict)
+            else result.get("persisted", True)
+        )
+        fatal = False
+        if result.get("ok"):
+            result["batch_status"] = "success"
+            if persisted:
+                output_line = f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}"
+                logger.info("one-click SMS %s: RT stored (%s)", account_reference(email), result.get("refresh_token_status", ""))
+            else:
+                output_line = f"[FAIL] {email}: OAuth completed, local save failed"
+                logger.warning("one-click SMS local save failed: account=%s", account_reference(email))
+            print(output_line)
+            _emit_one_click_event(
+                run_id=account_run_id,
+                batch_id=batch_id,
+                stage="completed" if persisted else "failed",
+                status="success" if persisted else "failed",
+                email=email,
+                detail="RT 已保存" if persisted else "OAuth 已完成，但本地保存失败",
+                account_terminal=True,
+                failure_class="" if persisted else "persistence",
             )
         else:
-            print(f"[FAIL] {email}: {result.get('error', 'unknown')}")
-            logger.warning("one-click SMS %s failed: %s", email, result.get("error", "unknown"))
-            result["persistence"] = ctx.persist_failure(data, json_path, email, result)
+            result["batch_status"] = "failed"
+            error = sanitize_text(result.get("error") or "unknown")[:160]
+            result["error"] = error
+            print(f"[FAIL] {email}: {error}")
+            logger.warning("one-click SMS %s failed: %s", account_reference(email), error)
+            try:
+                result["persistence"] = ctx.persist_failure(data, json_path, email, result)
+                persisted = bool(result["persistence"].get("persisted"))
+            except Exception:
+                fatal = True
+                persisted = False
+                result["persistence"] = {"persisted": False, "error_code": "failure_persistence_exception"}
+                logger.warning("one-click SMS failure save failed: account=%s", account_reference(email))
             _emit_one_click_event(
                 run_id=account_run_id,
                 batch_id=batch_id,
                 stage="failed",
                 status="failed",
                 email=email,
-                detail=str(result.get("error") or "一键接码失败")[:160],
+                detail=error,
                 account_terminal=True,
-                failure_class=str(result.get("failure_class") or "unknown"),
+                failure_class="persistence" if fatal else str(result.get("failure_class") or "unknown"),
             )
         result.setdefault("email", email)
-        return index, result
+        result["persisted"] = persisted
+        result.pop("tokens", None)
+        return index, result, fatal
 
     ordered = [None] * len(emails)
+    stopped = False
     if workers <= 1:
         for index, email in enumerate(emails):
-            i, result = _run_one(index, email)
+            i, result, stopped = _run_one(index, email)
             ordered[i] = result
+            if stopped:
+                break
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(_run_one, i, email) for i, email in enumerate(emails)]
-            for future in as_completed(futures):
-                i, result = future.result()
-                ordered[i] = result
+            next_index = 0
+            pending = {}
+            while next_index < min(workers, len(emails)):
+                pending[executor.submit(_run_one, next_index, emails[next_index])] = next_index
+                next_index += 1
+            while pending:
+                done, _ = wait(pending, return_when=FIRST_COMPLETED)
+                for future in done:
+                    index = pending.pop(future)
+                    try:
+                        i, result, fatal = future.result()
+                    except Exception:
+                        # Defensive fallback for failures outside the worker's
+                        # own exception guard; do not lose its account slot.
+                        i, result, fatal = index, {
+                            "email": emails[index], "ok": False, "batch_status": "unknown",
+                            "error_code": "one_click_worker_exception",
+                        }, True
+                        _emit_one_click_event(
+                            run_id=f"{batch_id}:{account_reference(emails[index])}",
+                            batch_id=batch_id, stage="unknown", status="unknown",
+                            email=emails[index], detail="接码结果未知，已停止派发新账号",
+                            account_terminal=True, failure_class="internal",
+                        )
+                    ordered[i] = result
+                    stopped = stopped or fatal
+                if not stopped:
+                    while next_index < len(emails) and len(pending) < workers:
+                        pending[executor.submit(_run_one, next_index, emails[next_index])] = next_index
+                        next_index += 1
 
-    results = [result for result in ordered if result is not None]
+    for index, result in enumerate(ordered):
+        if result is not None:
+            continue
+        email = emails[index]
+        ordered[index] = {"email": email, "ok": False, "batch_status": "skipped", "error_code": "batch_stopped"}
+        _emit_one_click_event(
+            run_id=f"{batch_id}:{account_reference(email)}",
+            batch_id=batch_id, stage="skipped", status="skipped",
+            email=email, detail="前序异常，未执行",
+            account_terminal=True,
+        )
+
+    results = ordered
     ok_count = sum(1 for result in results if result.get("ok"))
+    failed_count = sum(1 for result in results if result.get("batch_status") == "failed")
+    unknown_count = sum(1 for result in results if result.get("batch_status") == "unknown")
+    skipped_count = sum(1 for result in results if result.get("batch_status") == "skipped")
+    persist_failed = sum(
+        1 for result in results
+        if result.get("batch_status") not in {"unknown", "skipped"} and result.get("persisted") is False
+    )
+    batch_ok = ok_count == len(emails) and not persist_failed
     logger.info("one-click SMS RT refresh finished: ok=%d/%d", ok_count, len(emails))
     summary = {
-        "ok": ok_count == len(emails),
+        "ok": batch_ok,
         "total": len(emails),
+        "attempted": len(emails) - skipped_count,
         "success": ok_count,
-        "failed": len(emails) - ok_count,
+        "failed": failed_count,
+        "unknown": unknown_count,
+        "skipped": skipped_count,
+        "persist_failed": persist_failed,
         "results": results,
     }
     _emit_one_click_event(
         run_id=run_id,
         batch_id=batch_id,
         stage="batch_completed",
-        status="completed" if ok_count == len(emails) else "failed",
-        detail=f"完成 {ok_count}/{len(emails)}",
+        status="completed" if batch_ok else "failed",
+        detail=f"完成 {ok_count}/{len(emails)}，保存失败 {persist_failed}，未知 {unknown_count}，跳过 {skipped_count}",
         total=len(emails),
         batch_terminal=True,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-    if ok_count != len(emails):
+    if not batch_ok:
         raise SystemExit(3)
 
 

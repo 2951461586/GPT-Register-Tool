@@ -336,6 +336,11 @@ def relogin_codex_account(
             if proxy_index:
                 attempt["proxy_index"] = proxy_index
             attempts.append(attempt)
+            # OAuth completed remotely but its new tokens were not saved.
+            # Another OTP/browser strategy would spend resources without
+            # repairing the local write failure.
+            if result.get("remote_ok") and result.get("persisted") is False:
+                return {**attempt, "attempts": attempts}
             if not _recoverable_on_other_proxy(result):
                 break
         if strategy == "chatgpt_email_otp" and "otp_poll_timeout" in str(result.get("error") or ""):
@@ -445,7 +450,10 @@ def relogin_local_codex_account(
             result=result,
         )
         safe = _safe_relogin_result(saved)
-        safe.update({"ok": True, "probe": probe, "persisted": True})
+        persisted = bool(saved.get("persisted"))
+        safe.update({"ok": persisted, "probe": probe, "persisted": persisted, "remote_ok": True})
+        if not persisted:
+            safe["error"] = "oauth_persistence_failed"
         return safe
     except Exception as exc:
         return {"ok": False, "error": _redact_recovery_error(exc)}

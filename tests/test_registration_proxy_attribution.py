@@ -158,3 +158,56 @@ def test_blocked_canary_rotates_the_pool_cursor_for_future_accounts():
     assert [audit["pool_index"] for audit in ordered_audits] == [0, 2, 0]
     assert [audit["rotation_generation"] for audit in ordered_audits] == [0, 1, 1]
     assert results[1]["proxy_rotation_count"] == 1
+
+
+def test_prewarmed_future_account_uses_rotated_proxy_after_blocked_canary():
+    mailboxes = [SimpleNamespace(email=f"warm{index}@example.com") for index in range(3)]
+    seen = []
+    sequence = iter(range(12))
+
+    def refresh(proxy):
+        return f"{proxy}?sid={next(sequence)}"
+
+    def run_email(**kwargs):
+        seen.append(kwargs)
+        email = kwargs["mailbox"].email
+        if email == mailboxes[0].email:
+            return {"success": False, "email": email,
+                    "error": "email_otp_send_stuck", "failure_class": "mailbox"}
+        if email == mailboxes[1].email and kwargs["registration_attempt"] == 1:
+            return {"success": False, "email": email,
+                    "error": "connection reset", "failure_class": "network"}
+        return {"success": True, "email": email}
+
+    config = {
+        "email_registration": {"sentinel_backend": "legacy", "sentinel_prewarm_window": 2},
+        "registration": {"driver": "protocol", "pulse": {
+            "enabled": True, "wave_size": 2, "wave_delay_seconds": 0,
+            "ban_pause_seconds": 0, "canary_enabled": True,
+        }},
+    }
+    pool = ["http://proxy-a.invalid:8080", "http://proxy-b.invalid:8080",
+            "http://proxy-c.invalid:8080"]
+    with patch("sms_tool.batch_runner.CFG", config), \
+         patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda values, _: values), \
+         patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=refresh), \
+         patch("sms_tool.sentinel_tokens._extract_sentinel",
+               side_effect=lambda **kwargs: {"prewarmed_for": kwargs["proxy"]}), \
+         patch("sms_tool.batch_runner.ProxyHealthTracker"), \
+         patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard), \
+         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
+         patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}):
+        results = run_batch_impl(
+            count=3, proxy_pool=pool, mailboxes=mailboxes, workers=3,
+            max_attempts=2, retry_delay_seconds=0,
+            run_email_func=run_email, registration_driver="protocol",
+        )
+
+    account = [row for row in seen if row["mailbox"].email == mailboxes[1].email]
+    assert len(account) == 2
+    assert all(row["proxy"].startswith(pool[2]) for row in account)
+    assert account[0]["proxy"] != account[1]["proxy"]
+    assert all(row["proxy_metadata"]["pool_index"] == 2 for row in account)
+    assert all(row["proxy_metadata"]["rotation_generation"] == 1 for row in account)
+    assert account[0]["sentinel_data"] is None  # Prewarm was bound to proxy-b.
+    assert results[1]["proxy_session_refresh_count"] == 2

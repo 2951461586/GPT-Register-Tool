@@ -103,22 +103,32 @@ def check(
     return unclaimed, claims, rows_seen
 
 
+def coverage_counts(
+    tracked: set[str], claims: dict[str, list[str]]
+) -> tuple[set[str], dict[str, list[str]]]:
+    """Report only tracked sms_tool modules, not incidental row-level paths."""
+    named = tracked & claims.keys()
+    duplicates = {
+        path: claims[path] for path in sorted(named) if len(claims[path]) > 1
+    }
+    return named, duplicates
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--detail", action="store_true", help="print every claimed path")
+    ap.add_argument("--detail", action="store_true", help="print each claimed tracked module")
     args = ap.parse_args(argv)
 
     if not DIRECTORY_MAP.is_file():
         print(f"missing {DIRECTORY_MAP}")
         return 2
 
-    unclaimed, claims, rows_seen = check()
-    duplicates = {
-        path: groups for path, groups in sorted(claims.items()) if len(groups) > 1
-    }
+    tracked = {path for path in tracked_paths("sms_tool") if path.endswith(".py")}
+    unclaimed, claims, rows_seen = check(tracked=tracked)
+    named, duplicates = coverage_counts(tracked, claims)
 
     if args.detail:
-        for path in sorted(claims):
+        for path in sorted(named):
             print(f"  {path}  <- {', '.join(claims[path])}")
         print(f"rows parsed: {rows_seen}")
 
@@ -132,8 +142,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"module coverage OK ({len(claims)} tracked modules, {rows_seen} rows, "
-        f"{len(duplicates)} cross-row claims)"
+        f"module coverage OK ({len(tracked)} tracked sms_tool modules, "
+        f"{len(named)} claimed, {len(unclaimed)} unclaimed, "
+        f"{rows_seen} rows, {len(duplicates)} cross-row claims)"
     )
     return 0
 

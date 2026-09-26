@@ -17,6 +17,8 @@ import pytest
 
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool import registration
+from unittest.mock import patch
 
 
 def _workflow():
@@ -56,4 +58,19 @@ def test_non_200_marks_transport_unknown(status):
     workflow.r._probe_registration_access_token.return_value = {"status_code": status}
     workflow._persist_checkpoint = Mock()
     workflow.probe_access_token()
+    workflow._persist_checkpoint.assert_called_once_with("at_probe_transport_unknown")
+
+
+def test_bound_facade_probe_preserves_patch_scope_and_unknown_checkpoint():
+    with patch.object(registration, "_probe_registration_access_token", return_value={"status_code": 503}) as probe:
+        operations = registration._email_registration_operations()
+    workflow = RegistrationEmailWorkflow(RegistrationStateMachine(lambda *_: None), operations=operations)
+    workflow.runtime.access_token = "test-token"
+    workflow.runtime.auth_body = {}
+    workflow.runtime.proxy = "http://proxy.invalid:8080"
+    workflow._persist_checkpoint = Mock()
+    workflow.probe_access_token()
+    probe.assert_called_once_with(
+        "test-token", {}, proxy="http://proxy.invalid:8080", cfg=workflow.config
+    )
     workflow._persist_checkpoint.assert_called_once_with("at_probe_transport_unknown")

@@ -115,21 +115,15 @@ Cross-row claims are reported but are not an error. `tests/test_module_coverage.
 pins the real tree, the unclaimed failure and the parser boundaries; CI runs the
 same script.
 
-**Current tracked-file measurement** (`git ls-files`, after attributing the
-previously unnamed modules):
-
-| Quantity | Current |
-| --- | --- |
-| Tracked `sms_tool/**/*.py` (including package roots) | **250** |
-| Named by at least one row | **250 (100%)** |
-| Named by no row | **0** |
-| Named by more than one row | **5** (`storage.py` ×3; `commands/email_change.py`, `payment_link_manager.py`, `promotion_states.py`, `sub2api_import.py` ×2) |
-
-The five cross-row claims predate this gate and reflect overlapping
-workflow and implementation descriptions; the newly attributed modules add
-no new duplicates. This is a tracked-file placement inventory, **not** a check
-of untracked modules or a behavioral architecture gate. Recompute with
-`python scripts/module_coverage_check.py --detail`.
+**Current counts are computed, not copied into this document.** Run
+`python scripts/module_coverage_check.py` for tracked `sms_tool` Python files,
+claimed/unclaimed files, row count and cross-row claims; add `--detail` for
+each claimed module and its rows. The reported denominator excludes incidental
+`scripts/` and `SmsWorkbench/` paths named by a row. An unclaimed tracked module
+fails the gate; cross-row claims are reported, not rejected, because some
+workflow and implementation rows intentionally overlap. This is a tracked-file
+placement inventory, **not** a check of untracked modules or a behavioral
+architecture gate.
 
 ## `SmsWorkbench/` payment command boundary
 

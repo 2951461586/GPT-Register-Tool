@@ -99,6 +99,43 @@ def test_failed_db_write_reports_partial_success(tmp_path):
     }
 
 
+def test_successful_oauth_reports_failed_db_save_without_losing_remote_success(tmp_path):
+    session = tmp_path / "session.json"
+    with patch.object(codex_oauth, "upsert_account", return_value=False):
+        result = codex_oauth._save_oauth_tokens(
+            {"email": "e@example.test"}, str(session),
+            {"access_token": "at", "refresh_token": "rt"},
+            "e@example.test", "codex_oauth_pkce",
+        )
+
+    assert result["ok"] is True
+    assert result["persistence"] == {
+        "session_saved": True, "account_saved": False,
+        "persisted": False, "error_code": "account_write_failed",
+    }
+    assert result["persisted"] is False
+    assert session.is_file()
+
+
+def test_successful_oauth_attempts_db_save_after_session_write_failure(tmp_path):
+    with (
+        patch.object(codex_oauth, "atomic_write_text", side_effect=OSError("permission denied")),
+        patch.object(codex_oauth, "upsert_account", return_value=True) as upsert,
+    ):
+        result = codex_oauth._save_oauth_tokens(
+            {"email": "e@example.test"}, str(tmp_path / "session.json"),
+            {"access_token": "at", "refresh_token": "rt"},
+            "e@example.test", "codex_oauth_pkce",
+        )
+
+    assert result["ok"] is True
+    assert result["persistence"] == {
+        "session_saved": False, "account_saved": True,
+        "persisted": False, "error_code": "session_write_failed",
+    }
+    upsert.assert_called_once()
+
+
 def test_command_adapter_does_not_write_session_files():
     source = Path(one_click.__file__).read_text(encoding="utf-8")
     assert "write_text(" not in source

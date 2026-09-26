@@ -187,7 +187,7 @@ def refresh_promotion_statuses(
         _emit_account_batch_event(
             run_id,
             "account_completed",
-            "completed" if result.get("ok") else "failed",
+            "completed" if result.get("ok") and result.get("persisted") else "failed",
             account_ref=email,
             total=len(accounts),
             detail=str(result.get("promotion_status") or "检测完成"),
@@ -225,15 +225,16 @@ def refresh_promotion_statuses(
     _emit_account_batch_event(
         run_id,
         "batch_completed",
-        "completed" if success == len(results) else "failed",
+        "completed" if success == len(results) and not persist_failed else "failed",
         total=len(results),
         detail=(
             f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
-            f"传输失败 {transport_failed}，支付资格 {eligibility_ok}/{len(eligibility_results)}"
+            f"传输失败 {transport_failed}，保存失败 {persist_failed}，"
+            f"支付资格 {eligibility_ok}/{len(eligibility_results)}"
         ),
     )
     return {
-        "ok": success == len(results) if results else False,
+        "ok": bool(results) and success == len(results) and not persist_failed,
         "total": len(results),
         "success": success,
         "failed": len(results) - success,

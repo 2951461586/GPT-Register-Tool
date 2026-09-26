@@ -236,7 +236,9 @@ namespace SmsWorkbench
                     {
                         "success" or "completed" => "成功",
                         "failed" or "error" => "失败",
+                        "unknown" => "未知",
                         "cancelled" => "已取消",
+                        "skipped" => "已跳过",
                         _ => "进行中",
                     };
                     return suffix.Length > 0

@@ -66,6 +66,8 @@ def test_script_exits_zero_on_real_tree() -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "module coverage OK" in proc.stdout
+    tracked = {path for path in gate.tracked_paths("sms_tool") if path.endswith(".py")}
+    assert f"({len(tracked)} tracked sms_tool modules, {len(tracked)} claimed, 0 unclaimed," in proc.stdout
 
 
 def test_unclaimed_module_fails() -> None:
@@ -116,3 +118,31 @@ def test_check_supports_injected_tracked_set_without_git() -> None:
         _DOC, tracked={"sms_tool/a.py", "sms_tool/zzz.py"}, resolver=_resolver
     )
     assert unclaimed == ["sms_tool/zzz.py"]
+
+
+def test_report_counts_only_tracked_sms_tool_modules() -> None:
+    tracked = {"sms_tool/a.py", "sms_tool/b.py"}
+    claims = {
+        "sms_tool/a.py": ["Alpha"],
+        "sms_tool/b.py": ["Beta", "Gamma"],
+        "scripts/irrelevant.py": ["Alpha", "Beta"],
+        "SmsWorkbench/irrelevant.cs": ["Alpha"],
+    }
+    named, duplicates = gate.coverage_counts(tracked, claims)
+    assert named == {"sms_tool/a.py", "sms_tool/b.py"}
+    assert duplicates == {"sms_tool/b.py": ["Beta", "Gamma"]}
+
+
+def test_detail_omits_incidental_row_paths(monkeypatch, capsys) -> None:
+    tracked = {"sms_tool/a.py"}
+    claims = {
+        "sms_tool/a.py": ["Alpha"],
+        "scripts/irrelevant.py": ["Alpha", "Beta"],
+    }
+    monkeypatch.setattr(gate, "tracked_paths", lambda root: tracked)
+    monkeypatch.setattr(gate, "check", lambda *, tracked: ([], claims, 2))
+    assert gate.main(["--detail"]) == 0
+    output = capsys.readouterr().out
+    assert "sms_tool/a.py  <- Alpha" in output
+    assert "scripts/irrelevant.py" not in output
+    assert "(1 tracked sms_tool modules, 1 claimed, 0 unclaimed, 2 rows, 0 cross-row claims)" in output

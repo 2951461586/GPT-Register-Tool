@@ -190,6 +190,10 @@ Scan results report remote `ok` independently of local `persistence`
 (`session_saved`, `account_saved`, `persisted`, and a generic `error_code`).
 The batch counts `persist_failed` separately from remote `failed`; a partial
 save makes the batch `ok` false and the desktop command exit nonzero.
+Promotion batch `success` and per-account `ok` still describe the remote plan
+probe; its `account_completed`/`batch_completed` events report failure when
+the corresponding local save did not complete. The desktop promotion summary
+shows `保存失败` separately from the plan result.
 
 ## Proxy precedence
 

@@ -134,6 +134,10 @@ class RegistrationProgressTests(unittest.TestCase):
                         "scheme": "http",
                         "rotation_generation": 2,
                     },
+                    "fingerprint_geo_audit": {
+                        "fingerprint_country": "US", "exit_country": "DE",
+                        "source": "preflight", "proxy": "http://user:secret@proxy.invalid",
+                    },
                     "future_batch_eligible": True,
                     "retry_disposition": "cooldown",
                 })
@@ -155,6 +159,8 @@ class RegistrationProgressTests(unittest.TestCase):
             )
             self.assertTrue(stored["future_batch_eligible"])
             self.assertEqual(stored["retry_disposition"], "cooldown")
+            self.assertEqual(stored["fingerprint_geo_audit"]["status"], "mismatch")
+            self.assertNotIn("secret", repr(stored["fingerprint_geo_audit"]))
 
     def test_constructor_preserves_batch_and_attempt_when_result_omits_them(self):
         with tempfile.TemporaryDirectory() as temp_dir:

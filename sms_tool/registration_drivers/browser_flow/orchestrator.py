@@ -168,6 +168,25 @@ def run_browser_registration(
     _browser_geo = browser_fingerprint_pool.detect_proxy_exit_geo(proxy, enabled=_browser_geo_enabled)
     _browser_profile = browser_fingerprint_pool.select_browser_profile(_browser_geo, seed=device_id, config=config)
     locale, timezone_id = decisions.aligned_locale_timezone(_browser_profile, locale, timezone_id)
+    # When geo detection fails, aligned_locale_timezone keeps the configured
+    # locale instead of the pool's US fallback. Report what we requested, not
+    # that unapplied fallback. Provider-managed drivers own their own locale.
+    locale_parts = str(locale or "").replace("_", "-").split("-")
+    locale_country = locale_parts[-1] if len(locale_parts) > 1 else ""
+    geo_audit = {
+        "fingerprint_country": (
+            locale_country
+            if driver_name in decisions.SCREEN_MANAGED_DRIVERS else ""
+        ),
+        "exit_country": str(
+            (_browser_geo or {}).get("country")
+            or (proxy_metadata or {}).get("actual_country") or ""
+        ),
+        "source": (
+            "geo_probe" if (_browser_geo or {}).get("country")
+            else "preflight"
+        ),
+    }
     # P1-3: playwright consumes this as its viewport; camoufox consumes it as
     # Screen(max_width, max_height) (previously hardcoded 1280x900, so the pool
     # never reached it). Provider-owned drivers get None -- see decisions.py.
@@ -192,6 +211,8 @@ def run_browser_registration(
                 if proxy_metadata is not None:
                     proxy_metadata = dict(proxy_metadata)
                     proxy_metadata["actual_country"] = verification.get("actual_country", "")
+                geo_audit["exit_country"] = str(verification.get("actual_country") or "")
+                geo_audit["source"] = "browser_probe"
                 if not verification.get("ok"):
                     _country_error = str(verification.get("error") or "unknown")
                     if _country_check == "blocking":
@@ -582,6 +603,7 @@ def run_browser_registration(
                 registration_warning=dom_fields._safe_text(warning),
                 post_registration_ready=success,
                 mailbox_snapshot=registration_outcome._mailbox_snapshot(mailbox),
+                fingerprint_geo_audit=geo_audit,
                 extra={
                     "registration_driver": driver_name,
                     "access_token_probe": probe,
@@ -617,6 +639,7 @@ def run_browser_registration(
                 "registration_machine": machine.snapshot(),
                 "browser_diagnostics": diagnostics,
                 "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+                "fingerprint_geo_audit": geo_audit,
                 "driver_capabilities": driver_capabilities(driver_name),
             },
         )
@@ -643,6 +666,7 @@ def run_browser_registration(
                 "registration_machine": machine.snapshot(),
                 "browser_diagnostics": diagnostics,
                 "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+                "fingerprint_geo_audit": geo_audit,
                 "driver_capabilities": driver_capabilities(driver_name),
             },
         )

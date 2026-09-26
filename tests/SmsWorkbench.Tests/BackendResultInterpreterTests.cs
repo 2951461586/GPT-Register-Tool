@@ -230,6 +230,21 @@ public sealed class BackendResultInterpreterTests
         Assert.Contains("总数：0", BackendResultInterpreter.PromotionSummary(new List<Dictionary<string, object>>()));
     }
 
+    [Fact]
+    public void PromotionSummary_KeepsRemoteSuccessDistinctFromFailedSave()
+    {
+        var rows = new[]
+        {
+            Row(("email", "a@example.com"), ("ok", true), ("persisted", false),
+                ("promotion_status", "Free·无优惠"), ("probe", Row(("ok", true)))),
+        };
+
+        string summary = BackendResultInterpreter.PromotionSummary(rows);
+
+        Assert.Contains("检测成功：1", summary);
+        Assert.Contains("保存失败：1", summary);
+    }
+
     // ── Result-dialog gate ──────────────────────────────────────────────
 
     [Theory]
@@ -647,6 +662,16 @@ public sealed class BackendResultInterpreterTests
 
         using var mailbox = JsonDocument.Parse("{\"total\":5,\"success\":2,\"failed\":3,\"mailbox_auth_invalid\":3}");
         Assert.Equal("完成 2/5，失败 3，邮箱认证失败 3", BackendResultInterpreter.BatchSummaryLabel(mailbox.RootElement));
+    }
+
+    [Fact]
+    public void BatchSummaryLabelDistinguishesPersistenceUnknownAndSkipped()
+    {
+        using var document = JsonDocument.Parse(
+            "{\"total\":4,\"success\":1,\"failed\":1,\"persist_failed\":1,\"unknown\":1,\"skipped\":1}");
+        Assert.Equal(
+            "完成 1/4，失败 1，保存失败 1，未知 1，跳过 1",
+            BackendResultInterpreter.BatchSummaryLabel(document.RootElement));
     }
 
     [Fact]

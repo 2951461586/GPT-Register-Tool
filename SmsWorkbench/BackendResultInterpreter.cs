@@ -229,6 +229,7 @@ public static class BackendResultInterpreter
         int ok = 0;
         int tokenInvalid = 0;
         int failed = 0;
+        int persistFailed = 0;
         var badges = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (rows != null)
         {
@@ -239,6 +240,8 @@ public static class BackendResultInterpreter
                 if (IsProbeSucceeded(row)) ok++;
                 else if (IsProbeReturned401(row)) tokenInvalid++;
                 else failed++;
+                if (row.ContainsKey("persisted") && !BackendJson.GetBool(row, "persisted"))
+                    persistFailed++;
                 string badge = PromotionBadge(row);
                 if (badge.Length == 0) badge = "未知";
                 badges.TryGetValue(badge, out int count);
@@ -250,6 +253,8 @@ public static class BackendResultInterpreter
             .Append("    检测成功：").Append(ok)
             .Append("    AT失效：").Append(tokenInvalid)
             .Append("    其他失败：").Append(failed);
+        if (persistFailed > 0)
+            text.Append("    保存失败：").Append(persistFailed);
         foreach (KeyValuePair<string, int> badge in badges.OrderByDescending(b => b.Value))
         {
             text.Append("    ").Append(badge.Key).Append('：').Append(badge.Value);
@@ -474,13 +479,20 @@ public static class BackendResultInterpreter
         int liveness401 = root.TryGetProperty("liveness_401", out JsonElement liveness401Element) && liveness401Element.TryGetInt32(out int liveness401Value) ? liveness401Value : 0;
         int mailboxAuthInvalid = root.TryGetProperty("mailbox_auth_invalid", out JsonElement mailboxAuthElement) && mailboxAuthElement.TryGetInt32(out int mailboxAuthValue) ? mailboxAuthValue : 0;
         int timedOut = root.TryGetProperty("timed_out", out JsonElement timeoutElement) && timeoutElement.TryGetInt32(out int timeoutValue) ? timeoutValue : 0;
+        int persistFailed = root.TryGetProperty("persist_failed", out JsonElement persistElement) && persistElement.TryGetInt32(out int persistValue) ? persistValue : 0;
+        int unknown = root.TryGetProperty("unknown", out JsonElement unknownElement) && unknownElement.TryGetInt32(out int unknownValue) ? unknownValue : 0;
+        int skipped = root.TryGetProperty("skipped", out JsonElement skippedElement) && skippedElement.TryGetInt32(out int skippedValue) ? skippedValue : 0;
         if (unauthorized == 0) unauthorized = liveness401;
-        return timedOut > 0
+        string label = timedOut > 0
             ? $"完成 {success}/{totalValue}，失败 {failed}，超时 {timedOut}"
             : mailboxAuthInvalid > 0
                 ? $"完成 {success}/{totalValue}，失败 {failed}，邮箱认证失败 {mailboxAuthInvalid}"
             : unauthorized > 0
                 ? $"完成 {success}/{totalValue}，失败 {failed}，401 {unauthorized}"
                 : $"完成 {success}/{totalValue}，失败 {failed}";
+        if (persistFailed > 0) label += $"，保存失败 {persistFailed}";
+        if (unknown > 0) label += $"，未知 {unknown}";
+        if (skipped > 0) label += $"，跳过 {skipped}";
+        return label;
     }
 }

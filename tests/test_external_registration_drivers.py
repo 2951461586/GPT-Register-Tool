@@ -1717,10 +1717,20 @@ class TestExitCountryProbeCoversAllDrivers(unittest.TestCase):
                 self.assertNotIn("proxy_country_mismatch", result["error"], driver)
                 # ... but the observed country is still recorded for auditing.
                 self.assertEqual(result["proxy_audit"].get("actual_country"), "DE", driver)
+                self.assertEqual(result["fingerprint_geo_audit"]["status"], "mismatch")
+                self.assertEqual(result["fingerprint_geo_audit"]["source"], "browser_probe")
+                self.assertIn("fingerprint_geo_mismatch", result["registration_warning"])
 
     def test_local_driver_mismatch_is_logged(self):
         _, _, messages = self._run("camoufox", self._mismatch())
         self.assertTrue(any("country_mismatch:DE" in m for m in messages))
+
+    def test_missing_geo_does_not_report_unapplied_us_pool_default(self):
+        config = dict(_COUNTRY_CONFIG)
+        config["registration"] = dict(config["registration"], browser_locale="pt-BR")
+        result, _, _ = self._run("playwright", self._mismatch(), config=config)
+        assert result["fingerprint_geo_audit"]["fingerprint_country"] == "BR"
+        assert result["fingerprint_geo_audit"]["status"] == "mismatch"
 
     def test_probe_now_runs_for_local_drivers(self):
         # The whole point of P2-3: this used to be roxy/cloak only.
@@ -1747,6 +1757,7 @@ class TestExitCountryProbeCoversAllDrivers(unittest.TestCase):
         result, _, messages = self._run("camoufox", {"ok": True, "actual_country": "US"})
         self.assertEqual(result["proxy_audit"].get("actual_country"), "US")
         self.assertFalse(any("country_mismatch" in m for m in messages))
+        self.assertEqual(result["fingerprint_geo_audit"]["status"], "matched")
 
     # ── the probe now runs on every registration, so it must be bounded ──
 
