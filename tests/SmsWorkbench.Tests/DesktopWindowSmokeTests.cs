@@ -238,6 +238,21 @@ public sealed class DesktopWindowSmokeTests
             stage("show main window");
             main.Show();
             main.UpdateLayout();
+            stage("toggle and save theme");
+            // This smoke test constructs MainWindow without App.OnStartup;
+            // GetAppTheme may still be Unknown, which the toggle treats as Light.
+            var originalTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme()
+                == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
+                : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            var toggledTheme = originalTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                ? Wpf.Ui.Appearance.ApplicationTheme.Light
+                : Wpf.Ui.Appearance.ApplicationTheme.Dark;
+            main.NavCommand.Execute("theme");
+            Assert.Equal(toggledTheme, DesktopThemePreference.Load(rootDirectory, originalTheme));
+            main.NavCommand.Execute("theme");
+            Assert.Equal(originalTheme, DesktopThemePreference.Load(rootDirectory, toggledTheme));
+
             var brandTitle = Assert.IsType<TextBlock>(main.FindName("SidebarBrandTitle"));
             Assert.Equal("GPT Register Tool", brandTitle.Text);
             var formattedBrandTitle = new FormattedText(

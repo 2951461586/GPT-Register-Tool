@@ -221,6 +221,8 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
     response = data.get("response") if isinstance(data.get("response"), dict) else {}
     probe = response.get("access_token_probe") if isinstance(response.get("access_token_probe"), dict) else {}
     telemetry = data.get("access_token_telemetry") if isinstance(data.get("access_token_telemetry"), dict) else {}
+    geo = data.get("fingerprint_geo_audit") if isinstance(data.get("fingerprint_geo_audit"), Mapping) else {}
+    geo_status = str(geo.get("status") or "")
     registration_state = str(state or data.get("registration_state") or ("active" if data.get("success") else "failed"))
     email = _normalize_account_email(data.get("email") or "")
     error = str(data.get("error") or "")[:800]
@@ -252,6 +254,8 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
         # 4377 before its entry was added.  Any new result key that the audit row
         # needs has to be added here in the same change.
         "needs_manual_session_recovery": bool(data.get("needs_manual_session_recovery")),
+        # Store only the closed verdict, never a caller-supplied nested mapping.
+        "fingerprint_geo_status": geo_status if geo_status in {"matched", "mismatch", "unknown"} else "unknown",
     }
     init_database(runtime_config=runtime_config)
     conn = _connect(runtime_config=runtime_config)

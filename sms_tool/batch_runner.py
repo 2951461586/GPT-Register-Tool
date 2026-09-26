@@ -582,7 +582,9 @@ def run_batch_impl(
         for index in range(prewarm_window):
             base_proxy = proxy_pool[index % len(proxy_pool)] if proxy_pool else proxy
             worker_proxy = refresh_proxy_sid(base_proxy) if base_proxy else base_proxy
-            first_attempt_proxies[index] = worker_proxy
+            # The pulse can rotate future accounts after the canary. Keep the
+            # base slot with the prewarm so it cannot be applied to a new slot.
+            first_attempt_proxies[index] = (base_proxy, worker_proxy)
             prewarmed[index] = prewarm_executor.submit(
                 _extract_sentinel, proxy=worker_proxy, force_fresh=True, persist=False,
             )
@@ -691,9 +693,11 @@ def run_batch_impl(
             if _cancel_requested():
                 return i, _cancelled(attempt - 1)
             base_proxy = proxy_pool[account_proxy_index] if proxy_pool else proxy
+            prewarm = first_attempt_proxies.get(i) if attempt == 1 else None
+            use_prewarm = bool(prewarm and prewarm[0] == base_proxy)
             worker_proxy = (
-                first_attempt_proxies[i]
-                if attempt == 1 and i in first_attempt_proxies
+                prewarm[1]
+                if use_prewarm
                 else (refresh_proxy_sid(base_proxy) if base_proxy else base_proxy)
             )
             expected_country = infer_proxy_country(worker_proxy)
@@ -705,7 +709,7 @@ def run_batch_impl(
             )
             proxy_metadata["attempt"] = attempt
             proxy_metadata["rotation_generation"] = account_rotation_generation
-            sentinel_data = _prewarmed_sentinel(i) if attempt == 1 else None
+            sentinel_data = _prewarmed_sentinel(i) if use_prewarm else None
             # Hold this attempt's egress for as long as it is on the wire.  The
             # pool is round-robined, so two live accounts would otherwise leave
             # through the same address and nothing recorded it

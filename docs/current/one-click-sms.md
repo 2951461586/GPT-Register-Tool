@@ -13,11 +13,23 @@ sms-activate 客户端以 activation ID 管理租约；`nexsms.py` 使用号码�
 
 OAuth/SMS 成功的 token 由 `codex_oauth` 保存。失败时该模块将脱敏的
 `response.codex_oauth` 与手机号尝试结果写入 session JSON 和 SQLite。
-session 文件采用原子替换；两处写入不能跨介质原子提交，因此返回
+成功和失败的 session 文件均采用原子替换；两处写入不能跨介质原子提交，
+因此成功结果也保留远端 `ok=true`，同时返回 `persisted` 和
 `persistence.session_saved`、`account_saved`、`persisted`。单侧失败的
 `error_code` 仅为 `session_write_failed` 或 `account_write_failed`，
 不会把路径、供应商响应或凭据写进公开结果。远端失败与本地部分保存
-是两项独立事实，批次仍按远端结果记失败。
+是两项独立事实。账号恢复若拿到有效 AT 但本地保存失败，会返回
+`remote_ok=true`、`ok=false`、`persisted=false`，不再继续尝试下一条
+会消耗邮箱验证码的恢复路径。
+
+批次的 `total` 是选中账号数，`attempted = total - skipped`；
+`success`/`failed` 只计**已经执行**且远端成功/明确失败的账号。
+`unknown` 表示执行中发生未预期异常，不能据此断言远端失败；
+`skipped` 表示异常发生后没有启动的账号。四项互斥，合计等于 `total`。
+`persist_failed` 单独统计已执行账号的本地保存失败，可与远端
+`success` 或 `failed` 重叠。任何保存失败、未知或跳过均使批次
+`ok=false`，CLI 退出码为 3。异常时停止派发新账号，等待已经开始的账号
+收口，按原选中顺序输出每个账号结果；不会自动重试未知的远端动作。
 
 账号测活与接码不是同一流程。`--one-click-scan` 默认只探测 AT；
 只有显式深探测或恢复选项才允许 OAuth/OTP 副作用，详见

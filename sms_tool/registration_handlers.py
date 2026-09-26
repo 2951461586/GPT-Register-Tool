@@ -148,7 +148,7 @@ def _new_registration_session(proxy: str = "") -> Any:
     return session
 
 
-def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> None:
+def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
     """Pick the pooled protocol fingerprint and bind *its* geo to this account.
 
     P1-1: the pool resolves the proxy's exit geo before handing back a profile
@@ -175,9 +175,12 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> None:
             lang_full=profile.lang_full,
         )
         set_auth_fingerprint(profile.name)
+        return str(profile.country or "")
     else:
         from .paypal_proxy import infer_proxy_country
-        ops.set_fingerprint_geo(infer_proxy_country(proxy))
+        country = str(infer_proxy_country(proxy) or "")
+        ops.set_fingerprint_geo(country)
+        return country
 
 
 class RegistrationPersistence(Protocol):
@@ -307,6 +310,7 @@ class RegistrationEmailWorkflow:
         self.enroll_2fa = bool(enroll_2fa)
         self.config = config
         self.proxy_metadata = dict(proxy_metadata or {})
+        self.fingerprint_country = ""
         self._operations = operations
         self.persistence = persistence or StorageRegistrationPersistence()
         self.post_process_result = post_process_result
@@ -317,6 +321,20 @@ class RegistrationEmailWorkflow:
     @property
     def r(self) -> RegistrationOperations:
         return self._operations
+
+    def _fingerprint_geo_metadata(self) -> dict[str, Any]:
+        config = getattr(self, "config", None)
+        registration = (config or {}).get("registration") if isinstance(config, Mapping) else {}
+        fingerprint = registration.get("fingerprint_pool") if isinstance(registration, Mapping) else {}
+        allowed = fingerprint.get("allowed_countries") if isinstance(fingerprint, Mapping) else ()
+        proxy_metadata = getattr(self, "proxy_metadata", {}) or {}
+        return {
+            "fingerprint_country": getattr(self, "fingerprint_country", ""),
+            "exit_country": proxy_metadata.get("actual_country", ""),
+            # Batch preflight samples a pool entry, not this attempt's rotated session.
+            "source": "preflight",
+            "allowed_countries": allowed,
+        }
 
     def run(self) -> dict[str, Any]:
         r = self.r
@@ -380,8 +398,9 @@ class RegistrationEmailWorkflow:
             existing_account_password_known=self.runtime.existing_account_password_known,
             access_token=self.runtime.access_token,
         )
-        from .registration_result import safe_proxy_audit
+        from .registration_result import attach_fingerprint_geo_audit, safe_proxy_audit
         result["proxy_audit"] = safe_proxy_audit(getattr(self, "proxy_metadata", {}))
+        attach_fingerprint_geo_audit(result, self._fingerprint_geo_metadata())
         if cancelled:
             result["registration_state"] = "cancelled"
         elif self.runtime.existing_account:
@@ -699,7 +718,7 @@ class RegistrationEmailWorkflow:
         else:
             r._import_sentinel_cookies(s.session, s.sentinel_data, s.device_id)
         r.set_fingerprint_device(s.device_id)
-        _apply_protocol_fingerprint(r, self.config, s.proxy)
+        self.fingerprint_country = _apply_protocol_fingerprint(r, self.config, s.proxy)
         s.base_headers = r.openai_auth_headers(
             s.device_id,
             accept="application/json",

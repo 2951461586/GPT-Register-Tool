@@ -202,6 +202,15 @@ public class BackendLogPresenterTests
             BackendLogPresenter.ProgressEventLine(progress));
     }
 
+    [Theory]
+    [InlineData("unknown", "未知")]
+    [InlineData("skipped", "已跳过")]
+    public void ProgressEventLine_DistinguishesOneClickUnfinishedAccounts(string status, string label)
+    {
+        var progress = ScanEvent("one_click_sms", status, status);
+        Assert.Contains(label, BackendLogPresenter.ProgressEventLine(progress));
+    }
+
     [Fact]
     public void ProgressEventLine_SurvivesMissingDetailAndTotal()
     {

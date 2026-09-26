@@ -14,6 +14,7 @@ from sms_tool.registration_result import (
     COMMON_RESULT_KEYS,
     build_registration_failure_result,
     build_registration_result,
+    safe_fingerprint_geo_audit,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -65,6 +66,44 @@ class BuildRegistrationFailureResultTests(unittest.TestCase):
 
 
 class BuildRegistrationResultTests(unittest.TestCase):
+    def test_fingerprint_geo_audit_has_one_safe_shape_for_both_paths(self):
+        audit = safe_fingerprint_geo_audit(
+            fingerprint_country="us", exit_country="DE", source="browser_probe",
+            allowed_countries=["VN"],
+        )
+        self.assertEqual(audit, {
+            "status": "mismatch", "fingerprint_country": "US",
+            "exit_country": "DE", "source": "browser_probe",
+            "allowed_status": "mismatch",
+        })
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="US", exit_country="", source="unknown"
+        )["status"], "unknown")
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="https://user:pass@proxy.invalid", exit_country="US",
+            source="https://user:pass@proxy.invalid",
+        )["fingerprint_country"], "")
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="US", exit_country="US", source="probe"
+        )["status"], "matched")
+
+    def test_geo_mismatch_warns_without_changing_success_or_failure(self):
+        for success in (True, False):
+            with self.subTest(success=success):
+                result = build_registration_result(
+                    success=success, registration_mode="protocol", registration_state="active",
+                    fingerprint_geo_audit={
+                        "fingerprint_country": "US", "exit_country": "DE",
+                        "source": "preflight", "allowed_countries": ["VN"],
+                    },
+                    registration_warning="existing warning",
+                )
+                self.assertIs(result["success"], success)
+                self.assertEqual(result["fingerprint_geo_audit"]["status"], "mismatch")
+                self.assertIn("fingerprint_geo_mismatch", result["registration_warning"])
+                self.assertIn("fingerprint_allowed_country_mismatch", result["registration_warning"])
+                self.assertIn("existing warning", result["registration_warning"])
+
     def test_result_contains_every_common_key(self):
         result = build_registration_result(
             success=True,

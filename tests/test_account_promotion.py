@@ -136,6 +136,26 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
     assert all(event["total"] == 2 for event in terminal)
 
 
+def test_refresh_promotion_statuses_reports_partial_save_without_losing_probe_success(monkeypatch):
+    events = []
+    monkeypatch.setattr(promotion_batch, "_emit_account_batch_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        promotion_batch, "check_account_promotion",
+        lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
+    )
+
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1)
+
+    assert result["ok"] is False
+    assert (result["success"], result["failed"], result["persist_failed"]) == (1, 0, 1)
+    assert result["results"][0]["ok"] is True
+    assert result["results"][0]["persisted"] is False
+    assert next(args[2] for args, _ in events if args[1] == "account_completed") == "failed"
+    assert next(args[2] for args, _ in events if args[1] == "batch_completed") == "failed"
+
+
 def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkeypatch):
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
         "email": email,

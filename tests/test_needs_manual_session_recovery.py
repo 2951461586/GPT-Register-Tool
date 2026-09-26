@@ -245,6 +245,22 @@ def test_the_audit_row_keeps_the_bucket(tmp_path):
     assert json.loads(row["detail_json"])["needs_manual_session_recovery"] is True
 
 
+def test_the_audit_row_keeps_only_safe_fingerprint_geo_verdict(tmp_path):
+    from sms_tool.registration_result import build_registration_result
+
+    result = build_registration_result(
+        success=False, registration_mode="protocol", registration_state="failed",
+        email="geo@example.test", fingerprint_geo_audit={
+            "fingerprint_country": "US", "exit_country": "DE", "source": "preflight",
+            "proxy": "http://user:secret@proxy.invalid",
+        },
+    )
+    row = _write_and_read_audit(tmp_path, result, state="failed")
+    detail = json.loads(row["detail_json"])
+    assert detail["fingerprint_geo_status"] == "mismatch"
+    assert "secret" not in repr(detail)
+
+
 def test_the_audit_key_is_always_present_so_absent_never_means_false(tmp_path):
     """键永远在。这样「没进桶」和「这行早于该字段」才分得开。"""
     row = _write_and_read_audit(

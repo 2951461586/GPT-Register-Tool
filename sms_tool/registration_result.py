@@ -22,9 +22,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+import logging
+import re
 
 from .sanitizer import sanitize_text
 from .registration_policy import registration_retry_decision
+
+logger = logging.getLogger(__name__)
 
 
 # 两条路径共有的核心键。契约测试（tests/test_registration_result_contract.py）
@@ -44,6 +48,7 @@ COMMON_RESULT_KEYS = frozenset({
     "password",
     "plan_type",
     "proxy_audit",
+    "fingerprint_geo_audit",
     "post_registration_ready",
     "quota_status",
     "register_method",
@@ -82,6 +87,64 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def safe_fingerprint_geo_audit(metadata: Mapping[str, Any] | None = None, **fields: Any) -> dict[str, str]:
+    """Compare a selected locale with an independently observed exit, without proxy data."""
+    value = dict(metadata) if isinstance(metadata, Mapping) else {}
+    value.update(fields)
+
+    def country(raw: Any) -> str:
+        text = str(raw or "").strip().upper()
+        return text if re.fullmatch(r"[A-Z]{2}", text) else ""
+
+    fingerprint = country(value.get("fingerprint_country"))
+    exit_country = country(value.get("exit_country"))
+    source = str(value.get("source") or "")
+    if source not in {"preflight", "browser_probe", "geo_probe"}:
+        source = "unknown"
+    if not exit_country:
+        source = "unknown"
+    allowed = value.get("allowed_countries")
+    if isinstance(allowed, (list, tuple, set, frozenset)) and allowed:
+        countries = {country(item) for item in allowed} - {""}
+        allowed_status = (
+            "matched" if fingerprint in countries else "mismatch"
+        ) if fingerprint and countries else "unknown"
+    else:
+        allowed_status = str(value.get("allowed_status") or "not_configured")
+        if allowed_status not in {"matched", "mismatch", "not_configured", "unknown"}:
+            allowed_status = "unknown"
+    return {
+        "status": (
+            "matched" if fingerprint == exit_country else "mismatch"
+        ) if fingerprint and exit_country else "unknown",
+        "fingerprint_country": fingerprint,
+        "exit_country": exit_country,
+        "source": source,
+        "allowed_status": allowed_status,
+    }
+
+
+def attach_fingerprint_geo_audit(result: dict[str, Any], metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Attach a token-free verdict to either a complete or early-failure result."""
+    geo = safe_fingerprint_geo_audit(metadata)
+    result["fingerprint_geo_audit"] = geo
+    warnings = []
+    if geo["status"] == "mismatch":
+        warnings.append("fingerprint_geo_mismatch")
+    if geo["allowed_status"] == "mismatch":
+        warnings.append("fingerprint_allowed_country_mismatch")
+    if warnings:
+        logger.warning(
+            "registration fingerprint country warning: %s (fingerprint=%s exit=%s source=%s)",
+            ",".join(warnings), geo["fingerprint_country"], geo["exit_country"], geo["source"],
+        )
+        current_warning = sanitize_text(result.get("registration_warning"))
+        result["registration_warning"] = "; ".join(
+            [current_warning, *(code for code in warnings if code not in current_warning)]
+        ).strip("; ")
+    return result
+
+
 def build_registration_result(
     *,
     success: bool,
@@ -111,6 +174,7 @@ def build_registration_result(
     post_registration_ready: bool = False,
     mailbox_snapshot: Mapping[str, Any] | None = None,
     proxy_audit: Mapping[str, Any] | None = None,
+    fingerprint_geo_audit: Mapping[str, Any] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble one registration result dict from already-computed values.
@@ -149,10 +213,12 @@ def build_registration_result(
         "auth_fingerprint_profile": auth_fingerprint_profile,
         "mailbox": mailbox_snapshot or {},
         "proxy_audit": safe_proxy_audit(proxy_audit),
+        "fingerprint_geo_audit": safe_fingerprint_geo_audit(fingerprint_geo_audit),
     }
     if extra:
         result.update(extra)
     result["proxy_audit"] = safe_proxy_audit(result.get("proxy_audit"))
+    attach_fingerprint_geo_audit(result, result.get("fingerprint_geo_audit"))
     decision = registration_retry_decision(result.get("error"))
     result.setdefault("failure_class", "" if success else decision.failure_class)
     result.setdefault("retryable", not success and decision.retryable)
@@ -203,4 +269,6 @@ __all__ = [
     "build_registration_result",
     "build_registration_failure_result",
     "safe_proxy_audit",
+    "safe_fingerprint_geo_audit",
+    "attach_fingerprint_geo_audit",
 ]

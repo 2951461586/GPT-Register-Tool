@@ -34,9 +34,12 @@ namespace SmsWorkbench
             _logger = _host.Services.GetRequiredService<Serilog.ILogger>();
 
             var systemTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetSystemTheme();
-            var startTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
+            var defaultTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
                 ? Wpf.Ui.Appearance.ApplicationTheme.Dark
                 : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            var startTheme = DesktopThemePreference.Load(
+                _host.Services.GetRequiredService<IApplicationPaths>().RootDirectory,
+                defaultTheme);
             Wpf.Ui.Appearance.ApplicationThemeManager.Apply(startTheme, WindowBackdropType.Mica, true);
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();

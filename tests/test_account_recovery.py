@@ -1001,7 +1001,7 @@ def test_relogin_persists_only_after_http_200_probe():
     oauth_result = {"ok": True, "tokens": {"access_token": "new_at", "refresh_token": "rt_new"}}
     with (
         patch("sms_tool.codex_oauth.refresh_codex_oauth_session", return_value=oauth_result),
-        patch("sms_tool.codex_oauth._save_oauth_tokens", return_value={"ok": True, "mode": "codex_oauth_pkce"}) as save,
+        patch("sms_tool.codex_oauth._save_oauth_tokens", return_value={"ok": True, "mode": "codex_oauth_pkce", "persisted": True}) as save,
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
     ):
         result = account_recovery.relogin_local_codex_account({"email": "ok@example.com", "access_token": "old_at"})
@@ -1009,6 +1009,43 @@ def test_relogin_persists_only_after_http_200_probe():
     assert result["ok"]
     assert result["persisted"]
     save.assert_called_once()
+
+
+def test_codex_relogin_does_not_claim_saved_token_after_persistence_failure():
+    oauth_result = {"ok": True, "tokens": {"access_token": "new_at", "refresh_token": "rt_new"}}
+    with (
+        patch("sms_tool.codex_oauth.refresh_codex_oauth_session", return_value=oauth_result),
+        patch("sms_tool.codex_oauth._save_oauth_tokens", return_value={
+            "ok": True, "mode": "codex_oauth_pkce", "persisted": False,
+            "persistence": {"error_code": "account_write_failed"},
+        }),
+        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status_code": 200}),
+    ):
+        result = account_recovery.relogin_local_codex_account({"email": "ok@example.com", "access_token": "old_at"})
+
+    assert result["ok"] is False
+    assert result["remote_ok"] is True
+    assert result["persisted"] is False
+    assert result["error"] == "oauth_persistence_failed"
+
+
+def test_auto_relogin_does_not_spend_another_otp_after_oauth_save_failure():
+    failed_save = {
+        "ok": False, "mode": "codex_oauth_pkce", "remote_ok": True,
+        "persisted": False, "error": "oauth_persistence_failed",
+    }
+    with (
+        patch.object(account_recovery, "relogin_refresh_token_account", return_value={"ok": False}),
+        patch.object(account_recovery, "relogin_web_session_account", return_value={"ok": False}),
+        patch.object(account_recovery, "relogin_chatgpt_email_account", return_value={"ok": False}),
+        patch.object(account_recovery, "relogin_local_codex_account", return_value=failed_save),
+        patch.object(account_recovery, "relogin_browser_session_account") as browser,
+    ):
+        result = account_recovery.relogin_codex_account({"email": "ok@example.com"}, mode="auto")
+
+    assert result["error"] == "oauth_persistence_failed"
+    assert result["persisted"] is False
+    browser.assert_not_called()
 
 
 def test_successful_relogin_replaces_stale_quota_401_metadata():

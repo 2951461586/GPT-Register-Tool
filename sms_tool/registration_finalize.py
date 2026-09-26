@@ -248,6 +248,7 @@ def finalize(self) -> dict[str, Any]:
         post_registration_ready=s.post_registration_ready,
         mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
         proxy_audit=self.proxy_metadata,
+        fingerprint_geo_audit=self._fingerprint_geo_metadata(),
         extra={
             "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
             "oauth_refresh_token": s.oauth_refresh_token,
