@@ -114,9 +114,9 @@ STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_man
 STRIPE_RUNTIME = "c00af4ce81"
 STRIPE_PAYMENT_UA = f"stripe.js/{STRIPE_RUNTIME}; stripe-js-v3/{STRIPE_RUNTIME}; checkout"
 USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
+
 
 def configured_country(name: str, default: str) -> str:
     value = str(os.environ.get(name, default) or default).strip().upper()
@@ -147,11 +147,44 @@ _proxy_state: dict[str, Any] | None = None
 _proxy_redaction_registry = RedactionRegistry()
 
 KOREAN_FAMILY_NAMES = (
-    "김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황",
+    "김",
+    "이",
+    "박",
+    "최",
+    "정",
+    "강",
+    "조",
+    "윤",
+    "장",
+    "임",
+    "한",
+    "오",
+    "서",
+    "신",
+    "권",
+    "황",
 )
 KOREAN_GIVEN_NAMES = (
-    "민준", "서준", "도윤", "예준", "시우", "주원", "하준", "지호", "지후", "준서", "서연", "서윤",
-    "지우", "서현", "하은", "하윤", "민서", "지유", "윤서", "채원",
+    "민준",
+    "서준",
+    "도윤",
+    "예준",
+    "시우",
+    "주원",
+    "하준",
+    "지호",
+    "지후",
+    "준서",
+    "서연",
+    "서윤",
+    "지우",
+    "서현",
+    "하은",
+    "하윤",
+    "민서",
+    "지유",
+    "윤서",
+    "채원",
 )
 SEOUL_ADDRESS_SEEDS = (
     {"district": "강남구", "road": "테헤란로", "postal": "06164", "base": 87, "span": 40},
@@ -215,9 +248,7 @@ def env_int(name: str, default: int, minimum: int = 1, maximum: int = 1000) -> i
     return common_env_int(name, default, minimum, maximum)
 
 
-PREFLIGHT_TIMEOUT = env_int(
-    "KAKAO_PROXY_PREFLIGHT_TIMEOUT", 12, minimum=3, maximum=TIMEOUT
-)
+PREFLIGHT_TIMEOUT = env_int("KAKAO_PROXY_PREFLIGHT_TIMEOUT", 12, minimum=3, maximum=TIMEOUT)
 
 
 def default_proxy_scheme() -> str:
@@ -263,6 +294,7 @@ def register_proxy_for_redaction(proxy: str) -> None:
         normalize=normalize_proxy_url,
     )
 
+
 def proxy_short(proxy: str) -> str:
     """Delegate to ``common/proxy_bookkeeping.py``.
 
@@ -283,6 +315,7 @@ def proxy_chain_key(proxy: str) -> str:
     without_country = _PROXY_COUNTRY_SELECTOR_RE.sub(
         lambda match: f"{match.group('name')}{match.group('separator')}*", normalized
     )
+
     # 只去掉 sid 尾部的地区后缀（proxy_for_country 追加的 2 位大写国家码），保留
     # base sid。这样同一 Seed 的三地区派生（base+KR/base+VN）归一化到同一 base →
     # 同 chain_key（sticky 校验通过）；而多条只有 base sid 不同的冗余 Seed 仍是不同
@@ -344,10 +377,7 @@ def kakao_proxy_chain(proxy_seed: str) -> tuple[str, str, str]:
     promotion_proxy = proxy_for_country(proxy_seed, PROMOTION_COUNTRY)
     provider_proxy = proxy_for_country(proxy_seed, PROVIDER_COUNTRY)
     key = proxy_chain_key(proxy_seed)
-    if not key or any(
-        proxy_chain_key(proxy) != key
-        for proxy in (checkout_proxy, promotion_proxy, provider_proxy)
-    ):
+    if not key or any(proxy_chain_key(proxy) != key for proxy in (checkout_proxy, promotion_proxy, provider_proxy)):
         raise RuntimeError("代理地区改写改变了 sticky Seed，已拒绝混用代理链")
     return checkout_proxy, promotion_proxy, provider_proxy
 
@@ -361,11 +391,7 @@ def role_country(role: str) -> str:
 def role_label(role: str) -> str:
     if role == "promotion":
         return f"{PROMOTION_COUNTRY} promotion"
-    return (
-        f"{CHECKOUT_COUNTRY} checkout"
-        if role == "checkout"
-        else f"{PROVIDER_COUNTRY} provider/approve"
-    )
+    return f"{CHECKOUT_COUNTRY} checkout" if role == "checkout" else f"{PROVIDER_COUNTRY} provider/approve"
 
 
 def proxy_seed_file() -> Path:
@@ -953,7 +979,9 @@ def expected_amount(payload: dict[str, Any]) -> str:
             return str(safe_int(invoice[name]))
     line_items = payload.get("line_items")
     if isinstance(line_items, list):
-        amounts = [item.get("amount") for item in line_items if isinstance(item, dict) and item.get("amount") is not None]
+        amounts = [
+            item.get("amount") for item in line_items if isinstance(item, dict) and item.get("amount") is not None
+        ]
         if amounts:
             return str(sum(safe_int(value) for value in amounts))
     return "unknown"
@@ -1016,9 +1044,7 @@ def inspect_kakao_init(
     currency = str(payload.get("currency") or "").lower()
     methods = [str(item).lower() for item in (payload.get("payment_method_types") or [])]
     log(f"{stage} Stripe init: amount={amount}; currency={currency}; methods={','.join(methods) or 'none'}")
-    if (require_kakao and "kakao_pay" not in methods) or (
-        require_zero and (amount != "0" or currency != "krw")
-    ):
+    if (require_kakao and "kakao_pay" not in methods) or (require_zero and (amount != "0" or currency != "krw")):
         raise RuntimeError(
             f"checkout_not_kakao_trial: stage={stage} amount={amount} currency={currency} methods={methods}"
         )
@@ -1134,9 +1160,7 @@ def kakao_link(
     ensure_running(stop_event)
     log(f"{PROMOTION_COUNTRY} checkout/update 后通过 {PROVIDER_COUNTRY} 刷新 Stripe")
     init_payload, stripe_js_id = stripe_init(provider_session, checkout_id, publishable_key, checkout_page)
-    amount = inspect_kakao_init(
-        init_payload, f"{PROMOTION_COUNTRY} 更新后 {PROVIDER_COUNTRY}", require_zero=True
-    )
+    amount = inspect_kakao_init(init_payload, f"{PROMOTION_COUNTRY} 更新后 {PROVIDER_COUNTRY}", require_zero=True)
 
     billing = random_kakao_billing(token)
     tax_elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
@@ -1266,14 +1290,10 @@ def kakao_link(
     confirm_payload = confirm_response.json() or {}
     redirect = extract_redirect(confirm_payload)
     submission = (
-        confirm_payload.get("submission_attempt")
-        if isinstance(confirm_payload.get("submission_attempt"), dict)
-        else {}
+        confirm_payload.get("submission_attempt") if isinstance(confirm_payload.get("submission_attempt"), dict) else {}
     )
 
-    if not redirect and (
-        submission.get("state") == "requires_approval" or checkout.get("requires_manual_approval")
-    ):
+    if not redirect and (submission.get("state") == "requires_approval" or checkout.get("requires_manual_approval")):
         log(f"{PROVIDER_COUNTRY} OpenAI approve（最多 {APPROVE_RETRY_MAX} 次）")
         last_error = ""
         for index in range(1, APPROVE_RETRY_MAX + 1):
@@ -1358,8 +1378,8 @@ def kakao_result_contract(
     amount = None if not amount_match or amount_match.group(1) == "none" else safe_int(amount_match.group(1))
     currency = currency_match.group(1).upper() if currency_match else "KRW"
     methods_text = methods_match.group(1).lower() if methods_match else ""
-    has_kakao = True if ok else (
-        False if "kakao_pay" not in methods_text and "checkout_not_kakao_trial" in low else None
+    has_kakao = (
+        True if ok else (False if "kakao_pay" not in methods_text and "checkout_not_kakao_trial" in low else None)
     )
     if ok:
         decision, stage = "ready", "redirect"
@@ -1459,10 +1479,7 @@ def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
     while attempt < max_attempts:
         candidate = select_verified_seed(proxy_seeds, attempted_keys)
         if candidate is None:
-            last_error = (
-                f"没有可用的 {CHECKOUT_COUNTRY} -> {PROMOTION_COUNTRY} -> "
-                f"{PROVIDER_COUNTRY} 代理 Seed"
-            )
+            last_error = f"没有可用的 {CHECKOUT_COUNTRY} -> {PROMOTION_COUNTRY} -> {PROVIDER_COUNTRY} 代理 Seed"
             break
         proxy_seed, checkout_proxy, promotion_proxy, provider_proxy = candidate
         attempt += 1
@@ -1519,11 +1536,13 @@ def run_single_seed_mode(token: str, proxy_seeds: list[str]) -> int:
                 )
 
     log(f"全部失败: {last_error or '未获取 Kakao/Nicepay 跳转链接'}", "[ERROR] ")
-    print_kakao_result(kakao_result_contract(
-        ok=False,
-        attempts=attempt,
-        error=last_error or "kakao_nicepay_redirect_missing",
-    ))
+    print_kakao_result(
+        kakao_result_contract(
+            ok=False,
+            attempts=attempt,
+            error=last_error or "kakao_nicepay_redirect_missing",
+        )
+    )
     return 1
 
 
