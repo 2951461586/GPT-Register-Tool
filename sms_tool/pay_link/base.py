@@ -17,11 +17,25 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from ..paths import project_path, runtime_file
 from ..payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from ..payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method, validate_catalog_consistency
+from ..payment_catalog import (
+    PAYMENT_METHODS as CATALOG_METHODS,
+    normalize_payment_method as normalize_catalog_payment_method,
+    validate_catalog_consistency,
+)
 from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_approve_country as canonical_coerce_approve_country, parse_proxy_pool, payment_proxy_pools as canonical_payment_proxy_pools
+from ..payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
+from ..payment_routing import (
+    PaymentRoutePlan,
+    PaymentRoutePlanner,
+    coerce_approve_country as canonical_coerce_approve_country,
+    parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
@@ -30,7 +44,6 @@ def _config_data(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str
     if runtime_config is not None:
         return resolve_runtime_config(runtime_config).data
     return current_config_data()
-
 
 
 @dataclass(frozen=True)
@@ -42,7 +55,6 @@ class PaymentMethodSpec:
     adapter: str
     script: str = ""
     artifact_validator: str = "http_url"
-
 
 
 def _as_bool(value: Any) -> bool | None:
@@ -95,12 +107,10 @@ def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
 
 
-
 def _protocol_cfg(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
     source = _config_data(runtime_config)
     value = source.get("protocol_payments")
     return value if isinstance(value, Mapping) else {}
-
 
 
 def _reference_root(runtime_config: Mapping[str, Any] | None = None) -> Path:
@@ -108,11 +118,9 @@ def _reference_root(runtime_config: Mapping[str, Any] | None = None) -> Path:
     return project_path(configured)
 
 
-
 def _state_path() -> Path:
     configured = str(_protocol_cfg().get("state_file") or "").strip()
     return project_path(configured) if configured else runtime_file(_config_data(), "payment_link_runs.jsonl")
-
 
 
 def _last_json_object(text: str) -> dict[str, Any]:
@@ -127,11 +135,9 @@ def _last_json_object(text: str) -> dict[str, Any]:
     return {}
 
 
-
 def _tail(text: str, limit: int = 1200) -> str:
     value = str(text or "").strip()
     return value[-limit:]
-
 
 
 def _blik_completion(stdout: str) -> dict[str, Any]:
@@ -156,15 +162,12 @@ def _blik_completion(stdout: str) -> dict[str, Any]:
     return {}
 
 
-
 def _mask_ba_token(token: str) -> str:
     return "[REDACTED]" if token else ""
 
 
-
 def _redact_sensitive_text(value: str) -> str:
     return _canonical_sanitize_text(value)
-
 
 
 def _redact_sensitive_values(value: Any) -> Any:
@@ -181,9 +184,7 @@ def _redact_sensitive_values(value: Any) -> Any:
 _LOGGER = logging.getLogger("sms_tool.payment_link_manager")
 
 
-
 GOPAY_DEFAULT_APPROVE_COUNTRIES = ("JP", "TR")
-
 
 
 PAYMENT_METHODS = {
@@ -200,19 +201,30 @@ PAYMENT_METHODS = {
 }
 
 
-
 _STATE_LOCK = threading.Lock()
-
 
 
 _BLIK_RESULT_RE = re.compile(r"BLIK_RESULT:(\{.*\})")
 
 
-
 _DIRECT_CARD_CURRENCY = {
-    "PH": "PHP", "US": "USD", "GB": "GBP", "JP": "JPY", "DE": "EUR", "FR": "EUR",
-    "IE": "EUR", "NL": "EUR", "AU": "AUD", "CA": "CAD", "SG": "SGD", "IN": "INR",
-    "TR": "TRY", "BR": "BRL", "KR": "KRW", "PL": "PLN", "CH": "CHF", "VN": "VND",
+    "PH": "PHP",
+    "US": "USD",
+    "GB": "GBP",
+    "JP": "JPY",
+    "DE": "EUR",
+    "FR": "EUR",
+    "IE": "EUR",
+    "NL": "EUR",
+    "AU": "AUD",
+    "CA": "CAD",
+    "SG": "SGD",
+    "IN": "INR",
+    "TR": "TRY",
+    "BR": "BRL",
+    "KR": "KRW",
+    "PL": "PLN",
+    "CH": "CHF",
+    "VN": "VND",
     "NZ": "NZD",
 }
-

@@ -27,26 +27,48 @@ class PaymentLinkManagerTests(unittest.TestCase):
         from sms_tool.pay_link.core import probe_payment_method
 
         observation = {
-            "ok": True, "payment_method_types": ["card", "upi"],
-            "checkout_kind": "stripe", "evidence_sources": ["stripe_init", "stripe_elements"],
+            "ok": True,
+            "payment_method_types": ["card", "upi"],
+            "checkout_kind": "stripe",
+            "evidence_sources": ["stripe_init", "stripe_elements"],
         }
-        with patch("sms_tool.payment_capability.payment_method_capability_probe", return_value=observation) as probe, \
-             patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as executor:
+        with (
+            patch("sms_tool.payment_capability.payment_method_capability_probe", return_value=observation) as probe,
+            patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as executor,
+        ):
             result = probe_payment_method(
-                "at", "direct_card",
+                "at",
+                "direct_card",
                 payment_route_plan=PaymentRoutePlan.empty("direct_card"),
                 runtime_config={"chatgpt": {}, "protocol_payments": {}},
             )
         self.assertEqual(result, observation)
         probe.assert_called_once()
         executor.assert_not_called()
+
     def test_supported_methods_include_reference_adapters(self):
         methods = {item["key"]: item for item in manager.supported_payment_methods()}
         keys = set(methods)
-        self.assertEqual(keys, {
-            "paypal", "gopay", "gcash", "grabpay", "upi", "ideal", "pix", "kakao",
-            "blik", "twint", "direct_card", "momo", "qris", "bizum", "naver_pay",
-        })
+        self.assertEqual(
+            keys,
+            {
+                "paypal",
+                "gopay",
+                "gcash",
+                "grabpay",
+                "upi",
+                "ideal",
+                "pix",
+                "kakao",
+                "blik",
+                "twint",
+                "direct_card",
+                "momo",
+                "qris",
+                "bizum",
+                "naver_pay",
+            },
+        )
         self.assertTrue(methods["gcash"]["available"])
         self.assertTrue(all(methods[key]["adapter"] == "regional_wallet" for key in ("qris", "bizum", "naver_pay")))
 
@@ -62,13 +84,17 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_native_result_has_completed_state_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}):
+                with patch(
+                    "sms_tool.gen_pp_link.generate_pp_link",
+                    return_value={"ok": True, "url": "https://example.test/pay"},
+                ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertTrue(result["ok"])
         self.assertEqual(result["manager_state"], "completed")
-        self.assertEqual([item["state"] for item in result["state_history"]], [
-            "created", "validating", "preparing_proxy", "running", "extracting", "completed"
-        ])
+        self.assertEqual(
+            [item["state"] for item in result["state_history"]],
+            ["created", "validating", "preparing_proxy", "running", "extracting", "completed"],
+        )
 
     def test_manager_selects_configured_checkout_and_approve_pools(self):
         seen = []
@@ -98,10 +124,12 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 },
             },
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose),
+            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate),
+        ):
             result = manager.generate_payment_link(
                 "token",
                 payment_method="paypal",
@@ -311,9 +339,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "link_type": "gopay_protocol",
         }
         config = {"chatgpt": {}, "protocol_payments": {}}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+        ):
             with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
                 result = manager.generate_payment_link(
                     "token",
@@ -335,9 +365,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "link_type": "gopay_protocol",
         }
         config = {"chatgpt": {}, "protocol_payments": {}}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+        ):
             result = manager.generate_payment_link(
                 "token",
                 payment_method="gopay",
@@ -358,11 +390,14 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_native_failure_preserves_adapter_error_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.gen_pp_link.generate_upi_qr_link", return_value={
-                    "ok": False,
-                    "error": "UPI unavailable",
-                    "error_code": "upi_not_available",
-                }):
+                with patch(
+                    "sms_tool.gen_pp_link.generate_upi_qr_link",
+                    return_value={
+                        "ok": False,
+                        "error": "UPI unavailable",
+                        "error_code": "upi_not_available",
+                    },
+                ):
                     result = manager.generate_payment_link("token", payment_method="upi")
         self.assertEqual(result["error_code"], "upi_not_available")
         self.assertEqual(result["manager_state"], "failed")
@@ -403,11 +438,15 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed),
+        ):
             result = manager.generate_payment_link(
-                "token", payment_method="ideal", seed_proxy="socks5h://127.0.0.1:1080",
+                "token",
+                payment_method="ideal",
+                seed_proxy="socks5h://127.0.0.1:1080",
             )
 
         self.assertTrue(result["ok"])
@@ -667,7 +706,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             args=[],
             returncode=0,
             stdout=(
-                '检测到 User is already paid：用户已支付，任务正常结束\n'
+                "检测到 User is already paid：用户已支付，任务正常结束\n"
                 '{"payment_method": "ideal", "ok": false, "status": "already_paid", '
                 '"url": "", "link_type": "ideal_protocol", "error": "User is already paid", '
                 '"error_code": "account_already_paid", "retryable": false, '
@@ -693,12 +732,15 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
             with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
-                with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
-                    "ok": True,
-                    "url": approve_url,
-                    "ba_token": "BA-1AB23456CD789012E",
-                    "link_type": "paypal_ba_approve",
-                }):
+                with patch(
+                    "sms_tool.gen_pp_link.generate_pp_link",
+                    return_value={
+                        "ok": True,
+                        "url": approve_url,
+                        "ba_token": "BA-1AB23456CD789012E",
+                        "link_type": "paypal_ba_approve",
+                    },
+                ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
             persisted = runs.read_text(encoding="utf-8")
         # Run history keeps artifact presence only; the provider link never lands on disk.
@@ -714,15 +756,17 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
             with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
-                manager._persist_run({
-                    "ok": True,
-                    "provider_redirect_url": "https://provider.example.test/pay/secret-session",
-                    "details": {
-                        "fallback_url": "https://fallback.example.test/secret",
-                        "qr_data": "upi://pay?pa=sensitive",
-                        "qr_path": "C:/private/payment.png",
-                    },
-                })
+                manager._persist_run(
+                    {
+                        "ok": True,
+                        "provider_redirect_url": "https://provider.example.test/pay/secret-session",
+                        "details": {
+                            "fallback_url": "https://fallback.example.test/secret",
+                            "qr_data": "upi://pay?pa=sensitive",
+                            "qr_path": "C:/private/payment.png",
+                        },
+                    }
+                )
             record = runs.read_text(encoding="utf-8")
 
         for secret in ("provider.example.test", "fallback.example.test", "upi://", "payment.png"):
@@ -736,22 +780,26 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
             with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
-                manager._persist_run({
-                    "ok": False,
-                    "raw_output_tail": "Authorization: Bearer raw-tail-secret",
-                    "error": (
-                        "Authorization: Bearer bearer-secret "
-                        "access_token=access-secret "
-                        "proxy=http://proxy-user:proxy-pass@example.test:8080"
-                    ),
-                })
+                manager._persist_run(
+                    {
+                        "ok": False,
+                        "raw_output_tail": "Authorization: Bearer raw-tail-secret",
+                        "error": (
+                            "Authorization: Bearer bearer-secret "
+                            "access_token=access-secret "
+                            "proxy=http://proxy-user:proxy-pass@example.test:8080"
+                        ),
+                    }
+                )
             persisted = runs.read_text(encoding="utf-8")
         self.assertNotIn("raw_output_tail", persisted)
         for secret in ("raw-tail-secret", "bearer-secret", "access-secret", "proxy-user", "proxy-pass"):
             self.assertNotIn(secret, persisted)
 
     def test_persistence_failure_is_reported_without_raising(self):
-        with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}):
+        with patch(
+            "sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}
+        ):
             with patch("sms_tool.pay_link.persistence._persist_run", side_effect=OSError("disk blocked")):
                 result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertTrue(result["ok"])
