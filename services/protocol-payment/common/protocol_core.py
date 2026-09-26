@@ -51,6 +51,7 @@ def is_true(value: Any) -> bool:
     """True only when ``value`` is the bool ``True`` (not 1/"yes")."""
     return isinstance(value, bool) and value
 
+
 # ──────────────────── policy-driven redaction ────────────────────
 # 规则来自仓库根的 ``sensitive_policy.json``（single source）——C# 的
 # ``SensitiveDataSanitizer`` 与 Python 的 ``sms_tool.sanitizer`` 都读它，
