@@ -17,15 +17,41 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from ..paths import project_path, runtime_file
 from ..payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from ..payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method, validate_catalog_consistency
+from ..payment_catalog import (
+    PAYMENT_METHODS as CATALOG_METHODS,
+    normalize_payment_method as normalize_catalog_payment_method,
+    validate_catalog_consistency,
+)
 from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_approve_country as canonical_coerce_approve_country, parse_proxy_pool, payment_proxy_pools as canonical_payment_proxy_pools
+from ..payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
+from ..payment_routing import (
+    PaymentRoutePlan,
+    PaymentRoutePlanner,
+    coerce_approve_country as canonical_coerce_approve_country,
+    parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .base import PaymentMethodSpec, _protocol_cfg, _DIRECT_CARD_CURRENCY, _LOGGER, _as_bool, _blik_completion, _config_data, _last_json_object, _redact_sensitive_text, _reference_root, _tail
+from .base import (
+    PaymentMethodSpec,
+    _protocol_cfg,
+    _DIRECT_CARD_CURRENCY,
+    _LOGGER,
+    _as_bool,
+    _blik_completion,
+    _config_data,
+    _last_json_object,
+    _redact_sensitive_text,
+    _reference_root,
+    _tail,
+)
 from .base import is_false, is_true, safe_float, safe_int
 
 
@@ -58,14 +84,18 @@ def _run_extractor_subprocess(
         output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         return proc, output, None
     except subprocess.TimeoutExpired:
-        return None, "", {
-            "ok": False,
-            "status": "timed_out",
-            "error": f"{spec.label} extractor timed out after {timeout}s",
-            "error_code": "extractor_timed_out",
-            "error_stage": "adapter_subprocess",
-            "retryable": True,
-        }
+        return (
+            None,
+            "",
+            {
+                "ok": False,
+                "status": "timed_out",
+                "error": f"{spec.label} extractor timed out after {timeout}s",
+                "error_code": "extractor_timed_out",
+                "error_stage": "adapter_subprocess",
+                "retryable": True,
+            },
+        )
     finally:
         for path in cleanup_paths:
             if path:
@@ -75,14 +105,15 @@ def _run_extractor_subprocess(
                     _LOGGER.warning("failed to remove temporary payment credential file", exc_info=True)
 
 
-
 # --- Protocol-script adapter registry -------------------------------------
 # Each ``build_env`` turns the shared inputs into the environment variables the
 # matching extractor script under services/protocol-payment/ reads. Keeping
 # them as one registry replaces the per-key ``if`` chain in ``_run_protocol_script``
 # and makes every method's env contract explicit. ``pix`` carries its proxies in
 # the environment (no proxy-file), so it is handled separately below.
-def _build_pix_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+def _build_pix_env(
+    access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
+) -> dict[str, str]:
     env = {"OPENAI_ACCESS_TOKEN": access_token, "PIX_PROXY": seed_proxy}
     provider_proxy = str(kwargs.get("provider_proxy") or "").strip()
     promotion_proxy = str(kwargs.get("promotion_proxy") or "").strip()
@@ -93,18 +124,21 @@ def _build_pix_env(access_token: str, seed_proxy: str, proxy_file: str, script: 
     return env
 
 
-def _build_ideal_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+def _build_ideal_env(
+    access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
+) -> dict[str, str]:
     return {"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"}
 
 
-def _build_kakao_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+def _build_kakao_env(
+    access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
+) -> dict[str, str]:
     # Prefer Kakao's dedicated multi-seed file for redundancy + failover; fall
     # back to the single stage proxy when it is missing or empty.
     kakao_seed_pool = script.parent / "proxy_seeds.txt"
     kakao_seed_file = (
         str(kakao_seed_pool)
-        if kakao_seed_pool.is_file()
-        and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
+        if kakao_seed_pool.is_file() and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
         else proxy_file
     )
     env: dict[str, str] = {"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file}
@@ -112,15 +146,19 @@ def _build_kakao_env(access_token: str, seed_proxy: str, proxy_file: str, script
     checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
     promotion_country = str(countries.get("promotion") or "VN").strip().upper()
     provider_country = str(countries.get("provider") or kwargs.get("target_country") or "KR").strip().upper()
-    env.update({
-        "KAKAO_BOOTSTRAP_COUNTRY": checkout_country,
-        "KAKAO_PROMOTION_COUNTRY": promotion_country,
-        "KAKAO_PROVIDER_COUNTRY": provider_country,
-    })
+    env.update(
+        {
+            "KAKAO_BOOTSTRAP_COUNTRY": checkout_country,
+            "KAKAO_PROMOTION_COUNTRY": promotion_country,
+            "KAKAO_PROVIDER_COUNTRY": provider_country,
+        }
+    )
     return env
 
 
-def _build_blik_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+def _build_blik_env(
+    access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
+) -> dict[str, str]:
     blik_code = str(kwargs.get("blik_code") or "").strip()
     return {
         "PP_TOKEN": access_token,
@@ -130,7 +168,9 @@ def _build_blik_env(access_token: str, seed_proxy: str, proxy_file: str, script:
     }
 
 
-def _build_twint_env(access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]) -> dict[str, str]:
+def _build_twint_env(
+    access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
+) -> dict[str, str]:
     return {"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"}
 
 
@@ -145,7 +185,9 @@ _PROTOCOL_BUILD_ENV: dict[str, Callable[..., dict[str, str]]] = {
 }
 
 
-def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
+def _run_protocol_script(
+    spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any
+) -> dict[str, Any]:
     runtime_config = kwargs.pop("runtime_config", None)
     root = _reference_root(runtime_config)
     script = root / spec.script
@@ -199,7 +241,12 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
         env.update(builder(access_token, seed_proxy, proxy_file, script, kwargs))
 
     proc, output, timeout_err = _run_extractor_subprocess(
-        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(proxy_file,),
+        spec,
+        command,
+        env=env,
+        cwd=str(script.parent),
+        timeout=timeout,
+        cleanup_paths=(proxy_file,),
     )
     if timeout_err:
         return timeout_err
@@ -242,13 +289,11 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     }
 
 
-
 def _write_token_file(access_token: str) -> str:
     handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
     with handle:
         handle.write(str(access_token or "").strip() + "\n")
     return handle.name
-
 
 
 def _run_wallet_adapter(
@@ -267,14 +312,18 @@ def _run_wallet_adapter(
     method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
     timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     stage_keys = (
-        "checkout_proxy", "promotion_proxy", "update_proxy", "stripe_init_proxy",
-        "provider_proxy", "payment_method_proxy", "confirm_proxy", "approve_proxy",
-        "final_review_proxy", "redirect_proxy",
+        "checkout_proxy",
+        "promotion_proxy",
+        "update_proxy",
+        "stripe_init_proxy",
+        "provider_proxy",
+        "payment_method_proxy",
+        "confirm_proxy",
+        "approve_proxy",
+        "final_review_proxy",
+        "redirect_proxy",
     )
-    transport_context: dict[str, Any] = {
-        key: kwargs.get(key) or method_cfg.get(key) or ""
-        for key in stage_keys
-    }
+    transport_context: dict[str, Any] = {key: kwargs.get(key) or method_cfg.get(key) or "" for key in stage_keys}
     transport_context["default_proxy"] = proxy or method_cfg.get("proxy") or ""
     transport_context["payment_route_plan"] = kwargs.get("payment_route_plan")
     transport_context["stage_proxies"] = kwargs.get("stage_proxies")
@@ -294,8 +343,11 @@ def _run_wallet_adapter(
         spec.key == "gopay" if rotate_setting is None else is_true(_as_bool(rotate_setting))
     )
     for resolver_key in (
-        "proxy_resolver", "approve_proxy_resolver", "final_review_proxy_resolver",
-        "poll_proxy_resolver", "follow_redirect_proxy_resolver",
+        "proxy_resolver",
+        "approve_proxy_resolver",
+        "final_review_proxy_resolver",
+        "poll_proxy_resolver",
+        "follow_redirect_proxy_resolver",
     ):
         resolver = kwargs.get(resolver_key)
         if callable(resolver):
@@ -308,11 +360,7 @@ def _run_wallet_adapter(
         if "promotion_update" in kwargs
         else method_cfg.get("promotion_update", method_cfg.get("enable_promotion"))
     )
-    require_zero_setting = (
-        kwargs.get("require_zero")
-        if "require_zero" in kwargs
-        else method_cfg.get("require_zero")
-    )
+    require_zero_setting = kwargs.get("require_zero") if "require_zero" in kwargs else method_cfg.get("require_zero")
     require_zero = spec.key == "gopay" if require_zero_setting is None else is_true(_as_bool(require_zero_setting))
     transport = kwargs.get("transport")
     if transport is None:
@@ -343,7 +391,6 @@ def _run_wallet_adapter(
     )
 
 
-
 def _run_regional_wallet_adapter(
     spec: PaymentMethodSpec,
     access_token: str,
@@ -361,6 +408,7 @@ def _run_regional_wallet_adapter(
     transport = kwargs.get("transport")
     if transport is None and bool(kwargs.get("regional_transport_enabled")):
         from ..regional_payment_adapter import ChatGPTStripeRegionalTransport
+
         transport = ChatGPTStripeRegionalTransport(
             timeout=max(5, safe_int(kwargs.get("timeout_seconds") or 45)),
         )
@@ -385,7 +433,6 @@ def _run_regional_wallet_adapter(
     )
 
 
-
 def _run_gcash_adapter(
     spec: PaymentMethodSpec,
     access_token: str,
@@ -408,8 +455,7 @@ def _run_gcash_adapter(
         # The proven GCash route keeps checkout, taxes, resolve and provider start
         # on one exit. Promotion update may use its own exit.
         "provider_proxy": (
-            kwargs.get("checkout_proxy") or kwargs.get("provider_proxy")
-            or method_cfg.get("provider_proxy") or ""
+            kwargs.get("checkout_proxy") or kwargs.get("provider_proxy") or method_cfg.get("provider_proxy") or ""
         ),
         "confirm_proxy": (
             kwargs.get("confirm_proxy")
@@ -438,7 +484,6 @@ def _run_gcash_adapter(
     )
 
 
-
 def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
     """直卡 checkout short-link extractor adapter.
 
@@ -464,20 +509,22 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
         method_cfg = {}
     timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
 
-    checkout_proxy = str(
-        kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or ""
-    ).strip()
+    checkout_proxy = str(kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or "").strip()
     if not checkout_proxy:
         return {"ok": False, "error": f"{spec.label} requires a checkout proxy seed"}
-    update_proxy = str(
-        kwargs.get("promotion_proxy") or kwargs.get("approve_proxy") or checkout_proxy or ""
-    ).strip()
+    update_proxy = str(kwargs.get("promotion_proxy") or kwargs.get("approve_proxy") or checkout_proxy or "").strip()
 
-    country = str(kwargs.get("target_country") or kwargs.get("checkout_country") or spec.country or "PH").strip().upper()
-    currency = str(
-        method_cfg.get("currency")
-        or (spec.currency if country == spec.country else _DIRECT_CARD_CURRENCY.get(country, spec.currency))
-    ).strip().upper()
+    country = (
+        str(kwargs.get("target_country") or kwargs.get("checkout_country") or spec.country or "PH").strip().upper()
+    )
+    currency = (
+        str(
+            method_cfg.get("currency")
+            or (spec.currency if country == spec.country else _DIRECT_CARD_CURRENCY.get(country, spec.currency))
+        )
+        .strip()
+        .upper()
+    )
     countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
 
     env = os.environ.copy()
@@ -489,10 +536,14 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     env["DIRECT_CARD_UPDATE_PROXY"] = update_proxy
     token_file = _write_token_file(access_token)
     command = [
-        sys.executable, str(script),
-        "--credential-file", token_file,
-        "--billing-country", country,
-        "--currency", currency,
+        sys.executable,
+        str(script),
+        "--credential-file",
+        token_file,
+        "--billing-country",
+        country,
+        "--currency",
+        currency,
         "--skip-proxy-check",
     ]
     checkout_cc = str(countries.get("checkout") or "").strip().upper()
@@ -506,7 +557,12 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
         command.extend(["--promo-campaign-id", promo])
 
     proc, output, timeout_err = _run_extractor_subprocess(
-        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
+        spec,
+        command,
+        env=env,
+        cwd=str(script.parent),
+        timeout=timeout,
+        cleanup_paths=(token_file,),
     )
     if timeout_err:
         return timeout_err
@@ -540,7 +596,6 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     }
 
 
-
 def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
     """MoMo scannable-QR extractor adapter.
 
@@ -572,9 +627,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     stage_proxies = {
         "checkout": str(kwargs.get("checkout_proxy") or fallback_proxy).strip(),
         "promotion": str(kwargs.get("promotion_proxy") or fallback_proxy).strip(),
-        "provider": str(
-            kwargs.get("provider_proxy") or kwargs.get("stripe_init_proxy") or fallback_proxy
-        ).strip(),
+        "provider": str(kwargs.get("provider_proxy") or kwargs.get("stripe_init_proxy") or fallback_proxy).strip(),
         "approve": str(kwargs.get("approve_proxy") or fallback_proxy).strip(),
         "redirect": str(kwargs.get("redirect_proxy") or fallback_proxy).strip(),
     }
@@ -585,11 +638,16 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     env["PYTHONUTF8"] = "1"
     token_file = _write_token_file(access_token)
     command = [
-        sys.executable, str(script),
-        "--token-file", token_file,
-        "--pre-proxy", pre_proxy,
-        "--timeout", str(max(8, request_timeout)),
-        "--qr-out-dir", str(qr_dir),
+        sys.executable,
+        str(script),
+        "--token-file",
+        token_file,
+        "--pre-proxy",
+        pre_proxy,
+        "--timeout",
+        str(max(8, request_timeout)),
+        "--qr-out-dir",
+        str(qr_dir),
     ]
     if fallback_proxy:
         env["MOMO_PROXY"] = fallback_proxy
@@ -616,7 +674,12 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         command.extend(["--max-proxies", str(max_proxies)])
 
     proc, output, timeout_err = _run_extractor_subprocess(
-        spec, command, env=env, cwd=str(script.parent), timeout=timeout, cleanup_paths=(token_file,),
+        spec,
+        command,
+        env=env,
+        cwd=str(script.parent),
+        timeout=timeout,
+        cleanup_paths=(token_file,),
     )
     if timeout_err:
         return timeout_err
@@ -630,4 +693,3 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     if not parsed.get("ok") and not parsed.get("error"):
         parsed["error"] = parsed.get("qr_error") or parsed.get("decision_text") or "momo QR extraction failed"
     return parsed
-
