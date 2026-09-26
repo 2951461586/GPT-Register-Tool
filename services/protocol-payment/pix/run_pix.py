@@ -80,10 +80,7 @@ def main() -> int:
     artifacts = {key: value for key, value in summary.items() if value not in (None, "")}
     artifacts.setdefault("qr_data", str(result.get("pix_qr_code") or ""))
     url = str(
-        result.get("long_url")
-        or result.get("provider_redirect_url")
-        or result.get("pix_hosted_instructions_url")
-        or ""
+        result.get("long_url") or result.get("provider_redirect_url") or result.get("pix_hosted_instructions_url") or ""
     ).strip()
     if url or result.get("pix_qr_code"):
         _RESULT_REPORTER.success(url, artifacts=artifacts)

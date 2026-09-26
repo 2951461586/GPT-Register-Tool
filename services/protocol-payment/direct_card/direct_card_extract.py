@@ -62,9 +62,13 @@ PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 
+from common.protocol_core import ProtocolResultReporter, is_false, is_true, safe_float, safe_int
 from common.proxy_url import (
     normalize_provider_form as shared_normalize_provider_form,
 )
+
+# One terminal contract for every protocol extractor (common/protocol_core.py).
+_RESULT_REPORTER = ProtocolResultReporter("direct_card", "direct_card_protocol")
 
 
 VERSION = "1.0.0"
@@ -72,8 +76,7 @@ CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
 UPDATE_PATH = "/backend-api/payments/checkout/update"
 TRACE_URL = "https://www.cloudflare.com/cdn-cgi/trace"
 DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
 DEFAULT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 DEFAULT_CLIENT_BUILD = "7904904"
@@ -339,7 +342,7 @@ def normalize_proxy_url(proxy: str) -> str:
 
 def new_proxy_session_id(length: int = 8) -> str:
     """Random numeric session id preserving the original id length (min 1)."""
-    size = max(1, int(length or 8))
+    size = max(1, safe_int(length or 8))
     return "".join(str(random.randint(0, 9)) for _ in range(size))
 
 
@@ -373,10 +376,7 @@ def rotate_direct_card_proxy_session(proxy: str, country: str) -> str:
     host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
     if parsed.port:
         host = f"{host}:{parsed.port}"
-    netloc = (
-        f"{quote(username, safe='-._~')}:"
-        f"{quote(rotated_password, safe='-._~')}@{host}"
-    )
+    netloc = f"{quote(username, safe='-._~')}:{quote(rotated_password, safe='-._~')}@{host}"
     return urlunsplit((parsed.scheme or "http", netloc, parsed.path, parsed.query, parsed.fragment))
 
 
@@ -404,7 +404,7 @@ def money_minor_units(value: Any) -> int | None:
     if isinstance(value, int):
         return value
     if isinstance(value, str) and re.fullmatch(r"-?\d+", value.strip()):
-        return int(value.strip())
+        return safe_int(value.strip())
     return None
 
 
@@ -537,7 +537,7 @@ def decode_react_router_payload(payload: Any) -> Any:
                 key_text = str(encoded_key)
                 if not key_text.startswith("_") or not key_text[1:].isdigit():
                     continue
-                key = resolve(int(key_text[1:]))
+                key = resolve(safe_int(key_text[1:]))
                 if key is not None:
                     output[str(key)] = resolve(encoded_value)
             return output
@@ -564,8 +564,7 @@ def checkout_state_from_html(html: str) -> dict[str, Any]:
                 if state:
                     return state
             if checkout_amount_minor(payload) is not None and any(
-                key in payload
-                for key in ("total", "total_summary", "totalSummary", "lineItems", "line_items")
+                key in payload for key in ("total", "total_summary", "totalSummary", "lineItems", "line_items")
             ):
                 return payload
         elif isinstance(payload, list):
@@ -670,7 +669,7 @@ def is_retryable_network_error(exc: Exception) -> bool:
 
 
 def response_error(response: Any, prefix: str) -> UpstreamError:
-    status = int(getattr(response, "status_code", 0) or 0)
+    status = safe_int(getattr(response, "status_code", 0) or 0)
     headers = getattr(response, "headers", {}) or {}
     content_type = str(headers.get("content-type") or "")
     server = str(headers.get("server") or "")
@@ -678,10 +677,7 @@ def response_error(response: Any, prefix: str) -> UpstreamError:
     lowered = body[:4000].lower()
     is_html = "html" in content_type.lower() or body.lstrip().lower().startswith(("<!doctype", "<html"))
     cloudflare = status == 403 and (
-        "challenge-platform" in lowered
-        or "__cf$cv$params" in lowered
-        or "cloudflare" in server.lower()
-        or is_html
+        "challenge-platform" in lowered or "__cf$cv$params" in lowered or "cloudflare" in server.lower() or is_html
     )
     if is_html:
         title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.IGNORECASE | re.DOTALL)
@@ -779,12 +775,10 @@ class CheckoutExtractor:
         try:
             set_proxy(session, proxy)
             response = session.get(TRACE_URL, timeout=min(self.config.timeout, 12.0))
-            if int(getattr(response, "status_code", 0) or 0) >= 400:
+            if safe_int(getattr(response, "status_code", 0) or 0) >= 400:
                 raise response_error(response, "proxy country probe")
             fields = dict(
-                line.split("=", 1)
-                for line in str(getattr(response, "text", "") or "").splitlines()
-                if "=" in line
+                line.split("=", 1) for line in str(getattr(response, "text", "") or "").splitlines() if "=" in line
             )
             observed = str(fields.get("loc") or "").upper()
             if observed != expected_country:
@@ -798,12 +792,8 @@ class CheckoutExtractor:
         if not self.config.verify_proxy_country:
             return
         with ThreadPoolExecutor(max_workers=2) as executor:
-            checkout_future = executor.submit(
-                self._probe_country, checkout_proxy, self.config.checkout_proxy_country
-            )
-            update_future = executor.submit(
-                self._probe_country, update_proxy, self.config.update_proxy_country
-            )
+            checkout_future = executor.submit(self._probe_country, checkout_proxy, self.config.checkout_proxy_country)
+            update_future = executor.submit(self._probe_country, update_proxy, self.config.update_proxy_country)
             checkout_future.result()
             update_future.result()
         self.log(
@@ -832,7 +822,7 @@ class CheckoutExtractor:
             },
             timeout=self.config.timeout,
         )
-        if int(getattr(response, "status_code", 0) or 0) >= 400:
+        if safe_int(getattr(response, "status_code", 0) or 0) >= 400:
             try:
                 error_payload = response.json() or {}
             except Exception:
@@ -913,9 +903,7 @@ class CheckoutExtractor:
             },
         }
         headers = {
-            "Referer": checkout_short_url(
-                checkout["cs_id"], checkout["billing_country"], processor_entity
-            ),
+            "Referer": checkout_short_url(checkout["cs_id"], checkout["billing_country"], processor_entity),
             "x-openai-target-path": UPDATE_PATH,
             "x-openai-target-route": UPDATE_PATH,
         }
@@ -939,24 +927,20 @@ class CheckoutExtractor:
                 except Exception as exc:
                     if not is_retryable_network_error(exc) or attempt >= self.config.update_attempts:
                         raise ExtractorError(f"promotion update network error: {exc}") from exc
-                    current_proxy = rotate_direct_card_proxy_session(
-                        current_proxy, self.config.update_proxy_country
-                    )
+                    current_proxy = rotate_direct_card_proxy_session(current_proxy, self.config.update_proxy_country)
                     if owns_session:
                         safe_close(session)
                     session = self._clone_session(checkout_session, current_proxy)
                     owns_session = True
                     continue
-                if int(getattr(response, "status_code", 0) or 0) >= 400:
+                if safe_int(getattr(response, "status_code", 0) or 0) >= 400:
                     error = response_error(response, "checkout/update failed")
                     if not error.retryable or attempt >= self.config.update_attempts:
                         raise error
                     if error.cloudflare:
                         cloudflare_failures += 1
                         if cloudflare_failures >= self.config.cf_same_identity_attempts and not exit_rotated:
-                            rotated = rotate_direct_card_proxy_session(
-                                current_proxy, self.config.update_proxy_country
-                            )
+                            rotated = rotate_direct_card_proxy_session(current_proxy, self.config.update_proxy_country)
                             if rotated != current_proxy:
                                 current_proxy = rotated
                                 set_proxy(session, current_proxy)
@@ -980,7 +964,7 @@ class CheckoutExtractor:
                     raise UpstreamError(502, "checkout/update returned invalid JSON") from exc
                 if payload_has_invalid_promotion(payload):
                     raise InvalidPromotionError("checkout/update returned invalid_promotion")
-                if payload.get("success") is False:
+                if is_false(payload.get("success")):
                     raise UpstreamError(502, "checkout/update explicitly rejected the promotion")
                 sync_cookies(checkout_session, session)
                 return payload
@@ -1000,7 +984,7 @@ class CheckoutExtractor:
             headers={"Referer": "https://chatgpt.com/"},
             timeout=self.config.timeout,
         )
-        if int(getattr(response, "status_code", 0) or 0) >= 400:
+        if safe_int(getattr(response, "status_code", 0) or 0) >= 400:
             raise response_error(response, "checkout page amount query failed")
         state = checkout_state_from_html(str(getattr(response, "text", "") or ""))
         return checkout_amount_minor(state), checkout_currency(state) or self.config.currency
@@ -1022,9 +1006,7 @@ class CheckoutExtractor:
         if amount is None:
             return "pending", None, currency
         if amount != 0:
-            raise NonZeroAmountError(
-                f"promotion did not produce a zero checkout: amount_minor={amount} {currency}"
-            )
+            raise NonZeroAmountError(f"promotion did not produce a zero checkout: amount_minor={amount} {currency}")
         return "verified_zero", 0, currency
 
     def extract(self) -> CheckoutResult:
@@ -1037,12 +1019,8 @@ class CheckoutExtractor:
                 self._preflight(checkout_proxy, update_proxy)
                 checkout_session, checkout = self._create_checkout_with_retry(checkout_proxy)
                 self.log(f"Checkout created: {checkout['cs_id'][:12]}...")
-                update_payload = self._update_promotion(
-                    checkout_session, checkout, checkout_proxy, update_proxy
-                )
-                verification, amount, amount_currency = self._verify_amount(
-                    checkout_session, checkout, update_payload
-                )
+                update_payload = self._update_promotion(checkout_session, checkout, checkout_proxy, update_proxy)
+                verification, amount, amount_currency = self._verify_amount(checkout_session, checkout, update_payload)
                 return CheckoutResult(
                     ok=True,
                     long_url=checkout_short_url(
@@ -1139,25 +1117,35 @@ def config_from_args(args: argparse.Namespace) -> ExtractorConfig:
         update_proxy=str(args.update_proxy),
         plan_name=str(args.plan_name),
         promo_campaign_id=str(args.promo_campaign_id),
-        timeout=float(args.timeout),
-        checkout_attempts=int(args.checkout_attempts),
-        update_attempts=int(args.update_attempts),
-        full_attempts=int(args.full_attempts),
-        cf_same_identity_attempts=int(args.cf_same_identity_attempts),
-        cf_retry_delay=max(0.0, float(args.cf_retry_delay)),
+        timeout=safe_float(args.timeout),
+        checkout_attempts=safe_int(args.checkout_attempts),
+        update_attempts=safe_int(args.update_attempts),
+        full_attempts=safe_int(args.full_attempts),
+        cf_same_identity_attempts=safe_int(args.cf_same_identity_attempts),
+        cf_retry_delay=max(0.0, safe_float(args.cf_retry_delay)),
         verify_proxy_country=not bool(args.skip_proxy_check),
     )
 
 
 def print_json(payload: dict[str, Any], pretty: bool) -> None:
-    print(
-        json.dumps(
-            payload,
-            ensure_ascii=False,
-            indent=2 if pretty else None,
-            separators=None if pretty else (",", ":"),
+    """Emit the shared ``protocol_payment.v1`` terminal contract.
+
+    ``payload`` is preserved as ``artifacts`` (the manager still reads
+    ``long_url`` / ``amount_minor`` / ...), but it now travels on the unified
+    schema and passes through the policy-driven redaction in
+    ``common.protocol_core``. This used to print the raw payload, so an access
+    token embedded in an error message reached stdout unredacted.
+    """
+    artifacts = {str(key): value for key, value in payload.items()}
+    if is_true(payload.get("ok")):
+        _RESULT_REPORTER.success(str(payload.get("long_url") or ""), artifacts=artifacts)
+    else:
+        _RESULT_REPORTER.failure(
+            payload.get("error") or payload.get("error_type") or "direct_card extraction failed",
+            error_code=str(payload.get("error_type") or "direct_card_failed"),
+            error_stage="direct_card",
+            artifacts=artifacts,
         )
-    )
 
 
 def main(argv: list[str] | None = None) -> int:
