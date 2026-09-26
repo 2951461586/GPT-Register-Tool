@@ -49,9 +49,7 @@ class Base64UrlDecodeTests(unittest.TestCase):
 
     def test_decodes_padded_payload(self):
         payload = {"a": 1}
-        padded = base64.urlsafe_b64encode(
-            json.dumps(payload).encode()
-        ).decode()
+        padded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
         self.assertEqual(upi_link._upi_decode_base64url_json(padded), payload)
 
     def test_decodes_payload_containing_urlsafe_only_chars(self):
@@ -124,9 +122,7 @@ class QrImageKindTests(unittest.TestCase):
                 self.assertEqual(upi_link._upi_qr_image_kind(url), "")
 
     def test_extension_of_extensionless_path_is_empty(self):
-        self.assertEqual(
-            upi_link._upi_url_path_extension("https://qr.stripe.com/abc/qr"), ""
-        )
+        self.assertEqual(upi_link._upi_url_path_extension("https://qr.stripe.com/abc/qr"), "")
 
 
 class StaticResourceTests(unittest.TestCase):
@@ -161,9 +157,7 @@ class StaticResourceTests(unittest.TestCase):
 
     def test_data_image_is_not_static(self):
         """``data:image/...`` 是内联图，属于 QR 候选而不是静态资源。"""
-        self.assertFalse(
-            upi_link._upi_is_static_resource_url("data:image/png;base64,AAAA")
-        )
+        self.assertFalse(upi_link._upi_is_static_resource_url("data:image/png;base64,AAAA"))
 
     def test_code_resources_are_code_not_static(self):
         """js/css/字体走独立的 ``_upi_is_code_resource_url``。"""
@@ -174,9 +168,7 @@ class StaticResourceTests(unittest.TestCase):
         ):
             with self.subTest(url=url):
                 self.assertTrue(upi_link._upi_is_code_resource_url(url))
-        self.assertFalse(
-            upi_link._upi_is_code_resource_url("https://qr.stripe.com/a/q.png")
-        )
+        self.assertFalse(upi_link._upi_is_code_resource_url("https://qr.stripe.com/a/q.png"))
 
 
 class QrCandidateExtractionTests(unittest.TestCase):
@@ -224,11 +216,7 @@ class RedirectExtractionTests(unittest.TestCase):
     """
 
     def test_hosted_instructions_url(self):
-        payload = {
-            "next_action": {
-                "hosted_instructions_url": "https://payments.stripe.com/upi/instructions/abc"
-            }
-        }
+        payload = {"next_action": {"hosted_instructions_url": "https://payments.stripe.com/upi/instructions/abc"}}
         self.assertEqual(
             upi_link._upi_extract_redirect_url(payload),
             "https://payments.stripe.com/upi/instructions/abc",
@@ -236,9 +224,7 @@ class RedirectExtractionTests(unittest.TestCase):
 
     def test_redirect_to_url_nested(self):
         """旧实现漏掉的嵌套形态。"""
-        payload = {
-            "next_action": {"redirect_to_url": {"url": "https://pay.openai.com/c/pay/cs_y"}}
-        }
+        payload = {"next_action": {"redirect_to_url": {"url": "https://pay.openai.com/c/pay/cs_y"}}}
         self.assertEqual(
             upi_link._upi_extract_redirect_url(payload),
             "https://pay.openai.com/c/pay/cs_y",
@@ -324,9 +310,7 @@ class FreeTrialTests(unittest.TestCase):
         self.assertEqual(status["due"], 0)
 
     def test_nonzero_due_is_not_free_trial(self):
-        status = upi_link._upi_get_free_trial_status(
-            {"total_summary": {"due": 49900, "currency": "inr"}}
-        )
+        status = upi_link._upi_get_free_trial_status({"total_summary": {"due": 49900, "currency": "inr"}})
         self.assertFalse(status["has_free_trial"])
 
     def test_scan_handles_non_dict(self):
@@ -348,9 +332,7 @@ class AmountTests(unittest.TestCase):
         self.assertIsNone(upi_link._upi_amount_minor("49900"))
 
     def test_nested_get(self):
-        self.assertEqual(
-            upi_link._upi_nested_get({"a": {"b": {"c": 7}}}, ["a", "b", "c"]), 7
-        )
+        self.assertEqual(upi_link._upi_nested_get({"a": {"b": {"c": 7}}}, ["a", "b", "c"]), 7)
         self.assertIsNone(upi_link._upi_nested_get({"a": {}}, ["a", "b", "c"]))
         self.assertIsNone(upi_link._upi_nested_get(None, ["a"]))
 
@@ -469,28 +451,16 @@ class ConfirmBodyTests(unittest.TestCase):
         注意键名是带前缀的扁平形式，不是顶层 ``client_session_id``。
         """
         body = self._body()
-        self.assertEqual(
-            body.get("client_attribution_metadata[client_session_id]"), "csi_1"
-        )
-        self.assertEqual(
-            body.get("client_attribution_metadata[elements_session_id]"), "es_1"
-        )
-        self.assertEqual(
-            body.get("client_attribution_metadata[elements_session_config_id]"), "esc_1"
-        )
-        self.assertEqual(
-            body.get("client_attribution_metadata[checkout_config_id]"), "cfg_1"
-        )
-        self.assertEqual(
-            body.get("client_attribution_metadata[checkout_session_id]"), "cs_live_1"
-        )
+        self.assertEqual(body.get("client_attribution_metadata[client_session_id]"), "csi_1")
+        self.assertEqual(body.get("client_attribution_metadata[elements_session_id]"), "es_1")
+        self.assertEqual(body.get("client_attribution_metadata[elements_session_config_id]"), "esc_1")
+        self.assertEqual(body.get("client_attribution_metadata[checkout_config_id]"), "cfg_1")
+        self.assertEqual(body.get("client_attribution_metadata[checkout_session_id]"), "cs_live_1")
 
     def test_attribution_metadata_uses_custom_checkout_flow(self):
         """custom 模式的归因四元组：checkout / payment-element / custom_checkout / deferred。"""
         body = self._body()
-        self.assertEqual(
-            body.get("client_attribution_metadata[merchant_integration_source]"), "checkout"
-        )
+        self.assertEqual(body.get("client_attribution_metadata[merchant_integration_source]"), "checkout")
         self.assertEqual(
             body.get("client_attribution_metadata[merchant_integration_subtype]"),
             "payment-element",
@@ -499,9 +469,7 @@ class ConfirmBodyTests(unittest.TestCase):
             body.get("client_attribution_metadata[merchant_integration_version]"),
             "custom_checkout",
         )
-        self.assertEqual(
-            body.get("client_attribution_metadata[payment_intent_creation_flow]"), "deferred"
-        )
+        self.assertEqual(body.get("client_attribution_metadata[payment_intent_creation_flow]"), "deferred")
 
     def test_all_values_are_strings(self):
         """Stripe form-encoded 请求体必须是 str -> str。"""
@@ -516,8 +484,7 @@ class InitBodyTests(unittest.TestCase):
     def test_custom_checkout_betas(self):
         body = upi_link._upi_build_init_body(
             "pk_test_1",
-            {"locale": "en", "timezone": "Asia/Kolkata", "user_agent": "UA",
-             "accept_language": "en-IN,en;q=0.9"},
+            {"locale": "en", "timezone": "Asia/Kolkata", "user_agent": "UA", "accept_language": "en-IN,en;q=0.9"},
             "js_1",
         )
         betas = {v for k, v in body.items() if "client_betas" in k}
@@ -526,9 +493,7 @@ class InitBodyTests(unittest.TestCase):
         self.assertEqual(body.get("elements_session_client[elements_init_source]"), "custom_checkout")
 
     def test_all_values_are_strings(self):
-        body = upi_link._upi_build_init_body(
-            "pk_test_1", {"locale": "en", "timezone": "Asia/Kolkata"}, "js_1"
-        )
+        body = upi_link._upi_build_init_body("pk_test_1", {"locale": "en", "timezone": "Asia/Kolkata"}, "js_1")
         for key, value in body.items():
             with self.subTest(key=key):
                 self.assertIsInstance(value, str)
@@ -567,17 +532,11 @@ class SecondConfirmGateTests(unittest.TestCase):
 
     def test_timeout_triggers_retry(self):
         self.assertTrue(
-            upi_link._upi_should_retry_second_confirm(
-                RuntimeError("redirect url resolution timeout: waiting")
-            )
+            upi_link._upi_should_retry_second_confirm(RuntimeError("redirect url resolution timeout: waiting"))
         )
 
     def test_provider_decline_does_not_retry(self):
-        self.assertFalse(
-            upi_link._upi_should_retry_second_confirm(
-                RuntimeError("generic_decline provider declined")
-            )
-        )
+        self.assertFalse(upi_link._upi_should_retry_second_confirm(RuntimeError("generic_decline provider declined")))
 
 
 class FingerprintSelfConsistencyTests(unittest.TestCase):
@@ -603,9 +562,16 @@ class FingerprintSelfConsistencyTests(unittest.TestCase):
 
     def test_all_templates_have_required_keys(self):
         required = {
-            "name", "impersonate", "user_agent", "sec_ch_ua",
-            "sec_ch_ua_mobile", "sec_ch_ua_platform",
-            "locale", "elements_locale", "timezone", "accept_language",
+            "name",
+            "impersonate",
+            "user_agent",
+            "sec_ch_ua",
+            "sec_ch_ua_mobile",
+            "sec_ch_ua_platform",
+            "locale",
+            "elements_locale",
+            "timezone",
+            "accept_language",
         }
         for template in upi_link.UPI_FINGERPRINT_TEMPLATES:
             with self.subTest(name=template.get("name")):
@@ -616,9 +582,7 @@ class FingerprintSelfConsistencyTests(unittest.TestCase):
 
     def test_index_wraps_around(self):
         count = len(upi_link.UPI_FINGERPRINT_TEMPLATES)
-        self.assertEqual(
-            upi_link._upi_fingerprint(count), upi_link._upi_fingerprint(0)
-        )
+        self.assertEqual(upi_link._upi_fingerprint(count), upi_link._upi_fingerprint(0))
 
     def test_apply_fingerprint_sets_headers(self):
         class FakeSession:
@@ -649,9 +613,7 @@ class BillingProfileTests(unittest.TestCase):
                 self.assertTrue(profile.get(key))
 
     def test_fixed_billing_overrides(self):
-        profile = upi_link._upi_billing_profile(
-            {"fixed_billing": {"country": "IN", "city": "Mumbai"}}
-        )
+        profile = upi_link._upi_billing_profile({"fixed_billing": {"country": "IN", "city": "Mumbai"}})
         self.assertEqual(profile["city"], "Mumbai")
 
     def test_country_is_upper_cased(self):
@@ -694,10 +656,10 @@ class HtmlQrExtractionTests(unittest.TestCase):
     def test_does_not_stop_at_first_non_qr_image(self):
         """首个 img 是素材图时，不能因此丢掉后面的真实 QR 图。"""
         html = (
-            '<html><body>'
+            "<html><body>"
             '<img src="https://stripe.com/img/logo.png">'
             '<img src="https://qr.stripe.com/abc/real.png">'
-            '</body></html>'
+            "</body></html>"
         )
         found = upi_link._upi_extract_qr_from_html(html)
         joined = json.dumps(found)
@@ -754,7 +716,14 @@ class PublicSurfaceTests(unittest.TestCase):
 
     def test_billing_in_keys_unchanged(self):
         expected = {
-            "name", "email", "line1", "line2", "city", "state", "postal", "country",
+            "name",
+            "email",
+            "line1",
+            "line2",
+            "city",
+            "state",
+            "postal",
+            "country",
         }
         self.assertEqual(set(upi_link.UPI_BILLING_IN), expected)
 
@@ -777,9 +746,7 @@ class FailureClassificationTests(unittest.TestCase):
     def test_provider_declined(self):
         for text in ("generic_decline", "generic_decline provider declined", "approve blocked"):
             with self.subTest(text=text):
-                self.assertEqual(
-                    upi_link._upi_classify_failure(text), "upi_provider_declined"
-                )
+                self.assertEqual(upi_link._upi_classify_failure(text), "upi_provider_declined")
 
     def test_redirect_timeout(self):
         self.assertEqual(
@@ -825,11 +792,13 @@ class FailureClassificationTests(unittest.TestCase):
                 once = upi_link._upi_classify_failure(code)
                 twice = upi_link._upi_classify_failure(once)
                 self.assertEqual(
-                    once, code,
+                    once,
+                    code,
                     "自身 code 未被识别: %r -> %r" % (code, once),
                 )
                 self.assertEqual(
-                    once, twice,
+                    once,
+                    twice,
                     "不幂等: %r -> %r -> %r" % (code, once, twice),
                 )
 
@@ -870,14 +839,10 @@ class UiModeConfigTests(unittest.TestCase):
         这里改断言**行为契约**：``_upi_build_init_body`` 产出的就是 custom
         协议的特征载荷，它存在即说明 custom 是被支持的一等公民。
         """
-        body = upi_link._upi_build_init_body(
-            "pk_test_1", {"locale": "en", "timezone": "Asia/Kolkata"}, "js_1"
-        )
+        body = upi_link._upi_build_init_body("pk_test_1", {"locale": "en", "timezone": "Asia/Kolkata"}, "js_1")
         betas = {v for k, v in body.items() if "client_betas" in k}
         self.assertIn("custom_checkout_server_updates_1", betas)
-        self.assertEqual(
-            body.get("elements_session_client[elements_init_source]"), "custom_checkout"
-        )
+        self.assertEqual(body.get("elements_session_client[elements_init_source]"), "custom_checkout")
 
     def test_ui_mode_value_set_is_enumerated(self):
         """custom 与 hosted 都是合法取值——hosted 只是不再是默认。"""
@@ -961,7 +926,10 @@ class DumpChannelTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"UPI_DUMP": "1", "UPI_DUMP_DIR": tmp}, clear=False):
                 written = upi_link._upi_dump_http(
                     self._FakeResponse("resp-body-xyz", status_code=201),
-                    "stage_b", {"k": "v"}, "POST", "https://example.test/post",
+                    "stage_b",
+                    {"k": "v"},
+                    "POST",
+                    "https://example.test/post",
                 )
             self.assertTrue(written, "开关打开时应返回落盘路径")
             self.assertTrue(os.path.exists(written))
@@ -989,7 +957,10 @@ class DumpChannelTests(unittest.TestCase):
                 os.environ.pop("UPI_DUMP", None)
                 written = upi_link._upi_dump_http(
                     self._FakeResponse('{"error":"boom"}', status_code=402),
-                    "stage_forbidden", None, "POST", "https://example.test/forbidden",
+                    "stage_forbidden",
+                    None,
+                    "POST",
+                    "https://example.test/forbidden",
                     force=True,
                 )
             self.assertTrue(written, "force=True 时即便未开总开关也必须落盘")
@@ -1031,7 +1002,8 @@ class DumpChannelTests(unittest.TestCase):
                 redacted = upi_link._upi_redact_for_dump(raw)
                 for secret in secrets:
                     self.assertNotIn(
-                        secret, redacted,
+                        secret,
+                        redacted,
                         "%s 类凭据未被脱敏：%r" % (label, redacted),
                     )
                 self.assertIn("***", redacted, "%s 类应留下脱敏占位符" % label)
@@ -1053,7 +1025,8 @@ class DumpChannelTests(unittest.TestCase):
                     self._FakeResponse('{"access_token": "%s"}' % secret),
                     "stage_secret",
                     {"Authorization": "Bearer %s" % secret},
-                    "POST", "https://example.test/secret",
+                    "POST",
+                    "https://example.test/secret",
                 )
             with open(written, "r", encoding="utf-8") as fh:
                 content = fh.read()
@@ -1068,11 +1041,13 @@ class DumpChannelTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(
-                os.environ, {"UPI_DUMP": "1", "UPI_DUMP_DIR": tmp, "UPI_DUMP_LIMIT": "500"},
+                os.environ,
+                {"UPI_DUMP": "1", "UPI_DUMP_DIR": tmp, "UPI_DUMP_LIMIT": "500"},
                 clear=False,
             ):
                 written = upi_link._upi_dump_http(
-                    self._FakeResponse("A" * 4000), "stage_big",
+                    self._FakeResponse("A" * 4000),
+                    "stage_big",
                 )
             with open(written, "r", encoding="utf-8") as fh:
                 content = fh.read()
@@ -1187,9 +1162,7 @@ class FingerprintContractTests(unittest.TestCase):
         class NoProfileFields:
             """什么字段都没有——两个分支都应判定为缺失。"""
 
-        with mock.patch.object(
-            upi_link, "browser_profile_for_country", lambda country: NoProfileFields()
-        ):
+        with mock.patch.object(upi_link, "browser_profile_for_country", lambda country: NoProfileFields()):
             with self.assertRaises(RuntimeError) as ctx:
                 upi_link._upi_fingerprint(0, "IN")
         self.assertIn("browser_profile_for_country", str(ctx.exception))
@@ -1210,9 +1183,7 @@ class FingerprintContractTests(unittest.TestCase):
 
         from unittest import mock
 
-        with mock.patch.object(
-            upi_link, "browser_profile_for_country", lambda country: TrapProfile()
-        ):
+        with mock.patch.object(upi_link, "browser_profile_for_country", lambda country: TrapProfile()):
             with self.assertRaises(RuntimeError) as ctx:
                 upi_link._upi_fingerprint(0, "IN")
         self.assertIn("browser_profile_for_country", str(ctx.exception))
@@ -1293,14 +1264,18 @@ class DegradeOn403Tests(unittest.TestCase):
         session = self._Session([403, 200])
         original = upi_link._upi_fingerprint(0, "IN")
         resp, used = upi_link._upi_post_with_degrade(
-            session, "https://api.stripe.com/v1/x",
-            data={"a": "b"}, fingerprint=original, stage="t",
+            session,
+            "https://api.stripe.com/v1/x",
+            data={"a": "b"},
+            fingerprint=original,
+            stage="t",
         )
         self.assertEqual(resp.status_code, 200, "重试应拿到 200")
         self.assertEqual(session.calls, 2, "应恰好请求两次（原 + 重试一次）")
         self.assertEqual(used.get("name"), "chrome-mac", "重试应换成降级身份")
         self.assertNotEqual(
-            session.seen_uas[0], session.seen_uas[1],
+            session.seen_uas[0],
+            session.seen_uas[1],
             "重试时的 User-Agent 必须真的换了",
         )
 
@@ -1309,8 +1284,11 @@ class DegradeOn403Tests(unittest.TestCase):
         session = self._Session([403, 403, 403, 403])
         original = upi_link._upi_fingerprint(0, "IN")
         resp, used = upi_link._upi_post_with_degrade(
-            session, "https://api.stripe.com/v1/x",
-            data={"a": "b"}, fingerprint=original, stage="t",
+            session,
+            "https://api.stripe.com/v1/x",
+            data={"a": "b"},
+            fingerprint=original,
+            stage="t",
         )
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(session.calls, 2, "最多两次请求，不能继续换身份")
@@ -1320,8 +1298,11 @@ class DegradeOn403Tests(unittest.TestCase):
         session = self._Session([500, 200])
         original = upi_link._upi_fingerprint(0, "IN")
         resp, used = upi_link._upi_post_with_degrade(
-            session, "https://api.stripe.com/v1/x",
-            data={"a": "b"}, fingerprint=original, stage="t",
+            session,
+            "https://api.stripe.com/v1/x",
+            data={"a": "b"},
+            fingerprint=original,
+            stage="t",
         )
         self.assertEqual(resp.status_code, 500)
         self.assertEqual(session.calls, 1, "非 403 不应重试")
@@ -1332,8 +1313,11 @@ class DegradeOn403Tests(unittest.TestCase):
         session = self._Session([403, 200])
         degraded = upi_link._upi_degraded_template()
         resp, used = upi_link._upi_post_with_degrade(
-            session, "https://api.stripe.com/v1/x",
-            data={"a": "b"}, fingerprint=degraded, stage="t",
+            session,
+            "https://api.stripe.com/v1/x",
+            data={"a": "b"},
+            fingerprint=degraded,
+            stage="t",
         )
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(session.calls, 1, "已降级时不应再重试")
@@ -1392,8 +1376,7 @@ class ZeroAmountCacheTests(unittest.TestCase):
         from sms_tool.paypal_proxy import PayPalProxyState
 
         tmp = tempfile.mkdtemp()
-        return PayPalProxyState(Path(tmp) / "state.json", enabled=enabled,
-                                zero_cache_ttl_seconds=ttl)
+        return PayPalProxyState(Path(tmp) / "state.json", enabled=enabled, zero_cache_ttl_seconds=ttl)
 
     def test_zero_result_is_recorded_and_readable(self):
         state = self._state()
@@ -1460,6 +1443,222 @@ class ZeroAmountCacheTests(unittest.TestCase):
         sig = inspect.signature(upi_link.generate_upi_qr_link)
         self.assertIn("proxy_state", sig.parameters)
         self.assertIsNone(sig.parameters["proxy_state"].default)
+
+
+class CpmtSelectionTests(unittest.TestCase):
+    """``_upi_custom_payment_method_id`` 只认 UPI 相关的 cpmt。
+
+    参考实现 ``_upi_custom_payment_method_id`` 的契约：绝不能把非 UPI 的
+    custom method 当 UPI 提交，也不能凭空造 id。返回空串即表示要走
+    Stripe SetupIntent 路径。
+    """
+
+    def test_selects_upi_cpmt_by_type(self):
+        methods = [{"id": "cpmt_card", "type": "card"}, {"id": "cpmt_x", "type": "upi"}]
+        self.assertEqual(upi_link._upi_custom_payment_method_id(methods), "cpmt_x")
+
+    def test_selects_upi_cpmt_by_id_when_type_missing(self):
+        self.assertEqual(
+            upi_link._upi_custom_payment_method_id([{"id": "cpmt_abc_upi"}]),
+            "cpmt_abc_upi",
+        )
+
+    def test_ignores_non_upi_cpmt(self):
+        self.assertEqual(
+            upi_link._upi_custom_payment_method_id([{"id": "cpmt_abc", "type": "card"}]),
+            "",
+        )
+
+    def test_ignores_non_cpmt_ids(self):
+        self.assertEqual(
+            upi_link._upi_custom_payment_method_id([{"id": "pm_123", "type": "upi"}]),
+            "",
+        )
+
+    def test_accepts_bare_string_entries(self):
+        self.assertEqual(upi_link._upi_custom_payment_method_id(["cpmt_z_upi"]), "cpmt_z_upi")
+
+    def test_empty_or_invalid_shapes(self):
+        for value in (None, "", {}, [], [None], ["cpmt_card"], 5):
+            with self.subTest(value=value):
+                self.assertEqual(upi_link._upi_custom_payment_method_id(value), "")
+
+
+class CopyableLinkTests(unittest.TestCase):
+    """``_upi_copyable_link`` 必须优先可复制的 hosted instructions 页面。"""
+
+    HOSTED = "https://payments.stripe.com/upi/instructions/abc123"
+
+    def test_prefers_hosted_instructions_over_deep_link(self):
+        payload = {
+            "hosted_instructions_url": self.HOSTED,
+            "qr_code": {"data": "upi://pay?pa=x@y"},
+        }
+        self.assertEqual(upi_link._upi_copyable_link(payload), self.HOSTED)
+
+    def test_falls_back_to_deep_link(self):
+        payload = {"next_action": {"upi_handle_redirect_or_display_qr_code": {"qr_code": {"data": "upi://pay?pa=x@y"}}}}
+        self.assertEqual(upi_link._upi_copyable_link(payload), "upi://pay?pa=x@y")
+
+    def test_finds_hosted_url_in_nested_structure(self):
+        payload = {"a": {"b": [{"hosted_instructions_url": self.HOSTED}]}}
+        self.assertEqual(upi_link._upi_copyable_link(payload), self.HOSTED)
+
+    def test_rejects_non_stripe_hosted_url(self):
+        payload = {"hosted_instructions_url": "https://evil.example.com/upi/instructions/x"}
+        self.assertEqual(upi_link._upi_copyable_link(payload), "")
+
+    def test_returns_empty_when_nothing_copyable(self):
+        for value in ({}, {"qr_code": {}}, "plain", None, [1, 2]):
+            with self.subTest(value=value):
+                self.assertEqual(upi_link._upi_copyable_link(value), "")
+
+
+class SentinelHeaderTests(unittest.TestCase):
+    """Sentinel 头是 advisory：缺 device_id 时必须静默返回空集。"""
+
+    def test_missing_device_id_returns_empty_without_network(self):
+        self.assertEqual(upi_link._upi_sentinel_headers(None, "", "http://p:1"), {})
+
+    def test_flow_constant_is_the_supported_approval_flow(self):
+        self.assertEqual(upi_link.UPI_SENTINEL_APPROVAL_FLOW, "checkout_session_approval")
+
+
+class RiskContextTests(unittest.TestCase):
+    """Protocol risk rail纯函数：页面身份/部署哈希/遥测/头部。"""
+
+    def test_scrapes_build_seq_and_attestation(self):
+        html = '<html data-build="prod-abc" data-seq="11375882">'
+        html += '"webDeploymentAttestation":"AAAA.BBBB.cccc.dddd.eeee"}'
+        version, build, attestation = upi_link._upi_scrape_page_identity(html)
+        self.assertEqual(version, "prod-abc")
+        self.assertEqual(build, "11375882")
+        self.assertEqual(attestation, "AAAA.BBBB.cccc.dddd.eeee")
+
+    def test_scrapes_empty_when_absent(self):
+        self.assertEqual(upi_link._upi_scrape_page_identity("<html>"), ("", "", ""))
+
+    def test_deploy_id_from_attestation(self):
+        value = "x." + "a" * 20 + ".sig"
+        self.assertEqual(upi_link._upi_attestation_deploy_id(value), "a" * 20)
+        self.assertEqual(upi_link._upi_attestation_deploy_id("no-dots"), "")
+
+    def test_promo_page_url_quotes_campaign(self):
+        url = upi_link._upi_promo_page_url("plus-1-month-free")
+        self.assertTrue(url.startswith("https://chatgpt.com/?promo_campaign="))
+        self.assertIn("plus-1-month-free", url)
+
+    def test_risk_context_headers_are_self_consistent(self):
+        risk = upi_link._UpiRiskContext()
+        first = risk.headers(account_id="acct_1")
+        second = risk.headers()
+        self.assertEqual(first["x-openai-web-frontend"], "core_web")
+        self.assertEqual(first["Chatgpt-Account-Id"], "acct_1")
+        self.assertTrue(first["x-oai-is-client-observation"].startswith("v1.r.p."))
+        # Observation must rotate per stage; telemetry must advance. `or` is
+        # avoided here so the assertion cannot be folded by the linter.
+        self.assertNotEqual(first["x-oai-is-client-observation"], second["x-oai-is-client-observation"])
+        self.assertTrue(first["oai-telemetry"].startswith("[1,"))
+
+    def test_attestation_header_only_when_present(self):
+        risk = upi_link._UpiRiskContext()
+        self.assertNotIn("oai-web-deployment-attestation", risk.headers())
+        risk.attestation = "a.b.c"
+        self.assertEqual(risk.headers()["oai-web-deployment-attestation"], "a.b.c")
+
+    def test_session_is_live_rejects_none_and_fakes(self):
+        self.assertFalse(upi_link._upi_session_is_live(None))
+
+        class Fake:
+            pass
+
+        self.assertFalse(upi_link._upi_session_is_live(Fake()))
+
+
+class OaicsAndMandateTests(unittest.TestCase):
+    def test_fetch_oaics_state_skips_non_oaics(self):
+        class Session:
+            def get(self, *a, **k):  # pragma: no cover - must not be called
+                raise AssertionError("must not fetch for cs_ sessions")
+
+        self.assertEqual(
+            upi_link._upi_fetch_oaics_state(Session(), "at", cs_id="cs_live_x", processor_entity="e", proxy="p"),
+            {},
+        )
+
+    def test_server_mandate_extraction(self):
+        payload = {"payment_method_options": {"upi": {"mandate_options": {"amount": 199900, "end_date": 123}}}}
+        self.assertEqual(upi_link._upi_server_mandate(payload), {"amount": 199900, "end_date": 123})
+        self.assertEqual(upi_link._upi_server_mandate({}), {})
+        self.assertEqual(upi_link._upi_server_mandate("nope"), {})
+
+    def test_wait_paid_returns_when_setup_intent_succeeds(self):
+        class Resp:
+            status_code = 200
+
+            def json(self):
+                return {"setup_intent": {"status": "succeeded"}}
+
+        class Stripe:
+            def get(self, *a, **k):
+                return Resp()
+
+        result = upi_link._upi_wait_paid(Stripe(), cs_id="cs_x", stripe_pk="pk", ctx={}, timeout=30)
+        self.assertTrue(result["paid"])
+        self.assertEqual(result["payment_status"], "succeeded")
+
+    def test_wait_paid_unsupported_without_get(self):
+        self.assertEqual(
+            upi_link._upi_wait_paid(object(), cs_id="cs", stripe_pk="pk", ctx={}, timeout=30),
+            {"paid": False, "payment_status": "unsupported"},
+        )
+
+
+class BrowserRailPureTests(unittest.TestCase):
+    """无头浏览器 rail 的纯函数与风控上下文合并。"""
+
+    def test_browser_proxy_converts_socks5h_and_decodes_credentials(self):
+        parsed = upi_link._upi_browser_proxy("socks5h://user%40x:pw%21@host:1080")
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["server"], "socks5://host:1080")
+        self.assertEqual(parsed["username"], "user@x")
+        self.assertEqual(parsed["password"], "pw!")
+
+    def test_browser_proxy_http_keeps_scheme(self):
+        parsed = upi_link._upi_browser_proxy("http://h:9091")
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["server"], "http://h:9091")
+        self.assertNotIn("username", parsed)
+
+    def test_browser_proxy_blank_or_schemeless_returns_none(self):
+        self.assertIsNone(upi_link._upi_browser_proxy(""))
+        self.assertIsNone(upi_link._upi_browser_proxy("not-a-url"))
+
+    def test_find_attestation_requires_two_parts(self):
+        self.assertEqual(upi_link._upi_find_attestation('"webDeploymentAttestation":"a.b.c"'), "a.b.c")
+        self.assertEqual(upi_link._upi_find_attestation("no attestation here"), "")
+        self.assertEqual(upi_link._upi_find_attestation('"webDeploymentAttestation":"nodots"'), "")
+
+    def test_apply_capture_prefers_browser_observation(self):
+        risk = upi_link._UpiRiskContext()
+        used = risk.apply_capture({"attestation": "a.b.c", "observation": "v1.real", "stripe_ids": {"guid": "g"}})
+        self.assertTrue(used)
+        self.assertTrue(risk.browser_observation)
+        self.assertEqual(risk.observation_header(), "v1.real")
+        self.assertEqual(risk.stripe_ids["guid"], "g")
+        # The attestation deploy id re-anchors the client version.
+        self.assertTrue(risk.client_version.startswith("prod-"))
+
+    def test_apply_capture_stores_browser_sentinel(self):
+        risk = upi_link._UpiRiskContext()
+        risk.apply_capture({"sentinel_token": "tok", "sentinel_flow": "checkout_session_approval"})
+        self.assertEqual(risk.sentinel_tokens["checkout_session_approval"], "tok")
+
+    def test_protocol_rail_rotates_observation(self):
+        risk = upi_link._UpiRiskContext()
+        self.assertNotEqual(risk.observation_header(), risk.observation_header())
 
 
 if __name__ == "__main__":
