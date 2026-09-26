@@ -532,7 +532,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
-                stdout='{"long_url": "https://example.test/pix", "pix_qr_code": "000201"}\n',
+                stdout=(
+                    '{"schema":"protocol_payment.v1","payment_method":"pix","ok":true,'
+                    '"url":"https://example.test/pix","link_type":"pix_protocol",'
+                    '"pix_qr_code":"000201","qr_data":"000201"}\n'
+                ),
                 stderr="",
             )
 
@@ -590,9 +594,10 @@ class PaymentLinkManagerTests(unittest.TestCase):
             args=[],
             returncode=3,
             stdout=(
-                '{"ok":false,"payment_method":"kakao","decision":"nonzero_offer",'
-                '"stage":"stripe_init","amount_due":29000,"currency":"KRW",'
-                '"has_kakao":true,"url":"","attempts":1,"error":"nonzero"}\n'
+                '{"schema":"protocol_payment.v1","ok":false,"payment_method":"kakao",'
+                '"decision":"nonzero_offer","stage":"stripe_init","amount_due":29000,'
+                '"currency":"KRW","has_kakao":true,"url":"","link_type":"kakao_protocol",'
+                '"attempts":1,"error":"nonzero"}\n'
             ),
             stderr="",
         )

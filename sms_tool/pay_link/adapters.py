@@ -26,6 +26,7 @@ from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canon
 from .. import payment_egress
 
 from .base import PaymentMethodSpec, _protocol_cfg, _DIRECT_CARD_CURRENCY, _LOGGER, _as_bool, _blik_completion, _config_data, _last_json_object, _redact_sensitive_text, _reference_root, _tail
+from .base import is_false, is_true, safe_float, safe_int
 
 
 def _run_extractor_subprocess(
@@ -160,7 +161,7 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
-    timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
     seed_proxy = str(
         kwargs.get("seed_proxy")
         or proxy
@@ -203,17 +204,14 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
     if timeout_err:
         return timeout_err
     parsed = _last_json_object(proc.stdout or "")
-    if (
-        parsed.get("schema") == "protocol_payment.v1"
-        and (proc.returncode == 0 or parsed.get("ok") is False)
+    if str(parsed.get("schema") or "") == "protocol_payment.v1" and (
+        proc.returncode == 0 or is_false(parsed.get("ok"))
     ):
+        # Every protocol extractor emits exactly one terminal contract. The
+        # manager keys off the schema -- never the method -- so a new extractor
+        # needs no branch here.
         parsed.setdefault("payment_method", spec.key)
         parsed.setdefault("link_type", f"{spec.key}_protocol")
-        return parsed
-    parsed = parsed if spec.key in {"pix", "kakao"} else {}
-    if parsed and spec.key == "kakao":
-        parsed.setdefault("payment_method", "kakao")
-        parsed.setdefault("url", parsed.get("provider_redirect_url") or "")
         return parsed
     if proc.returncode != 0:
         return {
@@ -221,12 +219,6 @@ def _run_protocol_script(spec: PaymentMethodSpec, access_token: str, proxy: Any 
             "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
             "exit_code": proc.returncode,
         }
-    parsed = _last_json_object(proc.stdout or "") if spec.key == "pix" else {}
-    if parsed:
-        parsed["ok"] = bool(parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_qr_code"))
-        parsed["url"] = parsed.get("long_url") or parsed.get("provider_redirect_url") or parsed.get("pix_hosted_instructions_url") or ""
-        parsed["qr_data"] = parsed.get("pix_qr_code") or ""
-        return parsed
     if spec.key == "blik":
         # BLIK 自动提交模式完成支付后没有可分享 URL，成功信号是提取器打印的
         # ``BLIK_RESULT:{...}`` 完成哨兵（status=completed）。不要再从截断日志抓 URL。
@@ -273,7 +265,7 @@ def _run_wallet_adapter(
     cfg = _protocol_cfg(runtime_config)
     methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
     method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
-    timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
+    timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     stage_keys = (
         "checkout_proxy", "promotion_proxy", "update_proxy", "stripe_init_proxy",
         "provider_proxy", "payment_method_proxy", "confirm_proxy", "approve_proxy",
@@ -299,7 +291,7 @@ def _run_wallet_adapter(
         else method_cfg.get("rotate_proxy_sessions")
     )
     transport_context["rotate_proxy_sessions"] = (
-        spec.key == "gopay" if rotate_setting is None else _as_bool(rotate_setting) is True
+        spec.key == "gopay" if rotate_setting is None else is_true(_as_bool(rotate_setting))
     )
     for resolver_key in (
         "proxy_resolver", "approve_proxy_resolver", "final_review_proxy_resolver",
@@ -321,7 +313,7 @@ def _run_wallet_adapter(
         if "require_zero" in kwargs
         else method_cfg.get("require_zero")
     )
-    require_zero = spec.key == "gopay" if require_zero_setting is None else _as_bool(require_zero_setting) is True
+    require_zero = spec.key == "gopay" if require_zero_setting is None else is_true(_as_bool(require_zero_setting))
     transport = kwargs.get("transport")
     if transport is None:
         transport = ChatGPTStripeWalletTransport(timeout=timeout)
@@ -341,11 +333,11 @@ def _run_wallet_adapter(
         ).strip(),
         require_zero=require_zero,
         promotion_update=_as_bool(promotion_setting),
-        max_approve_attempts=int(
+        max_approve_attempts=safe_int(
             kwargs.get("max_approve_attempts") or method_cfg.get("max_approve_attempts") or 6
         ),
-        max_poll_attempts=int(kwargs.get("max_poll_attempts") or method_cfg.get("max_poll_attempts") or 25),
-        poll_interval_seconds=float(
+        max_poll_attempts=safe_int(kwargs.get("max_poll_attempts") or method_cfg.get("max_poll_attempts") or 25),
+        poll_interval_seconds=safe_float(
             kwargs.get("poll_interval_seconds") or method_cfg.get("poll_interval_seconds") or 2.0
         ),
     )
@@ -370,7 +362,7 @@ def _run_regional_wallet_adapter(
     if transport is None and bool(kwargs.get("regional_transport_enabled")):
         from ..regional_payment_adapter import ChatGPTStripeRegionalTransport
         transport = ChatGPTStripeRegionalTransport(
-            timeout=max(5, int(kwargs.get("timeout_seconds") or 45)),
+            timeout=max(5, safe_int(kwargs.get("timeout_seconds") or 45)),
         )
     if transport is None:
         error = RuntimeError("regional payment adapter requires an injected transport")
@@ -408,7 +400,7 @@ def _run_gcash_adapter(
     cfg = _protocol_cfg(runtime_config)
     methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
     method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
-    timeout = max(5, int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
+    timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     transport_context: dict[str, Any] = {
         "checkout_proxy": kwargs.get("checkout_proxy") or method_cfg.get("checkout_proxy") or "",
         "promotion_proxy": kwargs.get("promotion_proxy") or method_cfg.get("promotion_proxy") or "",
@@ -470,7 +462,7 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
-    timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
 
     checkout_proxy = str(
         kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or ""
@@ -572,8 +564,8 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
     if not isinstance(method_cfg, Mapping):
         method_cfg = {}
-    timeout = int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
-    request_timeout = int(method_cfg.get("request_timeout_seconds") or 25)
+    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    request_timeout = safe_int(method_cfg.get("request_timeout_seconds") or 25)
     fallback_proxy = str(
         kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or method_cfg.get("proxy") or ""
     ).strip()
@@ -619,7 +611,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         value = stripe_profile.get(config_key)
         if value not in (None, ""):
             env[env_key] = json.dumps(value, ensure_ascii=False) if isinstance(value, (list, dict)) else str(value)
-    max_proxies = int(method_cfg.get("max_proxies") or 1)
+    max_proxies = safe_int(method_cfg.get("max_proxies") or 1)
     if max_proxies > 1:
         command.extend(["--max-proxies", str(max_proxies)])
 
