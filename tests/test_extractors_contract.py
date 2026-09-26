@@ -1,10 +1,10 @@
-"""Contract tests for the 5 previously untested protocol-payment extractors.
+"""Contract tests for the protocol-payment extractor result shapes.
 
 These lock, per extractor, the import surface and the payment-method key the
-manager keys off, plus the success-result contract. blik/ideal/twint emit the
-shared ``protocol_payment.v1`` schema; pix/direct_card use their own local shapes
-(documented inline). No network is touched — only pure helpers and the shared
-reporter are exercised.
+manager keys off, plus the success-result contract. blik/ideal/twint/pix/momo
+emit the shared ``protocol_payment.v1`` schema; kakao/direct_card still use
+their own local shapes (normalized at the adapter seam). No network is touched
+-- only pure helpers and the shared reporter are exercised.
 """
 
 import importlib
@@ -18,6 +18,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL_ROOT = ROOT / "services" / "protocol-payment"
+# ``common`` is only importable once the protocol root is on sys.path (the
+# extractors do the same at runtime); the ignore is for the static checker.
+if str(PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROTOCOL_ROOT))
+
+from common.protocol_core import ProtocolResultReporter  # type: ignore[import-not-found]  # noqa: E402
 
 
 def _import_extractor(name, module_file):
@@ -49,8 +55,6 @@ class BlikExtractorContractTests(unittest.TestCase):
         self.assertIn(self.mod.payment_method_type(), {"blik", "ideal"})
 
     def test_success_emits_v1_contract_and_redacts(self):
-        from common.protocol_core import ProtocolResultReporter
-
         collected = []
         reporter = ProtocolResultReporter(self.mod.payment_method_type(), writer=collected.append)
         reporter.success("https://pay.example/abc", message="access_token=at_secret_value")
@@ -70,8 +74,6 @@ class IdealExtractorContractTests(unittest.TestCase):
         self.assertEqual(_resolve_method(self.mod._result_reporter), "ideal")
 
     def test_success_emits_v1_contract(self):
-        from common.protocol_core import ProtocolResultReporter
-
         collected = []
         reporter = ProtocolResultReporter("ideal", writer=collected.append)
         reporter.success("https://pay.example/ideal")
@@ -90,8 +92,6 @@ class TwintExtractorContractTests(unittest.TestCase):
         self.assertEqual(_resolve_method(self.mod._result_reporter), "twint")
 
     def test_success_emits_v1_contract(self):
-        from common.protocol_core import ProtocolResultReporter
-
         collected = []
         reporter = ProtocolResultReporter("twint", writer=collected.append)
         reporter.success("https://pay.example/twint")
@@ -104,6 +104,7 @@ class PixExtractorContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mod = _import_extractor("pix", "pix_extract")
+        cls.runner = _import_extractor("pix", "run_pix")
 
     def test_imports_cleanly(self):
         self.assertEqual(self.mod.PIX_BOOTSTRAP_COUNTRY, "BR")
@@ -115,6 +116,22 @@ class PixExtractorContractTests(unittest.TestCase):
         self.assertEqual(
             self.mod.core.find_access_token({"data": {"token": "nested_tok"}}), "nested_tok"
         )
+
+    def test_runner_emits_the_shared_v1_contract(self):
+        # run_pix.py wraps generate_opll_pix_long_link's summary in the shared
+        # reporter; the manager parses the schema, not pix's private shape.
+        self.assertEqual(_resolve_method(self.runner._RESULT_REPORTER), "pix")
+        self.assertEqual(self.runner._RESULT_REPORTER._link_type, "pix_protocol")
+
+
+class MomoRunnerContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = _import_extractor("momo", "run_momo")
+
+    def test_runner_emits_the_shared_v1_contract(self):
+        self.assertEqual(_resolve_method(self.runner._RESULT_REPORTER), "momo")
+        self.assertEqual(self.runner._RESULT_REPORTER._link_type, "momo_protocol_qr")
 
 
 class DirectCardExtractorContractTests(unittest.TestCase):

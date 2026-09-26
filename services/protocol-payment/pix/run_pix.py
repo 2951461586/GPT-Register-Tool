@@ -10,7 +10,17 @@ from pathlib import Path
 # allow running from this directory
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# ``common/`` is the sibling of this script's directory; the host launches
+# extractors with ``cwd=<their own dir>``, so the protocol root must be added
+# explicitly (same convention as blik/ideal/twint).
+_PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROTOCOL_ROOT))
+
 from pix_extract import generate_opll_pix_long_link, proxy_for_region
+from common.protocol_core import ProtocolResultReporter
+
+_RESULT_REPORTER = ProtocolResultReporter("pix", "pix_protocol")
 
 
 def main() -> int:
@@ -67,7 +77,22 @@ def main() -> int:
         "cs_id": result.get("cs_id"),
         "payment_method_id": result.get("payment_method_id"),
     }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    artifacts = {key: value for key, value in summary.items() if value not in (None, "")}
+    artifacts.setdefault("qr_data", str(result.get("pix_qr_code") or ""))
+    url = str(
+        result.get("long_url")
+        or result.get("provider_redirect_url")
+        or result.get("pix_hosted_instructions_url")
+        or ""
+    ).strip()
+    if url or result.get("pix_qr_code"):
+        _RESULT_REPORTER.success(url, artifacts=artifacts)
+    else:
+        _RESULT_REPORTER.failure(
+            result.get("error") or result.get("pix_error") or "pix extraction returned no artifact",
+            error_code="pix_failed",
+            artifacts=artifacts,
+        )
     if args.out:
         Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         print(f"wrote {args.out}", file=sys.stderr)

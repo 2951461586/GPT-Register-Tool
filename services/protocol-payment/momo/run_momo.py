@@ -23,7 +23,16 @@ from pathlib import Path
 # allow running from this directory (imports momo_qr_extract + ac_paylink_core)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# ``common/`` is the sibling of this script's directory; the host launches the
+# runner with ``cwd=<this dir>``, so add the protocol root explicitly.
+_PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROTOCOL_ROOT))
+
 import momo_qr_extract as momo
+from common.protocol_core import ProtocolResultReporter
+
+_RESULT_REPORTER = ProtocolResultReporter("momo", "momo_protocol_qr")
 
 
 _DATA_URI_RE = re.compile(
@@ -70,14 +79,15 @@ def main() -> int:
     parser.add_argument("--qr-out-dir", default="", help="directory for decoded QR PNG files")
     args = parser.parse_args()
 
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
 
     token = (args.token or "").strip()
     if args.token_file:
         token = Path(args.token_file).read_text(encoding="utf-8").strip()
     if not token:
-        print(json.dumps({"ok": False, "error": "missing access token", "payment_method": "momo"}, ensure_ascii=False))
+        _RESULT_REPORTER.failure("missing access token", error_code="missing_access_token")
         return 2
 
     proxy = (args.proxy or args.checkout_proxy or "").strip()
@@ -115,10 +125,14 @@ def main() -> int:
     display_url = hosted or (qr_data if qr_data.startswith(("http://", "https://")) else "")
     display_qr = "" if qr_data.startswith("data:image") else qr_data
 
+    # ``credential_valid`` is a bool from the extractor; only a literal False
+    # marks the credential invalid (absent/None stays "valid").
+    credential_valid = result.get("credential_valid")
+    credential_ok = credential_valid if isinstance(credential_valid, bool) else True
     summary = {
         "ok": bool(
             (has_qr and (hosted or qr_path))
-            or (args.probe_only and result.get("credential_valid") is not False and result.get("checkout_status") == "created")
+            or (args.probe_only and credential_ok and result.get("checkout_status") == "created")
         ),
         "payment_method": "momo",
         "url": display_url,
@@ -142,8 +156,17 @@ def main() -> int:
     }
     if not summary["ok"]:
         summary["error"] = result.get("qr_error") or result.get("decision_text") or decision or "momo QR extraction failed"
-    print(json.dumps(summary, ensure_ascii=False))
-    return 0 if summary["ok"] else 3
+    artifacts = {key: value for key, value in summary.items() if key not in {"ok", "url", "link_type"}}
+    if summary["ok"]:
+        _RESULT_REPORTER.success(display_url or str(summary.get("qr_data") or ""), artifacts=artifacts)
+        return 0
+    _RESULT_REPORTER.failure(
+        summary["error"],
+        error_code="momo_qr_failed",
+        error_stage=str(result.get("stage_status") or ""),
+        artifacts=artifacts,
+    )
+    return 3
 
 
 if __name__ == "__main__":
@@ -152,5 +175,5 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as exc:
-        print(json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}", "payment_method": "momo"}, ensure_ascii=False))
+        _RESULT_REPORTER.failure(f"{type(exc).__name__}: {exc}", error_code="momo_runner_exception")
         raise SystemExit(1)
