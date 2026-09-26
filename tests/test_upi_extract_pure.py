@@ -24,7 +24,9 @@
 
 import base64
 import json
+import os
 import unittest
+from unittest import mock
 
 from sms_tool import upi_link
 
@@ -476,6 +478,98 @@ class ConfirmBodyTests(unittest.TestCase):
         for key, value in self._body().items():
             with self.subTest(key=key):
                 self.assertIsInstance(value, str)
+
+    def _ctx_with_passive(self, passive):
+        ctx = {
+            "guid": "g" * 16,
+            "muid": "m" * 16,
+            "sid": "s" * 16,
+            "client_session_id": "csi_1",
+            "elements_session_id": "es_1",
+            "elements_session_config_id": "esc_1",
+            "config_id": "cfg_1",
+            "init_checksum": "chk_1",
+            "stripe_version": "2025-03-31.basil",
+        }
+        ctx["passive_captcha"] = passive
+        return ctx
+
+    def test_passive_captcha_fields_from_ctx(self):
+        """ctx 带求解结果时，confirm 必须带上 token 与 ekey。"""
+        body = self._body(
+            ctx=self._ctx_with_passive(
+                {"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek1"}
+            )
+        )
+        self.assertEqual(body.get("passive_captcha_token"), "P1_abc")
+        self.assertEqual(body.get("passive_captcha_ekey"), "ek1")
+
+    def test_passive_captcha_attempt_without_token_keeps_empty_ekey(self):
+        """已尝试但求解失败（ctx 为空 dict）：带空 ekey、不带 token。"""
+        body = self._body(ctx=self._ctx_with_passive({}))
+        self.assertNotIn("passive_captcha_token", body)
+        self.assertEqual(body.get("passive_captcha_ekey"), "")
+
+    def test_no_passive_captcha_key_adds_no_fields(self):
+        """未开启（ctx 无该键）：完全不新增字段，保持旧行为。"""
+        body = self._body()
+        self.assertNotIn("passive_captcha_token", body)
+        self.assertNotIn("passive_captcha_ekey", body)
+
+
+class PassiveCaptchaTests(unittest.TestCase):
+    """Stripe 被动 hCaptcha 求解接线回归。
+
+    参考实现实测：confirm 缺 ``passive_captcha_token`` 时 Stripe 在支付设置
+    阶段回 ``setup_attempt_failed`` / ``generic_decline``。本仓复用
+    ``captcha_solver._solve_hcaptcha``，这里只在离线层钉住
+    「配置抽取 / 开关 / 成功 / 降级」四条边界，不跑真浏览器。
+    """
+
+    def test_config_from_init_top_level(self):
+        cfg = upi_link._upi_passive_captcha_config({"site_key": "sk_1", "rqdata": "rq_1"})
+        self.assertEqual(cfg, {"site_key": "sk_1", "rqdata": "rq_1"})
+
+    def test_config_prefers_nested_passive_captcha(self):
+        cfg = upi_link._upi_passive_captcha_config(
+            {
+                "site_key": "outer",
+                "rqdata": "outer_rq",
+                "passive_captcha": {"site_key": "inner", "rqdata": "inner_rq"},
+            }
+        )
+        self.assertEqual(cfg, {"site_key": "inner", "rqdata": "inner_rq"})
+
+    def test_config_absent_returns_empty(self):
+        self.assertEqual(upi_link._upi_passive_captcha_config({"foo": 1}), {})
+        self.assertEqual(upi_link._upi_passive_captcha_config("nope"), {})
+
+    def test_disabled_returns_none_so_no_fields_added(self):
+        with mock.patch.dict(os.environ, {"UPI_PASSIVE_CAPTCHA": "0"}, clear=False):
+            self.assertIsNone(upi_link._upi_passive_captcha_fields({"site_key": "sk"}))
+        with mock.patch.dict(os.environ, {"UPI_HCAPTCHA_DISABLE": "1"}, clear=False):
+            self.assertIsNone(upi_link._upi_passive_captcha_fields({"site_key": "sk"}))
+
+    def test_solver_success_returns_token_and_ekey(self):
+        with mock.patch(
+            "sms_tool.captcha_solver._solve_hcaptcha", return_value=("P1_abc", "ek")
+        ) as solver:
+            out = upi_link._upi_passive_captcha_fields(
+                {"site_key": "sk", "rqdata": "rq"}, proxy="http://p"
+            )
+        self.assertEqual(out, {"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek"})
+        self.assertEqual(solver.call_args.kwargs["site_key"], "sk")
+        self.assertEqual(solver.call_args.kwargs["rqdata"], "rq")
+
+    def test_solver_failure_degrades_to_empty_attempt(self):
+        with mock.patch(
+            "sms_tool.captcha_solver._solve_hcaptcha", side_effect=RuntimeError("boom")
+        ):
+            out = upi_link._upi_passive_captcha_fields({"site_key": "sk"})
+        self.assertEqual(out, {})
+
+    def test_missing_site_key_returns_empty_attempt(self):
+        self.assertEqual(upi_link._upi_passive_captcha_fields({"foo": 1}), {})
 
 
 class InitBodyTests(unittest.TestCase):

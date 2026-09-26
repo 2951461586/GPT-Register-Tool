@@ -2629,6 +2629,79 @@ def _upi_build_init_body(
     }
 
 
+def _upi_passive_captcha_config(init_payload: Any) -> dict[str, str]:
+    """提取 Stripe 的 passive hCaptcha ``site_key`` / ``rqdata``。
+
+    Stripe 的 ``payment_pages/init`` 顶层带 ``site_key`` + ``rqdata``（被动
+    hCaptcha 配置）；参考实现从 ``elements.passive_captcha`` 读同一组值。
+    两处都接受，缺失时返回空 dict（调用方按可选字段降级）。
+    """
+    if not isinstance(init_payload, Mapping):
+        return {}
+    site_key = str(init_payload.get("site_key") or "").strip()
+    rqdata = str(init_payload.get("rqdata") or "").strip()
+    nested = init_payload.get("passive_captcha")
+    if isinstance(nested, Mapping):
+        site_key = str(nested.get("site_key") or site_key).strip()
+        rqdata = str(nested.get("rqdata") or rqdata).strip()
+    if not site_key:
+        return {}
+    return {"site_key": site_key, "rqdata": rqdata}
+
+
+def _upi_passive_captcha_fields(
+    init_payload: Any,
+    *,
+    proxy: str = "",
+    locale: str = "en-US",
+    timeout_ms: int = 120000,
+) -> dict[str, str] | None:
+    """求解 Stripe 被动 hCaptcha，返回 confirm 需要的字段。
+
+    参考实现实测（HAR #473/#500/#609）：confirm 缺少 ``passive_captcha_token``
+    时 Stripe **不会**在前置校验报错，而是在支付设置阶段返回
+    ``setup_attempt_failed`` / ``generic_decline``。token 无法离线伪造，
+    必须跑完下发的挑战；本仓已有 Playwright 求解器
+    （``captcha_solver._solve_hcaptcha``），直接复用而不另植一份。
+
+    与 attestation/sentinel 同样的容错语义：求解失败/无 site_key 按可选字段
+    降级返回 ``{}``（confirm 照常进行，只是缺 token）；显式关闭时返回
+    ``None``，调用方据此**完全不新增字段**，保持旧行为。
+    """
+    if _env_bool("UPI_HCAPTCHA_DISABLE", False) or not _env_bool("UPI_PASSIVE_CAPTCHA", True):
+        return None
+    cfg = _upi_passive_captcha_config(init_payload)
+    if not cfg.get("site_key"):
+        _emit("captcha", "init 无 passive site_key，confirm 将缺 passive_captcha_token")
+        return {}
+    try:
+        from .captcha_solver import _solve_hcaptcha
+    except Exception as exc:
+        _emit("captcha", f"求解器不可用（非致命）: {type(exc).__name__}")
+        return {}
+    _emit("captcha", "开始求解 Stripe 被动 hCaptcha...")
+    try:
+        token, ekey = _solve_hcaptcha(
+            site_key=cfg["site_key"],
+            rqdata=cfg.get("rqdata", ""),
+            proxy=proxy,
+            headless=True,
+            timeout_ms=timeout_ms,
+            locale=locale,
+        )
+    except Exception as exc:
+        _emit("captcha", f"被动 hCaptcha 失败（非致命）: {type(exc).__name__}: {str(exc)[:120]}")
+        return {}
+    if not token:
+        _emit("captcha", "被动 hCaptcha 未返回 token")
+        return {}
+    out = {"passive_captcha_token": str(token)}
+    if ekey:
+        out["passive_captcha_ekey"] = str(ekey)
+    _emit("captcha", f"被动 hCaptcha token 就绪（len={len(str(token))}, ekey={'有' if ekey else '无'}）")
+    return out
+
+
 def _upi_build_confirm_body(
     *,
     cs_id: str,
@@ -2740,6 +2813,13 @@ def _upi_build_confirm_body(
             body["payment_method_data[billing_details][address][line2]"] = str(billing["line2"])
     else:
         body["payment_method"] = pm_id
+
+    passive = ctx.get("passive_captcha")
+    if isinstance(passive, Mapping):
+        if passive.get("passive_captcha_token"):
+            body["passive_captcha_token"] = str(passive["passive_captcha_token"])
+        # 参考实现无条件带该键（即使为空），Stripe 也接受空值。
+        body["passive_captcha_ekey"] = str(passive.get("passive_captcha_ekey") or "")
 
     # ``browser_locale`` / ``browser_timezone`` are valid only on the init and
     # tax/customer update requests; Stripe's confirm rejects them with
@@ -3760,6 +3840,17 @@ def generate_upi_qr_link(
         else:
             init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
         ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+        # Stripe's passive hCaptcha token cannot be forged offline; a confirm
+        # without it is answered later at the payment-setup stage with
+        # ``setup_attempt_failed`` / ``generic_decline``. Solve it here (once)
+        # and let ``_upi_build_confirm_body`` emit the fields.
+        _passive = _upi_passive_captcha_fields(
+            init,
+            proxy=provider_proxy or checkout_proxy,
+            locale=str(fingerprint.get("locale") or "en-US"),
+        )
+        if _passive is not None:
+            ctx["passive_captcha"] = _passive
         # Prefer the Stripe identifiers the live browser actually used so the
         # confirm request stays consistent with the page that minted them.
         for _key in ("guid", "muid", "sid"):
