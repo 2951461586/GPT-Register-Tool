@@ -676,9 +676,11 @@ class OaicsRailTests(unittest.TestCase):
     def _run(self, stripe=None, cs=None):
         stripe = stripe or _FakeStripe()
         cs = cs or _FakeChatGpt()
-        with mock.patch.object(upi_link, "_upi_dump_http", lambda *a, **k: None), mock.patch.object(
-            upi_link, "_write_qr_png", lambda *a, **k: ""
-        ), mock.patch.object(upi_link, "_upi_hydrate_qr_data", lambda qr, *a, **k: qr):
+        with (
+            mock.patch.object(upi_link, "_upi_dump_http", lambda *a, **k: None),
+            mock.patch.object(upi_link, "_write_qr_png", lambda *a, **k: ""),
+            mock.patch.object(upi_link, "_upi_hydrate_qr_data", lambda qr, *a, **k: qr),
+        ):
             result = upi_link._upi_run_oaics_flow(
                 stripe,
                 cs,
