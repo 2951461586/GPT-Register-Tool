@@ -59,6 +59,37 @@ def _as_bool(value: Any) -> bool | None:
     return None
 
 
+def safe_int(value: Any, default: int = 0) -> int:
+    """``int(value)`` that never raises (missing/garbage -> ``default``).
+
+    Adapter options come from CLI/store/config and can be absent or
+    non-numeric; raising there loses the whole run to a ValueError.
+    """
+    if isinstance(value, bool):
+        return 1 if value else 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    """``float(value)`` that never raises (missing/garbage -> ``default``)."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def is_true(value: Any) -> bool:
+    """True only when ``value`` is the bool ``True`` (not 1/"yes")."""
+    return isinstance(value, bool) and value
+
+
+def is_false(value: Any) -> bool:
+    """True only when ``value`` is the bool ``False`` (not 0/None/"")."""
+    return isinstance(value, bool) and not value
+
 
 def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
@@ -116,7 +147,7 @@ def _blik_completion(stdout: str) -> dict[str, Any]:
             continue
         if (
             isinstance(value, dict)
-            and value.get("ok") is True
+            and is_true(value.get("ok"))
             and str(value.get("payment_method") or "").lower() == "blik"
             and str(value.get("status") or "").lower() == "completed"
             and value.get("link_type") == "blik_protocol_completed"
