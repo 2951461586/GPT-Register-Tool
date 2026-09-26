@@ -497,9 +497,7 @@ class ConfirmBodyTests(unittest.TestCase):
     def test_passive_captcha_fields_from_ctx(self):
         """ctx 带求解结果时，confirm 必须带上 token 与 ekey。"""
         body = self._body(
-            ctx=self._ctx_with_passive(
-                {"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek1"}
-            )
+            ctx=self._ctx_with_passive({"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek1"})
         )
         self.assertEqual(body.get("passive_captcha_token"), "P1_abc")
         self.assertEqual(body.get("passive_captcha_ekey"), "ek1")
@@ -551,25 +549,185 @@ class PassiveCaptchaTests(unittest.TestCase):
             self.assertIsNone(upi_link._upi_passive_captcha_fields({"site_key": "sk"}))
 
     def test_solver_success_returns_token_and_ekey(self):
-        with mock.patch(
-            "sms_tool.captcha_solver._solve_hcaptcha", return_value=("P1_abc", "ek")
-        ) as solver:
-            out = upi_link._upi_passive_captcha_fields(
-                {"site_key": "sk", "rqdata": "rq"}, proxy="http://p"
-            )
+        with mock.patch("sms_tool.captcha_solver._solve_hcaptcha", return_value=("P1_abc", "ek")) as solver:
+            out = upi_link._upi_passive_captcha_fields({"site_key": "sk", "rqdata": "rq"}, proxy="http://p")
         self.assertEqual(out, {"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek"})
         self.assertEqual(solver.call_args.kwargs["site_key"], "sk")
         self.assertEqual(solver.call_args.kwargs["rqdata"], "rq")
 
     def test_solver_failure_degrades_to_empty_attempt(self):
-        with mock.patch(
-            "sms_tool.captcha_solver._solve_hcaptcha", side_effect=RuntimeError("boom")
-        ):
+        with mock.patch("sms_tool.captcha_solver._solve_hcaptcha", side_effect=RuntimeError("boom")):
             out = upi_link._upi_passive_captcha_fields({"site_key": "sk"})
         self.assertEqual(out, {})
 
     def test_missing_site_key_returns_empty_attempt(self):
         self.assertEqual(upi_link._upi_passive_captcha_fields({"foo": 1}), {})
+
+
+class _FakeResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+        self.text = json.dumps(payload)
+
+    def json(self):
+        return self._payload
+
+
+class _FakeStripe:
+    def __init__(self):
+        self.posts = []
+        self.gets = []
+
+    def post(self, url, data=None, timeout=None):
+        self.posts.append((url, dict(data or {})))
+        if url == upi_link.UPI_CONFIRMATION_TOKENS_URL:
+            return _FakeResponse(200, {"id": "ctoken_1"})
+        if "payment_intents/pi_1/confirm" in url:
+            return _FakeResponse(
+                200,
+                {
+                    "id": "pi_1",
+                    "status": "requires_action",
+                    "next_action": {"upi_handle_redirect_or_display_qr_code": {"upi_uri": "upi://pay?pa=host"}},
+                },
+            )
+        return _FakeResponse(404, {})
+
+    def get(self, url, timeout=None):
+        self.gets.append(url)
+        return _FakeResponse(200, {"id": "pi_1", "status": "requires_action"})
+
+
+class _FakeChatGpt:
+    def __init__(self):
+        self.posts = []
+
+    def post(self, url, json=None, headers=None, timeout=None):
+        self.posts.append((url, dict(json or {})))
+        return _FakeResponse(200, {"status": "success", "client_secret": "pi_1_secret_abc"})
+
+
+class OaicsRailTests(unittest.TestCase):
+    """OAICS/deferred rail（``oaics_*``）回归。
+
+    参考实现的 OAICS 两步 confirm：``/v1/confirmation_tokens`` 铸 ``ctoken_``，
+    再由 ChatGPT ``/backend-api/payments/checkout/confirm`` 用该 token 确认，
+    最后 confirm PaymentIntent 取二维码。custom rail 的 ``payment_pages``
+    confirm 拒收 ``mandate_data``（实测 400 ``parameter_unknown``）；只有这条
+    rail 带 UPI mandate 接受字段。
+
+    实测（2026-09-26）：ChatGPT 建单 API 拒绍 ``checkout_ui_mode='deferred'``
+    （422）；各可接受模式都回 ``cs_live_`` ⇒ 本 rail 当前只在后端自发返回
+    ``oaics_`` 时可达。Stripe 半步已实测：``confirmation_tokens`` 对
+    ``cs_live_`` 返回 200 + ``ctoken_``。
+    """
+
+    def _ctx(self):
+        return {
+            "stripe_js_id": "sjs_1",
+            "guid": "g" * 16,
+            "muid": "m" * 16,
+            "sid": "s" * 16,
+            "elements_session_id": "es_1",
+            "elements_session_config_id": "esc_1",
+            "runtime_version": "dummy",
+        }
+
+    def test_first_string_nested_and_plain(self):
+        self.assertEqual(upi_link._upi_first_string({"id": "x"}, ["id"]), "x")
+        self.assertEqual(upi_link._upi_first_string({"payment_intent": {"id": "pi_9"}}, ["payment_intent"]), "pi_9")
+        self.assertEqual(upi_link._upi_first_string({}, ["id"]), "")
+        self.assertEqual(upi_link._upi_first_string("nope", ["id"]), "")
+
+    def test_payment_intent_id_from_secret(self):
+        self.assertEqual(upi_link._upi_payment_intent_id("pi_123_secret_abc"), "pi_123")
+        self.assertEqual(upi_link._upi_payment_intent_id("pi_123"), "pi_123")
+        self.assertEqual(upi_link._upi_payment_intent_id("cs_live_x"), "")
+
+    def test_confirmation_token_body_carries_mandate(self):
+        body = upi_link._upi_build_confirmation_token_body(
+            cs_id="oaics_1",
+            stripe_pk="pk_1",
+            billing={
+                "name": "N",
+                "email": "e@x.com",
+                "line1": "L",
+                "city": "C",
+                "state": "S",
+                "postal_code": "400001",
+                "country": "IN",
+            },
+            ctx=self._ctx(),
+            elements={"session_id": "es_real", "config_id": "cfg_real"},
+            payment_method_types=["card", "link", "upi"],
+        )
+        self.assertEqual(body["setup_future_usage"], "off_session")
+        self.assertEqual(body["mandate_data[customer_acceptance][type]"], "online")
+        self.assertEqual(body["mandate_data[customer_acceptance][online][infer_from_client]"], "true")
+        self.assertEqual(body["client_context[currency]"], "inr")
+        self.assertEqual(body["client_context[mode]"], "subscription")
+        self.assertEqual(body["client_context[payment_method_types][2]"], "upi")
+        self.assertEqual(body["payment_method_data[client_attribution_metadata][elements_session_id]"], "es_real")
+        self.assertEqual(body["client_attribution_metadata[elements_session_config_id]"], "cfg_real")
+        # custom 的 payment_pages confirm 拒收这些字段；这里必须不带 custom 专属键
+        self.assertNotIn("expected_amount", body)
+
+    def _run(self, stripe=None, cs=None):
+        stripe = stripe or _FakeStripe()
+        cs = cs or _FakeChatGpt()
+        with mock.patch.object(upi_link, "_upi_dump_http", lambda *a, **k: None), mock.patch.object(
+            upi_link, "_write_qr_png", lambda *a, **k: ""
+        ), mock.patch.object(upi_link, "_upi_hydrate_qr_data", lambda qr, *a, **k: qr):
+            result = upi_link._upi_run_oaics_flow(
+                stripe,
+                cs,
+                access_token="at",
+                device_id="did",
+                cs_id="oaics_1",
+                stripe_pk="pk_1",
+                processor_entity="openai_ie",
+                billing={"name": "N", "email": "e@x.com", "country": "IN"},
+                fingerprint={"locale": "en"},
+                ctx=self._ctx(),
+                elements={"session_id": "es_1", "config_id": "cfg_1"},
+                oaics_state={},
+                amount=0,
+                payment_currency="inr",
+                target_country="IN",
+                checkout_country="IN",
+                payment_country="IN",
+                checkout_proxy="",
+                provider_proxy="",
+                approve_proxy="",
+                qr_path="",
+                wait_paid=False,
+                paid_timeout=1.0,
+            )
+        return stripe, cs, result
+
+    def test_run_posts_confirmation_token_then_chatgpt_then_payment_intent(self):
+        stripe, cs, result = self._run()
+        self.assertEqual(stripe.posts[0][0], upi_link.UPI_CONFIRMATION_TOKENS_URL)
+        self.assertTrue(cs.posts[0][1]["confirm_token"].startswith("ctoken_"))
+        self.assertTrue(any("payment_intents/pi_1/confirm" in url for url, _ in stripe.posts))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["link_type"], "upi_deep_link")
+        self.assertEqual(result["upi_uri"], "upi://pay?pa=host")
+        self.assertEqual(result["checkout_ui_mode"], "deferred")
+        self.assertTrue(result["approval_ok"])
+        self.assertEqual(result["confirmation_token_id"], "ctoken_1")
+
+    def test_run_rejects_non_ctoken(self):
+        class _BadStripe(_FakeStripe):
+            def post(self, url, data=None, timeout=None):
+                if url == upi_link.UPI_CONFIRMATION_TOKENS_URL:
+                    return _FakeResponse(200, {"id": "tok_1"})
+                return super().post(url, data=data, timeout=timeout)
+
+        with self.assertRaises(RuntimeError) as caught:
+            self._run(stripe=_BadStripe())
+        self.assertIn("ctoken", str(caught.exception))
 
 
 class InitBodyTests(unittest.TestCase):
