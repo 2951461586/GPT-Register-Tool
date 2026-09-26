@@ -108,7 +108,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | ③ 协议支付代理 | Checkout/Approve | **随用户选择的 checkout/approve 出口动态选择**：取 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool` 持有的候选池（如 IPWO US/JP/GB），**非固定 JP/US/GB 混用** |
 
 - **按 lane 选池**：`proxy_pool_for()`（`proxy_routing.py:41`）返回 lane 专属池 + 单向回退。已知 lane：`browser_registration`、`protocol_registration`、`liveness`、`promotion`、`health_browser`。
-- **统一操作代理候选**：`select_operation_proxy()`（`proxy_routing.py:219`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
+- **统一操作代理候选**：`select_operation_proxy()`（`proxy_routing.py:215`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
 
 > 实战含义：本地用 Clash/代理软件把 `127.0.0.1:7897` 作为 OTP 收件专用出口，注册与支付各走独立上游；不要把同一个 session 出口同时喂给注册和健康探测。
 
@@ -256,7 +256,7 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:41` / `:56` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:89` / `:101` | DID 一致性 |
 | `proxy_pool_for` | `proxy_routing.py:41` | 按 lane 选池 + 单向回退 |
-| `select_operation_proxy` | `proxy_routing.py:219` | 从统一候选序列选择操作代理 |
+| `select_operation_proxy` | `proxy_routing.py:215` | 从统一候选序列选择操作代理 |
 | `ProxyEntry` | `proxy_entry.py:67` | 规范代理模型 |
 | `parse_proxy` | `proxy_entry.py:128` | 6 形式解析 |
 | `rebuild_proxy_credentials` | `proxy_entry.py:384` | 凭据重建 |
