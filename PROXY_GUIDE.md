@@ -72,6 +72,23 @@ rotation, so the flag is purely additive. The default is `0` (off). Because any
 username is accepted, the server logs a warning when sticky mode is enabled on a
 non-loopback listen address.
 
+### Edge-aware health check
+
+By default an upstream is "healthy" once the pool can complete a SOCKS5/HTTP
+tunnel to `cloudflare.com:443` — which says nothing about whether Cloudflare
+will *serve* `chatgpt.com` through that exit. Add `--health-edge-probe` to make
+the probe issue a real HTTPS request and apply the same clean/blocked
+classification `scripts/proxy_pool_probe.py` uses, so a 403-challenged exit is
+marked unhealthy and rotated out:
+
+```powershell
+python start_proxy_pool.py --health-edge-probe
+```
+
+Off by default: the tunnel-only probe is unchanged. Each probe costs one HTTP
+request per upstream, and `--health-timeout` defaults to 15s in this mode
+instead of 5s.
+
 ## Verification
 
 Check the configured checkout/approve/update proxy exits without running a

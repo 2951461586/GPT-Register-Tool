@@ -25,6 +25,7 @@ import logging
 import socket
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
@@ -358,6 +359,7 @@ class Socks5Server:
         health_check_fail_threshold: int = 3,
         health_tracker: ProxyHealthTracker | None = None,
         sticky_session_ttl: float = 0.0,
+        edge_probe: Callable[[str, float], tuple[bool, str]] | None = None,
     ) -> None:
         self._listen_host = listen_host
         self._listen_port = listen_port
@@ -397,6 +399,14 @@ class Socks5Server:
             ttl = 0.0
         self._sticky_session_ttl = ttl if ttl > 0 else 0.0
         self._sticky_sessions: dict[str, tuple[UpstreamProxy, float]] = {}
+        # P1-3 (opt-in): when set, the health probe issues a real HTTP request
+        # through the upstream and classifies the ChatGPT edge instead of only
+        # completing a tunnel.  That is what lets a Cloudflare-403 exit be marked
+        # unhealthy; the default (None) keeps the tunnel-only probe unchanged.
+        # Injected rather than imported so proxy_pool keeps its zero-runtime-import
+        # design -- the composition root (start_proxy_pool.py) wires the concrete
+        # probe.  Signature: ``(proxy_url, timeout) -> (healthy, error)``.
+        self._edge_probe = edge_probe
         self._connect_timeout = connect_timeout
         self._max_retries = max_retries
         self._pipe_buf_size = pipe_buf_size
@@ -810,6 +820,50 @@ class Socks5Server:
 
     # ── health check ──
 
+    async def _check_upstream(
+        self, upstream: UpstreamProxy, test_host: str, test_port: int
+    ) -> tuple[bool, str]:
+        """Return ``(healthy, error)`` for one upstream.
+
+        Default: complete the real, scheme-aware handshake (tunnel-only).
+        Opt-in (an ``edge_probe`` was injected): issue a real HTTP request and
+        let the probe classify the ChatGPT edge, so a Cloudflare-403 exit is
+        reported unhealthy.  The blocking probe runs in a worker thread so the
+        event loop keeps serving clients.
+        """
+        if self._edge_probe is not None:
+            try:
+                return await asyncio.to_thread(self._edge_probe, upstream.proxy_url, self._health_check_timeout)
+            except Exception as exc:  # a probe that raises must not kill the loop
+                return False, f"edge_probe_error:{type(exc).__name__}"
+        try:
+            # The probe runs the *same* handshake real traffic runs
+            # (scheme-aware, and with the upstream's credentials).
+            # The old inline probe always sent a no-auth SOCKS5
+            # greeting, so an upstream that requires RFC 1929 auth
+            # was reported dead even while serving fine -- and it
+            # could not express an HTTP upstream at all.
+            r, w = await asyncio.wait_for(
+                self._open_upstream(upstream),
+                timeout=self._health_check_timeout,
+            )
+            try:
+                await self._handshake(
+                    r,
+                    w,
+                    upstream,
+                    test_host,
+                    test_port,
+                    _ATYP_DOMAIN,
+                    self._health_check_timeout,
+                )
+                return True, ""
+            finally:
+                w.close()
+                await w.wait_closed()
+        except Exception as exc:
+            return False, str(exc)[:120]
+
     async def _health_check_loop(self) -> None:
         # P0-3: probe the configured target (cloudflare.com:443 by default) instead
         # of connectivity-check.gstatic.com -- a green check now means the proxy can
@@ -825,36 +879,7 @@ class Socks5Server:
                 await asyncio.sleep(self._health_check_interval)
                 for upstream in self._upstreams:
                     was_healthy = upstream.healthy
-                    success = False
-                    probe_error = ""
-                    try:
-                        # The probe runs the *same* handshake real traffic runs
-                        # (scheme-aware, and with the upstream's credentials).
-                        # The old inline probe always sent a no-auth SOCKS5
-                        # greeting, so an upstream that requires RFC 1929 auth
-                        # was reported dead even while serving fine -- and it
-                        # could not express an HTTP upstream at all.
-                        r, w = await asyncio.wait_for(
-                            self._open_upstream(upstream),
-                            timeout=self._health_check_timeout,
-                        )
-                        try:
-                            await self._handshake(
-                                r,
-                                w,
-                                upstream,
-                                test_host,
-                                test_port,
-                                _ATYP_DOMAIN,
-                                self._health_check_timeout,
-                            )
-                            success = True
-                        finally:
-                            w.close()
-                            await w.wait_closed()
-                    except Exception as _probe_exc:
-                        success = False
-                        probe_error = str(_probe_exc)[:120]
+                    success, probe_error = await self._check_upstream(upstream, test_host, test_port)
 
                     # P1-2: a shared tracker (if configured) sees the same event.
                     await self._apply_health_async(
@@ -923,5 +948,6 @@ class Socks5Server:
             "total_connections": self._stats.total_connections,
             "total_errors": self._stats.total_errors,
             "sticky_sessions": len(self._sticky_sessions),
+            "health_probe": "edge" if self._edge_probe is not None else "tunnel",
             "upstreams": [u.to_dict() for u in self._upstreams],
         }

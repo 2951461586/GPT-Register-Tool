@@ -29,8 +29,9 @@ import signal
 import sys
 
 from sms_tool.phone_proxy import redact_proxy_url
-from sms_tool.proxy_pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
+from sms_tool.proxy_edge_probe import edge_health
 from sms_tool.proxy_health import ProxyHealthTracker
+from sms_tool.proxy_pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
 
 logger = logging.getLogger("proxy_pool")
 
@@ -108,6 +109,21 @@ def _parse_args() -> argparse.Namespace:
         help="Comma-separated upstream URLs (socks5://, socks5h://, http://, https://)",
     )
     p.add_argument("--health-interval", type=float, default=30.0, help="Health check interval (seconds)")
+    p.add_argument(
+        "--health-edge-probe",
+        action="store_true",
+        help=(
+            "Verify the ChatGPT edge with a real HTTPS request instead of only "
+            "completing a tunnel, so an exit Cloudflare answers with 403 is marked "
+            "unhealthy. Off by default (the tunnel-only probe is unchanged)."
+        ),
+    )
+    p.add_argument(
+        "--health-timeout",
+        type=float,
+        default=None,
+        help="Per-probe timeout (seconds; default 5 tunnel / 15 edge)",
+    )
     p.add_argument("--connect-timeout", type=float, default=10.0, help="Upstream connect timeout (seconds)")
     p.add_argument(
         "--sticky-session-ttl",
@@ -162,6 +178,8 @@ def main() -> None:
     port = args.port or 18080
     stats_port = args.stats_port or 18081
     health_interval = args.health_interval or 30.0
+    health_timeout = args.health_timeout or (15.0 if args.health_edge_probe else 5.0)
+    edge_probe = edge_health if args.health_edge_probe else None
     connect_timeout = args.connect_timeout or 10.0
     sticky_ttl = args.sticky_session_ttl or 0.0
     max_retries = 2
@@ -174,11 +192,12 @@ def main() -> None:
         upstreams=upstreams,
         stats_port=stats_port,
         health_check_interval=health_interval,
-        health_check_timeout=5.0,
+        health_check_timeout=health_timeout,
         connect_timeout=connect_timeout,
         max_retries=max_retries,
         health_tracker=health_tracker,
         sticky_session_ttl=sticky_ttl,
+        edge_probe=edge_probe,
     )
 
     logger.info("Proxy pool config: host=%s port=%d stats=%d upstreams=%d", host, port, stats_port, len(upstreams))
