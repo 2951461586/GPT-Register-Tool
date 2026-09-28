@@ -12,9 +12,25 @@ from ._extract import (
     _upi_find_submission_attempt,
     _upi_int_value,
 )
-from .constants import STRIPE_PAYMENT_PAGE_GET_URL_T, UPI_CHATGPT_CLIENT_BUILD_NUMBER, UPI_CHATGPT_CLIENT_VERSION, UPI_SENTINEL_APPROVAL_FLOW, UPI_SENTINEL_PING_URL, UPI_WARMUP_TIMEOUT
+from .constants import (
+    STRIPE_PAYMENT_PAGE_GET_URL_T,
+    UPI_CHATGPT_CLIENT_BUILD_NUMBER,
+    UPI_CHATGPT_CLIENT_VERSION,
+    UPI_SENTINEL_APPROVAL_FLOW,
+    UPI_SENTINEL_PING_URL,
+    UPI_WARMUP_TIMEOUT,
+)
 from .env import _emit
-from .session import _upi_account_id_from_token, _upi_apply_fingerprint, _upi_attestation_deploy_id, _upi_env_attestation, _upi_fingerprint, _upi_scrape_page_identity, _upi_session_is_live, _upi_warmup_session
+from .session import (
+    _upi_account_id_from_token,
+    _upi_apply_fingerprint,
+    _upi_attestation_deploy_id,
+    _upi_env_attestation,
+    _upi_fingerprint,
+    _upi_scrape_page_identity,
+    _upi_session_is_live,
+    _upi_warmup_session,
+)
 from .browser import _upi_browser_capture
 from .stripe import _upi_elements_session_params
 
@@ -118,6 +134,8 @@ class _UpiRiskContext:
         if account_id:
             headers["Chatgpt-Account-Id"] = account_id
         return headers
+
+
 def _upi_capture_risk_context(
     session: Any,
     *,
@@ -181,6 +199,8 @@ def _upi_capture_risk_context(
         "protocol risk context: attestation=%s build=%s" % ("yes" if risk.attestation else "no", risk.client_build),
     )
     return risk
+
+
 def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
     """Best-effort Sentinel connectivity ping (failure is never fatal)."""
     if not _upi_session_is_live(session) or not hasattr(session, "post"):
@@ -198,6 +218,8 @@ def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
         )
     except Exception:
         pass
+
+
 def _upi_sentinel_headers(
     session: Any,
     device_id: Any,
@@ -235,6 +257,8 @@ def _upi_sentinel_headers(
     if headers:
         _emit("sentinel", f"{flow} Sentinel ready (len={len(issued.token)})")
     return headers
+
+
 def _upi_fetch_oaics_state(
     session: Any,
     access_token: Any,
@@ -275,6 +299,8 @@ def _upi_fetch_oaics_state(
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
 def _upi_wait_paid(
     stripe: Any,
     *,
@@ -323,6 +349,8 @@ def _upi_wait_paid(
         time.sleep(poll_interval)
     submission = _upi_find_submission_attempt(last)
     return {"paid": False, "payment_status": str(submission.get("state") or "timeout")}
+
+
 def _upi_apply_approve_risk(
     session: Any,
     risk: Any,
