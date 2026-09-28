@@ -65,13 +65,20 @@ def payment_proxy_pools(config: Mapping[str, Any], payment_method: str) -> dict[
 
 
 def has_explicit_payment_proxy(args: Any) -> bool:
-    return bool(getattr(args, "proxy_explicit", False) or any(
-        parse_proxy_pool(getattr(args, name, None))
-        for name in (
-            "checkout_proxy", "checkout_proxy_pool", "provider_proxy",
-            "approve_proxy", "approve_proxy_pool", "promotion_proxy",
+    return bool(
+        getattr(args, "proxy_explicit", False)
+        or any(
+            parse_proxy_pool(getattr(args, name, None))
+            for name in (
+                "checkout_proxy",
+                "checkout_proxy_pool",
+                "provider_proxy",
+                "approve_proxy",
+                "approve_proxy_pool",
+                "promotion_proxy",
+            )
         )
-    ))
+    )
 
 
 def payment_country(payment_method: str, explicit: str = "") -> str:
@@ -84,10 +91,15 @@ def payment_country(payment_method: str, explicit: str = "") -> str:
     method = str(payment_method or "paypal").strip().lower().replace("-", "_")
     try:
         from ..config import CFG
+
         protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), Mapping) else {}
         methods = protocol.get("methods") if isinstance(protocol.get("methods"), Mapping) else {}
         configured = methods.get(method) if isinstance(methods.get(method), Mapping) else {}
-        countries = configured.get("stage_proxy_countries") if isinstance(configured.get("stage_proxy_countries"), Mapping) else {}
+        countries = (
+            configured.get("stage_proxy_countries")
+            if isinstance(configured.get("stage_proxy_countries"), Mapping)
+            else {}
+        )
         canonical = str(countries.get("checkout") or configured.get("checkout_country") or "").strip().upper()
         if canonical:
             return canonical
@@ -148,12 +160,7 @@ def payment_stage_args(
         provider_proxy = explicit_provider
         approve_proxy = explicit_approve
     else:
-        checkout_proxy = (
-            explicit_checkout
-            or method_stage.get("checkout")
-            or method_cfg.get("checkout_proxy")
-            or None
-        )
+        checkout_proxy = explicit_checkout or method_stage.get("checkout") or method_cfg.get("checkout_proxy") or None
         provider_proxy = (
             explicit_provider
             or method_stage.get("provider")
@@ -252,9 +259,7 @@ def stage_country_overrides(
     }
     if "promotion" not in countries:
         countries["promotion"] = (
-            countries.get("promotion_update")
-            or countries.get("update")
-            or ("TH" if method == "gopay" else "")
+            countries.get("promotion_update") or countries.get("update") or ("TH" if method == "gopay" else "")
         )
     for alias in ("promotion_update", "update"):
         countries.pop(alias, None)
@@ -278,7 +283,9 @@ def resolve_payment_route(
     # The desktop proxy-pool workflow deliberately does not accept a manual
     # exit-country override.  The planner derives the required country from
     # the payment method and probes the pool before any side effect.
-    countries = {} if getattr(args, "auto_proxy_country", False) else context.stage_country_overrides(args, payment_method)
+    countries = (
+        {} if getattr(args, "auto_proxy_country", False) else context.stage_country_overrides(args, payment_method)
+    )
     target_country = context.payment_country(payment_method, getattr(args, "target_country", ""))
     checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
     promotion_proxy = context.promotion_proxy_arg(args, payment_method)
@@ -289,8 +296,7 @@ def resolve_payment_route(
         for name in ("checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
     )
     explicit_approve_route = any(
-        str(getattr(args, name, None) or "").strip()
-        for name in ("approve_proxy", "promotion_proxy")
+        str(getattr(args, name, None) or "").strip() for name in ("approve_proxy", "promotion_proxy")
     )
     stage_pools = {
         "checkout": parse_proxy_pool(getattr(args, "checkout_proxy_pool", None))
@@ -318,13 +324,15 @@ def resolve_payment_route(
         explicit_stages.update({"auth_gate": checkout_proxy, "checkout": checkout_proxy})
     if not stage_pools["checkout"] and provider_proxy:
         options["provider_proxy"] = provider_proxy
-        explicit_stages.update({
-            "stripe_init": provider_proxy,
-            "payment_method": provider_proxy,
-            "confirm": provider_proxy,
-            "redirect": provider_proxy,
-            "poll": provider_proxy,
-        })
+        explicit_stages.update(
+            {
+                "stripe_init": provider_proxy,
+                "payment_method": provider_proxy,
+                "confirm": provider_proxy,
+                "redirect": provider_proxy,
+                "poll": provider_proxy,
+            }
+        )
     if not stage_pools["approve"] and approve_proxy:
         options["approve_proxy"] = approve_proxy
         explicit_stages["approve"] = approve_proxy
@@ -370,9 +378,7 @@ def resolve_payment_route(
             promotion_proxy = rotate_proxy_session(promotion_proxy, promotion_country)
         adapter["promotion_proxy"] = promotion_proxy
     stage_pool_attempts = {
-        stage: [dict(item) for item in attempts]
-        for stage, attempts in plan.attempts.items()
-        if attempts
+        stage: [dict(item) for item in attempts] for stage, attempts in plan.attempts.items() if attempts
     }
     attempts = [item for values in stage_pool_attempts.values() for item in values]
     return {
@@ -420,14 +426,21 @@ def resolve_access_token(args: Any, *, stderr: Any = None) -> tuple[str, Any]:
             value = value.get(key)
         return str(value or "").strip()
 
-    access_token = next((value for value in (
-        str(data.get("access_token") or "").strip(),
-        str(data.get("accessToken") or "").strip(),
-        nested(data, "auth_session", "access_token"),
-        nested(data, "auth_session", "accessToken"),
-        nested(data, "session", "access_token"),
-        nested(data, "session", "accessToken"),
-    ) if value), "")
+    access_token = next(
+        (
+            value
+            for value in (
+                str(data.get("access_token") or "").strip(),
+                str(data.get("accessToken") or "").strip(),
+                nested(data, "auth_session", "access_token"),
+                nested(data, "auth_session", "accessToken"),
+                nested(data, "session", "access_token"),
+                nested(data, "session", "accessToken"),
+            )
+            if value
+        ),
+        "",
+    )
     return access_token, data
 
 
@@ -496,11 +509,7 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
     countries = {} if getattr(args, "auto_proxy_country", False) else context.stage_country_overrides(args, method)
     default_country = context.payment_country(method, getattr(args, "target_country", ""))
     pool = context.protocol_proxy_pool()
-    configured_pools = (
-        context.payment_proxy_pools(method)
-        if callable(context.payment_proxy_pools)
-        else {}
-    )
+    configured_pools = context.payment_proxy_pools(method) if callable(context.payment_proxy_pools) else {}
     configured_pools = configured_pools if isinstance(configured_pools, Mapping) else {}
     stage_pools = {
         "checkout": parse_proxy_pool(getattr(args, "checkout_proxy_pool", None))
@@ -508,11 +517,7 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
         "approve": parse_proxy_pool(getattr(args, "approve_proxy_pool", None))
         or parse_proxy_pool(configured_pools.get("approve")),
     }
-    use_pool = (
-        not context.has_explicit_payment_proxy(args)
-        and not (proxy or checkout_proxy)
-        and bool(pool)
-    )
+    use_pool = not context.has_explicit_payment_proxy(args) and not (proxy or checkout_proxy) and bool(pool)
     stage_values = {
         "checkout": checkout_proxy or proxy,
         "approve": approve_proxy or proxy,
@@ -623,10 +628,12 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     email_file = str(getattr(args, "email_file", None) or "").strip()
     if email_file:
         if method == "blik" and not getattr(args, "payment_probe_only", False):
-            output({
-                "ok": False,
-                "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
-            })
+            output(
+                {
+                    "ok": False,
+                    "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
+                }
+            )
             raise SystemExit(2)
 
         from ..payment_batch import run_payment_batch
@@ -686,9 +693,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             raise SystemExit(3)
         output(report)
         counts = report.get("counts", {})
-        if (
-            getattr(args, "payment_probe_only", False) and not report.get("ok")
-        ) or (
+        if (getattr(args, "payment_probe_only", False) and not report.get("ok")) or (
             not getattr(args, "payment_probe_only", False) and not counts.get("completed")
         ):
             raise SystemExit(3)
@@ -724,12 +729,17 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     else:
         at, auth_context = context.resolve_access_token(args)
     if not at:
-        print(json.dumps({
-            "ok": False,
-            "error": "selected account has no Access Token" if (
-                getattr(args, "email", None) or getattr(args, "session_file", None)
-            ) else "missing --at (Access Token)",
-        }, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "selected account has no Access Token"
+                    if (getattr(args, "email", None) or getattr(args, "session_file", None))
+                    else "missing --at (Access Token)",
+                },
+                ensure_ascii=False,
+            )
+        )
         raise SystemExit(1)
     if route is None:
         route = selected_route()

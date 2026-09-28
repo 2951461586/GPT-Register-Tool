@@ -33,7 +33,9 @@ def _restore_relogin_env():
 
 def test_cli_exposes_relogin_mode_choices():
     parser = cli.build_parser()
-    args = parser.parse_args(["--extract-payment-link", "--payment-method", "upi", "--payment-relogin-mode", "web_session"])
+    args = parser.parse_args(
+        ["--extract-payment-link", "--payment-method", "upi", "--payment-relogin-mode", "web_session"]
+    )
     assert args.payment_relogin_mode == "web_session"
     assert parser.parse_args(["--extract-payment-link", "--payment-method", "upi"]).payment_relogin_mode is None
 
