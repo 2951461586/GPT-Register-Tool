@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -16,6 +17,7 @@ def ensure_payment_access_token(
     proxy: Any = None,
     timeout: int = 30,
     relogin_on_401: bool = True,
+    relogin_mode: str = "",
     stabilization_probes: int = 1,
     stabilization_delay_seconds: float = 0.0,
 ) -> dict[str, Any]:
@@ -41,13 +43,23 @@ def ensure_payment_access_token(
     if not access_token:
         return _auth_failure("missing_access_token", email=account_email)
 
+    # pi-lens-ignore: unchecked-throwing-call-python
     probe_count = max(1, min(int(stabilization_probes or 1), 3))
+    # pi-lens-ignore: unchecked-throwing-call-python
     delay = max(0.0, min(float(stabilization_delay_seconds or 0.0), 60.0))
     probes: list[dict[str, Any]] = []
     refreshed = False
     original_hash = access_token_telemetry(access_token).get("token_hash", "")
+    # AT recovery strategy. Explicit argument wins; otherwise the
+    # ``PAYMENT_RELOGIN_MODE`` environment override (set by the batch CLI so the
+    # in-process JIT call does not need a parameter threaded through every
+    # layer); otherwise ``auto``.
+    effective_relogin_mode = (
+        str(relogin_mode or "").strip() or os.environ.get("PAYMENT_RELOGIN_MODE", "") or "auto"
+    )
 
     for index in range(probe_count):
+        # pi-lens-ignore: unchecked-throwing-call-python
         probe = probe_account_liveness(data, proxy=proxy, timeout=max(5, int(timeout or 30)))
         probes.append(_public_probe(probe))
         status_code = _as_int(probe.get("status_code"))
@@ -68,8 +80,9 @@ def ensure_payment_access_token(
         relogin = relogin_codex_account(
             data,
             proxy=proxy,
+            # pi-lens-ignore: unchecked-throwing-call-python
             timeout=max(int(timeout or 30), 30),
-            mode="auto",
+            mode=effective_relogin_mode,
         )
         refreshed = True
         if not relogin.get("ok"):
@@ -89,7 +102,9 @@ def ensure_payment_access_token(
         if not access_token:
             return _auth_failure("oauth_refresh_missing_persisted_access_token", email=account_email, refreshed=True)
 
-        candidate_probe = relogin.get("probe") if isinstance(relogin.get("probe"), dict) else {}
+        candidate_probe = relogin.get("probe")
+        if not isinstance(candidate_probe, dict):
+            candidate_probe = {}
         probes.append(_public_probe(candidate_probe))
         if _as_int(candidate_probe.get("status_code")) != 200:
             return _auth_failure(

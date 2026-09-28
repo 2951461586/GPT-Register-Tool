@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import re
 import sys
 from collections.abc import Callable, Mapping
@@ -595,6 +596,15 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
 
     method = context.payment_method(args)
+    # AT recovery strategy for the JIT gate. Carried via env so the in-process
+    # batch's ``ensure_payment_access_token`` call needs no extra parameter
+    # threaded through the batch layer. ``web_session`` skips the mailbox-OTP
+    # strategy, which is what made a 401 account hang the batch for minutes.
+    relogin_mode = str(getattr(args, "payment_relogin_mode", "") or "").strip()
+    if relogin_mode:
+        os.environ["PAYMENT_RELOGIN_MODE"] = relogin_mode
+    else:
+        os.environ.pop("PAYMENT_RELOGIN_MODE", None)
 
     def payment_progress(event: Mapping[str, Any]) -> None:
         emit_event({"domain": "payment", **dict(event or {})})
@@ -698,6 +708,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             email=str(getattr(args, "email", None) or ""),
             session_file=str(getattr(args, "session_file", None) or ""),
             proxy=route["proxy"],
+            # pi-lens-ignore: unchecked-throwing-call-python
             timeout=min(max(10, int(getattr(args, "refresh_timeout", 30) or 30)), 300),
             relogin_on_401=not getattr(args, "no_jit_at_refresh", False),
         )
