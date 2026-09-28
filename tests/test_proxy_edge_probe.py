@@ -18,7 +18,9 @@ from sms_tool.proxy_edge_probe import (
     DEAD,
     DEGRADED,
     STATUSES,
+    EdgeVerdict,
     classify_edge_response,
+    edge_health,
     probe_openai_edge,
 )
 
@@ -138,3 +140,33 @@ def test_direct_probe_is_labelled_and_makes_no_proxy_claims():
     assert verdict.status == CLEAN
     assert verdict.proxy == "DIRECT"
     assert session.proxies == {}
+
+
+# ---------------------------------------------------------------------------
+# edge_health: the pool-facing adapter
+# ---------------------------------------------------------------------------
+
+
+def _edge_health_with(verdict):
+    with patch("sms_tool.proxy_edge_probe.probe_openai_edge", return_value=verdict):
+        return edge_health("http://u:p@h:1")
+
+
+def test_edge_health_clean_is_healthy_with_no_detail():
+    assert _edge_health_with(EdgeVerdict(proxy="h", status=CLEAN, http_status=200)) == (True, "")
+
+
+def test_edge_health_blocked_reports_cloudflare_and_status():
+    verdict = EdgeVerdict(proxy="h", status=BLOCKED, http_status=403, blocked_by_cloudflare=True)
+    assert _edge_health_with(verdict) == (False, "edge:blocked:http_403:cloudflare")
+
+
+def test_edge_health_dead_has_no_http_status():
+    assert _edge_health_with(EdgeVerdict(proxy="h", status=DEAD, error="Timeout")) == (False, "edge:dead")
+
+
+def test_edge_health_degraded_reports_status():
+    assert _edge_health_with(EdgeVerdict(proxy="h", status=DEGRADED, http_status=503)) == (
+        False,
+        "edge:degraded:http_503",
+    )

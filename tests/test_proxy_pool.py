@@ -26,6 +26,14 @@ from sms_tool.proxy_pool import (
 from sms_tool.proxy_health import ProxyHealthTracker
 
 
+def _pick(server, **kwargs):
+    """``_pick_upstream`` is typed ``UpstreamProxy | None``; these tests always
+    build a server with upstreams, so a None pick is a test bug."""
+    upstream = server._pick_upstream(**kwargs)
+    assert upstream is not None
+    return upstream
+
+
 class TestUpstreamProxy(unittest.TestCase):
     def test_from_url_basic(self):
         u = UpstreamProxy.from_url("socks5://127.0.0.1:7897")
@@ -133,7 +141,7 @@ class TestPickUpstream(unittest.TestCase):
         u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b")
         server = self._make_server([u1, u2])
 
-        picks = [server._pick_upstream().label for _ in range(4)]
+        picks = [_pick(server).label for _ in range(4)]
         self.assertEqual(picks, ["a", "b", "a", "b"])
 
     def test_skips_unhealthy(self):
@@ -141,7 +149,7 @@ class TestPickUpstream(unittest.TestCase):
         u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b", healthy=True)
         server = self._make_server([u1, u2])
 
-        pick = server._pick_upstream()
+        pick = _pick(server)
         self.assertEqual(pick.label, "b")
 
     def test_fail_open_half_open_returns_single_candidate(self):
@@ -167,7 +175,7 @@ class TestPickUpstream(unittest.TestCase):
         u2 = UpstreamProxy(host="2.2.2.2", port=1080, label="b", healthy=False, fail_count=2)
         server = self._make_server([u1, u2])
 
-        picks = [server._pick_upstream().label for _ in range(4)]
+        picks = [_pick(server).label for _ in range(4)]
         # Both candidates appear, round-robin among the dead set.
         self.assertEqual(sorted(set(picks)), ["a", "b"])
 
@@ -179,7 +187,7 @@ class TestPickUpstream(unittest.TestCase):
         u = UpstreamProxy(host="1.1.1.1", port=1080, label="only")
         server = self._make_server([u])
         for _ in range(5):
-            self.assertEqual(server._pick_upstream().label, "only")
+            self.assertEqual(_pick(server).label, "only")
 
     def test_priority_prefers_higher(self):
         """Lower priority number = higher priority, selected first."""
@@ -187,7 +195,7 @@ class TestPickUpstream(unittest.TestCase):
         u1 = UpstreamProxy(host="2.2.2.2", port=1080, label="lo", priority=1)
         server = self._make_server([u0, u1])
 
-        picks = [server._pick_upstream().label for _ in range(4)]
+        picks = [_pick(server).label for _ in range(4)]
         # should always pick the higher-priority (priority=0) upstream
         self.assertEqual(picks, ["hi", "hi", "hi", "hi"])
 
@@ -198,7 +206,7 @@ class TestPickUpstream(unittest.TestCase):
         u1 = UpstreamProxy(host="3.3.3.3", port=1080, label="c", priority=1)
         server = self._make_server([u0a, u0b, u1])
 
-        picks = [server._pick_upstream().label for _ in range(4)]
+        picks = [_pick(server).label for _ in range(4)]
         self.assertEqual(picks, ["a", "b", "a", "b"])
 
     def test_priority_fallback_to_lower_tier(self):
@@ -207,7 +215,7 @@ class TestPickUpstream(unittest.TestCase):
         u1 = UpstreamProxy(host="2.2.2.2", port=1080, label="lo", priority=1)
         server = self._make_server([u0, u1])
 
-        pick = server._pick_upstream()
+        pick = _pick(server)
         self.assertEqual(pick.label, "lo")
 
 
@@ -540,6 +548,8 @@ class _FakeHttpProxy:
         writer.close()
 
     async def close(self):
+        if self._server is None:
+            return
         self._server.close()
         await self._server.wait_closed()
 
@@ -693,6 +703,7 @@ class TestHttpConnectUpstream(unittest.TestCase):
                 health_check_interval=3600.0,
             )
             await server.start()
+            assert server._server is not None
             listen_port = server._server.sockets[0].getsockname()[1]
             try:
                 r, w = await asyncio.open_connection("127.0.0.1", listen_port)
@@ -740,35 +751,29 @@ class TestStickySessions(unittest.TestCase):
         server = Socks5Server("127.0.0.1", 0, [a, b], stats_port=0, sticky_session_ttl=ttl)
         return server, a, b
 
-    @staticmethod
-    def _pick(server, **kwargs):
-        upstream = server._pick_upstream(**kwargs)
-        assert upstream is not None
-        return upstream
-
     def test_disabled_ttl_preserves_round_robin_even_with_a_key(self):
         server, _a, _b = self._pair(ttl=0.0)
-        picks = [self._pick(server, sticky_key="acct-1").label for _ in range(4)]
+        picks = [_pick(server, sticky_key="acct-1").label for _ in range(4)]
         self.assertEqual(picks, ["a", "b", "a", "b"])
         self.assertEqual(server._sticky_sessions, {})
 
     def test_same_key_reuses_one_upstream(self):
         server, _a, _b = self._pair(ttl=300.0)
-        first = self._pick(server, sticky_key="acct-1")
-        second = self._pick(server, sticky_key="acct-1")
+        first = _pick(server, sticky_key="acct-1")
+        second = _pick(server, sticky_key="acct-1")
         self.assertIs(first, second)
         self.assertEqual(first.label, "a")
 
     def test_distinct_keys_get_independent_upstreams(self):
         server, _a, _b = self._pair(ttl=300.0)
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
-        self.assertEqual(self._pick(server, sticky_key="acct-2").label, "b")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "a")
+        self.assertEqual(_pick(server, sticky_key="acct-2").label, "b")
         # ...and acct-1 is still pinned.
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "a")
 
     def test_empty_key_falls_back_to_round_robin(self):
         server, _a, _b = self._pair(ttl=300.0)
-        picks = [self._pick(server).label for _ in range(4)]
+        picks = [_pick(server).label for _ in range(4)]
         self.assertEqual(picks, ["a", "b", "a", "b"])
 
     def test_expired_binding_is_dropped_and_rebound(self):
@@ -777,18 +782,18 @@ class TestStickySessions(unittest.TestCase):
         server, a, b = self._pair(ttl=300.0)
         server._sticky_sessions["acct-1"] = (a, _time.monotonic() - 1)
         server._rr_idx = 1  # deterministic: the re-pick starts at the second upstream
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "b")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "b")
         self.assertIs(server._sticky_sessions["acct-1"][0], b)
 
     def test_unhealthy_binding_is_dropped_and_rebound(self):
         server, a, b = self._pair(ttl=300.0)
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "a")
         a.healthy = False
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "b")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "b")
 
     def test_excluded_binding_is_dropped_for_the_retry(self):
         server, a, b = self._pair(ttl=300.0)
-        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        self.assertEqual(_pick(server, sticky_key="acct-1").label, "a")
         picked = server._pick_upstream(sticky_key="acct-1", exclude={a.addr})
         self.assertIs(picked, b)
 
@@ -897,6 +902,68 @@ class TestStickySessions(unittest.TestCase):
         self.assertEqual(writes[0], bytes([_SOCKS5_VER, _USERPASS]))
         self.assertEqual(writes[1], bytes([0x01, 0x00]))  # RFC 1929 success
         self.assertEqual(writes[2][:2], bytes([_SOCKS5_VER, 0x00]))  # CONNECT success
+
+
+class TestEdgeHealthProbe(unittest.TestCase):
+    """P1-3: opt-in real-HTTP health probe, injected (proxy_pool imports nothing)."""
+
+    def _server(self, probe=None, timeout=5.0):
+        return Socks5Server(
+            "127.0.0.1", 0, [], stats_port=0, health_check_timeout=timeout, edge_probe=probe
+        )
+
+    def test_default_is_tunnel_only(self):
+        server = self._server()
+        self.assertIsNone(server._edge_probe)
+        self.assertEqual(server._stats_json()["health_probe"], "tunnel")
+
+    def test_stats_reports_edge_mode(self):
+        server = self._server(probe=lambda _url, _timeout: (True, ""))
+        self.assertEqual(server._stats_json()["health_probe"], "edge")
+
+    def test_edge_success_is_healthy(self):
+        server = self._server(probe=lambda _url, _timeout: (True, ""))
+        ok, error = asyncio.run(
+            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
+        )
+        self.assertTrue(ok)
+        self.assertEqual(error, "")
+
+    def test_edge_failure_carries_the_detail(self):
+        server = self._server(probe=lambda _url, _timeout: (False, "edge:blocked:http_403:cloudflare"))
+        ok, error = asyncio.run(
+            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
+        )
+        self.assertFalse(ok)
+        self.assertEqual(error, "edge:blocked:http_403:cloudflare")
+
+    def test_a_raising_probe_does_not_kill_the_loop(self):
+        def _boom(_url, _timeout):
+            raise RuntimeError("nope")
+
+        server = self._server(probe=_boom)
+        ok, error = asyncio.run(
+            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
+        )
+        self.assertFalse(ok)
+        self.assertEqual(error, "edge_probe_error:RuntimeError")
+
+    def test_edge_probe_receives_the_upstream_url_and_timeout(self):
+        seen: dict = {}
+
+        def _probe(url, timeout):
+            seen["url"] = url
+            seen["timeout"] = timeout
+            return True, ""
+
+        server = self._server(probe=_probe, timeout=7.5)
+        asyncio.run(
+            server._check_upstream(
+                UpstreamProxy(host="h", port=1, username="u", password="p"), "cloudflare.com", 443
+            )
+        )
+        self.assertEqual(seen["url"], "socks5://u:p@h:1")
+        self.assertEqual(seen["timeout"], 7.5)
 
 
 if __name__ == "__main__":

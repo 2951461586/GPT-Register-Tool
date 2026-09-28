@@ -238,6 +238,27 @@ def probe_openai_edge(
     return _verdict(status, http_status=status_code, blocked=status == BLOCKED)
 
 
+def edge_health(proxy: str, timeout: float = DEFAULT_TIMEOUT) -> tuple[bool, str]:
+    """Adapt :func:`probe_openai_edge` to the SOCKS5 pool's health contract.
+
+    The pool treats an upstream as healthy only when the edge serves it; a
+    Cloudflare block, a 5xx or a dead transport is a failure, with a short,
+    credential-free detail string for the shared tracker's ``last_error``.
+    Formatting the detail lives here so ``proxy_pool`` needs no import of this
+    module (it keeps its zero-runtime-import design and takes the callable by
+    injection instead).
+    """
+    verdict = probe_openai_edge(proxy, timeout=timeout)
+    if verdict.status == CLEAN:
+        return True, ""
+    detail = f"edge:{verdict.status}"
+    if verdict.http_status:
+        detail += f":http_{verdict.http_status}"
+    if verdict.blocked_by_cloudflare:
+        detail += ":cloudflare"
+    return False, detail
+
+
 __all__ = [
     "BLOCKED",
     "CHATGPT_LOGIN_PATH",
@@ -249,5 +270,6 @@ __all__ = [
     "EdgeVerdict",
     "STATUSES",
     "classify_edge_response",
+    "edge_health",
     "probe_openai_edge",
 ]
