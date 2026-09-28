@@ -347,6 +347,8 @@ def generate_upi_qr_link(
                 checkout_proxy,
                 flow=_upi_ensure_checkout_flow(),
                 supplied_token=risk.sentinel_tokens.get(_upi_ensure_checkout_flow(), ""),
+                fingerprint=fingerprint,
+                page_url=_upi_promo_page_url(),
             )
         )
         _upi_sentinel_ping(cs, proxy=checkout_proxy, referer="https://chatgpt.com/")

@@ -17,6 +17,7 @@ from .constants import (
     UPI_CHATGPT_CLIENT_BUILD_NUMBER,
     UPI_CHATGPT_CLIENT_VERSION,
     UPI_SENTINEL_APPROVAL_FLOW,
+    UPI_SENTINEL_CHECKOUT_FLOW,
     UPI_SENTINEL_PING_URL,
     UPI_WARMUP_TIMEOUT,
 )
@@ -33,6 +34,7 @@ from .session import (
 )
 from .browser import _upi_browser_capture
 from .stripe import _upi_elements_session_params
+from ._vendor.upi_sentinel import mint_sentinel
 
 
 class _UpiRiskContext:
@@ -220,6 +222,62 @@ def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
         pass
 
 
+def _upi_session_cookie_header(session: Any, device_id: Any) -> str:
+    """Cookie header for a Sentinel mint: always carries ``oai-did``.
+
+    The bridge posts ``/backend-api/sentinel/req`` with this cookie, so it must
+    be the same account identity the Checkout session uses (a token minted under
+    a different ``oai-did`` is rejected).
+    """
+    try:
+        raw = str(session.headers.get("Cookie") or "").strip()
+    except Exception:
+        raw = ""
+    did = str(device_id or "").strip()
+    if not raw:
+        return f"oai-did={did}"
+    if did and "oai-did=" not in raw:
+        return f"oai-did={did}; {raw}"
+    return raw
+
+
+def _upi_bridge_sentinel_kwargs(fingerprint: Any) -> dict[str, Any]:
+    """Map a UPI fingerprint dict to the vendored bridge's identity inputs."""
+    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    platform_raw = str(fp.get("sec_ch_ua_platform") or '"Windows"').strip('"').lower()
+    if "mac" in platform_raw:
+        platform, platform_label = "MacIntel", "macOS"
+    else:
+        platform, platform_label = "Win32", "Windows"
+    return {
+        "user_agent": str(fp.get("user_agent") or ""),
+        "language": str(fp.get("locale") or "en-IN"),
+        "timezone": str(fp.get("timezone") or "Asia/Kolkata"),
+        "platform": platform,
+        "platform_label": platform_label,
+    }
+
+
+def _upi_mint_sentinel_via_bridge(
+    *,
+    flow: str,
+    device_id: Any,
+    proxy: Any,
+    fingerprint: Any,
+    cookie_header: str,
+    page_url: str,
+) -> dict[str, Any]:
+    """Mint through the vendored reference bridge (main token + SO)."""
+    return mint_sentinel(
+        flow=flow,
+        device_id=device_id,
+        proxy=str(proxy or ""),
+        cookie_header=cookie_header,
+        page_url=page_url,
+        **_upi_bridge_sentinel_kwargs(fingerprint),
+    )
+
+
 def _upi_sentinel_headers(
     session: Any,
     device_id: Any,
@@ -227,14 +285,21 @@ def _upi_sentinel_headers(
     *,
     flow: str = UPI_SENTINEL_APPROVAL_FLOW,
     supplied_token: str = "",
+    fingerprint: Any = None,
+    page_url: str = "",
 ) -> dict[str, str]:
-    """Mint one Sentinel token bound to this flow and session.
+    """Mint the Sentinel header pair bound to this flow and session.
+
+    Uses the vendored reference bridge so both ``openai-sentinel-token`` **and**
+    ``openai-sentinel-so-token`` are produced. The ChatGPT
+    ``payments/checkout/approve`` gate reads the SO; the registration runner in
+    :mod:`sms_tool.sentinel` does not emit one, which is why UPI approve answered
+    ``result=blocked``. Per the reference HAR, approve's own ``sentinel/req``
+    does not return an SO either, so a non-checkout flow falls back to a fresh
+    ``chatgpt_checkout`` mint for the SO while keeping its own main token.
 
     Advisory only: a missing or malformed token must not abort an otherwise
-    valid Checkout session, so every failure degrades to an empty header set
-    and lets the upstream risk layer classify the response. Mirrors
-    ``paypal_extract._fresh_approval_sentinel`` so checkout/approval requests
-    carry the same risk attestation the browser flow does.
+    valid Checkout session, so every failure degrades to an empty header set.
     """
     if not device_id or not _upi_session_is_live(session):
         return {}
@@ -242,20 +307,62 @@ def _upi_sentinel_headers(
         # Browser-issued token: never substitute a Node-minted one, because the
         # risk engine correlates it with the observed browser session.
         return {"OpenAI-Sentinel-Token": str(supplied_token).strip()}
-    try:
-        from ..sentinel import issue_sentinel_flow
 
-        issued = issue_sentinel_flow(flow=flow, device_id=device_id, session=session, proxy=proxy)
+    cookie_header = _upi_session_cookie_header(session, device_id)
+    page = str(page_url or "https://chatgpt.com/")
+    try:
+        minted = _upi_mint_sentinel_via_bridge(
+            flow=flow,
+            device_id=device_id,
+            proxy=proxy,
+            fingerprint=fingerprint,
+            cookie_header=cookie_header,
+            page_url=page,
+        )
     except Exception as exc:
-        _emit("sentinel", f"Sentinel unavailable (non-fatal): {type(exc).__name__}: {str(exc)[:120]}")
-        return {}
-    headers: dict[str, str] = {}
-    if issued.token:
-        headers["OpenAI-Sentinel-Token"] = issued.token
-    if issued.so_token:
-        headers["OpenAI-Sentinel-SO-Token"] = issued.so_token
-    if headers:
-        _emit("sentinel", f"{flow} Sentinel ready (len={len(issued.token)})")
+        minted = {"error": type(exc).__name__}
+
+    if minted.get("error") or not minted.get("main"):
+        # Bridge unavailable (no Node, SDK error): fall back to the registration
+        # runner so a missing SO never aborts an otherwise valid Checkout.
+        _emit("sentinel", f"bridge unavailable (non-fatal): {str(minted.get('error'))[:120]}")
+        try:
+            from ..sentinel import issue_sentinel_flow
+
+            issued = issue_sentinel_flow(flow=flow, device_id=device_id, session=session, proxy=proxy)
+        except Exception as exc:
+            _emit("sentinel", f"Sentinel unavailable (non-fatal): {type(exc).__name__}: {str(exc)[:120]}")
+            return {}
+        headers: dict[str, str] = {}
+        if issued.token:
+            headers["OpenAI-Sentinel-Token"] = issued.token
+        if issued.so_token:
+            headers["OpenAI-Sentinel-SO-Token"] = issued.so_token
+        if headers:
+            _emit("sentinel", f"{flow} Sentinel ready (legacy, len={len(issued.token)})")
+        return headers
+
+    headers = {"OpenAI-Sentinel-Token": str(minted["main"])}
+    so_value = str(minted.get("so") or "")
+    if not so_value and flow != UPI_SENTINEL_CHECKOUT_FLOW:
+        try:
+            checkout = _upi_mint_sentinel_via_bridge(
+                flow=UPI_SENTINEL_CHECKOUT_FLOW,
+                device_id=device_id,
+                proxy=proxy,
+                fingerprint=fingerprint,
+                cookie_header=cookie_header,
+                page_url=page,
+            )
+            so_value = str(checkout.get("so") or "")
+        except Exception:
+            so_value = ""
+    if so_value:
+        headers["OpenAI-Sentinel-SO-Token"] = so_value
+    _emit(
+        "sentinel",
+        f"{flow} Sentinel ready (bridge len={len(headers['OpenAI-Sentinel-Token'])} so={'yes' if so_value else 'no'})",
+    )
     return headers
 
 
@@ -382,6 +489,7 @@ def _upi_apply_approve_risk(
                 proxy,
                 flow=UPI_SENTINEL_APPROVAL_FLOW,
                 supplied_token=risk.sentinel_tokens.get(UPI_SENTINEL_APPROVAL_FLOW, ""),
+                fingerprint=fingerprint,
             )
         )
     except Exception:
