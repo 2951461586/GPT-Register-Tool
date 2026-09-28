@@ -44,11 +44,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 }
             },
             "protocol_payments": {
-                "methods": {
-                    "paypal": {
-                        "stage_proxy_countries": {"checkout": "US", "approve": "US"}
-                    }
-                }
+                "methods": {"paypal": {"stage_proxy_countries": {"checkout": "US", "approve": "US"}}}
             },
         }
 
@@ -92,7 +88,11 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         cfg = {"paypal": {"require_zero_due": False, "require_ba_token": False}}
         with patch.object(gen_pp_link, "_load_json", return_value=cfg):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+            with patch.object(
+                gen_pp_link,
+                "_proxies_from_config",
+                return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""},
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link(
                         "at",
@@ -118,13 +118,19 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, *args, **kwargs):
                 return FakeResponse({})
 
-        checkout = FakeResponse({
-            "checkout_session_id": "cs_test",
-            "processor_entity": "openai_ie",
-            "publishable_key": "pk_test",
-        })
+        checkout = FakeResponse(
+            {
+                "checkout_session_id": "cs_test",
+                "processor_entity": "openai_ie",
+                "publishable_key": "pk_test",
+            }
+        )
         with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+            with patch.object(
+                gen_pp_link,
+                "_proxies_from_config",
+                return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""},
+            ):
                 with patch.object(gen_pp_link, "_checkout_post", return_value=checkout):
                     with patch.object(gen_pp_link, "_new_session", return_value=FakeSession()):
                         result = gen_pp_link.generate_hosted_long_url("at", require_zero=True)
@@ -271,10 +277,16 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "approve_proxy": seen.get("approve_proxy", ""),
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": True}}
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
-                    result = gen_pp_link.generate_pp_link("at", target_country="DE", require_zero=True, require_ba_token=True)
+                    result = gen_pp_link.generate_pp_link(
+                        "at", target_country="DE", require_zero=True, require_ba_token=True
+                    )
 
         self.assertTrue(result["ok"])
         self.assertEqual(seen["target_country"], "DE")
@@ -298,8 +310,12 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "target_country": "GB",
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": False}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": False}}
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link("at", require_zero=False, require_ba_token=True)
 
@@ -328,8 +344,12 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "target_country": "GB",
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": False}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "GB", "require_zero_due": False}}
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link("at", require_zero=False, require_ba_token=False)
 
@@ -357,18 +377,17 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         config = {"paypal": {"require_zero_due": True, "require_ba_token": False}}
         with patch.object(gen_pp_link, "_load_json", return_value=config):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+            with patch.object(
+                gen_pp_link,
+                "_proxies_from_config",
+                return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""},
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
-                    result = gen_pp_link.generate_pp_link(
-                        "at", target_country="GB", checkout_country="GB"
-                    )
+                    result = gen_pp_link.generate_pp_link("at", target_country="GB", checkout_country="GB")
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["link_type"], "chatgpt_checkout_link")
         self.assertFalse(result["side_effect_started"])
-
-
-
 
     def test_chatgpt_checkout_link_returns_chatgpt_checkout_url_without_stripe_init(self):
         posted = []
@@ -402,11 +421,28 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 return FakeResponse()
             raise AssertionError(f"unexpected call: {url}")
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "chatgpt_checkout_link", "target_country": "US", "billing_regions": ["US"]}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={
+                "paypal": {
+                    "link_generation_type": "chatgpt_checkout_link",
+                    "target_country": "US",
+                    "billing_regions": ["US"],
+                }
+            },
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
                     with patch.object(gen_pp_link, "_checkout_post", side_effect=fake_checkout_post):
-                        result = gen_pp_link.generate_pp_link("at", paypal_generation_type="chatgpt_checkout_link", target_country="US", checkout_country="US")
+                        result = gen_pp_link.generate_pp_link(
+                            "at",
+                            paypal_generation_type="chatgpt_checkout_link",
+                            target_country="US",
+                            checkout_country="US",
+                        )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["url"], "https://chatgpt.com/checkout/openai_llc/cs_live_CHATGPT")
@@ -417,7 +453,6 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertEqual(result["currency"], "USD")
         self.assertEqual(len(posted), 1)
         self.assertEqual(posted[0][1]["checkout_ui_mode"], "custom")
-
 
     def test_hosted_generation_uses_jp_checkout_and_short_pay_url(self):
         posted = []
@@ -444,26 +479,50 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, url, json=None, data=None, timeout=None):
                 posted.append((self.proxy, url, json, data))
                 if "/payment_pages/cs_live_SHORT/init" in url:
-                    return FakeResponse(200, {
-                        "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SHORT#fragment",
-                        "payment_method_types": ["card", "paypal"],
-                        "currency": "jpy",
-                        "total_summary": {"due": 0, "currency": "jpy"},
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SHORT#fragment",
+                            "payment_method_types": ["card", "paypal"],
+                            "currency": "jpy",
+                            "total_summary": {"due": 0, "currency": "jpy"},
+                        },
+                    )
                 raise AssertionError(url)
 
         def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
             posted.append((proxy, url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
-                return FakeResponse(200, {
-                    "checkout_session_id": "cs_live_SHORT",
-                    "processor_entity": "openai_ie",
-                    "publishable_key": "pk_test",
-                })
+                return FakeResponse(
+                    200,
+                    {
+                        "checkout_session_id": "cs_live_SHORT",
+                        "processor_entity": "openai_ie",
+                        "publishable_key": "pk_test",
+                    },
+                )
             raise AssertionError(url)
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "hosted_long_url", "billing_regions": ["JP"], "require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "socks5h://jp-checkout", "provider": "http://jp-provider:11001", "approve": "http://unused"}):
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={
+                "paypal": {
+                    "link_generation_type": "hosted_long_url",
+                    "billing_regions": ["JP"],
+                    "require_zero_due": True,
+                }
+            },
+        ):
+            with patch.object(
+                gen_pp_link,
+                "_proxies_from_config",
+                return_value={
+                    "checkout": "socks5h://jp-checkout",
+                    "provider": "http://jp-provider:11001",
+                    "approve": "http://unused",
+                },
+            ):
                 with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
                     with patch.object(gen_pp_link, "_checkout_post", side_effect=fake_checkout_post):
                         result = gen_pp_link.generate_pp_link("at")
@@ -481,7 +540,6 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertEqual(posted[0][2]["checkout_ui_mode"], "custom")
         self.assertEqual(len(posted), 2)
         self.assertNotIn("confirm", posted[1][1])
-
 
     def test_hosted_generation_keeps_target_separate_from_checkout_country(self):
         posted = []
@@ -507,20 +565,50 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, url, json=None, data=None, timeout=None):
                 posted.append((url, json, data))
                 if "/payment_pages/cs_live_SPLIT/init" in url:
-                    return FakeResponse(200, {"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SPLIT#fragment", "payment_method_types": ["card"], "currency": "jpy", "total_summary": {"due": 2727, "currency": "jpy"}})
+                    return FakeResponse(
+                        200,
+                        {
+                            "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_SPLIT#fragment",
+                            "payment_method_types": ["card"],
+                            "currency": "jpy",
+                            "total_summary": {"due": 2727, "currency": "jpy"},
+                        },
+                    )
                 raise AssertionError(url)
 
         def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
             posted.append((url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
-                return FakeResponse(200, {"checkout_session_id": "cs_live_SPLIT", "processor_entity": "openai_llc", "publishable_key": "pk_test"})
+                return FakeResponse(
+                    200,
+                    {
+                        "checkout_session_id": "cs_live_SPLIT",
+                        "processor_entity": "openai_llc",
+                        "publishable_key": "pk_test",
+                    },
+                )
             raise AssertionError(url)
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"link_generation_type": "hosted_long_url", "target_country": "US", "billing_regions": ["JP"], "require_zero_due": False}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={
+                "paypal": {
+                    "link_generation_type": "hosted_long_url",
+                    "target_country": "US",
+                    "billing_regions": ["JP"],
+                    "require_zero_due": False,
+                }
+            },
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
                     with patch.object(gen_pp_link, "_checkout_post", side_effect=fake_checkout_post):
-                        result = gen_pp_link.generate_pp_link("at", target_country="US", checkout_country="JP", require_zero=False)
+                        result = gen_pp_link.generate_pp_link(
+                            "at", target_country="US", checkout_country="JP", require_zero=False
+                        )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["target_country"], "US")
@@ -559,31 +647,43 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, url, json=None, data=None, timeout=None):
                 posted.append((self.proxy, url, json, data))
                 if url.endswith("/backend-api/payments/checkout"):
-                    return FakeResponse(200, {
-                        "checkout_session_id": "cs_live_UPI",
-                        "processor_entity": "openai_ie",
-                        "publishable_key": "pk_test_upi",
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "checkout_session_id": "cs_live_UPI",
+                            "processor_entity": "openai_ie",
+                            "publishable_key": "pk_test_upi",
+                        },
+                    )
                 if "/payment_pages/cs_live_UPI/init" in url:
-                    return FakeResponse(200, {
-                        "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_UPI#fidkdWxOYHwnPyd1blpxYHZxWjA0",
-                        "payment_method_types": ["card", "upi"],
-                        "currency": "inr",
-                        "total_summary": {"due": 0, "currency": "inr"},
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_UPI#fidkdWxOYHwnPyd1blpxYHZxWjA0",
+                            "payment_method_types": ["card", "upi"],
+                            "currency": "inr",
+                            "total_summary": {"due": 0, "currency": "inr"},
+                        },
+                    )
                 if url.endswith("/payment_pages/cs_live_UPI"):
-                    return FakeResponse(200, {
-                        "payment_method_types": ["card", "upi"],
-                        "currency": "inr",
-                        "total_summary": {"due": 0, "currency": "inr"},
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "payment_method_types": ["card", "upi"],
+                            "currency": "inr",
+                            "total_summary": {"due": 0, "currency": "inr"},
+                        },
+                    )
                 if "/payment_pages/cs_live_UPI/confirm" in url:
-                    return FakeResponse(200, {
-                        "status": "succeeded",
-                        "payment_method_types": ["card", "upi"],
-                        "currency": "inr",
-                        "total_summary": {"due": 0, "currency": "inr"},
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "status": "succeeded",
+                            "payment_method_types": ["card", "upi"],
+                            "currency": "inr",
+                            "total_summary": {"due": 0, "currency": "inr"},
+                        },
+                    )
                 raise AssertionError(url)
 
         def fake_new_session(proxy=""):
@@ -646,7 +746,14 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, url, json=None, data=None, timeout=None):
                 if url.endswith("/backend-api/payments/checkout"):
                     return FakeResponse({"checkout_session_id": "cs_live_NOUPI", "publishable_key": "pk_test"})
-                return FakeResponse({"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_NOUPI", "payment_method_types": ["card"], "currency": "inr", "total_summary": {"due": 0, "currency": "inr"}})
+                return FakeResponse(
+                    {
+                        "stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_NOUPI",
+                        "payment_method_types": ["card"],
+                        "currency": "inr",
+                        "total_summary": {"due": 0, "currency": "inr"},
+                    }
+                )
 
         cfg = {"upi": {"checkout_country": "JP", "payment_country": "IN", "require_zero_due": True}}
         with _patch_upi(load_json=cfg, new_session=lambda proxy="": FakeSession(proxy)):
@@ -704,7 +811,6 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         self.assertEqual(proxies["provider"], "http://127.0.0.1:11001")
         self.assertEqual(proxies["approve"], "http://127.0.0.1:11002")
 
-
     def test_checkout_country_resolved_from_billing_regions_and_passed_to_extractor(self):
         seen = {}
 
@@ -728,8 +834,14 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "approve_proxy": seen.get("approve_proxy", ""),
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "US", "billing_regions": ["JP"], "require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={"paypal": {"target_country": "US", "billing_regions": ["JP"], "require_zero_due": True}},
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link("at", require_zero=True, require_ba_token=True)
 
@@ -759,8 +871,12 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "checkout_country": seen.get("checkout_country", ""),
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "DE", "require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "DE", "require_zero_due": True}}
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link("at", require_zero=True, require_ba_token=True)
 
@@ -788,10 +904,18 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     "checkout_country": seen.get("checkout_country", ""),
                 }
 
-        with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {"target_country": "US", "billing_regions": ["JP"], "require_zero_due": True}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}):
+        with patch.object(
+            gen_pp_link,
+            "_load_json",
+            return_value={"paypal": {"target_country": "US", "billing_regions": ["JP"], "require_zero_due": True}},
+        ):
+            with patch.object(
+                gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": ""}
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
-                    result = gen_pp_link.generate_pp_link("at", target_country="US", checkout_country="TR", require_zero=True, require_ba_token=True)
+                    result = gen_pp_link.generate_pp_link(
+                        "at", target_country="US", checkout_country="TR", require_zero=True, require_ba_token=True
+                    )
 
         self.assertTrue(result["ok"])
         self.assertEqual(seen["target_country"], "US")
@@ -821,26 +945,37 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def post(self, url, json=None, data=None, timeout=None):
                 posted.append((url, json, data))
                 if url.endswith("/backend-api/payments/checkout"):
-                    return FakeResponse(200, {
-                        "checkout_session_id": "cs_live_SPLIT",
-                        "processor_entity": "openai_ie",
-                        "publishable_key": "pk_test",
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "checkout_session_id": "cs_live_SPLIT",
+                            "processor_entity": "openai_ie",
+                            "publishable_key": "pk_test",
+                        },
+                    )
                 if "/payment_pages/cs_live_SPLIT/init" in url:
-                    return FakeResponse(200, {
-                        "payment_method_types": ["card", "paypal"],
-                        "currency": "jpy",
-                        "total_summary": {"due": 0, "currency": "jpy"},
-                    })
+                    return FakeResponse(
+                        200,
+                        {
+                            "payment_method_types": ["card", "paypal"],
+                            "currency": "jpy",
+                            "total_summary": {"due": 0, "currency": "jpy"},
+                        },
+                    )
                 if "/payment_methods" in url:
                     return FakeResponse(200, {"id": "pm_test_123"})
                 if "/payment_pages/cs_live_SPLIT/confirm" in url:
-                    return FakeResponse(200, {
-                        "next_action": {
-                            "type": "redirect_to_url",
-                            "redirect_to_url": {"url": "https://www.paypal.com/agreements/approve?ba_token=BA-TEST123"},
+                    return FakeResponse(
+                        200,
+                        {
+                            "next_action": {
+                                "type": "redirect_to_url",
+                                "redirect_to_url": {
+                                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-TEST123"
+                                },
+                            },
                         },
-                    })
+                    )
                 if url.endswith("/backend-api/sentinel/ping"):
                     return FakeResponse(200, {})
                 if url.endswith("/backend-api/payments/checkout/approve"):
@@ -853,16 +988,23 @@ class GeneratePpLinkContractTests(unittest.TestCase):
         def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
             posted.append((url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
-                return FakeResponse(200, {
-                    "checkout_session_id": "cs_live_SPLIT",
-                    "processor_entity": "openai_ie",
-                    "publishable_key": "pk_test",
-                })
+                return FakeResponse(
+                    200,
+                    {
+                        "checkout_session_id": "cs_live_SPLIT",
+                        "processor_entity": "openai_ie",
+                        "publishable_key": "pk_test",
+                    },
+                )
             raise AssertionError(url)
 
         with patch.object(paypal_extract, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
             with patch.object(paypal_extract, "_checkout_post", side_effect=fake_checkout_post):
-                with patch.object(paypal_extract.PPLinkExtractor, "_poll_payment_page", return_value="https://www.paypal.com/agreements/approve?ba_token=BA-TEST123"):
+                with patch.object(
+                    paypal_extract.PPLinkExtractor,
+                    "_poll_payment_page",
+                    return_value="https://www.paypal.com/agreements/approve?ba_token=BA-TEST123",
+                ):
                     extractor = gen_pp_link.PPLinkExtractor(
                         access_token="at",
                         target_country="US",

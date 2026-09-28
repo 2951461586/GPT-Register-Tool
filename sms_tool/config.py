@@ -32,28 +32,30 @@ _LOGGER = logging.getLogger(__name__)
 # deliberately generous: an unrecognised key only produces a *warning* (see
 # ``config_warnings``), so over-listing costs a missed typo warning while
 # under-listing would nag about legitimate config.
-ACCOUNT_HEALTH_KEYS = frozenset({
-    "use_registration_affinity",
-    "batch_timeout_seconds",
-    "account_timeout_seconds",
-    "relogin_cooldown_seconds",
-    "relogin_repeat_cooldown_seconds",
-    "relogin_dead_end_permanent",
-    "post_registration_enabled",
-    "post_registration_deep_liveness",
-    "proxy_pool",
-    "proxies",
-    "workers",
-    "max_pending",
-    "state_file",
-    "checks",
-    "enabled",
-    "consecutive_failures",
-    "fail_skip_after",
-    "fail_cooldown_seconds",
-    "probe_cache_ttl_seconds",
-    "zero_cache_ttl_seconds",
-})
+ACCOUNT_HEALTH_KEYS = frozenset(
+    {
+        "use_registration_affinity",
+        "batch_timeout_seconds",
+        "account_timeout_seconds",
+        "relogin_cooldown_seconds",
+        "relogin_repeat_cooldown_seconds",
+        "relogin_dead_end_permanent",
+        "post_registration_enabled",
+        "post_registration_deep_liveness",
+        "proxy_pool",
+        "proxies",
+        "workers",
+        "max_pending",
+        "state_file",
+        "checks",
+        "enabled",
+        "consecutive_failures",
+        "fail_skip_after",
+        "fail_cooldown_seconds",
+        "probe_cache_ttl_seconds",
+        "zero_cache_ttl_seconds",
+    }
+)
 
 # ``account_health_queue`` clamps the worker count to this range, so anything
 # outside it is silently ignored -- worth telling the operator about.
@@ -234,8 +236,6 @@ def load_merged_config() -> dict[str, Any]:
     return {}
 
 
-
-
 def validate_registration_driver_config(
     config: Mapping[str, Any],
     driver: Any = None,
@@ -338,10 +338,14 @@ _CURRENT_CONFIG: ContextVar[RuntimeConfig | None] = ContextVar("sms_tool_runtime
 
 
 def resolve_runtime_config(value: ConfigInput = None, *, workflow: str | None = None) -> RuntimeConfig:
-    config = value if isinstance(value, RuntimeConfig) else (
-        RuntimeConfig.from_mapping(value, validate=False)
-        if isinstance(value, Mapping)
-        else (_CURRENT_CONFIG.get() or default_runtime_config())
+    config = (
+        value
+        if isinstance(value, RuntimeConfig)
+        else (
+            RuntimeConfig.from_mapping(value, validate=False)
+            if isinstance(value, Mapping)
+            else (_CURRENT_CONFIG.get() or default_runtime_config())
+        )
     )
     validate_config(config.data, workflow=workflow)
     return config
@@ -515,53 +519,69 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
     if account_health is not None and not isinstance(account_health, Mapping):
         errors.append("account_health must be an object")
     if isinstance(account_health, Mapping):
-        if "proxy_pool" in account_health and not isinstance(
-            account_health.get("proxy_pool"), (str, list, tuple)
-        ):
+        if "proxy_pool" in account_health and not isinstance(account_health.get("proxy_pool"), (str, list, tuple)):
             errors.append("account_health.proxy_pool must be a proxy list")
         health_proxies = account_health.get("proxies", {})
         if health_proxies is not None and not isinstance(health_proxies, Mapping):
             errors.append("account_health.proxies must be an object")
         elif isinstance(health_proxies, Mapping):
             supported_health_lanes = {
-                "liveness", "liveness_pool", "quota_pool",
-                "promotion", "promotion_pool",
-                "browser", "browser_pool", "browser_verification_pool",
+                "liveness",
+                "liveness_pool",
+                "quota_pool",
+                "promotion",
+                "promotion_pool",
+                "browser",
+                "browser_pool",
+                "browser_verification_pool",
             }
             unknown_health_lanes = sorted(set(health_proxies) - supported_health_lanes)
             if unknown_health_lanes:
-                errors.append(
-                    "unsupported account_health proxy lane: "
-                    + ", ".join(unknown_health_lanes)
-                )
+                errors.append("unsupported account_health proxy lane: " + ", ".join(unknown_health_lanes))
             for key, value in health_proxies.items():
                 if not isinstance(value, (str, list, tuple)):
                     errors.append(f"account_health.proxies.{key} must be a proxy list")
-        _validate_positive_numbers(account_health, (
-            "workers", "max_pending", "batch_timeout_seconds",
-            "account_timeout_seconds", "relogin_cooldown_seconds",
-            "relogin_repeat_cooldown_seconds",
-            "fail_skip_after", "fail_cooldown_seconds",
-        ), "account_health", errors)
+        _validate_positive_numbers(
+            account_health,
+            (
+                "workers",
+                "max_pending",
+                "batch_timeout_seconds",
+                "account_timeout_seconds",
+                "relogin_cooldown_seconds",
+                "relogin_repeat_cooldown_seconds",
+                "fail_skip_after",
+                "fail_cooldown_seconds",
+            ),
+            "account_health",
+            errors,
+        )
 
     registration = config.get("registration", {})
     if registration is not None and not isinstance(registration, Mapping):
         errors.append("registration must be an object")
     if isinstance(registration, Mapping):
         from .registration_drivers.base import KNOWN_DRIVER_ALIASES
+
         if "browser_profile_pool" in registration:
-            errors.append(
-                "registration.browser_profile_pool is unsupported; "
-                "browser hardware profiles are built in"
-            )
+            errors.append("registration.browser_profile_pool is unsupported; browser hardware profiles are built in")
         driver = str(registration.get("driver") or "protocol").strip().lower().replace("-", "_")
         if driver not in KNOWN_DRIVER_ALIASES:
             errors.append("registration.driver is unsupported")
-        _validate_positive_numbers(registration, (
-            "retry_attempts", "retry_delay_seconds", "at_stability_probe_count",
-            "at_stability_probe_delay_seconds", "at_probe_timeout_seconds", "browser_timeout_seconds",
-            "browser_worker_limit",
-        ), "registration", errors)
+        _validate_positive_numbers(
+            registration,
+            (
+                "retry_attempts",
+                "retry_delay_seconds",
+                "at_stability_probe_count",
+                "at_stability_probe_delay_seconds",
+                "at_probe_timeout_seconds",
+                "browser_timeout_seconds",
+                "browser_worker_limit",
+            ),
+            "registration",
+            errors,
+        )
         if "browser_headless" in registration and not isinstance(registration.get("browser_headless"), bool):
             errors.append("registration.browser_headless must be a boolean")
         for key in ("browser_locale", "browser_timezone"):
@@ -572,6 +592,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             errors.append("registration.drivers must be an object")
         elif isinstance(drivers, Mapping):
             from .registration_drivers.base import BROWSER_REGISTRATION_DRIVERS
+
             supported_drivers = BROWSER_REGISTRATION_DRIVERS
             unknown_drivers = sorted(set(drivers) - supported_drivers)
             if unknown_drivers:
@@ -591,8 +612,13 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                     errors,
                 )
                 for key in (
-                    "use_proxy", "humanize", "geoip", "keep_browser_open",
-                    "delete_profile_after_run", "generate_browser_profile", "ad_blocker",
+                    "use_proxy",
+                    "humanize",
+                    "geoip",
+                    "keep_browser_open",
+                    "delete_profile_after_run",
+                    "generate_browser_profile",
+                    "ad_blocker",
                 ):
                     if key in raw and not isinstance(raw.get(key), bool):
                         errors.append(f"registration.drivers.{name}.{key} must be a boolean")
@@ -608,10 +634,19 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             errors.append("registration.stage_timeouts must be an object")
         elif isinstance(stage_timeouts, Mapping):
             valid_stages = {
-                "sentinel", "identity_ready", "auth_flow", "user_register",
-                "email_otp_send", "email_otp_wait", "email_otp_validate",
-                "create_account", "auth_session", "codex_oauth",
-                "access_token_probe", "totp_enroll", "finalize",
+                "sentinel",
+                "identity_ready",
+                "auth_flow",
+                "user_register",
+                "email_otp_send",
+                "email_otp_wait",
+                "email_otp_validate",
+                "create_account",
+                "auth_session",
+                "codex_oauth",
+                "access_token_probe",
+                "totp_enroll",
+                "finalize",
             }
             unknown_stages = sorted(set(stage_timeouts) - valid_stages)
             if unknown_stages:
@@ -632,8 +667,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 errors.append("registration.pulse.canary_enabled must be a boolean")
             _validate_positive_numbers(
                 pulse,
-                ("wave_size", "wave_delay_seconds", "ban_threshold",
-                 "ban_pause_seconds", "max_waves"),
+                ("wave_size", "wave_delay_seconds", "ban_threshold", "ban_pause_seconds", "max_waves"),
                 "registration.pulse",
                 errors,
             )
@@ -645,14 +679,8 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 if key not in retry_policy:
                     continue
                 value = retry_policy.get(key)
-                if (
-                    isinstance(value, bool)
-                    or not isinstance(value, (int, float))
-                    or value <= 0
-                ):
-                    errors.append(
-                        f"registration.retry_policy.{key} must be a positive number"
-                    )
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+                    errors.append(f"registration.retry_policy.{key} must be a positive number")
         process_pool = registration.get("browser_process_pool", {})
         if process_pool is not None and not isinstance(process_pool, Mapping):
             errors.append("registration.browser_process_pool must be an object")
@@ -682,25 +710,18 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         elif isinstance(fingerprint_pool, Mapping):
             mode = fingerprint_pool.get("mode")
             if mode is not None and str(mode).strip().lower() not in {"random", "round_robin"}:
-                errors.append(
-                    "registration.fingerprint_pool.mode must be 'random' or 'round_robin'"
-                )
-            if "verify_hint" in fingerprint_pool and not isinstance(
-                fingerprint_pool.get("verify_hint"), bool
-            ):
+                errors.append("registration.fingerprint_pool.mode must be 'random' or 'round_robin'")
+            if "verify_hint" in fingerprint_pool and not isinstance(fingerprint_pool.get("verify_hint"), bool):
                 errors.append("registration.fingerprint_pool.verify_hint must be a boolean")
             countries = fingerprint_pool.get("allowed_countries")
             if countries is not None:
                 if not isinstance(countries, (list, tuple)):
-                    errors.append(
-                        "registration.fingerprint_pool.allowed_countries must be an array"
-                    )
+                    errors.append("registration.fingerprint_pool.allowed_countries must be an array")
                 else:
                     invalid_countries = sorted(
                         str(code)
                         for code in countries
-                        if str(code or "").strip()
-                        and not re.fullmatch(r"[A-Za-z]{2}", str(code).strip())
+                        if str(code or "").strip() and not re.fullmatch(r"[A-Za-z]{2}", str(code).strip())
                     )
                     if invalid_countries:
                         errors.append(
@@ -715,9 +736,12 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         _validate_positive_numbers(
             email,
             (
-                "otp_timeout", "otp_poll_interval",
-                "sentinel_circuit_cooldown_seconds", "sentinel_circuit_failures",
-                "sentinel_max_concurrency", "sentinel_prewarm_window",
+                "otp_timeout",
+                "otp_poll_interval",
+                "sentinel_circuit_cooldown_seconds",
+                "sentinel_circuit_failures",
+                "sentinel_max_concurrency",
+                "sentinel_prewarm_window",
             ),
             "email_registration",
             errors,
@@ -782,9 +806,7 @@ def config_warnings(config: Mapping[str, Any]) -> list[str]:
         return warnings_out
     unknown = sorted(str(key) for key in set(health) - ACCOUNT_HEALTH_KEYS)
     if unknown:
-        warnings_out.append(
-            "unknown account_health key(s): " + ", ".join(unknown)
-        )
+        warnings_out.append("unknown account_health key(s): " + ", ".join(unknown))
     low, high = ACCOUNT_HEALTH_WORKER_RANGE
     workers = health.get("workers")
     if isinstance(workers, (int, float)) and not isinstance(workers, bool):
@@ -793,13 +815,14 @@ def config_warnings(config: Mapping[str, Any]) -> list[str]:
             # pi-lens-ignore: unchecked-throwing-call-python
             clamped = max(low, min(int(workers), high))
             warnings_out.append(
-                f"account_health.workers={workers} is outside the effective "
-                f"range {low}..{high}; it runs as {clamped}"
+                f"account_health.workers={workers} is outside the effective range {low}..{high}; it runs as {clamped}"
             )
     return warnings_out
 
 
-def _validate_positive_numbers(section: Mapping[str, Any], keys: tuple[str, ...], prefix: str, errors: list[str]) -> None:
+def _validate_positive_numbers(
+    section: Mapping[str, Any], keys: tuple[str, ...], prefix: str, errors: list[str]
+) -> None:
     for key in keys:
         if key not in section:
             continue
@@ -811,6 +834,7 @@ def _validate_positive_numbers(section: Mapping[str, Any], keys: tuple[str, ...]
 def _validate_payment_config(section: Mapping[str, Any], errors: list[str]) -> None:
     from .payment_catalog import PAYMENT_CATALOG, normalize_payment_method
     from .payment_flow import normalize_payment_stage
+
     supported = set(PAYMENT_CATALOG.methods)
     enabled = section.get("enabled_methods", [])
     if enabled is not None and not isinstance(enabled, (list, tuple)):
@@ -850,7 +874,9 @@ def _validate_payment_config(section: Mapping[str, Any], errors: list[str]) -> N
             elif isinstance(stages, (list, tuple)):
                 invalid = [str(stage) for stage in stages if not normalize_payment_stage(stage)]
                 if invalid:
-                    errors.append(f"protocol_payments.methods.{method}.stages contains unsupported stages: {', '.join(invalid)}")
+                    errors.append(
+                        f"protocol_payments.methods.{method}.stages contains unsupported stages: {', '.join(invalid)}"
+                    )
             routes = raw.get("stage_routes")
             if routes is not None and not isinstance(routes, Mapping):
                 errors.append(f"protocol_payments.methods.{method}.stage_routes must be an object")

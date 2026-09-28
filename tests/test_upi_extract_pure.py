@@ -1108,9 +1108,7 @@ class UiModeConfigTests(unittest.TestCase):
         from pathlib import Path
 
         package = Path(upi_link.__file__).resolve().parent
-        source = "\n".join(
-            path.read_text(encoding="utf-8") for path in sorted(package.glob("*.py"))
-        )
+        source = "\n".join(path.read_text(encoding="utf-8") for path in sorted(package.glob("*.py")))
         self.assertIn('"custom"', source)
         self.assertIn('"hosted"', source)
 

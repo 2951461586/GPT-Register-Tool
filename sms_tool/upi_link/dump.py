@@ -16,6 +16,8 @@ from .env import _env_bool, _env_int, _env_str
 
 _dump_lock = threading.RLock()
 _dump_counter = 0
+
+
 def _upi_redact_for_dump(text: Any) -> str:
     """把一段文本里的凭据抹掉，供落盘/日志使用。
 
@@ -40,6 +42,8 @@ def _upi_redact_for_dump(text: Any) -> str:
     except Exception:  # pragma: no cover - redactor must never break dumping
         pass
     return value
+
+
 def _upi_dump_dir() -> Path:
     """解析 dump 落盘目录。
 
@@ -52,6 +56,8 @@ def _upi_dump_dir() -> Path:
         return Path(configured).expanduser()
     repo_root = Path(__file__).resolve().parents[2]
     return repo_root / UPI_DUMP_DEFAULT_DIR
+
+
 def _upi_dump_http(
     response: Any,
     stage: str,
@@ -127,6 +133,8 @@ def _upi_dump_http(
         return str(path)
     except Exception:
         return ""
+
+
 def _approve_backoff(attempt: int, cap: float) -> float:
     """approve 重试退避：随尝试次数线性增长，被 cap 截断。
 

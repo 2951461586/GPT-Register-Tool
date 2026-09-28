@@ -32,7 +32,26 @@ from ._extract import (
     _upi_int_value,
     _upi_is_provider_decline_text,
 )
-from .constants import PROJECT_ROOT, UPI_ATTESTATION_ENV_KEYS, UPI_BILLING_ADDRESSES, UPI_BILLING_IN, UPI_BILLING_NAMES, UPI_CHATGPT_CLIENT_BUILD_NUMBER, UPI_CHATGPT_CLIENT_VERSION, UPI_EMAIL_DOMAINS, UPI_FINGERPRINT_TEMPLATES, UPI_SENTINEL_CHECKOUT_FLOW, UPI_WARMUP_TIMEOUT, _UPI_ATTESTATION_ANY_RE, _UPI_ATTESTATION_RE, _UPI_PAGE_BUILD_ANY_RE, _UPI_PAGE_BUILD_RE, _UPI_PAGE_SEQ_ANY_RE, _UPI_PAGE_SEQ_JSON_RE, _UPI_PAGE_SEQ_RE
+from .constants import (
+    PROJECT_ROOT,
+    UPI_ATTESTATION_ENV_KEYS,
+    UPI_BILLING_ADDRESSES,
+    UPI_BILLING_IN,
+    UPI_BILLING_NAMES,
+    UPI_CHATGPT_CLIENT_BUILD_NUMBER,
+    UPI_CHATGPT_CLIENT_VERSION,
+    UPI_EMAIL_DOMAINS,
+    UPI_FINGERPRINT_TEMPLATES,
+    UPI_SENTINEL_CHECKOUT_FLOW,
+    UPI_WARMUP_TIMEOUT,
+    _UPI_ATTESTATION_ANY_RE,
+    _UPI_ATTESTATION_RE,
+    _UPI_PAGE_BUILD_ANY_RE,
+    _UPI_PAGE_BUILD_RE,
+    _UPI_PAGE_SEQ_ANY_RE,
+    _UPI_PAGE_SEQ_JSON_RE,
+    _UPI_PAGE_SEQ_RE,
+)
 from .env import _emit, _env_bool, _env_str
 
 
@@ -88,6 +107,8 @@ def _upi_billing_profile(cfg: Mapping[str, Any] | None = None) -> dict[str, str]
 
     profile["country"] = str(profile.get("country") or "IN").strip().upper()
     return profile
+
+
 def _upi_fingerprint(index: int | None = None, country: str | None = None) -> dict[str, str]:
     """按索引（缺省随机）取一套自洽的浏览器身份模板。
 
@@ -118,6 +139,8 @@ def _upi_fingerprint(index: int | None = None, country: str | None = None) -> di
         result["accept_language"] = _upi_accept_language_for(locale)
         result["timezone"] = timezone_name
     return result
+
+
 def _upi_record_zero_result(proxy_state: Any, proxy: str, country: str, amount: Any) -> None:
     """把本轮 checkout 的实付金额记进代理状态（0 元缓存）。
 
@@ -141,6 +164,8 @@ def _upi_record_zero_result(proxy_state: Any, proxy: str, country: str, amount: 
     except Exception:
         # 调度优化失败不应该有任何可观测后果，也不该刷日志噪声
         pass
+
+
 def _upi_accept_language_for(locale: str) -> str:
     """从 ``en-IN`` / ``vi-VN`` 这类 locale 生成 ``Accept-Language``。
 
@@ -155,6 +180,8 @@ def _upi_accept_language_for(locale: str) -> str:
     if primary == value.lower():
         return "%s;q=0.9" % primary
     return "%s,%s;q=0.9" % (value, primary)
+
+
 def _upi_apply_fingerprint(session: Any, fingerprint: Mapping[str, str]) -> None:
     """把指纹模板落到 session 的默认 header 上。
 
@@ -175,6 +202,8 @@ def _upi_apply_fingerprint(session: Any, fingerprint: Mapping[str, str]) -> None
         session.headers.update(cleaned)
     except Exception:
         pass
+
+
 def _upi_apply_chatgpt_identity(
     session: Any,
     fingerprint: Mapping[str, str],
@@ -207,6 +236,8 @@ def _upi_apply_chatgpt_identity(
         session.headers.update(headers)
     except Exception:
         pass
+
+
 def _upi_new_chatgpt_session(
     proxy: str,
     fingerprint: Mapping[str, str],
@@ -257,6 +288,8 @@ def _upi_new_chatgpt_session(
         else:
             session.headers["Cookie"] = f"__Secure-next-auth.session-token={session_token}"
     return session
+
+
 def _upi_session_is_live(session: Any) -> bool:
     """True only for a real transport session, never a test double.
 
@@ -273,6 +306,8 @@ def _upi_session_is_live(session: Any) -> bool:
         except Exception:
             return False
     return type(session).__module__.split(".", 1)[0] in {"requests", "curl_cffi"}
+
+
 def _upi_account_id_from_token(token: str) -> str:
     """Read the ChatGPT account id from an access token without verifying it."""
     try:
@@ -285,15 +320,21 @@ def _upi_account_id_from_token(token: str) -> str:
         return str(auth.get("chatgpt_account_id") or payload.get("chatgpt_account_id") or "")
     except Exception:
         return ""
+
+
 def _upi_promo_page_url(campaign: str = PLUS_TRIAL_CAMPAIGN_ID) -> str:
     """The campaign entry page the browser checkout navigates through first."""
     return "https://chatgpt.com/?promo_campaign=" + quote(str(campaign or PLUS_TRIAL_CAMPAIGN_ID), safe="")
+
+
 def _upi_attestation_deploy_id(attestation: str) -> str:
     """Extract the deployment hash from a ``webDeploymentAttestation`` value."""
     for part in str(attestation or "").strip().split("."):
         if len(part) >= 16 and re.fullmatch(r"[A-Za-z0-9_-]+", part):
             return part
     return ""
+
+
 def _upi_scrape_page_identity(html: str) -> tuple[str, str, str]:
     """Return ``(client_version, client_build, attestation)`` scraped from HTML.
 
@@ -315,12 +356,16 @@ def _upi_scrape_page_identity(html: str) -> tuple[str, str, str]:
     if match and "." in match.group(1):
         attestation = match.group(1).strip()
     return version, build, attestation
+
+
 def _upi_env_attestation() -> str:
     for key in UPI_ATTESTATION_ENV_KEYS:
         value = str(os.environ.get(key) or "").strip()
         if value and "." in value:
             return value
     return ""
+
+
 def _upi_find_attestation(text: Any) -> str:
     """Find a two-part ``webDeploymentAttestation`` in a serialized page."""
     value = str(text or "")
@@ -328,6 +373,8 @@ def _upi_find_attestation(text: Any) -> str:
     if match and "." in match.group(1):
         return match.group(1).strip()
     return ""
+
+
 def _upi_warmup_session(
     session: Any,
     *,
@@ -353,6 +400,8 @@ def _upi_warmup_session(
         _emit("risk", f"warmup failed (non-fatal): {type(exc).__name__}")
         return ""
     return str(getattr(response, "text", "") or "")
+
+
 def _upi_ensure_checkout_flow() -> str:
     """Register and return the create-time Sentinel flow.
 
@@ -370,6 +419,8 @@ def _upi_ensure_checkout_flow() -> str:
     except Exception:
         pass
     return UPI_SENTINEL_CHECKOUT_FLOW
+
+
 def _upi_elements_session(
     stripe: Any,
     *,
@@ -423,12 +474,16 @@ def _upi_elements_session(
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
 def _upi_server_mandate(init: Any) -> dict[str, Any]:
     """Return the server-issued UPI mandate_options, if any."""
     options = init.get("payment_method_options") if isinstance(init, Mapping) else None
     upi = options.get("upi") if isinstance(options, Mapping) else None
     mandate = upi.get("mandate_options") if isinstance(upi, Mapping) else None
     return dict(mandate) if isinstance(mandate, Mapping) else {}
+
+
 def _upi_runtime_version() -> str:
     """Stripe.js 运行时版本（``version`` 字段)。
 
@@ -436,16 +491,22 @@ def _upi_runtime_version() -> str:
     这里允许 ``UPI_STRIPE_RUNTIME_VERSION`` 覆盖以便灰度。
     """
     return _env_str("UPI_STRIPE_RUNTIME_VERSION", "6f8494a281")
+
+
 def _normalize_hosted_checkout_url(url: str) -> str:
     value = str(url or "").strip()
     if value:
         return value.replace("checkout.stripe.com", "pay.openai.com")
     return value
+
+
 def _default_qr_path(prefix: str = "upi") -> str:
     directory = Path(PROJECT_ROOT) / "runtime" / "upi_qr"
     directory.mkdir(parents=True, exist_ok=True)
     stamp, _ = _upi_int_value(time.time())
     return str(directory / f"{prefix}_{stamp}_{uuid.uuid4().hex[:8]}.png")
+
+
 def _write_qr_png(data: str, qr_path: str = "") -> str:
     url = str(data or "").strip()
     if not url:
@@ -463,6 +524,8 @@ def _write_qr_png(data: str, qr_path: str = "") -> str:
     except OSError as exc:
         raise RuntimeError(f"failed to write UPI QR image to {path}") from exc
     return str(path)
+
+
 def _upi_classify_failure(error: Any) -> str:
     """把 UPI 流水线的异常压成稳定的 ``error_code``。
 
