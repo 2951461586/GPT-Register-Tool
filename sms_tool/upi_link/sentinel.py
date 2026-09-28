@@ -344,7 +344,11 @@ def _upi_sentinel_headers(
 
     headers = {"OpenAI-Sentinel-Token": str(minted["main"])}
     so_value = str(minted.get("so") or "")
-    if not so_value and flow != UPI_SENTINEL_CHECKOUT_FLOW:
+    if flow != UPI_SENTINEL_CHECKOUT_FLOW:
+        # HAR #228: the SO the approve gate reads carries an internal
+        # ``flow: chatgpt_checkout`` — it is the checkout-phase SO reused, not
+        # the approval flow's own. Prefer the checkout mint's SO even when the
+        # approval mint returned one.
         try:
             checkout = _upi_mint_sentinel_via_bridge(
                 flow=UPI_SENTINEL_CHECKOUT_FLOW,
@@ -354,9 +358,11 @@ def _upi_sentinel_headers(
                 cookie_header=cookie_header,
                 page_url=page,
             )
-            so_value = str(checkout.get("so") or "")
+            checkout_so = str(checkout.get("so") or "")
+            if checkout_so:
+                so_value = checkout_so
         except Exception:
-            so_value = ""
+            pass
     if so_value:
         headers["OpenAI-Sentinel-SO-Token"] = so_value
     _emit(

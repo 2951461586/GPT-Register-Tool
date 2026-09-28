@@ -101,6 +101,16 @@ def test_approval_flow_reuses_checkout_so_when_missing():
     assert headers == {"OpenAI-Sentinel-Token": "APPR", "OpenAI-Sentinel-SO-Token": "CO_SO"}
 
 
+def test_approval_flow_prefers_checkout_so_over_its_own():
+    # HAR #228: the approve SO's internal flow is chatgpt_checkout, so the
+    # checkout mint's SO wins even when the approval mint returned one.
+    headers = _call(
+        UPI_SENTINEL_APPROVAL_FLOW,
+        [{"main": "APPR", "so": "APPR_SO"}, {"main": "CO", "so": "CO_SO"}],
+    )
+    assert headers == {"OpenAI-Sentinel-Token": "APPR", "OpenAI-Sentinel-SO-Token": "CO_SO"}
+
+
 def test_bridge_error_falls_back_to_registration_runner():
     issued = type("Issued", (), {"token": "LEGACY", "so_token": "LEGACY_SO"})()
     with (
