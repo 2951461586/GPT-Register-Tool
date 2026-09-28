@@ -156,9 +156,11 @@ def _resolve_upi_runtime(
     # ``x-oai-is-client-observation``, and reuse the Checkout-stage Sentinel for
     # approve. ``current`` keeps the legacy inline-PM + fresh-approval-Sentinel
     # + synthetic-observation path for rollback/A-B.
-    approve_shape = str(
-        upi_cfg.get("approve_shape") if "approve_shape" in upi_cfg else _env_str("UPI_APPROVE_SHAPE", "reference")
-    ).strip().lower()
+    approve_shape = (
+        str(upi_cfg.get("approve_shape") if "approve_shape" in upi_cfg else _env_str("UPI_APPROVE_SHAPE", "reference"))
+        .strip()
+        .lower()
+    )
     if approve_shape not in {"reference", "current"}:
         approve_shape = "reference"
     if approve_shape == "reference":
@@ -753,6 +755,7 @@ def generate_upi_qr_link(
             inline_pm=inline_pm,
             return_url=return_url,
             payment_method_selection_flow=payment_method_selection_flow,
+            reference_shape=approve_shape == "reference",
         )
         confirm_resp, confirm_fingerprint = _upi_post_with_degrade(
             stripe,
@@ -1059,6 +1062,7 @@ def generate_upi_qr_link(
                                 _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or return_url
                             ),
                             payment_method_selection_flow=payment_method_selection_flow,
+                            reference_shape=approve_shape == "reference",
                         )
                         second_resp = stripe.post(
                             STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
