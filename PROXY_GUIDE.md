@@ -52,6 +52,26 @@ error. The historical silent fallback to `socks5://127.0.0.1:7897` (via the
 purpose: a pool that quietly serves your local clash listener instead of the
 configured provider is worse than a loud failure.
 
+### Sticky sessions
+
+By default the listener rotates upstream **per connection** — right for fetch
+work, wrong for a registration that must present one exit for its whole flow.
+Pass `--sticky-session-ttl <seconds>` to pin a client that offers SOCKS5
+username/password auth to one upstream for that window (sliding: each reuse
+refreshes it):
+
+```powershell
+python start_proxy_pool.py --sticky-session-ttl 900
+```
+
+The **username** is the session key; the password is accepted but ignored
+(there is no user database). Point a long flow at it as
+`socks5h://<session-name>@127.0.0.1:18080`, using a distinct name per account so
+exits stay isolated. Clients that send no credentials keep per-connection
+rotation, so the flag is purely additive. The default is `0` (off). Because any
+username is accepted, the server logs a warning when sticky mode is enabled on a
+non-loopback listen address.
+
 ## Verification
 
 Check the configured checkout/approve/update proxy exits without running a

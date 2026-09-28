@@ -43,7 +43,9 @@ def _upstreams_from_proxy_cfg(cfg: dict) -> list[UpstreamProxy]:
     of being silently coerced into SOCKS5 upstreams that fail at connect time;
     entries without a usable URL are skipped loudly too.
     """
-    proxy_cfg = cfg.get("proxy") if isinstance(cfg.get("proxy"), dict) else {}
+    proxy_cfg = cfg.get("proxy")
+    if not isinstance(proxy_cfg, dict):
+        proxy_cfg = {}
     raw_list = proxy_cfg.get("pool") or []
     upstreams: list[UpstreamProxy] = []
     for entry in raw_list:
@@ -107,6 +109,17 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--health-interval", type=float, default=30.0, help="Health check interval (seconds)")
     p.add_argument("--connect-timeout", type=float, default=10.0, help="Upstream connect timeout (seconds)")
+    p.add_argument(
+        "--sticky-session-ttl",
+        type=float,
+        default=0.0,
+        help=(
+            "Pin a client that offers SOCKS5 username/password auth to one upstream for "
+            "this many seconds (0 = disabled, per-connection round-robin). Use this when "
+            "a long flow must not hop exits mid-way; clients without credentials are "
+            "unaffected."
+        ),
+    )
     p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p.parse_args()
 
@@ -138,7 +151,7 @@ def main() -> None:
 
     if not upstreams:
         logger.error(
-            "No usable upstreams configured. Pass --upstreams \"socks5://host:port,...\" "
+            'No usable upstreams configured. Pass --upstreams "socks5://host:port,..." '
             "or add proxy.pool entries to the proxy shard (proxy.json). "
             "Supported upstream schemes: %s.",
             ", ".join(UPSTREAM_SCHEMES),
@@ -150,6 +163,7 @@ def main() -> None:
     stats_port = args.stats_port or 18081
     health_interval = args.health_interval or 30.0
     connect_timeout = args.connect_timeout or 10.0
+    sticky_ttl = args.sticky_session_ttl or 0.0
     max_retries = 2
 
     health_tracker = ProxyHealthTracker(health_cfg)
@@ -164,10 +178,10 @@ def main() -> None:
         connect_timeout=connect_timeout,
         max_retries=max_retries,
         health_tracker=health_tracker,
+        sticky_session_ttl=sticky_ttl,
     )
 
-    logger.info("Proxy pool config: host=%s port=%d stats=%d upstreams=%d",
-                host, port, stats_port, len(upstreams))
+    logger.info("Proxy pool config: host=%s port=%d stats=%d upstreams=%d", host, port, stats_port, len(upstreams))
     for u in upstreams:
         logger.info("  upstream: %s [%s] user=%s", u.label, u.addr, "***" if u.username else "-")
 
