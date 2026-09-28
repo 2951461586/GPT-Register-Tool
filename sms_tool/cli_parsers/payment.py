@@ -18,6 +18,7 @@ def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--payment-batch-id", default=None, help="Batch ID; reused only together with --payment-resume-checkpoint")
     parser.add_argument("--payment-resume-checkpoint", action="store_true", help="Explicitly resume matching accounts from an existing payment batch checkpoint")
     parser.add_argument("--no-jit-at-refresh", action="store_true", help="Probe the saved AT but do not run email OTP OAuth on HTTP 401")
+    parser.add_argument("--payment-relogin-mode", choices=["auto", "web_session", "chatgpt_email_otp", "codex_oauth", "browser_session"], default=None, help="AT recovery strategy on HTTP 401: auto (default), web_session (session-cookie replay, fastest, no OTP/mail), chatgpt_email_otp, codex_oauth, browser_session")
     parser.add_argument("--payment-probe-only", action="store_true", help="Create Checkout and run Stripe capability detection without creating a payment method")
     parser.add_argument("--payment-matrix", default=None, help="Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix")
     parser.add_argument("--payment-canary", type=int, default=0, help="Limit a payment batch to the first N unique accounts")
