@@ -19,7 +19,21 @@
       "us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD",
       "as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD",
       "eu.ipwo.net:7878:YOUR_USER_custom_zone_GB:YOUR_PASSWORD"
-    ]
+    ],
+    "lanes": {
+      "protocol_registration": [
+        "http://127.0.0.1:7897"
+      ],
+      "browser_registration": [
+        "http://127.0.0.1:7897"
+      ],
+      "mailbox": [
+        "http://127.0.0.1:7897"
+      ],
+      "payment": [
+        "http://us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
+      ]
+    }
   },
   "registration": {
     "driver": "protocol",

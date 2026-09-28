@@ -20,7 +20,7 @@
     "sms_tool/captcha_solver.py": 3,
     "sms_tool/cli.py": 17,
     "sms_tool/codex_export.py": 1,
-    "sms_tool/codex_oauth.py": 4,
+    "sms_tool/codex_oauth.py": 3,
     "sms_tool/codex_phone.py": 2,
     "sms_tool/commands/accounts.py": 15,
     "sms_tool/commands/helpers.py": 3,
@@ -40,6 +40,7 @@
     "sms_tool/geo/resolver.py": 3,
     "sms_tool/k12_identity.py": 2,
     "sms_tool/logging_setup.py": 6,
+    "sms_tool/mailbox.py": 1,
     "sms_tool/mailbox_quarantine.py": 3,
     "sms_tool/mailbox_service.py": 2,
     "sms_tool/mailbox_strategies.py": 9,
@@ -72,6 +73,7 @@
     "sms_tool/providers/smailr_client.py": 2,
     "sms_tool/proxy_bridge.py": 4,
     "sms_tool/proxy_pool.py": 1,
+    "sms_tool/proxy_registry.py": 2,
     "sms_tool/proxy_routing.py": 1,
     "sms_tool/registration.py": 3,
     "sms_tool/registration_cancel.py": 1,
@@ -97,8 +99,8 @@
     "sms_tool/store/connection.py": 2,
     "sms_tool/store/markers.py": 1,
     "sms_tool/store/normalize.py": 2,
-    "sms_tool/upi_link.py": 2,
+    "sms_tool/upi_link/__init__.py": 9,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 402
+  "total": 411
 }

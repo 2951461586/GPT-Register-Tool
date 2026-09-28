@@ -54,6 +54,7 @@ class PaymentResultContractTests(unittest.TestCase):
         # the latter is a classmethod and mock's classmethod wrapper has
         # edge cases when the class is re-imported via different paths.
         from sms_tool.payment_operation import PaymentOperationStore as _Store
+
         self._store_root = Path(self._tmp.name) / "payment_operations"
         self._store_patch = patch(
             "sms_tool.pay_link.core.PaymentOperationStore",
@@ -61,11 +62,15 @@ class PaymentResultContractTests(unittest.TestCase):
         )
         self._store_patch.start()
         self.addCleanup(self._store_patch.stop)
+
         # Patch from_config to point at our isolated root
+        def _from_config(cls, config):
+            return cls(self._store_root)
+
         self._from_config_patch = patch.object(
             _Store,
             "from_config",
-            classmethod(lambda cls, config: cls(self._store_root)),
+            classmethod(_from_config),
         )
         self._from_config_patch.start()
         self.addCleanup(self._from_config_patch.stop)
@@ -74,14 +79,19 @@ class PaymentResultContractTests(unittest.TestCase):
         return Path(directory) / "payment-runs.jsonl"
 
     def test_success_has_non_retryable_empty_error_contract(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
-                 "ok": True,
-                 "url": "https://example.test/approve",
-                 "retryable": True,
-                 "error_stage": "stale-adapter-stage",
-             }):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch(
+                "sms_tool.gen_pp_link.generate_pp_link",
+                return_value={
+                    "ok": True,
+                    "url": "https://example.test/approve",
+                    "retryable": True,
+                    "error_stage": "stale-adapter-stage",
+                },
+            ),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertTrue(result["ok"])
@@ -90,15 +100,20 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertEqual("", result["error_stage"])
 
     def test_explicit_adapter_cancellation_is_not_collapsed_into_failure(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
-                 "ok": False,
-                 "status": "canceled",
-                 "error": "stopped by operator",
-                 "stage": "provider_redirect",
-                 "retryable": True,
-             }):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch(
+                "sms_tool.gen_pp_link.generate_pp_link",
+                return_value={
+                    "ok": False,
+                    "status": "canceled",
+                    "error": "stopped by operator",
+                    "stage": "provider_redirect",
+                    "retryable": True,
+                },
+            ),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertFalse(result["ok"])
@@ -110,17 +125,22 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertEqual("cancelled", result["state_history"][-1]["state"])
 
     def test_unknown_adapter_outcome_requires_reconciliation_and_is_not_retryable(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", return_value={
-                 "ok": False,
-                 "state": "unknown",
-                 "error_code": "payment_outcome_unknown",
-                 "error": "confirm response was lost",
-                 "stage": "confirm",
-                 "outcome_unknown": True,
-                 "retry_safe": True,
-             }):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch(
+                "sms_tool.gen_pp_link.generate_pp_link",
+                return_value={
+                    "ok": False,
+                    "state": "unknown",
+                    "error_code": "payment_outcome_unknown",
+                    "error": "confirm response was lost",
+                    "stage": "confirm",
+                    "outcome_unknown": True,
+                    "retry_safe": True,
+                },
+            ),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertEqual("unknown", result["manager_state"])
@@ -134,9 +154,11 @@ class PaymentResultContractTests(unittest.TestCase):
             outcome_unknown = True
             stage = "approve"
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=OutcomeUnknownError("response lost")):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=OutcomeUnknownError("response lost")),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertEqual("unknown", result["manager_state"])
@@ -152,9 +174,11 @@ class PaymentResultContractTests(unittest.TestCase):
             error_stage = "confirm"
             retryable = True
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=StructuredUnknownError("response lost")):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=StructuredUnknownError("response lost")),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertEqual("unknown", result["manager_state"])
@@ -175,9 +199,11 @@ class PaymentResultContractTests(unittest.TestCase):
             "status": "pending",
             "url": "https://example.test/authorize",
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=[pending_without_link, pending_with_link]):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=[pending_without_link, pending_with_link]),
+        ):
             unknown = manager.generate_payment_link("token", payment_method="paypal")
             complete = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -189,11 +215,13 @@ class PaymentResultContractTests(unittest.TestCase):
 
     def test_subprocess_timeout_has_distinct_retryable_terminal_contract(self):
         timeout = subprocess.TimeoutExpired(cmd=["extractor"], timeout=3)
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.pay_link.adapters._protocol_cfg", return_value={"timeout_seconds": 3}), \
-             patch("sms_tool.payment_egress.assert_egress_countries"), \
-             patch("sms_tool.payment_link_manager.subprocess.run", side_effect=timeout) as run_mock:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.pay_link.adapters._protocol_cfg", return_value={"timeout_seconds": 3}),
+            patch("sms_tool.payment_egress.assert_egress_countries"),
+            patch("sms_tool.payment_link_manager.subprocess.run", side_effect=timeout) as run_mock,
+        ):
             result = manager.generate_payment_link(
                 "token",
                 payment_method="ideal",
@@ -203,10 +231,13 @@ class PaymentResultContractTests(unittest.TestCase):
         # Diagnostic: confirm the mock was actually invoked exactly once.
         # If call_count != 1 the patch didn't take (flaky root-cause probe).
         # Dump the full result so we can see which early-return path was taken.
-        self.assertEqual(1, run_mock.call_count,
-                         f"subprocess.run was called {run_mock.call_count} times; "
-                         f"the patch may not have taken effect. "
-                         f"result={result}")
+        self.assertEqual(
+            1,
+            run_mock.call_count,
+            f"subprocess.run was called {run_mock.call_count} times; "
+            f"the patch may not have taken effect. "
+            f"result={result}",
+        )
         self.assertFalse(result["ok"])
         self.assertEqual("timed_out", result["status"])
         self.assertEqual("timed_out", result["manager_state"])
@@ -215,9 +246,11 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertIs(True, result["retryable"])
 
     def test_keyboard_interrupt_is_returned_as_cancelled(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=KeyboardInterrupt):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=KeyboardInterrupt),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertEqual("cancelled", result["manager_state"])
@@ -227,13 +260,18 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertIs(False, result["retryable"])
 
     def test_regular_adapter_failure_gets_structured_defaults(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_upi_qr_link", return_value={
-                 "ok": False,
-                 "error": "UPI is unavailable",
-                 "error_code": "upi_not_available",
-             }):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch(
+                "sms_tool.upi_link.generate_upi_qr_link",
+                return_value={
+                    "ok": False,
+                    "error": "UPI is unavailable",
+                    "error_code": "upi_not_available",
+                },
+            ),
+        ):
             result = manager.generate_payment_link("token", payment_method="upi")
 
         self.assertEqual("failed", result["manager_state"])
@@ -242,9 +280,11 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertIs(False, result["retryable"])
 
     def test_invalid_adapter_result_remains_a_definitive_contract_failure(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)), \
-             patch("sms_tool.gen_pp_link.generate_pp_link", return_value={}):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.gen_pp_link.generate_pp_link", return_value={}),
+        ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
         self.assertEqual("failed", result["manager_state"])
@@ -253,8 +293,10 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertIs(False, result["retryable"])
 
     def test_validation_failure_has_structured_non_retryable_error(self):
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+        ):
             result = manager.generate_payment_link("token", payment_method="not-supported")
 
         self.assertEqual("failed", result["manager_state"])

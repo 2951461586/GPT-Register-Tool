@@ -45,6 +45,12 @@ The configured mailbox proxy remains first. When
 (default), the operation proxy is appended as a fallback. This is not a claim
 that mailbox and registration traffic always share one exit.
 
+When the optional canonical lane `proxy.lanes.mailbox` is declared it is
+**authoritative**: `_mailbox_proxy_candidates` returns that pool (plus the
+operation-proxy fallback when enabled) instead of the legacy
+`mailbox_proxy` / `mailbox_proxy_pool` keys. Absent the canonical lane, the
+legacy resolution above is unchanged. See `PROXY_GUIDE.md`.
+
 ## Machine-readable contract
 
 The table is checked against executable behaviour. Update code and this table

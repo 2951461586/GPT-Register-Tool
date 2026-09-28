@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-import extractor_parity_report as parity  # noqa: E402
+import extractor_parity_report as parity  # noqa: E402  # type: ignore
 
 
 def _cmp(a: str, b: str) -> dict[str, list[str]]:
@@ -131,10 +131,7 @@ def test_two_functions_colliding_after_normalisation_both_survive():
     A dict keyed on the normalised name would silently drop one, understating
     the file's function count.
     """
-    funcs = parity.top_level_functions(
-        "def f_ideal(x):\n    return 1\n"
-        "def f_twint(x):\n    return 2\n"
-    )
+    funcs = parity.top_level_functions("def f_ideal(x):\n    return 1\ndef f_twint(x):\n    return 2\n")
     assert len(funcs) == 2, f"a sibling was overwritten: {sorted(funcs)}"
 
 
@@ -176,9 +173,7 @@ def test_self_test_detects_a_normaliser_that_erases_everything(monkeypatch):
 
 def test_self_test_detects_a_normaliser_that_erases_nothing(monkeypatch):
     """The opposite failure: never normalising makes every sibling look unique."""
-    monkeypatch.setattr(
-        parity, "_normalise", lambda node, **kw: __import__("ast").dump(node)
-    )
+    monkeypatch.setattr(parity, "_normalise", lambda node, **kw: __import__("ast").dump(node))
     assert parity.predicates_are_trustworthy() is not None
 
 
@@ -200,35 +195,67 @@ def test_void_delegating_stub_is_excluded():
 
 
 def test_returning_delegating_stub_is_excluded():
-    stub = '''
+    stub = """
         def proxy_key(proxy):
             return shared_proxy_key(proxy)
-    '''
+    """
     assert parity.is_delegating_stub(_parse_one(stub)) is True
 
 
 def test_a_call_to_a_shared_helper_among_real_logic_is_still_counted():
     """Narrowness check: the predicate must not swallow functions that merely
     happen to call a shared helper -- those still hold logic worth measuring."""
-    not_a_stub = '''
+    not_a_stub = """
         def load_proxy_seeds(path):
             shared_load_proxy_file(path)
             return sorted(result)
-    '''
+    """
     assert parity.is_delegating_stub(_parse_one(not_a_stub)) is False
 
 
 def test_a_bare_call_to_a_non_shared_name_is_not_a_stub():
-    not_a_stub = '''
+    not_a_stub = """
         def refresh():
             do_work()
-    '''
+    """
+    assert parity.is_delegating_stub(_parse_one(not_a_stub)) is False
+
+
+def test_common_alias_delegating_stub_is_excluded():
+    """``common_*`` is the alias the protocol_core extraction produced.
+
+    Missing this form counted the already-shared ``amount_from_payload`` /
+    ``collect_urls`` wrappers as duplication, which over-reports the ratchet.
+    """
+    stub = """
+        def collect_urls(payload):
+            return common_collect_urls(payload)
+    """
+    assert parity.is_delegating_stub(_parse_one(stub)) is True
+
+
+def test_shared_module_attribute_stub_is_excluded():
+    """``shared_<module>.<fn>`` is the geo / stripe_flow delegation shape."""
+    stub = """
+        def lookup_proxy_country(proxy):
+            return shared_geo.lookup_proxy_country(proxy)
+    """
+    assert parity.is_delegating_stub(_parse_one(stub)) is True
+
+
+def test_attribute_call_on_a_non_shared_object_is_not_a_stub():
+    """Narrowness: ``self.client.refresh()`` must not look like delegation."""
+    not_a_stub = """
+        def refresh(self):
+            return self.client.refresh()
+    """
     assert parity.is_delegating_stub(_parse_one(not_a_stub)) is False
 
 
 def _parse_one(source: str):
     import ast
     import textwrap as _tw
+
     tree = ast.parse(_tw.dedent(source))
     return next(n for n in tree.body if isinstance(n, ast.FunctionDef))
 
@@ -271,8 +298,7 @@ def test_control_pair_stays_independent():
     counts, _reports = parity.collect()
     key = f"{parity.CONTROL_PAIR[0]}:{parity.CONTROL_PAIR[1]}"
     assert counts[key] <= parity.CONTROL_MAX_DUPLICATES, (
-        f"control pair {key} reports {counts[key]} identical functions; the "
-        f"normaliser is over-erasing"
+        f"control pair {key} reports {counts[key]} identical functions; the normaliser is over-erasing"
     )
 
 
@@ -336,10 +362,7 @@ def test_control_check_has_its_own_rejection_path(monkeypatch):
     """
     inflated = parity.CONTROL_MAX_DUPLICATES + 1
     code = _control_probe(monkeypatch, inflated)
-    assert code == 1, (
-        "with the ratchet satisfied the control must still reject; "
-        f"got exit={code}"
-    )
+    assert code == 1, f"with the ratchet satisfied the control must still reject; got exit={code}"
 
 
 def test_cli_passes_when_control_is_within_threshold():
@@ -359,8 +382,9 @@ def test_ratchet_holds_for_the_current_tree():
         if current > allowed:
             grown.append(f"{key}: {current} > {allowed}")
     assert not grown, (
-        "extractor duplication grew:\n  " + "\n  ".join(grown) +
-        "\nExtract the shared function instead of copying it, or justify a "
+        "extractor duplication grew:\n  "
+        + "\n  ".join(grown)
+        + "\nExtract the shared function instead of copying it, or justify a "
         "baseline bump via "
         "'python scripts/extractor_parity_report.py --update-baseline'."
     )
@@ -392,7 +416,9 @@ def test_missing_extractor_is_a_loud_error():
 def test_cli_exit_zero_on_the_current_tree():
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "extractor_parity_report.py")],
-        capture_output=True, text=True, cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "ratchet OK" in result.stdout
@@ -401,9 +427,7 @@ def test_cli_exit_zero_on_the_current_tree():
 def test_cli_reports_growth_against_a_tightened_baseline(tmp_path):
     """Point the script at a baseline that understates reality; it must fail."""
     baseline_path = tmp_path / "baseline.json"
-    baseline_path.write_text(
-        json.dumps({"pairs": {"ideal:twint": {"duplicates": 0}}}), encoding="utf-8"
-    )
+    baseline_path.write_text(json.dumps({"pairs": {"ideal:twint": {"duplicates": 0}}}), encoding="utf-8")
     real = parity.BASELINE
     parity.BASELINE = baseline_path
     try:

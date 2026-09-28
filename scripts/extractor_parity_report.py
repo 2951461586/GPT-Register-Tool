@@ -72,6 +72,7 @@ import ast
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path(__file__).resolve().parent / "extractor_parity_baseline.json"
@@ -101,12 +102,24 @@ _SKIP_DIRS = {"__pycache__"}
 # Provider-identifying tokens. Erased from identifiers and string constants so
 # that `stripe_create_ideal_pm` and `stripe_create_twint_pm` compare equal.
 PROVIDER_TOKENS: tuple[str, ...] = (
-    "ideal", "IDEAL", "Ideal",
-    "twint", "TWINT", "Twint",
-    "blik", "BLIK", "Blik",
-    "momo", "MOMO", "Momo",
-    "kakao", "KAKAO", "Kakao",
-    "pix", "PIX", "Pix",
+    "ideal",
+    "IDEAL",
+    "Ideal",
+    "twint",
+    "TWINT",
+    "Twint",
+    "blik",
+    "BLIK",
+    "Blik",
+    "momo",
+    "MOMO",
+    "Momo",
+    "kakao",
+    "KAKAO",
+    "Kakao",
+    "pix",
+    "PIX",
+    "Pix",
 )
 
 NORMALISED = "PROVIDER"
@@ -121,34 +134,32 @@ FIXTURES: tuple[tuple[str, str, bool], ...] = (
     # --- provider-suffixed siblings must pair up and compare equal ---
     # This is the case that a naive exact-name join gets WRONG: it buckets both
     # as file-specific and hides them from the duplication count.
-    ("def f_ideal(x):\n    return x + 1\n",
-     "def f_twint(x):\n    return x + 1\n", True),
-    ("def stripe_create_ideal_pm(x):\n    return x + 1\n",
-     "def stripe_create_twint_pm(x):\n    return x + 1\n", True),
+    ("def f_ideal(x):\n    return x + 1\n", "def f_twint(x):\n    return x + 1\n", True),
+    ("def stripe_create_ideal_pm(x):\n    return x + 1\n", "def stripe_create_twint_pm(x):\n    return x + 1\n", True),
     # same pairing, but the body genuinely differs
-    ("def f_ideal(x):\n    return x + 1\n",
-     "def f_twint(x):\n    return x - 1\n", False),
-    ("def f_ideal(x):\n    return x > 1\n",
-     "def f_twint(x):\n    return x >= 1\n", False),
+    ("def f_ideal(x):\n    return x + 1\n", "def f_twint(x):\n    return x - 1\n", False),
+    ("def f_ideal(x):\n    return x > 1\n", "def f_twint(x):\n    return x >= 1\n", False),
     # provider token in a callee name only -> still the same shape
-    ("def f_ideal(x):\n    return ideal_helper(x)\n",
-     "def f_twint(x):\n    return twint_helper(x)\n", True),
+    ("def f_ideal(x):\n    return ideal_helper(x)\n", "def f_twint(x):\n    return twint_helper(x)\n", True),
     # differing statement count must not normalise away
-    ("def f_ideal(x):\n    return x\n",
-     "def f_ideal(x):\n    return x\n    return x\n", False),
+    ("def f_ideal(x):\n    return x\n", "def f_ideal(x):\n    return x\n    return x\n", False),
     # A provider token inside a STRING constant must normalise too, otherwise
     # every URL/log-message difference shows up as a false "different".
-    ('def f_ideal():\n    return "https://ideal.example/x"\n',
-     'def f_twint():\n    return "https://twint.example/x"\n', True),
+    (
+        'def f_ideal():\n    return "https://ideal.example/x"\n',
+        'def f_twint():\n    return "https://twint.example/x"\n',
+        True,
+    ),
     # ...but a genuinely different URL must NOT normalise away to a match.
-    ('def f_ideal():\n    return "https://ideal.example/a"\n',
-     'def f_twint():\n    return "https://twint.example/b"\n', False),
+    (
+        'def f_ideal():\n    return "https://ideal.example/a"\n',
+        'def f_twint():\n    return "https://twint.example/b"\n',
+        False,
+    ),
     # --- differently-named, unrelated functions must NOT pair ---
-    ("def alpha(x):\n    return x + 1\n",
-     "def beta(x):\n    return x + 1\n", False),
+    ("def alpha(x):\n    return x + 1\n", "def beta(x):\n    return x + 1\n", False),
     # --- whitespace / docstring differences are not real differences ---
-    ("def f_ideal(x):\n    return x + 1\n",
-     "def f_twint(x):\n    # a comment\n    return x + 1\n", True),
+    ("def f_ideal(x):\n    return x + 1\n", "def f_twint(x):\n    # a comment\n    return x + 1\n", True),
     # Docstrings are prose, not behaviour.  This fixture is the regression guard
     # for the bug fixed on 2026-09-17: `ast.unparse` round-trips docstrings
     # faithfully, so before `_drop_docstrings` existed the two bodies below
@@ -160,30 +171,68 @@ FIXTURES: tuple[tuple[str, str, bool], ...] = (
     # `_drop_docstrings` fully disabled, and mutation testing could not see the
     # predicate at all.  A guard that a broken implementation still satisfies is
     # not a guard.  Keep the non-provider word.
-    ('def f_ideal(x):\n    """Read the alpha ledger."""\n    return x + 1\n',
-     'def f_twint(x):\n    """Read the beta ledger."""\n    return x + 1\n', True),
+    (
+        'def f_ideal(x):\n    """Read the alpha ledger."""\n    return x + 1\n',
+        'def f_twint(x):\n    """Read the beta ledger."""\n    return x + 1\n',
+        True,
+    ),
     # ...but a docstring-only node is still a node: dropping prose must not turn
     # a body with a real statement difference into a match.
-    ('def f_ideal(x):\n    """Read the ledger."""\n    return x + 1\n',
-     'def f_twint(x):\n    """Read the ledger."""\n    return x + 2\n', False),
+    (
+        'def f_ideal(x):\n    """Read the ledger."""\n    return x + 1\n',
+        'def f_twint(x):\n    """Read the ledger."""\n    return x + 2\n',
+        False,
+    ),
     # --- delegating stubs must NOT count as duplication ---
     # Extraction creates these on purpose; counting them inverts the metric's
     # direction (see `is_delegating_stub`).  Two identical forwarders => the
     # function pair must be invisible, so "identical" is empty here.
-    ("def proxy_short_ideal(x):\n    return shared_proxy_short(x, normalize)\n",
-     "def proxy_short_twint(x):\n    return shared_proxy_short(x, normalize)\n", False),
-    ('def proxy_key_ideal(x):\n    """Delegate to common/proxy_bookkeeping.py."""\n'
-     "    return shared_proxy_key(x, normalize)\n",
-     'def proxy_key_twint(x):\n    """Delegate to common/proxy_bookkeeping.py."""\n'
-     "    return shared_proxy_key(x, normalize)\n", False),
+    (
+        "def proxy_short_ideal(x):\n    return shared_proxy_short(x, normalize)\n",
+        "def proxy_short_twint(x):\n    return shared_proxy_short(x, normalize)\n",
+        False,
+    ),
+    (
+        'def proxy_key_ideal(x):\n    """Delegate to common/proxy_bookkeeping.py."""\n'
+        "    return shared_proxy_key(x, normalize)\n",
+        'def proxy_key_twint(x):\n    """Delegate to common/proxy_bookkeeping.py."""\n'
+        "    return shared_proxy_key(x, normalize)\n",
+        False,
+    ),
     # A stub must be a *pure* forwarder.  A body with real work plus a shared_
     # call is still real logic and must stay counted -- otherwise wrapping a
     # duplicated body in a shared_ call would launder it out of the metric.
-    ("def f_ideal(x):\n    y = x + 1\n    return shared_helper(y)\n",
-     "def f_twint(x):\n    y = x + 1\n    return shared_helper(y)\n", True),
+    (
+        "def f_ideal(x):\n    y = x + 1\n    return shared_helper(y)\n",
+        "def f_twint(x):\n    y = x + 1\n    return shared_helper(y)\n",
+        True,
+    ),
     # Same, for a body that computes something before delegating.
-    ("def f_ideal(x):\n    return shared_helper(x) + 1\n",
-     "def f_twint(x):\n    return shared_helper(x) + 1\n", True),
+    ("def f_ideal(x):\n    return shared_helper(x) + 1\n", "def f_twint(x):\n    return shared_helper(x) + 1\n", True),
+    # --- the delegation alias/module forms must be invisible too ---
+    # Extractors delegate with a `common_*` alias (imported from
+    # `common.protocol_core`) and with a `shared_<module>.<fn>` attribute call
+    # (e.g. `shared_geo.lookup_proxy_country`, `shared_stripe_flow.*`), not only
+    # with a bare `shared_*` Name.  Before this was covered, those
+    # already-extracted wrappers were counted as duplication again -- the same
+    # trap that made batch 4 look like a no-op.
+    (
+        "def collect_urls(p):\n    return common_collect_urls(p)\n",
+        "def collect_urls(p):\n    return common_collect_urls(p)\n",
+        False,
+    ),
+    (
+        "def lookup_proxy_country(p):\n    return shared_geo.lookup_proxy_country(p)\n",
+        "def lookup_proxy_country(p):\n    return shared_geo.lookup_proxy_country(p)\n",
+        False,
+    ),
+    # ...but a body that merely *calls* a shared module and does real work with
+    # the result is still logic worth measuring.
+    (
+        "def f_ideal(x):\n    return shared_geo.lookup_proxy_country(x) + 1\n",
+        "def f_twint(x):\n    return shared_geo.lookup_proxy_country(x) + 1\n",
+        True,
+    ),
 )
 
 
@@ -201,11 +250,7 @@ def _drop_docstrings(node: ast.AST) -> None:
         if not isinstance(body, list) or not body:
             continue
         first = body[0]
-        if (
-            isinstance(first, ast.Expr)
-            and isinstance(first.value, ast.Constant)
-            and isinstance(first.value.value, str)
-        ):
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
             body.pop(0)
 
 
@@ -340,7 +385,8 @@ def is_delegating_stub(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """True when ``node`` only forwards to a shared ``common/`` helper.
 
     Recognised shapes -- the whole body, docstring aside, is a single call to a
-    name starting with ``shared_``.  Both forms occur:
+    name starting with ``shared_`` / ``common_``, or to an attribute on a
+    module alias starting with ``shared_`` / ``common_``.  All forms occur:
 
         def proxy_key(proxy: str) -> str:
             \"\"\"Delegate to common/proxy_bookkeeping.py.\"\"\"
@@ -350,10 +396,19 @@ def is_delegating_stub(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
             \"\"\"Delegate to common/http_dump.py.\"\"\"
             shared_dump_http(response, stage, ..., dump_env="IDEAL_DUMP")
 
-    The second form (a bare expression-statement call, no ``return``) is what a
-    void function delegates with.  It went unrecognised at first, which made
-    batch 4 look like a no-op: the real duplicate body was removed (-1) while
-    the two new stubs were counted as a new duplicate pair (+1).
+        def collect_urls(payload):
+            return common_collect_urls(payload)          # common_* alias
+
+        def lookup_proxy_country(proxy):
+            return shared_geo.lookup_proxy_country(proxy) # shared_<mod>.<fn>
+
+    The void form (a bare expression-statement call, no ``return``) went
+    unrecognised at first, which made batch 4 look like a no-op: the real
+    duplicate body was removed (-1) while the two new stubs were counted as a
+    new duplicate pair (+1).  The ``common_*`` alias and ``shared_<mod>.<fn>``
+    attribute forms were the same trap for the protocol_core / geo / stripe_flow
+    extractions -- they are the delegation shapes those batches actually
+    produced, so leaving them out kept already-shared code in the count.
 
     Why this exists
     ---------------
@@ -370,9 +425,12 @@ def is_delegating_stub(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     its behaviour is still worth de-duplicating.
     """
     body = node.body
-    if body and isinstance(body[0], ast.Expr) \
-            and isinstance(body[0].value, ast.Constant) \
-            and isinstance(body[0].value.value, str):
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
         body = body[1:]
     if len(body) != 1:
         return False
@@ -389,8 +447,12 @@ def is_delegating_stub(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     if not isinstance(call, ast.Call):
         return False
     func = call.func
-    name = func.id if isinstance(func, ast.Name) else None
-    return bool(name and name.startswith("shared_"))
+    if isinstance(func, ast.Name):
+        return func.id.startswith(("shared_", "common_"))
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        # `shared_geo.lookup_proxy_country(...)` / `shared_stripe_flow.f(...)`
+        return func.value.id.startswith(("shared_", "common_"))
+    return False
 
 
 def compare_sources(a: str, b: str) -> dict[str, list[str]]:
@@ -441,10 +503,7 @@ def extractor_path(name: str, root: Path = ROOT) -> Path:
     folder = root / SERVICES_ROOT / name
     if not folder.is_dir():
         raise FileNotFoundError(f"no extractor folder for {name!r}: {folder}")
-    candidates = sorted(
-        p for p in folder.glob("*.py")
-        if p.name != "__init__.py" and not (_SKIP_DIRS & set(p.parts))
-    )
+    candidates = sorted(p for p in folder.glob("*.py") if p.name != "__init__.py" and not (_SKIP_DIRS & set(p.parts)))
     if not candidates:
         raise FileNotFoundError(f"no .py file in {folder}")
     preferred = [p for p in candidates if "extract" in p.name]
@@ -469,22 +528,42 @@ def collect(root: Path = ROOT) -> tuple[dict[str, int], dict[str, dict]]:
     for a, b in PAIRS:
         key = f"{a}:{b}"
         report = pair_report(a, b, root)
-        counts[key] = int(report["duplicates"])
+        counts[key] = report["duplicates"]
         reports[key] = report
     return counts, reports
 
 
+def _as_int(value: Any, default: int = 0) -> int:
+    """Coerce a hand-editable baseline value, defaulting on bad input.
+
+    The baseline is operator-editable JSON.  A non-numeric entry used to crash
+    the gate with a raw ``ValueError`` traceback; falling back to ``default``
+    keeps the ratchet's documented semantics and never changes the result for a
+    valid numeric entry.
+    """
+    if isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def load_baseline(path: Path | None = None) -> dict:
-    return json.loads((path or BASELINE).read_text(encoding="utf-8"))
+    target = path or BASELINE
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        # JSONDecodeError is already a ValueError subclass, so callers that
+        # catch ValueError keep working; the message just names the file now.
+        raise ValueError(f"invalid baseline JSON: {target}: {exc}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--detail", action="store_true", help="print the per-pair table")
     parser.add_argument("--list", action="store_true", help="print function names")
-    parser.add_argument(
-        "--pair", help="restrict --list/--detail output to one pair, e.g. ideal:twint"
-    )
+    parser.add_argument("--pair", help="restrict --list/--detail output to one pair, e.g. ideal:twint")
     parser.add_argument(
         "--update-baseline",
         action="store_true",
@@ -498,8 +577,7 @@ def main(argv: list[str] | None = None) -> int:
     if broken is not None:
         print(f"SELF-TEST FAILED: {broken}", file=sys.stderr)
         print(
-            "extractor-parity: refusing to report on a predicate that fails its "
-            "own fixtures.",
+            "extractor-parity: refusing to report on a predicate that fails its own fixtures.",
             file=sys.stderr,
         )
         return 1
@@ -533,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
             handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         print(f"baseline updated: {BASELINE.name}")
         for key in sorted(counts):
-            before = int(previous.get("pairs", {}).get(key, {}).get("duplicates") or 0)
+            before = _as_int(previous.get("pairs", {}).get(key, {}).get("duplicates"))
             after = counts[key]
             delta = after - before
             flag = " " if delta == 0 else ("+" if delta > 0 else "!")
@@ -547,7 +625,7 @@ def main(argv: list[str] | None = None) -> int:
     baseline = load_baseline()
     grown: list[tuple[str, int, int, list[str]]] = []
     for key in sorted(counts):
-        allowed = int(baseline.get("pairs", {}).get(key, {}).get("duplicates") or 0)
+        allowed = _as_int(baseline.get("pairs", {}).get(key, {}).get("duplicates"))
         current = counts[key]
         if current <= allowed:
             continue

@@ -1,5 +1,5 @@
 """
-	TWINT 最终支付 URL 提取脚本。
+        TWINT 最终支付 URL 提取脚本。
 
 说明：
 - TWINT 在 Stripe 里通常会跳转到支付授权页。
@@ -72,7 +72,22 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
-from common.extractor_helpers import is_user_already_paid_error
+from common.extractor_helpers import (
+    is_direct_remove_proxy_error as shared_is_direct_remove_proxy_error,
+    is_proxy_health_failure as shared_is_proxy_health_failure,
+    is_user_already_paid_error,
+)
+from common.provider_profile import (
+    TWINT_PROFILE as _PROVIDER_PROFILE,
+    billing_profile as shared_billing_profile,
+    build_email as shared_build_email,
+    currency_for_country as shared_currency_for_country,
+    is_unavailable_error as shared_is_unavailable_error,
+    normalize_country as shared_normalize_country,
+    payment_browser_locale as shared_payment_browser_locale,
+    payment_browser_timezone as shared_payment_browser_timezone,
+    payment_elements_locale as shared_payment_elements_locale,
+)
 from common.protocol_core import (
     ProtocolResultReporter,
     amount_from_payload as common_amount_from_payload,
@@ -110,6 +125,37 @@ from common.proxy_selection import (
     is_preferred_proxy as shared_is_preferred_proxy,
     pick_random_proxies as shared_pick_random_proxies,
     proxy_for_country as shared_proxy_for_country,
+)
+from common.proxy_state import (
+    ProxyStateStore,
+    checkout_zero_cache_status as shared_checkout_zero_cache_status,
+    checkout_zero_cache_ttl as shared_checkout_zero_cache_ttl,
+    is_reused_proxy_record as shared_is_reused_proxy_record,
+    load_proxy_state as shared_load_proxy_state,
+    order_proxy_group as shared_order_proxy_group,
+    prune_proxy_seed_state as shared_prune_proxy_seed_state,
+    prune_proxy_state as shared_prune_proxy_state,
+    proxy_pair_key as shared_proxy_pair_key,
+    proxy_record as shared_proxy_record,
+    proxy_remove_after_fails as shared_proxy_remove_after_fails,
+    proxy_state_key as shared_proxy_state_key,
+    proxy_state_path as shared_proxy_state_path,
+    record_checkout_zero_result as shared_record_checkout_zero_result,
+    record_failure_by_stage as shared_record_failure_by_stage,
+    record_proxy_health_failure as shared_record_proxy_health_failure,
+    record_proxy_pair_approve_success as shared_record_proxy_pair_approve_success,
+    record_proxy_pair_result as shared_record_proxy_pair_result,
+    record_proxy_result as shared_record_proxy_result,
+    save_proxy_state as shared_save_proxy_state,
+    successful_approve_preferences as shared_successful_approve_preferences,
+    successful_pair_preferences as shared_successful_pair_preferences,
+    zero_cache_scheduling_enabled as shared_zero_cache_scheduling_enabled,
+)
+from common.proxy_seed_file import (
+    ProxySeedFile,
+    proxy_seed_file as shared_proxy_seed_file,
+    remove_failed_proxies as shared_remove_failed_proxies,
+    unique_proxy_seeds as shared_unique_proxy_seeds,
 )
 from common.proxy_url import (
     NO_FOUR_PART,
@@ -153,11 +199,9 @@ def print_failure_result(
 def print_already_paid_result() -> None:
     _result_reporter.already_paid()
 
+
 TWINT_UNAVAILABLE_ERROR = "当前账号支付方式不支持 TWINT"
-STRIPE_VERSION_FULL = (
-    "2025-03-31.basil; checkout_server_update_beta=v1; "
-    "checkout_manual_approval_preview=v1"
-)
+STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 DEFAULT_STRIPE_RUNTIME_VERSION = "6f8494a281"
 CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
@@ -166,6 +210,8 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
 )
+
+
 def configured_country(name: str, default: str) -> str:
     value = str(os.environ.get(name, default) or default).strip().upper()
     if not re.fullmatch(r"[A-Z]{2}", value):
@@ -173,53 +219,14 @@ def configured_country(name: str, default: str) -> str:
     return value
 
 
-TWINT_BOOTSTRAP_COUNTRY = configured_country(
-    "TWINT_BOOTSTRAP_COUNTRY", os.environ.get("TWINT_CHECKOUT_COUNTRY", "CH")
-)
+TWINT_BOOTSTRAP_COUNTRY = configured_country("TWINT_BOOTSTRAP_COUNTRY", os.environ.get("TWINT_CHECKOUT_COUNTRY", "CH"))
 TWINT_PROMOTION_COUNTRY = configured_country("TWINT_PROMOTION_COUNTRY", "VN")
-TWINT_PROVIDER_COUNTRY = configured_country(
-    "TWINT_PROVIDER_COUNTRY", os.environ.get("TWINT_BILLING_COUNTRY", "CH")
-)
+TWINT_PROVIDER_COUNTRY = configured_country("TWINT_PROVIDER_COUNTRY", os.environ.get("TWINT_BILLING_COUNTRY", "CH"))
 
-COUNTRY_CURRENCY = {
-    "CH": "CHF",
-    "NL": "EUR",
-    "BE": "EUR",
-    "DE": "EUR",
-    "FR": "EUR",
-    "US": "USD",
-    "IN": "INR",
-    "JP": "JPY",
-    "VN": "VND",
-}
-
-DEFAULT_TWINT_BILLING = {
-    "email": "redacted@example.invalid",
-    "name": "Alex Meyer",
-    "country": "CH",
-    "line1": "Bahnhofstrasse 1",
-    "line2": "",
-    "city": "Zurich",
-    "postal_code": "8001",
-    "state": "",
-}
-
-CH_BILLING_NAMES = [
-    ("Alex", "Meyer"),
-    ("Lea", "Keller"),
-    ("Noah", "Fischer"),
-    ("Mia", "Weber"),
-    ("Luca", "Schmid"),
-]
-
-CH_BILLING_ADDRESSES = [
-    ("Bahnhofstrasse 1", "Zurich", "8001"),
-    ("Aeschenplatz 2", "Basel", "4052"),
-    ("Rue du Rhone 50", "Geneva", "1204"),
-    ("Bahnhofplatz 1", "Bern", "3011"),
-]
-
-EMAIL_DOMAINS = ("gmail.com", "outlook.com", "icloud.com", "hotmail.com")
+#: Derived view of the shared profile table.  The provider-difference contract
+#: test asserts ``module.COUNTRY_CURRENCY``, so the name stays; the data is
+#: single-sourced in ``common/provider_profile.py``.
+COUNTRY_CURRENCY = dict(_PROVIDER_PROFILE.country_currency)
 
 _log_file = LOG_DIR / f"twint_{time.strftime('%Y%m%d-%H%M%S')}.log"
 # Durable rotated copy alongside the legacy append-only file above. The legacy
@@ -227,7 +234,8 @@ _log_file = LOG_DIR / f"twint_{time.strftime('%Y%m%d-%H%M%S')}.log"
 # rotation-resilient mirror. It writes to files only, never stdout.
 _durable_logger = make_file_logger("twint", LOG_DIR, redact=lambda text: redact_log_text(text))
 _dump_counter = DumpCounter()
-_proxy_state: dict[str, Any] | None = None
+#: Owned by ``_proxy_state_store`` below; the lock is still shared with the
+#: record-keeping functions that guard a read-modify-write with it.
 _proxy_state_lock = RLock()
 _log_lock = RLock()
 _proxy_file_lock = RLock()
@@ -276,8 +284,8 @@ def is_checkout_not_active_error(value: Any) -> bool:
 
 
 def is_twint_unavailable_error(value: Any) -> bool:
-    text = str(value or "")
-    return TWINT_UNAVAILABLE_ERROR in text or "当前 checkout 不支持 TWINT" in text
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_is_unavailable_error(_PROVIDER_PROFILE, value)
 
 
 def random_user_agent() -> str:
@@ -293,36 +301,33 @@ def stripe_browser_id() -> str:
 
 
 def build_email(first_name: str, last_name: str) -> str:
-    first = re.sub(r"[^a-z]", "", first_name.lower())
-    last = re.sub(r"[^a-z]", "", last_name.lower())
-    suffix = random.randint(10000, 999999)
-    domain = random.choice(EMAIL_DOMAINS)
-    if random.random() < 0.5:
-        local = f"{first}.{last}{suffix}"
-    else:
-        local = f"{first}{last}{suffix}"
-    return f"{local}@{domain}"
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_build_email(_PROVIDER_PROFILE, first_name, last_name)
 
 
 def normalize_country(country: str) -> str:
-    value = str(country or "").strip().upper()
-    return value if value in COUNTRY_CURRENCY else "CH"
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_normalize_country(_PROVIDER_PROFILE, country)
 
 
 def currency_for_country(country: str) -> str:
-    return COUNTRY_CURRENCY.get(normalize_country(country), "CHF")
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_currency_for_country(_PROVIDER_PROFILE, country)
 
 
 def payment_browser_locale() -> str:
-    return os.environ.get("TWINT_BROWSER_LOCALE", "de-CH").strip() or "de-CH"
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_payment_browser_locale(_PROVIDER_PROFILE)
 
 
 def payment_elements_locale() -> str:
-    return os.environ.get("TWINT_ELEMENTS_LOCALE", "de").strip() or "de"
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_payment_elements_locale(_PROVIDER_PROFILE)
 
 
 def payment_browser_timezone() -> str:
-    return os.environ.get("TWINT_BROWSER_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_payment_browser_timezone(_PROVIDER_PROFILE)
 
 
 def saved_payment_value() -> str:
@@ -343,9 +348,7 @@ def normalize_proxy_url(proxy: str) -> str:
     one implementation.  ``four_part=NO_FOUR_PART`` and userinfo re-encoding are
     unchanged.  ``runtime/tmp/p0_proxy_diff.py`` pins the equivalence.
     """
-    return shared_normalize_proxy_url(
-        proxy, default_scheme=default_proxy_scheme(), four_part=NO_FOUR_PART
-    )
+    return shared_normalize_proxy_url(proxy, default_scheme=default_proxy_scheme(), four_part=NO_FOUR_PART)
 
 
 def register_proxy_for_redaction(proxy: str) -> None:
@@ -360,6 +363,7 @@ def register_proxy_for_redaction(proxy: str) -> None:
         registry=_proxy_redaction_registry,
         normalize=normalize_proxy_url,
     )
+
 
 def default_proxy_scheme() -> str:
     """Delegate to the shared resolver in ``common/proxy_url.py``."""
@@ -421,6 +425,7 @@ def proxy_for_country(proxy: str, country: str) -> str:
         register=register_proxy_for_redaction,
     )
 
+
 def twint_proxy_chain(proxy_seed: str) -> tuple[str, str, str]:
     """Keep one sticky seed across configured checkout, promotion, and provider stages."""
     checkout_proxy = proxy_for_country(proxy_seed, TWINT_BOOTSTRAP_COUNTRY)
@@ -428,8 +433,7 @@ def twint_proxy_chain(proxy_seed: str) -> tuple[str, str, str]:
     provider_proxy = proxy_for_country(proxy_seed, TWINT_PROVIDER_COUNTRY)
     chain_key = proxy_chain_key(proxy_seed)
     if not chain_key or any(
-        proxy_chain_key(proxy) != chain_key
-        for proxy in (checkout_proxy, promotion_proxy, provider_proxy)
+        proxy_chain_key(proxy) != chain_key for proxy in (checkout_proxy, promotion_proxy, provider_proxy)
     ):
         raise RuntimeError("代理地区改写改变了 sticky seed，已拒绝混用代理链")
     return checkout_proxy, promotion_proxy, provider_proxy
@@ -447,7 +451,9 @@ def log_twint_proxy_chain(proxy_seed: str, checkout_proxy: str, promotion_proxy:
 
 def twint_lookup_proxy_country(group: str, proxy: str, timeout: int | None = None) -> tuple[str, str, str]:
     return shared_geo.lookup_proxy_country(
-        group, proxy, timeout,
+        group,
+        proxy,
+        timeout,
         record=proxy_record(group, proxy),
         save_state=save_proxy_state,
         new_session=new_session,
@@ -460,7 +466,9 @@ def twint_lookup_proxy_country(group: str, proxy: str, timeout: int | None = Non
 
 def twint_lookup_proxy_targets(group: str, proxy: str, timeout: int | None = None) -> tuple[bool, str]:
     return shared_geo.lookup_proxy_targets(
-        group, proxy, timeout,
+        group,
+        proxy,
+        timeout,
         record=proxy_record(group, proxy),
         save_state=save_proxy_state,
         new_session=new_session,
@@ -492,7 +500,8 @@ def maybe_check_proxy_geo(checkout_proxy: str, provider_proxy: str) -> None:
     if not env_bool("TWINT_PROXY_GEO_CHECK", False):
         return
     shared_geo.ensure_proxy_country(
-        "checkout", checkout_proxy,
+        "checkout",
+        checkout_proxy,
         lookup_country=twint_lookup_proxy_country,
         expected_countries=twint_expected_proxy_countries,
         env_bool=env_bool,
@@ -503,7 +512,8 @@ def maybe_check_proxy_geo(checkout_proxy: str, provider_proxy: str) -> None:
     )
     if env_bool("TWINT_PROXY_TARGET_CHECK", False):
         shared_geo.ensure_proxy_targets(
-            "checkout", checkout_proxy,
+            "checkout",
+            checkout_proxy,
             lookup_targets=twint_lookup_proxy_targets,
             env_bool=env_bool,
             log=log,
@@ -521,272 +531,129 @@ def normalize_pre_proxy_url(proxy: str) -> str:
     return normalize_proxy_url(proxy)
 
 
+#: One store per extractor.  It owns the previously module-level
+#: ``_proxy_state``; the wrappers below keep the old module-level API so
+#: callers (and the record-keeping batch) are untouched.
+_proxy_state_store = ProxyStateStore(
+    env_prefix="TWINT",
+    base_dir=SCRIPT_DIR,
+    proxy_key=proxy_key,
+    proxy_chain_key=proxy_chain_key,
+    env_bool=env_bool,
+    env_int=env_int,
+    normalize_country=normalize_country,
+    lock=_proxy_state_lock,
+    log=log,
+)
+
+#: Owns the seed list and its quarantine file; the redaction trio is this
+#: extractor's own so seed strings never cross registries.
+_proxy_seed_file = ProxySeedFile(
+    env_prefix="TWINT",
+    base_dir=SCRIPT_DIR,
+    proxy_chain_key=proxy_chain_key,
+    label=proxy_label,
+    redact=redact_log_text,
+    register=register_proxy_for_redaction,
+    env_bool=env_bool,
+    log=log,
+    file_lock=_proxy_file_lock,
+)
+
+
 def proxy_state_path() -> Path:
-    raw = os.environ.get("TWINT_PROXY_STATE_FILE", "").strip()
-    return Path(raw) if raw else SCRIPT_DIR / "proxy_state.json"
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_proxy_state_path(_proxy_state_store)
 
 
 def load_proxy_state() -> dict[str, Any]:
-    global _proxy_state
-    with _proxy_state_lock:
-        if _proxy_state is not None:
-            return _proxy_state
-        path = proxy_state_path()
-        if not path.exists():
-            _proxy_state = {"seed": {}, "checkout": {}, "promotion": {}, "provider": {}, "pair": {}}
-            return _proxy_state
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-        if not isinstance(data, dict):
-            data = {}
-        data.setdefault("seed", {})
-        data.setdefault("checkout", {})
-        data.setdefault("promotion", {})
-        data.setdefault("provider", {})
-        data.setdefault("pair", {})
-        _proxy_state = data
-        return _proxy_state
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_load_proxy_state(_proxy_state_store)
 
 
 def save_proxy_state() -> None:
-    with _proxy_state_lock:
-        if _proxy_state is None:
-            return
-        path = proxy_state_path()
-        path.write_text(json.dumps(_proxy_state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_save_proxy_state(_proxy_state_store)
 
 
 def proxy_state_key(group: str, proxy: str) -> str:
-    if group == "seed":
-        return proxy_chain_key(proxy)
-    return proxy_key(proxy)
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_proxy_state_key(_proxy_state_store, group, proxy)
 
 
 def prune_proxy_seed_state(proxy_seeds: list[str]) -> None:
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        seed_state = state.setdefault("seed", {})
-        active_keys = {proxy_chain_key(proxy) for proxy in proxy_seeds if proxy_chain_key(proxy)}
-        stale_keys = [key for key in seed_state if key not in active_keys]
-        for key in stale_keys:
-            del seed_state[key]
-        if stale_keys:
-            save_proxy_state()
-    if stale_keys:
-        log(f"Seed 代理状态清理完成: {len(stale_keys)}")
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_prune_proxy_seed_state(_proxy_state_store, proxy_seeds)
 
 
 def prune_proxy_state(checkout_proxies: list[str], promotion_proxies: list[str], provider_proxies: list[str]) -> None:
-    removed_counts: dict[str, int] = {}
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        active_keys_by_group: dict[str, set[str]] = {}
-        for group, proxies in (
-            ("checkout", checkout_proxies),
-            ("promotion", promotion_proxies),
-            ("provider", provider_proxies),
-        ):
-            group_state = state.get(group)
-            if not isinstance(group_state, dict):
-                continue
-            active_keys = {proxy_key(proxy) for proxy in proxies if proxy}
-            active_keys_by_group[group] = active_keys
-            stale_keys = [key for key in group_state if key not in active_keys]
-            for key in stale_keys:
-                del group_state[key]
-            if stale_keys:
-                removed_counts[group] = len(stale_keys)
-        pair_state = state.get("pair")
-        if isinstance(pair_state, dict):
-            active_checkout = active_keys_by_group.get("checkout", set())
-            active_provider = active_keys_by_group.get("provider", set())
-            stale_pair_keys = [
-                key
-                for key, record in pair_state.items()
-                if not isinstance(record, dict)
-                or record.get("checkout") not in active_checkout
-                or record.get("provider") not in active_provider
-            ]
-            for key in stale_pair_keys:
-                del pair_state[key]
-            if stale_pair_keys:
-                removed_counts["pair"] = len(stale_pair_keys)
-        if removed_counts:
-            save_proxy_state()
-    if removed_counts:
-        summary = ", ".join(f"{group}={count}" for group, count in removed_counts.items())
-        log(f"代理状态清理完成: {summary}")
+    """Delegate to ``common/proxy_state.py`` (batch 3)."""
+    return shared_prune_proxy_state(_proxy_state_store, checkout_proxies, promotion_proxies, provider_proxies)
 
 
 def proxy_record(group: str, proxy: str) -> dict[str, Any]:
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        group_state = state.setdefault(group, {})
-        key = proxy_state_key(group, proxy)
-        if not key:
-            return {}
-        record = group_state.setdefault(key, {})
-        record.setdefault("success", 0)
-        record.setdefault("fail", 0)
-        return record
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_proxy_record(_proxy_state_store, group, proxy)
 
 
 def proxy_pair_key(checkout_proxy: str, provider_proxy: str) -> str:
-    checkout_key = proxy_key(checkout_proxy)
-    provider_key = proxy_key(provider_proxy)
-    return f"{checkout_key}:{provider_key}" if checkout_key and provider_key else ""
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_proxy_pair_key(_proxy_state_store, checkout_proxy, provider_proxy)
 
 
 def record_proxy_result(group: str, proxy: str, success: bool, reason: str = "") -> dict[str, Any]:
-    if not proxy or not env_bool("TWINT_PROXY_SCORE", True):
-        return {}
-    record = proxy_record(group, proxy)
-    if not record:
-        return {}
-    now = int(time.time())
-    if success:
-        record["success"] = int(record.get("success") or 0) + 1
-        record["fail"] = 0
-        record["last_success"] = now
-        record["last_reason"] = "success"
-    else:
-        record["fail"] = int(record.get("fail") or 0) + 1
-        record["last_fail"] = now
-        record["last_reason"] = str(reason or "failed")[:160]
-    save_proxy_state()
-    return record
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_record_proxy_result(_proxy_state_store, group, proxy, success, reason)
 
 
 def proxy_remove_after_fails() -> int:
-    return env_int("TWINT_PROXY_REMOVE_AFTER_FAILS", 3)
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_proxy_remove_after_fails(_proxy_state_store)
 
 
 def is_reused_proxy_record(group: str, record: dict[str, Any]) -> bool:
-    return int(record.get("success") or 0) > 0
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_is_reused_proxy_record(_proxy_state_store, record)
 
 
 def record_proxy_health_failure(group: str, proxy: str, reason: str) -> None:
-    record = record_proxy_result(group, proxy, False, reason)
-    fail_count = int(record.get("fail") or 0)
-    remove_after = proxy_remove_after_fails() if is_reused_proxy_record(group, record) else 1
-    if fail_count >= remove_after:
-        remove_failed_proxy(group, proxy, reason)
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_record_proxy_health_failure(_proxy_state_store, group, proxy, reason, remove_failed_proxy)
 
 
 def checkout_zero_cache_ttl() -> int:
-    return env_int("TWINT_ZERO_CACHE_TTL", 86400, minimum=0)
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_checkout_zero_cache_ttl(_proxy_state_store)
 
 
 def zero_cache_scheduling_enabled() -> bool:
-    return env_bool("TWINT_ZERO_CACHE_SCHEDULING", False)
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_zero_cache_scheduling_enabled(_proxy_state_store)
 
 
 def checkout_zero_cache_status(proxy: str, country: str) -> tuple[str, int, int]:
-    if not proxy or not env_bool("TWINT_ZERO_CACHE", True):
-        return "", 0, 0
-    record = proxy_record("seed", proxy)
-    if not record:
-        return "", 0, 0
-    checked_at = int(record.get("zero_checked_at") or 0)
-    if not checked_at:
-        return "", 0, 0
-    ttl = checkout_zero_cache_ttl()
-    if ttl > 0 and int(time.time()) - checked_at > ttl:
-        return "", 0, checked_at
-    if normalize_country(str(record.get("zero_country") or country)) != normalize_country(country):
-        return "", 0, checked_at
-    amount = int(record.get("zero_amount") or 0)
-    if record.get("zero_ok") is True:
-        return "ok", amount, checked_at
-    if record.get("zero_ok") is False:
-        return "bad", amount, checked_at
-    return "", amount, checked_at
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_checkout_zero_cache_status(_proxy_state_store, proxy, country)
 
 
 def record_checkout_zero_result(proxy: str, country: str, amount: int) -> None:
-    if not proxy or not env_bool("TWINT_ZERO_CACHE", True):
-        return
-    record = proxy_record("seed", proxy)
-    if not record:
-        return
-    amount = int(amount or 0)
-    record["zero_ok"] = amount == 0
-    record["zero_amount"] = amount
-    record["zero_country"] = normalize_country(country)
-    record["zero_checked_at"] = int(time.time())
-    if amount == 0:
-        record["zero_success"] = int(record.get("zero_success") or 0) + 1
-    save_proxy_state()
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_record_checkout_zero_result(_proxy_state_store, proxy, country, amount)
 
 
 def record_proxy_pair_result(checkout_proxy: str, provider_proxy: str, success: bool, reason: str = "") -> None:
-    record_proxy_result("checkout", checkout_proxy, success, reason)
-    record_proxy_result("provider", provider_proxy, success, reason)
-    if not checkout_proxy or not provider_proxy or not env_bool("TWINT_PROXY_SCORE", True):
-        return
-    key = proxy_pair_key(checkout_proxy, provider_proxy)
-    if not key:
-        return
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        pair_state = state.setdefault("pair", {})
-        record = pair_state.setdefault(
-            key,
-            {"checkout": proxy_key(checkout_proxy), "provider": proxy_key(provider_proxy)},
-        )
-        now = int(time.time())
-        if success:
-            record["success"] = int(record.get("success") or 0) + 1
-            record["fail"] = 0
-            record["last_success"] = now
-            record["last_reason"] = "success"
-        else:
-            record["fail"] = int(record.get("fail") or 0) + 1
-            record["last_fail"] = now
-            record["last_reason"] = str(reason or "failed")[:160]
-        save_proxy_state()
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_record_proxy_pair_result(_proxy_state_store, checkout_proxy, provider_proxy, success, reason)
 
 
 def record_proxy_pair_approve_success(checkout_proxy: str, provider_proxy: str, approve_proxy: str) -> None:
-    if not checkout_proxy or not provider_proxy or not approve_proxy or not env_bool("TWINT_PROXY_SCORE", True):
-        return
-    key = proxy_pair_key(checkout_proxy, provider_proxy)
-    approve_key = proxy_key(approve_proxy)
-    if not key or not approve_key:
-        return
-    record_proxy_result("provider", approve_proxy, True, "approve_success")
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        pair_state = state.setdefault("pair", {})
-        record = pair_state.setdefault(
-            key,
-            {"checkout": proxy_key(checkout_proxy), "provider": proxy_key(provider_proxy)},
-        )
-        now = int(time.time())
-        record["approve"] = approve_key
-        record["approve_success"] = int(record.get("approve_success") or 0) + 1
-        record["approve_last_success"] = now
-        record["approve_last_reason"] = "success"
-        save_proxy_state()
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_record_proxy_pair_approve_success(_proxy_state_store, checkout_proxy, provider_proxy, approve_proxy)
 
 
 def successful_approve_preferences(checkout_proxy: str, provider_proxy: str, approve_pool: list[str]) -> list[str]:
-    if not env_bool("TWINT_PROXY_SCORE", True):
-        return []
-    pair_state = load_proxy_state().get("pair", {})
-    if not isinstance(pair_state, dict):
-        return []
-    record = pair_state.get(proxy_pair_key(checkout_proxy, provider_proxy))
-    if not isinstance(record, dict):
-        return []
-    approve_key = str(record.get("approve") or "")
-    if not approve_key:
-        return []
-    approve_by_key = {proxy_key(proxy): proxy for proxy in approve_pool}
-    approve_proxy = approve_by_key.get(approve_key)
-    return [approve_proxy] if approve_proxy else []
+    """Delegate to ``common/proxy_state.py`` (batch 3b)."""
+    return shared_successful_approve_preferences(_proxy_state_store, checkout_proxy, provider_proxy, approve_pool)
 
 
 def record_failure_by_stage(
@@ -795,97 +662,23 @@ def record_failure_by_stage(
     provider_proxy: str,
     promotion_proxy: str = "",
 ) -> None:
-    def record_seed_failure(proxy: str) -> None:
-        if not proxy:
-            return
-        if is_direct_remove_proxy_error(reason):
-            remove_failed_proxy("seed", proxy, reason)
-            record_proxy_result("seed", proxy, False, reason)
-        elif is_proxy_health_failure(reason):
-            record_proxy_health_failure("seed", proxy, reason)
-        else:
-            record_proxy_result("seed", proxy, False, reason)
-
-    if "checkout 阶段失败" in reason or "checkout 创建失败" in reason:
-        record_seed_failure(checkout_proxy)
-        return
-    if is_twint_unavailable_error(reason):
-        return
-    if "0 元优惠未生效" in reason:
-        return
-    if "approve blocked" in reason:
-        return
-    if "promotion 阶段失败" in reason or "checkout/update" in reason:
-        record_seed_failure(promotion_proxy)
-        return
-    record_seed_failure(provider_proxy)
+    """Delegate to ``common/proxy_state.py`` (batch 5)."""
+    return shared_record_failure_by_stage(
+        _proxy_state_store,
+        reason,
+        checkout_proxy,
+        provider_proxy,
+        promotion_proxy,
+        remove_failed=remove_failed_proxy,
+        is_direct_remove=is_direct_remove_proxy_error,
+        is_health_failure=is_proxy_health_failure,
+        is_unavailable=is_twint_unavailable_error,
+    )
 
 
 def order_proxy_group(group: str, proxies: list[str]) -> list[str]:
-    if not env_bool("TWINT_PROXY_SCORE", True):
-        return proxies
-    state = load_proxy_state().get(group, {})
-    skip_failed = env_bool("TWINT_PROXY_SKIP_FAILED", True)
-    fail_threshold = env_int("TWINT_PROXY_FAIL_SKIP_AFTER", 1)
-    fail_cooldown = env_int("TWINT_PROXY_FAIL_COOLDOWN", 180, minimum=0)
-    zero_ttl = checkout_zero_cache_ttl()
-    zero_scheduling = zero_cache_scheduling_enabled()
-    now = int(time.time())
-    kept: list[str] = []
-    cooldown_skipped = 0
-    zero_skipped = 0
-    zero_seen = 0
-    success_seen = 0
-    for proxy in proxies:
-        record = state.get(proxy_state_key(group, proxy), {}) if isinstance(state, dict) else {}
-        success_count = int(record.get("success") or 0)
-        fail_count = int(record.get("fail") or 0)
-        last_fail = int(record.get("last_fail") or 0)
-        if success_count > 0:
-            success_seen += 1
-        zero_checked_at = int(record.get("zero_checked_at") or 0)
-        zero_cache_valid = zero_checked_at and (zero_ttl <= 0 or now - zero_checked_at <= zero_ttl)
-        if group == "checkout" and zero_scheduling and zero_cache_valid and record.get("zero_ok") is True:
-            zero_seen += 1
-        if (
-            group == "checkout"
-            and zero_scheduling
-            and env_bool("TWINT_ZERO_CACHE_SKIP_BAD", True)
-            and zero_cache_valid
-            and record.get("zero_ok") is False
-        ):
-            zero_skipped += 1
-            continue
-        if skip_failed and fail_count >= fail_threshold:
-            in_cooldown = fail_cooldown <= 0 or not last_fail or now - last_fail <= fail_cooldown
-            if in_cooldown:
-                cooldown_skipped += 1
-                continue
-        kept.append(proxy)
-
-    if not kept and proxies:
-        log(f"{group} 代理状态过滤后为空，已全部跳过", "[WARN] ")
-
-    def rank(proxy: str) -> tuple[int, int, int, int, int]:
-        record = state.get(proxy_state_key(group, proxy), {}) if isinstance(state, dict) else {}
-        zero_checked_at = int(record.get("zero_checked_at") or 0)
-        zero_cache_valid = zero_checked_at and (zero_ttl <= 0 or now - zero_checked_at <= zero_ttl)
-        zero_rank = 1 if group == "checkout" and zero_scheduling and zero_cache_valid and record.get("zero_ok") is True else 0
-        return (
-            zero_rank,
-            int(record.get("success") or 0),
-            int(record.get("last_success") or 0),
-            -int(record.get("fail") or 0),
-            -int(record.get("last_fail") or 0),
-        )
-
-    ordered = sorted(kept, key=rank, reverse=True)
-    if cooldown_skipped or success_seen or zero_seen or zero_skipped:
-        log(
-            f"{group} 代理状态: 成功优先={success_seen}，0元命中={zero_seen}，"
-            f"冷却跳过={cooldown_skipped}，0元失败跳过={zero_skipped}"
-        )
-    return ordered
+    """Delegate to ``common/proxy_state.py`` (batch 4)."""
+    return shared_order_proxy_group(_proxy_state_store, group, proxies)
 
 
 def set_proxy(session: Any, proxy: str) -> None:
@@ -925,97 +718,23 @@ def load_proxy_file(path: Path) -> list[str]:
 
 
 def proxy_seed_file() -> Path:
-    raw = (
-        os.environ.get("TWINT_PROXY_SEED_FILE", "").strip()
-        or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
-    )
-    return Path(raw).expanduser() if raw else SCRIPT_DIR / "proxy_seeds.txt"
+    """Delegate to ``common/proxy_seed_file.py`` (batch 4)."""
+    return shared_proxy_seed_file(_proxy_seed_file)
 
 
 def is_direct_remove_proxy_error(reason: str) -> bool:
-    text = str(reason or "").lower()
-    return any(
-        marker in text
-        for marker in (
-            "proxy authentication",
-            "proxy auth",
-            "resolve proxy",
-            "could not resolve proxy",
-            "invalid proxy",
-            "malformed proxy",
-            "unsupported proxy",
-            "http 407",
-            "status 407",
-        )
-    )
+    """Delegate to ``common/extractor_helpers.py`` (batch 5)."""
+    return shared_is_direct_remove_proxy_error(reason)
 
 
 def is_proxy_health_failure(reason: str) -> bool:
-    text = str(reason or "").lower()
-    return any(
-        marker in text
-        for marker in (
-            "目标站不可达",
-            "proxy-server",
-            "connection reset",
-            "recv failure",
-            "timed out",
-            "timeout",
-            "connect tunnel failed",
-            "proxy connect aborted",
-            "proxy tunneling",
-            "proxy handshake",
-            "connection refused",
-            "ssl connect",
-            "tls connect",
-            "curl: (28)",
-            "curl: (35)",
-            "curl: (56)",
-            "http_502",
-            "http_503",
-            "http_504",
-        )
-    )
+    """Delegate to ``common/extractor_helpers.py`` (batch 5)."""
+    return shared_is_proxy_health_failure(reason)
 
 
 def remove_failed_proxies(group: str, failures: list[tuple[str, str]]) -> int:
-    if not failures or not env_bool("TWINT_PROXY_REMOVE_FAILED", True):
-        return 0
-    for proxy, _reason in failures:
-        register_proxy_for_redaction(proxy)
-    path = proxy_seed_file()
-    if not path.is_file():
-        return 0
-    reasons = {proxy_chain_key(proxy): reason for proxy, reason in failures if proxy_chain_key(proxy)}
-    if not reasons:
-        return 0
-    with _proxy_file_lock:
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-        removed = [line for line in lines if proxy_chain_key(line) in reasons]
-        if not removed:
-            return 0
-        kept = [line for line in lines if proxy_chain_key(line) not in reasons]
-        quarantine = SCRIPT_DIR / "removed_proxies.jsonl"
-        with open(quarantine, "a", encoding="utf-8") as f:
-            for line in removed:
-                chain_key = proxy_chain_key(line)
-                f.write(
-                    json.dumps(
-                        {
-                            "time": int(time.time()),
-                            "group": group,
-                            "proxy": proxy_label(line.strip()),
-                            "reason": redact_log_text(str(reasons.get(chain_key) or ""))[:300],
-                            "source": path.name,
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        temp_path = path.with_name(f".{path.name}.tmp")
-        temp_path.write_text("".join(kept), encoding="utf-8")
-        os.replace(temp_path, path)
-        return len(removed)
+    """Delegate to ``common/proxy_seed_file.py`` (batch 4)."""
+    return shared_remove_failed_proxies(_proxy_seed_file, group, failures)
 
 
 def remove_failed_proxy(group: str, proxy: str, reason: str) -> bool:
@@ -1023,19 +742,8 @@ def remove_failed_proxy(group: str, proxy: str, reason: str) -> bool:
 
 
 def unique_proxy_seeds(proxy_seeds: list[str]) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    duplicates = 0
-    for proxy_seed in proxy_seeds:
-        chain_key = proxy_chain_key(proxy_seed)
-        if not chain_key or chain_key in seen:
-            duplicates += 1
-            continue
-        seen.add(chain_key)
-        unique.append(proxy_seed)
-    if duplicates:
-        log(f"代理 Seed 去重: 忽略相同 sticky session {duplicates} 条", "[WARN] ")
-    return unique
+    """Delegate to ``common/proxy_seed_file.py`` (batch 4)."""
+    return shared_unique_proxy_seeds(_proxy_seed_file, proxy_seeds)
 
 
 def load_proxy_seeds() -> list[str]:
@@ -1095,6 +803,7 @@ def _redact_text(text: str, limit: int | None = None) -> str:
         limit_env="TWINT_DUMP_LIMIT",
         env_int=env_int,
     )
+
 
 def dump_http(
     response: requests.Response | None,
@@ -1248,9 +957,11 @@ def checkout_response_has_promo(payload: Any) -> bool:
 def checkout_response_has_trial(payload: Any) -> bool:
     if not isinstance(payload, dict):
         return False
+    # pi-lens-ignore: no-identity-operator-on-literals
     if payload.get("one_click_trial_eligible") is True:
         return True
     subscription_data = payload.get("subscription_data")
+    # pi-lens-ignore: unchecked-throwing-call-python
     if isinstance(subscription_data, dict) and int(subscription_data.get("trial_period_days") or 0) > 0:
         return True
     for key in ("trial_period_days", "trial_end"):
@@ -1297,7 +1008,14 @@ def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
         headers=headers,
         timeout=CHATGPT_TIMEOUT,
     )
-    dump_http(resp, "checkout", body, "POST", "https://chatgpt.com/backend-api/payments/checkout", force=resp.status_code >= 400)
+    dump_http(
+        resp,
+        "checkout",
+        body,
+        "POST",
+        "https://chatgpt.com/backend-api/payments/checkout",
+        force=resp.status_code >= 400,
+    )
     if resp.status_code >= 400:
         if is_user_already_paid_error(resp.text):
             raise RuntimeError("用户已支付: User is already paid")
@@ -1413,6 +1131,7 @@ def update_checkout_promotion(
         payload = resp.json() or {}
     except Exception:
         payload = {}
+    # pi-lens-ignore: no-identity-operator-on-literals
     if isinstance(payload, dict) and payload.get("success") is False:
         raise RuntimeError(f"checkout/update rejected: {str(payload)[:500]}")
     log(f"{TWINT_PROMOTION_COUNTRY} checkout/update 成功: promo={promo_id if 'promo_campaign' in body else 'off'}")
@@ -1495,9 +1214,12 @@ def amount_from_payload(payload: Any) -> int:
 
 
 def build_ctx(init_payload: dict[str, Any], checkout: dict[str, str]) -> dict[str, Any]:
-    client_context = init_payload.get("_client_context") if isinstance(init_payload.get("_client_context"), dict) else {}
+    client_context_raw = init_payload.get("_client_context")
+    client_context: dict[str, Any] = client_context_raw if isinstance(client_context_raw, dict) else {}
     return {
-        "stripe_js_id": str(client_context.get("stripe_js_id") or init_payload.get("client_stripe_js_id") or uuid.uuid4()),
+        "stripe_js_id": str(
+            client_context.get("stripe_js_id") or init_payload.get("client_stripe_js_id") or uuid.uuid4()
+        ),
         "client_session_id": str(uuid.uuid4()),
         "guid": stripe_browser_id(),
         "muid": stripe_browser_id(),
@@ -1520,7 +1242,9 @@ def stripe_elements_session_params(ctx: dict[str, Any]) -> dict[str, str]:
         "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_session_client[elements_init_source]": "custom_checkout",
         "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[session_id]": str(ctx.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"),
+        "elements_session_client[session_id]": str(
+            ctx.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"
+        ),
         "elements_session_client[stripe_js_id]": str(ctx.get("stripe_js_id") or uuid.uuid4()),
         "elements_session_client[locale]": str(ctx.get("locale") or payment_elements_locale()),
         "elements_session_client[is_aggregation_expected]": "false",
@@ -1530,36 +1254,8 @@ def stripe_elements_session_params(ctx: dict[str, Any]) -> dict[str, str]:
 
 
 def twint_billing_profile() -> dict[str, str]:
-    first_name, last_name = random.choice(CH_BILLING_NAMES)
-    line1, city, postal_code = random.choice(CH_BILLING_ADDRESSES)
-    profile = {
-        "email": build_email(first_name, last_name),
-        "name": f"{first_name} {last_name}",
-        "country": "CH",
-        "line1": line1,
-        "line2": "",
-        "city": city,
-        "postal_code": postal_code,
-        "state": "",
-    }
-    if env_bool("TWINT_USE_FIXED_BILLING", False):
-        profile = dict(DEFAULT_TWINT_BILLING)
-    env_map = {
-        "email": "TWINT_EMAIL",
-        "name": "TWINT_NAME",
-        "country": "TWINT_BILLING_COUNTRY",
-        "line1": "TWINT_LINE1",
-        "line2": "TWINT_LINE2",
-        "city": "TWINT_CITY",
-        "postal_code": "TWINT_POSTAL_CODE",
-        "state": "TWINT_STATE",
-    }
-    for key, env_name in env_map.items():
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            profile[key] = value
-    profile["country"] = normalize_country(profile.get("country", "CH"))
-    return profile
+    """Delegate to ``common/provider_profile.py`` (stage 2 S2)."""
+    return shared_billing_profile(_PROVIDER_PROFILE, env_bool=env_bool)
 
 
 def stripe_update_customer_data(
@@ -1597,9 +1293,7 @@ def stripe_update_customer_data(
         resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
         dump_http(resp, "customer_data_update_nl", body, "POST", url, force=resp.status_code >= 400)
         if resp.status_code < 400:
-            log(
-                f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}"
-            )
+            log(f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}")
             return True
         if is_checkout_not_active_error(resp.text):
             raise RuntimeError("checkout_not_active_session")
@@ -1661,7 +1355,9 @@ def stripe_update_tax_region(
 
 def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billing: dict[str, str]) -> None:
     cs_id = checkout["cs_id"]
-    processor = processor_entity_for_country(checkout.get("billing_country", "CH"), checkout.get("processor_entity") or "")
+    processor = processor_entity_for_country(
+        checkout.get("billing_country", "CH"), checkout.get("processor_entity") or ""
+    )
     checkout_page_url = f"https://chatgpt.com/checkout/{processor}/{cs_id}"
     body = {
         "snapshot": {
@@ -1688,7 +1384,14 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
             },
             timeout=CHATGPT_TIMEOUT,
         )
-        dump_http(resp, "checkout_snapshot", body, "POST", "https://chatgpt.com/backend-api/payments/checkout/snapshot", force=env_bool("TWINT_DUMP_WARMUP", False) or resp.status_code >= 400)
+        dump_http(
+            resp,
+            "checkout_snapshot",
+            body,
+            "POST",
+            "https://chatgpt.com/backend-api/payments/checkout/snapshot",
+            force=env_bool("TWINT_DUMP_WARMUP", False) or resp.status_code >= 400,
+        )
         if resp.status_code >= 400:
             if is_checkout_not_active_error(resp.text):
                 raise RuntimeError("checkout_not_active_session")
@@ -1701,7 +1404,9 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
         log(f"checkout snapshot 异常: {exc}", "[WARN] ")
 
 
-def stripe_create_twint_pm(stripe: requests.Session, cs_id: str, stripe_pk: str, billing: dict[str, str], ctx: dict[str, Any]) -> str:
+def stripe_create_twint_pm(
+    stripe: requests.Session, cs_id: str, stripe_pk: str, billing: dict[str, str], ctx: dict[str, Any]
+) -> str:
     body: dict[str, Any] = {
         "billing_details[name]": billing.get("name") or "Alex Meyer",
         "billing_details[email]": billing.get("email") or "redacted@example.invalid",
@@ -1717,7 +1422,9 @@ def stripe_create_twint_pm(stripe: requests.Session, cs_id: str, stripe_pk: str,
         body["billing_details[address][state]"] = billing["state"]
 
     resp = stripe.post("https://api.stripe.com/v1/payment_methods", data=body, timeout=DEFAULT_TIMEOUT)
-    dump_http(resp, "twint_pm", body, "POST", "https://api.stripe.com/v1/payment_methods", force=resp.status_code >= 400)
+    dump_http(
+        resp, "twint_pm", body, "POST", "https://api.stripe.com/v1/payment_methods", force=resp.status_code >= 400
+    )
     if resp.status_code >= 400:
         raise RuntimeError(f"创建 TWINT PM 失败 HTTP {resp.status_code}: {resp.text[:500]}")
     pm_id = str((resp.json() or {}).get("id") or "")
@@ -1726,7 +1433,9 @@ def stripe_create_twint_pm(stripe: requests.Session, cs_id: str, stripe_pk: str,
     return pm_id
 
 
-def add_inline_twint_payment_method_data(body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]) -> None:
+def add_inline_twint_payment_method_data(
+    body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]
+) -> None:
     body.update(
         {
             "payment_method_data[type]": "twint",
@@ -1744,7 +1453,9 @@ def add_inline_twint_payment_method_data(body: dict[str, Any], cs_id: str, billi
             "payment_method_data[client_attribution_metadata][client_session_id]": ctx["stripe_js_id"],
             "payment_method_data[client_attribution_metadata][checkout_config_id]": ctx.get("config_id") or "",
             "payment_method_data[client_attribution_metadata][elements_session_id]": ctx["elements_session_id"],
-            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx["elements_session_config_id"],
+            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx[
+                "elements_session_config_id"
+            ],
             "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
             "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
             "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
@@ -1760,11 +1471,15 @@ def add_inline_twint_payment_method_data(body: dict[str, Any], cs_id: str, billi
 
 
 def processor_entity_for_country(country: str, processor_entity: str = "") -> str:
-    return shared_stripe_flow.processor_entity_for_country(country, processor_entity, normalize_country=normalize_country)
+    return shared_stripe_flow.processor_entity_for_country(
+        country, processor_entity, normalize_country=normalize_country
+    )
 
 
 def stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str) -> str:
-    return shared_stripe_flow.stripe_checkout_long_url(cs_id, country, processor_entity, normalize_country=normalize_country)
+    return shared_stripe_flow.stripe_checkout_long_url(
+        cs_id, country, processor_entity, normalize_country=normalize_country
+    )
 
 
 def to_openai_pay_url(stripe_hosted_url: str) -> str:
@@ -1791,7 +1506,8 @@ def stripe_confirm_twint(
     runtime_version = str(ctx.get("runtime_version") or DEFAULT_STRIPE_RUNTIME_VERSION)
     body = {
         "eid": "NA",
-        "expected_amount": os.environ.get("PP_EXPECTED_AMOUNT", "").strip() or str(ctx.get("checkout_amount") or amount_from_payload(init_payload)),
+        "expected_amount": os.environ.get("PP_EXPECTED_AMOUNT", "").strip()
+        or str(ctx.get("checkout_amount") or amount_from_payload(init_payload)),
         "expected_payment_method_type": "twint",
         "return_url": stripe_confirm_return_url(cs_id, checkout, stripe_hosted_url),
         "_stripe_version": str(ctx.get("stripe_version") or STRIPE_VERSION_FULL),
@@ -1982,7 +1698,9 @@ def stripe_intent_redirect_url(
     if not intent_id or not client_secret:
         return ""
     intent_object = str(intent_payload.get("object") or "").strip()
-    intent_path = "setup_intents" if intent_object == "setup_intent" or intent_id.startswith("seti_") else "payment_intents"
+    intent_path = (
+        "setup_intents" if intent_object == "setup_intent" or intent_id.startswith("seti_") else "payment_intents"
+    )
     params = {"key": stripe_pk, "client_secret": client_secret}
     url = f"https://api.stripe.com/v1/{intent_path}/{intent_id}"
     resp = stripe.get(url, params=params, timeout=DEFAULT_TIMEOUT)
@@ -2088,14 +1806,23 @@ def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) ->
             },
             timeout=CHATGPT_TIMEOUT,
         )
-        dump_http(resp, "sentinel_ping", {}, "POST", "https://chatgpt.com/backend-api/sentinel/ping", force=env_bool("TWINT_DUMP_WARMUP", False))
+        dump_http(
+            resp,
+            "sentinel_ping",
+            {},
+            "POST",
+            "https://chatgpt.com/backend-api/sentinel/ping",
+            force=env_bool("TWINT_DUMP_WARMUP", False),
+        )
     except Exception as exc:
         log(f"approve sentinel 请求异常: {exc}", "[WARN] ")
 
 
 def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None:
     cs_id = checkout["cs_id"]
-    processor = processor_entity_for_country(checkout.get("billing_country", "CH"), checkout.get("processor_entity", ""))
+    processor = processor_entity_for_country(
+        checkout.get("billing_country", "CH"), checkout.get("processor_entity", "")
+    )
     checkout_page_url = f"https://chatgpt.com/checkout/{processor}/{cs_id}"
     if env_bool("TWINT_APPROVE_WARMUP", True):
         warmup_approve_context(chatgpt, checkout_page_url)
@@ -2295,7 +2022,7 @@ def poll_payment_page(
         last_error = str(submission or "waiting")
         time.sleep(1)
     if last_payload:
-        dump_response = type("DumpResponse", (), {})()
+        dump_response: Any = type("DumpResponse", (), {})()
         dump_response.status_code = 200
         dump_response.url = url
         dump_response.text = json.dumps(last_payload, ensure_ascii=False, indent=2)
@@ -2342,7 +2069,9 @@ def resolve_external_redirect(stripe: requests.Session, start_url: str) -> str:
 
 
 def approve_proxy_candidates(checkout_proxy: str, provider_proxy: str, approve_pool: list[str]) -> list[str]:
-    approve_preferences = successful_approve_preferences(checkout_proxy, provider_proxy, [provider_proxy] + approve_pool)
+    approve_preferences = successful_approve_preferences(
+        checkout_proxy, provider_proxy, [provider_proxy] + approve_pool
+    )
     if approve_preferences:
         log(f"命中成功 approve 代理优先: {proxy_label(approve_preferences[0])}")
     return list(dict.fromkeys(approve_preferences + [provider_proxy] + approve_pool))
@@ -2363,8 +2092,18 @@ def resolve_confirm_payload_twint(
     approve_pool: list[str],
 ) -> tuple[str, list[str], str]:
     return shared_stripe_flow.resolve_confirm_payload(
-        stripe, confirm_payload, checkout, stripe_pk, ctx, pm_id,
-        access_token, device_id, session_token, checkout_proxy, provider_proxy, approve_pool,
+        stripe,
+        confirm_payload,
+        checkout,
+        stripe_pk,
+        ctx,
+        pm_id,
+        access_token,
+        device_id,
+        session_token,
+        checkout_proxy,
+        provider_proxy,
+        approve_pool,
         provider_label="TWINT",
         redirect_label="支付 URL",
         no_redirect_note="redirect",
@@ -2397,6 +2136,7 @@ def run_provider_flow(
 
     def inspect_init(payload: dict[str, Any], stage: str) -> tuple[dict[str, Any], int]:
         current_ctx = build_ctx(payload, checkout)
+        # pi-lens-ignore: unchecked-throwing-call-python
         current_amount = int(current_ctx.get("checkout_amount") or 0)
         amount_major = current_amount / 100
         log(f"{stage} Stripe init 成功, 金额={checkout['currency']} {amount_major:.2f}")
@@ -2406,8 +2146,7 @@ def run_provider_flow(
             log(f"Stripe 可用支付方式: {methods}")
             if "twint" not in methods:
                 raise RuntimeError(
-                    f"{TWINT_UNAVAILABLE_ERROR}: {stage} amount={current_amount}; "
-                    f"payment_method_types={methods}"
+                    f"{TWINT_UNAVAILABLE_ERROR}: {stage} amount={current_amount}; payment_method_types={methods}"
                 )
         return current_ctx, current_amount
 
@@ -2441,9 +2180,7 @@ def run_provider_flow(
     )
     init_payload = stripe_init(checkout["cs_id"], stripe_pk, provider_proxy)
     hosted_url = str(init_payload.get("stripe_hosted_url") or "")
-    ctx, amount = inspect_init(
-        init_payload, f"{TWINT_PROMOTION_COUNTRY} 更新后 {TWINT_PROVIDER_COUNTRY}"
-    )
+    ctx, amount = inspect_init(init_payload, f"{TWINT_PROMOTION_COUNTRY} 更新后 {TWINT_PROVIDER_COUNTRY}")
     record_checkout_zero_result(checkout_proxy, checkout_country, amount)
     if amount != 0:
         raise RuntimeError(f"0 元优惠未生效，当前金额小单位={amount}，已停止生成非 0 元 TWINT 链")
@@ -2492,7 +2229,9 @@ def run_provider_flow(
         checkout_snapshot(snapshot_chatgpt, checkout, billing)
 
     log("Stripe confirm (expected=TWINT)...")
-    confirm_payload = stripe_confirm_twint(stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing)
+    confirm_payload = stripe_confirm_twint(
+        stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing
+    )
     log("Stripe confirm 成功, 解析跳转...")
     log_payment_page_summary("confirm", confirm_payload)
     if stop_event and stop_event.is_set():
@@ -2515,6 +2254,7 @@ def run_provider_flow(
             provider_proxy,
             approve_pool,
         )
+    # pi-lens-ignore: no-boolean-in-except
     except Exception as exc:
         if not should_retry_second_confirm_after_approve(exc):
             raise
@@ -2522,7 +2262,9 @@ def run_provider_flow(
         init_payload = stripe_init(checkout["cs_id"], stripe_pk, provider_proxy)
         hosted_url = str(init_payload.get("stripe_hosted_url") or hosted_url or "")
         ctx = build_ctx(init_payload, checkout)
-        confirm_payload = stripe_confirm_twint(stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing)
+        confirm_payload = stripe_confirm_twint(
+            stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing
+        )
         log("二次 Stripe confirm 成功, 解析跳转...")
         log_payment_page_summary("second_confirm", confirm_payload)
         redirect_url, qr_urls, retry_approve_proxy = resolve_confirm_payload_twint(
@@ -2681,36 +2423,13 @@ def run_attempt(
 
 
 def successful_pair_preferences(checkout_proxies: list[str], provider_proxies: list[str]) -> dict[str, list[str]]:
-    if not env_bool("TWINT_PROXY_SCORE", True):
-        return {}
-    checkout_by_key = {proxy_key(proxy): proxy for proxy in checkout_proxies}
-    provider_by_key = {proxy_key(proxy): proxy for proxy in provider_proxies}
-    pair_state = load_proxy_state().get("pair", {})
-    if not isinstance(pair_state, dict):
-        return {}
-
-    candidates: list[tuple[int, int, str, str]] = []
-    for record in pair_state.values():
-        if not isinstance(record, dict):
-            continue
-        success_count = int(record.get("success") or 0)
-        if success_count <= 0:
-            continue
-        checkout_proxy = checkout_by_key.get(str(record.get("checkout") or ""))
-        provider_proxy = provider_by_key.get(str(record.get("provider") or ""))
-        if checkout_proxy and provider_proxy:
-            candidates.append((success_count, int(record.get("last_success") or 0), checkout_proxy, provider_proxy))
-
-    candidates.sort(reverse=True)
-    preferences: dict[str, list[str]] = {}
-    for _success_count, _last_success, checkout_proxy, provider_proxy in candidates:
-        providers = preferences.setdefault(checkout_proxy, [])
-        if provider_proxy not in providers:
-            providers.append(provider_proxy)
-    return preferences
+    """Delegate to ``common/proxy_state.py`` (batch 5)."""
+    return shared_successful_pair_preferences(_proxy_state_store, checkout_proxies, provider_proxies)
 
 
-def build_attempt_batches(checkout_proxies: list[str], provider_proxies: list[str], max_attempts: int) -> list[tuple[str, list[str]]]:
+def build_attempt_batches(
+    checkout_proxies: list[str], provider_proxies: list[str], max_attempts: int
+) -> list[tuple[str, list[str]]]:
     per_checkout = env_int("TWINT_PROVIDER_PER_CHECKOUT", 30)
     provider_pool = provider_proxies[:]
     preferred_pairs = successful_pair_preferences(checkout_proxies, provider_proxies)
@@ -2770,6 +2489,7 @@ def is_preferred_proxy(group: str, proxy: str) -> bool:
         key=proxy_key,
     )
 
+
 def pick_random_proxies(proxies: list[str], limit: int, group: str = "") -> list[str]:
     """Delegate to the shared picker (batch 5 of the consolidation).
 
@@ -2785,6 +2505,7 @@ def pick_random_proxies(proxies: list[str], limit: int, group: str = "") -> list
         order_group=order_proxy_group,
         is_preferred=is_preferred_proxy,
     )
+
 
 def run_single_link_attempt(
     access_token: str,
@@ -2813,6 +2534,7 @@ def run_single_link_attempt(
         device_id = str(uuid.uuid4())
         checkout_candidates = pick_random_proxies(checkout_proxies, checkout_retry, "checkout")
         checkout: dict[str, str] | None = None
+        checkout_proxy = ""
         promotion_proxy = ""
         provider_proxy = ""
 
@@ -2830,8 +2552,12 @@ def run_single_link_attempt(
             try:
                 checkout_proxy, promotion_proxy, provider_proxy = twint_proxy_chain(proxy_seed)
                 log_twint_proxy_chain(proxy_seed, checkout_proxy, promotion_proxy, provider_proxy)
-                log(f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}")
-                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(checkout_proxy, checkout_country)
+                log(
+                    f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}"
+                )
+                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(
+                    checkout_proxy, checkout_country
+                )
                 if zero_status == "ok":
                     log(f"checkout 0元资格缓存命中: amount={zero_amount}")
                 elif zero_status == "bad":
@@ -2882,6 +2608,7 @@ def run_single_link_attempt(
                 return attempt, redirect_url, "", False
             last_error = "no_redirect_url"
             record_proxy_result("provider", provider_proxy, False, last_error)
+        # pi-lens-ignore: no-boolean-in-except
         except Exception as exc:
             error = str(exc)
             last_error = error
@@ -2918,9 +2645,7 @@ def run_single_link_parallel_mode(
     workers = min(max(1, requested_workers), max(1, worker_limit), twint_retry)
     checkout_country = normalize_country(os.environ.get("TWINT_CHECKOUT_COUNTRY", TWINT_BOOTSTRAP_COUNTRY))
     checkout_currency = currency_for_country(checkout_country)
-    configured_pm_country = normalize_country(
-        os.environ.get("TWINT_BILLING_COUNTRY", TWINT_PROVIDER_COUNTRY)
-    )
+    configured_pm_country = normalize_country(os.environ.get("TWINT_BILLING_COUNTRY", TWINT_PROVIDER_COUNTRY))
     max_blocked = env_int("TWINT_MAX_APPROVE_BLOCKED", twint_retry)
     approve_blocked_count = 0
     last_error = ""
@@ -3010,9 +2735,7 @@ def run_single_link_mode(
     twint_retry = env_int("TWINT_MAX_RETRY", 5)
     checkout_country = normalize_country(os.environ.get("TWINT_CHECKOUT_COUNTRY", TWINT_BOOTSTRAP_COUNTRY))
     checkout_currency = currency_for_country(checkout_country)
-    configured_pm_country = normalize_country(
-        os.environ.get("TWINT_BILLING_COUNTRY", TWINT_PROVIDER_COUNTRY)
-    )
+    configured_pm_country = normalize_country(os.environ.get("TWINT_BILLING_COUNTRY", TWINT_PROVIDER_COUNTRY))
     max_blocked = env_int("TWINT_MAX_APPROVE_BLOCKED", twint_retry)
     approve_blocked_count = 0
     last_error = ""
@@ -3030,9 +2753,7 @@ def run_single_link_mode(
         pm_country = billing["country"]
         device_id = str(uuid.uuid4())
         available_seeds = [
-            proxy_seed
-            for proxy_seed in proxy_seeds
-            if proxy_chain_key(proxy_seed) not in attempted_seed_keys
+            proxy_seed for proxy_seed in proxy_seeds if proxy_chain_key(proxy_seed) not in attempted_seed_keys
         ]
         checkout_candidates = pick_random_proxies(available_seeds, checkout_retry, "seed")
         if not checkout_candidates:
@@ -3067,7 +2788,9 @@ def run_single_link_mode(
                     f"{checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}，"
                     f"本次已尝试 Seed={len(attempted_seed_keys)}"
                 )
-                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(checkout_proxy, checkout_country)
+                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(
+                    checkout_proxy, checkout_country
+                )
                 if zero_status == "ok":
                     log(f"checkout 0元资格缓存命中: amount={zero_amount}")
                 elif zero_status == "bad":
@@ -3076,6 +2799,7 @@ def run_single_link_mode(
                 checkout = create_checkout(chatgpt, checkout_country)
                 checkout_proxy_used = checkout_proxy
                 break
+            # pi-lens-ignore: no-boolean-in-except
             except Exception as exc:
                 error = str(exc)
                 last_error = error
@@ -3122,6 +2846,7 @@ def run_single_link_mode(
                 return 0
             last_error = "no_redirect_url"
             record_proxy_result("seed", provider_proxy, False, last_error)
+        # pi-lens-ignore: no-boolean-in-except
         except Exception as exc:
             error = str(exc)
             last_error = error

@@ -1352,8 +1352,9 @@ class DumpChannelTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("UPI_DUMP_DIR", None)
             default_dir = upi_link._upi_dump_dir()
-        repo_root = os.path.dirname(os.path.abspath(upi_link.__file__))
-        repo_root = os.path.dirname(repo_root)
+        repo_root = os.path.dirname(os.path.abspath(upi_link.__file__))  # sms_tool/upi_link
+        repo_root = os.path.dirname(repo_root)  # sms_tool
+        repo_root = os.path.dirname(repo_root)  # repository root
         self.assertTrue(
             str(default_dir).startswith(os.path.join(repo_root, "runtime")),
             "默认 dump 目录 %s 不在 runtime/ 下，会被 git 跟踪" % default_dir,

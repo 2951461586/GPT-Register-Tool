@@ -11,6 +11,7 @@ from typing import Any
 from .payment_catalog import PAYMENT_METHODS, normalize_payment_method
 from .payment_flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
 from .proxy_entry import parse_proxy_list, resolve_proxy_value
+from .proxy_routing import canonical_payment_pools
 
 
 LEGACY_STAGE_KEYS: dict[str, tuple[str, ...]] = {
@@ -130,9 +131,7 @@ def method_payment_config(config: Mapping[str, Any], payment_method: Any) -> dic
     legacy_countries = legacy.get("stage_proxy_countries")
     canonical_countries = canonical.get("stage_proxy_countries")
     if canonical_owns_routing:
-        merged["stage_proxy_countries"] = (
-            dict(canonical_countries) if isinstance(canonical_countries, Mapping) else {}
-        )
+        merged["stage_proxy_countries"] = dict(canonical_countries) if isinstance(canonical_countries, Mapping) else {}
     elif isinstance(legacy_countries, Mapping):
         merged["stage_proxy_countries"] = dict(legacy_countries)
     return merged
@@ -183,9 +182,7 @@ class PaymentRoutePlan:
         options = {
             "payment_route_plan": self,
             "stage_proxy_countries": {
-                stage: route.expected_country
-                for stage, route in self.routes.items()
-                if route.expected_country
+                stage: route.expected_country for stage, route in self.routes.items() if route.expected_country
             },
             "stage_proxies": selected,
         }
@@ -260,10 +257,7 @@ class PaymentRoutePlanner:
         method_cfg = method_payment_config(self.config, method)
         profile = payment_flow_profile(method, method_cfg)
         shared_override = self._proxy_value(values.get("proxy"))
-        default = self._proxy_value(
-            default_proxy
-            or values.get("proxy")
-        )
+        default = self._proxy_value(default_proxy or values.get("proxy"))
         countries = self._countries(method, method_cfg, values)
         self._validate_countries(method, countries, values)
         raw_explicit_countries = (
@@ -291,13 +285,27 @@ class PaymentRoutePlanner:
             values,
             default,
         )
-        stage_routes = routing_method_cfg.get("stage_routes") if isinstance(routing_method_cfg.get("stage_routes"), Mapping) else {}
+        stage_routes = (
+            routing_method_cfg.get("stage_routes")
+            if isinstance(routing_method_cfg.get("stage_routes"), Mapping)
+            else {}
+        )
         explicit_stage_routes = values.get("stage_routes") if isinstance(values.get("stage_routes"), Mapping) else {}
         stage_routes = {**dict(stage_routes), **dict(explicit_stage_routes)}
-        stage_pools = routing_method_cfg.get("stage_proxy_pools") if isinstance(routing_method_cfg.get("stage_proxy_pools"), Mapping) else {}
-        explicit_stage_pools = values.get("stage_proxy_pools") if isinstance(values.get("stage_proxy_pools"), Mapping) else {}
+        stage_pools = (
+            routing_method_cfg.get("stage_proxy_pools")
+            if isinstance(routing_method_cfg.get("stage_proxy_pools"), Mapping)
+            else {}
+        )
+        explicit_stage_pools = (
+            values.get("stage_proxy_pools") if isinstance(values.get("stage_proxy_pools"), Mapping) else {}
+        )
         stage_pools = {**dict(stage_pools), **dict(explicit_stage_pools)}
-        configured_stage_proxies = routing_method_cfg.get("stage_proxies") if isinstance(routing_method_cfg.get("stage_proxies"), Mapping) else {}
+        configured_stage_proxies = (
+            routing_method_cfg.get("stage_proxies")
+            if isinstance(routing_method_cfg.get("stage_proxies"), Mapping)
+            else {}
+        )
         explicit_stage_proxies = values.get("stage_proxies") if isinstance(values.get("stage_proxies"), Mapping) else {}
         checkout_scalar = self._explicit_stage_proxy(
             PaymentStage.CHECKOUT.value,
@@ -305,12 +313,15 @@ class PaymentRoutePlanner:
             values,
             routing_method_cfg,
         )
-        approve_scalar = self._explicit_stage_proxy(
-            PaymentStage.APPROVE.value,
-            explicit_stage_proxies,
-            values,
-            routing_method_cfg,
-        ) or checkout_scalar
+        approve_scalar = (
+            self._explicit_stage_proxy(
+                PaymentStage.APPROVE.value,
+                explicit_stage_proxies,
+                values,
+                routing_method_cfg,
+            )
+            or checkout_scalar
+        )
         scalar_groups = {"checkout": checkout_scalar, "approve": approve_scalar}
 
         routes: dict[str, StageRoute] = {}
@@ -354,12 +365,16 @@ class PaymentRoutePlanner:
             if not pool and default:
                 pool = [default]
                 group_name = "default"
-            expected = str(
-                explicit_countries.get(stage)
-                or ("" if automatic_country else route_cfg.get("country"))
-                or countries.get(stage)
-                or ""
-            ).strip().upper()
+            expected = (
+                str(
+                    explicit_countries.get(stage)
+                    or ("" if automatic_country else route_cfg.get("country"))
+                    or countries.get(stage)
+                    or ""
+                )
+                .strip()
+                .upper()
+            )
             session_policy = str(route_cfg.get("session_policy") or "sticky_flow").strip()
             failure_policy = str(route_cfg.get("failure_policy") or "rotate_before_side_effect").strip()
             route = StageRoute(stage, group_name, tuple(pool), expected, session_policy, failure_policy)
@@ -369,9 +384,7 @@ class PaymentRoutePlanner:
                 continue
             selection_stage = group_name if group_name in {"checkout", "approve"} else stage
             selection_expected = (
-                countries.get(selection_stage, expected)
-                if selection_stage in {"checkout", "approve"}
-                else expected
+                countries.get(selection_stage, expected) if selection_stage in {"checkout", "approve"} else expected
             )
             reuse_key = (
                 group_name,
@@ -383,6 +396,7 @@ class PaymentRoutePlanner:
             if not chosen_base:
                 ordered = list(pool)
                 if ordered and pool_offset:
+                    # pi-lens-ignore: unchecked-throwing-call-python
                     offset = int(pool_offset) % len(ordered)
                     ordered = ordered[offset:] + ordered[:offset]
                 explicit_seed = bool(values.get("proxy") or values.get("checkout_proxy"))
@@ -396,11 +410,7 @@ class PaymentRoutePlanner:
                     and not group_name.startswith("explicit:")
                     and not group_name.startswith("configured:")
                     and not scalar_group
-                    and not (
-                        explicit_seed
-                        and len(ordered) == 1
-                        and self._proxy_value(ordered[0]) == default
-                    )
+                    and not (explicit_seed and len(ordered) == 1 and self._proxy_value(ordered[0]) == default)
                 )
                 if should_probe:
                     from .paypal_proxy import select_proxy_from_pool
@@ -418,18 +428,30 @@ class PaymentRoutePlanner:
                 if chosen_base:
                     selected_by_group[reuse_key] = chosen_base
             chosen = chosen_base
-            configured_countries = routing_method_cfg.get("stage_proxy_countries") if isinstance(routing_method_cfg.get("stage_proxy_countries"), Mapping) else {}
-            explicit_countries = values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {}
+            configured_countries = (
+                routing_method_cfg.get("stage_proxy_countries")
+                if isinstance(routing_method_cfg.get("stage_proxy_countries"), Mapping)
+                else {}
+            )
+            explicit_countries = (
+                values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {}
+            )
             country_requested = bool(
                 route_cfg.get("country")
                 or configured_countries.get(stage)
                 or explicit_countries.get(stage)
-                or (stage in {PaymentStage.AUTH_GATE.value, PaymentStage.CHECKOUT.value} and (values.get("checkout_country") or values.get("target_country")))
+                or (
+                    stage in {PaymentStage.AUTH_GATE.value, PaymentStage.CHECKOUT.value}
+                    and (values.get("checkout_country") or values.get("target_country"))
+                )
                 or (stage == PaymentStage.APPROVE.value and values.get("approve_country"))
             )
-            scalar_route = bool(explicit) or scalar_group or group_name.startswith("configured:") or bool(shared_override)
+            scalar_route = (
+                bool(explicit) or scalar_group or group_name.startswith("configured:") or bool(shared_override)
+            )
             if chosen and expected and (country_requested or not scalar_route):
                 from .paypal_proxy import rotate_proxy_session
+
                 rotation_key = (chosen, expected)
                 chosen = rotated_sessions.get(rotation_key)
                 if not chosen:
@@ -456,29 +478,30 @@ class PaymentRoutePlanner:
 
     def _named_pools(self) -> dict[str, tuple[str, ...]]:
         raw = self.protocol.get("proxy_pools") if isinstance(self.protocol.get("proxy_pools"), Mapping) else {}
-        return {str(name): tuple(parse_proxy_pool(value)) for name, value in raw.items()}
+        named = {str(name): tuple(parse_proxy_pool(value)) for name, value in raw.items()}
+        # Optional canonical region pools (``proxy.lanes.payment.pools``) merge
+        # over the legacy names; absent, this returns the legacy map unchanged.
+        canonical = canonical_payment_pools(self.config)
+        if canonical:
+            for name, pool in canonical.items():
+                if pool:
+                    named[name] = tuple(pool)
+        return named
 
-    def _legacy_groups(self, method_cfg: Mapping[str, Any], values: Mapping[str, Any], default: str) -> dict[str, tuple[str, ...]]:
+    def _legacy_groups(
+        self, method_cfg: Mapping[str, Any], values: Mapping[str, Any], default: str
+    ) -> dict[str, tuple[str, ...]]:
         protocol_fallback = (
-            parse_proxy_pool(self.protocol.get("proxy_pool"))
-            if values.get("use_protocol_proxy_pool")
-            else []
+            parse_proxy_pool(self.protocol.get("proxy_pool")) if values.get("use_protocol_proxy_pool") else []
         )
         explicit_checkout = self._first_proxy_pool(values, keys=LEGACY_STAGE_KEYS["checkout"])
         explicit_approve = self._first_proxy_pool(values, keys=LEGACY_STAGE_KEYS["approve"])
-        checkout = self._first_pool(
-            values, method_cfg, keys=LEGACY_POOL_KEYS["checkout"]
-        ) or explicit_checkout
-        approve = self._first_pool(
-            values, method_cfg, keys=LEGACY_POOL_KEYS["approve"]
-        ) or explicit_approve
+        checkout = self._first_pool(values, method_cfg, keys=LEGACY_POOL_KEYS["checkout"]) or explicit_checkout
+        approve = self._first_pool(values, method_cfg, keys=LEGACY_POOL_KEYS["approve"]) or explicit_approve
         if not checkout:
             checkout = self._first_proxy_pool(values, method_cfg, keys=LEGACY_STAGE_KEYS["checkout"])
         if not approve:
-            approve = (
-                explicit_checkout
-                or self._first_proxy_pool(method_cfg, keys=LEGACY_STAGE_KEYS["approve"])
-            )
+            approve = explicit_checkout or self._first_proxy_pool(method_cfg, keys=LEGACY_STAGE_KEYS["approve"])
         fallback = tuple(protocol_fallback or ([default] if default else []))
         return {
             "checkout": tuple(checkout) or fallback,
@@ -488,8 +511,22 @@ class PaymentRoutePlanner:
 
     def _countries(self, method: str, method_cfg: Mapping[str, Any], values: Mapping[str, Any]) -> dict[str, str]:
         automatic = bool(values.get("auto_proxy_country"))
-        configured = {} if automatic else (method_cfg.get("stage_proxy_countries") if isinstance(method_cfg.get("stage_proxy_countries"), Mapping) else {})
-        explicit = {} if automatic else (values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {})
+        configured = (
+            {}
+            if automatic
+            else (
+                method_cfg.get("stage_proxy_countries")
+                if isinstance(method_cfg.get("stage_proxy_countries"), Mapping)
+                else {}
+            )
+        )
+        explicit = (
+            {}
+            if automatic
+            else (
+                values.get("stage_proxy_countries") if isinstance(values.get("stage_proxy_countries"), Mapping) else {}
+            )
+        )
         countries = {
             normalize_payment_stage(key): str(value or "").strip().upper()
             for key, value in {**dict(configured), **dict(explicit)}.items()
@@ -518,9 +555,7 @@ class PaymentRoutePlanner:
     @staticmethod
     def _validate_countries(method: str, countries: Mapping[str, str], values: Mapping[str, Any]) -> None:
         invalid = {
-            stage: country
-            for stage, country in countries.items()
-            if country and not re.fullmatch(r"[A-Z]{2}", country)
+            stage: country for stage, country in countries.items() if country and not re.fullmatch(r"[A-Z]{2}", country)
         }
         if invalid:
             rendered = ", ".join(f"{stage}={country}" for stage, country in sorted(invalid.items()))
@@ -586,8 +621,10 @@ def payment_proxy_pools(config: Mapping[str, Any], payment_method: Any) -> dict[
         else:
             direct = []
             pool_name = str(configured or "").strip()
-        return direct or parse_proxy_pool(named.get(pool_name)) or PaymentRoutePlanner._first_pool(
-            method_cfg, keys=LEGACY_POOL_KEYS[legacy_key]
+        return (
+            direct
+            or parse_proxy_pool(named.get(pool_name))
+            or PaymentRoutePlanner._first_pool(method_cfg, keys=LEGACY_POOL_KEYS[legacy_key])
         )
 
     return {

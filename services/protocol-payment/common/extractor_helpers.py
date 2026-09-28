@@ -20,7 +20,65 @@ from __future__ import annotations
 
 from typing import Any
 
+__all__ = [
+    "is_direct_remove_proxy_error",
+    "is_proxy_health_failure",
+    "is_user_already_paid_error",
+]
+
 
 def is_user_already_paid_error(value: Any) -> bool:
     """Checkout 已支付错误判定：跨 blik / ideal / twint 行为完全一致。"""
+    # pi-lens-ignore: no-identity-operator-on-literals
     return "user is already paid" in str(value or "").lower()
+
+
+def is_direct_remove_proxy_error(reason: str) -> bool:
+    """代理凭据/可达性硬错误：跨 ideal / twint / blik 行为完全一致。
+
+    ``record_failure_by_stage`` 用它决定“直接摘除 seed”而非只记一票失败。
+    """
+    text = str(reason or "").lower()
+    return any(
+        marker in text
+        for marker in (
+            "proxy authentication",
+            "proxy auth",
+            "resolve proxy",
+            "could not resolve proxy",
+            "invalid proxy",
+            "malformed proxy",
+            "unsupported proxy",
+            "http 407",
+            "status 407",
+        )
+    )
+
+
+def is_proxy_health_failure(reason: str) -> bool:
+    """代理健康类失败（可重试、按阈值摘除）：跨 ideal / twint / blik 一致。"""
+    text = str(reason or "").lower()
+    return any(
+        marker in text
+        for marker in (
+            "目标站不可达",
+            "proxy-server",
+            "connection reset",
+            "recv failure",
+            "timed out",
+            "timeout",
+            "connect tunnel failed",
+            "proxy connect aborted",
+            "proxy tunneling",
+            "proxy handshake",
+            "connection refused",
+            "ssl connect",
+            "tls connect",
+            "curl: (28)",
+            "curl: (35)",
+            "curl: (56)",
+            "http_502",
+            "http_503",
+            "http_504",
+        )
+    )

@@ -10,7 +10,6 @@
     "services/protocol-payment/twint/twint_extract.py": 5,
     "sms_tool/accounts/account_creation.py": 1,
     "sms_tool/accounts/account_email_change.py": 1,
-    "sms_tool/accounts/account_promotion.py": 3,
     "sms_tool/accounts/account_recovery.py": 9,
     "sms_tool/accounts/account_scan.py": 1,
     "sms_tool/batch_runner.py": 1,
@@ -36,7 +35,7 @@
     "sms_tool/payment_batch.py": 1,
     "sms_tool/payment_link_manager.py": 42,
     "sms_tool/paypal/orchestrator.py": 2,
-    "sms_tool/paypal_link/gen_link.py": 50,
+    "sms_tool/paypal_link/gen_link.py": 25,
     "sms_tool/paypal_protocol.py": 1,
     "sms_tool/paypal_reverse.py": 1,
     "sms_tool/pp_link_helpers.py": 10,
@@ -84,5 +83,5 @@
     "tests/test_smailr_provider.py": 1,
     "tests/test_wallet_transport.py": 1
   },
-  "total": 455
+  "total": 427
 }

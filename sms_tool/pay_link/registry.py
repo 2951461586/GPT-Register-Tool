@@ -17,16 +17,45 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from ..paths import project_path, runtime_file
 from ..payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from ..payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method, validate_catalog_consistency
+from ..payment_catalog import (
+    PAYMENT_METHODS as CATALOG_METHODS,
+    normalize_payment_method as normalize_catalog_payment_method,
+    validate_catalog_consistency,
+)
 from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_approve_country as canonical_coerce_approve_country, parse_proxy_pool, payment_proxy_pools as canonical_payment_proxy_pools
+from ..payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
+from ..payment_routing import (
+    PaymentRoutePlan,
+    PaymentRoutePlanner,
+    coerce_approve_country as canonical_coerce_approve_country,
+    parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
-from .adapters import _run_direct_card, _run_gcash_adapter, _run_momo, _run_protocol_script, _run_regional_wallet_adapter, _run_wallet_adapter
-from .base import GOPAY_DEFAULT_APPROVE_COUNTRIES, _protocol_cfg, PAYMENT_METHODS, _LOGGER, _config_data, _reference_root, _select_kwargs
+from .adapters import (
+    _run_direct_card,
+    _run_gcash_adapter,
+    _run_momo,
+    _run_protocol_script,
+    _run_regional_wallet_adapter,
+    _run_wallet_adapter,
+)
+from .base import (
+    GOPAY_DEFAULT_APPROVE_COUNTRIES,
+    _protocol_cfg,
+    PAYMENT_METHODS,
+    _LOGGER,
+    _config_data,
+    _reference_root,
+    _select_kwargs,
+)
 
 
 def build_default_payment_registry() -> PaymentAdapterRegistry:
@@ -34,13 +63,13 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     registry = PaymentAdapterRegistry()
 
     def methods_for(adapter_key: str) -> tuple[str, ...]:
-        return tuple(
-            key for key, definition in CATALOG_METHODS.items()
-            if definition.adapter == adapter_key
-        )
+        return tuple(key for key, definition in CATALOG_METHODS.items() if definition.adapter == adapter_key)
 
-    def paypal_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def paypal_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         from ..gen_pp_link import generate_pp_link
+
         runtime_config = kwargs.pop("runtime_config", None)
         kwargs.pop("payment_method", None)
         return generate_pp_link(
@@ -49,47 +78,82 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
             auth_context=auth_context,
             paypal_generation_type=kwargs.pop("paypal_generation_type", None),
             runtime_config=runtime_config,
-            **_select_kwargs(kwargs, {
-                "checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy",
-                "confirm_proxy", "approve_proxy", "promotion_proxy", "target_country",
-                "checkout_country", "require_zero", "require_ba_token", "stage_proxy_countries",
-                "max_checkout_retries", "max_stage_retries",
-            }),
+            **_select_kwargs(
+                kwargs,
+                {
+                    "checkout_proxy",
+                    "provider_proxy",
+                    "stripe_init_proxy",
+                    "payment_method_proxy",
+                    "confirm_proxy",
+                    "approve_proxy",
+                    "promotion_proxy",
+                    "target_country",
+                    "checkout_country",
+                    "require_zero",
+                    "require_ba_token",
+                    "stage_proxy_countries",
+                    "max_checkout_retries",
+                    "max_stage_retries",
+                },
+            ),
         )
 
-    def upi_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-        from ..gen_pp_link import generate_upi_qr_link
+    def upi_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        from ..upi_link import UPI_CALL_OPTIONS, generate_upi_qr_link, upi_invocation
+
         runtime_config = kwargs.pop("runtime_config", None)
         kwargs.pop("payment_method", None)
         return generate_upi_qr_link(
-            access_token=access_token,
-            proxy=proxy,
-            auth_context=auth_context,
-            runtime_config=runtime_config,
-            **_select_kwargs(kwargs, {
-                "checkout_proxy", "provider_proxy", "approve_proxy", "target_country",
-                "checkout_country", "payment_country", "require_zero", "qr_path",
-            }),
+            **upi_invocation(
+                access_token,
+                runtime_config,
+                proxy=proxy,
+                auth_context=auth_context,
+                **_select_kwargs(kwargs, set(UPI_CALL_OPTIONS)),
+            )
         )
 
-    def wallet_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-        return _run_wallet_adapter(PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
+    def wallet_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        return _run_wallet_adapter(
+            PAYMENT_METHODS[str(kwargs.pop("payment_method"))],
+            access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            **kwargs,
+        )
 
-    def gcash_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def gcash_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         kwargs.pop("payment_method", None)
-        return _run_gcash_adapter(PAYMENT_METHODS["gcash"], access_token, proxy=proxy, auth_context=auth_context, **kwargs)
+        return _run_gcash_adapter(
+            PAYMENT_METHODS["gcash"], access_token, proxy=proxy, auth_context=auth_context, **kwargs
+        )
 
-    def script_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def script_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         spec = PAYMENT_METHODS[str(kwargs.pop("payment_method"))]
         return _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
 
-    def direct_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def direct_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         return _run_direct_card(PAYMENT_METHODS["direct_card"], access_token, proxy=proxy, **kwargs)
 
-    def momo_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def momo_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         return _run_momo(PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs)
 
-    def regional_wallet_runner(*, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    def regional_wallet_runner(
+        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
         method = str(kwargs.pop("payment_method"))
         return _run_regional_wallet_adapter(
             PAYMENT_METHODS[method],
@@ -112,11 +176,9 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     return registry
 
 
-
 def normalize_payment_method(value: Any) -> str:
     method = normalize_catalog_payment_method(value)
     return method if method in PAYMENT_METHODS else ""
-
 
 
 def payment_proxy_pools(
@@ -127,11 +189,9 @@ def payment_proxy_pools(
     return canonical_payment_proxy_pools(_config_data(runtime_config), payment_method)
 
 
-
 def payment_method_label(value: Any) -> str:
     method = normalize_payment_method(value)
     return PAYMENT_METHODS[method].label if method else str(value or "")
-
 
 
 def supported_payment_methods() -> list[dict[str, Any]]:
@@ -140,23 +200,23 @@ def supported_payment_methods() -> list[dict[str, Any]]:
     output = []
     for spec in PAYMENT_METHODS.values():
         available = spec.key in registered and (not spec.script or (root / spec.script).is_file())
-        output.append({
-            "key": spec.key,
-            "label": spec.label,
-            "country": spec.country,
-            "currency": spec.currency,
-            "adapter": spec.adapter,
-            "available": available,
-        })
+        output.append(
+            {
+                "key": spec.key,
+                "label": spec.label,
+                "country": spec.country,
+                "currency": spec.currency,
+                "adapter": spec.adapter,
+                "available": available,
+            }
+        )
     return output
-
 
 
 def register_payment_adapter(adapter: Any) -> Any:
     """Register an adapter at the payment seam; useful for new methods/tests."""
     PAYMENT_ADAPTERS.register(adapter)
     return adapter
-
 
 
 def allowed_approve_countries(payment_method: Any) -> tuple[str, ...]:
@@ -172,7 +232,6 @@ def allowed_approve_countries(payment_method: Any) -> tuple[str, ...]:
     if method == "gopay":
         return GOPAY_DEFAULT_APPROVE_COUNTRIES
     return ()
-
 
 
 def coerce_approve_country(payment_method: Any, country: Any) -> tuple[str, bool]:
@@ -202,7 +261,6 @@ def coerce_approve_country(payment_method: Any, country: Any) -> tuple[str, bool
     return coerced, True
 
 
-
 def _resolve_proxy_pool_routes(
     method: str,
     proxy: Any,
@@ -216,9 +274,7 @@ def _resolve_proxy_pool_routes(
     source = _config_data(runtime_config)
     configured_countries = values.get("stage_proxy_countries")
     configured_countries = dict(configured_countries) if isinstance(configured_countries, Mapping) else {}
-    approve_input = str(
-        configured_countries.get("approve") or values.get("approve_country") or ""
-    ).strip().upper()
+    approve_input = str(configured_countries.get("approve") or values.get("approve_country") or "").strip().upper()
     pre_coercions: list[dict[str, Any]] = []
     if approve_input:
         approve_country, changed = coerce_approve_country(method, approve_input)
@@ -227,11 +283,13 @@ def _resolve_proxy_pool_routes(
             values["stage_proxy_countries"] = configured_countries
             if str(values.get("approve_country") or "").strip():
                 values["approve_country"] = approve_country
-            pre_coercions.append({
-                "field": "approve_country",
-                "original": approve_input,
-                "coerced": approve_country,
-            })
+            pre_coercions.append(
+                {
+                    "field": "approve_country",
+                    "original": approve_input,
+                    "coerced": approve_country,
+                }
+            )
     supplied = values.get("payment_route_plan")
     if isinstance(supplied, PaymentRoutePlan):
         plan = supplied
@@ -274,7 +332,6 @@ def _resolve_proxy_pool_routes(
     return plan.checkout_proxy or proxy, routed
 
 
-
 def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str]:
     raw = _protocol_cfg(runtime_config).get("enabled_methods")
     if isinstance(raw, str):
@@ -287,4 +344,3 @@ def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str
 
 
 PAYMENT_ADAPTERS = build_default_payment_registry()
-

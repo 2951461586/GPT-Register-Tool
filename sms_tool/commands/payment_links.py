@@ -26,6 +26,14 @@ class PaymentLinkCommandContext:
     runtime_config: Mapping[str, Any]
 
 
+def _clamped_int(value: Any) -> int:
+    """Best-effort non-negative int for CLI limits; malformed input falls back to 0."""
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate PayPal BA link from Access Token."""
 
@@ -34,8 +42,10 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
         print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
-    paypal_cfg = ctx.runtime_config.get("paypal") if isinstance(ctx.runtime_config.get("paypal"), dict) else {}
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    _paypal_raw = ctx.runtime_config.get("paypal")
+    paypal_cfg: dict[str, Any] = _paypal_raw if isinstance(_paypal_raw, dict) else {}
+    _paypal_regions = paypal_cfg.get("billing_regions")
+    regions: list[Any] = _paypal_regions if isinstance(_paypal_regions, list) else []
     generation_type = (
         (getattr(args, "paypal_generation_type", None) or paypal_cfg.get("link_generation_type") or "")
         .strip()
@@ -103,15 +113,17 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
 
 def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate UPI hosted payment link and QR code from Access Token."""
-    from ..gen_pp_link import generate_upi_qr_link
+    from ..upi_link import generate_upi_qr_link, upi_invocation
 
     at = (getattr(args, "at", None) or "").strip()
     if not at:
         print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
         raise SystemExit(1)
 
-    upi_cfg = ctx.runtime_config.get("upi") if isinstance(ctx.runtime_config.get("upi"), dict) else {}
-    regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
+    _upi_raw = ctx.runtime_config.get("upi")
+    upi_cfg: dict[str, Any] = _upi_raw if isinstance(_upi_raw, dict) else {}
+    _upi_regions = upi_cfg.get("billing_regions")
+    regions: list[Any] = _upi_regions if isinstance(_upi_regions, list) else []
     checkout_country = (
         (
             getattr(args, "checkout_country", None)
@@ -139,20 +151,22 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "upi")
     require_zero = not getattr(args, "no_require_zero", False)
     result = generate_upi_qr_link(
-        access_token=at,
-        proxy=proxy,
-        checkout_proxy=checkout_proxy,
-        provider_proxy=provider_proxy,
-        approve_proxy=approve_proxy,
-        target_country=checkout_country,
-        checkout_country=checkout_country,
-        payment_country=payment_country,
-        require_zero=require_zero,
-        qr_path=getattr(args, "qr_path", None),
-        runtime_config=ctx.runtime_config,
-        wait_paid=bool(getattr(args, "wait_paid", False)),
-        paid_timeout=getattr(args, "paid_timeout", 900.0) or 900.0,
-        require_server_upi_mandate=bool(getattr(args, "require_server_upi_mandate", False)),
+        **upi_invocation(
+            at,
+            ctx.runtime_config,
+            proxy=proxy,
+            checkout_proxy=checkout_proxy,
+            provider_proxy=provider_proxy,
+            approve_proxy=approve_proxy,
+            target_country=checkout_country,
+            checkout_country=checkout_country,
+            payment_country=payment_country,
+            require_zero=require_zero,
+            qr_path=getattr(args, "qr_path", None),
+            wait_paid=bool(getattr(args, "wait_paid", False)),
+            paid_timeout=getattr(args, "paid_timeout", 900.0) or 900.0,
+            require_server_upi_mandate=bool(getattr(args, "require_server_upi_mandate", False)),
+        )
     )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -205,7 +219,7 @@ def batch_auto_pay(args: Any) -> None:
     from ..paypal_auto import auto_pay as run_auto_pay
     from ..storage import list_paypal_accounts
 
-    limit = max(0, int(args.batch_auto_pay_limit or 0))
+    limit = _clamped_int(args.batch_auto_pay_limit)
 
     # Get accounts with pending PayPal status
     all_accounts = list_paypal_accounts()
@@ -273,7 +287,7 @@ def list_paypal_ba_queue(args: Any) -> None:
     from ..desktop_ipc import emit_result
     from ..paypal_authorization_queue import list_paypal_ba_authorizations
 
-    items = list_paypal_ba_authorizations(limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0)))
+    items = list_paypal_ba_authorizations(limit=_clamped_int(getattr(args, "paypal_ba_queue_limit", 0)))
     emit_result(
         {"ok": True, "total": len(items), "results": items},
         enabled=bool(getattr(args, "desktop_ipc", False)),
@@ -291,13 +305,16 @@ def process_paypal_ba_queue(args: Any) -> None:
             approval_url=str(item.get("approval_url") or ""),
             proxy=getattr(args, "proxy", None),
             headless=bool(getattr(args, "auto_pay_headless", False)),
-            timeout=int(getattr(args, "auto_pay_timeout", 180) or 180),
+            timeout=_clamped_int(getattr(args, "auto_pay_timeout", 180)) or 180,
             reverse_only=bool(getattr(args, "auto_pay_reverse_only", False)),
         )
 
+    def _progress(event: dict[str, Any]) -> None:
+        emit_event(event)
+
     result = process_paypal_ba_authorizations(
         authorize,
-        limit=max(0, int(getattr(args, "paypal_ba_queue_limit", 0) or 0)),
-        progress=lambda event: emit_event(event),
+        limit=_clamped_int(getattr(args, "paypal_ba_queue_limit", 0)),
+        progress=_progress,
     )
     emit_result(result, enabled=bool(getattr(args, "desktop_ipc", False)))

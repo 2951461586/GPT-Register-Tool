@@ -107,6 +107,49 @@ that flag changes the egress used by *every* phone verification, not just
 mismatched ones. The three options considered are recorded in
 `docs/audits/scan-2026-09-12-localflow-register-reference.md` (finding P4).
 
+## Unified proxy lanes and the optional `proxy.lanes` declaration (2026-09-28)
+
+The three egress lanes resolve through three deliberately different modules
+(Rule 19 keeps them apart):
+
+| Lane | Resolver | Legacy declaration keys |
+| --- | --- | --- |
+| registration | `proxy_routing.proxy_pool_for` | `proxy.registration` / `proxy.pool` / `proxy.default` |
+| mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
+| payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
+
+`sms_tool/proxy_registry.py` is the single read/manage surface over all three
+(`resolve` / `census`, credential-free). It **fronts** the resolvers; it does
+not replace them.
+
+When `proxy.lanes` is present it is **authoritative** for the matching lane;
+when absent (the default) every resolver uses its legacy keys unchanged, so
+existing shards keep working byte-for-byte. All three live paths honour it:
+`proxy_pool_for` for registration, `mailbox._mailbox_proxy_candidates` for the
+OTP poller, and `PaymentRoutePlanner._named_pools` for payment region pools.
+
+```jsonc
+"proxy": { "lanes": {
+  "protocol_registration": ["http://..."],
+  "browser_registration":  ["http://..."],
+  "mailbox":               ["http://127.0.0.1:7897"],
+  "payment": { "pools": { "US": ["..."], "JP": ["..."] }, "default": ["..."] }
+}}
+```
+
+`proxy.lanes.payment.pools` names are the ones referenced by
+`protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
+
+Inspect everything with the credential-free census:
+
+```powershell
+python scripts/proxy_census.py
+python scripts/proxy_census.py --json --methods paypal,upi,kakao,momo
+```
+
+`proxy` remains owned by the `proxy` shard (`SHARD_OWNERSHIP`), so `lanes`
+routes to `proxy.json` and needs no schema change.
+
 ## Examples and credentials
 
 `config.example.json` uses placeholders or local/documentation endpoints.
