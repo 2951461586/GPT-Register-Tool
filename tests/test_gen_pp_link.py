@@ -684,6 +684,8 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                             "total_summary": {"due": 0, "currency": "inr"},
                         },
                     )
+                if url.endswith("/v1/payment_methods"):
+                    return FakeResponse(200, {"id": "pm_test_upi"})
                 raise AssertionError(url)
 
         def fake_new_session(proxy=""):

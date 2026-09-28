@@ -149,6 +149,7 @@ def _upi_build_confirm_body(
     pm_id: str = "",
     inline_pm: bool = True,
     return_url: str = "",
+    payment_method_selection_flow: str = "automatic",
 ) -> dict[str, str]:
     """构造 custom 模式 confirm 载荷。
 
@@ -189,7 +190,7 @@ def _upi_build_confirm_body(
         "client_attribution_metadata[merchant_integration_subtype]": "payment-element",
         "client_attribution_metadata[merchant_integration_version]": "custom_checkout",
         "client_attribution_metadata[payment_intent_creation_flow]": "deferred",
-        "client_attribution_metadata[payment_method_selection_flow]": "automatic",
+        "client_attribution_metadata[payment_method_selection_flow]": str(payment_method_selection_flow),
         "client_attribution_metadata[elements_session_id]": str(ctx.get("elements_session_id") or ""),
         "client_attribution_metadata[elements_session_config_id]": str(ctx.get("elements_session_config_id") or ""),
         "client_attribution_metadata[merchant_integration_additional_elements][0]": "payment",
@@ -239,7 +240,9 @@ def _upi_build_confirm_body(
                 "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
                 "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
                 "payment_method_data[client_attribution_metadata][payment_intent_creation_flow]": "deferred",
-                "payment_method_data[client_attribution_metadata][payment_method_selection_flow]": "automatic",
+                "payment_method_data[client_attribution_metadata][payment_method_selection_flow]": str(
+                    payment_method_selection_flow
+                ),
             }
         )
         if billing.get("state"):
