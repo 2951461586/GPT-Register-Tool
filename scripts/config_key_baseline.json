@@ -16,6 +16,7 @@
     "driver",
     "drivers",
     "existing_login_continue_on_verified_page",
+    "fingerprint_pool",
     "humanize",
     "password_charset",
     "password_random_length",
