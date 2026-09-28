@@ -69,7 +69,7 @@ class Base64UrlDecodeTests(unittest.TestCase):
         """非法输入一律返回 None，绝不抛异常（调用方靠 None 判断）。"""
         for bad in ("", "   ", None, "!!!not-base64!!!", "eyJhIjoxfQ--"):
             with self.subTest(bad=bad):
-                self.assertIsNone(upi_link._upi_decode_base64url_json(bad))
+                self.assertIsNone(upi_link._upi_decode_base64url_json(bad))  # type: ignore[arg-type]
 
     def test_trailing_dashes_are_not_silently_successful(self):
         """``eyJhIjoxfQ--`` 长度非法（10 字符），任何字母表都解不出——
@@ -403,7 +403,7 @@ class ConfirmBodyTests(unittest.TestCase):
             return_url="https://chatgpt.com/",
         )
         kwargs.update(overrides)
-        return upi_link._upi_build_confirm_body(**kwargs)
+        return upi_link._upi_build_confirm_body(**kwargs)  # type: ignore[arg-type]
 
     def test_custom_only_fields_present(self):
         """custom 专有字段。字段清单与参考实现逐字对齐——
@@ -1099,10 +1099,18 @@ class UiModeConfigTests(unittest.TestCase):
         self.assertEqual(body.get("elements_session_client[elements_init_source]"), "custom_checkout")
 
     def test_ui_mode_value_set_is_enumerated(self):
-        """custom 与 hosted 都是合法取值——hosted 只是不再是默认。"""
-        import inspect
+        """custom 与 hosted 都是合法取值——hosted 只是不再是默认。
 
-        source = inspect.getsource(upi_link)
+        The literals live in the module that owns runtime resolution, so scan
+        every source file in the package instead of ``inspect.getsource`` on the
+        facade (which is a re-export shell after the 2026-09-28 split).
+        """
+        from pathlib import Path
+
+        package = Path(upi_link.__file__).resolve().parent
+        source = "\n".join(
+            path.read_text(encoding="utf-8") for path in sorted(package.glob("*.py"))
+        )
         self.assertIn('"custom"', source)
         self.assertIn('"hosted"', source)
 
@@ -1417,7 +1425,9 @@ class FingerprintContractTests(unittest.TestCase):
         class NoProfileFields:
             """什么字段都没有——两个分支都应判定为缺失。"""
 
-        with mock.patch.object(upi_link, "browser_profile_for_country", lambda country: NoProfileFields()):
+        from sms_tool.upi_link import session as upi_session
+
+        with mock.patch.object(upi_session, "browser_profile_for_country", lambda country: NoProfileFields()):
             with self.assertRaises(RuntimeError) as ctx:
                 upi_link._upi_fingerprint(0, "IN")
         self.assertIn("browser_profile_for_country", str(ctx.exception))
@@ -1438,7 +1448,9 @@ class FingerprintContractTests(unittest.TestCase):
 
         from unittest import mock
 
-        with mock.patch.object(upi_link, "browser_profile_for_country", lambda country: TrapProfile()):
+        from sms_tool.upi_link import session as upi_session
+
+        with mock.patch.object(upi_session, "browser_profile_for_country", lambda country: TrapProfile()):
             with self.assertRaises(RuntimeError) as ctx:
                 upi_link._upi_fingerprint(0, "IN")
         self.assertIn("browser_profile_for_country", str(ctx.exception))
@@ -1684,7 +1696,7 @@ class ZeroAmountCacheTests(unittest.TestCase):
         spy = Spy()
         upi_link._upi_record_zero_result(None, self.PROXY, "IN", 1)
         upi_link._upi_record_zero_result(spy, "", "IN", 1)
-        upi_link._upi_record_zero_result(spy, None, "IN", 1)
+        upi_link._upi_record_zero_result(spy, None, "IN", 1)  # type: ignore[arg-type]
         self.assertEqual(spy.calls, [], "空代理/空 state 时不应往下游写")
 
         # 反过来：正常入参必须真的被调用，证明探针本身有效

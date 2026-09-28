@@ -6,7 +6,8 @@ entrypoint, applied to UPI.
 Background
 ----------
 UPI extraction used to be reachable three ways: the real definition in
-``sms_tool/upi_link/`` (pipeline ``__init__.py`` + ``_extract.py``), a
+``sms_tool/upi_link/`` (package: re-export facade ``__init__.py`` + layered
+submodules incl. ``_extract.py``), a
 re-export through the ``paypal_link`` package
 (`gen_link` imported the whole ``_upi_*`` block, then ``paypal_link/__init__``
 put it in ``__all__``), and ``sms_tool.gen_pp_link`` (a
@@ -37,7 +38,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "sms_tool"
 ENTRYPOINT = "generate_upi_qr_link"
-REAL_MODULE = "sms_tool/upi_link/__init__.py"
+REAL_MODULE = "sms_tool/upi_link/pipeline.py"
+REAL_PACKAGE_PREFIX = "sms_tool/upi_link/"
 
 # A representative slice of the UPI surface the paypal_link facade must not own.
 UPI_NAMES = (
@@ -73,8 +75,8 @@ def test_generate_upi_qr_link_has_exactly_one_definition():
         "Two same-named implementations make patching in tests silently miss the "
         "other call path -- keep one definition and import it everywhere."
     )
-    assert next(iter(sites)) == REAL_MODULE, (
-        f"{ENTRYPOINT} moved out of {REAL_MODULE} (now {next(iter(sites))}). "
+    assert next(iter(sites)).startswith(REAL_PACKAGE_PREFIX), (
+        f"{ENTRYPOINT} moved out of {REAL_PACKAGE_PREFIX} (now {next(iter(sites))}). "
         "Update this guard deliberately if that was intentional."
     )
 
@@ -84,7 +86,11 @@ def test_upi_link_is_the_single_owner():
 
     fn = getattr(upi_link, ENTRYPOINT, None)
     assert fn is not None, f"sms_tool.upi_link lost {ENTRYPOINT}"
-    assert fn.__module__ == "sms_tool.upi_link"
+    assert fn.__module__ == "sms_tool.upi_link.pipeline", (
+        f"sms_tool.upi_link.{ENTRYPOINT} resolves to {fn.__module__}, expected "
+        "sms_tool.upi_link.pipeline (the package re-exports it; the definition "
+        "must stay in the pipeline module)"
+    )
 
 
 def test_paypal_link_facade_drops_the_upi_surface():

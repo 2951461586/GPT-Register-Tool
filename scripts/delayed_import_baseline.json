@@ -99,7 +99,11 @@
     "sms_tool/store/connection.py": 2,
     "sms_tool/store/markers.py": 1,
     "sms_tool/store/normalize.py": 2,
-    "sms_tool/upi_link/__init__.py": 9,
+    "sms_tool/upi_link/browser.py": 3,
+    "sms_tool/upi_link/config.py": 2,
+    "sms_tool/upi_link/sentinel.py": 1,
+    "sms_tool/upi_link/session.py": 2,
+    "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
   "total": 411

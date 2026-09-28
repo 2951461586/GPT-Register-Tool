@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import os
+import re
+
+
+UPI_DUMP_DEFAULT_DIR = "runtime/upi_dumps"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
+UPI_CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
+UPI_CHECKOUT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
+UPI_CHECKOUT_APPROVE_URL = "https://chatgpt.com/backend-api/payments/checkout/approve"
+UPI_CHECKOUT_SNAPSHOT_URL = "https://chatgpt.com/backend-api/payments/checkout/snapshot"
+UPI_SENTINEL_PING_URL = "https://chatgpt.com/backend-api/sentinel/ping"
+STRIPE_PAYMENT_PAGE_INIT_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/init"
+STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/confirm"
+STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
+STRIPE_PAYMENT_METHODS_URL = "https://api.stripe.com/v1/payment_methods"
+STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
+UPI_CPMT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
+UPI_CPMT_START_URL = "https://chatgpt.com/backend-api/payments/checkout/custom_payment_method/start"
+UPI_CONFIRMATION_TOKENS_URL = "https://api.stripe.com/v1/confirmation_tokens"
+UPI_PAYMENT_INTENT_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_intents/{pi_id}/confirm"
+UPI_PAYMENT_INTENT_GET_URL_T = "https://api.stripe.com/v1/payment_intents/{pi_id}"
+UPI_SENTINEL_APPROVAL_FLOW = "checkout_session_approval"
+UPI_SENTINEL_CHECKOUT_FLOW = "chatgpt_checkout"
+UPI_WARMUP_TIMEOUT = 25
+UPI_ATTESTATION_ENV_KEYS = (
+    "PAY153_UPI_ATTESTATION",
+    "MIN_UPI_ATTESTATION",
+    "MIN_OAICS_ATTESTATION",
+)
+_UPI_PAGE_BUILD_RE = re.compile(r'<html[^>]*\bdata-build="([^"]+)"', re.I)
+_UPI_PAGE_BUILD_ANY_RE = re.compile(r'\bdata-build="([^"]+)"', re.I)
+_UPI_PAGE_SEQ_RE = re.compile(r'<html[^>]*\bdata-seq="([^"]+)"', re.I)
+_UPI_PAGE_SEQ_ANY_RE = re.compile(r'\bdata-seq="(\d+)"', re.I)
+_UPI_PAGE_SEQ_JSON_RE = re.compile(r'"buildNumber"\s*:\s*"?(\d{5,})')
+_UPI_ATTESTATION_RE = re.compile(r'"webDeploymentAttestation"\s*:\s*"([^"]+)"')
+_UPI_ATTESTATION_ANY_RE = re.compile(r'[^A-Za-z0-9]webDeploymentAttestation[=:]\s*["\']?([A-Za-z0-9._-]+)')
+UPI_APPROVAL_MAX_ATTEMPTS = 60
+UPI_QR_POLL_MAX_ATTEMPTS = 30
+UPI_CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
+UPI_CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
+UPI_QR_POLL_INTERVAL = 1.0
+UPI_FINGERPRINT_TEMPLATES: tuple[dict[str, str], ...] = (
+    {
+        "name": "chrome-win",
+        "impersonate": "chrome136",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/136.0.7103.114 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+        "locale": "en-IN",
+        "elements_locale": "en",
+        "timezone": "Asia/Kolkata",
+        "accept_language": "en-IN,en;q=0.9",
+    },
+    {
+        "name": "chrome-mac",
+        "impersonate": "chrome124",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_1) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.6367.119 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Google Chrome";v="124", "Chromium";v="124", "Not.A/Brand";v="99"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+        "locale": "en-IN",
+        "elements_locale": "en",
+        "timezone": "Asia/Kolkata",
+        "accept_language": "en-IN,en;q=0.9",
+    },
+    {
+        "name": "chrome-linux",
+        "impersonate": "chrome136",
+        "user_agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.114 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Not.A/Brand";v="99", "Chromium";v="136", "Google Chrome";v="136"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Linux"',
+        "locale": "en-IN",
+        "elements_locale": "en",
+        "timezone": "Asia/Kolkata",
+        "accept_language": "en-IN,en;q=0.9",
+    },
+)
+UPI_DEFAULT_FINGERPRINT = UPI_FINGERPRINT_TEMPLATES[0]
+UPI_BILLING_NAMES: tuple[tuple[str, str], ...] = (
+    ("Aisha", "Sharma"),
+    ("Arjun", "Mehta"),
+    ("Kavya", "Gupta"),
+    ("Rohan", "Kapoor"),
+    ("Priya", "Nair"),
+)
+UPI_BILLING_ADDRESSES: tuple[tuple[str, str, str, str], ...] = (
+    ("24 Park Street", "Kolkata", "700016", "WB"),
+    ("14 MG Road", "Bengaluru", "560001", "KA"),
+    ("18 Marine Drive", "Mumbai", "400020", "MH"),
+    ("32 Connaught Place", "New Delhi", "110001", "DL"),
+)
+UPI_EMAIL_DOMAINS: tuple[str, ...] = ("gmail.com", "outlook.com", "icloud.com", "hotmail.com")
+UPI_BILLING_IN = {
+    "name": "Rahul Sharma",
+    "email": "upi-scanner@example.com",
+    "line1": "Flat 302, Sai Residency",
+    "line2": "MG Road, Andheri East",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "postal": "400069",
+    "country": "IN",
+}
+UPI_SECOND_CONFIRM_MARKERS = (
+    "checkout_upcoming_invoice_mismatch",
+    "redirect url resolution timeout",
+    "missing_redirect",
+)
+UPI_CALL_OPTIONS: tuple[str, ...] = (
+    "proxy",
+    "auth_context",
+    "checkout_proxy",
+    "provider_proxy",
+    "approve_proxy",
+    "target_country",
+    "checkout_country",
+    "payment_country",
+    "require_zero",
+    "qr_path",
+    "proxy_state",
+    "device_id",
+    "session_token",
+    "wait_paid",
+    "paid_timeout",
+    "require_server_upi_mandate",
+)

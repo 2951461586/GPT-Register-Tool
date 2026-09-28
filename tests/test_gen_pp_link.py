@@ -1,9 +1,35 @@
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
 from sms_tool import paypal_extract
-from sms_tool import upi_link
+
+
+def _patch_upi(*, new_session=None, load_json=None, write_qr=None):
+    """Patch the UPI submodules that actually bind each seam.
+
+    Since the 2026-09-28 split, ``_new_session`` / ``_load_json`` /
+    ``_write_qr_png`` live in submodules and are imported by name into each
+    caller, so patching ``sms_tool.upi_link`` no longer reaches the call sites.
+    Patch every binding; return a context manager.
+    """
+    from sms_tool.upi_link import extract as upi_extract
+    from sms_tool.upi_link import flows as upi_flows
+    from sms_tool.upi_link import pipeline as upi_pipeline
+    from sms_tool.upi_link import session as upi_session
+    from sms_tool.upi_link import stripe as upi_stripe
+
+    stack = ExitStack()
+    if new_session is not None:
+        for module in (upi_pipeline, upi_session, upi_extract):
+            stack.enter_context(patch.object(module, "_new_session", side_effect=new_session))
+    if load_json is not None:
+        stack.enter_context(patch.object(upi_pipeline, "_load_json", return_value=load_json))
+    if write_qr is not None:
+        for module in (upi_pipeline, upi_flows, upi_stripe):
+            stack.enter_context(patch.object(module, "_write_qr_png", side_effect=write_qr))
+    return stack
 
 
 class GeneratePpLinkContractTests(unittest.TestCase):
@@ -44,7 +70,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 return FakeResponse()
 
         extractor = gen_pp_link.PPLinkExtractor("at", require_zero=True)
-        extractor._stripe_session = FakeSession()
+        extractor._stripe_session = FakeSession()  # type: ignore[assignment]
 
         with self.assertRaises(gen_pp_link.CheckoutNotZeroDueError):
             extractor._stripe_init("cs_test")
@@ -566,17 +592,19 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             qr_path = Path(tmp) / "upi.png"
-            with patch.object(upi_link, "_new_session", side_effect=fake_new_session):
-                with patch.object(upi_link, "_write_qr_png", side_effect=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1]):
-                    result = gen_pp_link.generate_upi_qr_link(
-                        "at",
-                        checkout_proxy="socks5h://jp-checkout",
-                        provider_proxy="http://in-provider:11001",
-                        checkout_country="JP",
-                        payment_country="IN",
-                        require_zero=True,
-                        qr_path=str(qr_path),
-                    )
+            with _patch_upi(
+                new_session=fake_new_session,
+                write_qr=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1],
+            ):
+                result = gen_pp_link.generate_upi_qr_link(
+                    "at",
+                    checkout_proxy="socks5h://jp-checkout",
+                    provider_proxy="http://in-provider:11001",
+                    checkout_country="JP",
+                    payment_country="IN",
+                    require_zero=True,
+                    qr_path=str(qr_path),
+                )
 
             self.assertTrue(result["ok"])
             self.assertEqual(result["payment_method"], "upi")
@@ -621,7 +649,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 return FakeResponse({"stripe_hosted_url": "https://checkout.stripe.com/c/pay/cs_live_NOUPI", "payment_method_types": ["card"], "currency": "inr", "total_summary": {"due": 0, "currency": "inr"}})
 
         cfg = {"upi": {"checkout_country": "JP", "payment_country": "IN", "require_zero_due": True}}
-        with patch.object(upi_link, "_load_json", return_value=cfg), patch.object(upi_link, "_new_session", side_effect=lambda proxy="": FakeSession(proxy)):
+        with _patch_upi(load_json=cfg, new_session=lambda proxy="": FakeSession(proxy)):
             result = gen_pp_link.generate_upi_qr_link("at", checkout_proxy="jp", provider_proxy="in")
 
         self.assertFalse(result["ok"])
