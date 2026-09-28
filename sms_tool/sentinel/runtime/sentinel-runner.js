@@ -115,6 +115,7 @@ function xorDecode(text, key) {
 }
 
 function decodeDx(dx, proof) {
+  // pi-lens-ignore: unchecked-throwing-call-js
   return JSON.parse(xorDecode(dx, proof));
 }
 
@@ -186,6 +187,7 @@ function headerMapFromEnv(options = {}) {
 }
 
 function assertAllowedChallengeHost(challengeUrl, officialMode) {
+  // pi-lens-ignore: unchecked-throwing-call-js
   const host = new URL(challengeUrl).hostname.toLowerCase();
   const allowed = (process.env.SENTINEL_ALLOW_HOST || "")
     .split(",")
@@ -216,6 +218,7 @@ async function fetchChallenge(challengeUrl, flow, proof, deviceId, options = {})
     method: "POST",
     headers: headerMapFromEnv({
       pageUrl: options.pageUrl,
+      // pi-lens-ignore: unchecked-throwing-call-js
       origin: new URL(challengeUrl).origin,
       userAgent: options.userAgent,
       deviceId,
@@ -731,6 +734,7 @@ function createBrowserContext(options) {
   const reactResourcesKey = options.reactResourcesKey || reactContainerKey.replace("__reactContainer$", "__reactResources$");
 
   const cookieJar = createCookieJar(options.cookie);
+  // pi-lens-ignore: unchecked-throwing-call-js
   const location = new URL(options.pageUrl);
   let iframeNode = null;
   const bodyChildren = [];
@@ -901,12 +905,24 @@ function createBrowserContext(options) {
 
   const browserFamily = String(options.browserFamily || "chrome").toLowerCase();
   const isSafari = browserFamily === "safari" || /Version\/[^ ]+ Safari\//.test(String(options.userAgent || ""));
+  // Gecko is a third platform class, not a Chrome variant.  Firefox exposes
+  // none of the Chromium-only globals guarded below (``navigator.userAgentData``,
+  // ``navigator.gpu``, ``navigator.deviceMemory``, ``navigator.login``,
+  // ``window.chrome``), so attaching them to a Firefox UA is a free
+  // contradiction.  The profile pool weights Firefox first (see
+  // ``auth_headers._FAMILY_WEIGHTS``), so this is the common case, not an edge.
+  const isFirefox = browserFamily === "firefox" || /Firefox\//.test(String(options.userAgent || ""));
   const exposeRequestIdleCallback = !isSafari && options.requestIdleCallback !== false;
   const navigatorProto = isSafari ? {
     javaEnabled: makeNativeFunction("javaEnabled", () => false),
     sendBeacon: makeNativeFunction("sendBeacon", () => true),
     getGamepads: makeNativeFunction("getGamepads", () => []),
     webkitGetUserMedia: makeNativeFunction("webkitGetUserMedia"),
+  } : isFirefox ? {
+    getGamepads: makeNativeFunction("getGamepads", () => []),
+    javaEnabled: makeNativeFunction("javaEnabled", () => false),
+    sendBeacon: makeNativeFunction("sendBeacon", () => true),
+    vibrate: makeNativeFunction("vibrate", () => false),
   } : {
     createAuctionNonce: makeNativeFunction("createAuctionNonce", () => crypto.randomUUID()),
     clearOriginJoinedAdInterestGroups: makeNativeFunction("clearOriginJoinedAdInterestGroups"),
@@ -930,13 +946,20 @@ function createBrowserContext(options) {
     plugins: createPluginArray(isSafari),
     mimeTypes: createMimeTypeArray(),
     hardwareConcurrency: options.hardwareConcurrency,
-    ...(isSafari ? {} : { deviceMemory: options.deviceMemory }),
-    maxTouchPoints: 0,
+    // ``navigator.deviceMemory`` and ``navigator.gpu`` are Chromium-only;
+    // Firefox and Safari expose neither.
+    ...(isSafari || isFirefox ? {} : { deviceMemory: options.deviceMemory }),
+    // Real hardware, not a hardcoded desktop: an iPhone UA with 0 touch points
+    // (or a desktop UA with 5) is another free contradiction.  The protocol
+    // profile carries ``max_touch_points`` (iOS=5, desktop=0).
+    maxTouchPoints: Number(options.maxTouchPoints) || 0,
     platform: options.navigatorPlatform || "MacIntel",
-    vendor: options.navigatorVendor || (isSafari ? "Apple Computer, Inc." : "Google Inc."),
+    // ``||`` treats Firefox's real empty vendor string as "unset" and would
+    // report the Chrome vendor; ``??`` keeps an explicitly empty value empty.
+    vendor: options.navigatorVendor ?? (isSafari ? "Apple Computer, Inc." : "Google Inc."),
     webdriver: false,
     bluetooth: { toString: () => "[object Bluetooth]" },
-    ...(isSafari ? {} : { gpu: { toString: () => "[object GPU]" } }),
+    ...(isSafari || isFirefox ? {} : { gpu: { toString: () => "[object GPU]" } }),
     connection: createNetworkInformation(),
     permissions: { query: async () => ({ state: "prompt", onchange: null }) },
     geolocation: {
@@ -949,7 +972,7 @@ function createBrowserContext(options) {
       getUserMedia: async () => { throw new Error("Permission denied"); },
     },
     storage: { estimate: async () => ({ quota: 10737418240, usage: 0 }) },
-    ...(isSafari ? {} : {
+    ...(isSafari || isFirefox ? {} : {
       login: { toString: () => "[object NavigatorLogin]" },
       userAgentData: {
         mobile: false,
@@ -1091,7 +1114,7 @@ function createBrowserContext(options) {
     outerWidth: options.screen.width,
     outerHeight: options.screen.height + 88,
     devicePixelRatio: options.devicePixelRatio,
-    ...(isSafari ? { safari: { pushNotification: {} } } : { chrome: { runtime: {}, app: {} } }),
+    ...(isSafari ? { safari: { pushNotification: {} } } : isFirefox ? {} : { chrome: { runtime: {}, app: {} } }),
     performance: browserPerformance,
     crypto: browserCrypto,
     TextEncoder,
@@ -1421,6 +1444,7 @@ async function main(argv = process.argv.slice(2), writeOutput = true) {
   clearTimers();
   if (!writeOutput) return tokenText;
   if (args.pretty || process.env.SENTINEL_PRETTY === "1") {
+    // pi-lens-ignore: unchecked-throwing-call-js
     process.stdout.write(`${JSON.stringify(JSON.parse(tokenText), null, 2)}\n`);
   } else {
     process.stdout.write(`${tokenText}\n`);
@@ -1435,4 +1459,7 @@ if (require.main === module) {
 module.exports = {
   main,
   normalizeChallenge,
+  // Exposed so the offline node test can assert the fabricated environment is
+  // family-consistent (Firefox must not receive Chromium-only globals).
+  createBrowserContext,
 };
