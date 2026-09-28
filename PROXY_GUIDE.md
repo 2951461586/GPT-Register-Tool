@@ -68,6 +68,25 @@ credentials are redacted in its output:
 python verify_proxy.py
 ```
 
+Can this exit actually serve ChatGPT?  A proxy can be reachable (ipinfo OK) yet
+be answered with a Cloudflare 403 at the ChatGPT edge.  The tunnel-only health
+check in `start_proxy_pool.py` cannot see that, so probe the pool **before** a
+run.  Both probes are read-only — one anonymous GET per proxy, no account, no
+mailbox, no checkout — and redact credentials in all stdout:
+
+```powershell
+# the configured proxies, ipinfo + edge verdict (clean/blocked/degraded/dead)
+python verify_proxy.py --chatgpt
+
+# the whole registration pool; write the clean subset as a pool file
+python scripts/proxy_pool_probe.py --workers 8
+python scripts/proxy_pool_probe.py --out runtime/pool_clean.txt --require-clean
+```
+
+`--out` contains credentials (that is what a usable pool file is), so keep it
+out of Git; the default `runtime/` location is already gitignored.  Build the
+registration pool only from entries reported `clean`.
+
 Check a local SOCKS5 exit manually:
 
 ```powershell
