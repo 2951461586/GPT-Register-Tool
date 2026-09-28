@@ -266,8 +266,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:535` / `:601` | 选池 |
 | `registration_network_preflight` | `registration_preflight.py:104` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration_preflight.py:74` | socks5↔http 纠错 |
-| `shared_fingerprint_pool` | `fingerprint_pool.py:347` | 协议路径指纹池单例 |
-| `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:121` / `:37` | 协议路径 TLS/UA 档案 |
+| `shared_fingerprint_pool` | `fingerprint_pool.py:345` | 协议路径指纹池单例 |
+| `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:122` / `:38` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:246` | 浏览器路径内置指纹池单例 |
 | `select_browser_profile` | `browser_fingerprint_pool.py:540` | 取浏览器硬件档案（seed 稳定） |
 | `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:320` | 穿透代理查出口地理 |
