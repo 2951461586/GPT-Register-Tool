@@ -150,6 +150,35 @@ python scripts/proxy_census.py --json --methods paypal,upi,kakao,momo
 `proxy` remains owned by the `proxy` shard (`SHARD_OWNERSHIP`), so `lanes`
 routes to `proxy.json` and needs no schema change.
 
+## Protocol fingerprint pool knobs (`registration.fingerprint_pool`)
+
+The **protocol** registration path selects from
+`fingerprint_pool.FingerprintPool`, whose knobs live under
+`registration.fingerprint_pool`. The browser path uses
+`browser_fingerprint_pool` instead and does not read this section.
+
+| Key | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `mode` | `"random"` \| `"round_robin"` | `"random"` | weighted-random family selection vs deterministic order (tests/operators) |
+| `verify_hint` | bool | `false` | measure the exit even when the credential advertises a region; a disagreement is logged and the measurement wins. Costs one probe per selection — use it to validate a newly added egress |
+| `allowed_countries` | array of ISO-3166 alpha-2 | `[]` | narrow the geo-bound selection; empty means no filter. Non-matching draws fall back to the closest profile with a one-time warning |
+
+```jsonc
+"registration": {
+  "fingerprint_pool": {
+    "mode": "random",
+    "verify_hint": false,
+    "allowed_countries": []
+  }
+}
+```
+
+Owned by the `runtime` shard (`SHARD_OWNERSHIP`), so it lives in `runtime.json`.
+`validate_config` rejects a wrong type, an unknown `mode`, or a non-ISO
+`allowed_countries` entry instead of silently falling back to the default pool.
+The pool is a process-lifetime singleton keyed by this section, so changing it
+mid-process does not rebuild an already-created pool.
+
 ## Examples and credentials
 
 `config.example.json` uses placeholders or local/documentation endpoints.

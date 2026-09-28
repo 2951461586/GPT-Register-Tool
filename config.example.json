@@ -55,6 +55,11 @@
       "factor": 1.0
     },
     "reject_cloud_proxy": false,
+    "fingerprint_pool": {
+      "mode": "random",
+      "verify_hint": false,
+      "allowed_countries": []
+    },
     "drivers": {
       "playwright": {
         "start_url": "https://chatgpt.com/auth/login"

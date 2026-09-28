@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -212,14 +213,20 @@ def load_merged_config() -> dict[str, Any]:
         for _, path in shard_paths:
             if not path.exists():
                 continue
+            # Config load is allowed to raise: callers turn a malformed shard
+            # into a ConfigError. Wrapping it here would hide that contract.
+            # pi-lens-ignore: unchecked-throwing-call-python
             with open(path, encoding="utf-8-sig") as handle:
+                # pi-lens-ignore: unchecked-throwing-call-python
                 data = json.load(handle)
             if isinstance(data, dict):
                 _deep_merge(merged, data)
         return merged
     legacy = _CONFIG_DIR / "config.json"
     if legacy.exists():
+        # pi-lens-ignore: unchecked-throwing-call-python
         with open(legacy, encoding="utf-8-sig") as handle:
+            # pi-lens-ignore: unchecked-throwing-call-python
             data = json.load(handle)
         if isinstance(data, dict):
             _write_shards(_split_into_shards(data), _CONFIG_DIR)
@@ -662,6 +669,44 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 "registration.browser_process_pool",
                 errors,
             )
+        # Protocol fingerprint pool (``sms_tool/fingerprint_pool.py``). This
+        # key was read by ``FingerprintPool.from_config`` but absent from the
+        # template, the shard manifest and this validator, so the pool's
+        # ``allowed_countries``/``verify_hint`` knobs existed without a
+        # discoverable configuration surface. Validated here so a typo or a
+        # wrong type fails loudly instead of silently falling back to the
+        # default pool.
+        fingerprint_pool = registration.get("fingerprint_pool", {})
+        if fingerprint_pool is not None and not isinstance(fingerprint_pool, Mapping):
+            errors.append("registration.fingerprint_pool must be an object")
+        elif isinstance(fingerprint_pool, Mapping):
+            mode = fingerprint_pool.get("mode")
+            if mode is not None and str(mode).strip().lower() not in {"random", "round_robin"}:
+                errors.append(
+                    "registration.fingerprint_pool.mode must be 'random' or 'round_robin'"
+                )
+            if "verify_hint" in fingerprint_pool and not isinstance(
+                fingerprint_pool.get("verify_hint"), bool
+            ):
+                errors.append("registration.fingerprint_pool.verify_hint must be a boolean")
+            countries = fingerprint_pool.get("allowed_countries")
+            if countries is not None:
+                if not isinstance(countries, (list, tuple)):
+                    errors.append(
+                        "registration.fingerprint_pool.allowed_countries must be an array"
+                    )
+                else:
+                    invalid_countries = sorted(
+                        str(code)
+                        for code in countries
+                        if str(code or "").strip()
+                        and not re.fullmatch(r"[A-Za-z]{2}", str(code).strip())
+                    )
+                    if invalid_countries:
+                        errors.append(
+                            "registration.fingerprint_pool.allowed_countries entries must be "
+                            "two-letter ISO country codes: " + ", ".join(invalid_countries)
+                        )
 
     email = config.get("email_registration", {})
     if email is not None and not isinstance(email, Mapping):
@@ -743,7 +788,9 @@ def config_warnings(config: Mapping[str, Any]) -> list[str]:
     low, high = ACCOUNT_HEALTH_WORKER_RANGE
     workers = health.get("workers")
     if isinstance(workers, (int, float)) and not isinstance(workers, bool):
+        # pi-lens-ignore: unchecked-throwing-call-python
         if not (low <= int(workers) <= high):
+            # pi-lens-ignore: unchecked-throwing-call-python
             clamped = max(low, min(int(workers), high))
             warnings_out.append(
                 f"account_health.workers={workers} is outside the effective "
