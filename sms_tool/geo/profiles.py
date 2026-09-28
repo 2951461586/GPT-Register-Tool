@@ -52,7 +52,11 @@ MARKET_PROFILES: dict[str, dict[str, str]] = {
     # 英语是菲律宾的官方语言，浏览器首选 en-PH 属常见组合。
     "PH": {"timezone_iana": "Asia/Manila", "lang": "en-PH", "lang_full": "en-PH,en;q=0.9,en-US;q=0.8"},
     "CN": {"timezone_iana": "Asia/Shanghai", "lang": "zh-CN", "lang_full": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
-    "HK": {"timezone_iana": "Asia/Hong_Kong", "lang": "zh-HK", "lang_full": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6"},
+    "HK": {
+        "timezone_iana": "Asia/Hong_Kong",
+        "lang": "zh-HK",
+        "lang_full": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6",
+    },
     "TW": {"timezone_iana": "Asia/Taipei", "lang": "zh-TW", "lang_full": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
 }
 
@@ -66,4 +70,27 @@ def market_profile(country: str) -> dict[str, str]:
     return MARKET_PROFILES.get(str(country or "").strip().upper(), dict(DEFAULT_TZ_FALLBACK))
 
 
-__all__ = ["MARKET_PROFILES", "DEFAULT_TZ_FALLBACK", "market_profile"]
+def geo_profile(country: str) -> dict[str, str] | None:
+    """Protocol-lane rendering of a market, or ``None`` when the market is uncurated.
+
+    The protocol fingerprint lane needs ``{timezone, lang, lang_full}`` while the
+    browser lane needs the full ``MARKET_PROFILES`` entry; this is the protocol
+    projection so ``fingerprint_pool`` does not reach into a private table.
+
+    ``None`` (not the UTC default) is returned on purpose: callers must be able
+    to tell "this country has a curated clock" from "unknown country, use the
+    measured timezone".  Returning the fallback here would silently hand a
+    Brazilian exit a UTC clock -- the exact mismatch the geo resolver exists to
+    prevent.
+    """
+    entry = MARKET_PROFILES.get(str(country or "").strip().upper())
+    if not entry:
+        return None
+    return {
+        "timezone": entry["timezone_iana"],
+        "lang": entry["lang"],
+        "lang_full": entry["lang_full"],
+    }
+
+
+__all__ = ["DEFAULT_TZ_FALLBACK", "MARKET_PROFILES", "geo_profile", "market_profile"]

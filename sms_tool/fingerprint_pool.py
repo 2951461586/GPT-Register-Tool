@@ -25,6 +25,7 @@ from typing import Any
 
 from .auth_headers import fingerprint_profile_weights
 from .geo import ProxyGeo
+from .geo.profiles import geo_profile
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class ProtocolEnvironmentProfile:
 
 def _build_profiles() -> list[ProtocolEnvironmentProfile]:
     """Build validated profiles from the auth_headers profile tables."""
-    from .auth_headers import AUTH_FINGERPRINT_PROFILES, _GEO_PROFILES
+    from .auth_headers import AUTH_FINGERPRINT_PROFILES
 
     profiles: list[ProtocolEnvironmentProfile] = []
     try:
@@ -97,7 +98,7 @@ def _build_profiles() -> list[ProtocolEnvironmentProfile]:
     # the only hard-coded value here is the DEFAULT geo used when no proxy is
     # supplied at all -- it is overridden on every ``next(proxy)`` call.
     geo_key = "US"
-    geo = _GEO_PROFILES.get(geo_key, {})
+    geo = geo_profile(geo_key) or {}
     for browser_name, browser_cfg in AUTH_FINGERPRINT_PROFILES.items():
         if browser_name not in supported:
             continue
@@ -177,9 +178,7 @@ class FingerprintPool:
         # ``allowed_countries: ["VN"]`` fell back to the default profile.
         allowed_countries = fp_cfg.get("allowed_countries")
         if isinstance(allowed_countries, (list, tuple)) and allowed_countries:
-            pool._allowed_countries = frozenset(
-                str(c).strip().upper() for c in allowed_countries if str(c).strip()
-            )
+            pool._allowed_countries = frozenset(str(c).strip().upper() for c in allowed_countries if str(c).strip())
         return pool
 
     def _with_geo(self, profile: "ProtocolEnvironmentProfile", proxy: str | None) -> "ProtocolEnvironmentProfile":
@@ -194,7 +193,6 @@ class FingerprintPool:
             return profile
         try:
             from .paypal_proxy import infer_proxy_country
-            from .auth_headers import _GEO_PROFILES
         except Exception:
             return profile
         hint = ""
@@ -203,15 +201,15 @@ class FingerprintPool:
         except Exception:
             hint = ""
         # Only pay for a measurement when the curated table cannot answer.
-        # ``_GEO_PROFILES`` covers a handful of markets wired up by hand; any
+        # ``geo_profile`` covers a handful of markets wired up by hand; any
         # other country needs the measured clock, otherwise the profile keeps
         # its hard-coded US one.
-        resolved = self._resolve_geo(proxy, hint, need_timezone=hint not in _GEO_PROFILES)
+        resolved = self._resolve_geo(proxy, hint, need_timezone=geo_profile(hint) is None)
         country = resolved.country
-        geo = _GEO_PROFILES.get(country) if country else None
+        geo = geo_profile(country) if country else None
         if not geo:
-            # The country is real but has no curated entry (``_GEO_PROFILES``
-            # only covers the handful of markets that were wired up by hand).
+            # The country is real but has no curated entry (``geo_profile`` only
+            # covers the handful of markets that were wired up by hand).
             # Falling through to the profile default here is the actual bug this
             # resolver was built to kill: it hands a Brazilian exit IP a
             # US Eastern clock. Use the measured timezone when we have one and
