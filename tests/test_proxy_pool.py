@@ -110,9 +110,9 @@ class TestSocks5AddrEncoding(unittest.TestCase):
         data = _encode_socks5_addr("example.com", 443)
         self.assertEqual(data[0], _ATYP_DOMAIN)
         self.assertEqual(data[1], len("example.com"))
-        domain = data[2:2 + len("example.com")].decode()
+        domain = data[2 : 2 + len("example.com")].decode()
         self.assertEqual(domain, "example.com")
-        port = struct.unpack("!H", data[2 + len("example.com"):])[0]
+        port = struct.unpack("!H", data[2 + len("example.com") :])[0]
         self.assertEqual(port, 443)
 
 
@@ -216,7 +216,10 @@ class TestHealthStrategy(unittest.TestCase):
 
     def _make_server(self, fail_threshold=3, target="cloudflare.com", port=443):
         return Socks5Server(
-            "127.0.0.1", 0, [], stats_port=0,
+            "127.0.0.1",
+            0,
+            [],
+            stats_port=0,
             health_check_target_host=target,
             health_check_target_port=port,
             health_check_fail_threshold=fail_threshold,
@@ -289,7 +292,10 @@ class TestHealthSyncP1_2(unittest.TestCase):
         d = Path(tempfile.mkdtemp())
         tracker = ProxyHealthTracker({}, path=d / "registration_proxy_health.json")
         server = Socks5Server(
-            "127.0.0.1", 0, [], stats_port=0,
+            "127.0.0.1",
+            0,
+            [],
+            stats_port=0,
             health_check_fail_threshold=fail_threshold,
             health_tracker=tracker,
         )
@@ -305,9 +311,7 @@ class TestHealthSyncP1_2(unittest.TestCase):
 
     def test_proxy_url_key_matches_tracker_key(self):
         u = UpstreamProxy(host="1.2.3.4", port=1080, username="u", password="p")
-        self.assertTrue(
-            ProxyHealthTracker.key(u.proxy_url).startswith("1.2.3.4:1080#sid-")
-        )
+        self.assertTrue(ProxyHealthTracker.key(u.proxy_url).startswith("1.2.3.4:1080#sid-"))
 
     def test_apply_health_failure_mirrors_to_tracker(self):
         server, tracker = self._make_server_with_tracker()
@@ -450,9 +454,7 @@ class TestSocks5Handshake(unittest.TestCase):
             upstream_r.feed_data(bytes([_SOCKS5_VER, _NO_AUTH]))
             # upstream CONNECT reply (success, IPv4 bind 0.0.0.0:0)
             upstream_r.feed_data(
-                bytes([_SOCKS5_VER, 0x00, 0x00, _ATYP_IPV4])
-                + bytes([0, 0, 0, 0])
-                + struct.pack("!H", 0)
+                bytes([_SOCKS5_VER, 0x00, 0x00, _ATYP_IPV4]) + bytes([0, 0, 0, 0]) + struct.pack("!H", 0)
             )
             upstream_r.feed_eof()
 
@@ -570,9 +572,12 @@ class TestHttpConnectUpstream(unittest.TestCase):
                 r, w = await asyncio.open_connection("127.0.0.1", fake.port)
                 try:
                     await _http_connect_handshake(
-                        r, w,
+                        r,
+                        w,
                         UpstreamProxy(host="h", port=1, username="u", password="p", scheme="http"),
-                        "cloudflare.com", 443, 5.0,
+                        "cloudflare.com",
+                        443,
+                        5.0,
                     )
                     self.assertEqual(await asyncio.wait_for(r.read(8), 5.0), b"TUNNELED")
                 finally:
@@ -595,8 +600,12 @@ class TestHttpConnectUpstream(unittest.TestCase):
                 r, w = await asyncio.open_connection("127.0.0.1", fake.port)
                 try:
                     await _http_connect_handshake(
-                        r, w, UpstreamProxy(host="h", port=1, scheme="http"),
-                        "cloudflare.com", 443, 5.0,
+                        r,
+                        w,
+                        UpstreamProxy(host="h", port=1, scheme="http"),
+                        "cloudflare.com",
+                        443,
+                        5.0,
                     )
                 finally:
                     w.close()
@@ -610,16 +619,18 @@ class TestHttpConnectUpstream(unittest.TestCase):
 
     def test_non_2xx_reply_raises(self):
         async def _run():
-            fake = await _FakeHttpProxy(
-                status=b"HTTP/1.1 407 Proxy Authentication Required", payload=b""
-            ).start()
+            fake = await _FakeHttpProxy(status=b"HTTP/1.1 407 Proxy Authentication Required", payload=b"").start()
             try:
                 r, w = await asyncio.open_connection("127.0.0.1", fake.port)
                 try:
                     with self.assertRaises(ConnectionError) as ctx:
                         await _http_connect_handshake(
-                            r, w, UpstreamProxy(host="h", port=1, scheme="http"),
-                            "cloudflare.com", 443, 5.0,
+                            r,
+                            w,
+                            UpstreamProxy(host="h", port=1, scheme="http"),
+                            "cloudflare.com",
+                            443,
+                            5.0,
                         )
                 finally:
                     w.close()
@@ -631,6 +642,7 @@ class TestHttpConnectUpstream(unittest.TestCase):
 
     def test_handshake_dispatches_on_scheme(self):
         """socks5 still sends 0x05; http sends a CONNECT line."""
+
         async def _run():
             seen: asyncio.Queue[bytes] = asyncio.Queue()
 
@@ -648,9 +660,13 @@ class TestHttpConnectUpstream(unittest.TestCase):
                     try:
                         with self.assertRaises(Exception):
                             await server._handshake(
-                                r, w,
+                                r,
+                                w,
                                 UpstreamProxy(host="127.0.0.1", port=port, scheme=scheme),
-                                "cloudflare.com", 443, _ATYP_DOMAIN, 2.0,
+                                "cloudflare.com",
+                                443,
+                                _ATYP_DOMAIN,
+                                2.0,
                             )
                     finally:
                         w.close()
@@ -666,10 +682,12 @@ class TestHttpConnectUpstream(unittest.TestCase):
 
     def test_socks5_client_tunnels_through_an_http_upstream(self):
         """End-to-end: SOCKS5 in, HTTP CONNECT out, bytes both ways."""
+
         async def _run():
             fake = await _FakeHttpProxy().start()
             server = Socks5Server(
-                "127.0.0.1", 0,
+                "127.0.0.1",
+                0,
                 [UpstreamProxy(host="127.0.0.1", port=fake.port, scheme="http", label="http-up")],
                 stats_port=0,
                 health_check_interval=3600.0,
@@ -705,6 +723,180 @@ class TestHttpConnectUpstream(unittest.TestCase):
         payload, (request_line, _headers) = asyncio.run(_run())
         self.assertEqual(payload, b"TUNNELED")
         self.assertEqual(request_line, "CONNECT cloudflare.com:443 HTTP/1.1")
+
+
+class TestStickySessions(unittest.TestCase):
+    """P2-5: optional sticky sessions keyed by the SOCKS5 auth username.
+
+    Per-connection round-robin is right for a rotating fetch pool but wrong for
+    a registration: one account would hop exits mid-flow.  A client that offers
+    SOCKS5 username/password auth now names its session by username and is
+    pinned to one upstream for the TTL.  The default (``ttl=0``) is unchanged.
+    """
+
+    def _pair(self, ttl):
+        a = UpstreamProxy(host="1.1.1.1", port=1080, label="a")
+        b = UpstreamProxy(host="2.2.2.2", port=1080, label="b")
+        server = Socks5Server("127.0.0.1", 0, [a, b], stats_port=0, sticky_session_ttl=ttl)
+        return server, a, b
+
+    @staticmethod
+    def _pick(server, **kwargs):
+        upstream = server._pick_upstream(**kwargs)
+        assert upstream is not None
+        return upstream
+
+    def test_disabled_ttl_preserves_round_robin_even_with_a_key(self):
+        server, _a, _b = self._pair(ttl=0.0)
+        picks = [self._pick(server, sticky_key="acct-1").label for _ in range(4)]
+        self.assertEqual(picks, ["a", "b", "a", "b"])
+        self.assertEqual(server._sticky_sessions, {})
+
+    def test_same_key_reuses_one_upstream(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        first = self._pick(server, sticky_key="acct-1")
+        second = self._pick(server, sticky_key="acct-1")
+        self.assertIs(first, second)
+        self.assertEqual(first.label, "a")
+
+    def test_distinct_keys_get_independent_upstreams(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        self.assertEqual(self._pick(server, sticky_key="acct-2").label, "b")
+        # ...and acct-1 is still pinned.
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+
+    def test_empty_key_falls_back_to_round_robin(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        picks = [self._pick(server).label for _ in range(4)]
+        self.assertEqual(picks, ["a", "b", "a", "b"])
+
+    def test_expired_binding_is_dropped_and_rebound(self):
+        import time as _time
+
+        server, a, b = self._pair(ttl=300.0)
+        server._sticky_sessions["acct-1"] = (a, _time.monotonic() - 1)
+        server._rr_idx = 1  # deterministic: the re-pick starts at the second upstream
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "b")
+        self.assertIs(server._sticky_sessions["acct-1"][0], b)
+
+    def test_unhealthy_binding_is_dropped_and_rebound(self):
+        server, a, b = self._pair(ttl=300.0)
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        a.healthy = False
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "b")
+
+    def test_excluded_binding_is_dropped_for_the_retry(self):
+        server, a, b = self._pair(ttl=300.0)
+        self.assertEqual(self._pick(server, sticky_key="acct-1").label, "a")
+        picked = server._pick_upstream(sticky_key="acct-1", exclude={a.addr})
+        self.assertIs(picked, b)
+
+    def test_prune_drops_only_expired_bindings(self):
+        import time as _time
+
+        server, a, b = self._pair(ttl=300.0)
+        server._sticky_sessions["fresh"] = (a, _time.monotonic() + 100)
+        server._sticky_sessions["stale"] = (b, _time.monotonic() - 1)
+        server._prune_sticky_sessions()
+        self.assertIn("fresh", server._sticky_sessions)
+        self.assertNotIn("stale", server._sticky_sessions)
+
+    def test_stats_reports_sticky_session_count(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        self.assertEqual(server._stats_json()["sticky_sessions"], 0)
+        server._pick_upstream(sticky_key="acct-1")
+        self.assertEqual(server._stats_json()["sticky_sessions"], 1)
+
+    # ── integration: the full SOCKS5 greeting negotiates the key ──
+
+    @staticmethod
+    def _writer():
+        w = AsyncMock()
+        w.write = MagicMock()
+        w.drain = AsyncMock()
+        w.close = MagicMock()
+        w.wait_closed = AsyncMock()
+        w.can_write_eof = MagicMock(return_value=True)
+        w.write_eof = MagicMock()
+        return w
+
+    @staticmethod
+    def _client_reader(method, username="", password=""):
+        r = asyncio.StreamReader()
+        r.feed_data(bytes([_SOCKS5_VER, 0x01, method]))
+        if method == _USERPASS:
+            user = username.encode()
+            pwd = password.encode()
+            r.feed_data(bytes([0x01, len(user)]) + user + bytes([len(pwd)]) + pwd)
+        domain = b"example.com"
+        r.feed_data(
+            bytes([_SOCKS5_VER, _CMD_CONNECT, 0x00, _ATYP_DOMAIN, len(domain)]) + domain + struct.pack("!H", 443)
+        )
+        r.feed_eof()
+        return r
+
+    def _run_handshake(self, server, reader_factories):
+        """Drive full handshakes, building each client reader *inside* the loop.
+
+        A ``StreamReader`` built in the test body binds to whatever loop exists
+        then; after an earlier test calls ``asyncio.run`` the default loop is
+        closed and construction raises.  Factories defer that into the coroutine.
+        """
+        picked: list[str] = []
+
+        async def _record(upstream, _host, _port, _atyp):
+            picked.append(upstream.label)
+            empty = asyncio.StreamReader()
+            empty.feed_eof()
+            return empty, self._writer()
+
+        async def _drive():
+            with patch.object(server, "_connect_through_upstream", side_effect=_record):
+                for make_reader in reader_factories:
+                    await server._handle_client(make_reader(), self._writer())
+
+        asyncio.run(_drive())
+        return picked
+
+    def test_handshake_pins_by_username_across_connections(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        picked = self._run_handshake(
+            server,
+            [
+                lambda: self._client_reader(_USERPASS, "acct-1", "secret"),
+                lambda: self._client_reader(_USERPASS, "acct-1", "secret"),
+                lambda: self._client_reader(_USERPASS, "acct-2", "secret"),
+            ],
+        )
+        self.assertEqual(picked, ["a", "a", "b"])
+
+    def test_handshake_without_userpass_still_round_robins(self):
+        server, _a, _b = self._pair(ttl=300.0)
+        picked = self._run_handshake(
+            server,
+            [lambda: self._client_reader(_NO_AUTH), lambda: self._client_reader(_NO_AUTH)],
+        )
+        self.assertEqual(picked, ["a", "b"])
+
+    def test_handshake_sends_rfc1929_success_before_connect(self):
+        async def _run():
+            server, _a, _b = self._pair(ttl=300.0)
+            writer = self._writer()
+
+            async def _record(_upstream, _host, _port, _atyp):
+                empty = asyncio.StreamReader()
+                empty.feed_eof()
+                return empty, self._writer()
+
+            with patch.object(server, "_connect_through_upstream", side_effect=_record):
+                await server._handle_client(self._client_reader(_USERPASS, "acct-1", "secret"), writer)
+            return [call.args[0] for call in writer.write.call_args_list]
+
+        writes = asyncio.run(_run())
+        self.assertEqual(writes[0], bytes([_SOCKS5_VER, _USERPASS]))
+        self.assertEqual(writes[1], bytes([0x01, 0x00]))  # RFC 1929 success
+        self.assertEqual(writes[2][:2], bytes([_SOCKS5_VER, 0x00]))  # CONNECT success
 
 
 if __name__ == "__main__":

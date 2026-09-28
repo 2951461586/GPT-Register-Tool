@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import json
 import logging
 import socket
@@ -39,6 +40,10 @@ _SOCKS5_VER = 0x05
 _NO_AUTH = 0x00
 _USERPASS = 0x02
 _NO_ACCEPTABLE = 0xFF
+
+# RFC 1929 username/password sub-negotiation: version byte and success status.
+_USERPASS_VER = 0x01
+_AUTH_SUCCESS = 0x00
 
 _CMD_CONNECT = 0x01
 _ATYP_IPV4 = 0x01
@@ -141,9 +146,7 @@ class UpstreamProxy:
             "success_count": self.success_count,
             "total_connections": self.total_connections,
             "last_check": (
-                datetime.fromtimestamp(self.last_check, tz=timezone.utc).isoformat()
-                if self.last_check > 0
-                else None
+                datetime.fromtimestamp(self.last_check, tz=timezone.utc).isoformat() if self.last_check > 0 else None
             ),
         }
 
@@ -166,9 +169,7 @@ async def _read_exact(reader: asyncio.StreamReader, n: int) -> bytes:
     return data
 
 
-async def _read_socks5_addr(
-    reader: asyncio.StreamReader, addr_type: int
-) -> tuple[str, int]:
+async def _read_socks5_addr(reader: asyncio.StreamReader, addr_type: int) -> tuple[str, int]:
     if addr_type == _ATYP_IPV4:
         raw = await _read_exact(reader, 4)
         host = socket.inet_ntoa(raw)
@@ -208,6 +209,17 @@ def _encode_socks5_addr(host: str, port: int) -> bytes:
 
 def _build_socks5_reply(reply: int, bind_host: str = "0.0.0.0", bind_port: int = 0) -> bytes:
     return bytes([_SOCKS5_VER, reply, 0x00]) + _encode_socks5_addr(bind_host, bind_port)
+
+
+def _is_loopback(host: str) -> bool:
+    """True for an empty/``localhost``/loopback literal (used by the sticky warning)."""
+    text = str(host or "").strip().lower()
+    if text in {"", "localhost"}:
+        return True
+    try:
+        return ipaddress.ip_address(text).is_loopback
+    except ValueError:
+        return False
 
 
 # ──────────────────── upstream handshakes ────────────────────
@@ -302,9 +314,7 @@ async def _http_connect_handshake(
     authority = _http_connect_authority(dest_host, dest_port)
     lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
     if upstream.username:
-        token = base64.b64encode(
-            f"{upstream.username}:{upstream.password}".encode("utf-8")
-        ).decode("ascii")
+        token = base64.b64encode(f"{upstream.username}:{upstream.password}".encode("utf-8")).decode("ascii")
         lines.append(f"Proxy-Authorization: Basic {token}")
     lines.extend(("", ""))
     w.write("\r\n".join(lines).encode("ascii"))
@@ -347,6 +357,7 @@ class Socks5Server:
         health_check_target_port: int = 443,
         health_check_fail_threshold: int = 3,
         health_tracker: ProxyHealthTracker | None = None,
+        sticky_session_ttl: float = 0.0,
     ) -> None:
         self._listen_host = listen_host
         self._listen_port = listen_port
@@ -364,12 +375,28 @@ class Socks5Server:
         # the same count of consecutive successes (see _apply_health hysteresis).
         # A single blip no longer kills an upstream, and one lucky success no
         # longer whitelists a bad one.
-        self._health_check_fail_threshold = max(1, int(health_check_fail_threshold))
+        try:
+            threshold = int(health_check_fail_threshold)
+        except (TypeError, ValueError):
+            threshold = 3
+        self._health_check_fail_threshold = max(1, threshold)
         # P1-2: optional shared health tracker (ProxyHealthTracker). When set, every
         # health event funnelled through _apply_health is mirrored into the tracker's
         # on-disk state so the registration/remail paths see the SOCKS5 pool's
         # outcomes. Left None to keep the pool purely in-memory (default/tests).
         self._health_tracker: ProxyHealthTracker | None = health_tracker
+        # P2-5: optional sticky sessions.  A client that offers SOCKS5
+        # username/password auth names its session by username; connections with
+        # the same username reuse one upstream for ``sticky_session_ttl`` seconds
+        # (sliding: each reuse refreshes it), so a registration does not hop
+        # exits mid-flow.  ``0`` disables the feature and preserves the historical
+        # per-connection round-robin exactly.
+        try:
+            ttl = float(sticky_session_ttl)
+        except (TypeError, ValueError):
+            ttl = 0.0
+        self._sticky_session_ttl = ttl if ttl > 0 else 0.0
+        self._sticky_sessions: dict[str, tuple[UpstreamProxy, float]] = {}
         self._connect_timeout = connect_timeout
         self._max_retries = max_retries
         self._pipe_buf_size = pipe_buf_size
@@ -391,16 +418,23 @@ class Socks5Server:
             await self.stop()
 
     async def start(self) -> None:
-        self._server = await asyncio.start_server(
-            self._on_client, self._listen_host, self._listen_port
-        )
+        self._server = await asyncio.start_server(self._on_client, self._listen_host, self._listen_port)
         addrs = ", ".join(str(s.getsockname()) for s in self._server.sockets or [])
         logger.info("SOCKS5 proxy pool listening on %s", addrs)
+        if self._sticky_session_ttl > 0:
+            logger.info(
+                "sticky sessions enabled (ttl=%.0fs): clients that offer SOCKS5 "
+                "username/password auth are pinned by username",
+                self._sticky_session_ttl,
+            )
+            if not _is_loopback(self._listen_host):
+                logger.warning(
+                    "sticky sessions are enabled on non-loopback %s; any client username is accepted as a session key",
+                    self._listen_host,
+                )
 
         if self._stats_port > 0:
-            self._stats_server = await asyncio.start_server(
-                self._on_stats, self._listen_host, self._stats_port
-            )
+            self._stats_server = await asyncio.start_server(self._on_stats, self._listen_host, self._stats_port)
             logger.info("Stats endpoint on %s:%d", self._listen_host, self._stats_port)
 
         if self._upstreams:
@@ -435,9 +469,7 @@ class Socks5Server:
 
     # ── client handler ──
 
-    async def _on_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         task = asyncio.current_task()
         if task:
             self._active_tasks.add(task)
@@ -457,17 +489,29 @@ class Socks5Server:
             if task:
                 self._active_tasks.discard(task)
 
-    async def _handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         # Phase 1: greeting
         hdr = await asyncio.wait_for(_read_exact(reader, 2), timeout=10)
         ver, nmethods = hdr[0], hdr[1]
         if ver != _SOCKS5_VER:
             return
-        await _read_exact(reader, nmethods)  # consume method list
-        writer.write(bytes([_SOCKS5_VER, _NO_AUTH]))
-        await writer.drain()
+        methods = await _read_exact(reader, nmethods)
+        session_key = ""
+        if self._sticky_session_ttl > 0 and _USERPASS in methods:
+            # Offer USERPASS so a client can name its sticky session.  The
+            # username is the key and the password is accepted but ignored --
+            # there is no user database, and the listener is loopback by default
+            # (``start`` warns when it is not).
+            writer.write(bytes([_SOCKS5_VER, _USERPASS]))
+            await writer.drain()
+            session_key = await self._read_userpass(reader)
+            if session_key is None:
+                return
+            writer.write(bytes([_USERPASS_VER, _AUTH_SUCCESS]))
+            await writer.drain()
+        else:
+            writer.write(bytes([_SOCKS5_VER, _NO_AUTH]))
+            await writer.drain()
 
         # Phase 2: CONNECT request
         req_hdr = await asyncio.wait_for(_read_exact(reader, 4), timeout=10)
@@ -492,7 +536,7 @@ class Socks5Server:
         upstream = None
         max_attempts = len(self._upstreams) + 1
         for _attempt in range(max_attempts):
-            upstream = self._pick_upstream(exclude=tried)
+            upstream = self._pick_upstream(exclude=tried, sticky_key=session_key)
             if upstream is None:
                 break
             try:
@@ -501,6 +545,8 @@ class Socks5Server:
                     timeout=self._connect_timeout,
                 )
                 break  # success
+            # Generic connect-phase failures are the point of this retry loop.
+            # pi-lens-ignore: no-boolean-in-except
             except Exception as exc:
                 # P0-3: route live-failures through the same hysteresis as the
                 # health probe, so a single blip in real traffic does not instantly
@@ -510,14 +556,26 @@ class Socks5Server:
                 upstream.total_connections += 1
                 self._stats.total_errors += 1
                 tried.add(upstream.addr)
+                # A failed sticky binding is stale: drop it so the retry (and the
+                # next connection with this session name) re-binds instead of
+                # retrying the same dead exit.
+                if session_key:
+                    bound = self._sticky_sessions.get(session_key)
+                    if bound is not None and bound[0] is upstream:
+                        self._sticky_sessions.pop(session_key, None)
                 logger.warning(
                     "upstream %s connect failed for %s:%d (attempt %d/%d): %s",
-                    upstream.label, dest_host, dest_port, _attempt + 1, max_attempts, exc,
+                    upstream.label,
+                    dest_host,
+                    dest_port,
+                    _attempt + 1,
+                    max_attempts,
+                    exc,
                 )
                 upstream = None
                 continue
 
-        if upstream is None or up_r is None:
+        if upstream is None or up_r is None or up_w is None:
             writer.write(_build_socks5_reply(_REP_GENERAL_FAILURE))
             await writer.drain()
             return
@@ -533,7 +591,10 @@ class Socks5Server:
 
         logger.debug(
             "relay %s:%d via %s [%s]",
-            dest_host, dest_port, upstream.label, upstream.addr,
+            dest_host,
+            dest_port,
+            upstream.label,
+            upstream.addr,
         )
         try:
             await self._relay(reader, writer, up_r, up_w)
@@ -597,10 +658,49 @@ class Socks5Server:
                 error=error,
             )
 
-    def _pick_upstream(self, exclude: set[str] | None = None) -> UpstreamProxy | None:
+    async def _read_userpass(self, reader: asyncio.StreamReader) -> str | None:
+        """Read an RFC 1929 greeting and return the username as a sticky key.
+
+        Wire form: ``[ver, ulen, uname, plen, passwd]``.  The password is
+        consumed and ignored; there is no user database and the listener is
+        loopback by default.  Returns ``None`` on a malformed greeting so the
+        caller closes the connection.
+        """
+        try:
+            ver = (await asyncio.wait_for(_read_exact(reader, 1), timeout=10))[0]
+            ulen = (await asyncio.wait_for(_read_exact(reader, 1), timeout=10))[0]
+            username = (await _read_exact(reader, ulen)).decode("utf-8", "replace") if ulen else ""
+            plen = (await asyncio.wait_for(_read_exact(reader, 1), timeout=10))[0]
+            if plen:
+                await _read_exact(reader, plen)
+        except (asyncio.IncompleteReadError, TimeoutError, OSError):
+            return None
+        if ver != _USERPASS_VER:
+            return None
+        return username.strip()
+
+    def _pick_upstream(
+        self,
+        exclude: set[str] | None = None,
+        sticky_key: str = "",
+    ) -> UpstreamProxy | None:
         if not self._upstreams:
             return None
         exclude = exclude or set()
+        sticky = bool(sticky_key) and self._sticky_session_ttl > 0
+        now = time.monotonic()
+        if sticky:
+            bound = self._sticky_sessions.get(sticky_key)
+            if bound is not None:
+                upstream, expires = bound
+                if expires > now and upstream.healthy and upstream.addr not in exclude:
+                    # Sliding TTL: keep the account pinned while it is active.
+                    self._sticky_sessions[sticky_key] = (upstream, now + self._sticky_session_ttl)
+                    return upstream
+                # Expired, unhealthy, or excluded by an in-flight retry: the
+                # binding is stale, so drop it and re-pick below.
+                self._sticky_sessions.pop(sticky_key, None)
+        selected: UpstreamProxy | None = None
         healthy = [u for u in self._upstreams if u.healthy and u.addr not in exclude]
         if healthy:
             # priority-based selection: pick from the lowest priority number tier,
@@ -609,28 +709,37 @@ class Socks5Server:
             tier = [u for u in healthy if u.priority == min_pri]
             idx = self._rr_idx % len(tier)
             self._rr_idx += 1
-            return tier[idx]
-        # Half-open: nothing healthy. Instead of fail-open-resurrecting the entire
-        # pool (which would spray every dead upstream with live traffic at once),
-        # probe a single candidate -- the least-bad, rotating among ties -- so a
-        # recovery is discovered incrementally rather than by mass-resurrecting.
-        candidates = sorted(
-            (u for u in self._upstreams if u.addr not in exclude),
-            key=lambda u: (u.fail_count, u.priority),
-        )
-        if not candidates:
-            return None
-        candidate = candidates[self._rr_idx % len(candidates)]
-        self._rr_idx += 1
-        return candidate
+            selected = tier[idx]
+        else:
+            # Half-open: nothing healthy. Instead of fail-open-resurrecting the
+            # entire pool (which would spray every dead upstream with live traffic
+            # at once), probe a single candidate -- the least-bad, rotating among
+            # ties -- so a recovery is discovered incrementally rather than by
+            # mass-resurrecting.
+            candidates = sorted(
+                (u for u in self._upstreams if u.addr not in exclude),
+                key=lambda u: (u.fail_count, u.priority),
+            )
+            if candidates:
+                selected = candidates[self._rr_idx % len(candidates)]
+                self._rr_idx += 1
+        if sticky and selected is not None:
+            self._sticky_sessions[sticky_key] = (selected, now + self._sticky_session_ttl)
+            self._prune_sticky_sessions(now)
+        return selected
+
+    def _prune_sticky_sessions(self, now: float | None = None) -> None:
+        """Drop expired bindings; called on every new binding (cheap, bounded)."""
+        moment = time.monotonic() if now is None else now
+        expired = [key for key, (_upstream, expires) in self._sticky_sessions.items() if expires <= moment]
+        for key in expired:
+            self._sticky_sessions.pop(key, None)
 
     # ── upstream handshake ──
 
     def _open_upstream(self, upstream: UpstreamProxy):
         """Dial the upstream, wrapping in TLS when the scheme asks for it."""
-        return asyncio.open_connection(
-            upstream.host, upstream.port, ssl=upstream.scheme == "https"
-        )
+        return asyncio.open_connection(upstream.host, upstream.port, ssl=upstream.scheme == "https")
 
     async def _handshake(
         self,
@@ -658,9 +767,7 @@ class Socks5Server:
         r, w = await self._open_upstream(upstream)
 
         try:
-            await self._handshake(
-                r, w, upstream, dest_host, dest_port, dest_atyp, self._connect_timeout
-            )
+            await self._handshake(r, w, upstream, dest_host, dest_port, dest_atyp, self._connect_timeout)
         except Exception:
             w.close()
             await w.wait_closed()
@@ -733,8 +840,13 @@ class Socks5Server:
                         )
                         try:
                             await self._handshake(
-                                r, w, upstream, test_host, test_port,
-                                _ATYP_DOMAIN, self._health_check_timeout,
+                                r,
+                                w,
+                                upstream,
+                                test_host,
+                                test_port,
+                                _ATYP_DOMAIN,
+                                self._health_check_timeout,
                             )
                             success = True
                         finally:
@@ -769,9 +881,7 @@ class Socks5Server:
 
     # ── stats HTTP endpoint ──
 
-    async def _on_stats(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _on_stats(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             # read HTTP request line + headers (minimal parsing)
             request_line = await asyncio.wait_for(reader.readline(), timeout=5)
@@ -812,5 +922,6 @@ class Socks5Server:
             "active_connections": self._stats.active_connections,
             "total_connections": self._stats.total_connections,
             "total_errors": self._stats.total_errors,
+            "sticky_sessions": len(self._sticky_sessions),
             "upstreams": [u.to_dict() for u in self._upstreams],
         }
