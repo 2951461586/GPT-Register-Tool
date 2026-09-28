@@ -71,6 +71,7 @@ _LOGGER = logging.getLogger(__name__)
 # injects RuntimeConfig through MailboxService and leaves this as None.
 CFG = None
 
+
 def _config_data(runtime_config: ConfigInput = None) -> Mapping[str, object]:
     if runtime_config is not None:
         return resolve_runtime_config(runtime_config).data
@@ -88,6 +89,7 @@ def _email_cfg(runtime_config: ConfigInput = None):
 # Register each provider's message-fetcher and OTP-poller. Providers are tried
 # in registration order; the Graph API fallback (last) handles everything else.
 
+
 def _register_mailbox_strategies():
     """Register provider-specific message fetchers and OTP pollers."""
 
@@ -96,7 +98,11 @@ def _register_mailbox_strategies():
         "cfworker",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "cfworker",
         lambda mb, *, limit, proxy, email_cfg, **kw: mailbox_cfworker._fetch_cfworker_messages(
-            mb, limit=limit, proxy=proxy, email_cfg=email_cfg, client_func=_cfworker_client,
+            mb,
+            limit=limit,
+            proxy=proxy,
+            email_cfg=email_cfg,
+            client_func=_cfworker_client,
         ),
     )
     mailbox_strategies.register_otp_poller(
@@ -115,21 +121,26 @@ def _register_mailbox_strategies():
         "remail",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "remail",
         lambda mb, *, limit, proxy, include_body, **kw: mailbox_remail._fetch_remail_messages(
-            mb, limit=limit, proxy=proxy, include_body=include_body,
+            mb,
+            limit=limit,
+            proxy=proxy,
+            include_body=include_body,
         ),
     )
     mailbox_strategies.register_otp_poller(
         "remail",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "remail",
-        lambda mb, *, subject_keyword, timeout, issued_after_unix, proxy, excluded_otps, **kw: mailbox_remail._poll_remail_otp(
-            mb,
-            subject_keyword=subject_keyword,
-            timeout=timeout,
-            issued_after_unix=issued_after_unix,
-            proxy=proxy,
-            excluded_otps=excluded_otps,
-            poll_interval=None,
-            proxy_candidates=kw.get("proxy_candidates"),
+        lambda mb, *, subject_keyword, timeout, issued_after_unix, proxy, excluded_otps, **kw: (
+            mailbox_remail._poll_remail_otp(
+                mb,
+                subject_keyword=subject_keyword,
+                timeout=timeout,
+                issued_after_unix=issued_after_unix,
+                proxy=proxy,
+                excluded_otps=excluded_otps,
+                poll_interval=None,
+                proxy_candidates=kw.get("proxy_candidates"),
+            )
         ),
     )
     mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
@@ -143,22 +154,23 @@ def _register_mailbox_strategies():
         "smailr",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "smailr",
         lambda mb, *, limit, proxy, **kw: mailbox_smailr._fetch_smailr_messages(
-            mb, limit=limit, proxy=proxy,
+            mb,
+            limit=limit,
+            proxy=proxy,
         ),
     )
     mailbox_strategies.register_otp_poller(
         "smailr",
-        lambda mb, cfg: (
-            str(getattr(mb, "provider", "") or "") == "smailr"
-            and bool(getattr(mb, "token", ""))
-        ),
-        lambda mb, *, subject_keyword, timeout, issued_after_unix, proxy, excluded_otps, **kw: mailbox_smailr._poll_smailr_otp(
-            mb,
-            subject_keyword=subject_keyword,
-            timeout=timeout,
-            issued_after_unix=issued_after_unix,
-            proxy=proxy,
-            excluded_otps=excluded_otps,
+        lambda mb, cfg: str(getattr(mb, "provider", "") or "") == "smailr" and bool(getattr(mb, "token", "")),
+        lambda mb, *, subject_keyword, timeout, issued_after_unix, proxy, excluded_otps, **kw: (
+            mailbox_smailr._poll_smailr_otp(
+                mb,
+                subject_keyword=subject_keyword,
+                timeout=timeout,
+                issued_after_unix=issued_after_unix,
+                proxy=proxy,
+                excluded_otps=excluded_otps,
+            )
         ),
     )
     mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.register_credentials(
@@ -172,7 +184,9 @@ def _register_mailbox_strategies():
         "icloud",
         lambda mb, cfg: str(getattr(mb, "provider", "") or "") == mailbox_icloud_url.PROVIDER,
         lambda mb, *, limit, proxy, **kw: mailbox_icloud_url.fetch_icloud_url_messages(
-            mb, limit=limit, proxy=proxy,
+            mb,
+            limit=limit,
+            proxy=proxy,
         ),
     )
     mailbox_strategies.register_otp_poller(
@@ -253,6 +267,7 @@ def _otp_poll_interval():
 
 # moved _normalize_mailbox_email to dedicated mailbox module.
 
+
 def _cfworker_cfg():
     return mailbox_cfworker._cfworker_cfg(_email_cfg())
 
@@ -268,6 +283,14 @@ def _normalize_mailbox_proxy(value):
     if "://" not in proxy:
         proxy = "http://" + proxy
     return proxy
+
+
+def _coerce_int(value, default: int = 0) -> int:
+    """``int(value or 0)`` with a tolerant fallback (same contract as geo/proxy_state)."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return default
 
 
 def _configured_mailbox_proxy(runtime_config: ConfigInput = None):
@@ -298,13 +321,30 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     email_cfg = _email_cfg(runtime_config)
     proxy_cfg = config.get("proxy") if isinstance(config.get("proxy"), Mapping) else {}
     values = []
+    # Optional canonical lane (``proxy.lanes.mailbox``) is authoritative when
+    # present; absent, the legacy mailbox keys below are used unchanged.
+    from .proxy_routing import canonical_lane_pool
+
+    canonical = canonical_lane_pool(config, "mailbox")
+    if canonical:
+        values = list(canonical)
+        fallback_enabled = email_cfg.get("mailbox_proxy_fallback_to_operation_proxy", True)
+        if isinstance(fallback_enabled, str):
+            fallback_enabled = fallback_enabled.strip().lower() not in {"0", "false", "no", "off"}
+        if fallback_enabled:
+            operation = _normalize_mailbox_proxy(proxy)
+            if operation and operation not in values:
+                values.append(operation)
+        return values
     remail_cfg = email_cfg.get("remail") if isinstance(email_cfg.get("remail"), Mapping) else {}
     configured_pool = (
-        config.get("mailbox_proxy_pool")
-        or email_cfg.get("mailbox_proxy_pool")
-        or remail_cfg.get("proxy_pool")
+        config.get("mailbox_proxy_pool") or email_cfg.get("mailbox_proxy_pool") or remail_cfg.get("proxy_pool")
     )
-    raw_values = configured_pool if isinstance(configured_pool, (list, tuple)) else re.split(r"[\r\n,;]+", str(configured_pool or ""))
+    raw_values = (
+        configured_pool
+        if isinstance(configured_pool, (list, tuple))
+        else re.split(r"[\r\n,;]+", str(configured_pool or ""))
+    )
     items = raw_values if isinstance(raw_values, (list, tuple)) else [raw_values]
     for item in items:
         normalized = _normalize_mailbox_proxy(item)
@@ -323,8 +363,21 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     return values or [_normalize_mailbox_proxy(proxy)]
 
 
+def mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
+    """Public seam for lane resolvers such as :mod:`proxy_registry`.
+
+    ``mailbox.py`` exposes almost no public surface, so the proxy registry's
+    read-only facade would otherwise reach into the private implementation.
+    The private name stays authoritative; this wrapper exists so the registry
+    can front the mailbox lane without a cross-module private import (tracked
+    by ``scripts/mailbox_private_import_ratchet.py``). Live polling continues
+    to call ``_mailbox_proxy_candidates`` directly.
+    """
+    return _mailbox_proxy_candidates(proxy, runtime_config)
+
+
 def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: ConfigInput = None):
-    issued_after_unix = int(issued_after_unix or 0)
+    issued_after_unix = _coerce_int(issued_after_unix)
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     defaults = {
         "remail": 90,
@@ -421,6 +474,7 @@ def _snapshot_mailbox_message(mailbox, proxy=None):
             raise
         return ""
 
+
 def _create_cfworker_mailboxes(args=None):
     return mailbox_cfworker._create_cfworker_mailboxes(
         args=args,
@@ -431,7 +485,7 @@ def _create_cfworker_mailboxes(args=None):
 
 def _create_smailr_mailboxes(args=None):
     args = args or argparse.Namespace()
-    count = max(1, int(getattr(args, "count", 1) or 1))
+    count = max(1, _coerce_int(getattr(args, "count", 1)))
     domain = getattr(args, "smailr_domain", None) or None
     return mailbox_smailr.create_smailr_mailboxes(count, domain=domain)
 
@@ -465,12 +519,7 @@ def _gmail_mailbox_from_config(args=None):
     args = args or argparse.Namespace()
     cfg = _gmail_cfg()
     email_cfg = _email_cfg()
-    requested_email = (
-        getattr(args, "email", None)
-        or cfg.get("email")
-        or email_cfg.get("email")
-        or ""
-    ).strip().lower()
+    requested_email = (getattr(args, "email", None) or cfg.get("email") or email_cfg.get("email") or "").strip().lower()
     if not requested_email:
         return None
     if not mailbox_gmail.is_gmail_mailbox(MailboxAccount(email=requested_email, provider="gmail")):
@@ -575,6 +624,7 @@ def _mailbox_from_config(args=None):
 
 # moved _parse_chatai_mailbox_file to dedicated mailbox module.
 
+
 def _load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
     if getattr(args, "buy_remail_mailbox", False):
@@ -602,7 +652,6 @@ def _load_mailbox_pool(args=None):
     return filter_quarantined_mailboxes(pool)
 
 
-
 def _ensure_mailbox_account(mailbox=None):
     if mailbox:
         filtered = mailbox_remail.filter_dead_remail_mailboxes([mailbox])
@@ -610,7 +659,6 @@ def _ensure_mailbox_account(mailbox=None):
     if _remail_enabled():
         return mailbox_remail._create_remail_order(service_mode="code")
     return None
-
 
 
 def _ms_oauth_refresh(mailbox, proxy=None, scope_override=None):
@@ -671,7 +719,9 @@ def _gmail_imap_folders():
 
 
 def _gmail_imap_host():
-    return str(_gmail_cfg().get("imap_host") or mailbox_gmail.DEFAULT_IMAP_HOST).strip() or mailbox_gmail.DEFAULT_IMAP_HOST
+    return (
+        str(_gmail_cfg().get("imap_host") or mailbox_gmail.DEFAULT_IMAP_HOST).strip() or mailbox_gmail.DEFAULT_IMAP_HOST
+    )
 
 
 def _gmail_imap_port():
@@ -698,7 +748,7 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
     }
     if seen_message_id:
         seen_message_ids.add(seen_message_id)
-    seen_message_received_ts = int(getattr(mailbox, "seen_message_received_ts", 0) or 0)
+    seen_message_received_ts = _coerce_int(getattr(mailbox, "seen_message_received_ts", 0))
     messages = override_messages if override_messages is not None else _fetch_mailbox_messages(mailbox, proxy=proxy)
     for msg in messages:
         if _message_id(msg) in seen_message_ids:
@@ -706,13 +756,13 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
         candidate = _email_otp_candidate(mailbox, msg, keyword=keyword, issued_after_unix=issued_after_unix)
         if not candidate:
             continue
-        candidate_ts = int(candidate.get("received_ts") or 0)
+        candidate_ts = _coerce_int(candidate.get("received_ts"))
         if seen_message_received_ts and candidate_ts and candidate_ts < seen_message_received_ts:
             continue
         if latest is None:
             latest = candidate
             continue
-        latest_ts = int(latest.get("received_ts") or 0)
+        latest_ts = _coerce_int(latest.get("received_ts"))
         if candidate_ts and latest_ts:
             if candidate_ts > latest_ts:
                 latest = candidate
@@ -756,7 +806,9 @@ def _fetch_mailbox_messages(
     # Should never reach here (Graph API is catch-all), but guard anyway
     raise RuntimeError("no mailbox message fetcher resolved")
 
+
 # Message recipient extraction moved to sms_tool.mail_otp.
+
 
 def _poll_email_otp(
     mailbox,
@@ -826,6 +878,7 @@ def _poll_email_otp(
     # Should never reach here (Graph API is catch-all poller)
     raise RuntimeError("no OTP poller resolved")
 
+
 def _cfworker_otp_settle_seconds():
     return mailbox_cfworker._cfworker_otp_settle_seconds(_email_cfg())
 
@@ -882,8 +935,11 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
     proxy = _resolve_mailbox_proxy(proxy)
     if getattr(mailbox, "provider", "") == "cfworker":
         return mailbox_cfworker._fetch_cfworker_messages(
-            mailbox, limit=limit, proxy=proxy,
-            email_cfg=_email_cfg(), client_func=_cfworker_client,
+            mailbox,
+            limit=limit,
+            proxy=proxy,
+            email_cfg=_email_cfg(),
+            client_func=_cfworker_client,
         )
     if mailbox_gmail.is_gmail_mailbox(mailbox):
         if not _gmail_imap_enabled():
@@ -891,8 +947,11 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
         return mailbox_gmail.fetch_gmail_imap_messages(
             mailbox,
             token_fetcher=lambda scope: _gmail_oauth_refresh(mailbox, proxy=proxy, scope_override=scope),
-            folders=_gmail_imap_folders(), limit=limit,
-            host=_gmail_imap_host(), port=_gmail_imap_port(), proxy=proxy,
+            folders=_gmail_imap_folders(),
+            limit=limit,
+            host=_gmail_imap_host(),
+            port=_gmail_imap_port(),
+            proxy=proxy,
         )
     graph_error = None
     graph_messages = []
@@ -911,11 +970,15 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
             "Prefer": 'outlook.body-content-type="text"',
         }
         proxies = {"http": proxy, "https": proxy} if proxy else None
-        r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
+        r = curl_requests.get(
+            graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30
+        )
         if r.status_code in (401, 403):
             token = _ms_oauth_refresh(mailbox, proxy=proxy)
             headers["Authorization"] = "Bearer " + token
-            r = curl_requests.get(graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30)
+            r = curl_requests.get(
+                graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30
+            )
         try:
             body = r.json()
         except Exception:

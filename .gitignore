@@ -39,6 +39,9 @@ _*.py
 # 已跟踪的合法模块，不能被上面的规则吃掉（否则对它的修改会静默停止入库）
 !/sms_tool/__main__.py
 !/sms_tool/registration_drivers/_platform_patches.py
+# upi_link/__init__.py imports this pure extractor; without the exception the
+# package would commit without it and fail at import time.
+!/sms_tool/upi_link/_extract.py
 build_log.txt
 *~
 *.bak

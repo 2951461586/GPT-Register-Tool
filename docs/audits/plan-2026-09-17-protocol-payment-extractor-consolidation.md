@@ -292,6 +292,102 @@ services/protocol-payment/
 
 ---
 
+## 7.5 阶段 1 的 proxy-state 子批（✅ 已落地 2026-09-27）
+
+> 阶段 1 的 5 批（redaction / file_loading / http_dump / proxy_bookkeeping /
+> proxy_selection）此前已落地；本批补上**代理状态存储**这一簇，也是剩余重复
+> 体里最大的一个（其根因是模块级可变状态，前几批故意没碰）。
+
+- 新建 `services/protocol-payment/common/proxy_state.py`：`ProxyStateStore`
+  承载 path / load / save / key / prune_seed / prune 六个原语，注入 `env_prefix`、
+  `base_dir`、`proxy_key` / `proxy_chain_key` 与**同一个** `_proxy_state_lock`
+  （记录类函数在该锁内再调 load/save，故 store 的锁必须可重入且被注入，不能自建）。
+  free-function 表面（`shared_*` 别名）让提取器保留同名薄封装，调用点不变。
+- ideal / twint 已重接线：6 个原函数（`proxy_state_path` / `load_proxy_state` /
+  `save_proxy_state` / `proxy_state_key` / `prune_proxy_seed_state` /
+  `prune_proxy_state`）变为薄封装，各删除约 90 行重复实现。
+- **差分验证**（`runtime/tmp/_proxy_state_diff_verify.py`）：HEAD 版本 vs 新实现，
+  24 项检查（path env/默认、key seed/其它、load 缺失/部分/损坏/非 dict、save
+  字节、prune_seed / prune 的落盘字节与日志）**零分歧**。
+- 测试 `tests/test_proxy_state.py` 15 例；extractor 相关 257 例全过；parity
+  ideal:twint 83→77、ideal:blik 54→51、twint:blik 49→46。
+- **blik 暂不接线（有意）**：blik 的 `proxy_state_path` 读的是
+  `IDEAL_PROXY_STATE_FILE`（不是 `BLIK_`），且 `prune_proxy_state` 是 **2 参数**
+  签名（无 promotion）——两者都是需要独立取证的行为差异，按 §6「现在就动 blik」
+  的否决项处理。
+- **parity 工具修正**：`is_delegating_stub` 原只认裸 `shared_*(...)`，漏了
+  `common_*(...)` 与 `shared_<mod>.<fn>(...)` 两种既有转发形态，会把**已经抽取**
+  的壳重新计成重复。补全后基线诚实化，并补双向 fixture + 测试。
+- 说明：ideal/twint 里 86 处**既有**的 ast-grep 告警
+  （`unchecked-throwing-call-python` / `no-identity-operator-on-literals` /
+  `no-boolean-in-except`，在未改动的 blik 中同样存在、仓库 CI 不门禁）以
+  `# pi-lens-ignore: <rule>` 逐条标记为接受，避免它们淹没本次改动的真实告警。
+
+**✅ 已落地（2026-09-27，batch 3b — record / zero-cache / pair）**：
+
+- `ProxyStateStore` 扩容：新增 `env_bool` / `env_int` / `normalize_country` /
+  `clock` 注入面（env 名前缀由 store 统一拼 `<PREFIX>_`，suffix 只写一次），
+  及 13 个原语：`record` / `record_result` / `remove_after_fails` / `is_reused`
+  / `record_health_failure` / `zero_cache_ttl` / `zero_scheduling_enabled` /
+  `zero_cache_status` / `record_zero_result` / `pair_key` / `record_pair_result`
+  / `record_pair_approve_success` / `successful_approve_preferences`。
+- ideal / twint 的对应 13 个函数全部变为薄封装，共删除约 180 行重复实现；
+  原先为它们打的 36 处 `pi-lens-ignore` 随之消失（86 → 50）。
+- **行为保留的两个细节**：① 原 `int(record.get("x") or 0)` 改由 `_coerce_int`
+  包 try/except（状态文件被手改坏时默认值而非崩一次支付流程；对代码自身写入的
+  值逐字节等价）；② 原 `record.get("zero_ok") is True/False` 改由精确等价且
+  不触发 `no-identity-operator-on-literals` 的 `_strict_true/_strict_false`。
+- **差分验证**（`runtime/tmp/_proxy_state_diff_verify_b3.py`）：21 个用例 ×
+  ideal/twint 共 **42 项检查**（return 值 + 落盘字节，`time.time` 冻结），零分歧；
+  batch 3a harness 仍 24 项零分歧。
+- 测试 `tests/test_proxy_state.py` 扩到 **23 例**；extractor 相关 205 例全过；
+  parity 再降：ideal:twint 77→64、ideal:blik 51→43、twint:blik 46→38。
+- **仍未抽出（有意）**：`order_proxy_group`（依赖面最宽，需单独核实）、
+  `record_failure_by_stage`（provider 错误分类器）、seed 文件簇
+  （`proxy_seed_file` / `remove_failed_proxies` / `unique_proxy_seeds` /
+  `load_proxy_seeds`）、`successful_pair_preferences`。
+
+**✅ 已落地（2026-09-28，batch 4 — order_proxy_group + seed 文件簇）**：
+
+- `ProxyStateStore.order_group`：`order_proxy_group`（48 行）整段下沉；
+  `env_bool("..._ZERO_CACHE_SKIP_BAD", True)` 由循环内逐次求值提为循环外一次
+  （同值同结果），`int()` / `is True/False` 复用 `_coerce_int` /
+  `_strict_true/_strict_false`。
+- 新建 `services/protocol-payment/common/proxy_seed_file.py`：`ProxySeedFile`
+  承载 `path` / `unique` / `remove_failed`，注入 `env_prefix`、`base_dir`、
+  `proxy_chain_key`、脱敏三件套（`label` / `redact` / `register`）、`env_bool`、
+  `file_lock`、`clock`、`log`。`load_proxy_seeds`（含 provider 国家常量编排）
+  仍留本地。
+- ideal / twint：`order_proxy_group` / `proxy_seed_file` / `remove_failed_proxies`
+  / `unique_proxy_seeds` 变薄封装；`remove_failed_proxy` 保留为本地一行组合。
+- **差分验证**（`runtime/tmp/_proxy_state_diff_verify_b4.py`）：9 用例 × ideal/twint
+  = **18 项检查**（return、seed 文件字节、quarantine 字节、去时间戳日志），零分歧；
+  b2/b3 harness 仍零分歧。
+- 测试：`tests/test_proxy_seed_file.py` 11 例 + `test_proxy_state.py` 26 例全过；
+  extractor 相关 219 例全过；parity：ideal:twint 64→60、ideal:blik 43→41、
+  twint:blik 38→36；extractor 侧 `pi-lens-ignore` 20 处（原 86）。
+- **仍未抽出（有意）**：`record_failure_by_stage`（provider 错误分类器）、
+  `load_proxy_seeds`（provider 国家常量编排）、`successful_pair_preferences`。
+
+**✅ 已落地（2026-09-28，batch 5 — 错误分类器 + failure 派发 + pair 偏好）**：
+
+- `common/extractor_helpers.py` 新增两个纯分类器
+  （`is_direct_remove_proxy_error` / `is_proxy_health_failure`），ideal/twint 变薄封装。
+- `ProxyStateStore.record_failure_by_stage`：reason 标记串与派发顺序是共享协议词汇；
+  只注入 provider 专属的 `is_unavailable` 与提取器的 `remove_failed`（seed 文件摘除）。
+- `ProxyStateStore.pair_preferences`：`successful_pair_preferences` 整段下沉，
+  `int()` 走 `_coerce_int`。
+- **差分验证**（`runtime/tmp/_proxy_state_diff_verify_b5.py`）：11 用例 × ideal/twint
+  = **22 项检查**（state 字节、seed 字节、quarantine 字节、return），零分歧；
+  b2/b3/b4 harness 仍零分歧。
+- 测试：`tests/test_extractor_helpers.py`（新）+ `test_proxy_state.py` 扩到 30 例；
+  协议支付/extractor 相关 **228 例**全过；parity：ideal:twint 60→56、ideal:blik 41→38、
+  twint:blik 36→33；extractor 侧 `pi-lens-ignore` 17 处（原 86）。
+- **仍未抽出**：`load_proxy_seeds`（provider 国家常量编排，只组合共享原语）；
+  阶段 2 的成对 `stripe_*` / `run_*`（35 个非等价差异，需真实链路回放）。
+
+---
+
 ## 8. 工作量与顺序建议
 
 ```

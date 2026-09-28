@@ -339,7 +339,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         argv = ["chatgpt_phone_reg.py", "--generate-upi-qr", "--at", "at-test"]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.gen_pp_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
                     cli.main()
 
         self.assertIsNone(seen["proxy"])
@@ -366,7 +366,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         argv = ["chatgpt_phone_reg.py", "--generate-upi-qr", "--at", "at-test"]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.gen_pp_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
                     cli.main()
 
         self.assertIsNone(seen["proxy"])
@@ -395,7 +395,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.gen_pp_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
                     cli.main()
 
         self.assertEqual(seen["target_country"], "JP")

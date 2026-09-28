@@ -79,7 +79,8 @@ def parse_geo_country(source: str, payload: dict[str, Any]) -> tuple[str, str]:
     if source == "ipwho":
         if payload.get("success") is False:
             return "", str(payload.get("message") or "")
-        connection = payload.get("connection") if isinstance(payload.get("connection"), dict) else {}
+        connection_raw = payload.get("connection")
+        connection: dict[str, Any] = connection_raw if isinstance(connection_raw, dict) else {}
         return clean_country_code(str(payload.get("country_code") or "")), str(connection.get("asn") or "")
     if source == "ipapi":
         error = payload.get("error")
@@ -98,9 +99,17 @@ def target_probe_urls(group: str) -> list[tuple[str, str]]:
     ]
 
 
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """``int(value or 0)`` with a tolerant fallback (same contract as proxy_state)."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
 def target_response_error(resp: Any) -> str:
     headers = getattr(resp, "headers", {}) or {}
-    status_code = int(getattr(resp, "status_code", 0) or 0)
+    status_code = _coerce_int(getattr(resp, "status_code", 0))
     origin = str(headers.get("x-response-origin") or headers.get("X-Response-Origin") or "").lower()
     proxy_auth = str(headers.get("proxy-authenticate") or headers.get("Proxy-Authenticate") or "").lower()
     if "proxy-server" in origin:
@@ -126,6 +135,7 @@ def expected_proxy_countries(
     ``<PREFIX>_CHECKOUT_PROXY_COUNTRY`` / ``<PREFIX>_PROVIDER_PROXY_COUNTRIES``
     env vars, so the names are derived rather than hard-coded here.
     """
+
     def _expected_country() -> str:
         if group == "checkout":
             raw = os.environ.get(f"{env_prefix}_CHECKOUT_PROXY_COUNTRY", default_checkout_country())
@@ -156,10 +166,10 @@ def lookup_proxy_country(
     redact: Callable[[str], str],
     env_prefix: str,
 ) -> tuple[str, str, str]:
-    now = int(time.time())
+    now = _coerce_int(time.time())
     use_pre_proxy = env_bool(f"{env_prefix}_PROXY_GEO_USE_PRE_PROXY", False)
     cached_country = clean_country_code(str(record.get("country") or ""))
-    checked_at = int(record.get("country_checked_at") or 0)
+    checked_at = _coerce_int(record.get("country_checked_at"))
     cache_matches = "country_pre_proxy" in record and bool(record.get("country_pre_proxy")) == use_pre_proxy
     cache_ttl = env_int(f"{env_prefix}_PROXY_GEO_CACHE_TTL", 3600)
     if cached_country and cache_matches and now - checked_at <= cache_ttl:
@@ -210,9 +220,9 @@ def lookup_proxy_targets(
     env_prefix: str,
     user_agent: str,
 ) -> tuple[bool, str]:
-    now = int(time.time())
+    now = _coerce_int(time.time())
     use_pre_proxy = env_bool(f"{env_prefix}_PROXY_TARGET_USE_PRE_PROXY", True)
-    checked_at = int(record.get("target_checked_at") or 0)
+    checked_at = _coerce_int(record.get("target_checked_at"))
     cached_ok = record.get("target_ok")
     ttl = env_int(f"{env_prefix}_PROXY_TARGET_CACHE_TTL", 1800, minimum=0)
     cache_matches = "target_pre_proxy" in record and bool(record.get("target_pre_proxy")) == use_pre_proxy
@@ -254,7 +264,7 @@ def ensure_proxy_country(
     env_bool: Callable[[str, bool], bool],
     log: Callable[..., None],
     label: Callable[[str], str],
-    remove_failed: Callable[[str, str, str], None],
+    remove_failed: Callable[..., Any],
     env_prefix: str,
 ) -> None:
     if not env_bool(f"{env_prefix}_PROXY_GEO_CHECK", True):
@@ -389,4 +399,3 @@ def precheck_proxy_group(
     kept = [proxy for proxy in proxies if proxy in kept_set]
     log(f"{group} 代理预筛完成: kept={len(kept)}/{total}, removed={total - len(kept)}, unknown={unknown}")
     return kept
-

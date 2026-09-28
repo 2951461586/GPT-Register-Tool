@@ -113,3 +113,86 @@ rules:
   the desktop proxy inputs are normalized by `ProxyInputNormalizer.cs`, whose
   output `proxy_entry.parse_proxy` must accept (pinned by
   `tests/fixtures/proxy_input_cases.json`).
+
+## Unified Proxy Registry
+
+Three egress lanes used to resolve independently:
+
+| Lane | Resolver | Default config keys |
+| --- | --- | --- |
+| registration | `proxy_routing.proxy_pool_for` | `proxy.registration` / `proxy.pool` / `proxy.default` |
+| mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
+| payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
+
+`sms_tool/proxy_registry.py` is the single surface over all three. It does not
+replace the resolvers (their differences are deliberate, Rule 19) — it fronts
+them with one vocabulary (`registration` / `mailbox` / `payment`), one resolve
+call, and one credential-free census:
+
+```powershell
+python scripts/proxy_census.py                       # text table
+python scripts/proxy_census.py --json                # machine-readable
+python scripts/proxy_census.py --methods paypal,upi,kakao,momo
+```
+
+### Optional single declaration point
+
+When `proxy.lanes` is present it is **authoritative** for the matching lane;
+when absent (the default) every resolver uses its legacy keys unchanged, so
+existing shards keep working byte-for-byte.
+
+```jsonc
+"proxy": {
+  "lanes": {
+    "protocol_registration": ["http://user:pass@host:port", ...],
+    "browser_registration":  ["..."],
+    "mailbox":               ["http://127.0.0.1:7897"],
+    "payment": {
+      "pools":   { "US": ["..."], "JP": ["..."] },
+      "default": ["..."]
+    }
+  }
+}
+```
+
+- `protocol_registration` / `browser_registration` are honoured by
+  `proxy_pool_for` (registration batch, health and promotion probes).
+- `mailbox` is honoured by `mailbox._mailbox_proxy_candidates` (the OTP poller).
+- `payment` region pools are honoured by `PaymentRoutePlanner._named_pools`.
+- `proxy.lanes.payment.pools` keys match the names referenced by
+  `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
+- Credentials are never printed by the census or the registry.
+
+### Lane isolation
+
+The census compares **full credentials** (distinct sticky sessions on one
+endpoint are distinct exits) and reports any payment/mailbox credential that is
+also in the registration pool: `lane isolation: OK` or `CROSS-LANE OVERLAP`.
+Reusing a registration exit for payment/OTP is a documented violation, not a
+style point — `payment.json`'s UPI stage proxies were pointed at a registration
+pool entry until 2026-09-28 and now use the payment lane (`global.9http.com`).
+
+**UPI egress verified (2026-09-28)**: `upi.checkout_country` / `payment_country`
+/ `target_country` are all `IN` and `billing_regions=["IN"]` (fallback only), so
+`_upi_retarget_region` rewrites the payment credential to `geo-IN`. Probed
+through the proxy: `geo-IN` → `ok=True country=IN`; the same credential with
+`geo-JP` → `country_mismatch:JP`. So the UPI payment lane now genuinely exits
+from India **and** shares no credential with the registration pool. Note the
+`native_upi` adapter is a function adapter and does *not* pass through
+`payment_egress.assert_egress_countries`, so this probe was run by hand — re-run
+it after any payment-pool change.
+
+### Pruning orphaned health rows
+
+Swapping a pool leaves the old endpoints' health rows behind forever (the
+tracker only ever appends). Keep only the endpoints the active pools resolve to
+today (dry-run by default):
+
+```powershell
+python scripts/proxy_health_prune.py            # show orphaned endpoints
+python scripts/proxy_health_prune.py --apply    # rewrite under the tracker lock
+```
+
+A partial or invalid config degrades the census to what it can resolve (legacy
+mailbox resolution validates the whole config, so a census on a partial file
+returns an empty mailbox pool rather than raising).

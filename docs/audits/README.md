@@ -39,7 +39,7 @@ from `docs/README.md`.
 
 ## Contents
 
-44 files. Grouped by kind; newest first within each group.
+45 files. Grouped by kind; newest first within each group.
 
 > Recount: `ls docs/audits/*.md docs/audits/*.txt | wc -l` — this number is
 > pinned by `tests/test_audits_readme_index.py`, which fails when it and the
@@ -100,6 +100,7 @@ from `docs/README.md`.
 
 | File | Date | Subject |
 |---|---|---|
+| `plan-2026-09-28-stage2-replay.md` | 09-28 | 阶段 2 真实链路回放方案评估（评估稿，未拍板）：阶段 1 落地后 ideal/twint 非等价函数 **35 → 23**，逐一归一化 diff 后**仅 3 个影响 HTTP 请求体**（`stripe_create_*_pm` 的 `ideal[bank]`、`add_inline_*` 同名块、`update_*_checkout_taxes` 的 `currency`），其余为日志/数据差异；建议先做 VCR 式回放基建（`RecordingSession`/`ReplaySession`，只 patch 提取器的 `new_session`，Rule 10 不碰 `services/`），按「纯数据 → 纯措辞 → 真实逻辑」三档分批；**S4 需先录 6 个场景（ideal/twint 成功 + `generic_decline` / 优惠未生效 / already-paid / approve-blocked）才授权**。§11 记录 S0–S2 已落地（`tests/payment_replay.py`、`common/provider_profile.py`），S3/S5 按立项否决项不做 |
 | `plan-2026-09-17-protocol-payment-extractor-consolidation.md` | 09-17 | 协议支付提取器公共骨架抽取立项：ideal/twint **81%（108/134）顶层函数在标识符归一化后 AST 完全相同**、逐行 91.4%，但 35 个函数为**非等价差异**且在真实支付链路 ⇒ 建议三阶段（先零风险的度量基建 + 重复度 ratchet，再抽纯工具层，成对函数参数化单独拍板）；含 5 条明确否决项（**反对**合并为单一参数化引擎）、4 个待答开放问题（首要是 blik 独有的 32 个代理选址函数属"特有需求"还是"ideal/twint 落后版本"） |
 | `plan-2026-09-16-password-first-registration.md` | 09-16 | 密码优先注册立项：唯一待验假设 H1（POST `user/register` 后**采纳响应**能否让 `validate` 不再 409）、灰度 S0–S3 设计、与已删探针的差异、回滚 |
 | `plan-2026-09-16-partial-account-protocol-login.md` | 09-16 | 半注册账号协议登录方案：分「有密码 / 无密码」两类结论；aBai 与 turb **都不处理** `user_already_exists`；方案 A（预防）/ B（止损分流）/ C（`/about-you` 页面取证，唯一未试路线）/ D（明确否决） |

@@ -38,6 +38,50 @@ def _section(config: Mapping[str, Any] | None, name: str) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def canonical_lane_pool(config: Mapping[str, Any] | None, lane: str) -> list[str] | None:
+    """Read ``proxy.lanes.<lane>`` -- the optional single declaration point.
+
+    Returns ``None`` when the canonical section is absent (or empty), which is
+    the default: every resolver then keeps using its legacy keys unchanged.
+    Accepts either a bare list or ``{"pool"|"proxies"|"default": [...]}``.
+    """
+    lanes = _section(_section(config, "proxy"), "lanes")
+    entry = lanes.get(lane)
+    if entry is None:
+        return None
+    if isinstance(entry, Mapping):
+        values = entry.get("pool") or entry.get("proxies") or entry.get("default")
+    else:
+        values = entry
+    return parse_lane_proxy_pool(values) or None
+
+
+def canonical_payment_pools(config: Mapping[str, Any] | None) -> dict[str, list[str]] | None:
+    """Read ``proxy.lanes.payment`` -- region pools plus an optional default.
+
+    Shape: ``{"pools": {"US": [...], "JP": [...]}, "default": [...]}``; a bare
+    list is accepted as the default pool.  Returns ``None`` when absent.
+    """
+    lanes = _section(_section(config, "proxy"), "lanes")
+    entry = lanes.get("payment")
+    if entry is None:
+        return None
+    if not isinstance(entry, Mapping):
+        pool = parse_lane_proxy_pool(entry)
+        return {"default": pool} if pool else None
+    result: dict[str, list[str]] = {}
+    named = entry.get("pools")
+    if isinstance(named, Mapping):
+        for name, values in named.items():
+            pool = parse_lane_proxy_pool(values)
+            if pool:
+                result[str(name)] = pool
+    default = parse_lane_proxy_pool(entry.get("default") or entry.get("pool"))
+    if default:
+        result["default"] = default
+    return result or None
+
+
 def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
     """Return only the pool owned by ``lane``.
 
@@ -46,6 +90,9 @@ def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
     the registration pool as a legacy fallback. Persisted accounts can further
     restore their exact registration affinity in ``select_operation_proxy``.
     """
+    canonical = canonical_lane_pool(config, lane)
+    if canonical:
+        return canonical
     proxy = _section(config, "proxy")
     health = _section(config, "account_health")
     health_proxies = _section(health, "proxies")
@@ -181,7 +228,11 @@ def operation_proxy_candidates(
         if reg_host and len(configured) > 1:
             for candidate in configured:
                 parsed = urlsplit(candidate)
-                if parsed.hostname and parsed.hostname.lower() == reg_host and int(parsed.port or 0) == reg_port:
+                try:
+                    candidate_port = int(parsed.port or 0)
+                except (TypeError, ValueError):
+                    candidate_port = 0
+                if parsed.hostname and parsed.hostname.lower() == reg_host and candidate_port == reg_port:
                     continue
                 alternatives.append(candidate)
         if alternatives:
@@ -246,6 +297,8 @@ def select_operation_proxy(
 
 __all__ = [
     "OperationProxyCandidate",
+    "canonical_lane_pool",
+    "canonical_payment_pools",
     "operation_proxy_candidates",
     "parse_lane_proxy_pool",
     "proxy_pool_for",

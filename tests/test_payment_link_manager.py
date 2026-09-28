@@ -391,7 +391,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch(
-                    "sms_tool.gen_pp_link.generate_upi_qr_link",
+                    "sms_tool.upi_link.generate_upi_qr_link",
                     return_value={
                         "ok": False,
                         "error": "UPI unavailable",
