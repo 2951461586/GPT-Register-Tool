@@ -1,0 +1,1095 @@
+from __future__ import annotations
+
+try:  # pragma: no cover - direct script execution
+    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
+except ImportError:
+    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from ..paypal_extract import CURRENCY_MAP, _new_session
+except ImportError:
+    from paypal_extract import CURRENCY_MAP, _new_session  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from ..phone_proxy import redact_proxy_text
+except ImportError:
+    from phone_proxy import redact_proxy_text  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
+except ImportError:
+    from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
+from typing import Any
+from collections.abc import Mapping
+from types import SimpleNamespace
+import json
+import time
+import uuid
+from ._extract import (
+    _upi_custom_payment_method_id,
+    _upi_extract_next_action,
+    _upi_extract_qr_candidates,
+    _upi_extract_redirect_url,
+    _upi_find_submission_attempt,
+    _upi_get_free_trial_status,
+    _upi_is_instructions_url,
+    _upi_qr_image_kind,
+    _upi_raise_if_setup_intent_blocked,
+)
+from .constants import DEFAULT_CONFIG_PATH, STRIPE_PAYMENT_PAGE_CONFIRM_URL_T, STRIPE_PAYMENT_PAGE_GET_URL_T, UPI_APPROVAL_MAX_ATTEMPTS, UPI_CHECKOUT_APPROVE_URL, UPI_CHECKOUT_CONFIRM_URL, UPI_CHECKOUT_URL, UPI_QR_POLL_MAX_ATTEMPTS, UPI_SENTINEL_APPROVAL_FLOW
+from .env import _emit, _env_bool, _env_int, _env_str, _float_env
+from .dump import _approve_backoff, _upi_dump_http
+from .config import _load_json, _method_cfg, _payment_stage_proxies_from_config, _upi_retarget_region
+from .session import _normalize_hosted_checkout_url, _upi_account_id_from_token, _upi_apply_fingerprint, _upi_billing_profile, _upi_classify_failure, _upi_elements_session, _upi_ensure_checkout_flow, _upi_fingerprint, _upi_new_chatgpt_session, _upi_promo_page_url, _upi_record_zero_result, _upi_server_mandate, _write_qr_png
+from .browser import _upi_browser_approve
+from .stripe import _upi_build_confirm_body, _upi_build_ctx, _upi_create_upi_pm, _upi_elements_session_params, _upi_hosted_fallback_result, _upi_is_403, _upi_passive_captcha_fields, _upi_poll_payment_page, _upi_post_with_degrade, _upi_should_retry_second_confirm, _upi_stripe_init
+from .sentinel import _upi_apply_approve_risk, _upi_capture_risk_context, _upi_fetch_oaics_state, _upi_sentinel_headers, _upi_sentinel_ping, _upi_wait_paid
+from .extract import _upi_hydrate_qr_data, _upi_resolve_external_redirect
+from .flows import _upi_run_cpmt_flow, _upi_run_oaics_flow
+
+
+def _resolve_upi_runtime(
+    access_token,
+    proxy,
+    checkout_proxy,
+    provider_proxy,
+    approve_proxy,
+    target_country,
+    checkout_country,
+    payment_country,
+    require_zero,
+    runtime_config,
+    device_id,
+    session_token,
+):
+    """Resolve every config/env/proxy input generate_upi_qr_link reads.
+
+    Extracted 2026-09-19 from the top of ``generate_upi_qr_link`` (the
+    79-line block before the Stripe try).  Pure input resolution -- no
+    network, no shared state -- so it returns a SimpleNamespace the
+    caller unpacks.  Kept in this module because it reads the same
+    module-level constants (CURRENCY_MAP, UPI_* caps) as the pipeline.
+    """
+    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _load_json(DEFAULT_CONFIG_PATH)
+    upi_cfg = _method_cfg(cfg, "upi")
+    stage_proxies = _payment_stage_proxies_from_config(cfg, "upi")
+    _checkout = checkout_proxy or proxy or stage_proxies["checkout"]
+    _provider = provider_proxy or proxy or stage_proxies["provider"]
+    _approve = approve_proxy or proxy or stage_proxies["approve"]
+    checkout_proxy = str(_checkout or "").strip()
+    provider_proxy = str(_provider or "").strip()
+    approve_proxy = str(_approve or "").strip()
+    regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
+    checkout_country = str(
+        checkout_country
+        or upi_cfg.get("checkout_country")
+        or upi_cfg.get("checkout_billing_country")
+        or upi_cfg.get("billing_country")
+        or target_country
+        or upi_cfg.get("target_country")
+        or (regions[0] if regions else "IN")
+        or "IN"
+    ).upper()
+    payment_country = str(
+        payment_country or upi_cfg.get("payment_country") or upi_cfg.get("payment_method_country") or "IN"
+    ).upper()
+    target_country = checkout_country
+    currency = CURRENCY_MAP.get(checkout_country, "INR")
+    payment_currency = CURRENCY_MAP.get(payment_country, "INR")
+    if require_zero is None:
+        _paypal_raw = cfg.get("paypal")
+        paypal_cfg: dict[str, Any] = _paypal_raw if isinstance(_paypal_raw, dict) else {}
+        require_zero = bool(upi_cfg.get("require_zero_due", paypal_cfg.get("require_zero_due", True)))
+
+    # 协议与策略开关（配置段优先, 环境变量兜底）
+    checkout_ui_mode = (
+        str(upi_cfg.get("checkout_ui_mode") or _env_str("UPI_CHECKOUT_UI_MODE", "custom") or "custom").strip().lower()
+    )
+    if checkout_ui_mode not in {"custom", "hosted"}:
+        checkout_ui_mode = "custom"
+    inline_pm = bool(
+        upi_cfg.get("confirm_inline_pm") if "confirm_inline_pm" in upi_cfg else _env_bool("UPI_CONFIRM_INLINE_PM", True)
+    )
+    update_tax_region = bool(
+        upi_cfg.get("update_tax_region") if "update_tax_region" in upi_cfg else _env_bool("UPI_UPDATE_TAX_REGION", True)
+    )
+    update_customer_data = bool(
+        upi_cfg.get("update_customer_data")
+        if "update_customer_data" in upi_cfg
+        else _env_bool("UPI_UPDATE_CUSTOMER_DATA", False)
+    )
+    max_approve_attempts = _env_int("UPI_APPROVAL_MAX_ATTEMPTS", UPI_APPROVAL_MAX_ATTEMPTS)
+    poll_max_attempts = _env_int("UPI_QR_POLL_MAX_ATTEMPTS", UPI_QR_POLL_MAX_ATTEMPTS)
+    # 无头浏览器 rail：只有真实浏览器能签发 approve 阶段校验的
+    # x-oai-is-client-observation。默认开启，Playwright 不可用时自动回退协议 rail。
+    browser_rail = (
+        bool(upi_cfg.get("browser_rail")) if "browser_rail" in upi_cfg else _env_bool("UPI_BROWSER_RAIL", True)
+    )
+    # approve 重试之间的退避上限（秒）。参考实现是 random.uniform(1, 2)，
+    # 这里做成可调：默认 1.5s，测试里置 0 即可让 60 次重试瞬间跑完。
+    approve_backoff_cap = _float_env("UPI_APPROVAL_BACKOFF", 1.5)
+    approve_backoff_cap = max(0.0, approve_backoff_cap)
+
+    # 一套自洽的浏览器身份贯穿全流程（旧实现每个 session 各随机一个 UA ⇒ 指纹自相矛盾）
+    # locale/timezone 从契约层按 payment_country 取，不在这里硬编码。
+    fingerprint_index = upi_cfg.get("fingerprint")
+    try:
+        fingerprint = _upi_fingerprint(
+            int(fingerprint_index) if fingerprint_index is not None else None,
+            payment_country,
+        )
+    except (TypeError, ValueError):
+        fingerprint = _upi_fingerprint(country=payment_country)
+    billing = _upi_billing_profile(upi_cfg if "fixed_billing" in upi_cfg else None)
+    # 设备身份：调用方可传账号真实 device_id（session 文件里有），
+    # 不传则生成一个自洽的 UUID——风控看的是头的存在性与一致性。
+    device_id = str(device_id or "").strip() or str(uuid.uuid4())
+    # UPI 建单/记账/审批都必须走账单国出口；已知 region/geo/country 模板重定向
+    # 到该国家，不动粘性会话。未知格式原样保留（真实出口门禁由上层负责）。
+    checkout_proxy = _upi_retarget_region(checkout_proxy, checkout_country)
+    provider_proxy = _upi_retarget_region(provider_proxy, checkout_country)
+    approve_proxy = _upi_retarget_region(approve_proxy, checkout_country)
+    session_token = str(session_token or "").strip()
+    return SimpleNamespace(
+        cfg=cfg,
+        upi_cfg=upi_cfg,
+        stage_proxies=stage_proxies,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        regions=regions,
+        checkout_country=checkout_country,
+        payment_country=payment_country,
+        target_country=target_country,
+        currency=currency,
+        payment_currency=payment_currency,
+        require_zero=require_zero,
+        checkout_ui_mode=checkout_ui_mode,
+        inline_pm=inline_pm,
+        update_tax_region=update_tax_region,
+        update_customer_data=update_customer_data,
+        max_approve_attempts=max_approve_attempts,
+        poll_max_attempts=poll_max_attempts,
+        approve_backoff_cap=approve_backoff_cap,
+        browser_rail=browser_rail,
+        fingerprint_index=fingerprint_index,
+        fingerprint=fingerprint,
+        billing=billing,
+        device_id=device_id,
+        session_token=session_token,
+    )
+def upi_invocation(
+    access_token: str,
+    runtime_config: Mapping[str, Any] | None = None,
+    *,
+    proxy: Any = None,
+    auth_context: Mapping[str, Any] | None = None,
+    checkout_proxy: Any = None,
+    provider_proxy: Any = None,
+    approve_proxy: Any = None,
+    target_country: Any = None,
+    checkout_country: Any = None,
+    payment_country: Any = None,
+    require_zero: Any = None,
+    qr_path: Any = None,
+    proxy_state: Any = None,
+    device_id: Any = None,
+    session_token: Any = None,
+    wait_paid: bool = False,
+    paid_timeout: float = 900.0,
+    require_server_upi_mandate: bool = False,
+) -> dict[str, Any]:
+    """Build the canonical kwargs for :func:`generate_upi_qr_link`.
+
+    Single assembly seam shared by the CLI (``--generate-upi-qr``) and the
+    ``native_upi`` pay_link adapter. Both now expose the same option set, so the
+    adapter path can honour ``wait_paid`` / ``paid_timeout`` /
+    ``require_server_upi_mandate`` exactly like the CLI instead of dropping them.
+    """
+    return {
+        "access_token": access_token,
+        "runtime_config": runtime_config,
+        "proxy": proxy,
+        "auth_context": auth_context,
+        "checkout_proxy": checkout_proxy,
+        "provider_proxy": provider_proxy,
+        "approve_proxy": approve_proxy,
+        "target_country": target_country,
+        "checkout_country": checkout_country,
+        "payment_country": payment_country,
+        "require_zero": require_zero,
+        "qr_path": qr_path,
+        "proxy_state": proxy_state,
+        "device_id": device_id,
+        "session_token": session_token,
+        "wait_paid": wait_paid,
+        "paid_timeout": paid_timeout,
+        "require_server_upi_mandate": require_server_upi_mandate,
+    }
+def generate_upi_qr_link(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    checkout_proxy: str | None = None,
+    provider_proxy: str | None = None,
+    approve_proxy: str | None = None,
+    target_country: str | None = None,
+    checkout_country: str | None = None,
+    payment_country: str | None = None,
+    require_zero: bool | None = None,
+    qr_path: str | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
+    proxy_state: Any = None,
+    device_id: str | None = None,
+    session_token: str | None = None,
+    wait_paid: bool = False,
+    paid_timeout: float = 900.0,
+    require_server_upi_mandate: bool = False,
+) -> dict[str, Any]:
+    """Generate a UPI payment link with full Stripe Confirm + Approve flow.
+
+    ``proxy_state`` 是可选的 ``PayPalProxyState``（或任何实现
+    ``record_zero_result(proxy, country, amount)`` 的对象）。传入后，本轮
+    checkout 的实付金额会被记进 0 元缓存，供后续批次做代理调度。
+    **不传即完全关闭**，既有调用方行为不变。
+
+    Implements the complete UPI extraction pipeline over the **custom checkout**
+    protocol (2026-09-17 rewrite; was ``hosted``):
+
+      1. ChatGPT checkout (create cs_id) -- ``checkout_ui_mode=custom``
+      2. Stripe init (build ctx: guid/muid/sid, elements session, init_checksum)
+      3. Free trial detection (coupon / discount / amount analysis)
+      4. Tax region update (IN billing) + customer_data sync
+      5. Stripe confirm (upi PM inline or by reference) with expected_amount +
+         last_displayed_line_item_group_details
+      6. ChatGPT approve (handle ``blocked`` by refreshing client ids)
+      7. Poll payment_pages / setup_intent -> extract redirect / upi:// URI
+         -> hydrate hosted instructions -> follow external redirect -> render QR
+
+    Returns ``upi://`` deep link + QR PNG path on success, or the Stripe
+    hosted instructions URL / hosted fallback if UPI data is not available.
+    """
+    _rc = _resolve_upi_runtime(
+        access_token=access_token,
+        proxy=proxy,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        target_country=target_country,
+        checkout_country=checkout_country,
+        payment_country=payment_country,
+        require_zero=require_zero,
+        runtime_config=runtime_config,
+        device_id=device_id,
+        session_token=session_token,
+    )
+    cfg = _rc.cfg
+    upi_cfg = _rc.upi_cfg
+    stage_proxies = _rc.stage_proxies
+    checkout_proxy = str(_rc.checkout_proxy or "")
+    provider_proxy = str(_rc.provider_proxy or "")
+    approve_proxy = str(_rc.approve_proxy or "")
+    regions = _rc.regions
+    checkout_country = str(_rc.checkout_country or "")
+    payment_country = str(_rc.payment_country or "")
+    target_country = str(_rc.target_country or "")
+    currency = _rc.currency
+    payment_currency = _rc.payment_currency
+    require_zero = _rc.require_zero
+    checkout_ui_mode = _rc.checkout_ui_mode
+    inline_pm = _rc.inline_pm
+    update_tax_region = _rc.update_tax_region
+    update_customer_data = _rc.update_customer_data
+    max_approve_attempts = _rc.max_approve_attempts
+    poll_max_attempts = _rc.poll_max_attempts
+    approve_backoff_cap = _rc.approve_backoff_cap
+    browser_rail = _rc.browser_rail
+    fingerprint_index = _rc.fingerprint_index
+    fingerprint = _rc.fingerprint
+    billing = _rc.billing
+    device_id = str(_rc.device_id or "")
+    session_token = str(_rc.session_token or "")
+
+    emit = _emit
+
+    try:
+        # ── Stage 1: ChatGPT checkout ────────────────────────────────────
+        emit(
+            "checkout",
+            f"Stage 1: using {redact_proxy_text(checkout_proxy or 'DIRECT', checkout_proxy)} for UPI checkout (ui_mode={checkout_ui_mode})",
+        )
+        cs = _upi_new_chatgpt_session(checkout_proxy, fingerprint, device_id, session_token)
+        cs.headers.update(
+            {
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Referer": "https://chatgpt.com/",
+                # 网关路由头（参考实现在请求级传；本 session 只打这一个
+                # 端点，放 session 头等价且不破坏 FakeSession.post 签名）
+                "x-openai-target-path": "/backend-api/payments/checkout",
+                "x-openai-target-route": "/backend-api/payments/checkout",
+            }
+        )
+        risk = _upi_capture_risk_context(
+            cs,
+            access_token=access_token,
+            device_id=device_id,
+            page_url=_upi_promo_page_url(),
+            fingerprint=fingerprint,
+            proxy=checkout_proxy,
+            session_token=session_token,
+            use_browser=browser_rail,
+            sentinel_flow=_upi_ensure_checkout_flow(),
+        )
+        cs.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
+        cs.headers.update(
+            _upi_sentinel_headers(
+                cs,
+                device_id,
+                checkout_proxy,
+                flow=_upi_ensure_checkout_flow(),
+                supplied_token=risk.sentinel_tokens.get(_upi_ensure_checkout_flow(), ""),
+            )
+        )
+        _upi_sentinel_ping(cs, proxy=checkout_proxy, referer="https://chatgpt.com/")
+        checkout_body: dict[str, Any] = {
+            "entry_point": "all_plans_pricing_modal",
+            "plan_name": "chatgptplusplan",
+            "billing_details": {"country": checkout_country, "currency": currency},
+            "promo_campaign": {"promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID, "is_coupon_from_query_param": False},
+            "checkout_ui_mode": checkout_ui_mode,
+        }
+        r = cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)
+        _upi_dump_http(r, "chatgpt_checkout", checkout_body, "POST", UPI_CHECKOUT_URL, force=r.status_code >= 400)
+        if r.status_code == 401:
+            return {
+                "ok": False,
+                "error": "access_token invalid or expired (401)",
+                "error_code": "checkout_unauthorized",
+                "payment_method": "upi",
+            }
+        if r.status_code >= 400:
+            return {
+                "ok": False,
+                "error": f"checkout failed: {r.status_code} {r.text[:300]}",
+                "error_code": "checkout_failed",
+                "payment_method": "upi",
+            }
+        checkout_data = r.json() or {}
+        cs_id = str(checkout_data.get("checkout_session_id") or checkout_data.get("id", "") or "")
+        # Accept both rails the backend can pick: ``cs_*`` (Stripe payment_pages,
+        # custom) and ``oaics_*`` (deferred-intent Elements). The prefix is the
+        # reliable signal; the response's checkout_ui_mode string can disagree.
+        if not cs_id.startswith(("cs_", "oaics_")):
+            return {
+                "ok": False,
+                "error": f"checkout response missing cs_id: {json.dumps(checkout_data, ensure_ascii=False)[:200]}",
+                "error_code": "checkout_bad_response",
+                "payment_method": "upi",
+            }
+        stripe_pk = checkout_data.get("publishable_key") or DEFAULT_STRIPE_PK
+        processor_entity = checkout_data.get("processor_entity") or (
+            "openai_llc" if checkout_country == "US" else "openai_ie"
+        )
+        emit("checkout", f"checkout success: cs_id={cs_id}")
+        is_oaics = cs_id.startswith("oaics_")
+        _oaics_state: dict[str, Any] = {}
+        if is_oaics:
+            # oaics_ sessions carry a CustomerSession secret instead of a
+            # Checkout client secret; refresh the authenticated state once so
+            # the deferred-intent rail sees the authoritative method list.
+            checkout_ui_mode = "deferred"
+            _oaics_state = _upi_fetch_oaics_state(
+                cs, access_token, cs_id=cs_id, processor_entity=processor_entity, proxy=checkout_proxy
+            )
+            emit(
+                "oaics",
+                f"oaics_ session: state refreshed ({len(_oaics_state)} keys)"
+                if _oaics_state
+                else "oaics_ session: state unavailable",
+            )
+
+        # ── Stage 2: Stripe init (custom mode) ───────────────────────────
+        emit(
+            "stripe_init",
+            f"Stage 2: using {redact_proxy_text(provider_proxy or 'DIRECT', provider_proxy)} for Stripe init",
+        )
+        stripe = _new_session(provider_proxy)
+        _upi_apply_fingerprint(stripe, fingerprint)
+        stripe_js_id = uuid.uuid4().hex
+        if is_oaics:
+            customer_session_secret = str(
+                checkout_data.get("customer_session_client_secret")
+                or checkout_data.get("customer_session_secret")
+                or (_oaics_state.get("customer_session_client_secret") if isinstance(_oaics_state, Mapping) else "")
+                or (_oaics_state.get("customer_session_secret") if isinstance(_oaics_state, Mapping) else "")
+                or ""
+            )
+            if not customer_session_secret:
+                return {
+                    "ok": False,
+                    "error": "oaics_ checkout missing customer_session_client_secret",
+                    "error_code": "oaics_prerequisites_missing",
+                    "payment_method": "upi",
+                    "cs_id": cs_id,
+                }
+            init = _upi_elements_session(
+                stripe,
+                stripe_pk=stripe_pk,
+                amount=(_oaics_state.get("amount") if isinstance(_oaics_state, Mapping) else 0),
+                stripe_js_id=stripe_js_id,
+                customer_session_secret=customer_session_secret,
+                fingerprint=fingerprint,
+            )
+            if not init:
+                return {
+                    "ok": False,
+                    "error": "oaics_ elements session negotiation failed",
+                    "error_code": "oaics_elements_failed",
+                    "payment_method": "upi",
+                    "cs_id": cs_id,
+                }
+        else:
+            init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
+        ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+        # Stripe's passive hCaptcha token cannot be forged offline; a confirm
+        # without it is answered later at the payment-setup stage with
+        # ``setup_attempt_failed`` / ``generic_decline``. Solve it here (once)
+        # and let ``_upi_build_confirm_body`` emit the fields.
+        _passive = _upi_passive_captcha_fields(
+            init,
+            proxy=provider_proxy or checkout_proxy,
+            locale=str(fingerprint.get("locale") or "en-US"),
+        )
+        if _passive is not None:
+            ctx["passive_captcha"] = _passive
+        # Prefer the Stripe identifiers the live browser actually used so the
+        # confirm request stays consistent with the page that minted them.
+        for _key in ("guid", "muid", "sid"):
+            if risk.stripe_ids.get(_key) and not ctx.get(_key):
+                ctx[_key] = risk.stripe_ids[_key]
+        emit("stripe_init", "init success, analyzing free trial...")
+        if require_server_upi_mandate:
+            mandate = _upi_server_mandate(init)
+            emit(
+                "mandate",
+                "server mandate_options="
+                + ("present" if mandate else "missing")
+                + (f" end_date={mandate.get('end_date')}" if mandate else ""),
+            )
+
+        # ── Stage 3: Free trial detection ────────────────────────────────
+        ft_status = _upi_get_free_trial_status(init)
+        amount = ft_status["due"]
+        pm_types = ft_status["payment_method_types"]
+        emit(
+            "stripe_init",
+            f"free_trial={ft_status['has_free_trial']} due={amount} coupon={ft_status['coupon_name']} upi={ft_status['has_upi']}",
+        )
+        # 0 元缓存：本轮 checkout 代理有没有产出免费试用，记下来供后续批次调度。
+        # 必须在 ``require_zero`` 的早退**之前**记——那次失败恰恰是最有价值的
+        # 负样本（"这个代理出的是非零"），早退掉就永远学不到。
+        _upi_record_zero_result(proxy_state, checkout_proxy, checkout_country, amount)
+        if require_zero and not ft_status["has_free_trial"]:
+            return {
+                "ok": False,
+                "error": f"no_free_trial: due={amount} coupon={ft_status['coupon_name']} percent_off={ft_status['percent_off']}",
+                "error_code": "no_free_trial",
+                "payment_method": "upi",
+                "cs_id": cs_id,
+                "amount": amount,
+                "currency": payment_currency.upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_country": payment_country,
+                "coupon_name": ft_status["coupon_name"],
+                "percent_off": ft_status["percent_off"],
+            }
+        if pm_types and not ft_status["has_upi"]:
+            return {
+                "ok": False,
+                "error": f"UPI not available for checkout; payment_method_types={pm_types}",
+                "error_code": "upi_not_available",
+                "payment_method": "upi",
+                "cs_id": cs_id,
+                "payment_method_types": pm_types,
+                "amount": amount,
+                "currency": payment_currency.upper(),
+                "target_country": target_country,
+                "checkout_country": checkout_country,
+                "billing_country": checkout_country,
+                "payment_country": payment_country,
+            }
+
+        # ── Stage 3b: cpmt bypass ────────────────────────────────────────
+        # When Checkout advertises a UPI custom payment method, prefer the
+        # ChatGPT-side confirm+start rail. It avoids the Stripe SetupIntent
+        # stage entirely, which is the known source of generic_decline.
+        cpm_id = _upi_custom_payment_method_id(checkout_data.get("custom_payment_methods"))
+        if cpm_id:
+            emit("cpmt", f"Checkout advertises UPI custom method {cpm_id}; using the no-SetupIntent rail")
+            return _upi_run_cpmt_flow(
+                cs,
+                access_token=access_token,
+                cs_id=cs_id,
+                cpm_id=cpm_id,
+                processor_entity=processor_entity,
+                amount=amount,
+                payment_currency=payment_currency,
+                target_country=target_country,
+                checkout_country=checkout_country,
+                payment_country=payment_country,
+                device_id=device_id,
+                checkout_proxy=checkout_proxy,
+                qr_path=qr_path or "",
+            )
+
+        # ── Stage 3c: OAICS / deferred rail ─────────────────────────────
+        # An ``oaics_`` session has no Stripe Checkout client secret; its
+        # confirm is the reference's two-step ``/v1/confirmation_tokens`` ->
+        # ChatGPT ``/checkout/confirm`` sequence, and only that rail accepts
+        # the UPI mandate acceptance fields. See ``_upi_run_oaics_flow`` for
+        # the measured reachability caveat.
+        if is_oaics:
+            emit("oaics", "OAICS rail: confirmation_tokens -> chatgpt confirm -> payment_intent confirm")
+            return _upi_run_oaics_flow(
+                stripe,
+                cs,
+                access_token=access_token,
+                device_id=device_id,
+                cs_id=cs_id,
+                stripe_pk=stripe_pk,
+                processor_entity=processor_entity,
+                billing=billing,
+                fingerprint=fingerprint,
+                ctx=ctx,
+                elements=init if isinstance(init, Mapping) else {},
+                oaics_state=_oaics_state,
+                amount=amount,
+                payment_currency=payment_currency,
+                target_country=target_country,
+                checkout_country=checkout_country,
+                payment_country=payment_country,
+                checkout_proxy=checkout_proxy,
+                provider_proxy=provider_proxy,
+                approve_proxy=approve_proxy,
+                qr_path=qr_path,
+                wait_paid=wait_paid,
+                paid_timeout=paid_timeout,
+            )
+
+        # ── Stage 4: Tax region + customer data sync ─────────────────────
+        if update_tax_region:
+            emit("tax_region", "Stage 4: updating tax region to IN")
+            tax_body: dict[str, str] = {
+                "tax_region[country]": str(billing.get("country") or "IN"),
+                "tax_region[postal_code]": str(billing.get("postal_code") or ""),
+                "tax_region[state]": str(billing.get("state") or ""),
+                "tax_region[city]": str(billing.get("city") or ""),
+                "tax_region[line1]": str(billing.get("line1") or ""),
+                "key": stripe_pk,
+                "_stripe_version": STRIPE_VERSION,
+                **_upi_elements_session_params(ctx),
+            }
+            if billing.get("line2"):
+                tax_body["tax_region[line2]"] = str(billing["line2"])
+            try:
+                tax_resp = stripe.post(
+                    STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                    data=tax_body,
+                    timeout=DEFAULT_TIMEOUT,
+                )
+            except Exception as exc:
+                emit("tax_region", f"tax region transport error (non-fatal): {type(exc).__name__}: {exc}")
+                tax_resp = None
+            if tax_resp is not None:
+                _upi_dump_http(
+                    tax_resp,
+                    "stripe_tax_region",
+                    tax_body,
+                    "POST",
+                    STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                    force=tax_resp.status_code >= 400,
+                )
+                if tax_resp.status_code >= 400:
+                    emit(
+                        "tax_region",
+                        f"tax region update failed (non-fatal): {tax_resp.status_code} {tax_resp.text[:200]}",
+                    )
+                else:
+                    emit("tax_region", "tax region updated")
+                    refreshed = tax_resp.json() or {}
+                    if isinstance(refreshed, dict) and refreshed:
+                        init = refreshed
+                        ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+
+        if update_customer_data:
+            emit("customer_data", "Stage 4: submitting IN customer_data")
+            customer_body: dict[str, str] = {
+                "customer_data[email]": str(billing.get("email") or ""),
+                "customer_data[name]": str(billing.get("name") or ""),
+                "customer_data[address][country]": str(billing.get("country") or "IN"),
+                "customer_data[address][line1]": str(billing.get("line1") or ""),
+                "customer_data[address][city]": str(billing.get("city") or ""),
+                "customer_data[address][postal_code]": str(billing.get("postal_code") or ""),
+                "expected_amount": str(ctx.get("checkout_amount") or 0),
+                "key": stripe_pk,
+                "_stripe_version": STRIPE_VERSION,
+                **_upi_elements_session_params(ctx),
+            }
+            if billing.get("state"):
+                customer_body["customer_data[address][state]"] = str(billing["state"])
+            if billing.get("line2"):
+                customer_body["customer_data[address][line2]"] = str(billing["line2"])
+            try:
+                cd_resp = stripe.post(
+                    STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                    data=customer_body,
+                    timeout=DEFAULT_TIMEOUT,
+                )
+                _upi_dump_http(
+                    cd_resp,
+                    "stripe_customer_data",
+                    customer_body,
+                    "POST",
+                    STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                    force=cd_resp.status_code >= 400,
+                )
+                if cd_resp.status_code >= 400:
+                    emit(
+                        "customer_data", f"customer_data failed (non-fatal): {cd_resp.status_code} {cd_resp.text[:200]}"
+                    )
+                else:
+                    emit("customer_data", "customer_data submitted")
+            except Exception as exc:
+                emit("customer_data", f"customer_data transport error (non-fatal): {type(exc).__name__}: {exc}")
+
+        # ── Stage 5: Stripe confirm ──────────────────────────────────────
+        pm_id = ""
+        if inline_pm:
+            emit("stripe_confirm", "Stage 5: Stripe confirm with inline UPI payment method")
+        else:
+            pm_id = _upi_create_upi_pm(stripe, cs_id, stripe_pk, billing)
+            emit("stripe_confirm", f"Stage 5: Stripe confirm referencing pm={pm_id}")
+
+        return_url = (
+            _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
+            or f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+        )
+        confirm_body = _upi_build_confirm_body(
+            cs_id=cs_id,
+            stripe_pk=stripe_pk,
+            ctx=ctx,
+            processor_entity=processor_entity,
+            init_payload=init,
+            billing=billing,
+            fingerprint=fingerprint,
+            pm_id=pm_id,
+            inline_pm=inline_pm,
+            return_url=return_url,
+        )
+        confirm_resp, confirm_fingerprint = _upi_post_with_degrade(
+            stripe,
+            STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+            data=confirm_body,
+            fingerprint=fingerprint,
+            stage="stripe_confirm",
+        )
+        if _upi_is_403(confirm_resp) and confirm_fingerprint:
+            # 降级重试成功后，后续阶段（approve / 二次 confirm）必须沿用同一套
+            # 身份，否则又回到「confirm 用 chrome124、approve 用 chrome136」的
+            # 自相矛盾状态。
+            fingerprint = dict(confirm_fingerprint)
+            _upi_apply_fingerprint(stripe, fingerprint)
+            emit("stripe_confirm", "adopted degraded fingerprint for subsequent stages")
+        if confirm_resp.status_code >= 400:
+            emit("stripe_confirm", f"confirm failed: {confirm_resp.status_code} {confirm_resp.text[:300]}")
+            return _upi_hosted_fallback_result(
+                cs_id=cs_id,
+                processor_entity=processor_entity,
+                init=init,
+                amount=amount,
+                payment_currency=payment_currency,
+                target_country=target_country,
+                checkout_country=checkout_country,
+                payment_country=payment_country,
+                pm_types=pm_types,
+                checkout_proxy=checkout_proxy,
+                provider_proxy=provider_proxy,
+                approve_proxy=approve_proxy,
+                checkout_ui_mode=checkout_ui_mode,
+                qr_path=qr_path,
+                warning=f"stripe_confirm_failed: {confirm_resp.status_code}",
+            )
+        confirm_data = confirm_resp.json() or {}
+        emit("stripe_confirm", "confirm success")
+        # SetupIntent 失败判读（旧实现完全没有这一步）
+        _upi_raise_if_setup_intent_blocked(confirm_data, "stripe confirm", current_pm_id=pm_id)
+
+        # ── Stage 6: ChatGPT approve ─────────────────────────────────────
+        # 门禁严格对齐参考实现的三分支（参见参考 idx_extract 的三段 if/elif）：
+        #   1) 已有 redirect              -> 不需要 approve，直接进 Stage 7
+        #   2) 无 redirect 且 requires_approval -> 必须 approve
+        #   3) 无 redirect 也无 QR        -> 只轮询 payment_pages 最终确认，不发 approve
+        #   4) 无 redirect 但有 QR        -> 已拿到可用物，不必再 approve
+        # 旧实现用的是「状态是 requires_approval 或 没有 redirect」这种并集，
+        # 会把分支 3/4 也拖进 approve，既多发无谓请求也会阻塞在 60 次重试上。
+        confirm_redirect = _upi_extract_redirect_url(confirm_data)
+        confirm_qr_urls = _upi_extract_qr_candidates(confirm_data)
+        submission = _upi_find_submission_attempt(confirm_data)
+        submission_state = str(submission.get("state") or "")
+        needs_approval = not confirm_redirect and submission_state == "requires_approval"
+        needs_final_poll = not confirm_redirect and not confirm_qr_urls and submission_state != "requires_approval"
+        if needs_final_poll:
+            emit(
+                "approve",
+                "confirm 无 redirect/QR 且非 requires_approval，跳过 approve 直接做最终确认轮询",
+            )
+        blocked_count = 0
+        approval_blocked = False
+        # 注意：approval_ok / approval_data 必须在这里就绑定。
+        # Stage 7 会无条件遍历 (confirm_data, approval_data)，若只在
+        # needs_approval 分支里赋值，跳过 approve 时会 UnboundLocalError。
+        approval_ok = False
+        approval_data: dict[str, Any] = {}
+        if needs_approval:
+            emit(
+                "approve",
+                f"Stage 6: ChatGPT approve using {redact_proxy_text(approve_proxy or 'DIRECT', approve_proxy)}",
+            )
+            if browser_rail and not approval_ok:
+                emit("approve", "Stage 6: headless browser approve (same-session observation)")
+                browser_approve = _upi_browser_approve(
+                    access_token=access_token,
+                    session_token=session_token,
+                    device_id=device_id,
+                    proxy=approve_proxy,
+                    fingerprint=fingerprint,
+                    processor_entity=processor_entity,
+                    cs_id=cs_id,
+                )
+                emit(
+                    "approve",
+                    "browser approve: ok=%s result=%s obs=%s error=%s"
+                    % (
+                        browser_approve["ok"],
+                        browser_approve["result"] or "unknown",
+                        "yes" if browser_approve["observation"] else "no",
+                        str(browser_approve["error"] or "none")[:120],
+                    ),
+                )
+                if browser_approve["ok"]:
+                    approval_ok = True
+                    approval_data = {"result": "approved", "via": "headless_browser"}
+            approve_session = _upi_new_chatgpt_session(approve_proxy, fingerprint, device_id, session_token)
+            approve_session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                }
+            )
+            # The approval endpoint is risk-gated: it needs the same deployment
+            # attestation, signed observation and frontend markers as Checkout,
+            # plus a fresh checkout_session_approval Sentinel. Attach the full
+            # The approval endpoint is risk-gated: re-capture the browser-issued
+            # observation on the Checkout page so approve does not replay the
+            # create-stage context (which the risk engine rejects).
+            if browser_rail and not approval_ok:
+                risk = _upi_capture_risk_context(
+                    approve_session,
+                    access_token=access_token,
+                    device_id=device_id,
+                    page_url=f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                    fingerprint=fingerprint,
+                    proxy=approve_proxy,
+                    session_token=session_token,
+                    use_browser=True,
+                    sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW,
+                )
+            _upi_apply_approve_risk(
+                approve_session, risk, access_token, device_id, approve_proxy, fingerprint, payment_country
+            )
+            # Try confirm endpoint first
+            try:
+                confirm_chatgpt = approve_session.post(
+                    UPI_CHECKOUT_CONFIRM_URL,
+                    json={"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
+                    timeout=CHATGPT_TIMEOUT,
+                )
+                confirm_json = confirm_chatgpt.json() or {} if confirm_chatgpt.status_code < 400 else {}
+                _upi_dump_http(
+                    confirm_chatgpt,
+                    "chatgpt_approve_confirm",
+                    {"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
+                    "POST",
+                    UPI_CHECKOUT_CONFIRM_URL,
+                    force=confirm_chatgpt.status_code >= 400,
+                )
+                if str(confirm_json.get("result", "")).lower() == "approved":
+                    emit("approve", "approved via confirm endpoint")
+                    approval_data = confirm_json
+                    approval_ok = True
+                else:
+                    approval_data = confirm_json
+            except Exception as exc:
+                emit("approve", f"confirm endpoint error (non-fatal): {type(exc).__name__}: {exc}")
+
+            # If confirm didn't approve, try approve endpoint with retries
+            if not approval_ok:
+                for attempt in range(1, max_approve_attempts + 1):
+                    try:
+                        approve_resp = approve_session.post(
+                            UPI_CHECKOUT_APPROVE_URL,
+                            json={"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                            headers={
+                                "x-openai-target-path": "/backend-api/payments/checkout/approve",
+                                "x-openai-target-route": "/backend-api/payments/checkout/approve",
+                            },
+                            timeout=CHATGPT_TIMEOUT,
+                        )
+                        _upi_dump_http(
+                            approve_resp,
+                            f"chatgpt_approve_{attempt:02d}",
+                            {"checkout_session_id": cs_id, "processor_entity": processor_entity},
+                            "POST",
+                            UPI_CHECKOUT_APPROVE_URL,
+                            force=approve_resp.status_code >= 400,
+                        )
+                        if approve_resp.status_code < 400:
+                            approve_json = approve_resp.json() or {}
+                            result = str(approve_json.get("result", "")).lower()
+                            if result == "approved":
+                                emit("approve", f"approved on attempt {attempt}")
+                                approval_ok = True
+                                approval_data = approve_json
+                                break
+                            if result == "blocked":
+                                # 参考实现: blocked 时保留当前线路重领 SEN/SO 并轮换
+                                # 观察证明重试（文档 5.3）；只换 UA 而沿用同一份
+                                # 风控上下文等于原样重放，必然继续 blocked。
+                                blocked_count += 1
+                                emit("approve", f"attempt {attempt}: blocked, rotating risk context")
+                                _upi_apply_approve_risk(
+                                    approve_session,
+                                    risk,
+                                    access_token,
+                                    device_id,
+                                    approve_proxy,
+                                    fingerprint,
+                                    payment_country,
+                                )
+                                if attempt < max_approve_attempts:
+                                    time.sleep(_approve_backoff(attempt, approve_backoff_cap))
+                                continue
+                            approval_data = approve_json
+                        elif attempt % 10 == 0:
+                            emit(
+                                "approve",
+                                f"attempt {attempt}/{max_approve_attempts}: status={approve_resp.status_code}",
+                            )
+                    except Exception as ex:
+                        if attempt % 10 == 0:
+                            emit("approve", f"attempt {attempt} exception: {type(ex).__name__}: {ex}")
+                    if attempt < max_approve_attempts:
+                        time.sleep(_approve_backoff(attempt, approve_backoff_cap))
+
+            if not approval_ok:
+                # 参考实现的判据：全部尝试都 blocked ⇒ 这是 provider 侧风控，
+                # 不是「再等等就好」，必须让上层能区分出来。
+                if blocked_count and blocked_count == max_approve_attempts:
+                    approval_blocked = True
+                    emit(
+                        "approve",
+                        f"all {max_approve_attempts} attempts blocked (provider risk control)",
+                    )
+                else:
+                    emit("approve", "approval failed after all attempts, continuing to extraction")
+
+        # ── Stage 7: Extract redirect / upi:// URI ───────────────────────
+        emit("poll", "Stage 7: extracting UPI redirect / QR data")
+        qr_data: dict[str, Any] = {}
+        redirect_url = ""
+
+        def _absorb(source: Any) -> None:
+            """把一份响应里的跳转 / QR / upi:// 全部吸收进累积态。"""
+            nonlocal redirect_url
+            if not redirect_url:
+                candidate = _upi_extract_redirect_url(source)
+                if candidate:
+                    redirect_url = candidate
+            for url in _upi_extract_qr_candidates(source):
+                kind = _upi_qr_image_kind(url)
+                if kind == "svg":
+                    qr_data.setdefault("qr_image_url_svg", url)
+                elif kind in ("png", "jpg"):
+                    qr_data.setdefault("qr_image_url_png", url)
+            for k, v in _upi_extract_next_action(source).items():
+                if v and (k == "upi_uri" or not qr_data.get(k)):
+                    qr_data[k] = v
+
+        # First check confirm/approve responses (redirect 优先, QR 补充)
+        for source in (confirm_data, approval_data):
+            _absorb(source)
+
+        # Poll Stripe payment page until a real redirect / QR / upi:// appears
+        if not redirect_url and not qr_data.get("upi_uri"):
+            for _attempt in range(1, max(1, poll_max_attempts) + 1):
+                if redirect_url or qr_data.get("upi_uri"):
+                    break
+                try:
+                    poll_redirect, poll_qr = _upi_poll_payment_page(stripe, cs_id, stripe_pk, ctx, current_pm_id=pm_id)
+                except Exception as exc:
+                    if _upi_should_retry_second_confirm(exc):
+                        emit("poll", f"extraction needs a second confirm: {str(exc)[:160]}")
+                        break
+                    raise
+                if poll_redirect:
+                    redirect_url = poll_redirect
+                for url in poll_qr:
+                    kind = _upi_qr_image_kind(url)
+                    if kind == "svg":
+                        qr_data.setdefault("qr_image_url_svg", url)
+                    elif kind in ("png", "jpg"):
+                        qr_data.setdefault("qr_image_url_png", url)
+                break
+
+        # If still nothing, refresh init and try a second confirm once
+        if not redirect_url and not qr_data.get("upi_uri"):
+            emit("poll", "re-init + second confirm to resolve UPI data")
+            try:
+                refreshed_init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
+            except Exception as exc:
+                emit("poll", f"re-init failed (non-fatal): {type(exc).__name__}: {exc}")
+                refreshed_init = None
+            if refreshed_init:
+                init = refreshed_init
+                ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+                _absorb(init)
+                if not redirect_url and not qr_data.get("upi_uri"):
+                    try:
+                        second_body = _upi_build_confirm_body(
+                            cs_id=cs_id,
+                            stripe_pk=stripe_pk,
+                            ctx=ctx,
+                            processor_entity=processor_entity,
+                            init_payload=init,
+                            billing=billing,
+                            fingerprint=fingerprint,
+                            pm_id=pm_id,
+                            inline_pm=inline_pm,
+                            return_url=(
+                                _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or return_url
+                            ),
+                        )
+                        second_resp = stripe.post(
+                            STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+                            data=second_body,
+                            timeout=DEFAULT_TIMEOUT,
+                        )
+                        _upi_dump_http(
+                            second_resp,
+                            "stripe_second_confirm",
+                            second_body,
+                            "POST",
+                            STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+                            force=second_resp.status_code >= 400,
+                        )
+                        if second_resp.status_code < 400:
+                            confirm_data = second_resp.json() or {}
+                            emit("poll", "second confirm succeeded, re-extracting")
+                            _absorb(confirm_data)
+                    except Exception as exc:
+                        emit("poll", f"second confirm failed (non-fatal): {type(exc).__name__}: {exc}")
+
+        # Follow the external redirect to the real instructions page
+        if redirect_url:
+            resolved = _upi_resolve_external_redirect(stripe, redirect_url)
+            if resolved and resolved != redirect_url:
+                emit("redirect", f"followed redirect to {resolved[:80]}...")
+                redirect_url = resolved
+            if _upi_is_instructions_url(redirect_url):
+                qr_data.setdefault("hosted_instructions_url", redirect_url)
+
+        # Hydrate: fetch hosted_instructions_url HTML if no upi:// yet
+        emit("hydrate", "hydrating UPI QR data from hosted instructions")
+        qr_data = _upi_hydrate_qr_data(qr_data, provider_proxy, fingerprint)
+
+        upi_uri = str(qr_data.get("upi_uri") or "")
+        if not upi_uri.startswith("upi://"):
+            mobile_auth = str(qr_data.get("mobile_auth_url") or "")
+            upi_uri = mobile_auth if mobile_auth.startswith("upi://") else ""
+        hosted_url = (
+            _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
+            or f"https://pay.openai.com/c/pay/{cs_id}"
+        )
+        if not redirect_url:
+            redirect_url = hosted_url
+        expires_at = qr_data.get("expires_at") or int(time.time()) + 300
+
+        if upi_uri:
+            emit("done", f"UPI URI extracted: {upi_uri[:40]}...")
+            qr_data_str = upi_uri
+            link_type = "upi_deep_link"
+        elif _upi_is_instructions_url(redirect_url):
+            emit("done", "hosted UPI instructions page resolved")
+            qr_data_str = redirect_url
+            link_type = "upi_instructions_url"
+        else:
+            emit("done", "no upi:// URI found, falling back to hosted URL")
+            qr_data_str = redirect_url or hosted_url
+            link_type = "upi_hosted_fallback"
+
+        written_qr_path = _write_qr_png(qr_data_str, qr_path or "")
+        paid_state = {"paid": False, "payment_status": "not_requested"}
+        if wait_paid:
+            emit("paid", f"waiting up to {paid_timeout:g}s for payment on {cs_id[:20]}...")
+            paid_state = _upi_wait_paid(stripe, cs_id=cs_id, stripe_pk=stripe_pk, ctx=ctx, timeout=paid_timeout)
+            emit("paid", f"payment_status={paid_state.get('payment_status')} paid={paid_state.get('paid')}")
+        return {
+            "ok": True,
+            "payment_method": "upi",
+            "method": "upi",
+            "link_type": link_type,
+            "url": upi_uri or redirect_url or hosted_url,
+            "upi_uri": upi_uri,
+            "hosted_url": hosted_url,
+            "instructions_url": redirect_url if _upi_is_instructions_url(redirect_url) else "",
+            "qr_data": qr_data_str,
+            "qr_path": written_qr_path,
+            "qr_image_url_png": qr_data.get("qr_image_url_png", ""),
+            "qr_image_url_svg": qr_data.get("qr_image_url_svg", ""),
+            "expires_at": expires_at,
+            "cs_id": cs_id,
+            "processor_entity": processor_entity,
+            "amount": amount,
+            "currency": payment_currency.upper(),
+            "target_country": target_country,
+            "checkout_country": checkout_country,
+            "billing_country": checkout_country,
+            "payment_country": payment_country,
+            "payment_method_types": pm_types,
+            "coupon_name": ft_status["coupon_name"],
+            "approval_ok": approval_ok,
+            "approval_blocked": approval_blocked,
+            "paid": bool(paid_state.get("paid")),
+            "payment_status": str(paid_state.get("payment_status") or ""),
+            "checkout_ui_mode": checkout_ui_mode,
+            "checkout_proxy": checkout_proxy,
+            "provider_proxy": provider_proxy,
+            "approve_proxy": approve_proxy,
+        }
+    except Exception as e:
+        # 把失败原因压成可判读的 error_code。历史实现一律返回
+        # "upi_qr_failed"，调用方只能读 error 字符串做子串匹配——
+        # 而 error_classification 又不认识 generic_decline / approve blocked
+        # 这些 UPI 专有说法（实测都落到 "unknown"）。
+        # 这里就地给出稳定代码，让上层不必解析自然语言。
+        return {
+            "ok": False,
+            "error": str(e),
+            "error_code": _upi_classify_failure(e),
+            "payment_method": "upi",
+            "url": "",
+            "qr_path": "",
+        }

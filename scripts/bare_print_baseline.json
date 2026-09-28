@@ -56,6 +56,6 @@
   "sms_tool/smsbower.py": 2,
   "sms_tool/store/accounts.py": 1,
   "sms_tool/store/normalize.py": 1,
-  "sms_tool/upi_link/__init__.py": 1,
+  "sms_tool/upi_link/env.py": 1,
   "sms_tool/utils.py": 8
 }

@@ -4,9 +4,10 @@ Why this exists
 ---------------
 ``upi_link`` re-implements three helpers instead of importing them from
 ``paypal_link.gen_link``: the dependency direction is ``gen_pp_link ->
-upi_link``, never the reverse (see the module docstring in
+upi_link``, never the reverse (see the package docstring in
 ``sms_tool/upi_link/__init__.py``), so importing the canonical ``gen_link``
-helpers here would close an import cycle. The copies are:
+helpers here would close an import cycle. The copies live in the submodule that
+owns each helper (``env`` / ``config`` / ``session``):
 
   * ``_emit``                          -- progress/error sink
   * ``_load_json``                     -- BOM- and shard-tolerant config loader
@@ -52,19 +53,19 @@ ROOT = Path(__file__).resolve().parents[1]
 # (left file, right file, function name, why the copy exists)
 PAIRS: tuple[tuple[str, str, str, str], ...] = (
     (
-        "sms_tool/upi_link/__init__.py",
+        "sms_tool/upi_link/env.py",
         "sms_tool/paypal_link/gen_link.py",
         "_emit",
         "progress/error sink shared by both payment lanes",
     ),
     (
-        "sms_tool/upi_link/__init__.py",
+        "sms_tool/upi_link/config.py",
         "sms_tool/paypal_link/gen_link.py",
         "_load_json",
         "shard-aware config loader; must stay BOM/shard-compatible both ways",
     ),
     (
-        "sms_tool/upi_link/__init__.py",
+        "sms_tool/upi_link/session.py",
         "sms_tool/paypal_link/gen_link.py",
         "_normalize_hosted_checkout_url",
         "Stripe checkout host rewrite shared by both payment lanes",
