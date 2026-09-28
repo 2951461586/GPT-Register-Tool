@@ -162,15 +162,9 @@ def run_payment_batch(
         existing_by_ref = {
             str(row.get("account_ref") or ""): row
             for row in (existing.get("results") or [])
-            if (
-                isinstance(row, dict)
-                and row.get("account_ref")
-                and _checkpoint_row_resumable(row)
-            )
+            if (isinstance(row, dict) and row.get("account_ref") and _checkpoint_row_resumable(row))
         }
-        ordered: list[dict[str, Any] | None] = [
-            existing_by_ref.get(_account_ref(email)) for email in selected
-        ]
+        ordered: list[dict[str, Any] | None] = [existing_by_ref.get(_account_ref(email)) for email in selected]
         pending = [(index, email) for index, email in enumerate(selected) if ordered[index] is None]
         if existing and resume_checkpoint:
             _replay_events(event_path, run_signature, progress)
@@ -185,9 +179,14 @@ def run_payment_batch(
         if progress is None:
             event = None
         now_mono = time.monotonic()
-        state = stage_state.setdefault(account_ref, {"started": now_mono, "stage": "", "stage_started": now_mono, "timings": {}, "last_failed_stage": ""})
+        state = stage_state.setdefault(
+            account_ref,
+            {"started": now_mono, "stage": "", "stage_started": now_mono, "timings": {}, "last_failed_stage": ""},
+        )
         if state["stage"] and state["stage"] != stage:
-            state["timings"][state["stage"]] = state["timings"].get(state["stage"], 0) + int((now_mono - state["stage_started"]) * 1000)
+            state["timings"][state["stage"]] = state["timings"].get(state["stage"], 0) + int(
+                (now_mono - state["stage_started"]) * 1000
+            )
         if state["stage"] != stage:
             state["stage"] = stage
             state["stage_started"] = now_mono
@@ -242,7 +241,10 @@ def run_payment_batch(
                 break
         if manual_token:
             from .accounts.account_liveness import probe_account_liveness
-            probe = probe_account_liveness({"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout)
+
+            probe = probe_account_liveness(
+                {"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout
+            )
             auth = {
                 "ok": int(probe.get("status_code") or 0) == 200,
                 "access_token": manual_token,
@@ -250,7 +252,9 @@ def run_payment_batch(
                 "probed": True,
                 "refreshed": False,
                 "probe": probe,
-                "error": "" if int(probe.get("status_code") or 0) == 200 else str(probe.get("error") or "token_invalid"),
+                "error": ""
+                if int(probe.get("status_code") or 0) == 200
+                else str(probe.get("error") or "token_invalid"),
             }
         else:
             auth = ensure_payment_access_token(
@@ -296,6 +300,7 @@ def run_payment_batch(
             if auth.get("terminal") or row["decision"] == "account_deactivated":
                 try:
                     from .accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
+
                     seed_data, _ = load_account_seed(email=email)
                     if seed_data is not None and is_permanently_deactivated(seed_data):
                         _persist_permanent_deactivation(seed_data)
@@ -307,7 +312,13 @@ def run_payment_batch(
             row["status"] = "failed"
             emit(account_ref, "auth_gate", "failed", detail=row["decision"], account_terminal=True)
             timing = stage_state.get(account_ref, {})
-            row.update({"stage_timings_ms": dict(timing.get("timings") or {}), "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000), "last_failed_stage": timing.get("last_failed_stage") or "auth_gate"})
+            row.update(
+                {
+                    "stage_timings_ms": dict(timing.get("timings") or {}),
+                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                    "last_failed_stage": timing.get("last_failed_stage") or "auth_gate",
+                }
+            )
             return index, row
         emit(account_ref, "auth_gate", "completed")
         if cell.get("matrix_mismatch") or matrix_route_mismatch:
@@ -317,7 +328,13 @@ def run_payment_batch(
             row["retryable"] = False
             emit(account_ref, "validation", "failed", detail=row["decision"], account_terminal=True)
             timing = stage_state.get(account_ref, {})
-            row.update({"stage_timings_ms": dict(timing.get("timings") or {}), "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000), "last_failed_stage": timing.get("last_failed_stage") or "validation"})
+            row.update(
+                {
+                    "stage_timings_ms": dict(timing.get("timings") or {}),
+                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                    "last_failed_stage": timing.get("last_failed_stage") or "validation",
+                }
+            )
             return index, row
         if probe_only:
             emit(account_ref, "capability_probe")
@@ -336,14 +353,16 @@ def run_payment_batch(
             public = _public_payment_result(capability)
             decision = str(public.get("decision") or public.get("error_code") or "capability_unknown")
             row.update(public)
-            row.update({
-                "auth": public_auth,
-                "capability_probed": True,
-                "attempted": False,
-                "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
-                "decision": decision,
-                "attempts": probe_attempt,
-            })
+            row.update(
+                {
+                    "auth": public_auth,
+                    "capability_probed": True,
+                    "attempted": False,
+                    "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
+                    "decision": decision,
+                    "attempts": probe_attempt,
+                }
+            )
             emit(
                 account_ref,
                 "capability_probe",
@@ -351,7 +370,13 @@ def run_payment_batch(
                 account_terminal=True,
             )
             timing = stage_state.get(account_ref, {})
-            row.update({"stage_timings_ms": dict(timing.get("timings") or {}), "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000), "last_failed_stage": timing.get("last_failed_stage")})
+            row.update(
+                {
+                    "stage_timings_ms": dict(timing.get("timings") or {}),
+                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                    "last_failed_stage": timing.get("last_failed_stage"),
+                }
+            )
             return index, row
         if method == "paypal":
             emit(account_ref, "capability_probe")
@@ -376,22 +401,30 @@ def run_payment_batch(
                     or ("trial_ineligible" if probed_eligible is False else "capability_unknown")
                 )
                 row.update(public_capability)
-                row.update({
-                    "auth": public_auth,
-                    "capability_probed": True,
-                    "attempted": False,
-                    "eligible": probed_eligible if isinstance(probed_eligible, bool) else None,
-                    "decision": decision,
-                    "attempts": probe_attempt,
-                    "error_stage": str(public_capability.get("error_stage") or "eligibility"),
-                })
+                row.update(
+                    {
+                        "auth": public_auth,
+                        "capability_probed": True,
+                        "attempted": False,
+                        "eligible": probed_eligible if isinstance(probed_eligible, bool) else None,
+                        "decision": decision,
+                        "attempts": probe_attempt,
+                        "error_stage": str(public_capability.get("error_stage") or "eligibility"),
+                    }
+                )
                 if probed_eligible is False:
                     row["classification"] = "ineligible"
                     row["retryable"] = False
                     row["error_stage"] = "eligibility"
                 emit(account_ref, "capability_probe", "failed", detail=decision, account_terminal=True)
                 timing = stage_state.get(account_ref, {})
-                row.update({"stage_timings_ms": dict(timing.get("timings") or {}), "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000), "last_failed_stage": timing.get("last_failed_stage") or "capability_probe"})
+                row.update(
+                    {
+                        "stage_timings_ms": dict(timing.get("timings") or {}),
+                        "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                        "last_failed_stage": timing.get("last_failed_stage") or "capability_probe",
+                    }
+                )
                 return index, row
             row["capability_probed"] = True
             row["eligible"] = True
@@ -415,9 +448,19 @@ def run_payment_batch(
                 stage = str(payload.pop("stage", "") or "provider").strip().lower()
                 status = str(payload.pop("status", payload.pop("state", "running")) or "running")
                 for key in (
-                    "domain", "run_id", "batch_id", "account_ref", "operation", "method",
-                    "attempt", "max_attempts", "account_terminal", "batch_terminal",
-                    "duration_ms", "stage_timings_ms", "last_failed_stage",
+                    "domain",
+                    "run_id",
+                    "batch_id",
+                    "account_ref",
+                    "operation",
+                    "method",
+                    "attempt",
+                    "max_attempts",
+                    "account_terminal",
+                    "batch_terminal",
+                    "duration_ms",
+                    "stage_timings_ms",
+                    "last_failed_stage",
                 ):
                     payload.pop(key, None)
                 emit(
@@ -458,21 +501,25 @@ def run_payment_batch(
                 # direct BA approval artifacts enter the follow-up queue.
                 authorization_queue = {}
         public = _public_payment_result(last)
-        decision = str(public.get("decision") or public.get("error_code") or ("ready" if public.get("ok") else "failed"))
+        decision = str(
+            public.get("decision") or public.get("error_code") or ("ready" if public.get("ok") else "failed")
+        )
         eligible = _eligible_from_result(method, public)
         row.update(public)
         if str(row.get("status") or "").lower() == "unknown":
             row["requires_reconciliation"] = True
-        row.update({
-            "auth": public_auth,
-            "attempted": True,
-            "eligible": eligible,
-            "decision": decision,
-            "attempts": attempt,
-            "authorization_queued": bool(authorization_queue),
-            "authorization_queue_id": str(authorization_queue.get("id") or ""),
-            "authorization_status": str(authorization_queue.get("status") or ""),
-        })
+        row.update(
+            {
+                "auth": public_auth,
+                "attempted": True,
+                "eligible": eligible,
+                "decision": decision,
+                "attempts": attempt,
+                "authorization_queued": bool(authorization_queue),
+                "authorization_queue_id": str(authorization_queue.get("id") or ""),
+                "authorization_status": str(authorization_queue.get("status") or ""),
+            }
+        )
         emit(
             account_ref,
             "completed" if row.get("ok") else str(row.get("error_stage") or "failed"),
@@ -480,7 +527,14 @@ def run_payment_batch(
             account_terminal=True,
         )
         timing = stage_state.get(account_ref, {})
-        row.update({"stage_timings_ms": dict(timing.get("timings") or {}), "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000), "last_failed_stage": timing.get("last_failed_stage") or (str(row.get("error_stage") or "") if not row.get("ok") else "")})
+        row.update(
+            {
+                "stage_timings_ms": dict(timing.get("timings") or {}),
+                "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                "last_failed_stage": timing.get("last_failed_stage")
+                or (str(row.get("error_stage") or "") if not row.get("ok") else ""),
+            }
+        )
         return index, row
 
     last_checkpoint_write = [0.0]
@@ -491,11 +545,7 @@ def run_payment_batch(
         # interval while terminal states always persist. A crash can lose at
         # most one interval of progress, which resume re-runs by signature.
         now = time.monotonic()
-        if (
-            status == "running"
-            and not force
-            and now - last_checkpoint_write[0] < _CHECKPOINT_MIN_INTERVAL_SECONDS
-        ):
+        if status == "running" and not force and now - last_checkpoint_write[0] < _CHECKPOINT_MIN_INTERVAL_SECONDS:
             return None
         last_checkpoint_write[0] = now
         results = [_sanitize_report_value(row) for row in ordered if row is not None]
@@ -558,10 +608,22 @@ def run_payment_batch(
         process_gate.discard()
 
 
-def _build_report(*, batch_id: str, method: str, started: float, workers: int,
-                  probe_only: bool, selected_count: int, results: list[dict[str, Any]],
-                  cells: list[dict[str, Any]], report_path: Path, status: str,
-                  resumed: int, run_signature: str, resume_checkpoint: bool = False) -> dict[str, Any]:
+def _build_report(
+    *,
+    batch_id: str,
+    method: str,
+    started: float,
+    workers: int,
+    probe_only: bool,
+    selected_count: int,
+    results: list[dict[str, Any]],
+    cells: list[dict[str, Any]],
+    report_path: Path,
+    status: str,
+    resumed: int,
+    run_signature: str,
+    resume_checkpoint: bool = False,
+) -> dict[str, Any]:
     now = time.time()
     return {
         "ok": status == "finished" and bool(results) and all(bool(row.get("ok")) for row in results),
@@ -589,8 +651,7 @@ def _build_report(*, batch_id: str, method: str, started: float, workers: int,
 def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, int]:
     decisions = [str(row.get("decision") or "").lower() for row in results]
     terminal_states = [
-        str(row.get("terminal_state") or row.get("status") or row.get("state") or "").lower()
-        for row in results
+        str(row.get("terminal_state") or row.get("status") or row.get("state") or "").lower() for row in results
     ]
     return {
         "requested": requested,
@@ -600,18 +661,14 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
         "eligible": sum(row.get("eligible") is True for row in results),
         "capability_probed": sum(bool(row.get("capability_probed")) for row in results),
         "capability_unknown": sum(
-            bool(row.get("capability_probed") and str(row.get("classification") or "") == "unknown")
-            for row in results
+            bool(row.get("capability_probed") and str(row.get("classification") or "") == "unknown") for row in results
         ),
         "attempted": sum(bool(row.get("attempted")) for row in results),
         "completed": sum(bool(row.get("ok") and row.get("attempted")) for row in results),
         "trial_ineligible": sum("trial_ineligible" in value for value in decisions),
         "card_only": sum("card_only" in value or "promo_nonzero" in value for value in decisions),
         "approve_blocked": sum("approve" in value and "ready" not in value for value in decisions),
-        "link_ready": sum(
-            bool(row.get("ok") and (row.get("url") or row.get("url_present")))
-            for row in results
-        ),
+        "link_ready": sum(bool(row.get("ok") and (row.get("url") or row.get("url_present"))) for row in results),
         "qr_ready": sum(_is_qr_ready(row) for row in results),
         "terminal": sum(bool((row.get("auth") or {}).get("terminal")) for row in results),
         "failed": sum(not bool(row.get("ok")) for row in results),
@@ -628,14 +685,13 @@ def _batch_counts(results: list[dict[str, Any]], requested: int) -> dict[str, in
     }
 
 
-def _matrix_cell_for(index: int, cells: list[dict[str, Any]], method: str,
-                     registration_country: str) -> dict[str, Any]:
+def _matrix_cell_for(index: int, cells: list[dict[str, Any]], method: str, registration_country: str) -> dict[str, Any]:
     if not cells:
         return {"name": "default"}
     method_cells = [
-        cell for cell in cells
-        if not cell.get("payment_method")
-        or normalize_payment_method(str(cell.get("payment_method") or "")) == method
+        cell
+        for cell in cells
+        if not cell.get("payment_method") or normalize_payment_method(str(cell.get("payment_method") or "")) == method
     ]
     if not method_cells:
         return {"name": "unmatched", "matrix_mismatch": True}
@@ -648,10 +704,7 @@ def _matrix_cell_for(index: int, cells: list[dict[str, Any]], method: str,
             return {"name": "unmatched", "matrix_mismatch": True}
     else:
         candidates = method_cells
-    schedule = [
-        cell for cell in candidates
-        for _ in range(max(1, int(cell.get("sample_size") or 1)))
-    ]
+    schedule = [cell for cell in candidates for _ in range(max(1, int(cell.get("sample_size") or 1)))]
     return dict(schedule[index % len(schedule)])
 
 
@@ -700,14 +753,10 @@ def _cell_payment_kwargs(
         country = str(cell.get(field) or "").strip().upper()
         if country:
             countries[stage] = country
-    coerced_cell_approve, cell_approve_changed = coerce_approve_country(
-        payment_method, countries.get("approve")
-    )
+    coerced_cell_approve, cell_approve_changed = coerce_approve_country(payment_method, countries.get("approve"))
     if cell_approve_changed:
         countries["approve"] = coerced_cell_approve
-    coerced_base_approve, base_approve_changed = coerce_approve_country(
-        payment_method, values.get("approve_country")
-    )
+    coerced_base_approve, base_approve_changed = coerce_approve_country(payment_method, values.get("approve_country"))
     if base_approve_changed:
         values["approve_country"] = coerced_base_approve
     values["stage_proxy_countries"] = countries
@@ -743,7 +792,10 @@ def _eligible_from_result(method: str, result: dict[str, Any]) -> bool | None:
     if method == "kakao":
         if result.get("has_kakao") is True and result.get("amount_due") == 0:
             return True
-        if result.get("has_kakao") is False or str(result.get("decision") or "") in {"nonzero_offer", "kakao_not_enabled"}:
+        if result.get("has_kakao") is False or str(result.get("decision") or "") in {
+            "nonzero_offer",
+            "kakao_not_enabled",
+        }:
             return False
     return None
 
@@ -768,8 +820,12 @@ def _is_transient(result: dict[str, Any]) -> bool:
 def _public_payment_result(result: dict[str, Any]) -> dict[str, Any]:
     blocked = {"access_token", "auth_context", "raw_output", "raw_output_tail", "state_history"}
     token_metadata = {
-        "token_telemetry", "token_hash", "token_changed",
-        "authorization_queued", "authorization_queue_id", "authorization_status",
+        "token_telemetry",
+        "token_hash",
+        "token_changed",
+        "authorization_queued",
+        "authorization_queue_id",
+        "authorization_status",
     }
     return {
         key: value
@@ -782,8 +838,12 @@ def _sanitize_report_value(value: Any, key: str = "") -> Any:
     lowered = key.lower()
     blocked = {"email", "access_token", "refresh_token", "id_token", "auth_context", "password"}
     token_metadata = {
-        "token_telemetry", "token_hash", "token_changed",
-        "authorization_queued", "authorization_queue_id", "authorization_status",
+        "token_telemetry",
+        "token_hash",
+        "token_changed",
+        "authorization_queued",
+        "authorization_queue_id",
+        "authorization_status",
     }
     if lowered in blocked or "proxy" in lowered or ("token" in lowered and lowered not in token_metadata):
         return None
@@ -811,6 +871,7 @@ def _unique_emails(emails: list[str]) -> list[str]:
 
 def _account_ref(email: str) -> str:
     import hashlib
+
     return hashlib.sha256(str(email or "").strip().lower().encode("utf-8")).hexdigest()[:16]
 
 
@@ -971,18 +1032,22 @@ def _active_canary_pause(batch_cfg: dict[str, Any], method: str) -> dict[str, An
 def _record_canary_state(method: str, report: dict[str, Any]) -> dict[str, Any]:
     rows = report.get("results") if isinstance(report.get("results"), list) else []
     probe_only = bool(report.get("probe_only"))
-    evaluated = [
-        row for row in rows
-        if (row.get("capability_probed") if probe_only else row.get("attempted"))
-    ]
+    evaluated = [row for row in rows if (row.get("capability_probed") if probe_only else row.get("attempted"))]
     completed = (
         sum(bool(row.get("conclusive")) for row in evaluated)
         if probe_only
         else int((report.get("counts") or {}).get("completed") or 0)
     )
     conclusive_offer = {
-        "account_trial_ineligible", "card_only_full_price", "promo_nonzero", "momo_not_enabled",
-        "nonzero_offer", "wrong_currency", "kakao_not_enabled", "credential_invalid", "account_deactivated",
+        "account_trial_ineligible",
+        "card_only_full_price",
+        "promo_nonzero",
+        "momo_not_enabled",
+        "nonzero_offer",
+        "wrong_currency",
+        "kakao_not_enabled",
+        "credential_invalid",
+        "account_deactivated",
     }
     conclusive_offer.update({"payment_method_unavailable", "nonzero_offer"})
     decisions = {str(row.get("decision") or "") for row in evaluated}

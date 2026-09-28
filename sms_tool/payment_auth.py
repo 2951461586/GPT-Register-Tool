@@ -54,9 +54,7 @@ def ensure_payment_access_token(
     # ``PAYMENT_RELOGIN_MODE`` environment override (set by the batch CLI so the
     # in-process JIT call does not need a parameter threaded through every
     # layer); otherwise ``auto``.
-    effective_relogin_mode = (
-        str(relogin_mode or "").strip() or os.environ.get("PAYMENT_RELOGIN_MODE", "") or "auto"
-    )
+    effective_relogin_mode = str(relogin_mode or "").strip() or os.environ.get("PAYMENT_RELOGIN_MODE", "") or "auto"
 
     for index in range(probe_count):
         # pi-lens-ignore: unchecked-throwing-call-python
@@ -108,8 +106,12 @@ def ensure_payment_access_token(
         probes.append(_public_probe(candidate_probe))
         if _as_int(candidate_probe.get("status_code")) != 200:
             return _auth_failure(
-                _probe_error_code(candidate_probe), email=account_email, probe=candidate_probe,
-                probes=probes, token=access_token, refreshed=True,
+                _probe_error_code(candidate_probe),
+                email=account_email,
+                probe=candidate_probe,
+                probes=probes,
+                token=access_token,
+                refreshed=True,
             )
 
     telemetry = access_token_telemetry(
@@ -134,8 +136,15 @@ def ensure_payment_access_token(
 def public_payment_auth_result(result: dict[str, Any]) -> dict[str, Any]:
     """Strip credentials and mailbox/session material from a JIT result."""
     blocked = {
-        "access_token", "auth_context", "tokens", "id_token", "refresh_token",
-        "oauth_refresh_token", "cookie_header", "mailbox", "password",
+        "access_token",
+        "auth_context",
+        "tokens",
+        "id_token",
+        "refresh_token",
+        "oauth_refresh_token",
+        "cookie_header",
+        "mailbox",
+        "password",
     }
     return {key: value for key, value in dict(result or {}).items() if key not in blocked}
 
@@ -171,8 +180,7 @@ def _auth_failure(
 
 def _public_probe(probe: dict[str, Any]) -> dict[str, Any]:
     return {
-        key: value for key, value in dict(probe or {}).items()
-        if key not in {"body", "access_token", "Authorization"}
+        key: value for key, value in dict(probe or {}).items() if key not in {"body", "access_token", "Authorization"}
     }
 
 
