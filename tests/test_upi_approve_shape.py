@@ -70,6 +70,35 @@ def test_confirm_body_with_external_pm_has_no_inline_data():
     assert not any(key.startswith("payment_method_data[") for key in body)
 
 
+def test_reference_confirm_body_matches_upi_zero_link_shape():
+    body = _upi_build_confirm_body(
+        cs_id="cs_live_x",
+        stripe_pk="pk_x",
+        ctx={},
+        processor_entity="openai_ie",
+        init_payload={},
+        billing={},
+        fingerprint={},
+        pm_id="pm_x",
+        inline_pm=False,
+        return_url="https://r",
+        payment_method_selection_flow="merchant_specified",
+        reference_shape=True,
+    )
+    # Exact reference field set: no guid/muid/sid, consent, line-item details,
+    # elements-session params or passive captcha.
+    assert body["payment_method"] == "pm_x"
+    assert body["_stripe_version"].startswith("2020-08-27;custom_checkout_beta=v1")
+    assert body["version"] == "a34694b057"
+    assert body["tax_id_collection[purchasing_as_business]"] == "false"
+    assert body["client_attribution_metadata[merchant_integration_version]"] == "custom_checkout"
+    for absent in ("guid", "muid", "sid", "consent[terms_of_service]", "passive_captcha_ekey"):
+        assert absent not in body
+    assert not any(key.startswith("last_displayed_line_item_group_details") for key in body)
+    assert not any(key.startswith("payment_method_data[") for key in body)
+    assert not any(key.startswith("elements_session_client") for key in body)
+
+
 def test_no_synthetic_observation_without_browser_capture():
     risk = upi_sentinel._UpiRiskContext()
     risk.rotate_observation()

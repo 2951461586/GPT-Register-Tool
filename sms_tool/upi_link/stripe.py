@@ -24,7 +24,7 @@ from ._extract import (
     _upi_raise_if_setup_intent_blocked,
     _upi_setup_intent_last_error,
 )
-from .constants import STRIPE_INTENT_URL_T, STRIPE_PAYMENT_METHODS_URL, STRIPE_PAYMENT_PAGE_GET_URL_T, STRIPE_PAYMENT_PAGE_INIT_URL_T, UPI_FINGERPRINT_TEMPLATES, UPI_SECOND_CONFIRM_MARKERS
+from .constants import STRIPE_INTENT_URL_T, STRIPE_PAYMENT_METHODS_URL, STRIPE_PAYMENT_PAGE_GET_URL_T, STRIPE_PAYMENT_PAGE_INIT_URL_T, UPI_FINGERPRINT_TEMPLATES, UPI_REFERENCE_STRIPE_RUNTIME_VERSION, UPI_REFERENCE_STRIPE_VERSION, UPI_SECOND_CONFIRM_MARKERS
 from .env import _emit, _env_bool, _env_int, _env_str
 from .dump import _upi_dump_http
 from .session import _normalize_hosted_checkout_url, _upi_apply_fingerprint, _upi_runtime_version, _write_qr_png
@@ -150,6 +150,7 @@ def _upi_build_confirm_body(
     inline_pm: bool = True,
     return_url: str = "",
     payment_method_selection_flow: str = "automatic",
+    reference_shape: bool = False,
 ) -> dict[str, str]:
     """构造 custom 模式 confirm 载荷。
 
@@ -170,6 +171,36 @@ def _upi_build_confirm_body(
     """
     expected_amount, expected_amount_on_bca = _upi_confirm_amounts(init_payload, ctx.get("checkout_amount"))
     displayed = _upi_display_amounts(init_payload)
+    if reference_shape:
+        # Exact field set of the reference upi-zero-link confirm body: a
+        # separately-created PM referenced by id, the custom_checkout beta API
+        # version, and none of the extra custom-mode fields (consent /
+        # last_displayed_line_item_group_details / guid-muid-sid / passive
+        # captcha / elements session params) this project historically added.
+        body: dict[str, str] = {
+            "eid": "NA",
+            "payment_method": pm_id,
+            "expected_amount": str(expected_amount),
+            "tax_id_collection[purchasing_as_business]": "false",
+            "expected_payment_method_type": "upi",
+            "return_url": return_url or f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+            "key": stripe_pk,
+            "_stripe_version": UPI_REFERENCE_STRIPE_VERSION,
+            "version": UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
+            "client_attribution_metadata[client_session_id]": str(
+                ctx.get("client_session_id") or ctx.get("stripe_js_id") or ""
+            ),
+            "client_attribution_metadata[checkout_session_id]": cs_id,
+            "client_attribution_metadata[merchant_integration_source]": "checkout",
+            "client_attribution_metadata[merchant_integration_version]": "custom_checkout",
+            "client_attribution_metadata[payment_method_selection_flow]": "merchant_specified",
+            "client_attribution_metadata[checkout_config_id]": str(ctx.get("config_id") or uuid.uuid4()),
+            "link_brand": "link",
+        }
+        init_checksum = str(init_payload.get("init_checksum") or ctx.get("init_checksum") or "")
+        if init_checksum:
+            body["init_checksum"] = init_checksum
+        return body
     body: dict[str, str] = {
         "eid": "NA",
         "expected_amount": expected_amount,

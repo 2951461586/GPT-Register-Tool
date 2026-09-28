@@ -18,6 +18,15 @@ STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs
 STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
 STRIPE_PAYMENT_METHODS_URL = "https://api.stripe.com/v1/payment_methods"
 STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
+# Stripe API version string the reference upi-zero-link rail sends (captured
+# from the browser's confirm body). The ``custom_checkout_beta`` variant is the
+# one the manual-approval custom-checkout flow accepts.
+UPI_REFERENCE_STRIPE_VERSION = (
+    "2020-08-27;custom_checkout_beta=v1; checkout_server_update_beta=v1; "
+    "checkout_manual_approval_preview=v1"
+)
+# Stripe.js runtime version the reference confirm body carries.
+UPI_REFERENCE_STRIPE_RUNTIME_VERSION = "a34694b057"
 UPI_CPMT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
 UPI_CPMT_START_URL = "https://chatgpt.com/backend-api/payments/checkout/custom_payment_method/start"
 UPI_CONFIRMATION_TOKENS_URL = "https://api.stripe.com/v1/confirmation_tokens"
