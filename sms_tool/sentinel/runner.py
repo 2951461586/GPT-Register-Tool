@@ -38,10 +38,34 @@ def _impersonate_version(impersonate: str) -> str:
     return match.group(1) if match else ""
 
 
+def _platform_for_family(family: str, profile: Mapping[str, Any]) -> str:
+    """Return the ``userAgentData.platform`` / ``sec-ch-ua-platform`` value.
+
+    The profile already carries the canonical ``sec_ch_ua_platform``
+    (``"Windows"`` / ``"macOS"`` / ``"iOS"``, from
+    ``auth_headers._HARDWARE_PROFILES``).  These two runner options used to be
+    hardcoded to ``"Windows"``, so a Safari/iOS profile reported macOS/iOS in
+    its UA while the JS environment claimed a Windows platform -- a free
+    contradiction.  Prefer the declared value; fall back to the OS implied by
+    the impersonate token so a caller that omits the field still cannot pair a
+    macOS UA with a Windows platform.
+    """
+    declared = str(profile.get("sec_ch_ua_platform") or "").strip().strip('"')
+    if declared:
+        return declared
+    impersonate = str(profile.get("impersonate") or "").lower()
+    if impersonate.endswith("_ios"):
+        return "iOS"
+    if impersonate.endswith("_android"):
+        return "Android"
+    if family == "safari":
+        return "macOS"
+    return "Windows"
+
+
 def _node_binary() -> str:
     configured = (
-        str(os.getenv("OPENAI_SENTINEL_NODE_PATH") or "").strip()
-        or str(os.getenv("NODE_EXECUTABLE") or "").strip()
+        str(os.getenv("OPENAI_SENTINEL_NODE_PATH") or "").strip() or str(os.getenv("NODE_EXECUTABLE") or "").strip()
     )
     return configured or ("node.exe" if os.name == "nt" else "node")
 
@@ -79,6 +103,28 @@ def _safe_error(value: Any) -> str:
     return text[:500]
 
 
+def _as_int(value: Any, default: int) -> int:
+    """Coerce a profile field to int, falling back on anything malformed.
+
+    ``profile`` is a ``Mapping[str, Any]`` built by several callers, so a
+    non-numeric seed (or a caller that passes ``"eight"``) must not crash
+    issuance with a bare ``int()`` -- the runner degrades to the documented
+    default instead.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Any, default: float) -> float:
+    """Coerce a profile field to float, falling back on anything malformed."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def run_sentinel_sdk(
     challenge: Mapping[str, Any],
     *,
@@ -113,47 +159,47 @@ def run_sentinel_sdk(
     family = _impersonate_family(impersonate)
     major = _impersonate_version(impersonate) or "136"
     user_agent = str(profile.get("user_agent") or "Mozilla/5.0")
-    chrome_full = (
-        user_agent.split("Chrome/", 1)[1].split(" ", 1)[0]
-        if "Chrome/" in user_agent
-        else f"{major}.0.0.0"
-    )
+    # Platform-class fields must agree with the profile's real OS (see
+    # ``_platform_for_family``).  ``maxTouchPoints`` travels with them so an
+    # iOS profile is not pinned to a 0-touch desktop.
+    platform = _platform_for_family(family, profile)
+    chrome_full = user_agent.split("Chrome/", 1)[1].split(" ", 1)[0] if "Chrome/" in user_agent else f"{major}.0.0.0"
     config = {
         "flow": flow,
         "deviceId": device_id,
         "sentinelSid": str(profile.get("session_id") or ""),
         "pageUrl": str(page_url or ""),
         "scriptSrc": str(
-            profile.get("script_src")
-            or f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"
+            profile.get("script_src") or f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"
         ),
         "cookie": str(cookie or f"oai-did={device_id}"),
         "userAgent": user_agent,
         "browserFamily": family,
         "navigatorPlatform": str(profile.get("navigator_platform") or "Win32"),
         "navigatorVendor": "" if family == "firefox" else str(profile.get("navigator_vendor") or "Google Inc."),
-        "userAgentDataPlatform": "Windows",
+        "userAgentDataPlatform": platform,
+        "maxTouchPoints": _as_int(profile.get("max_touch_points"), 0),
         "requestIdleCallback": True,
         "language": language,
         "languages": languages or [language],
         "timeZone": str(profile.get("timezone") or "UTC"),
         "timezoneName": str(profile.get("timezone_name") or profile.get("timezone") or "UTC"),
-        "timezoneOffsetMinutes": int(profile.get("timezone_offset_minutes") or 0),
-        "hardwareConcurrency": int(profile.get("hardware_concurrency") or 8),
-        "jsHeapSizeLimit": int(profile.get("js_heap_size_limit") or 4_395_630_592),
-        "deviceMemory": int(profile.get("device_memory") or 8),
-        "devicePixelRatio": float(profile.get("device_pixel_ratio") or 1.0),
+        "timezoneOffsetMinutes": _as_int(profile.get("timezone_offset_minutes"), 0),
+        "hardwareConcurrency": _as_int(profile.get("hardware_concurrency"), 8),
+        "jsHeapSizeLimit": _as_int(profile.get("js_heap_size_limit"), 4_395_630_592),
+        "deviceMemory": _as_int(profile.get("device_memory"), 8),
+        "devicePixelRatio": _as_float(profile.get("device_pixel_ratio"), 1.0),
         "chromeMajor": major,
         "chromeFullVersion": chrome_full,
         "secChUa": str(profile.get("sec_ch_ua") or ""),
-        "secChUaPlatform": "Windows",
+        "secChUaPlatform": platform,
         "secChUaFullVersionList": str(profile.get("sec_ch_ua_full_version_list") or ""),
         "secChUaPlatformVersion": str(profile.get("sec_ch_ua_platform_version") or "10.0.0"),
         "secChUaArch": str(profile.get("sec_ch_ua_arch") or "x86"),
         "secChUaBitness": str(profile.get("sec_ch_ua_bitness") or "64"),
         "secChUaModel": str(profile.get("sec_ch_ua_model") or ""),
-        "width": int(width or 1920),
-        "height": int(height or 1080),
+        "width": _as_int(width, 1920),
+        "height": _as_int(height, 1080),
         "sdkPath": str(sdk_path),
     }
 

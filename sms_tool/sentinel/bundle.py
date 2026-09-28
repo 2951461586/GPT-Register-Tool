@@ -13,7 +13,7 @@ RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
 # Digests are computed over newline-normalised bytes (see ``_digest``), so the
 # pinned values below are stable regardless of the working tree's line endings.
 SDK_SHA256 = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"
-RUNNER_SHA256 = "b388b2e2cca9511bfa0cf06689407142cd790136c44020d1c4fc321c0ea9eece"
+RUNNER_SHA256 = "a90362ebd198b2baf3056da8d315aa4cb7c2f354e86dcf98bab9d3259e2563e7"
 DEFAULT_SENTINEL_VERSION = "20260219f9f6"
 
 
