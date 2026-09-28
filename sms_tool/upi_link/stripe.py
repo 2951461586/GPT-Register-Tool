@@ -24,7 +24,16 @@ from ._extract import (
     _upi_raise_if_setup_intent_blocked,
     _upi_setup_intent_last_error,
 )
-from .constants import STRIPE_INTENT_URL_T, STRIPE_PAYMENT_METHODS_URL, STRIPE_PAYMENT_PAGE_GET_URL_T, STRIPE_PAYMENT_PAGE_INIT_URL_T, UPI_FINGERPRINT_TEMPLATES, UPI_REFERENCE_STRIPE_RUNTIME_VERSION, UPI_REFERENCE_STRIPE_VERSION, UPI_SECOND_CONFIRM_MARKERS
+from .constants import (
+    STRIPE_INTENT_URL_T,
+    STRIPE_PAYMENT_METHODS_URL,
+    STRIPE_PAYMENT_PAGE_GET_URL_T,
+    STRIPE_PAYMENT_PAGE_INIT_URL_T,
+    UPI_FINGERPRINT_TEMPLATES,
+    UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
+    UPI_REFERENCE_STRIPE_VERSION,
+    UPI_SECOND_CONFIRM_MARKERS,
+)
 from .env import _emit, _env_bool, _env_int, _env_str
 from .dump import _upi_dump_http
 from .session import _normalize_hosted_checkout_url, _upi_apply_fingerprint, _upi_runtime_version, _write_qr_png
@@ -47,6 +56,8 @@ def _upi_elements_session_params(ctx: Mapping[str, Any]) -> dict[str, str]:
         "elements_options_client[saved_payment_method][enable_save]": "never",
         "elements_options_client[saved_payment_method][enable_redisplay]": "never",
     }
+
+
 def _upi_build_init_body(
     stripe_pk: str,
     fingerprint: Mapping[str, str],
@@ -68,6 +79,8 @@ def _upi_build_init_body(
         "key": stripe_pk,
         "_stripe_version": STRIPE_VERSION,
     }
+
+
 def _upi_passive_captcha_config(init_payload: Any) -> dict[str, str]:
     """提取 Stripe 的 passive hCaptcha ``site_key`` / ``rqdata``。
 
@@ -86,6 +99,8 @@ def _upi_passive_captcha_config(init_payload: Any) -> dict[str, str]:
     if not site_key:
         return {}
     return {"site_key": site_key, "rqdata": rqdata}
+
+
 def _upi_passive_captcha_fields(
     init_payload: Any,
     *,
@@ -137,6 +152,8 @@ def _upi_passive_captcha_fields(
         out["passive_captcha_ekey"] = str(ekey)
     _emit("captcha", f"被动 hCaptcha token 就绪（len={len(str(token))}, ekey={'有' if ekey else '无'}）")
     return out
+
+
 def _upi_build_confirm_body(
     *,
     cs_id: str,
@@ -295,6 +312,8 @@ def _upi_build_confirm_body(
     # ``parameter_unknown`` (measured live 2026-09-26). The reference confirm
     # body omits them, so they must not leak in through the shared params.
     return body
+
+
 def _upi_build_ctx(init_payload: Any, fingerprint: Mapping[str, str], stripe_js_id: str) -> dict[str, Any]:
     """参考实现 ``build_ctx``: 汇总 confirm 需要的客户端身份与金额上下文。"""
     payload = init_payload if isinstance(init_payload, dict) else {}
@@ -314,6 +333,8 @@ def _upi_build_ctx(init_payload: Any, fingerprint: Mapping[str, str], stripe_js_
         "runtime_version": _upi_runtime_version(),
         "stripe_version": STRIPE_VERSION,
     }
+
+
 def _upi_degraded_template() -> dict[str, str]:
     """降级指纹模板：chrome124 + macOS UA。
 
@@ -331,6 +352,8 @@ def _upi_degraded_template() -> dict[str, str]:
         if template.get("name") == wanted:
             return dict(template)
     return dict(UPI_FINGERPRINT_TEMPLATES[0])
+
+
 def _upi_is_403(response: Any) -> bool:
     """判定响应是否为 403（含 ``cf-mitigated`` 这类 WAF 标记）。"""
     if response is None:
@@ -343,6 +366,8 @@ def _upi_is_403(response: Any) -> bool:
     except Exception:
         mitigated = ""
     return mitigated == "challenge"
+
+
 def _upi_post_with_degrade(
     session: Any,
     url: str,
@@ -392,6 +417,8 @@ def _upi_post_with_degrade(
         force=resp_retry.status_code >= 400,
     )
     return resp_retry, degraded
+
+
 def _upi_stripe_init(
     stripe: Any,
     cs_id: str,
@@ -421,6 +448,8 @@ def _upi_stripe_init(
     payload["client_stripe_js_id"] = stripe_js_id
     payload["client_fingerprint_used"] = dict(used)
     return payload
+
+
 def _upi_create_upi_pm(
     stripe: Any,
     cs_id: str,
@@ -460,6 +489,8 @@ def _upi_create_upi_pm(
     if not pm_id.startswith("pm_"):
         raise RuntimeError(f"create UPI payment method returned bad payload: {str(getattr(resp, 'text', ''))[:300]}")
     return pm_id
+
+
 def _upi_payment_page_summary(payload: Any) -> dict[str, Any]:
     """参考实现 ``payment_page_summary``: 轮询可观测性的结构化摘要。"""
     if not isinstance(payload, dict):
@@ -491,8 +522,12 @@ def _upi_payment_page_summary(payload: Any) -> dict[str, Any]:
     elif isinstance(setup_intent, str):
         summary["setup_intent"] = setup_intent
     return {key: value for key, value in summary.items() if value not in (None, "", [], {})}
+
+
 def _upi_format_summary(summary: Mapping[str, Any]) -> str:
     return ", ".join(f"{key}={value}" for key, value in summary.items())
+
+
 def _upi_intent_redirect_url(
     stripe: Any,
     intent_payload: Any,
@@ -530,6 +565,8 @@ def _upi_intent_redirect_url(
         payload = {"_raw_text": getattr(resp, "text", "")}
     _upi_raise_if_setup_intent_blocked(payload, "stripe intent", current_pm_id=current_pm_id)
     return _upi_extract_redirect_url(payload)
+
+
 def _upi_payload_intent_redirect_url(
     stripe: Any,
     payload: Any,
@@ -552,6 +589,8 @@ def _upi_payload_intent_redirect_url(
             if redirect_url:
                 return redirect_url
     return ""
+
+
 def _upi_poll_payment_page(
     stripe: Any,
     cs_id: str,
@@ -643,9 +682,13 @@ def _upi_poll_payment_page(
         time.sleep(1)
 
     raise RuntimeError(f"redirect url resolution timeout: {last_error}")
+
+
 def _upi_should_retry_second_confirm(error: Any) -> bool:
     text = str(error or "").lower()
     return any(marker in text for marker in UPI_SECOND_CONFIRM_MARKERS)
+
+
 def _upi_hosted_fallback_result(
     *,
     cs_id: str,
@@ -694,6 +737,8 @@ def _upi_hosted_fallback_result(
     if warning:
         result["warning"] = warning
     return result
+
+
 def _upi_build_confirmation_token_body(
     *,
     cs_id: str,

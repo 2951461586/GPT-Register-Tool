@@ -22,8 +22,7 @@ STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
 # from the browser's confirm body). The ``custom_checkout_beta`` variant is the
 # one the manual-approval custom-checkout flow accepts.
 UPI_REFERENCE_STRIPE_VERSION = (
-    "2020-08-27;custom_checkout_beta=v1; checkout_server_update_beta=v1; "
-    "checkout_manual_approval_preview=v1"
+    "2020-08-27;custom_checkout_beta=v1; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 )
 # Stripe.js runtime version the reference confirm body carries.
 UPI_REFERENCE_STRIPE_RUNTIME_VERSION = "a34694b057"
