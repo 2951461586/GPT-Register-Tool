@@ -33,14 +33,57 @@ from ._extract import (
     _upi_qr_image_kind,
     _upi_raise_if_setup_intent_blocked,
 )
-from .constants import DEFAULT_CONFIG_PATH, STRIPE_PAYMENT_PAGE_CONFIRM_URL_T, STRIPE_PAYMENT_PAGE_GET_URL_T, UPI_APPROVAL_MAX_ATTEMPTS, UPI_CHECKOUT_APPROVE_URL, UPI_CHECKOUT_CONFIRM_URL, UPI_CHECKOUT_URL, UPI_QR_POLL_MAX_ATTEMPTS, UPI_SENTINEL_APPROVAL_FLOW
+from .constants import (
+    DEFAULT_CONFIG_PATH,
+    STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,
+    STRIPE_PAYMENT_PAGE_GET_URL_T,
+    UPI_APPROVAL_MAX_ATTEMPTS,
+    UPI_CHECKOUT_APPROVE_URL,
+    UPI_CHECKOUT_CONFIRM_URL,
+    UPI_CHECKOUT_URL,
+    UPI_QR_POLL_MAX_ATTEMPTS,
+    UPI_SENTINEL_APPROVAL_FLOW,
+)
 from .env import _emit, _env_bool, _env_int, _env_str, _float_env
 from .dump import _approve_backoff, _upi_dump_http
 from .config import _load_json, _method_cfg, _payment_stage_proxies_from_config, _upi_retarget_region
-from .session import _normalize_hosted_checkout_url, _upi_account_id_from_token, _upi_apply_fingerprint, _upi_billing_profile, _upi_classify_failure, _upi_elements_session, _upi_ensure_checkout_flow, _upi_fingerprint, _upi_new_chatgpt_session, _upi_promo_page_url, _upi_record_zero_result, _upi_server_mandate, _write_qr_png
+from .session import (
+    _normalize_hosted_checkout_url,
+    _upi_account_id_from_token,
+    _upi_apply_fingerprint,
+    _upi_billing_profile,
+    _upi_classify_failure,
+    _upi_elements_session,
+    _upi_ensure_checkout_flow,
+    _upi_fingerprint,
+    _upi_new_chatgpt_session,
+    _upi_promo_page_url,
+    _upi_record_zero_result,
+    _upi_server_mandate,
+    _write_qr_png,
+)
 from .browser import _upi_browser_approve
-from .stripe import _upi_build_confirm_body, _upi_build_ctx, _upi_create_upi_pm, _upi_elements_session_params, _upi_hosted_fallback_result, _upi_is_403, _upi_passive_captcha_fields, _upi_poll_payment_page, _upi_post_with_degrade, _upi_should_retry_second_confirm, _upi_stripe_init
-from .sentinel import _upi_apply_approve_risk, _upi_capture_risk_context, _upi_fetch_oaics_state, _upi_sentinel_headers, _upi_sentinel_ping, _upi_wait_paid
+from .stripe import (
+    _upi_build_confirm_body,
+    _upi_build_ctx,
+    _upi_create_upi_pm,
+    _upi_elements_session_params,
+    _upi_hosted_fallback_result,
+    _upi_is_403,
+    _upi_passive_captcha_fields,
+    _upi_poll_payment_page,
+    _upi_post_with_degrade,
+    _upi_should_retry_second_confirm,
+    _upi_stripe_init,
+)
+from .sentinel import (
+    _upi_apply_approve_risk,
+    _upi_capture_risk_context,
+    _upi_fetch_oaics_state,
+    _upi_sentinel_headers,
+    _upi_sentinel_ping,
+    _upi_wait_paid,
+)
 from .extract import _upi_hydrate_qr_data, _upi_resolve_external_redirect
 from .flows import _upi_run_cpmt_flow, _upi_run_oaics_flow
 
@@ -107,6 +150,20 @@ def _resolve_upi_runtime(
     inline_pm = bool(
         upi_cfg.get("confirm_inline_pm") if "confirm_inline_pm" in upi_cfg else _env_bool("UPI_CONFIRM_INLINE_PM", True)
     )
+    # Confirm/approve shape. ``reference`` mirrors the upi-zero-link pure-protocol
+    # rail: create the PM separately and confirm with ``payment_method: pm_id``,
+    # ``payment_method_selection_flow=merchant_specified``, no synthetic
+    # ``x-oai-is-client-observation``, and reuse the Checkout-stage Sentinel for
+    # approve. ``current`` keeps the legacy inline-PM + fresh-approval-Sentinel
+    # + synthetic-observation path for rollback/A-B.
+    approve_shape = str(
+        upi_cfg.get("approve_shape") if "approve_shape" in upi_cfg else _env_str("UPI_APPROVE_SHAPE", "reference")
+    ).strip().lower()
+    if approve_shape not in {"reference", "current"}:
+        approve_shape = "reference"
+    if approve_shape == "reference":
+        inline_pm = False
+    payment_method_selection_flow = "merchant_specified" if approve_shape == "reference" else "automatic"
     update_tax_region = bool(
         upi_cfg.get("update_tax_region") if "update_tax_region" in upi_cfg else _env_bool("UPI_UPDATE_TAX_REGION", True)
     )
@@ -163,6 +220,8 @@ def _resolve_upi_runtime(
         require_zero=require_zero,
         checkout_ui_mode=checkout_ui_mode,
         inline_pm=inline_pm,
+        approve_shape=approve_shape,
+        payment_method_selection_flow=payment_method_selection_flow,
         update_tax_region=update_tax_region,
         update_customer_data=update_customer_data,
         max_approve_attempts=max_approve_attempts,
@@ -175,6 +234,8 @@ def _resolve_upi_runtime(
         device_id=device_id,
         session_token=session_token,
     )
+
+
 def upi_invocation(
     access_token: str,
     runtime_config: Mapping[str, Any] | None = None,
@@ -223,6 +284,8 @@ def upi_invocation(
         "paid_timeout": paid_timeout,
         "require_server_upi_mandate": require_server_upi_mandate,
     }
+
+
 def generate_upi_qr_link(
     access_token: str,
     proxy: Any = None,
@@ -295,6 +358,8 @@ def generate_upi_qr_link(
     require_zero = _rc.require_zero
     checkout_ui_mode = _rc.checkout_ui_mode
     inline_pm = _rc.inline_pm
+    approve_shape = _rc.approve_shape
+    payment_method_selection_flow = _rc.payment_method_selection_flow
     update_tax_region = _rc.update_tax_region
     update_customer_data = _rc.update_customer_data
     max_approve_attempts = _rc.max_approve_attempts
@@ -340,17 +405,16 @@ def generate_upi_qr_link(
             sentinel_flow=_upi_ensure_checkout_flow(),
         )
         cs.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
-        cs.headers.update(
-            _upi_sentinel_headers(
-                cs,
-                device_id,
-                checkout_proxy,
-                flow=_upi_ensure_checkout_flow(),
-                supplied_token=risk.sentinel_tokens.get(_upi_ensure_checkout_flow(), ""),
-                fingerprint=fingerprint,
-                page_url=_upi_promo_page_url(),
-            )
+        checkout_sentinel_headers = _upi_sentinel_headers(
+            cs,
+            device_id,
+            checkout_proxy,
+            flow=_upi_ensure_checkout_flow(),
+            supplied_token=risk.sentinel_tokens.get(_upi_ensure_checkout_flow(), ""),
+            fingerprint=fingerprint,
+            page_url=_upi_promo_page_url(),
         )
+        cs.headers.update(checkout_sentinel_headers)
         _upi_sentinel_ping(cs, proxy=checkout_proxy, referer="https://chatgpt.com/")
         checkout_body: dict[str, Any] = {
             "entry_point": "all_plans_pricing_modal",
@@ -688,6 +752,7 @@ def generate_upi_qr_link(
             pm_id=pm_id,
             inline_pm=inline_pm,
             return_url=return_url,
+            payment_method_selection_flow=payment_method_selection_flow,
         )
         confirm_resp, confirm_fingerprint = _upi_post_with_degrade(
             stripe,
@@ -810,7 +875,15 @@ def generate_upi_qr_link(
                     sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW,
                 )
             _upi_apply_approve_risk(
-                approve_session, risk, access_token, device_id, approve_proxy, fingerprint, payment_country
+                approve_session,
+                risk,
+                access_token,
+                device_id,
+                approve_proxy,
+                fingerprint,
+                payment_country,
+                checkout_sentinel=checkout_sentinel_headers,
+                approve_shape=approve_shape,
             )
             # Try confirm endpoint first
             try:
@@ -880,6 +953,8 @@ def generate_upi_qr_link(
                                     approve_proxy,
                                     fingerprint,
                                     payment_country,
+                                    checkout_sentinel=checkout_sentinel_headers,
+                                    approve_shape=approve_shape,
                                 )
                                 if attempt < max_approve_attempts:
                                     time.sleep(_approve_backoff(attempt, approve_backoff_cap))
@@ -983,6 +1058,7 @@ def generate_upi_qr_link(
                             return_url=(
                                 _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or return_url
                             ),
+                            payment_method_selection_flow=payment_method_selection_flow,
                         )
                         second_resp = stripe.post(
                             STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),

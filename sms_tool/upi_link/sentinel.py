@@ -129,8 +129,13 @@ class _UpiRiskContext:
             "x-openai-web-frontend": "core_web",
             "x-openai-codex-window-type": "not_applicable",
             "x-oai-is-pending-updates": '{"v":3,"updates":[]}',
-            "x-oai-is-client-observation": self.observation_header(),
         }
+        # The reference upi-zero-link rail sends **no** observation header; only a
+        # real browser capture may forward one. A synthetic ``v1.r.p.`` value is
+        # more likely to be rejected as an invalid signature than to help, so
+        # omit it entirely when the browser rail did not issue it.
+        if self.browser_observation and self.observation:
+            headers["x-oai-is-client-observation"] = self.observation
         if self.attestation:
             headers["oai-web-deployment-attestation"] = self.attestation
         if account_id:
@@ -472,14 +477,16 @@ def _upi_apply_approve_risk(
     proxy: Any,
     fingerprint: Any,
     payment_country: Any,
+    *,
+    checkout_sentinel: Any = None,
+    approve_shape: str = "current",
 ) -> None:
     """Refresh approval-stage risk headers and Sentinel on the session.
 
-    The ChatGPT ``checkout/approve`` endpoint answers ``result=blocked``
-    unless the request carries a fresh signed observation, the deployment
-    attestation and a newly minted ``checkout_session_approval`` Sentinel.
-    Replaying the same context (only swapping the UA) therefore keeps failing,
-    so every retry rotates the whole context instead.
+    ``approve_shape="reference"`` mirrors the upi-zero-link pure-protocol rail:
+    reuse the Checkout-stage Sentinel pair (main token + checkout SO) instead of
+    minting a fresh ``checkout_session_approval`` one. ``current`` mints a fresh
+    approval-flow token per retry (the legacy behaviour).
     """
     if session is None:
         return
@@ -487,9 +494,16 @@ def _upi_apply_approve_risk(
         session.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
     except Exception:
         pass
-    try:
-        session.headers.update(
-            _upi_sentinel_headers(
+    sentinel_headers: dict[str, str] = {}
+    if (
+        approve_shape == "reference"
+        and isinstance(checkout_sentinel, Mapping)
+        and checkout_sentinel.get("OpenAI-Sentinel-Token")
+    ):
+        sentinel_headers = dict(checkout_sentinel)
+    else:
+        try:
+            sentinel_headers = _upi_sentinel_headers(
                 session,
                 device_id,
                 proxy,
@@ -497,9 +511,10 @@ def _upi_apply_approve_risk(
                 supplied_token=risk.sentinel_tokens.get(UPI_SENTINEL_APPROVAL_FLOW, ""),
                 fingerprint=fingerprint,
             )
-        )
-    except Exception:
-        pass
+        except Exception:
+            sentinel_headers = {}
+    if sentinel_headers:
+        session.headers.update(sentinel_headers)
     if payment_country:
         try:
             _upi_apply_fingerprint(session, _upi_fingerprint(country=payment_country))

@@ -1819,10 +1819,13 @@ class RiskContextTests(unittest.TestCase):
         second = risk.headers()
         self.assertEqual(first["x-openai-web-frontend"], "core_web")
         self.assertEqual(first["Chatgpt-Account-Id"], "acct_1")
-        self.assertTrue(first["x-oai-is-client-observation"].startswith("v1.r.p."))
-        # Observation must rotate per stage; telemetry must advance. `or` is
-        # avoided here so the assertion cannot be folded by the linter.
-        self.assertNotEqual(first["x-oai-is-client-observation"], second["x-oai-is-client-observation"])
+        # upi-zero-link alignment: no synthetic observation is sent; only a real
+        # browser capture forwards one.
+        self.assertNotIn("x-oai-is-client-observation", first)
+        self.assertNotIn("x-oai-is-client-observation", second)
+        risk.browser_observation = True
+        risk.observation = "v1.real"
+        self.assertEqual(risk.headers()["x-oai-is-client-observation"], "v1.real")
         self.assertTrue(first["oai-telemetry"].startswith("[1,"))
 
     def test_attestation_header_only_when_present(self):

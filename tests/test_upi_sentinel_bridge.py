@@ -32,7 +32,12 @@ class _Completed:
 
 
 def test_mint_sentinel_parses_bridge_output():
-    payload = {"main": '{"p":"x","t":"y","c":"z","id":"d","flow":"chatgpt_checkout"}', "so": '{"so":"s","c":"z"}', "hasT": True, "hasSo": True}
+    payload = {
+        "main": '{"p":"x","t":"y","c":"z","id":"d","flow":"chatgpt_checkout"}',
+        "so": '{"so":"s","c":"z"}',
+        "hasT": True,
+        "hasSo": True,
+    }
     with patch.object(vendor_sentinel.subprocess, "run", return_value=_Completed(json.dumps(payload).encode())):
         result = vendor_sentinel.mint_sentinel(flow="chatgpt_checkout", device_id="d", user_agent="ua")
     assert result["main"].startswith('{"p"')
@@ -42,7 +47,9 @@ def test_mint_sentinel_parses_bridge_output():
 
 def test_mint_sentinel_reports_node_missing():
     with patch.object(vendor_sentinel.subprocess, "run", side_effect=FileNotFoundError):
-        assert vendor_sentinel.mint_sentinel(flow="f", device_id="d", user_agent="ua") == {"error": "sentinel_node_missing"}
+        assert vendor_sentinel.mint_sentinel(flow="f", device_id="d", user_agent="ua") == {
+            "error": "sentinel_node_missing"
+        }
 
 
 def test_mint_sentinel_reports_timeout():
@@ -58,7 +65,9 @@ def test_mint_sentinel_reports_timeout():
 
 def test_mint_sentinel_reports_bad_json_and_bridge_error():
     with patch.object(vendor_sentinel.subprocess, "run", return_value=_Completed(b"not-json")):
-        assert vendor_sentinel.mint_sentinel(flow="f", device_id="d", user_agent="ua")["error"].startswith("sentinel_bridge_bad_json")
+        assert vendor_sentinel.mint_sentinel(flow="f", device_id="d", user_agent="ua")["error"].startswith(
+            "sentinel_bridge_bad_json"
+        )
     with patch.object(
         vendor_sentinel.subprocess, "run", return_value=_Completed(json.dumps({"error": "proto2: boom"}).encode())
     ):
