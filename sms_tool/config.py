@@ -512,6 +512,50 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 errors.append(f"proxy.{key} must be a proxy list")
         if "health" in proxy and not isinstance(proxy.get("health"), (str, list, tuple)):
             errors.append("proxy.health must be a proxy list")
+        # ``proxy.lanes`` is the optional single declaration point that
+        # ``proxy_routing.canonical_lane_pool`` treats as authoritative when it
+        # is present.  Without this check a misspelled lane name or a malformed
+        # pool sailed through validation and silently fell back to the legacy
+        # keys, so the operator had no signal that the declared lane was dead.
+        lanes = proxy.get("lanes")
+        if lanes is not None:
+            if not isinstance(lanes, Mapping):
+                errors.append("proxy.lanes must be an object")
+            else:
+                supported_lanes = {
+                    "protocol_registration",
+                    "browser_registration",
+                    "mailbox",
+                    "payment",
+                }
+                unknown_lanes = sorted(set(lanes) - supported_lanes)
+                if unknown_lanes:
+                    errors.append("unsupported proxy lane: " + ", ".join(unknown_lanes))
+                for lane, value in lanes.items():
+                    if lane == "payment":
+                        # ``{"pools": {"US": [...]}, "default": [...]}`` or a bare pool.
+                        if isinstance(value, Mapping):
+                            named = value.get("pools")
+                            if named is not None and not isinstance(named, Mapping):
+                                errors.append("proxy.lanes.payment.pools must be an object")
+                            elif isinstance(named, Mapping):
+                                for name, pool in named.items():
+                                    if not str(name or "").strip():
+                                        errors.append("proxy.lanes.payment.pools names must not be blank")
+                                    if not isinstance(pool, (str, list, tuple)):
+                                        errors.append(f"proxy.lanes.payment.pools.{name} must be a proxy list")
+                            for key in ("default", "pool", "proxies"):
+                                if key in value and not isinstance(value.get(key), (str, list, tuple)):
+                                    errors.append(f"proxy.lanes.payment.{key} must be a proxy list")
+                        elif not isinstance(value, (str, list, tuple)):
+                            errors.append("proxy.lanes.payment must be a proxy pool or an object")
+                    elif not isinstance(value, (str, list, tuple, Mapping)):
+                        errors.append(f"proxy.lanes.{lane} must be a proxy list")
+                    elif isinstance(value, Mapping):
+                        # ``canonical_lane_pool`` reads pool/proxies/default from a mapping.
+                        for key in ("pool", "proxies", "default"):
+                            if key in value and not isinstance(value.get(key), (str, list, tuple)):
+                                errors.append(f"proxy.lanes.{lane}.{key} must be a proxy list")
     if "mailbox_proxy_pool" in config and not isinstance(config.get("mailbox_proxy_pool"), (str, list, tuple)):
         errors.append("mailbox_proxy_pool must be a proxy list")
 
