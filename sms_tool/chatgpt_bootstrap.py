@@ -35,11 +35,13 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+from . import endpoints
+
 logger = logging.getLogger(__name__)
 
-ANON_BASE = "https://chatgpt.com/backend-anon"
-API_BASE = "https://chatgpt.com/backend-api"
-REFERER = "https://chatgpt.com/"
+ANON_BASE = endpoints.CHATGPT_BACKEND_ANON
+API_BASE = endpoints.CHATGPT_BACKEND_API
+REFERER = endpoints.CHATGPT_ORIGIN
 
 # The feature is OFF until explicitly enabled in
 # ``registration.chatgpt_bootstrap.enabled``.

@@ -34,6 +34,7 @@ from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, Registrat
 from .registration_runtime import RegistrationRuntimeState
 from .mailbox_errors import MailboxEndpointUnavailableError
 from .providers.mailbox_graph import MailboxAuthInvalidError
+from . import endpoints
 from . import registration_checkpoint
 from . import registration_finalize as _registration_finalize
 from .registration_state import (
@@ -591,8 +592,8 @@ class RegistrationEmailWorkflow:
         from .mailbox_service import MailboxService
         s.mailbox_service = MailboxService.create(self.config)
         chatgpt_cfg = self.config.get("chatgpt", {})
-        s.auth_base = chatgpt_cfg.get("auth_base_url", "https://auth.openai.com")
-        s.chat_base = chatgpt_cfg.get("chat_base_url", "https://chatgpt.com")
+        s.auth_base = chatgpt_cfg.get("auth_base_url", endpoints.AUTH_BASE)
+        s.chat_base = chatgpt_cfg.get("chat_base_url", endpoints.CHATGPT_BASE)
         from .paypal_proxy import infer_proxy_country
         r.set_fingerprint_geo(infer_proxy_country(s.proxy))
         self.machine.transition(RegistrationState.MAILBOX_READY)

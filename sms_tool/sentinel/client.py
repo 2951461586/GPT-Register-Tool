@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from curl_cffi import requests as curl_requests
 
+from .. import endpoints
 from ..auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
 from ..http_client import request_with_retry
 from ..phone_proxy import normalize_proxy_url, redact_proxy_text
@@ -20,10 +21,10 @@ from .runner import SentinelRunnerError, run_sentinel_sdk
 
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
 FLOW_PAGE_URLS = {
-    "username_password_create": "https://auth.openai.com/create-account/password",
-    "authorize_continue": "https://auth.openai.com/email-verification",
-    "oauth_create_account": "https://auth.openai.com/about-you",
-    "checkout_session_approval": "https://chatgpt.com/",
+    "username_password_create": endpoints.AUTH_CREATE_ACCOUNT_PASSWORD,
+    "authorize_continue": endpoints.AUTH_EMAIL_VERIFICATION,
+    "oauth_create_account": endpoints.AUTH_ABOUT_YOU,
+    "checkout_session_approval": endpoints.CHATGPT_ORIGIN,
 }
 
 
