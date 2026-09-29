@@ -79,6 +79,7 @@ EXPECTED_UNREAD = {
     "protocol_payments.proxy_pools.momo_approve",
     "protocol_payments.proxy_pools.momo_checkout",
     "protocol_payments.proxy_pools.short_lived",
+    "protocol_payments.proxy_pools.upi_in",
     "protocol_payments.proxy_pools.us_checkout",
     "upi.approve_missing_redirect",
     "upi.auto_generate",

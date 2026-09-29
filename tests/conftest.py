@@ -58,6 +58,22 @@ def _reset_logging_configured():
 
 
 @pytest.fixture(autouse=True)
+def _reset_upi_sentinel_mint_cache():
+    """Clear the UPI Sentinel mint cache around every test.
+
+    ``sms_tool.upi_link.sentinel._MINT_CACHE`` is module-level and keyed by
+    ``(flow, device_id, proxy, cookie, page_url, fingerprint)``.  A leaked entry
+    makes a later test read a previous test's mocked token instead of its own --
+    the same green-alone, red-in-full-run shape as the logging flag above.
+    """
+    from sms_tool.upi_link import sentinel as upi_sentinel
+
+    upi_sentinel._MINT_CACHE.clear()
+    yield
+    upi_sentinel._MINT_CACHE.clear()
+
+
+@pytest.fixture(autouse=True)
 def _reset_registration_cancel():
     """Reset the process-global registration cancel flag around every test.
 
