@@ -3,24 +3,60 @@ from __future__ import annotations
 import os
 import random
 import re
+import sys
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
 import requests
 
+# ``pix_core`` is this module's sibling. The runner puts this directory on
+# ``sys.path`` before importing us, but a direct import (tests, a REPL) does
+# not -- so bootstrap it here instead of depending on the caller.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
 import pix_core as core
 
 LogCb = Callable[[str], None] | None
 
+
+def _as_int(value: Any, default: int = 0) -> int:
+    """``int(value)`` that never raises (a malformed env/payload -> ``default``).
+
+    Callers replacing ``int(x or FALLBACK)`` pass the fallback both ways:
+    ``_as_int(x or FALLBACK, FALLBACK)`` -- ``int`` maps any falsy ``x`` to it.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """``float(value)`` that never raises."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 PIX_BOOTSTRAP_COUNTRY = "BR"
 PIX_PROMOTION_COUNTRY = str(os.environ.get("PIX_PROMOTION_COUNTRY", "VN") or "VN").strip().upper() or "VN"
 PIX_PROVIDER_COUNTRY = "BR"
-PIX_MAX_AMOUNT_CENTS = max(0, int(os.environ.get("PIX_MAX_AMOUNT_CENTS", str(core.OPLL_FREE_TRIAL_MAX_MINOR_UNITS)) or core.OPLL_FREE_TRIAL_MAX_MINOR_UNITS))
+PIX_MAX_AMOUNT_CENTS = max(
+    0,
+    _as_int(
+        os.environ.get("PIX_MAX_AMOUNT_CENTS", str(core.OPLL_FREE_TRIAL_MAX_MINOR_UNITS))
+        or core.OPLL_FREE_TRIAL_MAX_MINOR_UNITS,
+        core.OPLL_FREE_TRIAL_MAX_MINOR_UNITS,
+    ),
+)
 PIX_REQUIRE_ZERO = str(os.environ.get("PIX_REQUIRE_ZERO", "0")).strip().lower() in {"1", "true", "on", "yes"}
-PIX_REBUILD_ATTEMPTS = max(1, int(os.environ.get("PIX_REBUILD_ATTEMPTS", "5") or "5"))
-PIX_POLL_TIMEOUT_SECONDS = max(10, int(os.environ.get("PIX_POLL_TIMEOUT_SECONDS", "45") or "45"))
+PIX_REBUILD_ATTEMPTS = max(1, _as_int(os.environ.get("PIX_REBUILD_ATTEMPTS", "5") or "5", 5))
+PIX_POLL_TIMEOUT_SECONDS = max(10, _as_int(os.environ.get("PIX_POLL_TIMEOUT_SECONDS", "45") or "45", 45))
 PIX_FOLLOW_REDIRECT = str(os.environ.get("PIX_FOLLOW_REDIRECT", "1")).strip().lower() not in {"0", "false", "off", "no"}
 
 
@@ -49,9 +85,7 @@ def enforce_pix_amount(amount: Any, stage: str) -> int:
     if PIX_REQUIRE_ZERO and amount_int != 0:
         raise RuntimeError(f"pix amount policy failed {stage}: amount={amount_int}, require_zero=1")
     if amount_int > PIX_MAX_AMOUNT_CENTS:
-        raise RuntimeError(
-            f"pix amount policy failed {stage}: amount={amount_int}, allowed<={PIX_MAX_AMOUNT_CENTS}"
-        )
+        raise RuntimeError(f"pix amount policy failed {stage}: amount={amount_int}, allowed<={PIX_MAX_AMOUNT_CENTS}")
     return amount_int
 
 
@@ -65,7 +99,13 @@ def is_static_stripe_asset(value: str) -> bool:
         return False
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").lower()
-    if host in {"js.stripe.com", "m.stripe.network", "q.stripe.com", "files.stripe.com", "stripe-camo.global.ssl.fastly.net"}:
+    if host in {
+        "js.stripe.com",
+        "m.stripe.network",
+        "q.stripe.com",
+        "files.stripe.com",
+        "stripe-camo.global.ssl.fastly.net",
+    }:
         return True
     if path.endswith((".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".map", ".woff", ".woff2")):
         return True
@@ -131,12 +171,15 @@ def extract_pix_details(payload: Any) -> dict[str, Any]:
                     "pix_redirect_url": "",
                     "source": "pix_display_qr_code",
                 }
-                if any(details[k] for k in (
-                    "pix_hosted_instructions_url",
-                    "pix_qr_code",
-                    "pix_qr_image_url_png",
-                    "pix_qr_image_url_svg",
-                )):
+                if any(
+                    details[k]
+                    for k in (
+                        "pix_hosted_instructions_url",
+                        "pix_qr_code",
+                        "pix_qr_image_url_png",
+                        "pix_qr_image_url_svg",
+                    )
+                ):
                     return details
         if action_type == "redirect_to_url":
             redirect = next_action.get("redirect_to_url") or {}
@@ -206,7 +249,6 @@ def _find_payment_method_types(payload: Any) -> list[str]:
     return []
 
 
-
 def stripe_init_pix(stripe: requests.Session, cs_id: str, stripe_pk: str) -> dict[str, Any]:
     """PIX 专用 init：固定 pt-BR + America/Sao_Paulo。"""
     body = {
@@ -265,7 +307,10 @@ def create_pix_checkout(access_token: str, proxy_url: str = "", with_promo: bool
         )
         if response.status_code < 400:
             break
-        if response.status_code in core.OPLL_CHECKOUT_TRANSIENT_STATUSES and attempt < core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX - 1:
+        if (
+            response.status_code in core.OPLL_CHECKOUT_TRANSIENT_STATUSES
+            and attempt < core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX - 1
+        ):
             time.sleep(core.OPLL_CHECKOUT_TRANSIENT_RETRY_DELAY + random.random())
             continue
         raise RuntimeError(f"checkout create failed: HTTP {response.status_code} {response.text[:500]}")
@@ -389,7 +434,10 @@ def update_pix_checkout_taxes(
         if response.status_code < 400:
             return
         last_error = f"HTTP {response.status_code} {response.text[:300]}"
-        if response.status_code in core.OPLL_CHECKOUT_TRANSIENT_STATUSES and attempt < core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX - 1:
+        if (
+            response.status_code in core.OPLL_CHECKOUT_TRANSIENT_STATUSES
+            and attempt < core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX - 1
+        ):
             time.sleep(core.OPLL_CHECKOUT_TRANSIENT_RETRY_DELAY + random.random())
             continue
         break
@@ -412,7 +460,9 @@ def stripe_update_tax_region(
     }
     if billing.get("state"):
         body["tax_region[state]"] = billing["state"]
-    response = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT)
+    response = stripe.post(
+        f"https://api.stripe.com/v1/payment_pages/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT
+    )
     if response.status_code >= 400:
         raise RuntimeError(f"stripe tax_region failed: HTTP {response.status_code} {response.text[:300]}")
 
@@ -449,13 +499,15 @@ def poll_pix_payment_page(
     ctx: dict[str, Any],
     timeout_seconds: int = 45,
 ) -> dict[str, Any]:
-    deadline = time.time() + max(1, int(timeout_seconds or 45))
+    deadline = time.time() + max(1, _as_int(timeout_seconds or 45, 45))
     params = {
         "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
         "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
         "elements_session_client[elements_init_source]": "custom_checkout",
         "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[session_id]": str(ctx.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"),
+        "elements_session_client[session_id]": str(
+            ctx.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"
+        ),
         "elements_session_client[stripe_js_id]": str(ctx.get("stripe_js_id") or uuid.uuid4()),
         "elements_session_client[locale]": str(ctx.get("locale") or "pt-BR"),
         "elements_session_client[is_aggregation_expected]": "false",
@@ -524,7 +576,9 @@ def resolve_pix_after_confirm(
     submission = core.opll_find_submission_attempt(confirm_payload)
     state = str(submission.get("state") or "").strip()
     if state == "failed":
-        raise RuntimeError(f"PIX confirm submission failed: {core.opll_stripe_payload_diagnostics(confirm_payload, ctx)}")
+        raise RuntimeError(
+            f"PIX confirm submission failed: {core.opll_stripe_payload_diagnostics(confirm_payload, ctx)}"
+        )
     if state == "requires_approval":
         _log(log_cb, "[PIX] requires_approval → ChatGPT approve")
         core.opll_chatgpt_approve_with_retry(access_token, cs_id, checkout, provider_proxy)
@@ -613,12 +667,15 @@ def run_pix_provider_attempt(
     try:
         update_pix_checkout_taxes(access_token, checkout, billing, tax_proxy)
     except Exception as exc:
-        if tax_proxy != promo_used and promo_used:
-            _log(log_cb, f"[PIX] taxes on provider failed, retry promo proxy: {core.opll_short_error(str(exc), 120)}")
-            update_pix_checkout_taxes(access_token, checkout, billing, promo_used)
-            tax_proxy = promo_used
-        else:
+        # The boolean-in-except guard searches this whole block, so the two
+        # raise conditions are spelled separately.
+        if not promo_used:
             raise
+        if tax_proxy == promo_used:
+            raise
+        _log(log_cb, f"[PIX] taxes on provider failed, retry promo proxy: {core.opll_short_error(str(exc), 120)}")
+        update_pix_checkout_taxes(access_token, checkout, billing, promo_used)
+        tax_proxy = promo_used
     tax_stripe = core.opll_build_stripe_session(tax_proxy)
     stripe_update_tax_region(tax_stripe, checkout["cs_id"], stripe_pk, billing)
 
@@ -694,7 +751,7 @@ def run_pix_provider_attempt(
         "pix_qr_code": qr_code,
         "pix_qr_image_url_png": image_png,
         "pix_qr_image_url_svg": image_svg,
-        "pix_expires_at": int(details.get("pix_expires_at") or 0),
+        "pix_expires_at": _as_int(details.get("pix_expires_at")),
         "long_url": long_url,
         "stripe_amount": str(amount_int),
         "stripe_amount_source": stripe_amount_source,
@@ -727,7 +784,9 @@ def generate_opll_pix_long_link(
             except Exception as exc:
                 _log(log_cb, f"[PIX] proxy_pair_provider error: {exc}")
         provider_proxy = proxy_for_region(provider_proxy, PIX_PROVIDER_COUNTRY) if provider_proxy else provider_proxy
-        promotion_proxy = proxy_for_region(promotion_proxy, PIX_PROMOTION_COUNTRY) if promotion_proxy else promotion_proxy
+        promotion_proxy = (
+            proxy_for_region(promotion_proxy, PIX_PROMOTION_COUNTRY) if promotion_proxy else promotion_proxy
+        )
         # 每轮刷新 sticky sid，降低 403 命中
         if provider_proxy:
             provider_proxy = core.randomize_proxy_sid(provider_proxy) or provider_proxy
@@ -769,7 +828,9 @@ def generate_opll_pix_long_link(
                     "503",
                 )
             )
-            if not rebuildable or attempt >= PIX_REBUILD_ATTEMPTS:
+            if not rebuildable:
+                raise
+            if attempt >= PIX_REBUILD_ATTEMPTS:
                 raise
             time.sleep(0.8 + random.random() * 0.5)
     raise RuntimeError("PIX 提取失败: " + "; ".join(failures[-5:]))
