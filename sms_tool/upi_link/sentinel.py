@@ -7,6 +7,7 @@ except ImportError:
 from typing import Any
 from collections.abc import Mapping
 import secrets
+import threading
 import time
 from ._extract import (
     _upi_find_submission_attempt,
@@ -283,6 +284,83 @@ def _upi_mint_sentinel_via_bridge(
     )
 
 
+# ── Sentinel mint reuse + flow fallback (item 2, 2026-09-30) ───────────────
+# The vendored bridge is a one-shot Node process: each mint costs ~3-8 s, almost
+# all of it network + PoW (measured 2026-09-30: chatgpt_checkout 7.5 s,
+# checkout_session_approval 3.1 s).  tilian keeps a resident AF_UNIX daemon, but
+# AF_UNIX does not exist on Windows and our bridge is a **verbatim upstream copy**
+# (see ``_vendor/sentinel/PROVENANCE.md``) that must not be patched into a loop.
+#
+# What actually costs us here is not the Node cold start but re-minting the
+# *same* token: a Sentinel token is valid ~9 min, and the SO path plus approve
+# retries can ask for the same (flow, identity, egress) more than once.  So we
+# reuse the mint result in-process instead of paying for a resident daemon.
+_MINT_CACHE: dict[tuple[str, ...], tuple[float, dict[str, Any]]] = {}
+_MINT_CACHE_LOCK = threading.Lock()
+#: Conservative TTL, under the ~9 min server-side validity.
+UPI_SENTINEL_CACHE_TTL_SECONDS = 480.0
+
+#: Fallback flows, ported from chatgpt-upi-extractor's
+#: ``('authorize_continue', 'checkout_pay', 'checkout_approve')`` order: if the
+#: primary flow's mint comes back empty we try the next spelling before giving
+#: up on the Sentinel header entirely.
+UPI_SENTINEL_FALLBACK_FLOWS: dict[str, tuple[str, ...]] = {
+    UPI_SENTINEL_CHECKOUT_FLOW: (UPI_SENTINEL_CHECKOUT_FLOW, "checkout_pay", "authorize_continue"),
+    UPI_SENTINEL_APPROVAL_FLOW: (UPI_SENTINEL_APPROVAL_FLOW, "checkout_approve", UPI_SENTINEL_CHECKOUT_FLOW),
+}
+
+
+def _upi_sentinel_flow_candidates(flow: str) -> tuple[str, ...]:
+    """Flow spellings to try for ``flow``, primary first."""
+    primary = str(flow or "").strip() or UPI_SENTINEL_CHECKOUT_FLOW
+    return UPI_SENTINEL_FALLBACK_FLOWS.get(primary, (primary,))
+
+
+def _upi_mint_cache_key(
+    flow: Any, device_id: Any, proxy: Any, cookie_header: Any, page_url: Any, fingerprint: Any
+) -> tuple[str, ...]:
+    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    return (
+        str(flow or ""),
+        str(device_id or ""),
+        str(proxy or ""),
+        str(cookie_header or ""),
+        str(page_url or ""),
+        str(fp.get("ua") or ""),
+        str(fp.get("timezone") or ""),
+        str(fp.get("language") or fp.get("oai_language") or ""),
+    )
+
+
+def _upi_mint_sentinel_cached(
+    *, flow: str, device_id: Any, proxy: Any, fingerprint: Any, cookie_header: str, page_url: str
+) -> dict[str, Any]:
+    """Mint through the bridge, reusing a fresh result for the same identity.
+
+    Only a *successful* mint is cached; a failure stays uncached so a transient
+    Node/network error does not poison the rest of the run.
+    """
+    key = _upi_mint_cache_key(flow, device_id, proxy, cookie_header, page_url, fingerprint)
+    now = time.time()
+    with _MINT_CACHE_LOCK:
+        hit = _MINT_CACHE.get(key)
+        if hit is not None and now - hit[0] < UPI_SENTINEL_CACHE_TTL_SECONDS:
+            _emit("sentinel", f"{flow} Sentinel reused from cache (age {now - hit[0]:.0f}s)")
+            return dict(hit[1])
+    minted = _upi_mint_sentinel_via_bridge(
+        flow=flow,
+        device_id=device_id,
+        proxy=proxy,
+        fingerprint=fingerprint,
+        cookie_header=cookie_header,
+        page_url=page_url,
+    )
+    if isinstance(minted, dict) and minted.get("main"):
+        with _MINT_CACHE_LOCK:
+            _MINT_CACHE[key] = (now, dict(minted))
+    return minted
+
+
 def _upi_sentinel_headers(
     session: Any,
     device_id: Any,
@@ -315,17 +393,23 @@ def _upi_sentinel_headers(
 
     cookie_header = _upi_session_cookie_header(session, device_id)
     page = str(page_url or "https://chatgpt.com/")
-    try:
-        minted = _upi_mint_sentinel_via_bridge(
-            flow=flow,
-            device_id=device_id,
-            proxy=proxy,
-            fingerprint=fingerprint,
-            cookie_header=cookie_header,
-            page_url=page,
-        )
-    except Exception as exc:
-        minted = {"error": type(exc).__name__}
+    minted: dict[str, Any] = {}
+    for candidate_flow in _upi_sentinel_flow_candidates(flow):
+        try:
+            minted = _upi_mint_sentinel_cached(
+                flow=candidate_flow,
+                device_id=device_id,
+                proxy=proxy,
+                fingerprint=fingerprint,
+                cookie_header=cookie_header,
+                page_url=page,
+            )
+        except Exception as exc:
+            minted = {"error": type(exc).__name__}
+        if minted.get("main"):
+            if candidate_flow != flow:
+                _emit("sentinel", f"{flow} mint empty; used fallback flow {candidate_flow}")
+            break
 
     if minted.get("error") or not minted.get("main"):
         # Bridge unavailable (no Node, SDK error): fall back to the registration
@@ -355,7 +439,7 @@ def _upi_sentinel_headers(
         # the approval flow's own. Prefer the checkout mint's SO even when the
         # approval mint returned one.
         try:
-            checkout = _upi_mint_sentinel_via_bridge(
+            checkout = _upi_mint_sentinel_cached(
                 flow=UPI_SENTINEL_CHECKOUT_FLOW,
                 device_id=device_id,
                 proxy=proxy,

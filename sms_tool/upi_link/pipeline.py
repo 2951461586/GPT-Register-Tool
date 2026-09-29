@@ -86,6 +86,10 @@ from .sentinel import (
 )
 from .extract import _upi_hydrate_qr_data, _upi_resolve_external_redirect
 from .flows import _upi_run_cpmt_flow, _upi_run_oaics_flow
+from .verify import (
+    INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE,
+    verify_instructions_url as _upi_verify_instructions_url,
+)
 
 
 def _resolve_upi_runtime(
@@ -176,10 +180,20 @@ def _resolve_upi_runtime(
     )
     max_approve_attempts = _env_int("UPI_APPROVAL_MAX_ATTEMPTS", UPI_APPROVAL_MAX_ATTEMPTS)
     poll_max_attempts = _env_int("UPI_QR_POLL_MAX_ATTEMPTS", UPI_QR_POLL_MAX_ATTEMPTS)
-    # 无头浏览器 rail：只有真实浏览器能签发 approve 阶段校验的
-    # x-oai-is-client-observation。默认开启，Playwright 不可用时自动回退协议 rail。
+    # 无头浏览器 rail：曾经是唯一能签发 approve 阶段校验用的
+    # x-oai-is-client-observation 的路径，但 2026-09-30 实测它已不可用 ——
+    # Cloudflare 对无头 Chromium 返回 `Just a moment...` 挑战页，SDK 的
+    # frame.html 被 ERR_BLOCKED_BY_RESPONSE 拦掉；换 Camoufox 过得了 CF，
+    # 真站的 script-src-elem CSP 又拒绝我们注入的 sdk.js。结果 approve 必然
+    # blocked（7/7 失败）。同时它白烧 ~60s，把 approval 窗口和被动 hCaptcha
+    # 预算一起耗掉（hCaptcha 从 solved 变成 120s 超时）。
+    #
+    # 三家参考实现（upi-zero-link / chatgpt-upi-extractor / tilian）全部是纯协议，
+    # 没有一家用浏览器或 observation：哨兵走 Node 桥，approve 复用 checkout 阶段的
+    # Sentinel 对。本模块的 reference 形态本来就与之对齐，所以这里默认关闭浏览器轨。
+    # 关掉后实测 4/4 成功。要复现旧行为设 UPI_BROWSER_RAIL=1。
     browser_rail = (
-        bool(upi_cfg.get("browser_rail")) if "browser_rail" in upi_cfg else _env_bool("UPI_BROWSER_RAIL", True)
+        bool(upi_cfg.get("browser_rail")) if "browser_rail" in upi_cfg else _env_bool("UPI_BROWSER_RAIL", False)
     )
     # approve 重试之间的退避上限（秒）。参考实现是 random.uniform(1, 2)，
     # 这里做成可调：默认 1.5s，测试里置 0 即可让 60 次重试瞬间跑完。
@@ -1128,7 +1142,27 @@ def generate_upi_qr_link(
             emit("paid", f"waiting up to {paid_timeout:g}s for payment on {cs_id[:20]}...")
             paid_state = _upi_wait_paid(stripe, cs_id=cs_id, stripe_pk=stripe_pk, ctx=ctx, timeout=paid_timeout)
             emit("paid", f"payment_status={paid_state.get('payment_status')} paid={paid_state.get('paid')}")
-        return {
+
+        # ── 交付前核验（step 8，移植自 upi-zero-link/verify.py）───────────
+        # ``hosted_instructions_url`` 在 setup_intent **被拒**时也会返回，所以
+        # 「有 URL」不等于「签出了 ₹0 委托」。必须查 intent_state + fam，否则
+        # 交出去的是用户打开就看到 ₹1999 付款页的废链。
+        # 读不到页面属于「没结论」（inconclusive），不是「链是假的」。
+        verify_target = str(qr_data.get("hosted_instructions_url") or "")
+        if not verify_target and _upi_is_instructions_url(redirect_url):
+            verify_target = redirect_url
+        link_verified = False
+        verification_inconclusive = False
+        if verify_target:
+            verified, label = _upi_verify_instructions_url(verify_target, proxy=provider_proxy)
+            link_verified = bool(verified)
+            verification_inconclusive = (not verified) and label in UPI_VERIFY_INCONCLUSIVE
+            verification = label if (verified or not verification_inconclusive) else f"inconclusive:{label}"
+            emit("verify", f"UPI link {'verified' if verified else 'NOT verified'} ({verification})")
+        else:
+            verification = "no_instructions_url"
+
+        link_result: dict[str, Any] = {
             "ok": True,
             "payment_method": "upi",
             "method": "upi",
@@ -1160,7 +1194,17 @@ def generate_upi_qr_link(
             "checkout_proxy": checkout_proxy,
             "provider_proxy": provider_proxy,
             "approve_proxy": approve_proxy,
+            "verification": verification,
+            "link_verified": link_verified,
         }
+        if verify_target and not link_verified and not verification_inconclusive:
+            # 明确判定为废链 —— 不交付。
+            link_result["ok"] = False
+            link_result["error"] = f"UPI link 未通过核验（{verification}）"
+            link_result["error_code"] = "link_unverified"
+            link_result["error_stage"] = "artifact"
+            link_result["retryable"] = False
+        return link_result
     except Exception as e:
         # 把失败原因压成可判读的 error_code。历史实现一律返回
         # "upi_qr_failed"，调用方只能读 error 字符串做子串匹配——
