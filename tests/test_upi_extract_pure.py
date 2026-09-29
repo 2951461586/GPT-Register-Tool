@@ -964,7 +964,7 @@ class PublicSurfaceTests(unittest.TestCase):
 
     def test_public_constants_unchanged(self):
         """常量值是 compat 契约的一部分，改动要单独评估。"""
-        self.assertEqual(upi_link.UPI_APPROVAL_MAX_ATTEMPTS, 60)
+        self.assertEqual(upi_link.UPI_APPROVAL_MAX_ATTEMPTS, 5)
         self.assertEqual(upi_link.UPI_QR_POLL_MAX_ATTEMPTS, 30)
         self.assertEqual(upi_link.UPI_QR_POLL_INTERVAL, 1.0)
 

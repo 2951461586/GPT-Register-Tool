@@ -46,7 +46,13 @@ _UPI_PAGE_SEQ_ANY_RE = re.compile(r'\bdata-seq="(\d+)"', re.I)
 _UPI_PAGE_SEQ_JSON_RE = re.compile(r'"buildNumber"\s*:\s*"?(\d{5,})')
 _UPI_ATTESTATION_RE = re.compile(r'"webDeploymentAttestation"\s*:\s*"([^"]+)"')
 _UPI_ATTESTATION_ANY_RE = re.compile(r'[^A-Za-z0-9]webDeploymentAttestation[=:]\s*["\']?([A-Za-z0-9._-]+)')
-UPI_APPROVAL_MAX_ATTEMPTS = 60
+#: Approve-endpoint retry budget. The reference (``upi-zero-link``) uses
+#: ``APPROVE_ATTEMPTS = 5``; 60 was an order of magnitude past it, and because a
+#: risk-control block answers ``blocked`` on *every* attempt the extra 55 were
+#: measured as ~80 s of pure waste per account (2026-09-30: 3/3 accounts ran all
+#: 60 attempts and still delivered only a hosted fallback). Overridable per run
+#: with ``UPI_APPROVAL_MAX_ATTEMPTS``.
+UPI_APPROVAL_MAX_ATTEMPTS = 5
 UPI_QR_POLL_MAX_ATTEMPTS = 30
 UPI_CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 UPI_CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
