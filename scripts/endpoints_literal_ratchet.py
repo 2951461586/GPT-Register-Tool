@@ -1,36 +1,42 @@
-"""Ratchet: inline protocol-payment host literals must not grow.
+"""Ratchet: inline OpenAI/Stripe host literals must not grow.
 
 Why this exists
 ---------------
-``services/protocol-payment/common/endpoints.py`` is the declared single
-authority for the upstream hosts the extractors call, and its own docstring
-records the pain it was built to end: *"The extractors previously hard-coded
-https://chatgpt.com (and friends) in 30+ places ... A host change meant editing
-every one."*
+Each process boundary has one authority module for the upstream hosts it calls:
 
-That is only true once the extractors actually **use** it. A one-sided host
-change on an extractor that still inlines the literal is invisible: the module
-keeps working and quietly points at the old origin. The existing
-``tests/test_protocol_payment_endpoints.py`` only asserts the *shape* of the
-authority module -- it never checks a caller, so nothing caught the ~56 inline
-literals that ideal / twint / blik carried until 2026-09-28.
+* ``services/protocol-payment/common/endpoints.py`` for the payment extractors;
+* ``sms_tool/endpoints.py`` for the ``sms_tool`` client.
+
+The services docstring records the pain these exist to end: *"The extractors
+previously hard-coded https://chatgpt.com (and friends) in 30+ places ... A host
+change meant editing every one."* That is only true once the callers actually
+**use** the authority. A one-sided host change on a caller that still inlines the
+literal is invisible: the module keeps working and quietly points at the old
+origin. ``tests/test_protocol_payment_endpoints.py`` only asserts the *shape* of
+the services authority module -- it never checks a caller -- so nothing caught
+the ~56 inline literals ideal / twint / blik carried until 2026-09-28.
 
 What it checks
 --------------
-For every ``services/protocol-payment/**/*.py`` except ``common/endpoints.py``
-(the authority itself) it counts **managed-host string literals** -- a quote
-immediately before one of the managed hosts. A reference such as
-``endpoints.CHATGPT_BASE`` has no quote, and a prose comment *mentions* the host
-without quoting it, so neither is counted. The count is frozen per file in
-``endpoints_literal_baseline.json`` and may only go **down**; wiring an
-extractor to ``endpoints`` is the intended direction.
+For every ``.py`` under both scan roots except the authority ``endpoints.py``
+itself it counts **managed-host string literals** -- a quote immediately before
+one of the managed hosts. A reference such as ``endpoints.CHATGPT_BASE`` has no
+quote, and a prose comment *mentions* the host without quoting it, so neither is
+counted. The count is frozen per file in ``endpoints_literal_baseline.json`` and
+may only go **down**; wiring a caller to its authority is the intended direction.
 
-Per-file baselines on purpose: with one grand total, wiring ``pix`` would mask
-new literals added to ``direct_card``.
+Two things are deliberately **not** counted:
+
+* the JWT claim key ``https://api.openai.com/auth`` -- a dict key in the access
+  token, not a URL to call, so it must never be replaced by ``endpoints.API_BASE``;
+* ``_vendor/`` trees -- vendored code is not ours to centralise.
+
+Per-file baselines on purpose: with one grand total, wiring one file would mask
+new literals added to another.
 
 The predicate is pinned by ``FIXTURES`` on every invocation: a regex that
-over-matches (counts comments) or under-matches (misses f-strings) fails its own
-fixtures before it is allowed to judge the tree.
+over-matches (counts comments or the JWT claim key) or under-matches (misses
+f-strings) fails its own fixtures before it is allowed to judge the tree.
 
 Standard library only.
 """
@@ -46,15 +52,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path(__file__).resolve().parent / "endpoints_literal_baseline.json"
 
-SCAN_DIR = Path("services") / "protocol-payment"
-EXCLUDED = {"endpoints.py"}
+#: Both process boundaries. Each has its own ``endpoints.py`` authority.
+SCAN_DIRS: tuple[Path, ...] = (
+    Path("services") / "protocol-payment",
+    Path("sms_tool"),
+)
+EXCLUDED_FILES = {"endpoints.py"}
+EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 
-#: Hosts that ``common/endpoints.py`` owns. Keep in sync with its constants.
+#: Hosts owned by one of the two ``endpoints.py`` authorities.
 MANAGED_HOSTS: tuple[str, ...] = (
+    # services/protocol-payment/common/endpoints.py
     "chatgpt.com",
     "api.stripe.com",
     "checkout.stripe.com",
     "pay.openai.com",
+    # sms_tool/endpoints.py
+    "auth.openai.com",
+    "api.openai.com",
+)
+
+#: The JWT claim namespace in the access token. It looks like a URL to the
+#: regex but is a dict key; centralising it would be wrong.
+NON_URL_LITERALS = (
+    '"https://api.openai.com/auth"',
+    "'https://api.openai.com/auth'",
 )
 
 _HOST_ALT = "|".join(re.escape(host) for host in MANAGED_HOSTS)
@@ -67,17 +89,28 @@ LITERAL_RE = re.compile(rf"""['"](https://(?:{_HOST_ALT}))""")
 FIXTURES: tuple[tuple[str, str, int], ...] = (
     ("plain literal", 'x = "https://chatgpt.com/checkout/a/b"\n', 1),
     ("f-string literal", 'x = f"https://api.stripe.com/v1/payment_pages/{cs}/init"\n', 1),
+    ("auth host literal", 'x = "https://auth.openai.com/email-verification"\n', 1),
     ("authority reference", "x = endpoints.CHATGPT_BASE\n", 0),
     ("interpolated reference", 'x = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs}"\n', 0),
     ("prose comment", "# see https://chatgpt.com/checkout for the flow\n", 0),
     ("unmanaged host", 'x = "https://www.cloudflare.com/cdn-cgi/trace"\n', 0),
+    ("jwt claim key", 'x = claims.get("https://api.openai.com/auth")\n', 0),
+    ("jwt claim key single-quoted", "x = claims['https://api.openai.com/auth']\n", 0),
+    ("real api path is still counted", 'x = "https://api.openai.com/profile"\n', 1),
     ("two on one line", 'a = "https://chatgpt.com"; b = "https://pay.openai.com/c/pay/"\n', 2),
 )
 
 
+def strip_non_url_literals(source: str) -> str:
+    """Remove literal forms that look like hosts but are not URLs to call."""
+    for literal in NON_URL_LITERALS:
+        source = source.replace(literal, "")
+    return source
+
+
 def count_literals(source: str) -> int:
     """Managed-host string literals in one module source."""
-    return len(LITERAL_RE.findall(source))
+    return len(LITERAL_RE.findall(strip_non_url_literals(source)))
 
 
 def predicates_are_trustworthy() -> str | None:
@@ -88,7 +121,7 @@ def predicates_are_trustworthy() -> str | None:
         if actual != expected:
             problems.append(f"{name}: expected {expected}, got {actual}")
     # A guard that over-matches everything is as useless as one that matches
-    # nothing: the authority module itself must score zero.
+    # nothing: a plain literal must still score.
     if count_literals('X = "https://chatgpt.com"\n') == 0:
         problems.append("predicate missed a plain literal")
     return "; ".join(problems) if problems else None
@@ -97,17 +130,20 @@ def predicates_are_trustworthy() -> str | None:
 def collect(root: Path = ROOT) -> dict[str, int]:
     """{repo-relative file: managed-host literal count}, only non-zero files."""
     counts: dict[str, int] = {}
-    scan_root = root / SCAN_DIR
-    for path in sorted(scan_root.rglob("*.py")):
-        if "__pycache__" in path.parts or path.name in EXCLUDED:
+    for scan_dir in SCAN_DIRS:
+        scan_root = root / scan_dir
+        if not scan_root.is_dir():
             continue
-        try:
-            source = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        count = count_literals(source)
-        if count:
-            counts[path.relative_to(root).as_posix()] = count
+        for path in sorted(scan_root.rglob("*.py")):
+            if EXCLUDED_DIRS & set(path.parts) or path.name in EXCLUDED_FILES:
+                continue
+            try:
+                source = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            count = count_literals(source)
+            if count:
+                counts[path.relative_to(root).as_posix()] = count
     return counts
 
 
@@ -136,12 +172,12 @@ def load_baseline(path: Path | None = None) -> dict[str, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Ratchet on inline protocol-payment host literals.")
+    parser = argparse.ArgumentParser(description="Ratchet on inline OpenAI/Stripe host literals.")
     parser.add_argument("--detail", action="store_true", help="print the per-file table")
     parser.add_argument(
         "--update-baseline",
         action="store_true",
-        help="rewrite the baseline (only after WIRING an extractor, i.e. lowering it)",
+        help="rewrite the baseline (only after WIRING a caller, i.e. lowering it)",
     )
     parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args(argv)
@@ -170,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
             after = counts.get(path, 0)
             delta = after - before
             flag = " " if delta == 0 else ("+" if delta > 0 else "!")
-            print(f"  {flag} {path:<52} {before:3d} -> {after:3d} ({delta:+d})")
+            print(f"  {flag} {path:<58} {before:3d} -> {after:3d} ({delta:+d})")
         return 0
 
     if not BASELINE.exists():
@@ -189,9 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         for path, current, allowed in grown:
             print(
                 f"{path}: {current} inline managed-host literal(s) > baseline {allowed} "
-                f"(+{current - allowed}). Import the host from "
-                f"services/protocol-payment/common/endpoints.py instead of inlining it, "
-                f"or justify a baseline bump.",
+                f"(+{current - allowed}). Import the host from the matching endpoints.py "
+                f"authority (services/protocol-payment/common/ or sms_tool/) instead of "
+                f"inlining it, or justify a baseline bump.",
                 file=sys.stderr,
             )
         return 1

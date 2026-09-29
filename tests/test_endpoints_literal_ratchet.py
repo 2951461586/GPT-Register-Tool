@@ -65,6 +65,18 @@ def test_unmanaged_host_is_not_counted():
     assert eps.count_literals('x = "https://ipwho.is/?fields=success"\n') == 0
 
 
+def test_jwt_claim_key_is_not_counted():
+    """``https://api.openai.com/auth`` is a token claim key, not a URL.
+
+    Counting it would demand a ``endpoints.API_BASE`` rewrite that would break
+    every access-token parse, so the predicate must ignore it in both quote
+    styles while still counting a real ``/profile`` path.
+    """
+    assert eps.count_literals('x = claims.get("https://api.openai.com/auth")\n') == 0
+    assert eps.count_literals("x = claims['https://api.openai.com/auth']\n") == 0
+    assert eps.count_literals('x = "https://api.openai.com/profile"\n') == 1
+
+
 def test_multiple_literals_on_one_line_are_all_counted():
     assert eps.count_literals('a = "https://chatgpt.com"; b = "https://pay.openai.com/c/pay/"\n') == 2
 
@@ -115,10 +127,24 @@ def test_managed_hosts_match_the_authority_constants():
 
 
 def test_authority_module_is_excluded_from_the_scan():
+    """Both authorities define the hosts; scanning one would score its constants."""
     counts = eps.collect()
-    assert not any(path.endswith("common/endpoints.py") for path in counts), (
-        "the authority module defines the hosts; scanning it would score its own constants"
+    assert not any(path.endswith("endpoints.py") for path in counts), (
+        "an endpoints.py authority leaked into its own ratchet"
     )
+
+
+def test_vendor_tree_is_excluded():
+    counts = eps.collect()
+    assert not any("_vendor" in path for path in counts), (
+        "vendored code is not ours to centralise and must stay out of the ratchet"
+    )
+
+
+def test_both_process_boundaries_are_scanned():
+    counts = eps.collect()
+    assert any(path.startswith("services/protocol-payment/") for path in counts)
+    assert any(path.startswith("sms_tool/") for path in counts)
 
 
 def test_wired_extractors_have_zero_inline_literals():
