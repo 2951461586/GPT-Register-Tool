@@ -28,13 +28,15 @@ namespace SmsWorkbench
     }
 
     /// <summary>
-    /// Window-independent planner for every desktop backend command family
-    /// (registration, SMS, liveness, deletion, import, export, refresh,
-    /// protocol payment, inbox). It generalizes the
-    /// <see cref="ProtocolPaymentExecutionPlanner"/> pattern so the CLI
-    /// contract lives in exactly one module that can be unit tested by every
-    /// client adapter. Settings resolution stays with the caller; this class only shapes
-    /// already-resolved values into command-line arguments.
+    /// Window-independent planner for the desktop backend command families it
+    /// owns (registration, SMS, liveness, deletion, import, export, refresh,
+    /// inbox). Protocol payment has a sibling planner in this same assembly,
+    /// <see cref="ProtocolPaymentExecutionPlanner"/>: it returns a different
+    /// result shape, so it is deliberately not folded in here. Because both
+    /// live in SmsWorkbench.Contracts, the CLI contract is shaped in one
+    /// window-independent, unit-testable assembly. Settings resolution stays
+    /// with the caller; this class only shapes already-resolved values into
+    /// command-line arguments.
     /// </summary>
     public static class BackendCommandPlanner
     {
