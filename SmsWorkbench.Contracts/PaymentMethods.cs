@@ -9,10 +9,19 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace SmsWorkbench
 {
     public sealed record PaymentMethodOption(string Id, string DisplayName);
+
+    /// <summary>
+    /// One selectable country for a proxy stage (code + operator-facing label).
+    /// Declared here, not with the batch view models, because
+    /// <see cref="PaymentMethods"/> produces them and it must stay
+    /// window-independent.
+    /// </summary>
+    public sealed record PaymentProxyCountryOption(string Code, string DisplayName);
 
     public sealed record PaymentMethodDefinition(
         string Id,

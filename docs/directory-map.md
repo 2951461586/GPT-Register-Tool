@@ -130,9 +130,7 @@ architecture gate.
 | File | Responsibility |
 | --- | --- |
 | `MainWindow.Payment.cs` | Read control state, invoke the payment-link seam, and apply the returned view state. |
-| `ProtocolPaymentExecution.cs` | Build deterministic backend command plans and convert backend JSON into presentation models; contains no WPF control access. |
 | `PaymentBatchService.cs`, `PaymentBatchViewModel.cs` | Batch dialog execution and state; do not duplicate single-account command planning. |
-| `PaymentMethods.cs` | Canonical desktop payment-method catalog, aliases, countries, and single/batch availability. |
 | `AccountGridPresentation.cs` | Promotion status classification plus full filtered-set ordering before pagination. |
 
 ## `SmsWorkbench/` mailbox-change boundary
@@ -162,6 +160,10 @@ them and only apply the returned view state.
 | File | Responsibility |
 | --- | --- |
 | `SmsWorkbench.Contracts/BackendCommandPlanner.cs` | Build `BackendCommandPlan` argument lists and stable account-result kinds for registration/payment/scan tasks from primitive inputs; no WPF access. |
+| `SmsWorkbench.Contracts/ProtocolPaymentExecution.cs` | Build the protocol-payment command plan and convert its backend JSON into presentation models (`ProtocolPaymentResultPresenter`); no WPF access. Relocated from `SmsWorkbench/` so the whole backend CLI contract is testable without the app assembly. |
+| `SmsWorkbench.Contracts/PaymentMethods.cs` | Canonical desktop payment-method catalog, aliases, countries and single/batch availability; reads the embedded `payment_methods.json`. |
+| `SmsWorkbench.Contracts/ProxyInputNormalizer.cs` | `host:port:user:pass` to proxy-URL normalization and country inference, shared by the command planners. |
+| `SmsWorkbench.Contracts/SensitiveDataSanitizer.cs` | C# consumer of the repository `sensitive_policy.json`; log-strength redaction for operator-visible output. |
 | `SmsWorkbench/BackendResultInterpreter.cs` | Interpret backend execution results and proxy-test JSON into typed outcomes (success/timeout/cancelled). Owns account-result routing (`HasAccountResults` / `AccountResultTitle` / `ScanResultError`); presentation lives in `MainWindow.Export.cs::ShowAccountScanResultDialog`. |
 | `SmsWorkbench.Contracts/BackendJson.cs`, `SmsWorkbench.Contracts/BackendJsonProtocol.cs` | Canonical JSON-to-dictionary projection and protocol framing shared by interpreters; keep WPF out of JSON plumbing. |
 | `SmsWorkbench.Contracts/BackendContracts.cs`, `SmsWorkbench/BackendTaskCoordinator.cs` | Backend output-channel contracts and single-flight task coordination. |

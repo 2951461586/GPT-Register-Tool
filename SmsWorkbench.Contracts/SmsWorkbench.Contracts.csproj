@@ -11,4 +11,12 @@
     <AssemblyName>SmsWorkbench.Contracts</AssemblyName>
     <RootNamespace>SmsWorkbench</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Shared policy/catalog resources live with their only readers
+         (SensitiveDataSanitizer / PaymentMethods), which moved here so the
+         desktop command-plan contracts are window-independent. LogicalName is
+         pinned so the resource id does not follow the assembly rename. -->
+    <EmbeddedResource Include="..\payment_methods.json" LogicalName="SmsWorkbench.payment_methods.json" />
+    <EmbeddedResource Include="..\sensitive_policy.json" LogicalName="SmsWorkbench.sensitive_policy.json" />
+  </ItemGroup>
 </Project>

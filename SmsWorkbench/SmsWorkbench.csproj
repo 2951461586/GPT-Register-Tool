@@ -21,8 +21,6 @@
   <ItemGroup>
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\black-kitten.png" />
-    <EmbeddedResource Include="..\payment_methods.json" LogicalName="SmsWorkbench.payment_methods.json" />
-    <EmbeddedResource Include="..\sensitive_policy.json" LogicalName="SmsWorkbench.sensitive_policy.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmsWorkbench.Contracts\SmsWorkbench.Contracts.csproj" />

@@ -29,8 +29,6 @@ namespace SmsWorkbench
         /// <summary>Same as <see cref="CheckoutProxySourcePool"/> for Approve.</summary>
         string ApproveProxySourcePool = "");
 
-    public sealed record PaymentProxyCountryOption(string Code, string DisplayName);
-
     /// <summary>
     /// Test seam for the batch window's catalog-driven country options.  The
     /// production view model passes null and resolves through
