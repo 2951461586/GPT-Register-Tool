@@ -7,6 +7,7 @@ import uuid
 
 from curl_cffi import requests as curl_requests
 
+from . import endpoints
 from .codex_sentinel import import_cookie_header
 from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
@@ -42,6 +43,35 @@ _redact_proxy_url = _phone_redact_proxy_url
 _redact_proxy_text = _phone_redact_proxy_text
 
 
+def _as_int(value, default: int = 0) -> int:
+    """``int(value)`` that never raises.
+
+    The provider-health / metrics counters are read back from a hand-editable
+    cache; a malformed value must degrade to the default, not abort token
+    issuance. Mirrors the safe-coercion convention used by ``ProxyStateStore``.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default: float = 0.0) -> float:
+    """``float(value)`` that never raises."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_json_loads(text, default=None):
+    """``json.loads`` that never raises (malformed cache/token payload -> ``default``)."""
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return default
+
+
 def _get_cached_sentinel(force_fresh=False):
     if force_fresh:
         return None
@@ -65,9 +95,15 @@ def _save_sentinel_cache(data):
     payload["ts"] = time.time()
     with _sentinel_cache_lock:
         tmp_path = SENTINEL_CACHE_FILE.with_name(f"{SENTINEL_CACHE_FILE.name}.{uuid.uuid4().hex}.tmp")
-        with open(tmp_path, "w") as f:
-            json.dump(payload, f, ensure_ascii=False)
-        tmp_path.replace(SENTINEL_CACHE_FILE)
+        try:
+            with open(tmp_path, "w") as f:
+                json.dump(payload, f, ensure_ascii=False)
+            tmp_path.replace(SENTINEL_CACHE_FILE)
+        except (OSError, TypeError, ValueError) as exc:
+            # A cache write must never abort issuance: the token is already in
+            # hand, and the next call simply misses the cache and re-fetches.
+            print(f"  [!] Sentinel cache write failed: {exc}")
+            return
     print(f"[*] Sentinel token cached")
 
 
@@ -284,7 +320,7 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
 
     # Get auth cookies via HTTP (prime the session)
     try:
-        auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
+        auth_base = CFG["chatgpt"].get("auth_base_url", endpoints.AUTH_BASE)
         session.cookies.set("oai-did", did, domain=".openai.com", path="/")
         prime_resp = session.get(
             f"{auth_base}/create-account",
@@ -343,7 +379,9 @@ def _quickjs_enabled():
 
 def _http_fallback_enabled() -> bool:
     cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
-    return bool(cfg.get("sentinel_allow_http_fallback") is True)
+    value = cfg.get("sentinel_allow_http_fallback")
+    # Strict boolean: a truthy string must not enable the fallback.
+    return isinstance(value, bool) and value
 
 
 def _sentinel_max_concurrency():
@@ -373,7 +411,7 @@ def _provider_available(provider: str, *, explicit: bool = False) -> bool:
         return True
     with _sentinel_metrics_lock:
         state = _sentinel_provider_health.get(provider) or {}
-        return float(state.get("cooldown_until") or 0.0) <= time.time()
+        return _as_float(state.get("cooldown_until")) <= time.time()
 
 
 def _record_provider(provider: str, ok: bool, duration_ms: float) -> None:
@@ -389,7 +427,7 @@ def _record_provider(provider: str, ok: bool, duration_ms: float) -> None:
             health["consecutive_failures"] = 0.0
             health["cooldown_until"] = 0.0
         else:
-            health["consecutive_failures"] = float(health.get("consecutive_failures") or 0.0) + 1.0
+            health["consecutive_failures"] = _as_float(health.get("consecutive_failures")) + 1.0
             if health["consecutive_failures"] >= failure_limit:
                 health["cooldown_until"] = time.time() + cooldown
 
@@ -397,11 +435,11 @@ def _record_provider(provider: str, ok: bool, duration_ms: float) -> None:
 def sentinel_metrics_snapshot(reset: bool = False) -> dict:
     """Return aggregate, token-free extraction performance metrics."""
     with _sentinel_metrics_lock:
-        snapshot = json.loads(json.dumps(_sentinel_metrics))
+        snapshot = _safe_json_loads(json.dumps(_sentinel_metrics), {})
         snapshot["circuits"] = {
             provider: {
-                "consecutive_failures": int(state.get("consecutive_failures") or 0),
-                "cooldown_remaining_seconds": max(0, int(float(state.get("cooldown_until") or 0) - time.time())),
+                "consecutive_failures": _as_int(state.get("consecutive_failures")),
+                "cooldown_remaining_seconds": max(0, _as_int(_as_float(state.get("cooldown_until")) - time.time())),
             }
             for provider, state in _sentinel_provider_health.items()
         }
@@ -557,14 +595,14 @@ def _extract_sentinel_cloakbrowser(browser_proxy, persist=True, headless=True, d
     page = ctx.new_page()
 
     # Use create-account page (lighter, fewer redirects)
-    auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com")
+    auth_base = CFG["chatgpt"].get("auth_base_url", endpoints.AUTH_BASE)
     page_url = f"{auth_base}/create-account"
 
     try:
         page.goto(page_url, wait_until="domcontentloaded", timeout=120000)
     except Exception as e:
         err_msg = str(e)
-        if "ERR_PROXY" in err_msg or "ERR_TUNNEL" in err_msg or "ERR_CONNECTION" in err_msg:
+        if any(marker in err_msg for marker in ("ERR_PROXY", "ERR_TUNNEL", "ERR_CONNECTION")):
             print(f"  [Error] Proxy connection failed: {_redact_proxy_url(browser_proxy)}")
             print(f"  [Error] Please check if your proxy (Clash/V2Ray etc.) is running on the correct port.")
             browser.close()
@@ -665,7 +703,7 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
     oauth_token = browser_token("oauth_create_account")
     if not authorize_token:
         return None
-    authorize_payload = json.loads(authorize_token)
+    authorize_payload = _safe_json_loads(authorize_token, {})
     authorize_so = json.dumps(
         {
             "so": authorize_payload.get("so") or authorize_payload.get("c") or "",
@@ -676,7 +714,7 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    oauth_payload = json.loads(oauth_token)
+    oauth_payload = _safe_json_loads(oauth_token, {})
     sentinel_so = json.dumps(
         {
             "so": oauth_payload.get("so") or oauth_payload.get("c") or "",
