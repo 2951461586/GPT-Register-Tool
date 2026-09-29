@@ -167,6 +167,7 @@ from common.logging_setup import make_file_logger
 from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
 from common import geo as shared_geo
+from common import endpoints
 
 LOG_DIR = SCRIPT_DIR / "logs"
 DUMP_DIR = SCRIPT_DIR / "dumps"
@@ -923,8 +924,8 @@ def build_chatgpt_session(access_token: str, device_id: str, proxy: str, session
             "Accept": "*/*",
             "Accept-Language": payment_accept_language(),
             "Authorization": f"Bearer {access_token}",
-            "Origin": "https://chatgpt.com",
-            "Referer": "https://chatgpt.com/",
+            "Origin": endpoints.CHATGPT_BASE,
+            "Referer": endpoints.CHATGPT_BASE + "/",
             "Content-Type": "application/json",
             "oai-device-id": device_id,
             "oai-language": payment_browser_locale(),
@@ -1002,12 +1003,12 @@ def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
     log(f"Checkout promo: mode={promo_mode}, id={promo_id}")
 
     headers = {
-        "Referer": "https://chatgpt.com/",
+        "Referer": endpoints.CHATGPT_BASE + "/",
         "x-openai-target-path": "/backend-api/payments/checkout",
         "x-openai-target-route": "/backend-api/payments/checkout",
     }
     resp = chatgpt.post(
-        "https://chatgpt.com/backend-api/payments/checkout",
+        endpoints.CHATGPT_CHECKOUT_API,
         json=body,
         headers=headers,
         timeout=CHATGPT_TIMEOUT,
@@ -1017,7 +1018,7 @@ def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
         "checkout",
         body,
         "POST",
-        "https://chatgpt.com/backend-api/payments/checkout",
+        endpoints.CHATGPT_CHECKOUT_API,
         force=resp.status_code >= 400,
     )
     if resp.status_code >= 400:
@@ -1037,7 +1038,7 @@ def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
         fallback_body.pop("coupon", None)
         fallback_body["promo_campaign"] = promo_id
         resp = chatgpt.post(
-            "https://chatgpt.com/backend-api/payments/checkout",
+            endpoints.CHATGPT_CHECKOUT_API,
             json=fallback_body,
             headers=headers,
             timeout=CHATGPT_TIMEOUT,
@@ -1047,7 +1048,7 @@ def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
             "checkout_promo_campaign",
             fallback_body,
             "POST",
-            "https://chatgpt.com/backend-api/payments/checkout",
+            endpoints.CHATGPT_CHECKOUT_API,
             force=True,
         )
         if resp.status_code >= 400:
@@ -1091,7 +1092,7 @@ def checkout_page_url(checkout: dict[str, str]) -> str:
         IDEAL_BOOTSTRAP_COUNTRY,
         checkout.get("processor_entity") or "",
     )
-    return f"https://chatgpt.com/checkout/{processor}/{checkout['cs_id']}"
+    return endpoints.chatgpt_checkout_page(processor, checkout['cs_id'])
 
 
 def update_checkout_promotion(
@@ -1115,7 +1116,7 @@ def update_checkout_promotion(
             "promo_campaign_id": promo_id,
             "is_coupon_from_query_param": mode == "query",
         }
-    url = "https://chatgpt.com/backend-api/payments/checkout/update"
+    url = endpoints.CHATGPT_CHECKOUT_UPDATE
     resp = chatgpt.post(
         url,
         json=body,
@@ -1146,7 +1147,7 @@ def update_ideal_checkout_taxes(
     checkout: dict[str, str],
     billing: dict[str, str],
 ) -> None:
-    url = "https://chatgpt.com/backend-api/payments/checkout/taxes"
+    url = endpoints.CHATGPT_CHECKOUT_TAXES
     body = {
         "checkout_session_id": checkout["cs_id"],
         "checkout_email": billing["email"],
@@ -1202,7 +1203,7 @@ def stripe_init(cs_id: str, stripe_pk: str, proxy: str) -> dict[str, Any]:
         "key": stripe_pk,
         "_stripe_version": STRIPE_VERSION_FULL,
     }
-    url = f"https://api.stripe.com/v1/payment_pages/{cs_id}/init"
+    url = endpoints.stripe_payment_page(cs_id, "init")
     resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
     dump_http(resp, "stripe_init", body, "POST", url, force=resp.status_code >= 400)
     if resp.status_code >= 400:
@@ -1292,7 +1293,7 @@ def stripe_update_customer_data(
     if billing.get("state"):
         body["customer_data[address][state]"] = billing["state"]
 
-    url = f"https://api.stripe.com/v1/payment_pages/{cs_id}"
+    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
     try:
         resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
         dump_http(resp, "customer_data_update_nl", body, "POST", url, force=resp.status_code >= 400)
@@ -1340,7 +1341,7 @@ def stripe_update_tax_region(
     if billing.get("state"):
         body["tax_region[state]"] = billing["state"]
 
-    url = f"https://api.stripe.com/v1/payment_pages/{cs_id}"
+    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
     try:
         resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
         dump_http(resp, "tax_region_update", body, "POST", url, force=resp.status_code >= 400)
@@ -1362,7 +1363,7 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
     processor = processor_entity_for_country(
         checkout.get("billing_country", "NL"), checkout.get("processor_entity") or ""
     )
-    checkout_page_url = f"https://chatgpt.com/checkout/{processor}/{cs_id}"
+    checkout_page_url = endpoints.chatgpt_checkout_page(processor, cs_id)
     body = {
         "snapshot": {
             "billing_address": {
@@ -1379,7 +1380,7 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
     }
     try:
         resp = chatgpt.post(
-            "https://chatgpt.com/backend-api/payments/checkout/snapshot",
+            endpoints.CHATGPT_CHECKOUT_SNAPSHOT,
             json=body,
             headers={
                 "Referer": checkout_page_url,
@@ -1393,7 +1394,7 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
             "checkout_snapshot",
             body,
             "POST",
-            "https://chatgpt.com/backend-api/payments/checkout/snapshot",
+            endpoints.CHATGPT_CHECKOUT_SNAPSHOT,
             force=env_bool("IDEAL_DUMP_WARMUP", False) or resp.status_code >= 400,
         )
         if resp.status_code >= 400:
@@ -1428,9 +1429,9 @@ def stripe_create_ideal_pm(
     if billing.get("state"):
         body["billing_details[address][state]"] = billing["state"]
 
-    resp = stripe.post("https://api.stripe.com/v1/payment_methods", data=body, timeout=DEFAULT_TIMEOUT)
+    resp = stripe.post(endpoints.STRIPE_PAYMENT_METHODS, data=body, timeout=DEFAULT_TIMEOUT)
     dump_http(
-        resp, "ideal_pm", body, "POST", "https://api.stripe.com/v1/payment_methods", force=resp.status_code >= 400
+        resp, "ideal_pm", body, "POST", endpoints.STRIPE_PAYMENT_METHODS, force=resp.status_code >= 400
     )
     if resp.status_code >= 400:
         raise RuntimeError(f"创建 iDEAL PM 失败 HTTP {resp.status_code}: {resp.text[:500]}")
@@ -1454,7 +1455,7 @@ def add_inline_ideal_payment_method_data(
             "payment_method_data[billing_details][address][city]": billing["city"],
             "payment_method_data[billing_details][address][postal_code]": billing["postal_code"],
             "payment_method_data[payment_user_agent]": f"stripe.js/{random_runtime_version()}; stripe-js-v3/{random_runtime_version()}; payment-element; deferred-intent",
-            "payment_method_data[referrer]": "https://chatgpt.com",
+            "payment_method_data[referrer]": endpoints.CHATGPT_BASE,
             "payment_method_data[time_on_page]": str(random.randint(18000, 55000)),
             "payment_method_data[client_attribution_metadata][checkout_session_id]": cs_id,
             "payment_method_data[client_attribution_metadata][client_session_id]": ctx["stripe_js_id"],
@@ -1547,7 +1548,7 @@ def stripe_confirm_ideal(
         add_inline_ideal_payment_method_data(body, cs_id, billing, ctx)
     else:
         body["payment_method"] = pm_id
-    url = f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm"
+    url = endpoints.stripe_payment_page(cs_id, "confirm")
     resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
     dump_http(resp, "ideal_confirm", body, "POST", url, force=True)
     if resp.status_code >= 400:
@@ -1712,7 +1713,7 @@ def stripe_intent_redirect_url(
         "setup_intents" if intent_object == "setup_intent" or intent_id.startswith("seti_") else "payment_intents"
     )
     params = {"key": stripe_pk, "client_secret": client_secret}
-    url = f"https://api.stripe.com/v1/{intent_path}/{intent_id}"
+    url = f"{endpoints.STRIPE_API_BASE}/v1/{intent_path}/{intent_id}"
     resp = stripe.get(url, params=params, timeout=DEFAULT_TIMEOUT)
     dump_http(resp, "stripe_intent_get", params, "GET", url, force=resp.status_code >= 400)
     if resp.status_code != 200:
@@ -1807,10 +1808,10 @@ def format_payment_summary(summary: dict[str, Any]) -> str:
 def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) -> None:
     try:
         resp = chatgpt.post(
-            "https://chatgpt.com/backend-api/sentinel/ping",
+            endpoints.CHATGPT_SENTINEL_PING,
             json={},
             headers={
-                "Referer": "https://chatgpt.com/",
+                "Referer": endpoints.CHATGPT_BASE + "/",
                 "x-openai-target-path": "/backend-api/sentinel/ping",
                 "x-openai-target-route": "/backend-api/sentinel/ping",
             },
@@ -1821,7 +1822,7 @@ def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) ->
             "sentinel_ping",
             {},
             "POST",
-            "https://chatgpt.com/backend-api/sentinel/ping",
+            endpoints.CHATGPT_SENTINEL_PING,
             force=env_bool("IDEAL_DUMP_WARMUP", False),
         )
     except Exception as exc:
@@ -1833,7 +1834,7 @@ def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None
     processor = processor_entity_for_country(
         checkout.get("billing_country", "NL"), checkout.get("processor_entity", "")
     )
-    checkout_page_url = f"https://chatgpt.com/checkout/{processor}/{cs_id}"
+    checkout_page_url = endpoints.chatgpt_checkout_page(processor, cs_id)
     if env_bool("IDEAL_APPROVE_WARMUP", True):
         warmup_approve_context(chatgpt, checkout_page_url)
         time.sleep(random.uniform(0.8, 1.6))
@@ -1845,12 +1846,12 @@ def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None
         "x-openai-target-route": "/backend-api/payments/checkout/approve",
     }
     resp = chatgpt.post(
-        "https://chatgpt.com/backend-api/payments/checkout/approve",
+        endpoints.CHATGPT_CHECKOUT_APPROVE,
         json=body,
         headers=headers,
         timeout=CHATGPT_TIMEOUT,
     )
-    dump_http(resp, "approve", body, "POST", "https://chatgpt.com/backend-api/payments/checkout/approve", force=True)
+    dump_http(resp, "approve", body, "POST", endpoints.CHATGPT_CHECKOUT_APPROVE, force=True)
     if resp.status_code >= 400:
         raise RuntimeError(f"ChatGPT approve 失败 HTTP {resp.status_code}: {resp.text[:300]}")
     result = ""
@@ -1988,7 +1989,7 @@ def poll_payment_page(
         "key": stripe_pk,
         "_stripe_version": str(ctx.get("stripe_version") or STRIPE_VERSION_FULL),
     }
-    url = f"https://api.stripe.com/v1/payment_pages/{cs_id}"
+    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
     last_error = ""
     last_payload: dict[str, Any] = {}
     last_summary = ""
