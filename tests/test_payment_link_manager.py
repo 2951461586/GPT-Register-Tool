@@ -832,9 +832,7 @@ class AdapterV1ContractTests(unittest.TestCase):
     def test_v1_result_never_overwrites_an_explicit_value(self):
         from sms_tool.pay_link import adapters
 
-        out = adapters._v1_result(
-            {"payment_method": "explicit", "link_type": "momo_protocol_qr"}, self._spec("momo")
-        )
+        out = adapters._v1_result({"payment_method": "explicit", "link_type": "momo_protocol_qr"}, self._spec("momo"))
         self.assertEqual(out["payment_method"], "explicit")
         self.assertEqual(out["link_type"], "momo_protocol_qr")
 
