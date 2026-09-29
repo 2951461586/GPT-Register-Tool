@@ -64,12 +64,12 @@ _PROBE = (
 )
 
 
-def _import_clean(script: Path) -> subprocess.CompletedProcess[str]:
+def _import_clean(script: Path, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
     env["PYTHONUTF8"] = "1"
     return subprocess.run(
         [sys.executable, "-c", _PROBE, str(script)],
-        cwd=str(script.parent),
+        cwd=str(cwd or script.parent),
         env=env,
         capture_output=True,
         text=True,
@@ -89,4 +89,28 @@ def test_extractor_bootstraps_its_imports(name: str, rel: str) -> None:
         f"cwd=<its dir> -- the environment the host provides. It must bootstrap "
         f"its own sys.path (common/ and, for momo/pix, its sibling module).\n"
         f"stdout: {result.stdout[-400:]}\nstderr: {result.stderr[-800:]}"
+    )
+
+
+#: Library modules that import a *sibling* rather than ``common/``. They used to
+#: rely on the runner putting their own directory on ``sys.path``; a direct
+#: import from another cwd has to work too.
+SIBLING_LIBS: tuple[tuple[str, str], ...] = (
+    ("momo_lib", "momo/momo_qr_extract.py"),
+    ("ac_paylink_core", "momo/ac_paylink_core.py"),
+    ("pix_lib", "pix/pix_extract.py"),
+)
+
+
+@pytest.mark.parametrize("name,rel", SIBLING_LIBS, ids=[name for name, _ in SIBLING_LIBS])
+def test_sibling_library_bootstraps_itself_from_a_neutral_cwd(name: str, rel: str) -> None:
+    """Importing a library module from a neutral cwd must still find its sibling."""
+    script = PROTOCOL_ROOT / rel
+    assert script.is_file(), f"{name}: missing {script}"
+    result = _import_clean(script, cwd=PROTOCOL_ROOT)
+    assert result.returncode == 0 and "IMPORT_OK" in result.stdout, (
+        f"{name} ({rel}) could not be imported from cwd={PROTOCOL_ROOT}. It must "
+        f"put its own directory on sys.path before importing its sibling, not "
+        f"rely on the caller."
+        f"\nstdout: {result.stdout[-400:]}\nstderr: {result.stderr[-800:]}"
     )

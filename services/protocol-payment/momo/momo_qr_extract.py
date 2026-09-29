@@ -21,7 +21,58 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+# ``ac_paylink_core`` is this module's sibling. The runner puts this directory
+# on ``sys.path`` before importing us, but a direct import (tests, a REPL) does
+# not -- so bootstrap it here instead of depending on the caller.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
 import ac_paylink_core as paylink
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    """``int(value)`` that never raises (a malformed payload -> ``default``).
+
+    Callers replacing ``int(x or FALLBACK)`` must pass the same fallback *both*
+    ways -- ``_as_int(x or FALLBACK, FALLBACK)`` -- because ``int`` maps any
+    falsy ``x`` (including ``0``) to the fallback, not just ``None``.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """``float(value)`` that never raises."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_json_loads(text: Any, default: Any = None) -> Any:
+    """``json.loads`` that never raises (malformed body/overrides -> ``default``)."""
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def _strict_true(value: Any) -> bool:
+    """True only for the bool ``True``, without comparing against the literal.
+
+    Provider payloads carry ``true``/``"true"``/``1`` for the same flag; the flow
+    gates must not treat a truthy string as the boolean. Matches the
+    ``ProxyStateStore`` helper of the same name.
+    """
+    return isinstance(value, bool) and value
+
+
+def _strict_false(value: Any) -> bool:
+    """True only for the bool ``False``."""
+    return isinstance(value, bool) and not value
 
 
 ROOT = Path(__file__).resolve().parent
@@ -132,8 +183,6 @@ def _prefer_artifact(old: str, new: str) -> str:
     return new if len(new) > len(old) else old
 
 
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="脱敏检测 ChatGPT 账号的真正试用资格与 Stripe MoMo 支持情况。",
@@ -159,10 +208,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pre-proxy",
         default="auto",
-        help=(
-            "上游 SOCKS/HTTP 代理；默认 auto 会在本机 127.0.0.1:7897 可用时自动使用。"
-            "传 off 可禁用。"
-        ),
+        help=("上游 SOCKS/HTTP 代理；默认 auto 会在本机 127.0.0.1:7897 可用时自动使用。传 off 可禁用。"),
     )
     parser.add_argument(
         "--trial-days",
@@ -259,10 +305,14 @@ def load_credential(path: Path) -> tuple[str, str, dict[str, Any]]:
     try:
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
-        return "", "", {
-            "credential_valid": False,
-            "decision": "credential_parse_failed",
-        }
+        return (
+            "",
+            "",
+            {
+                "credential_valid": False,
+                "decision": "credential_parse_failed",
+            },
+        )
     stripped = raw.strip()
     candidates = [stripped]
     if stripped.startswith(("{", "[")) and stripped.endswith(","):
@@ -276,37 +326,57 @@ def load_credential(path: Path) -> tuple[str, str, dict[str, Any]]:
             access_token, session_token = parsed_access, parsed_session
             break
     if not access_token:
-        return "", "", {
-            "credential_valid": False,
-            "decision": "credential_parse_failed",
-        }
+        return (
+            "",
+            "",
+            {
+                "credential_valid": False,
+                "decision": "credential_parse_failed",
+            },
+        )
     expired, _ttl_minutes = jwt_expiry(access_token)
-    return access_token, session_token, {
-        "credential_valid": expired is not True,
-        "credential_expired": expired,
-        "decision": "credential_invalid" if expired is True else "credential_ready",
-    }
+    return (
+        access_token,
+        session_token,
+        {
+            "credential_valid": not _strict_true(expired),
+            "credential_expired": expired,
+            "decision": "credential_invalid" if _strict_true(expired) else "credential_ready",
+        },
+    )
 
 
 def load_credential_text(raw: str) -> tuple[str, str, dict[str, Any]]:
     text = str(raw or "").strip()
     if not text:
-        return "", "", {
-            "credential_valid": False,
-            "decision": "credential_parse_failed",
-        }
+        return (
+            "",
+            "",
+            {
+                "credential_valid": False,
+                "decision": "credential_parse_failed",
+            },
+        )
     access_token, session_token = normalize_token(text)
     if not access_token:
-        return "", "", {
-            "credential_valid": False,
-            "decision": "credential_parse_failed",
-        }
+        return (
+            "",
+            "",
+            {
+                "credential_valid": False,
+                "decision": "credential_parse_failed",
+            },
+        )
     expired, _ttl_minutes = jwt_expiry(access_token)
-    return access_token, session_token, {
-        "credential_valid": expired is not True,
-        "credential_expired": expired,
-        "decision": "credential_invalid" if expired is True else "credential_ready",
-    }
+    return (
+        access_token,
+        session_token,
+        {
+            "credential_valid": not _strict_true(expired),
+            "credential_expired": expired,
+            "decision": "credential_invalid" if _strict_true(expired) else "credential_ready",
+        },
+    )
 
 
 def local_port_open(host: str, port: int) -> bool:
@@ -320,11 +390,7 @@ def local_port_open(host: str, port: int) -> bool:
 def configure_pre_proxy(value: str) -> None:
     normalized = value.strip()
     if normalized.lower() == "auto":
-        normalized = (
-            "socks5h://127.0.0.1:7897"
-            if local_port_open("127.0.0.1", 7897)
-            else ""
-        )
+        normalized = "socks5h://127.0.0.1:7897" if local_port_open("127.0.0.1", 7897) else ""
     elif normalized.lower() in {"", "off", "none", "false", "0"}:
         normalized = ""
     if normalized:
@@ -368,9 +434,7 @@ def load_proxies(path: Path, direct: bool) -> list[str]:
             "请用 --proxy 传入单条 VN 代理、用 --proxy-file 指定列表文件，或用 --direct 走直连。"
         ) from exc
     proxies = [
-        normalize_proxy_url(line.strip())
-        for line in lines
-        if line.strip() and not line.lstrip().startswith("#")
+        normalize_proxy_url(line.strip()) for line in lines if line.strip() and not line.lstrip().startswith("#")
     ]
     if not proxies:
         raise RuntimeError(f"越南代理列表为空：{path}（每行一条 VN 代理，# 开头为注释）")
@@ -384,15 +448,10 @@ def proxy_for_vietnam(proxy: str) -> str:
 def is_cloudflare_response(text: str, status_code: int = 0) -> bool:
     body = str(text or "").lower()
     if status_code in {403, 503} and (
-        "cloudflare" in body
-        or "cf-ray" in body
-        or "just a moment" in body
-        or "attention required" in body
+        "cloudflare" in body or "cf-ray" in body or "just a moment" in body or "attention required" in body
     ):
         return True
-    return "cloudflare" in body and (
-        "just a moment" in body or "attention required" in body or "cf-ray" in body
-    )
+    return "cloudflare" in body and ("just a moment" in body or "attention required" in body or "cf-ray" in body)
 
 
 def is_user_already_paid_error(text: str) -> bool:
@@ -442,7 +501,7 @@ def checkout_body(trial_days: int, strategy: str = "hosted_promo") -> dict[str, 
         return base
     # legacy/custom trial days
     base["checkout_ui_mode"] = "custom"
-    base["subscription_data"] = {"trial_period_days": int(trial_days or 30)}
+    base["subscription_data"] = {"trial_period_days": _as_int(trial_days or 30, 30)}
     return base
 
 
@@ -451,14 +510,14 @@ CHECKOUT_STRATEGIES = ("hosted_promo", "custom_promo", "custom_trial")
 
 class _HttpResponse:
     def __init__(self, status_code: int, text: str, data: Any = None):
-        self.status_code = int(status_code or 0)
+        self.status_code = _as_int(status_code)
         self.text = str(text or "")
         self._data = data
 
     def json(self) -> Any:
         if self._data is not None:
             return self._data
-        return json.loads(self.text or "{}")
+        return _safe_json_loads(self.text, {})
 
 
 def _request_json(
@@ -472,13 +531,9 @@ def _request_json(
     timeout: int = 20,
 ) -> _HttpResponse:
     proxy_url = normalize_proxy_url(proxy)
-    pre_proxy = str(
-        os.environ.get("IDEAL_PRE_PROXY")
-        or os.environ.get("PP_PRE_PROXY")
-        or ""
-    ).strip()
+    pre_proxy = str(os.environ.get("IDEAL_PRE_PROXY") or os.environ.get("PP_PRE_PROXY") or "").strip()
     effective_proxy = proxy_url or pre_proxy
-    timeout = max(5, int(timeout or 20))
+    timeout = max(5, _as_int(timeout or 20, 20))
 
     # Prefer curl_cffi when available (better TLS fingerprint).
     try:
@@ -486,29 +541,29 @@ def _request_json(
     except Exception:
         curl_requests = None  # type: ignore
 
+    # ``timeout`` is passed explicitly (not folded into ``**extra``) so the
+    # request-without-timeout guard can see it; ``extra`` carries only proxies.
+    extra: dict[str, Any] = {}
+    if effective_proxy:
+        extra["proxies"] = {"http": effective_proxy, "https": effective_proxy}
+
     if curl_requests is not None:
-        kwargs: dict[str, Any] = {
-            "headers": headers,
-            "timeout": timeout,
-            "impersonate": "chrome",
-        }
-        if effective_proxy:
-            kwargs["proxies"] = {"http": effective_proxy, "https": effective_proxy}
         if json_body is not None:
-            resp = curl_requests.request(method.upper(), url, json=json_body, **kwargs)
+            resp = curl_requests.request(
+                method.upper(), url, json=json_body, headers=headers, impersonate="chrome", timeout=timeout, **extra
+            )
         else:
-            resp = curl_requests.request(method.upper(), url, data=form_body, **kwargs)
+            resp = curl_requests.request(
+                method.upper(), url, data=form_body, headers=headers, impersonate="chrome", timeout=timeout, **extra
+            )
         return _HttpResponse(resp.status_code, resp.text)
 
     import requests  # type: ignore
 
-    kwargs = {"headers": headers, "timeout": timeout}
-    if effective_proxy:
-        kwargs["proxies"] = {"http": effective_proxy, "https": effective_proxy}
     if json_body is not None:
-        resp = requests.request(method.upper(), url, json=json_body, **kwargs)
+        resp = requests.request(method.upper(), url, json=json_body, headers=headers, timeout=timeout, **extra)
     else:
-        resp = requests.request(method.upper(), url, data=form_body, **kwargs)
+        resp = requests.request(method.upper(), url, data=form_body, headers=headers, timeout=timeout, **extra)
     return _HttpResponse(resp.status_code, resp.text)
 
 
@@ -593,24 +648,16 @@ def create_checkout(
                 if last_error in {"already_paid", "credential_invalid"}:
                     return None, "", "", last_error, attempts, proxy_index + 1
                 # Rotate sticky on cloudflare / rate-limit / soft network blocks.
-                if last_error in {"cloudflare", "rate_limited"} and offset + 1 < min(
-                    max_proxies, len(proxies) or 1
-                ):
+                if last_error in {"cloudflare", "rate_limited"} and offset + 1 < min(max_proxies, len(proxies) or 1):
                     continue
-                if last_error.startswith("http_") and offset + 1 < min(
-                    max_proxies, len(proxies) or 1
-                ):
+                if last_error.startswith("http_") and offset + 1 < min(max_proxies, len(proxies) or 1):
                     continue
                 return None, "", "", last_error, attempts, proxy_index + 1
             data = response.json() or {}
             if not isinstance(data, dict):
                 last_error = "checkout_non_object"
                 continue
-            checkout_id = (
-                data.get("checkout_session_id")
-                or data.get("session_id")
-                or data.get("id")
-            )
+            checkout_id = data.get("checkout_session_id") or data.get("session_id") or data.get("id")
             if not checkout_id or not str(checkout_id).startswith("cs_"):
                 last_error = "checkout_missing_session"
                 continue
@@ -646,7 +693,7 @@ def stripe_init(
             checkout_id,
             stripe_key,
             proxy=selected_proxy,
-            timeout=float(timeout),
+            timeout=_as_float(timeout),
         )
         return payload, "ok", 1
     except Exception as exc:
@@ -723,7 +770,7 @@ def apply_promo_update(
         if resp.status_code >= 400:
             return False, f"update_http_{resp.status_code}"
         data = resp.json() or {}
-        if isinstance(data, dict) and data.get("success") is False:
+        if isinstance(data, dict) and _strict_false(data.get("success")):
             return False, "update_rejected"
         return True, "ok"
     except Exception as exc:
@@ -752,19 +799,17 @@ def stripe_field(payload: dict[str, Any], key: str) -> Any:
 def amount_due(payload: dict[str, Any]) -> int | None:
     summary = payload.get("total_summary")
     if isinstance(summary, dict) and summary.get("due") is not None:
-        return int(summary.get("due") or 0)
+        return _as_int(summary.get("due"))
     if payload.get("amount_total") is not None:
-        return int(payload.get("amount_total") or 0)
+        return _as_int(payload.get("amount_total"))
     amount = stripe_field(payload, "amount")
     if amount is not None:
-        return int(amount or 0)
+        return _as_int(amount)
     # invoice.amount_due branch is shared with the core resolver; delegate to it.
     return paylink.extract_amount_due_cents(payload)
 
 
-def trial_marker(
-    payload: dict[str, Any], nested_key: str | None = None
-) -> tuple[bool, Any, bool]:
+def trial_marker(payload: dict[str, Any], nested_key: str | None = None) -> tuple[bool, Any, bool]:
     candidates = [payload]
     if nested_key and isinstance(payload.get(nested_key), dict):
         candidates.append(payload[nested_key])
@@ -788,7 +833,7 @@ def trial_marker(
         ):
             break
     try:
-        has_days = int(trial_days or 0) > 0
+        has_days = _as_int(trial_days) > 0
     except (TypeError, ValueError):
         has_days = False
     has_end = trial_end not in (None, "", 0, "0", False)
@@ -819,14 +864,14 @@ def choose_decision(
     if has_momo is None:
         return "payment_methods_unknown"
     zero = amount_due_cents == 0
-    if has_momo is True:
+    if _strict_true(has_momo):
         if zero:
             return "ready"
         return "promo_nonzero"
     # no momo
-    if amount_due_cents not in (None, 0) and not actual_trial and one_click_eligible is not True:
+    if amount_due_cents not in (None, 0) and not actual_trial and not _strict_true(one_click_eligible):
         return "card_only_full_price"
-    if not actual_trial and one_click_eligible is False:
+    if not actual_trial and _strict_false(one_click_eligible):
         return "account_trial_ineligible"
     if not actual_trial:
         return "trial_not_applied"
@@ -882,7 +927,12 @@ def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
                         "svg",
                     }:
                         if _usable_qr_image(text):
-                            if "png" in key_l or text.endswith(".png") or "png" in text or text.startswith("data:image/png"):
+                            if (
+                                "png" in key_l
+                                or text.endswith(".png")
+                                or "png" in text
+                                or text.startswith("data:image/png")
+                            ):
                                 out["qr_png_url"] = out["qr_png_url"] or text
                             out["qr_image_url"] = out["qr_image_url"] or text
                     if key_l in {
@@ -894,7 +944,10 @@ def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
                     }:
                         if text.startswith(("http://", "https://")) and not _is_pm_icon(text):
                             out["hosted_instructions_url"] = _prefer(out["hosted_instructions_url"], text)
-                            if any(x in text.lower() for x in ("momo", "qr", "checkout.stripe.com", "pay.openai.com", "payment.momo")):
+                            if any(
+                                x in text.lower()
+                                for x in ("momo", "qr", "checkout.stripe.com", "pay.openai.com", "payment.momo")
+                            ):
                                 out["qr_data"] = _prefer(out["qr_data"], text)
                     if key_l in {"data", "qr_data", "qr_code", "qrcode", "payload", "value"}:
                         if _usable_pay_text(text):
@@ -968,14 +1021,20 @@ def extract_momo_qr_payload(payload: Any) -> dict[str, Any]:
             or val.lower() in _QR_JUNK_TOKENS
             or _is_pm_icon(val)
             or (k in {"qr_image_url", "qr_png_url"} and not _usable_qr_image(val))
-            or (k == "qr_data" and not _usable_pay_text(val) and not val.startswith(("http://", "https://", "data:image")))
+            or (
+                k == "qr_data"
+                and not _usable_pay_text(val)
+                and not val.startswith(("http://", "https://", "data:image"))
+            )
         )
         out[k] = "" if bad else val
 
     if out["qr_png_url"] and not out["qr_image_url"]:
         out["qr_image_url"] = out["qr_png_url"]
-    if out["qr_image_url"] and not out["qr_png_url"] and (
-        "png" in out["qr_image_url"].lower() or out["qr_image_url"].startswith("data:image/png")
+    if (
+        out["qr_image_url"]
+        and not out["qr_png_url"]
+        and ("png" in out["qr_image_url"].lower() or out["qr_image_url"].startswith("data:image/png"))
     ):
         out["qr_png_url"] = out["qr_image_url"]
     # Prefer real pay chain over empty qr_data (checkout.stripe / momo.vn / openai pay)
@@ -1065,16 +1124,17 @@ def confirm_momo_payment_page(
     Stripe returns parameter_unknown (use payment_method=pm_ only; billing is on PM).
     """
     expected = amount_due(init_payload)
-    expected_amount = "0" if expected is None else str(int(expected))
+    expected_amount = "0" if expected is None else str(_as_int(expected))
     init_checksum = str(init_payload.get("init_checksum") or "")
     return_url = f"https://chatgpt.com/?cs={checkout_id}"
     config_id = str(init_payload.get("config_id") or "")
     # runtime version from live PP confirm evidence (not stale fed52f3bc6)
-    runtime_version = str(
-        os.environ.get("PP_STRIPE_RUNTIME_VERSION")
-        or os.environ.get("MOMO_STRIPE_RUNTIME_VERSION")
+    runtime_version = (
+        str(
+            os.environ.get("PP_STRIPE_RUNTIME_VERSION") or os.environ.get("MOMO_STRIPE_RUNTIME_VERSION") or "6f8494a281"
+        ).strip()
         or "6f8494a281"
-    ).strip() or "6f8494a281"
+    )
     elements_session_id = f"elements_session_{uuid.uuid4().hex[:11]}"
     stripe_js_id = str(uuid.uuid4())
     form = {
@@ -1118,7 +1178,13 @@ def confirm_momo_payment_page(
             overrides = {}
         if isinstance(overrides, dict):
             allowed_prefixes = ("elements_session_client[", "elements_options_client[", "client_attribution_metadata[")
-            allowed_keys = {"version", "expected_amount", "expected_payment_method_type", "return_url", "consent[terms_of_service]"}
+            allowed_keys = {
+                "version",
+                "expected_amount",
+                "expected_payment_method_type",
+                "return_url",
+                "consent[terms_of_service]",
+            }
             for key, value in overrides.items():
                 name = str(key or "")
                 if name in allowed_keys or name.startswith(allowed_prefixes):
@@ -1258,25 +1324,17 @@ def follow_momo_redirect(url: str, proxy: str = "", timeout: int = 40) -> dict[s
         "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
     }
     try:
+        extra: dict[str, Any] = {"allow_redirects": True}
+        if proxy:
+            extra["proxies"] = {"http": proxy, "https": proxy}
         if curl_requests is not None:
-            kwargs: dict[str, Any] = {
-                "headers": headers,
-                "timeout": timeout,
-                "impersonate": "chrome",
-                "allow_redirects": True,
-            }
-            if proxy:
-                kwargs["proxies"] = {"http": proxy, "https": proxy}
-            resp = curl_requests.get(url, **kwargs)
+            resp = curl_requests.get(url, headers=headers, impersonate="chrome", timeout=timeout, **extra)
             final = str(getattr(resp, "url", "") or url)
             text = str(resp.text or "")
         else:
             import requests  # type: ignore
 
-            kwargs = {"headers": headers, "timeout": timeout, "allow_redirects": True}
-            if proxy:
-                kwargs["proxies"] = {"http": proxy, "https": proxy}
-            resp = requests.get(url, **kwargs)
+            resp = requests.get(url, headers=headers, timeout=timeout, **extra)
             final = str(getattr(resp, "url", "") or url)
             text = str(resp.text or "")
     except Exception as exc:
@@ -1352,9 +1410,7 @@ def emit_momo_qr(
     provider_proxy = str(provider_proxy or proxy or "").strip()
     approve_proxy = str(approve_proxy or provider_proxy or proxy or "").strip()
     redirect_proxy = str(redirect_proxy or provider_proxy or proxy or "").strip()
-    pm_id, pm_status = create_momo_payment_method(
-        checkout_id, stripe_key, proxy=provider_proxy, timeout=timeout
-    )
+    pm_id, pm_status = create_momo_payment_method(checkout_id, stripe_key, proxy=provider_proxy, timeout=timeout)
     info["pm_status"] = pm_status
     if not pm_id:
         info["qr_status"] = "pm_failed"
@@ -1461,9 +1517,7 @@ def emit_momo_qr(
         return info
 
     followed = follow_momo_redirect(redirect, proxy=redirect_proxy, timeout=max(timeout, 35))
-    if followed.get("error") and not (
-        followed.get("qr_image_url") or followed.get("hosted_instructions_url")
-    ):
+    if followed.get("error") and not (followed.get("qr_image_url") or followed.get("hosted_instructions_url")):
         info["qr_status"] = "redirect_follow_failed"
         info["qr_error"] = followed.get("error") or "follow_failed"
         return info
@@ -1486,8 +1540,7 @@ def emit_momo_qr(
         info["qr_data"] = data
 
     if info["qr_image_url"] or (
-        info["hosted_instructions_url"]
-        and is_scannable_momo_artifact(info["hosted_instructions_url"])
+        info["hosted_instructions_url"] and is_scannable_momo_artifact(info["hosted_instructions_url"])
     ):
         info["has_qr"] = True
         info["qr_status"] = "ok" if info["qr_image_url"] else "ok_momo_gateway"
@@ -1495,7 +1548,7 @@ def emit_momo_qr(
 
     info["has_qr"] = False
     info["qr_status"] = "qr_missing"
-    info["qr_error"] = followed.get("error") or f"followed {followed.get('final_url','')[:80]} no qr"
+    info["qr_error"] = followed.get("error") or f"followed {followed.get('final_url', '')[:80]} no qr"
     return info
 
 
@@ -1504,7 +1557,7 @@ def _candidate_score(row: dict[str, Any]) -> tuple:
     return (
         1 if row.get("amount_due") == 0 else 0,
         1 if row.get("has_momo") else 0,
-        1 if row.get("actual_trial") or row.get("one_click_trial_eligible") is True else 0,
+        1 if row.get("actual_trial") or _strict_true(row.get("one_click_trial_eligible")) else 0,
         1 if row.get("decision") == "ready" else 0,
     )
 
@@ -1529,7 +1582,7 @@ def _finalize_qr_decision(
     momo session forced to ₫0 may emit a QR — non-zero momo is a forced failure.
     """
     due_final = best.get("amount_due")
-    if best.get("has_momo") is True and due_final not in (0,):
+    if _strict_true(best.get("has_momo")) and due_final not in (0,):
         result["decision"] = "promo_nonzero"
         result["decision_text"] = DECISION_TEXT["promo_nonzero"]
         result["supported"] = False
@@ -1538,7 +1591,7 @@ def _finalize_qr_decision(
         result["qr_status"] = "blocked_nonzero"
         result["qr_error"] = f"amount_due={due_final}"
         return next_index
-    if not (emit_qr and best.get("has_momo") is True and due_final == 0):
+    if not (emit_qr and _strict_true(best.get("has_momo")) and due_final == 0):
         return next_index
 
     # If best was hosted, try one custom_promo session for real next_action QR.
@@ -1560,7 +1613,7 @@ def _finalize_qr_decision(
             timeout,
             strategy="custom_promo",
         )
-        result["checkout_proxy_attempts"] = int(result.get("checkout_proxy_attempts") or 0) + attempts2
+        result["checkout_proxy_attempts"] = _as_int(result.get("checkout_proxy_attempts")) + attempts2
         if data2 and cs2:
             # rezero custom session
             entity2 = processor_entity_of(data2)
@@ -1568,9 +1621,7 @@ def _finalize_qr_decision(
             promotion2 = stage_proxies.get("promotion") or proxy2
             init2, st2, _ = stripe_init(cs2, key2, provider2, timeout=timeout)
             if init2 is not None and amount_due(init2) not in (0,):
-                apply_promo_update(
-                    access_token, session_token, cs2, entity2, promotion2, timeout=timeout
-                )
+                apply_promo_update(access_token, session_token, cs2, entity2, promotion2, timeout=timeout)
                 init2, st2, _ = stripe_init(cs2, key2, provider2, timeout=timeout)
             methods2, _ = extract_methods(init2 or {})
             due2 = amount_due(init2) if init2 else None
@@ -1579,9 +1630,7 @@ def _finalize_qr_decision(
                 result["amount_due"] = 0
                 result["checkout_strategy"] = "custom_promo"
                 result["methods"] = methods2
-                result["promo_update_status"] = (
-                    str(result.get("promo_update_status") or "") + "+custom_emit"
-                )
+                result["promo_update_status"] = str(result.get("promo_update_status") or "") + "+custom_emit"
 
     qr_info = emit_momo_qr(
         emit_checkout,
@@ -1660,7 +1709,7 @@ def probe_account(
     else:
         access_token, session_token, credential = load_credential_text(raw_text or "")
     result: dict[str, Any] = {"account": label, **credential}
-    if not access_token or credential.get("credential_expired") is True:
+    if not access_token or _strict_true(credential.get("credential_expired")):
         result["conclusive"] = True
         result["supported"] = False
         result["decision_text"] = DECISION_TEXT.get(
@@ -1676,8 +1725,7 @@ def probe_account(
         return result, start_index
 
     stage_proxies = {
-        str(key): normalize_proxy_url(value) if value else ""
-        for key, value in dict(stage_proxies or {}).items()
+        str(key): normalize_proxy_url(value) if value else "" for key, value in dict(stage_proxies or {}).items()
     }
     checkout_stage_proxy = stage_proxies.get("checkout") or ""
     if checkout_stage_proxy:
@@ -1685,9 +1733,9 @@ def probe_account(
     if not proxies:
         proxies = [""]
     # Speed first: QR expires ~10 min. Cap attempts, keep proxy rotates small.
-    max_attempts = max(1, min(3, int(max_attempts or 3)))
-    max_proxies = max(1, min(3, int(max_proxies or 2)))
-    timeout = max(8, min(25, int(timeout or 12)))
+    max_attempts = max(1, min(3, _as_int(max_attempts or 3, 3)))
+    max_proxies = max(1, min(3, _as_int(max_proxies or 2, 2)))
+    timeout = max(8, min(25, _as_int(timeout or 12, 12)))
 
     best: dict[str, Any] | None = None
     next_index = start_index
@@ -1812,9 +1860,7 @@ def probe_account(
             attempt_info["promo_rezero_due"] = due
 
         methods, methods_source = extract_methods(init_payload)
-        init_has_trial, trial_days_value, has_trial_end = trial_marker(
-            init_payload, "elements_options"
-        )
+        init_has_trial, trial_days_value, has_trial_end = trial_marker(init_payload, "elements_options")
         actual_trial = bool(attempt_info["trial_in_openai_response"] or init_has_trial)
         has_momo = None if methods is None else "momo" in (methods or [])
         stripe_mode = stripe_field(init_payload, "mode")
@@ -1837,9 +1883,7 @@ def probe_account(
             "stripe_init_status": init_status,
             "stripe_init_attempts": init_attempts,
             "stripe_mode": stripe_mode,
-            "payment_method_collection": stripe_field(
-                init_payload, "payment_method_collection"
-            ),
+            "payment_method_collection": stripe_field(init_payload, "payment_method_collection"),
             "amount_due": due,
             "currency": stripe_field(init_payload, "currency"),
             "methods": methods,
@@ -1880,15 +1924,10 @@ def probe_account(
             best = cand
 
         # only stop early on forced-zero + momo
-        if has_momo is True and due == 0:
+        if _strict_true(has_momo) and due == 0:
             break
         # Fast-fail: full-price card-only after 2 strategies rarely flips.
-        if (
-            attempt_no >= 2
-            and has_momo is False
-            and due not in (None, 0)
-            and one_click_eligible is False
-        ):
+        if attempt_no >= 2 and _strict_false(has_momo) and due not in (None, 0) and _strict_false(one_click_eligible):
             break
         # continue loop
 
@@ -1924,7 +1963,9 @@ def probe_account(
         stage_proxies=stage_proxies,
     )
     result["stage_status"] = {
-        "checkout": "completed" if result.get("checkout_status") == "created" else str(result.get("checkout_status") or ""),
+        "checkout": "completed"
+        if result.get("checkout_status") == "created"
+        else str(result.get("checkout_status") or ""),
         "promotion": str(result.get("promo_update_status") or ""),
         "provider": str(result.get("stripe_init_status") or ""),
         "approve": str(result.get("approve_status") or ""),
@@ -1993,10 +2034,10 @@ def print_result(result: dict[str, Any], as_json: bool) -> None:
         print(f"[{label}] {decision_text}")
         return
     eligible = result.get("one_click_trial_eligible")
-    eligible_text = "是" if eligible is True else "否" if eligible is False else "未知"
+    eligible_text = "是" if _strict_true(eligible) else "否" if _strict_false(eligible) else "未知"
     trial_text = "是" if result.get("actual_trial") else "否"
     momo_value = result.get("has_momo")
-    momo_text = "是" if momo_value is True else "否" if momo_value is False else "未知"
+    momo_text = "是" if _strict_true(momo_value) else "否" if _strict_false(momo_value) else "未知"
     methods = ",".join(result.get("methods") or []) or "无"
     qr_flag = "是" if result.get("has_qr") else "否"
     qr_status = result.get("qr_status") or "-"
@@ -2039,7 +2080,7 @@ def main() -> int:
         results.append(result)
         print_result(result, args.json)
 
-    return 2 if any(result.get("conclusive") is False for result in results) else 0
+    return 2 if any(_strict_false(result.get("conclusive")) for result in results) else 0
 
 
 if __name__ == "__main__":
