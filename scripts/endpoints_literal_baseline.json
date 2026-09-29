@@ -1,0 +1,10 @@
+{
+  "files": {
+    "services/protocol-payment/direct_card/direct_card_extract.py": 7,
+    "services/protocol-payment/kakao/kakao_extract.py": 21,
+    "services/protocol-payment/momo/ac_paylink_core.py": 7,
+    "services/protocol-payment/momo/momo_qr_extract.py": 11,
+    "services/protocol-payment/pix/pix_core.py": 15,
+    "services/protocol-payment/pix/pix_extract.py": 9
+  }
+}

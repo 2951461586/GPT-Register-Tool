@@ -35,6 +35,10 @@ CHATGPT_SENTINEL_PING = f"{CHATGPT_BASE}/backend-api/sentinel/ping"
 
 # Stripe API paths
 STRIPE_PAYMENT_METHODS = f"{STRIPE_API_BASE}/v1/payment_methods"
+#: Bare ``payment_pages/<cs_id>`` prefix. The GET/confirm forms append the cs id
+#: and (for confirm/init) a suffix; ``stripe_payment_page`` covers the suffixed
+#: forms, this constant the bare page read.
+STRIPE_PAYMENT_PAGES = f"{STRIPE_API_BASE}/v1/payment_pages"
 
 
 def chatgpt_checkout_page(processor_entity: str, checkout_id: str) -> str:
@@ -68,6 +72,7 @@ __all__ = [
     "CHATGPT_CHECKOUT_TAXES",
     "CHATGPT_SENTINEL_PING",
     "STRIPE_PAYMENT_METHODS",
+    "STRIPE_PAYMENT_PAGES",
     "chatgpt_checkout_page",
     "chatgpt_checkout_verify",
     "stripe_payment_page",
