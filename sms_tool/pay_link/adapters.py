@@ -105,6 +105,92 @@ def _run_extractor_subprocess(
                     _LOGGER.warning("failed to remove temporary payment credential file", exc_info=True)
 
 
+@dataclass(frozen=True)
+class _ExtractorContext:
+    """Inputs the three extractor subprocess adapters resolve identically.
+
+    ``script`` is the extractor CLI, ``method_cfg`` the per-method config slice
+    (never ``None``) and ``timeout`` the resolved subprocess deadline.
+    ``runtime_config`` is carried because ``_prepare_extractor`` already popped
+    it out of the caller's option mapping.
+    """
+
+    runtime_config: Mapping[str, Any] | None
+    script: Path
+    method_cfg: Mapping[str, Any]
+    timeout: int
+
+
+def _prepare_extractor(spec: PaymentMethodSpec, kwargs: dict[str, Any]) -> "_ExtractorContext | dict[str, Any]":
+    """Shared preamble for the extractor subprocess adapters.
+
+    Resolves the script under the reference root, enforces the egress contract
+    and reads the per-method config. Returns a ready-to-return error dict when
+    the run must not start, otherwise an :class:`_ExtractorContext`. The two are
+    distinguishable by type, so callers write ``ctx = ...; if isinstance(ctx,
+    dict): return ctx`` instead of juggling a separate error flag.
+    """
+    runtime_config = kwargs.pop("runtime_config", None)
+    script = _reference_root(runtime_config) / spec.script
+    if not script.is_file():
+        return {"ok": False, "error": f"protocol extractor not found: {script}"}
+
+    try:
+        payment_egress.assert_egress_countries(kwargs, runtime_config)
+    except payment_egress.EgressCheckError as exc:
+        return exc.to_result(spec.key)
+
+    cfg = _protocol_cfg(runtime_config)
+    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
+    if not isinstance(method_cfg, Mapping):
+        method_cfg = {}
+    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    return _ExtractorContext(runtime_config, script, method_cfg, timeout)
+
+
+def _finish_extractor(
+    spec: PaymentMethodSpec,
+    script: Path,
+    command: list[str],
+    *,
+    env: dict[str, str],
+    timeout: int,
+    cleanup_paths: tuple[str, ...] = (),
+) -> tuple[subprocess.CompletedProcess[str] | None, str, dict[str, Any], dict[str, Any] | None]:
+    """Run an extractor CLI and parse its first JSON object.
+
+    Returns ``(proc, output, parsed, timeout_error)``. ``timeout_error`` is not
+    ``None`` only on ``TimeoutExpired`` (and then ``proc`` is ``None``);
+    otherwise ``parsed`` is the first JSON object the extractor printed, or ``{}``
+    when it printed none. Callers decide what an absent object means: the
+    protocol adapter still falls back to the BLIK completion sentinel, while
+    direct_card/momo fail through :func:`_extractor_output_missing`.
+    """
+    proc, output, timeout_err = _run_extractor_subprocess(
+        spec,
+        command,
+        env=env,
+        cwd=str(script.parent),
+        timeout=timeout,
+        cleanup_paths=cleanup_paths,
+    )
+    if timeout_err is not None:
+        return None, "", {}, timeout_err
+    assert proc is not None  # non-timeout return always carries a process
+    return proc, output, _last_json_object(proc.stdout or ""), None
+
+
+def _extractor_output_missing(
+    proc: subprocess.CompletedProcess[str], output: str
+) -> dict[str, Any]:
+    """The shared "extractor printed no structured result" failure."""
+    return {
+        "ok": False,
+        "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
+        "exit_code": proc.returncode,
+    }
+
+
 # --- Protocol-script adapter registry -------------------------------------
 # Each ``build_env`` turns the shared inputs into the environment variables the
 # matching extractor script under services/protocol-payment/ reads. Keeping
@@ -188,22 +274,10 @@ _PROTOCOL_BUILD_ENV: dict[str, Callable[..., dict[str, str]]] = {
 def _run_protocol_script(
     spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any
 ) -> dict[str, Any]:
-    runtime_config = kwargs.pop("runtime_config", None)
-    root = _reference_root(runtime_config)
-    script = root / spec.script
-    if not script.is_file():
-        return {"ok": False, "error": f"protocol extractor not found: {script}"}
-
-    try:
-        payment_egress.assert_egress_countries(kwargs, runtime_config)
-    except payment_egress.EgressCheckError as exc:
-        return exc.to_result(spec.key)
-
-    cfg = _protocol_cfg(runtime_config)
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
-    if not isinstance(method_cfg, Mapping):
-        method_cfg = {}
-    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    ctx = _prepare_extractor(spec, kwargs)
+    if isinstance(ctx, dict):
+        return ctx
+    script, method_cfg, timeout = ctx.script, ctx.method_cfg, ctx.timeout
     seed_proxy = str(
         kwargs.get("seed_proxy")
         or proxy
@@ -240,17 +314,17 @@ def _run_protocol_script(
             return {"ok": False, "error": f"unsupported protocol payment method: {spec.key}"}
         env.update(builder(access_token, seed_proxy, proxy_file, script, kwargs))
 
-    proc, output, timeout_err = _run_extractor_subprocess(
+    proc, output, parsed, timeout_err = _finish_extractor(
         spec,
+        script,
         command,
         env=env,
-        cwd=str(script.parent),
         timeout=timeout,
         cleanup_paths=(proxy_file,),
     )
-    if timeout_err:
+    if timeout_err is not None:
         return timeout_err
-    parsed = _last_json_object(proc.stdout or "")
+    assert proc is not None
     if str(parsed.get("schema") or "") == "protocol_payment.v1" and (
         proc.returncode == 0 or is_false(parsed.get("ok"))
     ):
@@ -492,22 +566,10 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     ``chatgpt.com/checkout/<entity>/<cs_id>`` long link. The access token is passed
     via a temp ``--credential-file`` so it never reaches the process argv.
     """
-    runtime_config = kwargs.pop("runtime_config", None)
-    root = _reference_root(runtime_config)
-    script = root / spec.script
-    if not script.is_file():
-        return {"ok": False, "error": f"protocol extractor not found: {script}"}
-
-    try:
-        payment_egress.assert_egress_countries(kwargs, runtime_config)
-    except payment_egress.EgressCheckError as exc:
-        return exc.to_result(spec.key)
-
-    cfg = _protocol_cfg(runtime_config)
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
-    if not isinstance(method_cfg, Mapping):
-        method_cfg = {}
-    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    ctx = _prepare_extractor(spec, kwargs)
+    if isinstance(ctx, dict):
+        return ctx
+    script, method_cfg, timeout = ctx.script, ctx.method_cfg, ctx.timeout
 
     checkout_proxy = str(kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or "").strip()
     if not checkout_proxy:
@@ -556,23 +618,19 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     if promo:
         command.extend(["--promo-campaign-id", promo])
 
-    proc, output, timeout_err = _run_extractor_subprocess(
+    proc, output, parsed, timeout_err = _finish_extractor(
         spec,
+        script,
         command,
         env=env,
-        cwd=str(script.parent),
         timeout=timeout,
         cleanup_paths=(token_file,),
     )
-    if timeout_err:
+    if timeout_err is not None:
         return timeout_err
-    parsed = _last_json_object(proc.stdout or "")
+    assert proc is not None
     if not parsed:
-        return {
-            "ok": False,
-            "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
-            "exit_code": proc.returncode,
-        }
+        return _extractor_output_missing(proc, output)
     if not parsed.get("ok"):
         return {
             "ok": False,
@@ -604,22 +662,10 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     a single normalized JSON object (``ok``/``url``/``qr_data``/``qr_path``/...). A
     ``data:image`` QR is decoded to a PNG under ``runtime/momo_qr`` by the runner.
     """
-    runtime_config = kwargs.pop("runtime_config", None)
-    root = _reference_root(runtime_config)
-    script = root / spec.script
-    if not script.is_file():
-        return {"ok": False, "error": f"protocol extractor not found: {script}"}
-
-    try:
-        payment_egress.assert_egress_countries(kwargs, runtime_config)
-    except payment_egress.EgressCheckError as exc:
-        return exc.to_result(spec.key)
-
-    cfg = _protocol_cfg(runtime_config)
-    method_cfg = cfg.get("methods", {}).get(spec.key, {}) if isinstance(cfg.get("methods"), Mapping) else {}
-    if not isinstance(method_cfg, Mapping):
-        method_cfg = {}
-    timeout = safe_int(method_cfg.get("timeout_seconds") or cfg.get("timeout_seconds") or 900)
+    ctx = _prepare_extractor(spec, kwargs)
+    if isinstance(ctx, dict):
+        return ctx
+    script, method_cfg, timeout = ctx.script, ctx.method_cfg, ctx.timeout
     request_timeout = safe_int(method_cfg.get("request_timeout_seconds") or 25)
     fallback_proxy = str(
         kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or method_cfg.get("proxy") or ""
@@ -632,7 +678,7 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         "redirect": str(kwargs.get("redirect_proxy") or fallback_proxy).strip(),
     }
     pre_proxy = str(method_cfg.get("pre_proxy") or "off").strip() or "off"
-    qr_dir = runtime_file(runtime_config or _config_data(), "momo_qr")
+    qr_dir = runtime_file(ctx.runtime_config or _config_data(), "momo_qr")
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
@@ -673,23 +719,19 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
     if max_proxies > 1:
         command.extend(["--max-proxies", str(max_proxies)])
 
-    proc, output, timeout_err = _run_extractor_subprocess(
+    proc, output, parsed, timeout_err = _finish_extractor(
         spec,
+        script,
         command,
         env=env,
-        cwd=str(script.parent),
         timeout=timeout,
         cleanup_paths=(token_file,),
     )
-    if timeout_err:
+    if timeout_err is not None:
         return timeout_err
-    parsed = _last_json_object(proc.stdout or "")
+    assert proc is not None
     if not parsed:
-        return {
-            "ok": False,
-            "error": _redact_sensitive_text(_tail(output)) or f"extractor exited {proc.returncode}",
-            "exit_code": proc.returncode,
-        }
+        return _extractor_output_missing(proc, output)
     if not parsed.get("ok") and not parsed.get("error"):
         parsed["error"] = parsed.get("qr_error") or parsed.get("decision_text") or "momo QR extraction failed"
     return parsed
