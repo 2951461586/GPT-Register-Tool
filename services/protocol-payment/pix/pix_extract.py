@@ -43,6 +43,7 @@ def _as_float(value: Any, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
 
+
 PIX_BOOTSTRAP_COUNTRY = "BR"
 PIX_PROMOTION_COUNTRY = str(os.environ.get("PIX_PROMOTION_COUNTRY", "VN") or "VN").strip().upper() or "VN"
 PIX_PROVIDER_COUNTRY = "BR"
