@@ -54,6 +54,21 @@ _UPI_ATTESTATION_ANY_RE = re.compile(r'[^A-Za-z0-9]webDeploymentAttestation[=:]\
 #: with ``UPI_APPROVAL_MAX_ATTEMPTS``.
 UPI_APPROVAL_MAX_ATTEMPTS = 5
 UPI_QR_POLL_MAX_ATTEMPTS = 30
+#: Direct SetupIntent mandate confirm (UPI AutoPay). Payment Page confirm drops
+#: ``payment_method_options`` as an unknown parameter on this Checkout revision,
+#: so an approved submission can still leave its SetupIntent at
+#: ``requires_payment_method``. UPI AutoPay only signs the mandate when it is
+#: submitted straight to ``/v1/setup_intents/{id}/confirm``, and *that* response
+#: is what carries the ``upi://`` deep link -- without this stage every run
+#: degrades to the hosted instructions page (measured 3/3 accounts, 2026-09-30).
+#: Reference: ``tilian/provider_checkout.retry_approved_local_mandate``.
+UPI_LOCAL_MANDATE_ENABLED = True
+#: Widest first: the reference retries the ladder before dropping any field,
+#: because a rejected variant answers 4xx instead of degrading by itself.
+UPI_LOCAL_MANDATE_STRIPE_VERSION = "2026-06-24.dahlia"
+UPI_LOCAL_MANDATE_DEFAULT_AMOUNT = 199900
+UPI_LOCAL_MANDATE_END_DAYS = 365
+UPI_LOCAL_MANDATE_DESCRIPTION = "Subscription payment"
 UPI_CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 UPI_CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
 UPI_QR_POLL_INTERVAL = 1.0
