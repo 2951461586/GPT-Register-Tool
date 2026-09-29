@@ -28,6 +28,7 @@ from ._extract import (
     _upi_extract_qr_candidates,
     _upi_extract_redirect_url,
     _upi_find_submission_attempt,
+    _upi_first_value_by_key,
     _upi_get_free_trial_status,
     _upi_is_instructions_url,
     _upi_qr_image_kind,
@@ -41,6 +42,7 @@ from .constants import (
     UPI_CHECKOUT_APPROVE_URL,
     UPI_CHECKOUT_CONFIRM_URL,
     UPI_CHECKOUT_URL,
+    UPI_LOCAL_MANDATE_ENABLED,
     UPI_QR_POLL_MAX_ATTEMPTS,
     UPI_SENTINEL_APPROVAL_FLOW,
 )
@@ -66,6 +68,7 @@ from .browser import _upi_browser_approve
 from .stripe import (
     _upi_build_confirm_body,
     _upi_build_ctx,
+    _upi_confirm_local_mandate,
     _upi_create_upi_pm,
     _upi_elements_session_params,
     _upi_hosted_fallback_result,
@@ -999,6 +1002,44 @@ def generate_upi_qr_link(
                     )
                 else:
                     emit("approve", "approval failed after all attempts, continuing to extraction")
+
+        # ── Stage 6b: 直连 SetupIntent 补交 UPI AutoPay mandate ────────────
+        # Payment Page 的 confirm 在当前 Checkout 版本上把
+        # ``payment_method_options`` 当未知参数丢弃，所以「已批准」的提交也可能
+        # 停在 ``requires_payment_method``，而 ``upi://`` 深链只有直连
+        # SetupIntent 再 confirm 一次才会出现。参考实现
+        # ``provider_checkout.retry_approved_local_mandate``。
+        if UPI_LOCAL_MANDATE_ENABLED:
+            mandate_setup_intent: Any = {}
+            for source in (confirm_data, approval_data):
+                candidate = _upi_first_value_by_key(source, "setup_intent")
+                if isinstance(candidate, Mapping) and str(candidate.get("id") or "").startswith("seti_"):
+                    mandate_setup_intent = candidate
+                    break
+            mandate = _upi_confirm_local_mandate(
+                stripe,
+                setup_intent=mandate_setup_intent,
+                pm_id=pm_id,
+                return_url=return_url,
+                stripe_pk=stripe_pk,
+                amount=ctx.get("checkout_amount"),
+            )
+            last_variant = mandate["variants"][-1]["variant"] if mandate["variants"] else "-"
+            if mandate["skipped"]:
+                emit("mandate", f"Stage 6b: skipped ({mandate['error']})")
+            else:
+                emit(
+                    "mandate",
+                    "Stage 6b: SetupIntent mandate %s via %s (%s)"
+                    % (
+                        "ok" if mandate["ok"] else "failed",
+                        last_variant,
+                        str(mandate.get("error") or "no error")[:160],
+                    ),
+                )
+            if mandate.get("payload"):
+                # 让 Stage 7 的 _absorb 直接吃下 mandate 响应里的 upi:// / 跳转。
+                approval_data = {**(approval_data or {}), "local_mandate": mandate["payload"]}
 
         # ── Stage 7: Extract redirect / upi:// URI ───────────────────────
         emit("poll", "Stage 7: extracting UPI redirect / QR data")

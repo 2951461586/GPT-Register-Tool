@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 try:  # pragma: no cover - direct script execution
+    from ..endpoints import CHATGPT_ORIGIN
+except ImportError:
+    from endpoints import CHATGPT_ORIGIN  # type: ignore
+try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 except ImportError:
     from pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
@@ -14,11 +18,13 @@ import uuid
 from ._extract import (
     _upi_confirm_amounts,
     _upi_display_amounts,
+    _upi_extract_next_action,
     _upi_extract_payment_amount,
     _upi_extract_qr_candidates,
     _upi_extract_redirect_url,
     _upi_find_submission_attempt,
     _upi_first_value_by_key,
+    _upi_int_value,
     _upi_is_provider_decline_text,
     _upi_provider_decline_message,
     _upi_raise_if_setup_intent_blocked,
@@ -30,6 +36,10 @@ from .constants import (
     STRIPE_PAYMENT_PAGE_GET_URL_T,
     STRIPE_PAYMENT_PAGE_INIT_URL_T,
     UPI_FINGERPRINT_TEMPLATES,
+    UPI_LOCAL_MANDATE_DEFAULT_AMOUNT,
+    UPI_LOCAL_MANDATE_DESCRIPTION,
+    UPI_LOCAL_MANDATE_END_DAYS,
+    UPI_LOCAL_MANDATE_STRIPE_VERSION,
     UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
     UPI_REFERENCE_STRIPE_VERSION,
     UPI_SECOND_CONFIRM_MARKERS,
@@ -489,6 +499,162 @@ def _upi_create_upi_pm(
     if not pm_id.startswith("pm_"):
         raise RuntimeError(f"create UPI payment method returned bad payload: {str(getattr(resp, 'text', ''))[:300]}")
     return pm_id
+
+
+_UPI_LOCAL_MANDATE_VERSIONS: tuple[str, ...] = (
+    UPI_LOCAL_MANDATE_STRIPE_VERSION,
+    f"{UPI_LOCAL_MANDATE_STRIPE_VERSION}; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1",
+    STRIPE_VERSION,
+)
+
+
+def _upi_local_mandate_amount(amount: Any, provider: str = "upi") -> int:
+    """mandate 上限金额：checkout 金额可用时用实额，否则用 provider 缺省值。
+
+    参考实现 ``retry_approved_local_mandate``: ``max(1, int(str(amount)))``，
+    结果 ``<= 1`` 时回落到 ``9990``（pix）/ ``199900``（upi）。
+    """
+    value, _ = _upi_int_value(amount)
+    if value > 1:
+        return value
+    return UPI_LOCAL_MANDATE_DEFAULT_AMOUNT if provider == "upi" else 9990
+
+
+def _upi_local_mandate_variants(provider: str, amount: int) -> list[tuple[str, dict[str, Any]]]:
+    """mandate_options 变体阶梯（参考实现顺序，最宽的先试）。
+
+    1 年 ``maximum`` 上限 → 1 年 ``fixed`` → ``maximum`` 去掉 ``end_date`` →
+    ``upi_pm_only``（不带 ``payment_method_options``）。最后一项仍会 confirm
+    SetupIntent，只是不声明 mandate，用于把卡在 ``requires_payment_method``
+    的提交推下去。
+    """
+    if provider != "upi":
+        return [("pm_only", {})]
+    now_unix, _ = _upi_int_value(time.time())
+    end_unix = now_unix + UPI_LOCAL_MANDATE_END_DAYS * 24 * 60 * 60
+    mandate = {
+        "amount": amount,
+        "amount_type": "maximum",
+        "description": UPI_LOCAL_MANDATE_DESCRIPTION,
+        "end_date": end_unix,
+    }
+    return [
+        ("upi_max_1y", {"mandate_options": dict(mandate)}),
+        ("upi_fixed_1y", {"mandate_options": {**mandate, "amount_type": "fixed"}}),
+        ("upi_max_no_end", {"mandate_options": {k: v for k, v in mandate.items() if k != "end_date"}}),
+        ("upi_pm_only", {}),
+    ]
+
+
+def _upi_flatten_stripe_params(value: Any, prefix: str = "") -> dict[str, str]:
+    """把嵌套 Stripe 参数展平成 ``a[b][c]`` 表单键（参考实现 ``flatten_stripe_params``）。"""
+    out: dict[str, str] = {}
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            child = f"{prefix}[{key}]" if prefix else str(key)
+            out.update(_upi_flatten_stripe_params(item, child))
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for index, item in enumerate(value):
+            out.update(_upi_flatten_stripe_params(item, f"{prefix}[{index}]"))
+    elif value is not None and prefix:
+        if isinstance(value, bool):
+            out[prefix] = "true" if value else "false"
+        else:
+            out[prefix] = str(value)
+    return out
+
+
+def _upi_confirm_local_mandate(
+    stripe: Any,
+    *,
+    setup_intent: Any,
+    pm_id: str,
+    return_url: str,
+    stripe_pk: str,
+    amount: Any = 0,
+    provider: str = "upi",
+    timeout: int = DEFAULT_TIMEOUT,
+) -> dict[str, Any]:
+    """直连 SetupIntent 补交本地授权，返回 mandate 响应里的 ``upi://`` 深链。
+
+    参考实现 ``provider_checkout.retry_approved_local_mandate``：Payment Page
+    的 confirm 在当前 Checkout 版本上把 ``payment_method_options`` 当作未知
+    参数丢弃，所以 **商户批准之后** 还必须直接对 SetupIntent 再 confirm 一次，
+    UPI AutoPay 的 mandate 才会落到响应里。缺了这一步，SetupIntent 会一直停在
+    ``requires_payment_method``，链路只能退回 hosted instructions 页。
+
+    返回 ``{"ok", "skipped", "variants", "payload", "upi_uri", "redirect_url",
+    "error"}``；前置条件（``seti_`` + ``client_secret`` + ``pm_``）不满足时
+    ``skipped=True``，由调用方决定是否忽略。
+    """
+    intent = setup_intent if isinstance(setup_intent, Mapping) else {}
+    setup_id = str(intent.get("id") or "").strip()
+    client_secret = str(intent.get("client_secret") or "").strip()
+    intent_pm = intent.get("payment_method")
+    if isinstance(intent_pm, Mapping):
+        intent_pm = intent_pm.get("id")
+    pm = str(pm_id or intent_pm or "").strip()
+    result: dict[str, Any] = {
+        "ok": False,
+        "skipped": False,
+        "variants": [],
+        "payload": {},
+        "upi_uri": "",
+        "redirect_url": "",
+        "error": "",
+    }
+    if not setup_id.startswith("seti_") or not client_secret or not pm.startswith("pm_"):
+        result["skipped"] = True
+        result["error"] = (
+            f"local mandate conditions unmet: setup_id={setup_id[:5] or '-'} "
+            f"client_secret={'yes' if client_secret else 'no'} pm={'yes' if pm.startswith('pm_') else 'no'}"
+        )
+        return result
+    mandate_amount = _upi_local_mandate_amount(amount, provider)
+    # ``STRIPE_INTENT_URL_T`` already owns the ``api.stripe.com`` host, so the
+    # confirm path is appended rather than inlined as a second literal.
+    url = STRIPE_INTENT_URL_T.format(intent_path="setup_intents", intent_id=setup_id) + "/confirm"
+    for name, options in _upi_local_mandate_variants(provider, mandate_amount):
+        body: dict[str, str] = {
+            "client_secret": client_secret,
+            "payment_method": pm,
+            "return_url": return_url or CHATGPT_ORIGIN,
+            "use_stripe_sdk": "true",
+            "mandate_data[customer_acceptance][type]": "online",
+            "mandate_data[customer_acceptance][online][infer_from_client]": "true",
+            "key": stripe_pk,
+        }
+        if options:
+            body.update(_upi_flatten_stripe_params(options, f"payment_method_options[{provider}]"))
+        for api_version in _UPI_LOCAL_MANDATE_VERSIONS:
+            entry: dict[str, Any] = {"variant": name, "api_version": api_version, "status": 0}
+            result["variants"].append(entry)
+            try:
+                resp = stripe.post(url, data=body, headers={"Stripe-Version": api_version}, timeout=timeout)
+            except Exception as exc:  # noqa: BLE001 - 传输异常按变体失败继续降级
+                entry["status"] = -1
+                result["error"] = f"{type(exc).__name__}: {exc}"
+                continue
+            status, _ = _upi_int_value(getattr(resp, "status_code", 0))
+            entry["status"] = status
+            text = str(getattr(resp, "text", "") or "")
+            _upi_dump_http(resp, f"stripe_local_mandate_{name}", body, "POST", url, force=status >= 400)
+            if status != 200:
+                result["error"] = f"HTTP {status}: {text[:360]}"
+                continue
+            payload = resp.json() or {}
+            entry["intent_status"] = str(payload.get("status") or "")
+            result["payload"] = payload
+            next_action = _upi_extract_next_action(payload)
+            upi_uri = str(next_action.get("upi_uri") or "")
+            redirect = _upi_extract_redirect_url(payload)
+            if upi_uri.startswith("upi://"):
+                result.update({"ok": True, "upi_uri": upi_uri, "redirect_url": redirect, "error": ""})
+                return result
+            if redirect:
+                result["redirect_url"] = redirect
+            result["error"] = f"no upi:// in {name} response"
+    return result
 
 
 def _upi_payment_page_summary(payload: Any) -> dict[str, Any]:

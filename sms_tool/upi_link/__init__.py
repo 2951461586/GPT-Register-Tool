@@ -119,6 +119,7 @@ from .stripe import (  # noqa: F401
     _upi_build_confirmation_token_body,
     _upi_build_ctx,
     _upi_build_init_body,
+    _upi_confirm_local_mandate,
     _upi_create_upi_pm,
     _upi_degraded_template,
     _upi_elements_session_params,
