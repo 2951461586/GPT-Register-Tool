@@ -180,9 +180,7 @@ def _finish_extractor(
     return proc, output, _last_json_object(proc.stdout or ""), None
 
 
-def _extractor_output_missing(
-    proc: subprocess.CompletedProcess[str], output: str
-) -> dict[str, Any]:
+def _extractor_output_missing(proc: subprocess.CompletedProcess[str], output: str) -> dict[str, Any]:
     """The shared "extractor printed no structured result" failure."""
     return {
         "ok": False,

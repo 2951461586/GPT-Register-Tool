@@ -908,9 +908,7 @@ class TestEdgeHealthProbe(unittest.TestCase):
     """P1-3: opt-in real-HTTP health probe, injected (proxy_pool imports nothing)."""
 
     def _server(self, probe=None, timeout=5.0):
-        return Socks5Server(
-            "127.0.0.1", 0, [], stats_port=0, health_check_timeout=timeout, edge_probe=probe
-        )
+        return Socks5Server("127.0.0.1", 0, [], stats_port=0, health_check_timeout=timeout, edge_probe=probe)
 
     def test_default_is_tunnel_only(self):
         server = self._server()
@@ -923,17 +921,13 @@ class TestEdgeHealthProbe(unittest.TestCase):
 
     def test_edge_success_is_healthy(self):
         server = self._server(probe=lambda _url, _timeout: (True, ""))
-        ok, error = asyncio.run(
-            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
-        )
+        ok, error = asyncio.run(server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443))
         self.assertTrue(ok)
         self.assertEqual(error, "")
 
     def test_edge_failure_carries_the_detail(self):
         server = self._server(probe=lambda _url, _timeout: (False, "edge:blocked:http_403:cloudflare"))
-        ok, error = asyncio.run(
-            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
-        )
+        ok, error = asyncio.run(server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443))
         self.assertFalse(ok)
         self.assertEqual(error, "edge:blocked:http_403:cloudflare")
 
@@ -942,9 +936,7 @@ class TestEdgeHealthProbe(unittest.TestCase):
             raise RuntimeError("nope")
 
         server = self._server(probe=_boom)
-        ok, error = asyncio.run(
-            server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443)
-        )
+        ok, error = asyncio.run(server._check_upstream(UpstreamProxy(host="1.1.1.1", port=1080), "cloudflare.com", 443))
         self.assertFalse(ok)
         self.assertEqual(error, "edge_probe_error:RuntimeError")
 
@@ -958,9 +950,7 @@ class TestEdgeHealthProbe(unittest.TestCase):
 
         server = self._server(probe=_probe, timeout=7.5)
         asyncio.run(
-            server._check_upstream(
-                UpstreamProxy(host="h", port=1, username="u", password="p"), "cloudflare.com", 443
-            )
+            server._check_upstream(UpstreamProxy(host="h", port=1, username="u", password="p"), "cloudflare.com", 443)
         )
         self.assertEqual(seen["url"], "socks5://u:p@h:1")
         self.assertEqual(seen["timeout"], 7.5)
