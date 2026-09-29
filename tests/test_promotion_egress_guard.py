@@ -42,11 +42,14 @@ def _transport_failure(_account, **_kwargs):
 @pytest.fixture
 def one_account(monkeypatch):
     monkeypatch.setattr(promotion_batch, "CFG", {})
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "email": email,
-        "access_token": "at",
-        "raw_json": json.dumps({"access_token": "at"}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at"}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
 
 
@@ -54,11 +57,14 @@ def one_account(monkeypatch):
 def five_accounts(monkeypatch):
     emails = [f"a{index}@example.com" for index in range(5)]
     monkeypatch.setattr(promotion_batch, "CFG", {})
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "email": email,
-        "access_token": "at",
-        "raw_json": json.dumps({"access_token": "at"}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at"}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     return emails
 
@@ -75,11 +81,13 @@ def _events(monkeypatch) -> list[tuple[tuple, dict]]:
 # Guard 1: preflight
 # --------------------------------------------------------------------------
 
+
 def test_all_dead_pool_aborts_before_any_account(monkeypatch, one_account):
     probed: list[str] = []
     monkeypatch.setattr(promotion_batch, "probe_openai_edge", lambda proxy, **kwargs: _verdict(DEAD))
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: probed.append(account["email"]) or {"ok": True},
     )
     events = _events(monkeypatch)
@@ -100,7 +108,8 @@ def test_blocked_edge_is_still_usable_and_the_batch_proceeds(monkeypatch, one_ac
     """A Cloudflare 403 at the login edge proves the proxy carried the request."""
     monkeypatch.setattr(promotion_batch, "probe_openai_edge", lambda proxy, **kwargs: _verdict(BLOCKED))
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
@@ -118,7 +127,8 @@ def test_direct_egress_never_probes(monkeypatch, one_account):
 
     monkeypatch.setattr(promotion_batch, "probe_openai_edge", _boom)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
@@ -136,12 +146,15 @@ def test_preflight_samples_up_to_the_cap_and_stops_at_the_first_alive(monkeypatc
 
     monkeypatch.setattr(promotion_batch, "probe_openai_edge", probe)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
     result = promotion_batch.refresh_promotion_statuses(
-        ["a@example.com"], workers=1, payment_eligibility=False,
+        ["a@example.com"],
+        workers=1,
+        payment_eligibility=False,
         proxy_pool="http://dead1.example:1\nhttp://dead2.example:1\nhttp://live.example:1\nhttp://dead3.example:1",
     )
 
@@ -152,6 +165,7 @@ def test_preflight_samples_up_to_the_cap_and_stops_at_the_first_alive(monkeypatc
 # --------------------------------------------------------------------------
 # Guard 2: circuit breaker
 # --------------------------------------------------------------------------
+
 
 def test_consecutive_transport_failures_trip_and_park_the_rest(monkeypatch, five_accounts):
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
@@ -170,8 +184,14 @@ def test_consecutive_transport_failures_trip_and_park_the_rest(monkeypatch, five
 def test_unauthorized_failures_never_trip_the_breaker(monkeypatch, five_accounts):
     """A dead access token is a per-account verdict, not a dead environment."""
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
-        lambda account, **kwargs: {"ok": False, "promotion_status": "AT失效", "error": "token_invalid", "status_code": 401},
+        promotion_batch,
+        "check_account_promotion",
+        lambda account, **kwargs: {
+            "ok": False,
+            "promotion_status": "AT失效",
+            "error": "token_invalid",
+            "status_code": 401,
+        },
     )
 
     result = promotion_batch.refresh_promotion_statuses(
@@ -186,8 +206,14 @@ def test_unauthorized_failures_never_trip_the_breaker(monkeypatch, five_accounts
 def test_http_reply_failures_never_trip_the_breaker(monkeypatch, five_accounts):
     """An HTTP answer means the tunnel works, so the consecutive count resets."""
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
-        lambda account, **kwargs: {"ok": False, "promotion_status": "HTTP 403", "error": "http_403", "status_code": 403},
+        promotion_batch,
+        "check_account_promotion",
+        lambda account, **kwargs: {
+            "ok": False,
+            "promotion_status": "HTTP 403",
+            "error": "http_403",
+            "status_code": 403,
+        },
     )
 
     result = promotion_batch.refresh_promotion_statuses(
@@ -200,13 +226,15 @@ def test_http_reply_failures_never_trip_the_breaker(monkeypatch, five_accounts):
 
 def test_a_success_resets_the_consecutive_count(monkeypatch, five_accounts):
     """Two transport failures then a success must not leave the breaker primed."""
-    outcomes = iter([
-        _transport_failure(None),
-        _transport_failure(None),
-        {"ok": True, "promotion_status": "Free·无优惠"},
-        _transport_failure(None),
-        _transport_failure(None),
-    ])
+    outcomes = iter(
+        [
+            _transport_failure(None),
+            _transport_failure(None),
+            {"ok": True, "promotion_status": "Free·无优惠"},
+            _transport_failure(None),
+            _transport_failure(None),
+        ]
+    )
     monkeypatch.setattr(promotion_batch, "check_account_promotion", lambda account, **kwargs: next(outcomes))
 
     result = promotion_batch.refresh_promotion_statuses(
@@ -255,12 +283,15 @@ def test_parked_accounts_are_not_counted_as_persist_failures(monkeypatch, five_a
 # Guard 3: per-candidate progress
 # --------------------------------------------------------------------------
 
+
 def test_each_candidate_emits_a_progress_event(monkeypatch, one_account):
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
     events = _events(monkeypatch)
 
     promotion_batch.refresh_promotion_statuses(
-        ["a@example.com"], workers=1, payment_eligibility=False,
+        ["a@example.com"],
+        workers=1,
+        payment_eligibility=False,
         proxy_pool="http://a.example:1\nhttp://b.example:1\nhttp://c.example:1",
     )
 
@@ -273,13 +304,19 @@ def test_each_candidate_emits_a_progress_event(monkeypatch, one_account):
 # Failure-class mapping
 # --------------------------------------------------------------------------
 
+
 def test_transport_is_the_only_environment_failure_class():
-    assert promotion_batch._promotion_env_failure_class(
-        {"ok": False, "probe": {"ok": False, "error": "curl: (28) timed out"}}
-    ) == "network"
-    assert promotion_batch._promotion_env_failure_class(
-        {"ok": False, "probe": {"ok": False, "status_code": 401}}
-    ) == "account"
-    assert promotion_batch._promotion_env_failure_class(
-        {"ok": False, "probe": {"ok": False, "status_code": 403}}
-    ) == "account"
+    assert (
+        promotion_batch._promotion_env_failure_class(
+            {"ok": False, "probe": {"ok": False, "error": "curl: (28) timed out"}}
+        )
+        == "network"
+    )
+    assert (
+        promotion_batch._promotion_env_failure_class({"ok": False, "probe": {"ok": False, "status_code": 401}})
+        == "account"
+    )
+    assert (
+        promotion_batch._promotion_env_failure_class({"ok": False, "probe": {"ok": False, "status_code": 403}})
+        == "account"
+    )

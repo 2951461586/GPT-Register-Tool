@@ -14,6 +14,7 @@ path, which is exactly what ``isolated_database`` below is for.
 
 So: opt-in fixtures for DB work, autouse only for cheap global state.
 """
+
 from __future__ import annotations
 
 import os
