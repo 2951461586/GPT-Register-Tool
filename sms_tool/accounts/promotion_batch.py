@@ -240,7 +240,14 @@ def refresh_promotion_statuses(
             # the separator rule.
             result["promotion_display"] = promotion_status_with_eligibility(label, eligibility_label)
         except Exception as exc:
-            result = {"email": email, "ok": False, "promotion_status": "检测失败", "promotion_state": PROMOTION_STATE_PROBE_FAILED, "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
+            result = {
+                "email": email,
+                "ok": False,
+                "promotion_status": "检测失败",
+                "promotion_state": PROMOTION_STATE_PROBE_FAILED,
+                "persisted": False,
+                "probe": {"ok": False, "error": str(exc)[:200]},
+            }
         if result.get("ok") and result.get("persisted"):
             breaker.record_success()
         else:
@@ -268,15 +275,10 @@ def refresh_promotion_statuses(
     # derive this itself, which left the CLI promotion path with no such key at
     # all -- two entry points, two different report shapes.
     trial_eligible = sum(
-        1
-        for item in results
-        if isinstance(item.get("probe"), dict)
-        and bool(item["probe"].get("plus_trial_eligible"))
+        1 for item in results if isinstance(item.get("probe"), dict) and bool(item["probe"].get("plus_trial_eligible"))
     )
     eligibility_results = [
-        item["payment_capability"]
-        for item in results
-        if isinstance(item.get("payment_capability"), dict)
+        item["payment_capability"] for item in results if isinstance(item.get("payment_capability"), dict)
     ]
     eligibility_ok = sum(1 for item in eligibility_results if item.get("ok"))
     # Distinct method tokens across the batch: the batch-level answer to "which
@@ -313,7 +315,9 @@ def refresh_promotion_statuses(
     }
 
 
-def _promotion_proxy_candidates(account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None) -> list[str | None]:
+def _promotion_proxy_candidates(
+    account: dict[str, Any], proxy: str | None, proxy_pool: str | list[str] | None
+) -> list[str | None]:
     """Return candidates from the canonical operation-proxy decision point."""
     candidates = operation_proxy_candidates(
         account,
@@ -515,15 +519,17 @@ def _emit_account_batch_event(
     try:
         from ..desktop_ipc import emit_event
 
-        emit_event({
-            "domain": "account_promotion",
-            "run_id": run_id,
-            "account_ref": account_ref,
-            "stage": stage,
-            "status": status,
-            "total": int(total or 0),
-            "detail": detail,
-        })
+        emit_event(
+            {
+                "domain": "account_promotion",
+                "run_id": run_id,
+                "account_ref": account_ref,
+                "stage": stage,
+                "status": status,
+                "total": int(total or 0),
+                "detail": detail,
+            }
+        )
     except Exception:
         pass
 
