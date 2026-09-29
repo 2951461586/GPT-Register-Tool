@@ -69,6 +69,15 @@ UPI_LOCAL_MANDATE_STRIPE_VERSION = "2026-06-24.dahlia"
 UPI_LOCAL_MANDATE_DEFAULT_AMOUNT = 199900
 UPI_LOCAL_MANDATE_END_DAYS = 365
 UPI_LOCAL_MANDATE_DESCRIPTION = "Subscription payment"
+#: Stripe refuses to let anyone but Checkout confirm a SetupIntent that Checkout
+#: created. Measured 2026-09-30 on the ``cs_live_`` rail: all 4 mandate variants
+#: x 3 ``Stripe-Version`` candidates answered the byte-identical
+#: ``You cannot confirm SetupIntents created by Checkout.`` (plus
+#: ``The latest attempt to set up the payment method has failed.``). Retrying a
+#: different variant or API version therefore cannot help, and the ladder must
+#: stop instead of spending 11 more round trips. A marker list, not an equality
+#: test, so adjacent Stripe wording still trips it.
+UPI_LOCAL_MANDATE_FATAL_MARKERS: tuple[str, ...] = ("created by checkout",)
 UPI_CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 UPI_CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
 UPI_QR_POLL_INTERVAL = 1.0
