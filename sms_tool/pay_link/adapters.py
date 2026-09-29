@@ -189,6 +189,22 @@ def _extractor_output_missing(proc: subprocess.CompletedProcess[str], output: st
     }
 
 
+def _v1_result(parsed: dict[str, Any], spec: PaymentMethodSpec) -> dict[str, Any]:
+    """Apply the ``protocol_payment.v1`` fields every adapter success must carry.
+
+    ``_normalize_result`` sets this same pair downstream, but these adapters are
+    also entry points in their own right -- ``registry.script_runner`` and
+    ``test_payment_egress_gate`` call them directly -- and a direct success must
+    carry the ``payment_method`` / ``link_type`` its failure shape already gets
+    from ``EgressCheckError.to_result``. Routing all three adapters through one
+    helper is what keeps them from drifting on it; it does not replace the
+    normalizer.
+    """
+    parsed.setdefault("payment_method", spec.key)
+    parsed.setdefault("link_type", f"{spec.key}_protocol")
+    return parsed
+
+
 # --- Protocol-script adapter registry -------------------------------------
 # Each ``build_env`` turns the shared inputs into the environment variables the
 # matching extractor script under services/protocol-payment/ reads. Keeping
@@ -329,9 +345,7 @@ def _run_protocol_script(
         # Every protocol extractor emits exactly one terminal contract. The
         # manager keys off the schema -- never the method -- so a new extractor
         # needs no branch here.
-        parsed.setdefault("payment_method", spec.key)
-        parsed.setdefault("link_type", f"{spec.key}_protocol")
-        return parsed
+        return _v1_result(parsed, spec)
     if proc.returncode != 0:
         return {
             "ok": False,
@@ -638,18 +652,20 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     long_url = str(parsed.get("long_url") or "").strip()
     if not long_url:
         return {"ok": False, "error": "direct_card extractor returned no checkout URL"}
-    return {
-        "ok": True,
-        "url": long_url,
-        "long_url": long_url,
-        "cs_id": parsed.get("cs_id") or "",
-        "processor_entity": parsed.get("processor_entity") or "",
-        "amount": parsed.get("amount_minor"),
-        "amount_verification": parsed.get("amount_verification") or "",
-        "currency": parsed.get("amount_currency") or currency,
-        "target_country": parsed.get("billing_country") or country,
-        "link_type": "direct_card_protocol",
-    }
+    return _v1_result(
+        {
+            "ok": True,
+            "url": long_url,
+            "long_url": long_url,
+            "cs_id": parsed.get("cs_id") or "",
+            "processor_entity": parsed.get("processor_entity") or "",
+            "amount": parsed.get("amount_minor"),
+            "amount_verification": parsed.get("amount_verification") or "",
+            "currency": parsed.get("amount_currency") or currency,
+            "target_country": parsed.get("billing_country") or country,
+        },
+        spec,
+    )
 
 
 def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
@@ -732,4 +748,4 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         return _extractor_output_missing(proc, output)
     if not parsed.get("ok") and not parsed.get("error"):
         parsed["error"] = parsed.get("qr_error") or parsed.get("decision_text") or "momo QR extraction failed"
-    return parsed
+    return _v1_result(parsed, spec)

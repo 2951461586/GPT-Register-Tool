@@ -807,5 +807,45 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertIn("OSError", result["persistence_warning"])
 
 
+class AdapterV1ContractTests(unittest.TestCase):
+    """The three subprocess adapters must carry the same v1 pair on success.
+
+    ``_normalize_result`` sets ``payment_method`` / ``link_type`` downstream, but
+    the adapters are also entry points in their own right
+    (``registry.script_runner``, ``test_payment_egress_gate``), so a direct
+    success must carry the pair its failure shape already gets from
+    ``EgressCheckError.to_result``.
+    """
+
+    def _spec(self, key):
+        from sms_tool.pay_link.base import PAYMENT_METHODS
+
+        return PAYMENT_METHODS[key]
+
+    def test_v1_result_fills_the_pair_when_absent(self):
+        from sms_tool.pay_link import adapters
+
+        out = adapters._v1_result({"ok": True}, self._spec("momo"))
+        self.assertEqual(out["payment_method"], "momo")
+        self.assertEqual(out["link_type"], "momo_protocol")
+
+    def test_v1_result_never_overwrites_an_explicit_value(self):
+        from sms_tool.pay_link import adapters
+
+        out = adapters._v1_result(
+            {"payment_method": "explicit", "link_type": "momo_protocol_qr"}, self._spec("momo")
+        )
+        self.assertEqual(out["payment_method"], "explicit")
+        self.assertEqual(out["link_type"], "momo_protocol_qr")
+
+    def test_direct_card_success_link_type_is_the_spec_default(self):
+        """``direct_card`` used to hardcode ``direct_card_protocol``; the helper
+        must still produce exactly that."""
+        from sms_tool.pay_link import adapters
+
+        out = adapters._v1_result({"ok": True}, self._spec("direct_card"))
+        self.assertEqual(out["link_type"], "direct_card_protocol")
+
+
 if __name__ == "__main__":
     unittest.main()
