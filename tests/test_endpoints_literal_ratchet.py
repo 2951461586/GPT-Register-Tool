@@ -29,18 +29,37 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import endpoints_literal_ratchet as eps  # noqa: E402  # type: ignore
 
-# Load the authority module itself for the constants cross-check.
-_ENDPOINTS_PATH = ROOT / "services" / "protocol-payment" / "common" / "endpoints.py"
-_SPEC = importlib.util.spec_from_file_location("ratchet_endpoints_probe", _ENDPOINTS_PATH)
-assert _SPEC and _SPEC.loader
-ENDPOINTS = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = ENDPOINTS
-_SPEC.loader.exec_module(ENDPOINTS)
+# Load the authority modules for the constants cross-check. Both process
+# boundaries have one; the ratchet's MANAGED_HOSTS must cover both.
+def _load_authority(rel_path: str, module_name: str):
+    path = ROOT / rel_path
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+ENDPOINTS = _load_authority(
+    "services/protocol-payment/common/endpoints.py", "ratchet_endpoints_probe"
+)
+SMS_ENDPOINTS = _load_authority("sms_tool/endpoints.py", "ratchet_sms_endpoints_probe")
 
 WIRED = (
     "services/protocol-payment/ideal/ideal_qr_extract.py",
     "services/protocol-payment/twint/twint_extract.py",
     "services/protocol-payment/blik/blik_qr_extract.py",
+)
+
+#: sms_tool call sites wired to the sms_tool authority on 2026-09-28.
+WIRED_SMS_TOOL = (
+    "sms_tool/registration_handlers.py",
+    "sms_tool/registration_preflight.py",
+    "sms_tool/chatgpt_bootstrap.py",
+    "sms_tool/sentinel/client.py",
+    "sms_tool/registration_drivers/browser_flow/context.py",
+    "sms_tool/registration_drivers/browser_session.py",
 )
 
 
@@ -110,20 +129,39 @@ def test_cli_fails_loudly_when_the_predicate_is_gutted(monkeypatch):
 
 
 def test_managed_hosts_match_the_authority_constants():
-    """MANAGED_HOSTS must cover every host ``endpoints.py`` declares.
+    """MANAGED_HOSTS must cover every host the two authorities declare.
 
-    A new host constant in the authority that the ratchet does not watch would
-    let an extractor inline it unmeasured.
+    A new host constant in either authority that the ratchet does not watch
+    would let a caller inline it unmeasured.
     """
-    declared = {
+    from_services = {
         ENDPOINTS.CHATGPT_HOST,
         ENDPOINTS.STRIPE_API_BASE.removeprefix("https://"),
         ENDPOINTS.STRIPE_CHECKOUT_BASE.removeprefix("https://"),
         ENDPOINTS.OPENAI_PAY_BASE.removeprefix("https://"),
     }
+    from_sms = {
+        SMS_ENDPOINTS.AUTH_BASE.removeprefix("https://"),
+        SMS_ENDPOINTS.CHATGPT_BASE.removeprefix("https://"),
+        SMS_ENDPOINTS.API_BASE.removeprefix("https://"),
+    }
+    declared = from_services | from_sms
     assert declared <= set(eps.MANAGED_HOSTS), (
         f"ratchet misses authority hosts: {sorted(declared - set(eps.MANAGED_HOSTS))}"
     )
+
+
+def test_sms_tool_authority_constants_are_exact():
+    """Pin the values the wiring replaced 1:1."""
+    assert SMS_ENDPOINTS.AUTH_BASE == "https://auth.openai.com"
+    assert SMS_ENDPOINTS.CHATGPT_BASE == "https://chatgpt.com"
+    assert SMS_ENDPOINTS.API_BASE == "https://api.openai.com"
+    assert SMS_ENDPOINTS.CHATGPT_ORIGIN == "https://chatgpt.com/"
+    assert SMS_ENDPOINTS.CHATGPT_BACKEND_API == "https://chatgpt.com/backend-api"
+    assert SMS_ENDPOINTS.CHATGPT_BACKEND_ANON == "https://chatgpt.com/backend-anon"
+    assert SMS_ENDPOINTS.AUTH_EMAIL_VERIFICATION == "https://auth.openai.com/email-verification"
+    assert SMS_ENDPOINTS.AUTH_CREATE_ACCOUNT_PASSWORD == "https://auth.openai.com/create-account/password"
+    assert SMS_ENDPOINTS.AUTH_ABOUT_YOU == "https://auth.openai.com/about-you"
 
 
 def test_authority_module_is_excluded_from_the_scan():
@@ -223,7 +261,17 @@ def test_baseline_is_written_with_lf_endings(tmp_path, monkeypatch):
     assert raw.endswith(b"\n")
 
 
-@pytest.mark.parametrize("path", WIRED)
+@pytest.mark.parametrize("path", WIRED + WIRED_SMS_TOOL)
 def test_wired_files_are_pure_lf(path):
     raw = (ROOT / path).read_bytes()
     assert b"\r\n" not in raw
+
+
+def test_wired_sms_tool_files_have_zero_inline_literals():
+    """The 2026-09-28 sms_tool registration-lane wiring must stay wired."""
+    counts = eps.collect()
+    residual = {path: counts.get(path, 0) for path in WIRED_SMS_TOOL if counts.get(path, 0)}
+    assert not residual, (
+        "a wired sms_tool caller re-inlined a managed host instead of importing "
+        f"sms_tool/endpoints.py: {residual}"
+    )

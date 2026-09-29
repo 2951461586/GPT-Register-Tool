@@ -13,6 +13,7 @@ from .auth_headers import (
     openai_auth_headers,
 )
 from .config import CFG
+from . import endpoints
 from .http_client import request_with_retry
 from .accounts.account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
@@ -29,7 +30,7 @@ def _sentinel_frame_version() -> str:
 
 
 def _chat_base() -> str:
-    return str((CFG.get("chatgpt") or {}).get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+    return str((CFG.get("chatgpt") or {}).get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
 
 
 def _proxy_scheme_fallback_mode(cfg=None) -> str:
@@ -113,8 +114,8 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
         raise RuntimeError(
             "auth_fingerprint_unavailable:" + ",".join(profile_capabilities["missing"])
         )
-    chat_base = str((CFG.get("chatgpt") or {}).get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-    auth_base = str((CFG.get("chatgpt") or {}).get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+    chat_base = str((CFG.get("chatgpt") or {}).get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
+    auth_base = str((CFG.get("chatgpt") or {}).get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
     sentinel_url = "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=" + _sentinel_frame_version()
     checks = (
         ("chatgpt-login", f"{chat_base}/login", f"{chat_base}/", False),

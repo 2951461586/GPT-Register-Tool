@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any
 
+from ... import endpoints
 from ..external_sessions import _driver_config
 from .dom_fields import _config_value
 
@@ -38,8 +39,8 @@ def prepare_browser_context(config: Mapping[str, Any], driver_name: str, browser
     timezone_id = str(_config_value(config, "browser_timezone", "America/New_York") or "America/New_York")
     email_cfg = config.get("email_registration") if isinstance(config.get("email_registration"), Mapping) else {}
     chat_cfg = config.get("chatgpt") if isinstance(config.get("chatgpt"), Mapping) else {}
-    chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-    auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+    chat_base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
+    auth_base = str(chat_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
     return BrowserRegistrationContext(
         selected,
         headless,

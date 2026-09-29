@@ -7,6 +7,7 @@ import time
 from typing import Any, Mapping
 from urllib.parse import unquote, urlsplit
 
+from .. import endpoints
 from ..browser_profile_reclaim import describe_contention
 from ..phone_proxy import normalize_proxy_url
 from .browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
@@ -295,7 +296,7 @@ class PlaywrightBrowserSession:
                 break
             time.sleep(1)
         try:
-            self.page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=self.timeout_ms)
+            self.page.goto(endpoints.CHATGPT_ORIGIN, wait_until="domcontentloaded", timeout=self.timeout_ms)
         except Exception:
             try:
                 self.page.evaluate("window.stop()")
