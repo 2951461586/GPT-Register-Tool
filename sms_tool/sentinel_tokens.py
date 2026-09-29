@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import threading
@@ -17,6 +18,9 @@ from .phone_proxy import (
     redact_proxy_text as _phone_redact_proxy_text,
     redact_proxy_url as _phone_redact_proxy_url,
 )
+from .operator_output import emit as _emit
+
+_LOGGER = logging.getLogger(__name__)
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
@@ -102,7 +106,7 @@ def _save_sentinel_cache(data):
         except (OSError, TypeError, ValueError) as exc:
             # A cache write must never abort issuance: the token is already in
             # hand, and the next call simply misses the cache and re-fetches.
-            print(f"  [!] Sentinel cache write failed: {exc}")
+            _emit(_LOGGER, "  [!] Sentinel cache write failed: %s", exc)
             return
     print(f"[*] Sentinel token cached")
 
