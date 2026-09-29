@@ -29,7 +29,6 @@
     "sms_tool/phone_reuse.py": 3,
     "sms_tool/proxy_edge_probe.py": 1,
     "sms_tool/registration_drivers/browser_flow/form_steps.py": 1,
-    "sms_tool/sentinel_tokens.py": 2,
     "sms_tool/session_converter.py": 2,
     "sms_tool/session_refresh.py": 2,
     "sms_tool/upi_link/browser.py": 8,
