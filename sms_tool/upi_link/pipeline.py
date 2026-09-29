@@ -1005,41 +1005,63 @@ def generate_upi_qr_link(
 
         # ── Stage 6b: 直连 SetupIntent 补交 UPI AutoPay mandate ────────────
         # Payment Page 的 confirm 在当前 Checkout 版本上把
-        # ``payment_method_options`` 当未知参数丢弃，所以「已批准」的提交也可能
-        # 停在 ``requires_payment_method``，而 ``upi://`` 深链只有直连
-        # SetupIntent 再 confirm 一次才会出现。参考实现
-        # ``provider_checkout.retry_approved_local_mandate``。
-        if UPI_LOCAL_MANDATE_ENABLED:
-            mandate_setup_intent: Any = {}
-            for source in (confirm_data, approval_data):
+        # ``payment_method_options`` 当未知参数丢弃，所以「已批准」的提交也会停在
+        # ``requires_payment_method``，而 ``upi://`` 深链只有直连 SetupIntent 再
+        # confirm 一次才会出现。参考实现 ``provider_checkout`` 的
+        # ``need_setup_recover`` + ``confirm_local_setup_intent``。
+        #
+        # 时序很关键：批准之前 ``checkout.session.setup_intent`` 是 **null**
+        # （2026-09-30 实测），SetupIntent 只在批准之后才出现。所以除了 approve
+        # 之后在这里试一次，还要作为 rescue 回调交给 Stage 7 的轮询再补一次。
+        mandate_state: dict[str, bool] = {"attempted": False, "ok": False}
+
+        def _absorb_mandate(*sources: Any) -> bool:
+            """在 sources 里找 ``seti_`` SetupIntent 并直连补交 mandate。
+
+            幂等：成功一次即封口；找不到 SetupIntent 时不动。返回 True 表示确实
+            发起了补交（调用方据此判断是否值得再轮询一轮）。
+            """
+            nonlocal approval_data
+            if mandate_state["ok"] or not UPI_LOCAL_MANDATE_ENABLED:
+                return False
+            setup_intent: Any = {}
+            for source in sources:
                 candidate = _upi_first_value_by_key(source, "setup_intent")
                 if isinstance(candidate, Mapping) and str(candidate.get("id") or "").startswith("seti_"):
-                    mandate_setup_intent = candidate
+                    setup_intent = candidate
                     break
+            if not setup_intent:
+                return False
+            mandate_state["attempted"] = True
             mandate = _upi_confirm_local_mandate(
                 stripe,
-                setup_intent=mandate_setup_intent,
+                setup_intent=setup_intent,
                 pm_id=pm_id,
                 return_url=return_url,
                 stripe_pk=stripe_pk,
                 amount=ctx.get("checkout_amount"),
             )
             last_variant = mandate["variants"][-1]["variant"] if mandate["variants"] else "-"
-            if mandate["skipped"]:
-                emit("mandate", f"Stage 6b: skipped ({mandate['error']})")
-            else:
-                emit(
-                    "mandate",
-                    "Stage 6b: SetupIntent mandate %s via %s (%s)"
-                    % (
-                        "ok" if mandate["ok"] else "failed",
-                        last_variant,
-                        str(mandate.get("error") or "no error")[:160],
-                    ),
-                )
+            emit(
+                "mandate",
+                "Stage 6b: SetupIntent mandate %s via %s (%s)"
+                % (
+                    "ok" if mandate["ok"] else "failed",
+                    last_variant,
+                    str(mandate.get("error") or "no error")[:160],
+                ),
+            )
+            mandate_state["ok"] = bool(mandate["ok"])
             if mandate.get("payload"):
-                # 让 Stage 7 的 _absorb 直接吃下 mandate 响应里的 upi:// / 跳转。
+                # 让 Stage 7 的 _absorb 吃下 mandate 响应里的 upi:// / 跳转。
                 approval_data = {**(approval_data or {}), "local_mandate": mandate["payload"]}
+            return True
+
+        if not _absorb_mandate(confirm_data, approval_data):
+            emit(
+                "mandate",
+                "Stage 6b: no SetupIntent yet (null until approval), rescue wired into the payment-page poll",
+            )
 
         # ── Stage 7: Extract redirect / upi:// URI ───────────────────────
         emit("poll", "Stage 7: extracting UPI redirect / QR data")
@@ -1067,13 +1089,28 @@ def generate_upi_qr_link(
         for source in (confirm_data, approval_data):
             _absorb(source)
 
+        def _rescue_mandate(payload: Mapping[str, Any]) -> bool:
+            """批准后「SetupIntent 未产出动作」的补交钩子（Stage 7 轮询回调）。
+
+            参考实现 ``need_setup_recover``：先直连补交 mandate，再让轮询继续一轮，
+            而不是把同一个 ``generic_decline`` 判成终态拒绝。
+            """
+            return _absorb_mandate(payload, confirm_data, approval_data)
+
         # Poll Stripe payment page until a real redirect / QR / upi:// appears
         if not redirect_url and not qr_data.get("upi_uri"):
             for _attempt in range(1, max(1, poll_max_attempts) + 1):
                 if redirect_url or qr_data.get("upi_uri"):
                     break
                 try:
-                    poll_redirect, poll_qr = _upi_poll_payment_page(stripe, cs_id, stripe_pk, ctx, current_pm_id=pm_id)
+                    poll_redirect, poll_qr = _upi_poll_payment_page(
+                        stripe,
+                        cs_id,
+                        stripe_pk,
+                        ctx,
+                        current_pm_id=pm_id,
+                        rescue=_rescue_mandate,
+                    )
                 except Exception as exc:
                     if _upi_should_retry_second_confirm(exc):
                         emit("poll", f"extraction needs a second confirm: {str(exc)[:160]}")
@@ -1088,6 +1125,10 @@ def generate_upi_qr_link(
                     elif kind in ("png", "jpg"):
                         qr_data.setdefault("qr_image_url_png", url)
                 break
+
+        # 补交 mandate 的响应是轮询中途才到的，这里再吸收一次。
+        if approval_data.get("local_mandate"):
+            _absorb(approval_data)
 
         # If still nothing, refresh init and try a second confirm once
         if not redirect_url and not qr_data.get("upi_uri"):

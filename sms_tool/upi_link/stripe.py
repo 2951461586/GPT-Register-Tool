@@ -9,6 +9,7 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
 from typing import Any
+from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 import json
@@ -39,6 +40,7 @@ from .constants import (
     UPI_LOCAL_MANDATE_DEFAULT_AMOUNT,
     UPI_LOCAL_MANDATE_DESCRIPTION,
     UPI_LOCAL_MANDATE_END_DAYS,
+    UPI_LOCAL_MANDATE_FATAL_MARKERS,
     UPI_LOCAL_MANDATE_STRIPE_VERSION,
     UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
     UPI_REFERENCE_STRIPE_VERSION,
@@ -597,6 +599,7 @@ def _upi_confirm_local_mandate(
     result: dict[str, Any] = {
         "ok": False,
         "skipped": False,
+        "fatal": False,
         "variants": [],
         "payload": {},
         "upi_uri": "",
@@ -641,6 +644,12 @@ def _upi_confirm_local_mandate(
             _upi_dump_http(resp, f"stripe_local_mandate_{name}", body, "POST", url, force=status >= 400)
             if status != 200:
                 result["error"] = f"HTTP {status}: {text[:360]}"
+                lowered = text.lower()
+                if any(marker in lowered for marker in UPI_LOCAL_MANDATE_FATAL_MARKERS):
+                    # 结构性拒绝（Checkout 创建的 SetupIntent 不允许直连 confirm）：
+                    # 换变体或换 API 版本都是同一句话，继续试只是白烧请求。
+                    result["fatal"] = True
+                    return result
                 continue
             payload = resp.json() or {}
             entry["intent_status"] = str(payload.get("status") or "")
@@ -757,12 +766,38 @@ def _upi_payload_intent_redirect_url(
     return ""
 
 
+def _upi_needs_setup_recover(payload: Any) -> bool:
+    """参考实现 ``need_setup_recover``（``provider_checkout``）的判据。
+
+    批准之后的 Payment Page 常常给出「已批准但没有任何 redirect/QR」的形态，
+    SetupIntent 停在 ``requires_payment_method``。UPI AutoPay 只有直连
+    SetupIntent 补交 mandate 才会产出 ``upi://``。缺这道判据时，下面的
+    ``failed`` 分支会把同一个 ``generic_decline`` 误判成终态拒绝（2026-09-30
+    实测：approve 第 1 次就 approved，然后立刻死在这里，只拿到 hosted 兜底）。
+
+    条件与参考实现逐条对齐：无 redirect/QR，且
+    ``setup_status in {requires_payment_method, requires_confirmation, ""}``
+    或存在 setup_intent 失败原因或命中 ``generic_decline``。
+    """
+    if not isinstance(payload, Mapping):
+        return False
+    if _upi_extract_redirect_url(payload) or _upi_extract_qr_candidates(payload):
+        return False
+    setup_intent = _upi_first_value_by_key(payload, "setup_intent")
+    status = str(setup_intent.get("status") or "").lower() if isinstance(setup_intent, Mapping) else ""
+    if status in ("requires_payment_method", "requires_confirmation", ""):
+        return True
+    failure = _upi_setup_intent_last_error(payload)
+    return bool(failure)
+
+
 def _upi_poll_payment_page(
     stripe: Any,
     cs_id: str,
     stripe_pk: str,
     ctx: Mapping[str, Any],
     current_pm_id: str = "",
+    rescue: Callable[[Mapping[str, Any]], bool] | None = None,
 ) -> tuple[str, list[str]]:
     """参考实现 ``poll_payment_page``: 轮询到「真跳转 / QR」或终态。
 
@@ -772,6 +807,11 @@ def _upi_poll_payment_page(
       直接判风控拒绝, 不再空转）。
     * 每轮都判读 SetupIntent 的 ``last_setup_error``。
     * 拿到 ``next_action`` 但没有直接可用的 URL 时, 还会追问 intent 一次。
+
+    ``rescue`` 是批准后「SetupIntent 未产出动作」的补交回调（参考实现
+    ``need_setup_recover`` + ``confirm_local_setup_intent``，见
+    :func:`_upi_needs_setup_recover`）。只在第一轮命中时调一次；返回 ``True``
+    表示确实补交了，值得再轮询一轮。策略留在调用方，这里只管循环控制。
     """
     deadline = time.time() + _env_int("UPI_POLL_TIMEOUT", 45)
     params = {
@@ -784,6 +824,7 @@ def _upi_poll_payment_page(
     last_summary = ""
     grace_deadline = 0.0
     grace_seconds = _env_int("UPI_FAILED_STATE_GRACE_POLL", 5, minimum=1)
+    attempted_rescue = False
 
     while time.time() < deadline:
         try:
@@ -817,6 +858,14 @@ def _upi_poll_payment_page(
         if redirect_url or qr_urls:
             _upi_dump_http(resp, "poll_success", params, "GET", url, force=True)
             return redirect_url, qr_urls
+
+        # 批准后没有任何 redirect/QR 时先补交 SetupIntent，再判失败。
+        if not attempted_rescue and rescue is not None and _upi_needs_setup_recover(payload):
+            attempted_rescue = True
+            if rescue(payload):
+                last_error = "post-approval SetupIntent rescue attempted"
+                time.sleep(1)
+                continue
 
         submission = _upi_find_submission_attempt(payload)
         state = str(submission.get("state") or "")

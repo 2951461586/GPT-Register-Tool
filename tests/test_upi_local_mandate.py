@@ -263,6 +263,146 @@ def test_200_without_deep_link_keeps_payload_for_hosted_fallback(monkeypatch, tm
 
 
 # --------------------------------------------------------------------------
+# post-approval SetupIntent rescue (reference ``need_setup_recover``)
+# --------------------------------------------------------------------------
+
+
+def _payment_page(
+    *, setup_status: str = "requires_payment_method", submission_state: str = "failed", last_error: str = "", redirect: str = ""
+) -> dict:
+    setup_intent: dict = {"id": "seti_123", "object": "setup_intent", "status": setup_status}
+    if last_error:
+        setup_intent["last_setup_error"] = {"code": last_error}
+    payload: dict = {
+        "object": "checkout.session",
+        "id": "ppage_1",
+        "setup_intent": setup_intent,
+        "submission_attempt": {"state": submission_state},
+    }
+    if redirect:
+        payload["next_action"] = {"redirect_to_url": {"url": redirect}}
+    return payload
+
+
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        pytest.param(_payment_page(setup_status="requires_payment_method"), True, id="requires_payment_method"),
+        pytest.param(_payment_page(setup_status="requires_confirmation"), True, id="requires_confirmation"),
+        pytest.param({"object": "checkout.session"}, True, id="no-setup-intent-yet"),
+        pytest.param(_payment_page(setup_status="succeeded"), False, id="succeeded"),
+        pytest.param(_payment_page(setup_status="succeeded", last_error="generic_decline"), True, id="decline"),
+        pytest.param(
+            _payment_page(redirect=INSTRUCTIONS),
+            False,
+            id="redirect-already-present",
+        ),
+        pytest.param("not-a-mapping", False, id="non-mapping"),
+    ],
+)
+def test_needs_setup_recover_matches_the_reference_condition(payload, expected):
+    assert S._upi_needs_setup_recover(payload) is expected
+
+
+class _FakePageStripe:
+    """GET recorder returning a scripted payment-page sequence."""
+
+    def __init__(self, payloads: list) -> None:
+        self._payloads = list(payloads)
+        self.calls = 0
+
+    def get(self, url, params=None, timeout=None):
+        self.calls += 1
+        return _resp(200, self._payloads.pop(0))
+
+
+def test_poll_rescues_setup_intent_then_returns_redirect(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    pages = [
+        _payment_page(setup_status="requires_payment_method", last_error="generic_decline"),
+        _payment_page(setup_status="succeeded", submission_state="succeeded", redirect=INSTRUCTIONS),
+    ]
+    fake = _FakePageStripe(pages)
+    seen: list = []
+
+    redirect, qr = S._upi_poll_payment_page(
+        fake,
+        "cs_live_x",
+        "pk",
+        {},
+        current_pm_id="pm_9",
+        rescue=lambda payload: seen.append(payload) or True,
+    )
+
+    assert redirect == INSTRUCTIONS
+    assert qr == []
+    assert fake.calls == 2
+    assert len(seen) == 1
+    assert seen[0]["setup_intent"]["status"] == "requires_payment_method"
+
+
+def test_poll_rescues_before_treating_the_decline_as_terminal(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 4)
+    with pytest.raises(RuntimeError) as err:
+        S._upi_poll_payment_page(
+            fake, "cs_live_x", "pk", {}, current_pm_id="pm_9", rescue=lambda payload: False
+        )
+    assert "generic_decline" in str(err.value)
+
+
+def test_poll_does_not_rescue_when_a_redirect_is_already_present(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    fake = _FakePageStripe([_payment_page(setup_status="requires_payment_method", redirect=INSTRUCTIONS)])
+    seen: list = []
+
+    redirect, _qr = S._upi_poll_payment_page(
+        fake, "cs_live_x", "pk", {}, current_pm_id="pm_9", rescue=lambda payload: seen.append(payload) or True
+    )
+
+    assert redirect == INSTRUCTIONS
+    assert seen == []
+
+
+def test_poll_without_a_rescue_callback_keeps_legacy_behaviour(monkeypatch, tmp_path):
+    """No rescue callback (e.g. mandate stage disabled) -> the decline stays terminal."""
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 3)
+    with pytest.raises(RuntimeError) as err:
+        S._upi_poll_payment_page(fake, "cs_live_x", "pk", {}, current_pm_id="pm_9")
+    assert "generic_decline" in str(err.value)
+
+
+def test_checkout_created_setup_intent_stops_the_ladder_immediately(monkeypatch, tmp_path):
+    """Structural refusal, measured live 2026-09-30: every variant and every
+    ``Stripe-Version`` candidate answers the same sentence, so the ladder must
+    stop after the first reply instead of spending 11 more round trips."""
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    body = {"error": {"message": "You cannot confirm SetupIntents created by Checkout."}}
+    fake = _FakeStripe([_resp(400, body)] * 12)
+    result = S._upi_confirm_local_mandate(fake, setup_intent=SETI, pm_id="pm_9", return_url="u", stripe_pk="pk")
+
+    assert result["ok"] is False
+    assert result["fatal"] is True
+    assert len(fake.calls) == 1
+    assert len(result["variants"]) == 1
+    assert "created by Checkout" in result["error"]
+
+
+def test_non_fatal_errors_still_walk_the_whole_ladder(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    body = {"error": {"message": "parameter_unknown"}}
+    fake = _FakeStripe([_resp(400, body)] * 12)
+    result = S._upi_confirm_local_mandate(fake, setup_intent=SETI, pm_id="pm_9", return_url="u", stripe_pk="pk")
+
+    assert result["fatal"] is False
+    assert len(result["variants"]) == 12
+
+
+# --------------------------------------------------------------------------
 # wiring defaults
 # --------------------------------------------------------------------------
 
