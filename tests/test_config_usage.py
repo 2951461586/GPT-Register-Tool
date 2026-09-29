@@ -16,6 +16,7 @@ this exists to prevent.
 
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252.
 """
+
 import json
 import re
 import tempfile
@@ -152,9 +153,7 @@ class DetectionTests(unittest.TestCase):
         if added:
             parts.append("NEW dead keys (wire up or delete): %s" % ", ".join(added))
         if removed:
-            parts.append(
-                "NO LONGER dead (delete from EXPECTED_UNREAD): %s" % ", ".join(removed)
-            )
+            parts.append("NO LONGER dead (delete from EXPECTED_UNREAD): %s" % ", ".join(removed))
         return " | ".join(parts) or "set changed"
 
     def test_data_keyed_mappings_are_not_reported(self):
@@ -176,9 +175,7 @@ class DetectionTests(unittest.TestCase):
 
     def test_example_is_not_advertising_unread_keys(self):
         """config.example.json should not document knobs that do nothing."""
-        offending = sorted(
-            item.path for item in config_usage.unread_config_keys() if item.in_example
-        )
+        offending = sorted(item.path for item in config_usage.unread_config_keys() if item.in_example)
         self.assertEqual(
             offending,
             [],
@@ -286,9 +283,7 @@ class CSharpConsumerTests(unittest.TestCase):
                     self.assertIn(key, report)
         # The Python-only wording must survive too, which needs at least one
         # unread key -- so build one instead of borrowing the operator's.
-        populated = config_usage.format_unread_report(
-            [config_usage.UnreadKey("demo.key", ("config.json",), False)]
-        )
+        populated = config_usage.format_unread_report([config_usage.UnreadKey("demo.key", ("config.json",), False)])
         self.assertIn("never read by Python source", populated)
 
     def test_write_only_keys_are_still_reported(self):

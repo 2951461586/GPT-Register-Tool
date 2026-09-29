@@ -22,6 +22,7 @@ from sms_tool.upi_link.constants import UPI_SENTINEL_APPROVAL_FLOW, UPI_SENTINEL
 # flow fallback
 # --------------------------------------------------------------------------
 
+
 def test_checkout_flow_falls_back_to_checkout_pay_then_authorize_continue():
     assert S._upi_sentinel_flow_candidates(UPI_SENTINEL_CHECKOUT_FLOW) == (
         UPI_SENTINEL_CHECKOUT_FLOW,
@@ -66,6 +67,7 @@ def test_headers_use_the_fallback_flow_when_the_primary_mints_empty(monkeypatch)
 # mint reuse
 # --------------------------------------------------------------------------
 
+
 def _fresh_cache(monkeypatch):
     monkeypatch.setattr(S, "_MINT_CACHE", {})
 
@@ -79,8 +81,12 @@ def test_successful_mint_is_reused(monkeypatch):
         return {"main": "M", "so": "S"}
 
     monkeypatch.setattr(S, "_upi_mint_sentinel_via_bridge", fake_mint)
-    first = S._upi_mint_sentinel_cached(flow="f", device_id="d", proxy="p", fingerprint={}, cookie_header="c", page_url="u")
-    second = S._upi_mint_sentinel_cached(flow="f", device_id="d", proxy="p", fingerprint={}, cookie_header="c", page_url="u")
+    first = S._upi_mint_sentinel_cached(
+        flow="f", device_id="d", proxy="p", fingerprint={}, cookie_header="c", page_url="u"
+    )
+    second = S._upi_mint_sentinel_cached(
+        flow="f", device_id="d", proxy="p", fingerprint={}, cookie_header="c", page_url="u"
+    )
 
     assert calls["n"] == 1, "the same identity must not mint twice inside the TTL"
     assert first == second == {"main": "M", "so": "S"}
