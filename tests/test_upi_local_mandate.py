@@ -268,7 +268,11 @@ def test_200_without_deep_link_keeps_payload_for_hosted_fallback(monkeypatch, tm
 
 
 def _payment_page(
-    *, setup_status: str = "requires_payment_method", submission_state: str = "failed", last_error: str = "", redirect: str = ""
+    *,
+    setup_status: str = "requires_payment_method",
+    submission_state: str = "failed",
+    last_error: str = "",
+    redirect: str = "",
 ) -> dict:
     setup_intent: dict = {"id": "seti_123", "object": "setup_intent", "status": setup_status}
     if last_error:
@@ -347,9 +351,7 @@ def test_poll_rescues_before_treating_the_decline_as_terminal(monkeypatch, tmp_p
     monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
     fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 4)
     with pytest.raises(RuntimeError) as err:
-        S._upi_poll_payment_page(
-            fake, "cs_live_x", "pk", {}, current_pm_id="pm_9", rescue=lambda payload: False
-        )
+        S._upi_poll_payment_page(fake, "cs_live_x", "pk", {}, current_pm_id="pm_9", rescue=lambda payload: False)
     assert "generic_decline" in str(err.value)
 
 
