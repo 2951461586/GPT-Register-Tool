@@ -79,8 +79,8 @@ class RegistrationDriver(str, Enum):
 Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 - 后端选择：环境变量 `OPENAI_SENTINEL_BACKEND`（在 `sms_tool/sentinel/client.py:59` 读取，默认 `node_runner`），对应 `config.example.json` 的 `sentinel_backend: "node_runner"`。`node_runner` 执行 vendored 在 `sms_tool/sentinel/` 下的 SDK（`sentinel/client.py:315`）。
-- **线程安全缓存**：`_get_cached_sentinel()`（`sentinel_tokens.py:75`）/ `_save_sentinel_cache()`（`sentinel_tokens.py:93`）带锁，调用方保留 single-flight 填充语义。
-- **DID 一致性**：`_sentinel_device_id()`（`sentinel_tokens.py:132`）+ `assert_sentinel_device_id()`（`sentinel_tokens.py:144`）保证同一账号的 Sentinel DID 恒定；跨账号绝不共享。
+- **线程安全缓存**：`_get_cached_sentinel()`（`sentinel_tokens.py:79`）/ `_save_sentinel_cache()`（`sentinel_tokens.py:97`）带锁，调用方保留 single-flight 填充语义。
+- **DID 一致性**：`_sentinel_device_id()`（`sentinel_tokens.py:136`）+ `assert_sentinel_device_id()`（`sentinel_tokens.py:148`）保证同一账号的 Sentinel DID 恒定；跨账号绝不共享。
 - **并发边界**：每个账号独立 Sentinel 事务与 `oai-did`，batch worker 不把 token 回写共享池；`sentinel_max_concurrency` 默认 2（上限 4）。`tests/test_sentinel_runner.py:71/135` 已验证 node_runner 可**离线**执行 vendored SDK。
 
 ---
@@ -254,8 +254,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `sentinel_fingerprint` | `auth_headers.py:630` | 确定性指纹派生 |
 | `openai_auth_headers` | `auth_headers.py:715` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
-| `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:75` / `:93` | 线程安全缓存 |
-| `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:132` / `:144` | DID 一致性 |
+| `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
+| `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
 | `proxy_pool_for` | `proxy_routing.py:85` | 按 lane 选池 + 单向回退 |
 | `select_operation_proxy` | `proxy_routing.py:266` | 从统一候选序列选择操作代理 |
 | `ProxyEntry` | `proxy_entry.py:67` | 规范代理模型 |
