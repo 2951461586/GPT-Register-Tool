@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import endpoints_literal_ratchet as eps  # noqa: E402  # type: ignore
 
+
 # Load the authority modules for the constants cross-check. Both process
 # boundaries have one; the ratchet's MANAGED_HOSTS must cover both.
 def _load_authority(rel_path: str, module_name: str):
@@ -41,9 +42,7 @@ def _load_authority(rel_path: str, module_name: str):
     return module
 
 
-ENDPOINTS = _load_authority(
-    "services/protocol-payment/common/endpoints.py", "ratchet_endpoints_probe"
-)
+ENDPOINTS = _load_authority("services/protocol-payment/common/endpoints.py", "ratchet_endpoints_probe")
 SMS_ENDPOINTS = _load_authority("sms_tool/endpoints.py", "ratchet_sms_endpoints_probe")
 
 WIRED = (
@@ -189,10 +188,7 @@ def test_wired_extractors_have_zero_inline_literals():
     """The 2026-09-28 wiring of ideal / twint / blik must stay wired."""
     counts = eps.collect()
     residual = {path: counts.get(path, 0) for path in WIRED if counts.get(path, 0)}
-    assert not residual, (
-        "a wired extractor re-inlined a managed host instead of importing "
-        f"endpoints: {residual}"
-    )
+    assert not residual, f"a wired extractor re-inlined a managed host instead of importing endpoints: {residual}"
 
 
 def test_ratchet_holds_for_the_current_tree():
@@ -272,6 +268,5 @@ def test_wired_sms_tool_files_have_zero_inline_literals():
     counts = eps.collect()
     residual = {path: counts.get(path, 0) for path in WIRED_SMS_TOOL if counts.get(path, 0)}
     assert not residual, (
-        "a wired sms_tool caller re-inlined a managed host instead of importing "
-        f"sms_tool/endpoints.py: {residual}"
+        f"a wired sms_tool caller re-inlined a managed host instead of importing sms_tool/endpoints.py: {residual}"
     )

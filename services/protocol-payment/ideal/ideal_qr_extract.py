@@ -1092,7 +1092,7 @@ def checkout_page_url(checkout: dict[str, str]) -> str:
         IDEAL_BOOTSTRAP_COUNTRY,
         checkout.get("processor_entity") or "",
     )
-    return endpoints.chatgpt_checkout_page(processor, checkout['cs_id'])
+    return endpoints.chatgpt_checkout_page(processor, checkout["cs_id"])
 
 
 def update_checkout_promotion(
@@ -1430,9 +1430,7 @@ def stripe_create_ideal_pm(
         body["billing_details[address][state]"] = billing["state"]
 
     resp = stripe.post(endpoints.STRIPE_PAYMENT_METHODS, data=body, timeout=DEFAULT_TIMEOUT)
-    dump_http(
-        resp, "ideal_pm", body, "POST", endpoints.STRIPE_PAYMENT_METHODS, force=resp.status_code >= 400
-    )
+    dump_http(resp, "ideal_pm", body, "POST", endpoints.STRIPE_PAYMENT_METHODS, force=resp.status_code >= 400)
     if resp.status_code >= 400:
         raise RuntimeError(f"创建 iDEAL PM 失败 HTTP {resp.status_code}: {resp.text[:500]}")
     pm_id = str((resp.json() or {}).get("id") or "")

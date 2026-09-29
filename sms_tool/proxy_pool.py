@@ -820,9 +820,7 @@ class Socks5Server:
 
     # ── health check ──
 
-    async def _check_upstream(
-        self, upstream: UpstreamProxy, test_host: str, test_port: int
-    ) -> tuple[bool, str]:
+    async def _check_upstream(self, upstream: UpstreamProxy, test_host: str, test_port: int) -> tuple[bool, str]:
         """Return ``(healthy, error)`` for one upstream.
 
         Default: complete the real, scheme-aware handshake (tunnel-only).
