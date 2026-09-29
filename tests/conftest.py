@@ -113,6 +113,37 @@ def _no_real_proxy_probe(request, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_real_promotion_preflight(request, monkeypatch):
+    """Block the promotion batch's real egress preflight.
+
+    ``promotion_batch._preflight_egress`` sends one anonymous GET per sampled
+    candidate through ``probe_openai_edge``.  Tests drive the batch by stubbing
+    ``check_account_promotion``; without this guard the preflight would be the
+    only real network call left -- and a test using an unroutable host would
+    either sit in the probe's timeout or abort the batch before the stubbed
+    probe ever ran.  Patch the *promotion_batch* binding, not
+    ``proxy_edge_probe`` itself, so other probe users are untouched.
+
+    A test that wants the real verdict just re-patches
+    ``promotion_batch.probe_openai_edge`` in its own body (its monkeypatch runs
+    after this fixture, so it wins).
+    """
+    if "allow_edge_probe" in request.keywords:
+        yield
+        return
+
+    from sms_tool.accounts import promotion_batch
+    from sms_tool.proxy_edge_probe import CLEAN, EdgeVerdict
+
+    monkeypatch.setattr(
+        promotion_batch,
+        "probe_openai_edge",
+        lambda proxy, **kwargs: EdgeVerdict(proxy="***:***", status=CLEAN),
+    )
+    yield
+
+
 @pytest.fixture(scope="session")
 def runtime_sandbox(tmp_path_factory):
     """One runtime sandbox for the whole session -- see ``isolated_runtime``.
@@ -191,11 +222,11 @@ def isolated_payment_operations(tmp_path, monkeypatch):
     from sms_tool.payment_operation import PaymentOperationStore
 
     root = tmp_path / "payment_operations"
-    monkeypatch.setattr(
-        PaymentOperationStore,
-        "from_config",
-        classmethod(lambda cls, config: cls(root)),
-    )
+
+    def _from_config(cls, config):
+        return cls(root)
+
+    monkeypatch.setattr(PaymentOperationStore, "from_config", classmethod(_from_config))
     yield root
 
 

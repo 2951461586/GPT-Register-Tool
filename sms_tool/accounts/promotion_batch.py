@@ -4,7 +4,9 @@ Split out of :mod:`sms_tool.accounts.account_promotion` so that module owns only
 the probe: ``check_account_promotion`` and its parse/label/code helpers. This
 module owns everything about running that probe across many saved accounts --
 proxy rotation, 429 throttling, the optional payment-eligibility pass, result
-persistence and progress events.
+persistence, progress events, and the two whole-batch guards that stop a dead
+egress pool from consuming the account list: a one-shot preflight and a
+consecutive-failure circuit breaker.
 
 The split is what keeps the probe module off the desktop read path's import
 cost: ``desktop_read`` reads ``promotion_states`` and ``account_promotion``;
@@ -31,6 +33,7 @@ from .account_payment_eligibility import (
     probe_account_payment_eligibility,
 )
 from .account_promotion import check_account_promotion, promotion_status_code
+from ..batch_circuit_breaker import BatchCircuitBreaker
 from ..config import CFG
 from ..promotion_states import (
     PROMOTION_STATE_AUTH_INVALID,
@@ -39,6 +42,7 @@ from ..promotion_states import (
     payment_method_tokens,
     promotion_status_with_eligibility,
 )
+from ..proxy_edge_probe import DEAD, probe_openai_edge
 from ..proxy_routing import operation_proxy_candidates, parse_lane_proxy_pool
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,13 @@ logger = logging.getLogger(__name__)
 PROMOTION_THROTTLE_STATUS = 429
 PROMOTION_THROTTLE_DEFAULT_BACKOFF = 1.5
 PROMOTION_THROTTLE_MAX_BACKOFF = 5.0
+
+# Batch preflight. On 2026-09-29 a wholly dead pool (every candidate a transport
+# timeout) turned a 15-account run into ~95 silent minutes: each account walked
+# all ~19 candidates at 20s each and emitted nothing until it finished. Probing
+# a few candidates first fails the batch in seconds instead.
+PROMOTION_PREFLIGHT_SAMPLE = 3
+PROMOTION_PREFLIGHT_TIMEOUT_SECONDS = 6.0
 
 
 def refresh_promotion_statuses(
@@ -86,13 +97,51 @@ def refresh_promotion_statuses(
             data.setdefault("access_token", record.get("access_token") or "")
         accounts.append(data)
 
-    max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
+    try:
+        requested_workers = int(workers or 1)
+    except (TypeError, ValueError):
+        requested_workers = 1
+    max_workers = max(1, min(requested_workers, 16, len(accounts) or 1))
     results: list[dict[str, Any]] = []
     run_id = uuid.uuid4().hex
     _emit_account_batch_event(run_id, "batch_started", "running", total=len(accounts), detail="账号优惠检测开始")
 
+    breaker = _promotion_batch_breaker()
+    preflight = _preflight_egress(
+        _promotion_egress_candidates(proxy, proxy_pool),
+        timeout=PROMOTION_PREFLIGHT_TIMEOUT_SECONDS,
+        sample=PROMOTION_PREFLIGHT_SAMPLE,
+    )
+    if not preflight["ok"]:
+        _emit_account_batch_event(
+            run_id,
+            "batch_aborted",
+            "failed",
+            total=len(accounts),
+            detail=f"出口池预检失败：{preflight['checked']} 个候选均无响应，已中止以免整批空转",
+        )
+        return _preflight_failure_result(len(accounts), preflight)
+
     def run(account: dict[str, Any]) -> dict[str, Any]:
         email = str(account.get("email") or "").strip().lower()
+        if breaker.tripped:
+            _emit_account_batch_event(
+                run_id,
+                "account_completed",
+                "skipped",
+                account_ref=email,
+                total=len(accounts),
+                detail="批次已熔断，跳过",
+            )
+            return {
+                "email": email,
+                "ok": False,
+                "promotion_status": "批次已熔断",
+                "promotion_state": PROMOTION_STATE_PROBE_FAILED,
+                "persisted": False,
+                "skipped": True,
+                "probe": {"ok": False, "error": "batch_circuit_open"},
+            }
         used_proxy = proxy
         try:
             with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
@@ -111,6 +160,14 @@ def refresh_promotion_statuses(
                     candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
                     probe = None
                     for index, candidate in enumerate(candidates):
+                        _emit_account_batch_event(
+                            run_id,
+                            "proxy_attempt",
+                            "running",
+                            account_ref=email,
+                            total=len(accounts),
+                            detail=f"代理 {index + 1}/{len(candidates)}",
+                        )
                         probe = check_account_promotion(
                             account,
                             proxy=candidate,
@@ -184,6 +241,10 @@ def refresh_promotion_statuses(
             result["promotion_display"] = promotion_status_with_eligibility(label, eligibility_label)
         except Exception as exc:
             result = {"email": email, "ok": False, "promotion_status": "检测失败", "promotion_state": PROMOTION_STATE_PROBE_FAILED, "persisted": False, "probe": {"ok": False, "error": str(exc)[:200]}}
+        if result.get("ok") and result.get("persisted"):
+            breaker.record_success()
+        else:
+            breaker.record(_promotion_env_failure_class(result))
         _emit_account_batch_event(
             run_id,
             "account_completed",
@@ -202,7 +263,7 @@ def refresh_promotion_statuses(
     success = sum(1 for item in results if item.get("ok"))
     unauthorized = sum(1 for item in results if _promotion_status_code(item) == 401)
     transport_failed = sum(1 for item in results if _promotion_failure_class(item) == "transport")
-    persist_failed = sum(1 for item in results if not item.get("persisted"))
+    persist_failed = sum(1 for item in results if not item.get("persisted") and not item.get("skipped"))
     # Owned here, not recounted by each caller. commands/registration.py used to
     # derive this itself, which left the CLI promotion path with no such key at
     # all -- two entry points, two different report shapes.
@@ -225,16 +286,18 @@ def refresh_promotion_statuses(
     _emit_account_batch_event(
         run_id,
         "batch_completed",
-        "completed" if success == len(results) and not persist_failed else "failed",
+        "completed" if success == len(results) and not persist_failed and not breaker.tripped else "failed",
         total=len(results),
         detail=(
             f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
             f"传输失败 {transport_failed}，保存失败 {persist_failed}，"
             f"支付资格 {eligibility_ok}/{len(eligibility_results)}"
+            + (f"；连续环境失败触发熔断（{breaker.tripped_class}），剩余账号已跳过" if breaker.tripped else "")
         ),
     )
     return {
-        "ok": bool(results) and success == len(results) and not persist_failed,
+        "ok": bool(results) and success == len(results) and not persist_failed and not breaker.tripped,
+        "circuit_breaker_tripped": breaker.tripped,
         "total": len(results),
         "success": success,
         "failed": len(results) - success,
@@ -308,7 +371,11 @@ def _promotion_probe_is_unauthorized(probe: Any) -> bool:
     """True when the promotion probe proved the access token is dead."""
     if not isinstance(probe, dict):
         return False
-    if int(probe.get("status_code") or 0) == 401:
+    try:
+        status_code = int(probe.get("status_code") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    if status_code == 401:
         return True
     return str(probe.get("promotion_state") or "").strip() == PROMOTION_STATE_AUTH_INVALID
 
@@ -347,6 +414,93 @@ def _promotion_failure_class(item: dict[str, Any]) -> str:
     if not code and _retryable_promotion_transport(probe):
         return "transport"
     return "probe"
+
+
+def _promotion_batch_breaker() -> BatchCircuitBreaker:
+    """Whole-batch breaker, sharing the registration batch-policy keys."""
+    registration_cfg = CFG.get("registration")
+    if not isinstance(registration_cfg, dict):
+        registration_cfg = {}
+    raw_threshold = registration_cfg.get("batch_circuit_breaker_threshold")
+    try:
+        threshold = max(1, int(raw_threshold or 3))
+    except (TypeError, ValueError):
+        threshold = 3
+    enabled = registration_cfg.get("batch_circuit_breaker_enabled", True) not in (
+        False,
+        0,
+        "0",
+        "false",
+        "False",
+        "no",
+    )
+    return BatchCircuitBreaker(threshold, enabled=enabled)
+
+
+def _promotion_env_failure_class(result: dict[str, Any]) -> str:
+    """Map one account outcome onto the shared batch-breaker vocabulary.
+
+    Only ``transport`` (no HTTP reply through *any* candidate) is an environment
+    failure. ``unauthorized`` / ``probe`` prove an HTTP reply came back, so the
+    environment is alive and the consecutive count must reset.
+    """
+    return "network" if _promotion_failure_class(result) == "transport" else "account"
+
+
+def _promotion_egress_candidates(proxy: str | None, proxy_pool: str | list[str] | None) -> list[str]:
+    """Distinct explicit + pool candidates the preflight should sample."""
+    values = [str(proxy or "").strip()]
+    values.extend(str(item or "").strip() for item in parse_lane_proxy_pool(proxy_pool))
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            out.append(value)
+    return out
+
+
+def _preflight_egress(candidates: list[str], *, timeout: float, sample: int) -> dict[str, Any]:
+    """Probe up to ``sample`` candidates; ``ok`` when any one answers at all.
+
+    ``DEAD`` is a transport failure (no HTTP reply); ``CLEAN`` / ``BLOCKED`` /
+    ``DEGRADED`` all prove the proxy carried the request to the edge, so the pool
+    is usable. Direct egress (no candidates) is always ok.
+    """
+    if not candidates:
+        return {"ok": True, "checked": 0, "alive": 0, "detail": "direct"}
+    checked = 0
+    alive = 0
+    for candidate in candidates[: max(1, sample)]:
+        checked += 1
+        if probe_openai_edge(candidate, timeout=timeout).status != DEAD:
+            alive += 1
+            break
+    return {"ok": alive > 0, "checked": checked, "alive": alive, "detail": "pool" if alive else "all_dead"}
+
+
+def _preflight_failure_result(requested: int, preflight: dict[str, Any]) -> dict[str, Any]:
+    """Result shape for a batch aborted before any account was probed."""
+    return {
+        "ok": False,
+        "total": 0,
+        "requested": requested,
+        "success": 0,
+        "failed": 0,
+        "unauthorized": 0,
+        "transport_failed": requested,
+        "persist_failed": 0,
+        "trial_eligible": 0,
+        "payment_eligibility_ok": 0,
+        "payment_eligibility_failed": 0,
+        "payment_eligibility_diagnostics": {},
+        "payment_methods_seen": [],
+        "results": [],
+        "error": "出口池预检失败：候选代理全部无响应，已中止以免整批空转",
+        "error_code": "egress_pool_unavailable",
+        "preflight": preflight,
+        "circuit_breaker_tripped": False,
+    }
 
 
 def _emit_account_batch_event(
