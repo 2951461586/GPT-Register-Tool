@@ -5,6 +5,7 @@ live in the `pay_link` subpackage and are re-exported verbatim so every
 `from sms_tool.payment_link_manager import ...` / `sms_tool.payment_link_manager.X`
 reference keeps working.
 """
+
 from __future__ import annotations
 import json
 import logging

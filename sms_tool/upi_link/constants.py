@@ -70,6 +70,12 @@ UPI_QR_POLL_MAX_ATTEMPTS = 30
 #: is what carries the ``upi://`` deep link -- without this stage every run
 #: degrades to the hosted instructions page (measured 3/3 accounts, 2026-09-30).
 #: Reference: ``tilian/provider_checkout.retry_approved_local_mandate``.
+#:
+#: This is only the **default** for ``upi.local_mandate_enabled`` (env override
+#: ``UPI_LOCAL_MANDATE_ENABLED``).  It used to be the only switch, and a
+#: hard-coded constant cannot be A/B'd or rolled back per run -- which this stage
+#: needs, because it is the one whose failure degrades the whole lane to the
+#: hosted instructions page instead of emitting a ``upi://`` deep link.
 UPI_LOCAL_MANDATE_ENABLED = True
 #: Widest first: the reference retries the ladder before dropping any field,
 #: because a rejected variant answers 4xx instead of degrading by itself.

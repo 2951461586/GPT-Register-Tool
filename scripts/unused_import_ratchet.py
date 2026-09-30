@@ -24,9 +24,30 @@ suite exposed three more (``33 failed / 64 errors``), then more again
 7. the **middle** segment of a dotted string token (``"...subprocess.run"`` consumes
    ``...subprocess``)
 8. the **alias** side of ``from x import name as alias``
+9. **channel 1 read in reverse** -- for a *deletion* it is not enough that the
+   name goes unused inside its own module; some **other** module may import it
+   *from* this one, and a re-export facade hides that because the facade exposes
+   the name only as a side effect of an import it makes for its own reasons.
+   Measured 2026-09-30: ``payment_link_manager.py`` exposed ``parse_proxy_pool``
+   solely because of its own ``from .payment_routing import parse_proxy_pool``;
+   the name is **not** in ``pay_link.__all__``, and removing that line broke
+   ``payment_batch.py`` and ``payment_batch_setup.py`` at collection time
+   (``ImportError: cannot import name 'parse_proxy_pool'``).  A channel-modelled
+   checker that only looks for dotted strings / ``patch.object`` / the name's own
+   use misses this.  Detection: resolve every ``from X import n`` repo-wide to an
+   absolute module path (honouring the relative level) and keep ``n`` when it
+   appears in ``consumed[X]``.
 
 Those are not enumerable by inspection, and every miss costs a full revert of a
 456-site change.  So the gate here is a **ratchet, not a clean-up**.
+
+Measured twice (2026-09-22, and again 2026-09-30 on ``pay_link/``): even with
+every channel above modelled, a bulk deletion still over-deleted -- the second
+2026-09-30 pass removed ``PaymentRoutePlan`` / ``PaymentRoutePlanner`` from
+``pay_link/registry.py`` although ``ruff --select F401`` never flagged them, and
+only ``ruff check`` (F821) caught it.  Treat a bulk F401 fix as unsafe by
+default; if one is attempted, do **one file per commit** and require ``ruff
+check`` plus the full suite green before touching the next file.
 
 What it does
 ------------

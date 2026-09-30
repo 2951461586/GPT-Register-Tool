@@ -192,6 +192,11 @@ def probe_openai_edge(
             elapsed_ms=_as_int((time.monotonic() - started) * 1000),
         )
 
+    # Function-local on purpose (counted by ``scripts/delayed_import_ratchet.py``):
+    # ``promotion_batch`` imports this module at top level and curl_cffi is a heavy
+    # optional dependency.  Deferring it keeps that importer chain free of curl_cffi
+    # and lets the probe degrade to ``dead`` with a named reason instead of failing
+    # at import time.
     try:
         from curl_cffi import requests as curl_requests
     except Exception:

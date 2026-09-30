@@ -1,18 +1,38 @@
 import unittest
 from contextlib import ExitStack
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
+from sms_tool import payment_egress
 from sms_tool import paypal_extract
 
 
-def _patch_upi(*, new_session=None, load_json=None, write_qr=None):
+def _stub_egress_probe(proxy, expected_country, stage, timeout):
+    """Return a matching-country verdict without dialling anything.
+
+    ``generate_upi_qr_link`` runs the shared payment egress gate before Stage 1
+    (``upi_link.pipeline._upi_assert_egress_contract``), so a full-pipeline UPI
+    test that supplies a proxy and a country would otherwise reach
+    ``paypal_proxy._probe_proxy_network`` and trip ``conftest``'s real-network
+    guard.  These tests are about country/method wiring, not exit geography; the
+    gate itself is covered by ``test_payment_egress_gate`` and
+    ``test_upi_egress_gate``.
+    """
+    return SimpleNamespace(ok=True, country_code=str(expected_country or ""), error="")
+
+
+def _patch_upi(*, new_session=None, load_json=None, write_qr=None, egress_probe=_stub_egress_probe):
     """Patch the UPI submodules that actually bind each seam.
 
     Since the 2026-09-28 split, ``_new_session`` / ``_load_json`` /
     ``_write_qr_png`` live in submodules and are imported by name into each
     caller, so patching ``sms_tool.upi_link`` no longer reaches the call sites.
     Patch every binding; return a context manager.
+
+    ``egress_probe`` defaults to :func:`_stub_egress_probe` so the pipeline tests
+    never reach the network.  Pass ``None`` to leave the real probe in place when
+    a test wants to assert the gate blocks.
     """
     from sms_tool.upi_link import extract as upi_extract
     from sms_tool.upi_link import flows as upi_flows
@@ -21,6 +41,11 @@ def _patch_upi(*, new_session=None, load_json=None, write_qr=None):
     from sms_tool.upi_link import stripe as upi_stripe
 
     stack = ExitStack()
+    # The probe cache is process-global; a stub verdict must not outlive the test.
+    payment_egress.clear_cache()
+    if egress_probe is not None:
+        stack.enter_context(patch.object(payment_egress, "_default_probe", egress_probe))
+        stack.callback(payment_egress.clear_cache)
     if new_session is not None:
         for module in (upi_pipeline, upi_session, upi_extract):
             stack.enter_context(patch.object(module, "_new_session", side_effect=new_session))

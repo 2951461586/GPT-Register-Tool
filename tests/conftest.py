@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -157,6 +158,7 @@ def _no_real_checkout_sentinel(request, monkeypatch):
     yield
     sentinel_pkg.client._CHECKOUT_MINT_CACHE.clear()
 
+
 @pytest.fixture(autouse=True)
 def _no_real_promotion_preflight(request, monkeypatch):
     """Block the promotion batch's real egress preflight.
@@ -186,6 +188,42 @@ def _no_real_promotion_preflight(request, monkeypatch):
         lambda proxy, **kwargs: EdgeVerdict(proxy="***:***", status=CLEAN),
     )
     yield
+
+
+@pytest.fixture(autouse=True)
+def _no_real_egress_probe(request, monkeypatch):
+    """Block the payment egress gate's real proxy probe.
+
+    ``payment_egress.assert_egress_countries`` dials every routed stage proxy and
+    compares the observed exit country.  Since the in-process adapters
+    (``native_paypal`` / ``wallet`` / ``gcash_custom`` / ``regional_wallet``, and
+    ``native_upi`` through the pipeline) assert the same contract the subprocess
+    extractors always did, any test that drives a function adapter through the
+    router *with both a proxy and an expected country* would reach the network --
+    and the assertion under test is about routing, not exit geography.
+
+    Same shape as :func:`_no_real_promotion_preflight`: stub the probe the
+    production code actually binds, and let a test that means to exercise the gate
+    opt out with ``@pytest.mark.allow_egress_probe``.  The gate's own tests
+    (``test_payment_egress_gate``, ``test_upi_egress_gate``) patch
+    ``payment_egress._default_probe`` directly; their patch is applied after this
+    fixture, so it wins.
+    """
+    if "allow_egress_probe" in request.keywords:
+        yield
+        return
+
+    from sms_tool import payment_egress
+
+    def _stub(proxy, expected, stage, timeout):
+        # "the exit matches what the route plan expected" -- the only verdict
+        # that lets a routing test proceed.
+        return SimpleNamespace(ok=True, country_code=str(expected or "").upper(), error="")
+
+    payment_egress.clear_cache()
+    monkeypatch.setattr(payment_egress, "_default_probe", _stub)
+    yield
+    payment_egress.clear_cache()
 
 
 @pytest.fixture(scope="session")

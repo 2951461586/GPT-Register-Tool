@@ -9,8 +9,15 @@ from .payment_contracts import PaymentRequest, PaymentResult
 
 
 class PaymentAdapter(Protocol):
-    key: str
-    methods: tuple[str, ...]
+    # Read-only properties rather than mutable attributes: the only implementation
+    # is the frozen ``FunctionPaymentAdapter`` dataclass, and a mutable-attribute
+    # Protocol rejects it ("key is not read-only in protocol").  Properties accept
+    # any implementation whose values are merely readable.
+    @property
+    def key(self) -> str: ...
+
+    @property
+    def methods(self) -> tuple[str, ...]: ...
 
     def run(self, request: PaymentRequest) -> PaymentResult: ...
 

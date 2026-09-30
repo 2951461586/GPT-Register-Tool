@@ -6,6 +6,7 @@ the whole pipeline lived in ``__init__.py``. ``generate_upi_qr_link`` is
 defined in :mod:`sms_tool.upi_link.pipeline` (single definition, guarded by
 ``tests/test_upi_link_entrypoint_unique.py``).
 """
+
 from __future__ import annotations
 
 from .constants import (  # noqa: F401
@@ -203,4 +204,3 @@ from ._extract import (  # noqa: F401
     _upi_setup_intent_last_error,
     _upi_url_path_extension,
 )
-
