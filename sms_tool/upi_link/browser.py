@@ -15,6 +15,24 @@ from ._extract import (
 from .session import _upi_find_attestation
 
 
+#: Chromium flags for the headless risk-context rail. ``--ignore-certificate-errors``
+#: keeps it usable through the pool's ``https://`` (TLS) upstreams, where Chromium
+#: otherwise floods ``ERR_CERT_DATABASE_CHANGED`` and aborts sub-resource loads.
+_BROWSER_ARGS = (
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+    "--ignore-certificate-errors",
+)
+#: Flows the *live* in-page ``SentinelSDK.token()`` can actually mint. Measured
+#: 2026-09-30 on the deployed SDK (``20260810913b``): ``authorize_continue``
+#: resolves (~4947 chars) while ``chatgpt_checkout`` and
+#: ``checkout_session_approval`` never resolve (still pending past 25s). Waiting
+#: on those hangs is exactly what raised ``browser_sentinel:Error`` and burned
+#: the approval window, so they are skipped here instead of awaited; the
+#: checkout/approval pair is minted by the Node bridge (``upi_link.sentinel``).
+_INPAGE_SENTINEL_FLOWS = frozenset({"authorize_continue"})
+
+
 def _upi_browser_available() -> bool:
     """True when the headless browser rail can run in this interpreter."""
     try:
@@ -103,7 +121,7 @@ def _upi_browser_capture(
             launch: dict[str, Any] = {
                 "headless": True,
                 "timeout": capture_ms,
-                "args": ["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"],
+                "args": list(_BROWSER_ARGS),
             }
             pw_proxy = _upi_browser_proxy(proxy)
             if pw_proxy:
@@ -113,6 +131,7 @@ def _upi_browser_capture(
                 user_agent=user_agent or None,
                 locale=locale,
                 timezone_id=timezone_id,
+                ignore_https_errors=True,
             )
             try:
                 context.add_cookies(
@@ -210,6 +229,12 @@ def _upi_browser_capture(
             # fingerprint; an out-of-band token is not interchangeable when the
             # risk engine correlates it with the observed browser session.
             flow = str(sentinel_flow or "").strip()
+            if flow and flow not in _INPAGE_SENTINEL_FLOWS:
+                # Do not await a mint the deployed SDK never resolves.
+                result["error"] = (
+                    (result["error"] + "; ") if result["error"] else ""
+                ) + f"browser_sentinel_skipped:{flow}"
+                flow = ""
             if flow:
                 try:
                     sdk_ms = _upi_int_value(min(max(5.0, _upi_int_value(timeout_s)[0] or 30) * 1000, 12000))[0] or 8000
@@ -310,13 +335,15 @@ def _upi_browser_approve(
             launch: dict[str, Any] = {
                 "headless": True,
                 "timeout": page_ms,
-                "args": ["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"],
+                "args": list(_BROWSER_ARGS),
             }
             pw_proxy = _upi_browser_proxy(proxy)
             if pw_proxy:
                 launch["proxy"] = pw_proxy
             browser = playwright.chromium.launch(**launch)
-            context = browser.new_context(user_agent=user_agent or None, locale=locale, timezone_id=timezone_id)
+            context = browser.new_context(
+                user_agent=user_agent or None, locale=locale, timezone_id=timezone_id, ignore_https_errors=True
+            )
             context.add_cookies(
                 [
                     {"name": "oai-did", "value": str(device_id or ""), "url": "https://chatgpt.com/"},
