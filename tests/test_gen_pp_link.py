@@ -415,7 +415,9 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 posted.append((url, json, data))
                 raise AssertionError(f"unexpected Stripe call: {url}")
 
-        def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
+        def fake_checkout_post(
+            url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None
+        ):
             posted.append((url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
                 return FakeResponse()
@@ -490,7 +492,9 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     )
                 raise AssertionError(url)
 
-        def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
+        def fake_checkout_post(
+            url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None
+        ):
             posted.append((proxy, url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
                 return FakeResponse(
@@ -576,7 +580,9 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                     )
                 raise AssertionError(url)
 
-        def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
+        def fake_checkout_post(
+            url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None
+        ):
             posted.append((url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
                 return FakeResponse(
@@ -987,7 +993,9 @@ class GeneratePpLinkContractTests(unittest.TestCase):
             def get(self, url, params=None, timeout=None, allow_redirects=True):
                 raise AssertionError(f"unexpected GET: {url}")
 
-        def fake_checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30):
+        def fake_checkout_post(
+            url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None
+        ):
             posted.append((url, json_body, None))
             if url.endswith("/backend-api/payments/checkout"):
                 return FakeResponse(

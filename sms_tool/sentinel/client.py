@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -20,11 +21,19 @@ from .runner import SentinelRunnerError, run_sentinel_sdk
 
 
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
+#: Sentinel flow the ChatGPT ``payments/checkout`` create gate reads. The
+#: reference project reverse-engineered this from the web bundle
+#: (``requireSentinelCheckout``) and proved live that the create call returns
+#: HTTP 200 only when *both* ``openai-sentinel-token`` and
+#: ``openai-sentinel-so-token`` are attached under this flow. A missing SO is
+#: the difference between 200 and ``400 unusual activity``.
+CHECKOUT_SENTINEL_FLOW = "chatgpt_checkout"
 FLOW_PAGE_URLS = {
     "username_password_create": endpoints.AUTH_CREATE_ACCOUNT_PASSWORD,
     "authorize_continue": endpoints.AUTH_EMAIL_VERIFICATION,
     "oauth_create_account": endpoints.AUTH_ABOUT_YOU,
     "checkout_session_approval": endpoints.CHATGPT_ORIGIN,
+    CHECKOUT_SENTINEL_FLOW: endpoints.CHATGPT_ORIGIN,
 }
 
 
@@ -78,7 +87,13 @@ def _legacy_fallback_enabled(config: Mapping[str, Any] | None) -> bool:
     email = email if isinstance(email, Mapping) else {}
     value = os.getenv("OPENAI_SENTINEL_LEGACY_FALLBACK")
     if value is None:
-        value = email.get("sentinel_legacy_fallback", True)
+        # Default **off**.  The pure-Python legacy issuer synthesises a PoW that
+        # passes the surface endpoints, but the OTP-dispatch service runs the
+        # real SDK JS server-side and rejects it (measured 2026-09-17: the silent
+        # fallback turned a runner defect into 126/126 ``create_account``
+        # failures).  A dead runner must fail loudly so a batch is not lost
+        # behind a degradation that looks like an upstream fault.
+        value = email.get("sentinel_legacy_fallback", False)
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -271,9 +286,16 @@ def issue_sentinel_token(
     proxy: str | None = None,
     profile: Mapping[str, Any] | None = None,
     page_url: str = "",
+    cookie_header: str = "",
     timeout_seconds: int = 60,
 ) -> SentinelToken:
-    """Issue one flow-bound token using the same session and fingerprint."""
+    """Issue one flow-bound token using the same session and fingerprint.
+
+    ``cookie_header`` lets a caller that does not hold the issuing session (the
+    checkout transports use ``curl_cffi``'s functional API) supply the account
+    cookie verbatim so the challenge is bound to the same ``oai-did`` the
+    checkout request will carry.
+    """
     flow = str(flow or "").strip()
     device_id = str(device_id or "").strip() or str(uuid.uuid4())
     if flow not in FLOW_PAGE_URLS:
@@ -302,7 +324,7 @@ def issue_sentinel_token(
             flow=flow,
             device_id=device_id,
             profile=active_profile,
-            cookie=_cookie_header(active_session, device_id),
+            cookie=_cookie_value(active_session, device_id, cookie_header),
             page_url=str(page_url or FLOW_PAGE_URLS[flow]),
             timeout_seconds=timeout_seconds,
         )
@@ -348,6 +370,7 @@ def issue_sentinel_flow(
     profile: Mapping[str, Any] | None = None,
     supplied_data: Mapping[str, Any] | None = None,
     config: Mapping[str, Any] | None = None,
+    cookie_header: str = "",
     timeout_seconds: int = 60,
 ) -> SentinelToken:
     """Issue at a protocol step, with explicit legacy rollback compatibility."""
@@ -364,6 +387,7 @@ def issue_sentinel_flow(
                 session=session,
                 proxy=proxy,
                 profile=profile,
+                cookie_header=cookie_header,
                 timeout_seconds=timeout_seconds,
             )
         except Exception as runner_error:
@@ -406,6 +430,110 @@ def issue_sentinel_flow(
             ) from fallback_error
         raise SentinelIssueError(f"sentinel_legacy_incomplete:{flow}")
     return legacy
+
+
+def _cookie_value(session: Any, device_id: str, override: str) -> str:
+    """Resolve the cookie sent to the Sentinel runner, keeping ``oai-did`` present."""
+    value = str(override or "").strip()
+    if not value:
+        return _cookie_header(session, device_id)
+    has_did = any(part.strip().lower().startswith("oai-did=") for part in value.split(";"))
+    return value if has_did else f"oai-did={device_id}; {value}"
+
+
+# ── Checkout Sentinel mint (single public authority) ───────────────────────
+# The ChatGPT checkout-create gate needs the ``chatgpt_checkout`` token pair on
+# every stage that can open a Checkout session.  The four call sites
+# (``payment_capability``, ``paypal_extract._create_checkout``,
+# ``wallet_transport`` and ``gcash_transport``) all reach the wire through
+# ``paypal_extract._checkout_post``, so that one place attaches the pair.  This
+# public helper is the authority they share; it mints through the same Node
+# runner as registration and *never* degrades to the pure-Python legacy issuer
+# (that issuer cannot produce ``chatgpt_checkout`` and is default-off anyway).
+_CHECKOUT_MINT_CACHE: dict[tuple[str, ...], tuple[float, SentinelToken]] = {}
+_CHECKOUT_MINT_CACHE_LOCK = threading.Lock()
+#: Conservative TTL, under the server-side ~9 min token validity.
+CHECKOUT_SENTINEL_CACHE_TTL_SECONDS = 480.0
+
+
+def _checkout_mint_cache_key(
+    device_id: str, proxy: str | None, cookie_header: str, profile: Mapping[str, Any] | None
+) -> tuple[str, ...]:
+    fp = profile if isinstance(profile, Mapping) else {}
+    return (
+        str(device_id or ""),
+        str(proxy or ""),
+        str(cookie_header or ""),
+        str(fp.get("user_agent") or ""),
+        str(fp.get("timezone") or ""),
+        str(fp.get("lang") or fp.get("language") or fp.get("locale") or ""),
+    )
+
+
+def issue_checkout_sentinel(
+    *,
+    device_id: str,
+    session: Any | None = None,
+    proxy: str | None = None,
+    profile: Mapping[str, Any] | None = None,
+    cookie_header: str = "",
+    timeout_seconds: int = 60,
+) -> SentinelToken:
+    """Issue the ``chatgpt_checkout`` token pair for the Checkout create gate.
+
+    Only a successful mint is cached so a transient runner/network error does
+    not poison the rest of the run.
+    """
+    key = _checkout_mint_cache_key(device_id, proxy, cookie_header, profile)
+    now = time.monotonic()
+    with _CHECKOUT_MINT_CACHE_LOCK:
+        hit = _CHECKOUT_MINT_CACHE.get(key)
+        if hit is not None and now - hit[0] < CHECKOUT_SENTINEL_CACHE_TTL_SECONDS:
+            return hit[1]
+    issued = issue_sentinel_flow(
+        flow=CHECKOUT_SENTINEL_FLOW,
+        device_id=device_id,
+        session=session,
+        proxy=proxy,
+        profile=profile,
+        cookie_header=cookie_header,
+        timeout_seconds=timeout_seconds,
+    )
+    if issued.token:
+        with _CHECKOUT_MINT_CACHE_LOCK:
+            _CHECKOUT_MINT_CACHE[key] = (now, issued)
+    return issued
+
+
+def checkout_sentinel_headers(
+    *,
+    device_id: str,
+    session: Any | None = None,
+    proxy: str | None = None,
+    profile: Mapping[str, Any] | None = None,
+    cookie_header: str = "",
+    timeout_seconds: int = 60,
+) -> dict[str, str]:
+    """Return the ``openai-sentinel-*`` header pair, or ``{}`` when unavailable.
+
+    Advisory by design: a Checkout that is otherwise valid must not be aborted
+    because the local runner is missing or slow.  Callers that need the failure
+    to surface use :func:`issue_checkout_sentinel` directly.
+    """
+    issued = issue_checkout_sentinel(
+        device_id=device_id,
+        session=session,
+        proxy=proxy,
+        profile=profile,
+        cookie_header=cookie_header,
+        timeout_seconds=timeout_seconds,
+    )
+    headers: dict[str, str] = {}
+    if issued.token:
+        headers["OpenAI-Sentinel-Token"] = issued.token
+    if issued.so_token:
+        headers["OpenAI-Sentinel-SO-Token"] = issued.so_token
+    return headers
 
 
 def issue_sentinel_bundle(
@@ -464,9 +592,13 @@ def issue_sentinel_bundle(
 
 
 __all__ = [
+    "CHECKOUT_SENTINEL_CACHE_TTL_SECONDS",
+    "CHECKOUT_SENTINEL_FLOW",
     "FLOW_PAGE_URLS",
     "SentinelIssueError",
     "SentinelToken",
+    "checkout_sentinel_headers",
+    "issue_checkout_sentinel",
     "issue_sentinel_bundle",
     "issue_sentinel_flow",
     "issue_sentinel_token",

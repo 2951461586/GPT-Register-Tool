@@ -128,3 +128,16 @@ plumbing. They do not establish a live registration or login success rate.
 Changing the lane choice, the `send` method, the continue-on-verified-page
 toggle, or Sentinel flow selection requires a controlled live comparison, not
 an offline transaction test.
+
+## Read-only registration probe
+
+`sms_tool/registration_probe.py` answers "is this mailbox new to OpenAI?" with
+the same `signin -> authorize` handshake the signup lane uses, and stops at the
+authorize landing. It never posts `authorize/continue`, registers a password,
+sends an OTP or creates an account. `classify_registration_landing` maps an
+auth `/create-account[/password]` landing to `unregistered`, `/log-in*` and the
+`login_password` / `mfa_challenge` page types to `registered`, and an
+`/email-verification` landing without a verification mode to `unknown` — the
+follow-up `authorize/continue` needed to disambiguate may dispatch an OTP, so it
+is deliberately not taken. A transport failure is `unknown` with an `error`
+field; "not probed" is never reported as "registered".

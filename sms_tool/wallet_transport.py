@@ -19,22 +19,43 @@ APPROVE_PATH = "/backend-api/payments/checkout/approve"
 APPROVE_URL = f"https://chatgpt.com{APPROVE_PATH}"
 _STRIPE_PAGE_URL = "https://api.stripe.com/v1/payment_pages/{checkout_session_id}"
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
-_BASE_REDIRECT_HOSTS = frozenset({
-    "pm-redirects.stripe.com",
-    "hooks.stripe.com",
-    "checkout.stripe.com",
-    "pay.openai.com",
-    "chatgpt.com",
-})
+_BASE_REDIRECT_HOSTS = frozenset(
+    {
+        "pm-redirects.stripe.com",
+        "hooks.stripe.com",
+        "checkout.stripe.com",
+        "pay.openai.com",
+        "chatgpt.com",
+    }
+)
 _HTML_REDIRECT_RE = re.compile(
     r"(?i)(?:url\s*=\s*|window\.location(?:\.href)?\s*=\s*)[\"']?"
     r"(https://[^\"'<>\s]+)"
 )
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """``int(value)`` that never raises; malformed input falls back to ``default``."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _cookie_device_id(cookie_header: str) -> str:
+    """Read ``oai-did`` out of an account cookie header, or ``""`` when absent."""
+    for part in str(cookie_header or "").split(";"):
+        name, _, value = part.partition("=")
+        if name.strip().lower() == "oai-did":
+            candidate = value.strip().strip('"')
+            if candidate:
+                return candidate
+    return ""
+
+
 class WalletHTTPError(RuntimeError):
     def __init__(self, message: str, status_code: int = 0) -> None:
-        self.status_code = int(status_code or 0)
+        self.status_code = _safe_int(status_code)
         super().__init__(message)
 
 
@@ -42,8 +63,8 @@ class ChatGPTStripeWalletTransport:
     """Production wire transport with stage-specific proxy routing."""
 
     def __init__(self, *, timeout: int = 45, max_redirect_hops: int = 8) -> None:
-        self.timeout = max(5, int(timeout or 45))
-        self.max_redirect_hops = max(1, min(int(max_redirect_hops or 8), 12))
+        self.timeout = max(5, _safe_int(timeout or 45, 45))
+        self.max_redirect_hops = max(1, min(_safe_int(max_redirect_hops or 8, 8), 12))
         self._sessions: dict[tuple[str, str], Any] = {}
         self._lock = threading.Lock()
 
@@ -52,6 +73,17 @@ class ChatGPTStripeWalletTransport:
 
         proxy = self._stage_proxy(request)
         cookie_header = str(request.auth_context.get("cookie_header") or "")
+        device_id = str(
+            request.auth_context.get("device_id")
+            or request.auth_context.get("oai_did")
+            or _cookie_device_id(cookie_header)
+        ).strip()
+        extra_headers = {
+            "x-openai-target-path": CHECKOUT_PATH,
+            "x-openai-target-route": CHECKOUT_PATH,
+        }
+        if device_id:
+            extra_headers["OAI-Device-Id"] = device_id
         try:
             response = gen_pp_link._checkout_post(
                 CHECKOUT_URL,
@@ -60,10 +92,7 @@ class ChatGPTStripeWalletTransport:
                 cookie_header,
                 proxy,
                 self.timeout,
-                extra_headers={
-                    "x-openai-target-path": CHECKOUT_PATH,
-                    "x-openai-target-route": CHECKOUT_PATH,
-                },
+                extra_headers=extra_headers,
             )
         except Exception as exc:
             raise WalletHTTPError(f"checkout transport failed: {type(exc).__name__}") from exc
@@ -182,7 +211,7 @@ class ChatGPTStripeWalletTransport:
                 timeout=self.timeout,
                 allow_redirects=False,
             )
-            status_code = int(getattr(response, "status_code", 0) or 0)
+            status_code = _safe_int(getattr(response, "status_code", 0))
             if status_code in _REDIRECT_STATUSES:
                 location = str((getattr(response, "headers", {}) or {}).get("Location") or "").strip()
                 if not location:
@@ -254,11 +283,7 @@ class ChatGPTStripeWalletTransport:
         context = request.transport_context
         resolver = (
             context.get(f"{request.stage}_proxy_resolver")
-            or (
-                context.get("final_review_proxy_resolver")
-                if request.stage == "approve"
-                else None
-            )
+            or (context.get("final_review_proxy_resolver") if request.stage == "approve" else None)
             or context.get("proxy_resolver")
         )
         if callable(resolver):
@@ -295,7 +320,7 @@ class ChatGPTStripeWalletTransport:
 
     @staticmethod
     def _json_response(response: Any, stage: str) -> Mapping[str, Any]:
-        status_code = int(getattr(response, "status_code", 0) or 0)
+        status_code = _safe_int(getattr(response, "status_code", 0))
         if status_code >= 400:
             raise WalletHTTPError(f"{stage} returned HTTP {status_code}", status_code)
         try:
@@ -319,8 +344,11 @@ class ChatGPTStripeWalletTransport:
         host = str(parsed.hostname or "").lower().rstrip(".")
         spec = WALLET_METHODS.get(str(method or "").lower())
         allowed = _BASE_REDIRECT_HOSTS | frozenset(spec.redirect_hosts if spec else ())
-        if parsed.scheme.lower() != "https" or parsed.username or parsed.password or not any(
-            host == suffix or host.endswith(f".{suffix}") for suffix in allowed
+        if (
+            parsed.scheme.lower() != "https"
+            or parsed.username
+            or parsed.password
+            or not any(host == suffix or host.endswith(f".{suffix}") for suffix in allowed)
         ):
             raise WalletProviderError(
                 "wallet redirect host is not allowed",

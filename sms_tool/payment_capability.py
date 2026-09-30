@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Protocol
 
+from . import endpoints
 from .checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
@@ -15,6 +16,10 @@ from .checkout_contract import (
     CheckoutSessionContract,
     StripeCapabilityEvidence,
 )
+
+#: ChatGPT ``payments/payment_methods`` route (path half; host comes from the
+#: ``endpoints`` authority so the literal is not re-declared here).
+_PAYMENT_METHODS_PATH = "/backend-api/payments/payment_methods"
 
 
 class PaymentCapabilityTransport(Protocol):
@@ -174,28 +179,58 @@ class ChatGPTStripeCapabilityTransport:
         if not processor or not processor.replace("_", "").isalpha():
             raise CapabilityProbeError(
                 "custom checkout processor invalid",
-                error_code="checkout_session_invalid", error_stage="checkout_response", retryable=False,
+                error_code="checkout_session_invalid",
+                error_stage="checkout_response",
+                retryable=False,
             )
         try:
             cookie_header = str(auth_context.get("cookie_header") or "")
             device_id = str(auth_context.get("device_id") or auth_context.get("oai_did") or "").strip()
             response = gen_pp_link._checkout_get(
                 f"https://chatgpt.com/backend-api/payments/checkout/{processor}/{checkout.checkout_session_id}",
-                access_token, cookie_header, proxy, timeout,
+                access_token,
+                cookie_header,
+                proxy,
+                timeout,
                 extra_headers={"OAI-Device-Id": device_id} if device_id else None,
             )
             return _response_json(
-                response, stage="custom_checkout",
-                unauthorized_code="custom_checkout_unauthorized", failure_code="custom_checkout_failed",
+                response,
+                stage="custom_checkout",
+                unauthorized_code="custom_checkout_unauthorized",
+                failure_code="custom_checkout_failed",
             )
         except CapabilityProbeError:
             raise
         except Exception:
             raise CapabilityProbeError(
                 "custom checkout transport failed",
-                error_code="custom_checkout_transport_failed", error_stage="custom_checkout", retryable=True,
+                error_code="custom_checkout_transport_failed",
+                error_stage="custom_checkout",
+                retryable=True,
                 status="unknown",
             ) from None
+
+    def payment_methods_signal(
+        self,
+        *,
+        access_token: str,
+        auth_context: dict[str, Any],
+        proxy: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        """Read-only trial/method signal, independent of Checkout create.
+
+        The create gate can refuse a probe (``400 unusual activity``), but this
+        GET still answers ``one_click_trial_eligible``. It never creates,
+        confirms or charges anything.
+        """
+        return _read_payment_methods_signal(
+            access_token=access_token,
+            auth_context=auth_context,
+            proxy=proxy,
+            timeout=timeout,
+        )
 
     def stripe_elements(
         self,
@@ -228,8 +263,10 @@ class ChatGPTStripeCapabilityTransport:
                 params[f"deferred_intent[payment_method_types][{index}]"] = method
             response = session.get("https://api.stripe.com/v1/elements/sessions", params=params, timeout=timeout)
             return _response_json(
-                response, stage="stripe_elements",
-                unauthorized_code="stripe_elements_unauthorized", failure_code="stripe_elements_failed",
+                response,
+                stage="stripe_elements",
+                unauthorized_code="stripe_elements_unauthorized",
+                failure_code="stripe_elements_failed",
             )
         finally:
             session.close()
@@ -249,7 +286,13 @@ def build_capability_probe_result(
     eligible: bool | None = available
     expected_currency = str(contract.currency or "").strip().upper()
     actual_currency = str(evidence.currency or "").strip().upper()
-    if evidence.payment_method_types and evidence.currency_present and expected_currency and actual_currency != expected_currency and not available:
+    if (
+        evidence.payment_method_types
+        and evidence.currency_present
+        and expected_currency
+        and actual_currency != expected_currency
+        and not available
+    ):
         classification, eligible, reason = "unknown", None, "checkout_currency_mismatch"
     elif available and not evidence.currency_present:
         classification, eligible, reason = "unknown", None, "checkout_currency_unknown"
@@ -264,35 +307,39 @@ def build_capability_probe_result(
 
     conclusive = classification in {"eligible", "ineligible"}
     result = dict(extra or {})
-    result.update({
-        "ok": conclusive,
-        "operation": "payment_method_capability_probe",
-        "payment_method": contract.payment_method,
-        "status": "completed" if conclusive else "unknown",
-        "classification": classification,
-        "decision": reason,
-        "eligible": eligible,
-        "method_available": available,
-        "conclusive": conclusive,
-        "checkout_country": contract.billing_country,
-        "currency": evidence.currency or contract.currency,
-        "amount": evidence.amount_minor,
-        "offer_state": evidence.offer_state,
-        "payment_method_types": list(evidence.payment_method_types),
-        "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
-        "custom_payment_methods": list(evidence.custom_payment_methods),
-        "checkout_session_present": bool(checkout_session_present),
-        "retryable": not conclusive,
-        "error_stage": "",
-        "error_code": "",
-        "error": "",
-    })
+    result.update(
+        {
+            "ok": conclusive,
+            "operation": "payment_method_capability_probe",
+            "payment_method": contract.payment_method,
+            "status": "completed" if conclusive else "unknown",
+            "classification": classification,
+            "decision": reason,
+            "eligible": eligible,
+            "method_available": available,
+            "conclusive": conclusive,
+            "checkout_country": contract.billing_country,
+            "currency": evidence.currency or contract.currency,
+            "amount": evidence.amount_minor,
+            "offer_state": evidence.offer_state,
+            "payment_method_types": list(evidence.payment_method_types),
+            "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
+            "custom_payment_methods": list(evidence.custom_payment_methods),
+            "checkout_session_present": bool(checkout_session_present),
+            "retryable": not conclusive,
+            "error_stage": "",
+            "error_code": "",
+            "error": "",
+        }
+    )
     if not conclusive:
-        result.update({
-            "error": reason,
-            "error_code": reason,
-            "error_stage": "capability_classification",
-        })
+        result.update(
+            {
+                "error": reason,
+                "error_code": reason,
+                "error_stage": "capability_classification",
+            }
+        )
     return result
 
 
@@ -320,6 +367,7 @@ def payment_method_capability_probe(
     stage_proxy_countries: Mapping[str, str] | None = None,
     timeout: int = 45,
     transport: PaymentCapabilityTransport | None = None,
+    fallback_transport: PaymentCapabilityTransport | None = None,
     custom_payment_method_type_id: str = "",
     **_: Any,
 ) -> dict[str, Any]:
@@ -382,25 +430,36 @@ def payment_method_capability_probe(
                 "confirm_proxy": _proxy_text(confirm_proxy or checkout_proxy or provider_proxy or proxy),
             },
             custom_payment_method_type_id=(
-                str(custom_payment_method_type_id or "").strip()
-                or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
+                str(custom_payment_method_type_id or "").strip() or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
             ),
             require_zero=require_zero,
         )
+    signal: dict[str, Any] = {}
+    fallback_used = False
+    checkout_proxy_text = _proxy_text(checkout_proxy or proxy)
+    try:
+        checkout_timeout = max(5, int(timeout or 45))
+    except (TypeError, ValueError):
+        checkout_timeout = 45
     try:
         context = dict(auth_context) if isinstance(auth_context, dict) else {}
+        signal_reader = getattr(transport or ChatGPTStripeCapabilityTransport(), "payment_methods_signal", None)
         device_id = str(context.get("device_id") or "").strip()
         oai_did = str(context.get("oai_did") or "").strip()
-        cookie_did = next((
-            part.partition("=")[2].strip().strip('"')
-            for part in str(context.get("cookie_header") or "").split(";")
-            if part.partition("=")[0].strip().lower() == "oai-did"
-        ), "")
+        cookie_did = next(
+            (
+                part.partition("=")[2].strip().strip('"')
+                for part in str(context.get("cookie_header") or "").split(";")
+                if part.partition("=")[0].strip().lower() == "oai-did"
+            ),
+            "",
+        )
         if len({value for value in (device_id, oai_did, cookie_did) if value}) > 1:
             raise CapabilityProbeError(
                 "Checkout device identity conflicts with account cookie",
                 error_code="checkout_identity_mismatch",
-                error_stage="checkout_create", retryable=False,
+                error_stage="checkout_create",
+                retryable=False,
             )
         if not device_id and (oai_did or cookie_did):
             context["device_id"] = oai_did or cookie_did
@@ -414,43 +473,83 @@ def payment_method_capability_probe(
             promo_campaign_id=promo_campaign_id,
             checkout_ui_mode=checkout_ui_mode,
         )
-        wire = transport or ChatGPTStripeCapabilityTransport()
-        checkout = wire.create_checkout(
-            contract,
-            access_token=str(access_token).strip(),
-            auth_context=context,
-            proxy=_proxy_text(checkout_proxy or proxy),
-            timeout=max(5, int(timeout or 45)),
-        )
+        wire: PaymentCapabilityTransport = transport or ChatGPTStripeCapabilityTransport()
+        if callable(signal_reader):
+            try:
+                raw_signal = signal_reader(
+                    access_token=str(access_token).strip(),
+                    auth_context=context,
+                    proxy=_proxy_text(checkout_proxy or proxy),
+                    timeout=max(5, int(timeout or 45)),
+                )
+            except Exception:
+                raw_signal = {}
+            if isinstance(raw_signal, Mapping):
+                signal = dict(raw_signal)
+        try:
+            checkout = wire.create_checkout(
+                contract,
+                access_token=str(access_token).strip(),
+                auth_context=context,
+                proxy=checkout_proxy_text,
+                timeout=checkout_timeout,
+            )
+        except CapabilityProbeError as primary_error:
+            # A browser/external session can still open the Checkout the
+            # protocol transport was refused. Only risk-block and transport
+            # failures fall through; a deterministic contract error does not.
+            if fallback_transport is None:
+                raise
+            if not _should_try_fallback(primary_error):
+                raise
+            checkout = fallback_transport.create_checkout(
+                contract,
+                access_token=str(access_token).strip(),
+                auth_context=context,
+                proxy=checkout_proxy_text,
+                timeout=checkout_timeout,
+            )
+            wire = fallback_transport
+            fallback_used = True
         evidence_sources: list[str] = []
         if checkout.checkout_session_id.startswith("oaics_"):
-            if not hasattr(wire, "custom_checkout_session"):
+            custom_reader = getattr(wire, "custom_checkout_session", None)
+            if custom_reader is None:
                 raise CapabilityProbeError(
                     "custom checkout reader unavailable",
                     error_code="custom_checkout_unavailable",
-                    error_stage="custom_checkout", retryable=False, status="unknown",
+                    error_stage="custom_checkout",
+                    retryable=False,
+                    status="unknown",
                 )
-            init_payload = wire.custom_checkout_session(
-                contract, checkout, access_token=str(access_token).strip(),
+            init_payload = custom_reader(
+                contract,
+                checkout,
+                access_token=str(access_token).strip(),
                 auth_context=context,
-                proxy=_proxy_text(checkout_proxy or proxy), timeout=max(5, int(timeout or 45)),
+                proxy=_proxy_text(checkout_proxy or proxy),
+                timeout=max(5, int(timeout or 45)),
             )
             if StripeCapabilityEvidence.from_payload(init_payload).payment_method_types:
                 evidence_sources.append("custom_checkout")
             checkout_kind = "oaics"
         else:
             init_payload = wire.stripe_init(
-                contract, checkout,
+                contract,
+                checkout,
                 proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
                 timeout=max(5, int(timeout or 45)),
             )
             if StripeCapabilityEvidence.from_payload(init_payload).payment_method_types:
                 evidence_sources.append("stripe_init")
             elements = {}
-            if hasattr(wire, "stripe_elements"):
+            elements_reader = getattr(wire, "stripe_elements", None)
+            if elements_reader is not None:
                 try:
-                    elements = wire.stripe_elements(
-                        contract, checkout, init_payload,
+                    elements = elements_reader(
+                        contract,
+                        checkout,
+                        init_payload,
                         proxy=_proxy_text(stripe_init_proxy or provider_proxy or proxy),
                         timeout=min(12, max(5, int(timeout or 45))),
                     )
@@ -471,6 +570,11 @@ def payment_method_capability_probe(
         )
         result["checkout_kind"] = checkout_kind
         result["evidence_sources"] = evidence_sources
+        result["fallback_used"] = fallback_used
+        if signal:
+            result["payment_methods_signal"] = signal
+            if "one_click_trial_eligible" in signal:
+                result["one_click_trial_eligible"] = signal["one_click_trial_eligible"]
         return result
     except CapabilityProbeError as exc:
         result = {
@@ -483,6 +587,9 @@ def payment_method_capability_probe(
         }
         if exc.http_status:
             result["http_status"] = exc.http_status
+        result["fallback_used"] = fallback_used
+        if signal:
+            result["payment_methods_signal"] = signal
         return result
     except CheckoutContractError as exc:
         return {
@@ -492,6 +599,7 @@ def payment_method_capability_probe(
             "error_code": exc.error_code,
             "error_stage": exc.error_stage,
             "retryable": exc.retryable,
+            **({"payment_methods_signal": signal} if signal else {}),
         }
     except Exception as exc:
         return {
@@ -501,6 +609,7 @@ def payment_method_capability_probe(
             "error_code": "capability_probe_unexpected",
             "error_stage": "capability_probe",
             "retryable": True,
+            **({"payment_methods_signal": signal} if signal else {}),
         }
 
 
@@ -511,7 +620,10 @@ def _response_json(
     unauthorized_code: str,
     failure_code: str,
 ) -> dict[str, Any]:
-    status_code = int(getattr(response, "status_code", 0) or 0)
+    try:
+        status_code = int(getattr(response, "status_code", 0) or 0)
+    except (TypeError, ValueError):
+        status_code = 0
     if status_code >= 400:
         retryable = status_code in {403, 408, 409, 425, 429} or status_code >= 500
         code = unauthorized_code if status_code in {401, 403} else failure_code
@@ -523,7 +635,11 @@ def _response_json(
             except Exception:
                 body = {}
             detail = body.get("detail") if isinstance(body, dict) else None
-            if status_code == 429 and isinstance(detail, dict) and detail.get("code") == "checkout_creation_rate_limited":
+            if (
+                status_code == 429
+                and isinstance(detail, dict)
+                and detail.get("code") == "checkout_creation_rate_limited"
+            ):
                 code = "checkout_creation_rate_limited"
             elif status_code == 400 and isinstance(detail, str) and "unusual activity" in detail.lower():
                 code = "checkout_risk_blocked"
@@ -560,6 +676,99 @@ def _proxy_text(value: Any) -> str:
     if isinstance(value, dict):
         value = value.get("https") or value.get("http") or ""
     return str(value or "").strip()
+
+
+def _read_payment_methods_signal(
+    *,
+    access_token: str,
+    auth_context: dict[str, Any],
+    proxy: str,
+    timeout: int,
+) -> dict[str, Any]:
+    """Read-only ``one_click_trial_eligible`` / method signal from ChatGPT.
+
+    Independent of Checkout create: it survives a refused create and never
+    creates, confirms or charges anything. Every failure degrades to ``{}`` so
+    it can only add evidence, never change a probe outcome.
+    """
+    from . import gen_pp_link
+
+    token = str(access_token or "").strip()
+    if not token:
+        return {}
+    context = auth_context if isinstance(auth_context, dict) else {}
+    cookie_header = str(context.get("cookie_header") or "")
+    device_id = str(context.get("device_id") or context.get("oai_did") or "").strip()
+    extra_headers = {
+        "x-openai-target-path": _PAYMENT_METHODS_PATH,
+        "x-openai-target-route": _PAYMENT_METHODS_PATH,
+    }
+    if device_id:
+        extra_headers["OAI-Device-Id"] = device_id
+    try:
+        response = gen_pp_link._checkout_get(
+            endpoints.CHATGPT_PAYMENT_METHODS,
+            token,
+            cookie_header,
+            _proxy_text(proxy),
+            max(5, int(timeout or 45)),
+            extra_headers=extra_headers,
+        )
+    except Exception:
+        return {}
+    try:
+        status_code = int(getattr(response, "status_code", 0) or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    if status_code >= 400:
+        return {}
+    try:
+        payload = response.json()
+    except Exception:
+        return {}
+    if not isinstance(payload, Mapping):
+        return {}
+    signal: dict[str, Any] = {}
+    trial = payload.get("one_click_trial_eligible")
+    if isinstance(trial, bool):
+        signal["one_click_trial_eligible"] = trial
+    methods = payload.get("payment_method_types") or payload.get("payment_methods")
+    if isinstance(methods, list):
+        tokens = [str(item).strip() for item in methods if str(item).strip()]
+        if tokens:
+            signal["payment_method_types"] = tokens
+    return signal
+
+
+def _should_try_fallback(exc: CapabilityProbeError) -> bool:
+    """True for the risk-block/transport failures a browser session can bypass."""
+    return exc.error_code == "checkout_risk_blocked" or bool(exc.retryable)
+
+
+def _paypal_probe_failure(exc: BaseException) -> dict[str, Any]:
+    """Normalise a failed PayPal capability probe into the shared result shape.
+
+    Extracted from the ``except`` handler so the handler itself stays free of
+    boolean operators (``no-boolean-in-except`` scans the whole clause body).
+    """
+    error_code = str(getattr(exc, "error_code", "") or "paypal_capability_probe_failed")
+    error_stage = str(getattr(exc, "error_stage", "") or "capability_probe")
+    retryable = bool(getattr(exc, "retryable", False))
+    return {
+        "ok": False,
+        "operation": "payment_method_capability_probe",
+        "payment_method": "paypal",
+        "status": "unknown" if retryable else "failed",
+        "classification": "unknown",
+        "decision": error_code,
+        "eligible": None,
+        "method_available": None,
+        "conclusive": False,
+        "error": _safe_error(exc),
+        "error_code": error_code,
+        "error_stage": error_stage,
+        "retryable": retryable,
+    }
 
 
 def _paypal_capability_probe(
@@ -681,23 +890,7 @@ def _paypal_capability_probe(
             "retryable": False,
         }
     except Exception as exc:
-        error_code = str(getattr(exc, "error_code", "") or "paypal_capability_probe_failed")
-        error_stage = str(getattr(exc, "error_stage", "") or "capability_probe")
-        return {
-            "ok": False,
-            "operation": "payment_method_capability_probe",
-            "payment_method": "paypal",
-            "status": "unknown" if bool(getattr(exc, "retryable", False)) else "failed",
-            "classification": "unknown",
-            "decision": error_code,
-            "eligible": None,
-            "method_available": None,
-            "conclusive": False,
-            "error": _safe_error(exc),
-            "error_code": error_code,
-            "error_stage": error_stage,
-            "retryable": bool(getattr(exc, "retryable", False)),
-        }
+        return _paypal_probe_failure(exc)
 
 
 def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
